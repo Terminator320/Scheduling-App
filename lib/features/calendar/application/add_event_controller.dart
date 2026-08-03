@@ -6,6 +6,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
@@ -24,6 +25,11 @@ abstract class AddEventState
     implements AppointmentFormFields {
   const factory AddEventState({
     DateTime? selectedDate,
+    DateTime? endDate,
+
+    /// The user picked an end date explicitly, so it no longer mirrors the
+    /// start — moving the start now SHIFTS it instead of collapsing the run.
+    @Default(false) bool endDateTouched,
     TimeOfDay? selectedStartTime,
     TimeOfDay? selectedEndTime,
     @Default(false) bool endTimeWasPickedManually,
@@ -82,7 +88,7 @@ class AddEventController extends Notifier<AddEventState>
 
   @override
   AddEventState build() {
-    return AddEventState(selectedDate: initialDate);
+    return AddEventState(selectedDate: initialDate, endDate: initialDate);
   }
 
   // --- AppointmentFormConcerns adapters ---
@@ -119,7 +125,32 @@ class AddEventController extends Notifier<AddEventState>
   void selectDate(DateTime date) {
     state = state.copyWith(
       selectedDate: date,
-      errors: withoutKey(state.errors, 'date'),
+      endDate: _shiftedEndDate(date),
+      errors: withoutKey(withoutKey(state.errors, 'date'), 'endDate'),
+    );
+  }
+
+  /// Where the end date lands when the start moves to [date].
+  ///
+  /// Untouched, it simply mirrors the start. Touched, the run keeps its
+  /// LENGTH — a 5-day job stays 5 days rather than collapsing to one — which
+  /// is why `endDateTouched` is tracked explicitly rather than inferred from
+  /// the two dates being equal.
+  DateTime _shiftedEndDate(DateTime date) {
+    final previousStart = state.selectedDate;
+    final previousEnd = state.endDate;
+    if (!state.endDateTouched || previousStart == null || previousEnd == null) {
+      return date;
+    }
+    final length = calendarDaysBetween(previousStart, previousEnd);
+    return addCalendarDays(date, length < 0 ? 0 : length);
+  }
+
+  void selectEndDate(DateTime date) {
+    state = state.copyWith(
+      endDate: date,
+      endDateTouched: true,
+      errors: withoutKey(state.errors, 'endDate'),
     );
   }
 
@@ -197,6 +228,7 @@ class AddEventController extends Notifier<AddEventState>
       AppointmentFormInput(
         title: title,
         date: state.selectedDate,
+        endDate: state.endDate ?? state.selectedDate,
         startTime: state.selectedStartTime,
         endTime: state.selectedEndTime,
         client: state.selectedClient,
@@ -215,7 +247,7 @@ class AddEventController extends Notifier<AddEventState>
 
     final (:start, :end) = appointmentSpan(
       date: state.selectedDate!,
-      endDate: state.selectedDate!,
+      endDate: state.endDate ?? state.selectedDate!,
       isAllDay: state.isAllDay,
       startTime: state.selectedStartTime,
       endTime: state.selectedEndTime,

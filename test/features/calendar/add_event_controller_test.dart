@@ -113,6 +113,52 @@ void main() {
     });
   });
 
+  group('end date', () {
+    test('mirrors the start date until it is touched', () {
+      final c = readNotifier()..selectDate(DateTime(2026, 8));
+      expect(readState().endDate, DateTime(2026, 8));
+
+      c.selectDate(DateTime(2026, 8, 4));
+      expect(readState().endDate, DateTime(2026, 8, 4));
+    });
+
+    test(
+      'once touched, moving the start shifts the end by the same days',
+      () {
+        final c = readNotifier()
+          ..selectDate(DateTime(2026, 8))
+          ..selectEndDate(DateTime(2026, 8, 5));
+        expect(readState().endDateTouched, isTrue);
+
+        c.selectDate(DateTime(2026, 8, 3));
+        expect(readState().endDate, DateTime(2026, 8, 7));
+      },
+    );
+
+    test(
+      'a start date moved past a touched end date drags the end along',
+      () {
+        readNotifier()
+          ..selectDate(DateTime(2026, 8))
+          ..selectEndDate(DateTime(2026, 8, 2))
+          ..selectDate(DateTime(2026, 8, 10));
+        expect(readState().endDate, DateTime(2026, 8, 11));
+      },
+    );
+
+    test('selectEndDate clears any endDate error', () async {
+      final c = readNotifier()
+        ..selectDate(DateTime(2026, 8, 5))
+        // Before the start date, so validate() flags it once submit() runs.
+        ..selectEndDate(DateTime(2026, 8));
+      await c.submit(title: '', address: '', notes: '', materialsNeeded: '');
+      expect(readState().errors.containsKey('endDate'), isTrue);
+
+      c.selectEndDate(DateTime(2026, 8, 10));
+      expect(readState().errors.containsKey('endDate'), isFalse);
+    });
+  });
+
   group('toggleEmployee', () {
     test('adds employees and removes them idempotently', () {
       final c = readNotifier()
