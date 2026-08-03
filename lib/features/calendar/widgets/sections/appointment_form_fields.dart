@@ -23,11 +23,12 @@ import 'package:scheduling/shared/widgets/fields/sheet_field_row.dart';
 import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// The eight text controllers an appointment form drives. Shared between the add and edit flows so their field sets stay in sync.
+/// The nine text controllers an appointment form drives. Shared between the add and edit flows so their field sets stay in sync.
 class AppointmentFormControllers {
   const AppointmentFormControllers({
     required this.title,
     required this.date,
+    required this.endDate,
     required this.startTime,
     required this.endTime,
     required this.clientSearch,
@@ -38,6 +39,7 @@ class AppointmentFormControllers {
 
   final TextEditingController title;
   final TextEditingController date;
+  final TextEditingController endDate;
   final TextEditingController startTime;
   final TextEditingController endTime;
   final TextEditingController clientSearch;
@@ -49,6 +51,7 @@ class AppointmentFormControllers {
   void dispose() {
     title.dispose();
     date.dispose();
+    endDate.dispose();
     startTime.dispose();
     endTime.dispose();
     clientSearch.dispose();
@@ -83,11 +86,15 @@ class AppointmentFormFields extends StatelessWidget {
     required this.onClearClient,
     required this.onToggleEmployee,
     required this.onPickDate,
+    required this.onPickEndDate,
     required this.onPickStartTime,
     required this.onPickEndTime,
     required this.onSelectRepeat,
     required this.onUseCustomAddress,
     super.key,
+    this.isMultiDay = false,
+    this.isOvernight = false,
+    this.spanLength = 1,
     this.editingStatus,
     this.onStatusChanged,
     this.onRequestAddClient,
@@ -110,10 +117,19 @@ class AppointmentFormFields extends StatelessWidget {
   final bool isPersonal;
 
   /// No time was put in, so the block owns the whole day: the start/end rows
-  /// are hidden and the record saves midnight → 23:59. Only offered on a
-  /// personal job, and on by default there.
+  /// are hidden and the record saves midnight → 23:59.
   final bool isAllDay;
   final ValueChanged<bool> onAllDayChanged;
+
+  /// True when this job runs more than one day — drives the daily-window
+  /// qualifier on the time labels and the run length beside the end date.
+  final bool isMultiDay;
+
+  /// True when the daily window crosses midnight, so the run counts nights.
+  final bool isOvernight;
+
+  /// Run length in days (or nights). 1 for a single-day job.
+  final int spanLength;
 
   final Map<String, AppointmentFormError> errors;
   final String employeeLabel;
@@ -126,6 +142,7 @@ class AppointmentFormFields extends StatelessWidget {
   final VoidCallback onClearClient;
   final ValueChanged<EmployeeRecord> onToggleEmployee;
   final VoidCallback onPickDate;
+  final VoidCallback onPickEndDate;
   final VoidCallback onPickStartTime;
   final VoidCallback onPickEndTime;
   final ValueChanged<RepeatInterval> onSelectRepeat;
@@ -290,7 +307,7 @@ class AppointmentFormFields extends StatelessWidget {
     const SizedBox(height: AppSpacing.sp16),
   ];
 
-  /// Date, start/end time, status (edit flow only) and repeat.
+  /// Start/end date, start/end time, status (edit flow only) and repeat.
   List<Widget> _scheduleSection(BuildContext context, AppLocalizations l10n) {
     final showStatus = editingStatus != null && onStatusChanged != null;
     final isNarrowPhone = context.isNarrowWidth;
@@ -303,7 +320,13 @@ class AppointmentFormFields extends StatelessWidget {
     // constructed for one.
     List<Widget> timeRows() {
       final startRow = SheetFieldRow(
-        label: l10n.calendar_startTime,
+        // Once the job runs past one day the two times describe a window
+        // repeated on every day of the run, not a single span.
+        label: !isMultiDay
+            ? l10n.calendar_startTime
+            : (isOvernight
+                  ? l10n.calendar_startTimeEachNight
+                  : l10n.calendar_startTimeEachDay),
         value: controllers.startTime.text,
         placeholder: l10n.calendar_start,
         accent: true,
@@ -312,7 +335,11 @@ class AppointmentFormFields extends StatelessWidget {
         onTap: onPickStartTime,
       );
       final endRow = SheetFieldRow(
-        label: l10n.calendar_endTime,
+        label: !isMultiDay
+            ? l10n.calendar_endTime
+            : (isOvernight
+                  ? l10n.calendar_endTimeNextMorning
+                  : l10n.calendar_endTimeEachDay),
         value: controllers.endTime.text,
         placeholder: l10n.calendar_end,
         accent: true,
@@ -341,21 +368,12 @@ class AppointmentFormFields extends StatelessWidget {
       const SizedBox(height: AppSpacing.sp8),
       SheetPanel(
         children: [
-          // --- All day (personal jobs only) — first row of the panel, since
-          // it decides whether the time rows below it exist at all.
-          if (isPersonal)
-            _AllDaySwitch(value: isAllDay, onChanged: onAllDayChanged),
-          SheetFieldRow(
-            label: l10n.calendar_date,
-            value: controllers.date.text,
-            placeholder: l10n.calendar_selectDate,
-            accent: true,
-            useMonoValue: true,
-            errorText: _err(context, 'date'),
-            onTap: onPickDate,
-            trailing: const Icon(Icons.calendar_today_outlined, size: 18),
-          ),
-          // An all-day block has no times to show — the date row is the whole
+          // --- All day — first row of the panel, since it decides whether the
+          // time rows below it exist at all. Offered on every job: a client
+          // visit can genuinely run whole days too.
+          _AllDaySwitch(value: isAllDay, onChanged: onAllDayChanged),
+          ..._dateRow(context, l10n),
+          // An all-day block has no times to show — the date rows are the whole
           // schedule.
           if (!isAllDay) ...timeRows(),
           // --- Repeat: same panel as the date and times, so everything about
@@ -376,6 +394,50 @@ class AppointmentFormFields extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sp16),
       ],
+    ];
+  }
+
+  /// Start and end date, laid out as the time pair below them is. A job that
+  /// runs one day just has the same date in both cells — two dates can't
+  /// disagree about the run the way a stored multi-day flag could.
+  List<Widget> _dateRow(BuildContext context, AppLocalizations l10n) {
+    final startRow = SheetFieldRow(
+      label: l10n.calendar_startDate,
+      value: controllers.date.text,
+      placeholder: l10n.calendar_selectDate,
+      accent: true,
+      useMonoValue: true,
+      errorText: _err(context, 'date'),
+      onTap: onPickDate,
+      trailing: const Icon(Icons.calendar_today_outlined, size: 18),
+    );
+    final endRow = SheetFieldRow(
+      label: l10n.calendar_endDate,
+      value: controllers.endDate.text,
+      placeholder: l10n.calendar_selectDate,
+      accent: true,
+      useMonoValue: true,
+      errorText: _err(context, 'endDate'),
+      onTap: onPickEndDate,
+      // The run length only earns its space once there is a run to describe.
+      trailingLabel: !isMultiDay
+          ? null
+          : (isOvernight
+                ? l10n.calendar_spanNights(spanLength)
+                : l10n.calendar_spanDays(spanLength)),
+    );
+    if (context.isNarrowWidth) return [startRow, endRow];
+    return [
+      IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: startRow),
+            const VerticalDivider(width: 1),
+            Expanded(child: endRow),
+          ],
+        ),
+      ),
     ];
   }
 
@@ -450,9 +512,9 @@ class _PersonalJobSwitch extends StatelessWidget {
   );
 }
 
-/// Turns the block into a whole-day one. Personal jobs only — a client visit
-/// always has a time. Lives inside the schedule `SheetPanel`, so it takes the
-/// panel's horizontal inset; the vertical is tighter than a `SheetFieldRow`'s
+/// Turns the block into a whole-day one. Offered on every job — a client visit
+/// can run whole days too. Lives inside the schedule `SheetPanel`, so it takes
+/// the panel's horizontal inset; the vertical is tighter than a `SheetFieldRow`'s
 /// because a switch is taller than a label-over-value pair and the row would
 /// otherwise tower over the date row beneath it.
 class _AllDaySwitch extends StatelessWidget {

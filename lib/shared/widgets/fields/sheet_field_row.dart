@@ -19,6 +19,7 @@ class SheetFieldRow extends StatelessWidget {
     this.trailing,
     this.errorText,
     this.useMonoValue = false,
+    this.trailingLabel,
   });
 
   final String label;
@@ -28,6 +29,10 @@ class SheetFieldRow extends StatelessWidget {
   final bool accent;
   final Widget? trailing;
   final String? errorText;
+
+  /// Muted text after the value, e.g. a run length beside an end date. Null
+  /// renders nothing.
+  final String? trailingLabel;
 
   /// Times, dates and other numerals render mono.
   final bool useMonoValue;
@@ -62,11 +67,30 @@ class SheetFieldRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sp4),
-                Text(
-                  isEmpty ? (placeholder ?? '') : value,
-                  style: valueStyle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        isEmpty ? (placeholder ?? '') : value,
+                        style: valueStyle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (trailingLabel != null) ...[
+                      const SizedBox(width: AppSpacing.sp8),
+                      Flexible(
+                        child: Text(
+                          trailingLabel!,
+                          style: theme.monoType.micro.copyWith(
+                            color: theme.palette.textMuted,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
                 if (errorText != null) ...[
                   const SizedBox(height: AppSpacing.sp4),
@@ -88,7 +112,11 @@ class SheetFieldRow extends StatelessWidget {
     if (onTap == null) return content;
     return Semantics(
       button: true,
-      label: '$label, ${isEmpty ? (placeholder ?? '') : value}',
+      // The trailing label is excluded with the rest of the subtree, so it has
+      // to be spoken here or it is invisible to a screen reader.
+      label:
+          '$label, ${isEmpty ? (placeholder ?? '') : value}'
+          '${trailingLabel == null ? '' : ', $trailingLabel'}',
       excludeSemantics: true,
       child: InkWell(
         onTap: onTap,
