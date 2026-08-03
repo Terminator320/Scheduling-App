@@ -2,6 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 
@@ -172,6 +173,18 @@ class AppointmentDateRange {
       end: day.end.isAfter(month.end) ? day.end : month.end,
     );
   }
+
+  /// How far back the range QUERY must reach. A job that started up to
+  /// [maxAppointmentSpanDays] ago can still be running inside this window, and
+  /// the query filters on `startTime` alone — so without this the calendar
+  /// simply never sees it.
+  ///
+  /// Deliberately a derived getter and NOT a constructor field: `==` stays
+  /// keyed on [start]/[end], so two surfaces asking for the same day still
+  /// produce equal ranges and share one Firestore listener. Widening at a call
+  /// site instead would fork a second query for the same day.
+  DateTime get fetchStart =>
+      DateTime(start.year, start.month, start.day - maxAppointmentSpanDays);
 
   /// The month grid renders only the weeks the month occupies, so it shows at
   /// most 6 leading and 6 trailing days — but the fetch keeps a wider ±14
