@@ -17,8 +17,6 @@ String appointmentFormErrorText(
       context.l10n.validation_pleaseSelectAStartTime,
     AppointmentFormError.endTimeRequired =>
       context.l10n.validation_pleaseSelectAnEndTime,
-    AppointmentFormError.endTimeMustBeAfterStart =>
-      context.l10n.calendar_mustBeAfterStartTime,
     AppointmentFormError.clientRequired =>
       context.l10n.validation_pleaseSelectAClient,
     AppointmentFormError.employeesRequired =>

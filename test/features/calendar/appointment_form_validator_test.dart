@@ -37,9 +37,9 @@ void main() {
     });
 
     test('an all-day block ignores stale times left over from before', () {
-      // Regression: times picked BEFORE all-day was switched on stay in state.
-      // An equal start/end pair used to re-raise endTimeMustBeAfterStart, so
-      // Save failed against time rows that were no longer on screen.
+      // Regression: times picked BEFORE all-day was switched on stay in
+      // state; the validator must not raise a time error against rows that
+      // are no longer on screen.
       final errors = AppointmentFormValidator.validate(
         _input(
           isPersonal: true,
@@ -50,16 +50,6 @@ void main() {
         ),
       );
       expect(errors, isEmpty);
-    });
-
-    test('a timed job still rejects an end that is not after the start', () {
-      final errors = AppointmentFormValidator.validate(
-        _input(
-          startTime: const TimeOfDay(hour: 9, minute: 0),
-          endTime: const TimeOfDay(hour: 9, minute: 0),
-        ),
-      );
-      expect(errors['endTime'], AppointmentFormError.endTimeMustBeAfterStart);
     });
 
     test('reports titleRequired on empty / whitespace title', () {
@@ -129,32 +119,16 @@ void main() {
       expect(errors['employees'], AppointmentFormError.employeesRequired);
     });
 
-    test('overnight appointment (end < start) is valid (auto-bumped)', () {
+    test('overnight appointment (end < start) is valid', () {
       final errors = AppointmentFormValidator.validate(
         _input(
           startTime: const TimeOfDay(hour: 23, minute: 0),
           endTime: const TimeOfDay(hour: 1, minute: 0),
         ),
       );
-      // end 1am is after start 11pm via the next-day bump in
-      // combineEndDateAndTime, so no error.
+      // The validator no longer checks end-vs-start ordering — appointmentSpan
+      // owns the overnight roll-over at save time.
       expect(errors, isEmpty);
-    });
-
-    test('end equal to start triggers endTimeMustBeAfterStart', () {
-      // Equal times must NOT get the overnight next-day bump (that would
-      // silently book a ~24h appointment) — they surface the validation
-      // error instead.
-      final errors = AppointmentFormValidator.validate(
-        _input(
-          startTime: const TimeOfDay(hour: 9, minute: 0),
-          endTime: const TimeOfDay(hour: 9, minute: 0),
-        ),
-      );
-      expect(
-        errors['endTime'],
-        AppointmentFormError.endTimeMustBeAfterStart,
-      );
     });
 
     test('reports multiple errors at once', () {
@@ -189,48 +163,14 @@ void main() {
     });
   });
 
-  group('combineEndDateAndTime', () {
-    test('returns same-day end when after start', () {
-      final r = combineEndDateAndTime(
-        DateTime(2026, 5, 10),
-        const TimeOfDay(hour: 11, minute: 0),
-        const TimeOfDay(hour: 9, minute: 0),
-      );
-      expect(r, DateTime(2026, 5, 10, 11));
-    });
-
-    test('bumps to next day only when end is strictly before start', () {
-      final r = combineEndDateAndTime(
-        DateTime(2026, 5, 10),
-        const TimeOfDay(hour: 1, minute: 0),
-        const TimeOfDay(hour: 23, minute: 0),
-      );
-      expect(r, DateTime(2026, 5, 11, 1));
-    });
-
-    test('keeps a same-day end when end equals start (no 24h bump)', () {
-      final r = combineEndDateAndTime(
-        DateTime(2026, 5, 10),
-        const TimeOfDay(hour: 9, minute: 0),
-        const TimeOfDay(hour: 9, minute: 0),
-      );
-      expect(r, DateTime(2026, 5, 10, 9));
-    });
-
-    test('returns same-day end when no startTime supplied', () {
-      final r = combineEndDateAndTime(
-        DateTime(2026, 5, 10),
-        const TimeOfDay(hour: 9, minute: 0),
-      );
-      expect(r, DateTime(2026, 5, 10, 9));
-    });
-  });
-
   group('allDaySpan / appointmentSpan', () {
     test('an all-day block spans midnight to 23:59 of the same date', () {
       // Real instants, not sentinels — every range query and the overdue
       // sweep keep treating it as an ordinary appointment.
-      final span = allDaySpan(DateTime(2026, 5, 10, 14, 37));
+      final span = allDaySpan(
+        DateTime(2026, 5, 10, 14, 37),
+        DateTime(2026, 5, 10, 14, 37),
+      );
 
       expect(span.start, DateTime(2026, 5, 10));
       expect(span.end, DateTime(2026, 5, 10, 23, 59));
@@ -241,6 +181,7 @@ void main() {
       // not leak into the stored span.
       final span = appointmentSpan(
         date: DateTime(2026, 5, 10),
+        endDate: DateTime(2026, 5, 10),
         isAllDay: true,
         startTime: const TimeOfDay(hour: 9, minute: 0),
         endTime: const TimeOfDay(hour: 11, minute: 0),
@@ -253,6 +194,7 @@ void main() {
     test('appointmentSpan uses the picked times when not all-day', () {
       final span = appointmentSpan(
         date: DateTime(2026, 5, 10),
+        endDate: DateTime(2026, 5, 10),
         isAllDay: false,
         startTime: const TimeOfDay(hour: 9, minute: 0),
         endTime: const TimeOfDay(hour: 11, minute: 30),
@@ -265,12 +207,72 @@ void main() {
     test('an end before the start rolls to the next day', () {
       final span = appointmentSpan(
         date: DateTime(2026, 5, 10),
+        endDate: DateTime(2026, 5, 10),
         isAllDay: false,
         startTime: const TimeOfDay(hour: 22, minute: 0),
         endTime: const TimeOfDay(hour: 1, minute: 0),
       );
 
       expect(span.end.day, 11);
+    });
+  });
+
+  group('appointmentSpan', () {
+    test('a same-day job spans the picked times', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 8),
+        endDate: DateTime(2026, 8),
+        isAllDay: false,
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 17, minute: 0),
+      );
+      expect(span.start, DateTime(2026, 8, 1, 9));
+      expect(span.end, DateTime(2026, 8, 1, 17));
+    });
+
+    test('a multi-day job ends on the end date at the end time', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 8),
+        endDate: DateTime(2026, 8, 5),
+        isAllDay: false,
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 17, minute: 0),
+      );
+      expect(span.start, DateTime(2026, 8, 1, 9));
+      expect(span.end, DateTime(2026, 8, 5, 17));
+    });
+
+    test('a night shift ends the morning after the last night', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 8),
+        endDate: DateTime(2026, 8, 3),
+        isAllDay: false,
+        startTime: const TimeOfDay(hour: 22, minute: 0),
+        endTime: const TimeOfDay(hour: 6, minute: 0),
+      );
+      expect(span.start, DateTime(2026, 8, 1, 22));
+      expect(span.end, DateTime(2026, 8, 4, 6));
+    });
+
+    test('an all-day run spans midnight to 23:59 of the end date', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 8, 10),
+        endDate: DateTime(2026, 8, 14),
+        isAllDay: true,
+      );
+      expect(span.start, DateTime(2026, 8, 10));
+      expect(span.end, DateTime(2026, 8, 14, 23, 59));
+    });
+
+    test('equal start and end times read as a continuous 24-hour window', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 8),
+        endDate: DateTime(2026, 8, 3),
+        isAllDay: false,
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 9, minute: 0),
+      );
+      expect(span.end, DateTime(2026, 8, 4, 9));
     });
   });
 }

@@ -373,6 +373,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
 
     final (:start, :end) = appointmentSpan(
       date: state.selectedDate,
+      endDate: state.selectedDate,
       isAllDay: state.isAllDay,
       startTime: state.selectedStartTime,
       endTime: state.selectedEndTime,
