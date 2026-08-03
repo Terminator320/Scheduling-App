@@ -18,7 +18,7 @@ lib/
 │   ├── animations/                  Shared animation widgets (FadeInItem, TapScale, AnimatedLoadingButton, AnimatedFormFieldWrapper — transition-only field shake)
 │   ├── connectivity/                App-wide connectivity — connectivity_providers.dart + offline_banner.dart (OfflineBanner shown when the device drops offline; connectivity_plus)
 │   ├── constants/                   app_urls.dart — external URL constants (e.g. the Settings privacy-policy link)
-│   ├── deep_links/                  The one app_links consumer — deep_link_target.dart (pure classifyDeepLink(Uri) → sealed DeepLinkTarget: InviteLink / AppointmentLink / IgnoredLink) + deep_link_dispatcher.dart (initial link + stream, onError-guarded; routes by target). IgnoredLink covers any URI carrying `homeWidget` — both plugins observe the same openURL, so without that skip every widget/Live-Activity/Siri tap would open twice. The invite branch waits for /login via TopRouteObserver before pushing, and a live session gets an info notice, never an auto-sign-out
+│   ├── deep_links/                  The one app_links consumer — deep_link_target.dart (pure classifyDeepLink(Uri) → sealed DeepLinkTarget: AppointmentLink / IgnoredLink) + deep_link_dispatcher.dart (initial link + stream, onError-guarded; routes by target). IgnoredLink covers any URI carrying `homeWidget` — both plugins observe the same openURL, so without that skip every widget/Live-Activity/Siri tap would open twice. P4c reduced this to the appointment branch ALONE: InviteLink, the /login route race and awaitLoginRoute are deleted, so an old esproschedule://invite?code=… link sitting in someone's messages falls through to IgnoredLink instead of reaching a screen that no longer exists
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
 │   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service
 │   ├── launchers/                   external_uri_launcher.dart (launchExternalUri — the ONE launch+log+notice implementation; the others are thin wrappers over it) + phone_call_launcher.dart (launchPhoneCall — shared tel: dialer) + web_url_launcher.dart (launchWebUrl — external https: opener for the Settings privacy-policy link) + route_map_launcher.dart (launchGoogleMapsRoute — opens a prebuilt multi-stop directions URI); parallel AddressMapLauncher (keeps its own guard — it surfaces a sanctioned SnackBar, not a notice) / EmailComposeLauncher
@@ -56,11 +56,11 @@ lib/
 │   └── .gen/                        Auto-generated app_localizations*.dart (gitignored); regenerate with `flutter gen-l10n`
 │
 └── features/
-    ├── auth/                        Sign-in, invite acceptance, password reset, account-status monitoring; activeUserIdentityProvider resolves (role, docId) for the off-screen schedule mirrors (widget + Siri) — null wipes them. Restyled in P4b (2026-08-02) onto the hero-gradient + lifted-card chrome in AuthScaffold. P4c (2026-08-02) replaced invite acceptance with **account_setup_screen.dart**: an admin-created account signs in normally, and a status of 'invited' routes here instead of the hub. It collects a new password + confirm (PasswordStrengthMeter above the PasswordRequirementsChecklist), names, phone, and one combined terms + location-consent checkbox gating the CTA; the password is changed BEFORE activation, which is the whole reason the shared starting password can't survive setup. **create_account_screen.dart, both accept_invite_* screens, CodeEntryBoxes, AuthCodeField and signup_code_policy.dart are all DELETED**
+    ├── auth/                        Sign-in, account setup, password reset, account-status monitoring; activeUserIdentityProvider resolves (role, docId) for the off-screen schedule mirrors (widget + Siri) — null wipes them. Restyled in P4b (2026-08-02) onto the hero-gradient + lifted-card chrome in AuthScaffold. P4c (2026-08-02) replaced invite acceptance with **account_setup_screen.dart**: an admin-created account signs in normally, and a status of 'invited' routes here instead of the hub. It collects a new password + confirm (PasswordStrengthMeter above the PasswordRequirementsChecklist), names, phone, and one combined terms + location-consent checkbox gating the CTA; the password is changed BEFORE activation, which is the whole reason the shared starting password can't survive setup. **create_account_screen.dart, both accept_invite_* screens, CodeEntryBoxes, AuthCodeField and signup_code_policy.dart are all DELETED**
     ├── calendar/                    Appointments — creation, editing, viewing, repeating series, image uploads (offline-durable via PendingUploadStore), day_route_screen (a day's stops numbered in start order, day picker + employee switcher → multi-stop maps handoff); JobTemplate quick-fill chips seed title/duration on the add form (display-only, never stored)
     ├── clients/                     Client management — CRUD, contacts, appointment history; client detail shows a Job history section (ClientJobHistorySection → fetchClientHistory, clientId-only single-field query sorted in Dart)
     ├── dashboard/                   Admin dashboard — pure stat reducers (DashboardAggregator) over one 8-week appointments range → hero/workload/trends/attention sections + fl_chart WeeklyBarChart
-    ├── employees/                   Team roster + person detail (rebuilt in P4, 2026-08-02). The user doc carries firstName/lastName, jobTitle (JobTitle enum — NOT the access role), a Sunday-indexed workingDays[7] + work start/end minutes, maxJobsPerDay (0 = no cap), onCall, and the emergencyContact/emergencyPhone pair (their own section on both the edit sheet and the detail view, apart from hours and access); `name` is always recomposed through composeEmployeeName so it can never go empty (watchAllUsers orders by it). Roster row shows "<jobTitle> · <n> jobs today" from ONE day-range listener reduced in Dart (employeeJobsTodayProvider), never a query per row. Detail = EmployeeProfileCard (avatar-as-colour-swatch + status/on-call chips + Edit pill) → Call/Email quick actions → KeyValuePanel → EmployeeTodaySection (AppointmentCards, renders "No jobs today" rather than omitting). EmployeeFormSheet split into InvitePersonSheet + EditPersonSheet on FormSheetFrame; disable/enable lives in the edit sheet footer with a future-assignment count caption. **There is no delete** — disable is the only removal (owner decision 2026-08-02). An **invited** person's row is a PendingInviteTile instead (P4b): a dashed avatar and in-place expansion rather than a detail sheet, revealing the INVITE CODE block (Copy pill), the always-"new code" caption, and Resend / Revoke. **Expanding IS a re-issue**, so the fetched code is cached per invite doc id for the row's lifetime and every re-issue argument comes from the stored record; revoking deletes the doc and the live stream drops the row.
+    ├── employees/                   Team roster + person detail (rebuilt in P4, 2026-08-02). The user doc carries firstName/lastName, jobTitle (JobTitle enum — NOT the access role), a Sunday-indexed workingDays[7] + work start/end minutes, maxJobsPerDay (0 = no cap), onCall, and the emergencyContact/emergencyPhone pair (their own section on both the edit sheet and the detail view, apart from hours and access); `name` is always recomposed through composeEmployeeName so it can never go empty (watchAllUsers orders by it). Roster row shows "<jobTitle> · <n> jobs today" from ONE day-range listener reduced in Dart (employeeJobsTodayProvider), never a query per row. Detail = EmployeeProfileCard (avatar-as-colour-swatch + status/on-call chips + Edit pill) → Call/Email quick actions → KeyValuePanel → EmployeeTodaySection (AppointmentCards, renders "No jobs today" rather than omitting). EmployeeFormSheet split into InvitePersonSheet + EditPersonSheet on FormSheetFrame; disable/enable lives in the edit sheet footer with a future-assignment count caption. **There is no delete** — disable is the only removal (owner decision 2026-08-02). An **invited** person's row is a PendingInviteTile instead (P4c): a dashed avatar and in-place expansion rather than a detail sheet, revealing the SIGN-IN DETAILS block — their email and the shared starting password, with one Copy-both pill — plus Reset password / Remove account. **Expanding is NOT a re-issue** (unlike the retired code flow): the starting password is a fixed shared value, so the row renders it with no server round-trip, and only Reset password re-provisions. EmployeeFormActivity keys its busy state by doc id (savingIds / deletingAccountIds) rather than one app-wide bool, and the row reads its own key through a Riverpod select — so one row's reset can't spin another's credentials away, and the reentrancy guard can't silently swallow a different row's tap; `_credentialsFor` keys any re-issued pair to its account so a recycled State can't cross-render one person's password onto another's row. `widgets/fields/credential_line.dart` owns the whole credential surface shared by that row and NewAccountDialog — `CredentialLine`, `CopyCredentialsButton`, `credentialPanelDecoration` and `copyCredentialsToClipboard` (the ONE sanctioned egress of a starting password); they were separate copies and had drifted on both the confirmed-state icon and the panel fill
     ├── feature_tour/                In-app guided tours (showcaseview 5.x) — one FeatureTourHost per hub tab registers its own scope and auto-starts once per tab (device-local tourSeenProvider / SharedPreferences); tourStepsFor is the pure role-aware step catalog, screens wire per-step GlobalKeys and pass ready:false while their body is a loading placeholder; Settings "Replay app tour" row is the only reset
     ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes a two-day payload (todayJobs + tomorrowJobs + on-device rolloverAt) into the App Group (home_widget); mirrors functions/widget_payload_utils.js; the today bucket is endTime-based for isAllDay records and nextJob prefers a timed job; Android no-op
     ├── live_activity/               iOS "time to leave" Lock Screen / Dynamic Island card — LiveActivityRegistrationController upserts the device push-to-start token + one update token per live card into users/{docId}/liveActivityTokens; canHostCards() is the single capability probe; liveActivityEnabledProvider is the device-local opt-out whose Settings toggle must also unregister(). Cards are push-STARTED by functions/live_activity_dispatch.js; Android no-op
@@ -121,10 +121,30 @@ Naming: `*RepositoryProvider`, `*StreamProvider`, `*InRangeProvider`, `filtered*
 
 All Firebase instances (Auth, Firestore, Storage) come from `lib/core/providers/firebase_providers.dart` — never call `FirebaseFirestore.instance` or `FirebaseAuth.instance` directly in feature code (except `main.dart` bootstrap, which runs before Riverpod is mounted).
 
+### Appointment date ranges
+
+`AppointmentDateRange` (`calendar/domain/models/appointment_record.dart`) is the
+key for every appointment stream, and it has **value equality** — two surfaces
+asking for the same window share one Firestore listener, while an hour of drift
+silently forks a second. Build one through a factory, never by hand:
+
+| Factory | Window |
+|---|---|
+| `forDay(day)` | One calendar day, midnight → next midnight (exclusive) |
+| `visibleMonth(focusedDay)` | The month ±14 days, a deliberate superset of every grid shape |
+| `forCalendar(focusedDay:, selectedDay:)` | The month grid ∪ the selected day |
+
+All of them use **calendar** arithmetic (`DateTime(y, m, d + 1)`), never
+`add(Duration(days: 1))`, which lands an hour off real midnight on the two
+DST-shift days. `todayRangeProvider`, the drawer's job count, the day route and
+`forCalendar`'s selected-day leg all resolve through `forDay` — it was
+hand-copied at four sites before, two of which named each other as the
+authority.
+
 ### Services vs Repositories
 
 - **Repositories** speak Firestore. They take and return domain models. All Firestore reads/writes go through a repository.
-- **Services** wrap non-CRUD async work: `AuthService` (account creation with invitation enforcement), `AppointmentImageUploadService` (multi-image Firebase Storage), `ImagePickerService` (pick with native resize/compress).
+- **Services** wrap non-CRUD async work: `AuthService` (sign-in, password reset, and P4c account setup — `completeAccountSetup` changes the password BEFORE calling the activation callable, and `register()` is deleted along with the retired code flow), `AppointmentImageUploadService` (multi-image Firebase Storage), `ImagePickerService` (pick with native resize/compress).
 - **NoticeService** is a broadcast stream of `AppNotice` events. Any code that needs to show a toast calls `ref.read(noticeServiceProvider).success(...)` or `.error(...)`. `NoticeListener` (inside `MaterialApp.builder`) renders them as animated notices that slide in from the **top** of the screen via `Overlay`, auto-dismiss after a timeout, and can be manually dismissed with ×.
 
 ### Local Storage
@@ -503,8 +523,7 @@ persists non-sensitive identity (uid, docId, name, colour) so the calendar can
 render immediately; role and status are always re-read live from Firestore (see
 Security Invariant #1).
 
-The auth screens (sign-in, password-reset, and the two-screen invite
-acceptance) share
+The auth screens (sign-in, password-reset, and the P4c account setup) share
 `AuthScaffold` (`auth/widgets/auth_form_widgets.dart`): a surface scroll view
 that centres the form, caps it at 440px on wide/landscape, and plays one
 reduce-motion-gated fade/rise entrance for the whole form (not a per-field
@@ -857,7 +876,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (1493 test cases as of 2026-08-02; `functions` adds 715 jest
+Run: `flutter test` (1456 test cases as of 2026-08-02; `functions` adds 692 jest
 tests in `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0 info
 lints** — see Analysis & Linting below; see

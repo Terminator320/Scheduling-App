@@ -61,6 +61,10 @@ class ClientSearchPolicy {
     text: normalize(
       [
         client.name,
+        // Legacy pre-Wave-reshape docs kept the business under its own field.
+        // `name` only falls back to it when blank, so a doc carrying both needs
+        // this to stay findable by the business name.
+        client.businessName,
         client.firstName,
         client.lastName,
         client.email,

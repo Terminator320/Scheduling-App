@@ -77,42 +77,67 @@ class AccountDeleteFailed extends AccountDeleteOutcome {
   final Object error;
 }
 
-/// Busy flags for the employee form/detail surfaces — these drive the Save
+/// Busy state for the employee form/detail surfaces — these drive the Save
 /// button and the status button spinners.
+///
+/// Saving and account-deletion are tracked as **sets of doc ids, not booleans**,
+/// because this notifier is app-wide while its surfaces are not: the roster can
+/// show several expanded `PendingInviteTile`s at once, each with its own Reset
+/// and Remove. A single flag made every row claim to be busy when any one of
+/// them was, and — worse — made the reentrancy guard refuse a *different* row's
+/// action, which `EmployeeSaveBusy` then dropped silently.
+///
+/// A brand-new person has no doc id yet, so they key on `''`. That is correct
+/// rather than a gap: the invite sheet is modal, so there is only ever one
+/// unsaved person, and a double-tap on it collides with itself exactly as it
+/// should.
 @immutable
 class EmployeeFormActivity {
   const EmployeeFormActivity({
-    this.isSaving = false,
+    this.savingIds = const {},
+    this.deletingAccountIds = const {},
     this.isTogglingStatus = false,
-    this.isDeletingAccount = false,
   });
 
-  final bool isSaving;
+  final Set<String> savingIds;
+  final Set<String> deletingAccountIds;
   final bool isTogglingStatus;
-  final bool isDeletingAccount;
+
+  /// Is *anything* saving. The two person sheets are modal and own the only
+  /// operation in flight when they are open, so they read this rather than
+  /// keying by id.
+  bool get isSaving => savingIds.isNotEmpty;
+  bool get isDeletingAccount => deletingAccountIds.isNotEmpty;
+
+  /// Is THIS employee saving / being removed — what a roster row must ask.
+  bool isSavingId(String docId) => savingIds.contains(docId);
+  bool isDeletingAccountId(String docId) => deletingAccountIds.contains(docId);
 
   EmployeeFormActivity copyWith({
-    bool? isSaving,
+    Set<String>? savingIds,
+    Set<String>? deletingAccountIds,
     bool? isTogglingStatus,
-    bool? isDeletingAccount,
   }) {
     return EmployeeFormActivity(
-      isSaving: isSaving ?? this.isSaving,
+      savingIds: savingIds ?? this.savingIds,
+      deletingAccountIds: deletingAccountIds ?? this.deletingAccountIds,
       isTogglingStatus: isTogglingStatus ?? this.isTogglingStatus,
-      isDeletingAccount: isDeletingAccount ?? this.isDeletingAccount,
     );
   }
 
   @override
   bool operator ==(Object other) =>
       other is EmployeeFormActivity &&
-      other.isSaving == isSaving &&
-      other.isTogglingStatus == isTogglingStatus &&
-      other.isDeletingAccount == isDeletingAccount;
+      setEquals(other.savingIds, savingIds) &&
+      setEquals(other.deletingAccountIds, deletingAccountIds) &&
+      other.isTogglingStatus == isTogglingStatus;
 
   @override
-  int get hashCode =>
-      Object.hash(isSaving, isTogglingStatus, isDeletingAccount);
+  int get hashCode => Object.hash(
+    Object.hashAllUnordered(savingIds),
+    Object.hashAllUnordered(deletingAccountIds),
+    isTogglingStatus,
+  );
 }
 
 /// Handles employee create/update/status, shared by the form sheet and the
@@ -137,6 +162,7 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
   /// four — but not zero.
   Future<EmployeeSaveOutcome> createAccount(EmployeeRecord employee) {
     return _save(
+      employee.id,
       (repo) async => EmployeeAccountCreated(
         await repo.createEmployeeAccount(
           name: employee.name,
@@ -162,7 +188,7 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
     EmployeeRecord employee, {
     EmergencyContact? emergency,
   }) {
-    return _save((repo) async {
+    return _save(employee.id, (repo) async {
       await repo.updateEmployee(docId: employee.id, employee: employee);
       if (emergency != null) {
         await repo.saveEmergencyContact(employee.id, emergency);
@@ -171,14 +197,20 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
     });
   }
 
+  /// Runs [write] for [docId], guarding reentrancy **per employee**.
+  ///
+  /// Keyed, not global: a second action on the SAME person is a double-tap and
+  /// must be refused (the save already running owns that outcome), while one on
+  /// a different person is a real action that has to proceed — refusing it
+  /// returned `EmployeeSaveBusy`, which by design surfaces nothing, so the tap
+  /// vanished with no spinner and no error.
   Future<EmployeeSaveOutcome> _save(
+    String docId,
     Future<EmployeeSaveOutcome> Function(EmployeesRepository repo) write,
   ) async {
-    // Reentrancy guard, synchronously first: the sheet's primary button only
-    // disables on the next frame, so a double-tap otherwise starts a second
-    // concurrent write. PendingInviteTile checks isSaving at its call site;
-    // owning it here covers the two person sheets too.
-    if (state.isSaving) {
+    // Synchronously first: the sheet's primary button only disables on the next
+    // frame, so a double-tap otherwise starts a second concurrent write.
+    if (state.isSavingId(docId)) {
       return const EmployeeSaveBusy();
     }
     // Resolve dependencies before the first await. The sheet can be
@@ -186,7 +218,7 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
     // Riverpod 3.
     final repo = ref.read(employeesRepositoryProvider);
     final logger = ref.read(loggerProvider);
-    state = state.copyWith(isSaving: true);
+    state = state.copyWith(savingIds: {...state.savingIds, docId});
     try {
       return await write(repo);
     } catch (e, st) {
@@ -196,7 +228,11 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
       logger.warn('EMP-CREATE saveEmployee failed', e, st);
       return EmployeeSaveFailed(e);
     } finally {
-      if (ref.mounted) state = state.copyWith(isSaving: false);
+      // Remove only THIS key — a concurrent save for another employee is still
+      // in flight and must keep its own.
+      if (ref.mounted) {
+        state = state.copyWith(savingIds: {...state.savingIds}..remove(docId));
+      }
     }
   }
 
@@ -234,7 +270,11 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
     // Resolved before the first await — see _save.
     final repo = ref.read(employeesRepositoryProvider);
     final logger = ref.read(loggerProvider);
-    state = state.copyWith(isDeletingAccount: true);
+    // Keyed like _save: two expanded pending rows can each be removed, and one
+    // row's removal must not disable the other's button.
+    state = state.copyWith(
+      deletingAccountIds: {...state.deletingAccountIds, docId},
+    );
     try {
       await repo.deleteEmployeeAccount(docId);
       return const AccountDeleted();
@@ -242,7 +282,11 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
       logger.warn('EMP-DELETE deleteEmployeeAccount failed', e, st);
       return AccountDeleteFailed(e);
     } finally {
-      if (ref.mounted) state = state.copyWith(isDeletingAccount: false);
+      if (ref.mounted) {
+        state = state.copyWith(
+          deletingAccountIds: {...state.deletingAccountIds}..remove(docId),
+        );
+      }
     }
   }
 }

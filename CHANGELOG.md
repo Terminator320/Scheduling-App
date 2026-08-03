@@ -10,7 +10,70 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.40.0+65] - 2026-08-02
+
+### Added
+- **An admin now creates an employee's account outright, instead of sending them
+  a code to redeem.** Fill in the person's details and the app makes their
+  sign-in there and then, showing you their email and a starting password to
+  hand over however you like — read it out, text it, whatever suits. One **Copy
+  both** button puts the pair on your clipboard together, so you can't send a
+  password without saying which account it opens.
+- **The employee finishes their own setup on first sign-in.** They sign in with
+  what you gave them and the app takes them straight to a setup screen: choose
+  your own password, confirm your name and phone, and accept the terms. Until
+  they've done that they can't see clients, jobs or anyone else on the team.
+- **A pending person's row opens in place on the Team list** to show their
+  sign-in details, with **Reset password** if they never signed in or lost what
+  you gave them, and **Remove account** to undo a mistaken invite. Once they've
+  set themselves up, both stop being offered — the account is theirs from that
+  point, and disabling is the only way to remove someone.
+
+### Changed
+- **Invite codes are gone.** The twelve-character code, the two-step accept
+  screens, the resend and revoke buttons, the expiry countdown and the invite
+  links have all been replaced by the flow above. There is no longer anything to
+  "accept" — so the sign-in screen's invite prompt has gone with it. An old
+  invite link sitting in someone's messages now does nothing rather than opening
+  a screen that no longer exists.
+- **A person's work email can no longer be edited once their account exists.**
+  It is the address they sign in with, and changing it here only ever renamed
+  the label — it never moved the actual sign-in. Showing it as fixed is the
+  honest version until changing a sign-in address is a thing the app can really
+  do.
+
+### Fixed
+- **Setup would accept the starting password as your "new" one.** The shared
+  password happens to satisfy every strength requirement, so someone could
+  "choose" the very value their admin had just read out to them and stay on it
+  permanently, with nothing anywhere flagging it. It is now rejected by name.
+- **Editing one person's email could reset a different person's password and
+  lock them out of the app entirely.** Creating an account matched people up by
+  email address, which an admin can edit freely, so the app could act on the
+  wrong account. It now matches on the account itself.
+- **Personal blocks stopped being nagged as overdue.** A personal entry whose
+  end time had passed showed up under the dashboard's Attention list as an
+  unfinished job, which there was no way to clear — personal blocks have no
+  "mark as done".
+- **Double-tapping Save no longer reports a false "you appear to be offline".**
+  The second tap was reported as a network error while perfectly online, with
+  the real save quietly succeeding behind the message.
+- **Revealed passwords are no longer offered to your keyboard's learning.**
+  Tapping **Show** on a password field turned it into ordinary text, which a
+  third-party keyboard was then free to remember and sync.
+- **Two pending rows opened at once no longer interfere with each other.**
+  Resetting one person's password used to blank out the other's details while it
+  ran, and a reset started on the second row while the first was still going was
+  silently dropped — no spinner, no message, nothing saved.
+- **Older clients are findable by their business name again**, including the
+  ones that carry both a contact name and a separate business name.
+
 ## [1.39.0+64] - 2026-08-02
+
+> The invite-code entries below were superseded by 1.40.0 the same day and never
+> reached anyone — employees are now given an account directly instead of a code
+> to redeem. Kept for the record; read 1.40.0 for how onboarding actually works.
+
 ### Added
 - **Accepting an invite is now its own two-step flow.** Enter the twelve-character
   code your employer sent you, and the app checks it *before* asking for anything

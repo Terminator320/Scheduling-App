@@ -149,4 +149,39 @@ void main() {
       expect(_matches(sophie, '   '), isFalse);
     });
   });
+
+  group('legacy businessName', () {
+    test('a business-only doc is searchable by its business name', () {
+      // The documented legacy shape: `name` empty, business under its own
+      // field. fromMap promotes it into `name`, so this has always worked.
+      final doc = ClientRecord.fromMap('c1', const {
+        'name': '',
+        'businessName': 'Plomberie Rivard',
+      });
+      expect(doc.name, 'Plomberie Rivard');
+      expect(_matches(doc, 'Rivard'), isTrue);
+    });
+
+    test('a doc with BOTH a name and a business name matches either', () {
+      // The gap: `name` is non-empty so the fallback never fires, and indexing
+      // `name` alone made the business name unfindable.
+      final doc = ClientRecord.fromMap('c2', const {
+        'name': 'Sophie Tremblay',
+        'businessName': 'Plomberie Rivard',
+      });
+      expect(doc.name, 'Sophie Tremblay');
+      expect(_matches(doc, 'Sophie'), isTrue);
+      expect(_matches(doc, 'Rivard'), isTrue);
+    });
+
+    test('businessName is never written back', () {
+      // Read-only legacy field: emitting it would persist it on every save and
+      // resurrect a field no UI can edit.
+      final doc = ClientRecord.fromMap('c3', const {
+        'name': 'Sophie Tremblay',
+        'businessName': 'Plomberie Rivard',
+      });
+      expect(doc.toMap().containsKey('businessName'), isFalse);
+    });
+  });
 }

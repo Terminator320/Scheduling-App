@@ -70,6 +70,22 @@ function requireString(data, key, maxLen) {
 }
 
 /**
+ * Same as requireString but allows the field to be absent or empty — the
+ * length cap and the control-char reject still apply to whatever is there.
+ * @param {object} data callable request data.
+ * @param {string} key field name.
+ * @param {number} maxLen max length (inclusive).
+ * @return {string} the trimmed value, or "" when absent.
+ */
+function optionalString(data, key, maxLen) {
+  const value = typeof data?.[key] === "string" ? data[key].trim() : "";
+  if (value.length > maxLen || hasControlChar(value)) {
+    throw new HttpsError("invalid-argument", `invalid-${key}`);
+  }
+  return value;
+}
+
+/**
  * Validates and returns a finite number within [min, max], throwing
  * HttpsError("invalid-argument") when missing, non-numeric, non-finite, or
  * out of range.
@@ -217,6 +233,7 @@ module.exports = {
   hasControlChar,
   assertPayloadShape,
   requireString,
+  optionalString,
   requireNumberInRange,
   readSessionToken,
   enforceDurableRateLimit,

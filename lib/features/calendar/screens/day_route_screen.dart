@@ -56,16 +56,6 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     _selectedEmployeeId = widget.employeeId;
   }
 
-  AppointmentDateRange _dayRange(DateTime day) {
-    final start = day.dateOnly;
-    // Calendar arithmetic, not a fixed 24h — see app_nav_drawer: on a DST day
-    // this otherwise ends an hour before or after real midnight.
-    return AppointmentDateRange(
-      start: start,
-      end: DateTime(start.year, start.month, start.day + 1),
-    );
-  }
-
   // Fall back to the first assignee if switching days leaves the selection empty. Non-admins always view their own jobs anyway.
   String _resolveEmployeeId(List<String> assigneeIds) {
     if (!widget.isAdmin) return widget.employeeId;
@@ -109,7 +99,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final range = _dayRange(_day);
+    final range = AppointmentDateRange.forDay(_day);
 
     // Admins read the whole day's appointments so the employee picker has something to show. Employees just read their own visible jobs.
     final provider = widget.isAdmin

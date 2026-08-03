@@ -4,11 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/core/utils/current_day_provider.dart';
-import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
-import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
 import 'package:scheduling/features/navigation/domain/drawer_catalog.dart';
 import 'package:scheduling/features/presence/application/live_map_providers.dart';
 import 'package:scheduling/features/presence/domain/live_map_aggregator.dart';
@@ -282,18 +280,10 @@ class _NavRow extends ConsumerWidget {
   };
 
   int? _todayJobCount(WidgetRef ref) {
-    // currentDayProvider so the bucket re-derives at midnight rather than
-    // waiting for a write to re-emit the stream.
-    final today = ref.watch(currentDayProvider).dateOnly;
-    // Calendar arithmetic, not a fixed 24h: on the two DST-shift days
-    // `add(Duration(days: 1))` lands an hour off next midnight, which both
-    // mis-buckets a late-evening job AND forks a second listener because the
-    // range no longer equals todayRangeProvider's (which the Team tab already
-    // holds open).
-    final range = AppointmentDateRange(
-      start: today,
-      end: DateTime(today.year, today.month, today.day + 1),
-    );
+    // todayRangeProvider, not a local range: it re-derives at midnight off
+    // currentDayProvider, and sharing its value means sharing the Firestore
+    // listener the Team tab already holds open rather than forking a second.
+    final range = ref.watch(todayRangeProvider);
     final jobs = isAdmin
         ? ref.watch(appointmentsInRangeProvider(range))
         : ref.watch(

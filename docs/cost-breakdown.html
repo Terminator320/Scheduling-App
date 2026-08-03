@@ -362,7 +362,7 @@
 <div class="wrap">
   <header>
     <p class="eyebrow">Firebase Backend &middot; Cost Analysis</p>
-    <h1>What the 24 Cloud Functions actually cost</h1>
+    <h1>What the 23 Cloud Functions actually cost</h1>
     <p class="lede">
       Across every function, trigger, and supporting service, the backend runs
       almost entirely inside Google's free tiers &mdash; a realistic
@@ -408,7 +408,7 @@
   <div class="callout">
     <span class="mark">$0</span>
     <p>
-      <b>Why compute is free:</b> all 24 functions' invocations pool into a
+      <b>Why compute is free:</b> all 23 functions' invocations pool into a
       single <b>2,000,000/month</b> free allowance, and combined compute
       (~9,000 vCPU-seconds) sits far under the <b>180,000 vCPU-s</b> free tier.
       You'd need roughly <b>70&times; more traffic</b> to leave the free tier on
@@ -418,7 +418,7 @@
   </div>
 
   <section>
-    <h2><span class="num">21</span> Cloud Functions</h2>
+    <h2><span class="num">23</span> Cloud Functions</h2>
     <p class="section-note">
       Estimated monthly volume for a small active plumbing shop. Every function's
       invocations and compute fall inside the free tier &mdash; cost is $0 regardless
@@ -567,17 +567,17 @@
           </tr>
           <tr>
             <td class="idx">17</td>
-            <td class="fn">createEmployeeInvite</td>
+            <td class="fn">createEmployeeAccount</td>
             <td><span class="trig">onCall</span></td>
-            <td>Admin invites an employee</td>
+            <td>Admin creates an employee&rsquo;s account (admin-only, 20/hour)</td>
             <td class="num">&lt;10</td>
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
             <td class="idx">18</td>
-            <td class="fn">redeemSignupCode</td>
+            <td class="fn">completeEmployeeSetup</td>
             <td><span class="trig">onCall</span></td>
-            <td>New employee redeems an invite code</td>
+            <td>New employee activates their own account</td>
             <td class="num">&lt;10</td>
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
@@ -615,17 +615,9 @@
           </tr>
           <tr>
             <td class="idx">23</td>
-            <td class="fn">previewInvite</td>
+            <td class="fn">deleteEmployeeAccount</td>
             <td><span class="trig">onCall</span></td>
-            <td>Invitee&rsquo;s code checked before they pick a password</td>
-            <td class="num">&lt;10</td>
-            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
-          </tr>
-          <tr>
-            <td class="idx">24</td>
-            <td class="fn">revokeInvite</td>
-            <td><span class="trig">onCall</span></td>
-            <td>Admin revokes a pending invite</td>
+            <td>Admin removes an account that never finished setup (admin-only, 20/hour)</td>
             <td class="num">&lt;5</td>
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
@@ -831,7 +823,7 @@
       <li>Free tiers cited: Functions <b>2M invocations + 180K vCPU-s</b>; Places <b>10K calls per SKU</b>; Firestore <b>50K reads / 20K writes / 20K deletes per day</b>; Storage <b>5 GB</b>; Scheduler <b>3 jobs</b> (six now run, so three bill at $0.10/job); FCM push <b>unlimited &amp; free</b>; Secret Manager <b>6 versions + 10K access</b>.</li>
       <li>Google Places replaced its $200 monthly credit (March 2025) with a per-SKU free monthly cap; session tokens can bill in-session autocomplete as $0.</li>
       <li>Wave Accounting, Firebase Cloud Messaging, and Apple's APNs (which carries the iOS Live Activity card) charge nothing per call &mdash; those functions cost only their (free-tier) Firebase compute.</li>
-      <li>All 24 functions are wired in <code>functions/index.js</code> for <code>schedulingapp-88727</code>; counts reflect the source as of 2026-08-02.</li>
+      <li>All 23 functions are wired in <code>functions/index.js</code> for <code>schedulingapp-88727</code>; counts reflect the source as of 2026-08-02. P4c retired the four signup-code callables (<code>createEmployeeInvite</code>, <code>redeemSignupCode</code>, <code>previewInvite</code>, <code>revokeInvite</code>) and added three account ones, so the count went 24 &rarr; 23. None of the six moves a cost lever &mdash; all sit in the free tier at &lt;10 calls/month &mdash; but the deletions are pending deployment, so production still runs the old set until then.</li>
     </ul>
   </div>
 </div>

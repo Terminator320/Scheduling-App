@@ -6,7 +6,10 @@ Functions live in `functions/` (project `schedulingapp-88727`, region
 `us-central1`). `index.js` is now a thin wiring surface that re-exports all 23
 functions under their original names — the implementations are split into
 domain modules: `security.js` (shared callable guards — `assertPayloadShape`,
-`requireString`, `requireNumberInRange` (finite number in `[min,max]`; rejects
+`requireString`, `optionalString` (same trim/length/control-char checks but
+allows absent-or-empty; it lived as a private copy in `invites.js` and was
+carried verbatim into `employee_accounts.js`, which is why it now sits here),
+`requireNumberInRange` (finite number in `[min,max]`; rejects
 `NaN`/`Infinity`), `readSessionToken`, `enforceDurableRateLimit`, `assertAdmin`),
 `bridge.js` (`syncUsersByUid`), `client_propagation.js`
 (`propagateClientEdits`), `client_job_count.js` (`recountClientJobs`, backed by
@@ -21,11 +24,22 @@ and is never written back to Auth, so an email-only check could clear one doc
 while `provisionAuthAccount` reset a different person's account. **And the
 rotation itself is deferred:** `provisionAuthAccount` only RESOLVES the uid for
 an existing account; `resetProvisionedPassword` runs after
-`performCreateAccount`'s transaction has claimed the person as still-`invited`,
-so a setup committing mid-call can no longer have its chosen password reverted.
+`performCreateAccount`'s transaction has claimed the person as still-`invited`
+— which NARROWS the window in which a setup committing mid-call has its chosen
+password reverted, but does not close it: the Auth call is outside both
+transactions, so a `completeEmployeeSetup` landing between the commit and the
+rotation still leaves an `active` employee on the shared default. Auth is not
+transactional; don't record this as fixed.
 The transaction additionally refuses when the uid already belongs to another
 doc — without that, a second doc carrying a live employee's uid made
-`syncUsersByUid` delete their `usersByUid` bridge and locked them out),
+`syncUsersByUid` delete their `usersByUid` bridge and locked them out.
+**Both orphan paths must LOG, loudly.** An Auth account with no `users` doc is
+invisible to every admin surface AND permanently bricks that email, because
+the pre-flight refuses an Auth account whose uid no doc claims — so it is
+unrecoverable in-app and needs the Firebase console. It arises two ways: the
+create's own rollback `deleteUser` failing, and `deleteEmployeeAccount`
+deleting the doc and then failing on Auth. Both now `logger.error` the uid;
+never restore a bare `.catch(() => {})` on either),
 `completeEmployeeSetup` (the person's own activation: transactional, refuses
 `setup-not-pending` on a replay, and stamps the consent timestamps only when
 the flags are actually `true`) and `deleteEmployeeAccount` (admin-only, and
