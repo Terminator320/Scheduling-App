@@ -294,7 +294,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       () => _appointments
           .where(
             'startTime',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
+            isGreaterThanOrEqualTo: Timestamp.fromDate(range.fetchStart),
           )
           .where('startTime', isLessThan: Timestamp.fromDate(range.end))
           .orderBy('startTime')
@@ -423,7 +423,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
           .where('employeeIds', arrayContains: employeeId)
           .where(
             'startTime',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(range.start),
+            isGreaterThanOrEqualTo: Timestamp.fromDate(range.fetchStart),
           )
           .where('startTime', isLessThan: Timestamp.fromDate(range.end))
           .orderBy('startTime')

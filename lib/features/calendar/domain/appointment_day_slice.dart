@@ -5,6 +5,12 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 
 /// The longest span a job may be booked for. Guards [expandToDays] against
 /// fanning a corrupt multi-year `endTime` into an unbounded number of slices.
+///
+/// Also the distance `AppointmentDateRange.fetchStart` reaches back past a
+/// range's start, so a job that started up to this many days ago is still
+/// fetched even though the query filters on `startTime` alone. The two must
+/// stay equal, or a job can start before the fetch window and still overlap
+/// it.
 const int maxAppointmentSpanDays = 14;
 
 /// One appointment as it appears on ONE of the days it spans.
