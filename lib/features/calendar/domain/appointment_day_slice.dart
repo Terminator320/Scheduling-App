@@ -138,7 +138,7 @@ Map<DateTime, List<AppointmentDaySlice>> expandToDays(
       final day = addCalendarDays(startDate, i);
       if (day.isBefore(range.start) || !day.isBefore(range.end)) continue;
       (index[day] ??= <AppointmentDaySlice>[]).add(
-        _sliceAt(a, day: day, index: i + 1, count: rawCount),
+        _sliceAt(a, day: day, index: i + 1, count: count),
       );
     }
   }
