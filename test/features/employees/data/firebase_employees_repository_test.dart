@@ -453,6 +453,108 @@ void main() {
       expect(data.containsKey('status'), isFalse);
     });
 
+    /// Makes the doc read report [uid], and makes the commit transaction see
+    /// [emailAfterCallable] — what the server leaves behind once it has moved
+    /// the email in both stores.
+    void stubStoredDoc({required String uid, String? emailAfterCallable}) {
+      when(
+        docSnapshot.data,
+      ).thenReturn({'email': 'old@example.com', 'uid': uid});
+      if (emailAfterCallable == null) return;
+      final txnSnapshot = _MockDocSnapshot();
+      when(txnSnapshot.data).thenReturn({'email': emailAfterCallable});
+      when(() => transaction.get(docRef)).thenAnswer((_) async => txnSnapshot);
+    }
+
+    test(
+      'routes an email change through the callable when a uid exists',
+      () async {
+        stubStoredDoc(uid: 'auth-uid', emailAfterCallable: 'new@example.com');
+        final callable = stubCallable(
+          'changeEmployeeEmail',
+          data: {'ok': true},
+        );
+
+        await repo().updateEmployee(
+          docId: 'my-id',
+          employee: const EmployeeRecord(
+            id: 'my-id',
+            name: 'Alice',
+            email: 'New@Example.com ',
+            uid: 'auth-uid',
+          ),
+        );
+
+        // Auth is the store that owns sign-in, so it must never be the one left
+        // behind — the callable moves both.
+        expect(capturedPayload(callable), {
+          'docId': 'my-id',
+          'email': 'new@example.com',
+        });
+      },
+    );
+
+    test('leaves the callable alone when the email is unchanged', () async {
+      stubStoredDoc(uid: 'auth-uid');
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Alice',
+          email: 'old@example.com',
+          uid: 'auth-uid',
+        ),
+      );
+
+      verifyNever(
+        () => functions.httpsCallable(any(), options: any(named: 'options')),
+      );
+    });
+
+    test('writes the email directly when the doc carries no uid', () async {
+      stubStoredDoc(uid: '');
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Alice',
+          email: 'new@example.com',
+        ),
+      );
+
+      // Nothing to join: no Auth account exists behind this doc yet.
+      verifyNever(
+        () => functions.httpsCallable(any(), options: any(named: 'options')),
+      );
+      expect(capturedUpdate()['email'], 'new@example.com');
+    });
+
+    test('surfaces the callable email-exists refusal as a typed failure', () {
+      stubStoredDoc(uid: 'auth-uid');
+      stubFailingCallable(
+        'changeEmployeeEmail',
+        FirebaseFunctionsException(
+          message: 'email-exists',
+          code: 'already-exists',
+        ),
+      );
+
+      expect(
+        () => repo().updateEmployee(
+          docId: 'my-id',
+          employee: const EmployeeRecord(
+            id: 'my-id',
+            name: 'Alice',
+            email: 'taken@example.com',
+            uid: 'auth-uid',
+          ),
+        ),
+        throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
+      );
+    });
+
     test('saveEmergencyContact writes users/{id}/private/emergency', () async {
       final privateCollection = _MockCollection();
       final emergencyDoc = _MockDocRef();

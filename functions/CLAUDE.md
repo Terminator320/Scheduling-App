@@ -3,7 +3,7 @@
 Loaded when working under `functions/`. Root context: `../CLAUDE.md`.
 
 Functions live in `functions/` (project `schedulingapp-88727`, region
-`us-central1`). `index.js` is now a thin wiring surface that re-exports all 26
+`us-central1`). `index.js` is now a thin wiring surface that re-exports all 27
 functions under their original names — the implementations are split into
 domain modules: `security.js` (shared callable guards — `assertPayloadShape`,
 `requireString`, `optionalString` (same trim/length/control-char checks but
@@ -25,7 +25,8 @@ shared `DEFAULT_PASSWORD` and the `invited` `users` doc carrying its real
 `uid`, rolls the Auth account back if the Firestore write fails, and refuses
 `email-exists` for an email that has already finished setup. **That refusal
 resolves the target by `uid`, not by email** — `users.email` is admin-editable
-and is never written back to Auth, so an email-only check could clear one doc
+and any doc edited before `changeEmployeeEmail` existed can still disagree with
+Auth (nothing back-fills those), so an email-only check could clear one doc
 while `provisionAuthAccount` reset a different person's account. **And the
 rotation itself is deferred:** `provisionAuthAccount` only RESOLVES the uid for
 an existing account; `resetProvisionedPassword` runs after
@@ -47,9 +48,31 @@ deleting the doc and then failing on Auth. Both now `logger.error` the uid;
 never restore a bare `.catch(() => {})` on either),
 `completeEmployeeSetup` (the person's own activation: transactional, refuses
 `setup-not-pending` on a replay, and stamps the consent timestamps only when
-the flags are actually `true`) and `deleteEmployeeAccount` (admin-only, and
-only while `invited` — doc first, Auth second, so a partial run converges).
-Pure helpers `performCreateAccount`, `performDeleteAccount` and
+the flags are actually `true`), `deleteEmployeeAccount` (admin-only, and
+only while `invited` — doc first, Auth second, so a partial run converges)
+and `changeEmployeeEmail` (admin-only, 2026-08-04 — the ONLY thing that joins
+the two stores on an email edit, and the reason
+`edit_person_sheet.dart`'s email field is editable again. **Auth FIRST,
+Firestore second, with a revert**: Auth owns sign-in and is the only store that
+can truly refuse a duplicate, so it must never be the one left behind; if
+`performChangeEmail`'s transaction then fails, the Auth email is put back and a
+failed revert `logger.error`s the uid + docId — **never the addresses, which
+are PII**. The transaction re-checks both the previous email and uniqueness,
+raising `email-changed` on a concurrent edit. Refuses
+`account-has-no-auth` for a doc with no `uid`: nothing to join there, and the
+client writes that email directly under the rules.
+**It then pushes the person a `kind:"emailChanged"` notice naming the new
+address** (`notifyEmailChanged` → the shared `sendToEmployee`, now exported
+from `notification_utils.js` — never re-derive the token fetch, the role/active
+gate or stale-token pruning). It runs AFTER the commit and swallows everything:
+the change is already durable in both stores, so a push failure must not hand
+the admin an error for something that worked. Roles are `TIMED_RECIPIENT_ROLES`,
+not the change set — the change set is employees-only because an admin normally
+makes those edits themselves, and here the admin is a *different* person from
+the one whose sign-in is moving. It is a courtesy, **not** a guarantee: no live
+FCM token means no notice, so the admin still has to tell them).
+Pure helpers `performCreateAccount`, `performDeleteAccount`,
+`performChangeEmail` and
 `buildActivationPatch` are exported for unit tests; the last one owns the
 never-empty-`name` contract that keeps a person inside `watchAllUsers`'
 `orderBy('name')`. `revokeInvite` and `previewInvite` are **deleted**.

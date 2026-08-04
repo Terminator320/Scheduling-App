@@ -116,6 +116,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `createEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (invite sheet, roster row Reset password) | — | App Check ✓ · admin · durable 20/hr·uid |
 | `completeEmployeeSetup` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` → `auth_service.dart` (account setup screen) | — | App Check ✓ · authed (own doc) · durable 5/15min·uid |
 | `deleteEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (pending-account row) | — | App Check ✓ · admin · durable 20/hr·uid |
+| `changeEmployeeEmail` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (inside `updateEmployee`, when the email changed on a doc with a `uid`) | — | App Check ✓ · admin · durable 20/hr·uid |
 | `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
 | `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin |
 | `waveSetImportSchedule` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings cadence picker) | — | App Check ✓ · admin |
@@ -246,6 +247,47 @@ is rejected up front because `.doc()` throws synchronously on it and would
 surface as an opaque `internal`. No rules change: the deletes are Admin SDK, and
 `allow delete` on `/users` stays withdrawn. Transactional core exported as
 `performDeleteAccount` for jest.
+
+### `changeEmployeeEmail` — `employee_accounts.js`
+Admin-only. Moves an employee's **sign-in identity** in Firebase Auth and on
+their `users` doc together. It exists because nothing else joined those two:
+`updateEmployee` writes Firestore alone, so an admin's email edit left the
+person signing in at the old address while every admin surface showed the new
+one — and it desynced the two stores `createEmployeeAccount` resolves against.
+Added 2026-08-04; it is what re-enabled the email field in `edit_person_sheet`.
+
+Refuses `failed-precondition / account-has-no-auth` for a doc carrying no `uid`
+— there is nothing to join, and that doc's email is written directly by the
+client under the rules. An email equal to the stored one is a no-op `{ok:true}`.
+
+**Order is Auth FIRST, Firestore second, with a revert.** Auth owns sign-in and
+is the only store that can genuinely refuse a duplicate, so it must never be
+the one left behind; a `auth/email-already-exists` becomes `already-exists /
+email-exists`. If the doc write then fails, the Auth email is set back and a
+**failed revert is `logger.error`-ed with the uid and docId — never the
+addresses, which are PII**: that state is the exact desync this function
+prevents and nothing in-app can find it.
+
+A cheap doc-level uniqueness pre-flight runs before Auth so the common conflict
+costs no Auth write plus rollback; `performChangeEmail`'s transaction is the
+authoritative check and re-tests **both** halves — that the doc still holds the
+email we read (`aborted / email-changed` otherwise, which the client surfaces as
+"try again") and that no other doc holds the new one. Guard order is the
+standard one (auth → `assertAdmin` → payload → `enforceDurableRateLimit` 20/hr
+per admin uid → work), with the same `/`-in-docId rejection as the delete.
+Transactional core exported as `performChangeEmail` for jest.
+
+On success it pushes the employee a `kind: "emailChanged"` notification naming
+the new address, via `notifyEmailChanged` → the shared `sendToEmployee` (now
+exported from `notification_utils.js`, so the token fetch, the role + active
+gate and stale-token pruning keep one owner). It runs **after** the commit and
+swallows every failure — the change is already durable in both stores, so a
+push problem must not surface as a failed save. Recipients use
+`TIMED_RECIPIENT_ROLES` so an admin whose own email is being changed is told
+too. Tapping it just opens the calendar (`_handlePushTap` treats a missing
+`appointmentId` as "no appointment to open"), and **it is a courtesy, not a
+guarantee**: an employee with no live FCM token learns when their old address
+stops signing them in, so the admin should still tell them directly.
 
 ## Maps / Places proxies
 

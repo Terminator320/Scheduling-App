@@ -425,19 +425,17 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
     ),
     const SizedBox(height: AppSpacing.sp16),
     SheetFocusScroll(
-      // Read-only once an Auth account exists: this field writes ONLY the
-      // Firestore doc, and nothing syncs it back to Firebase Auth, so editing
-      // it left the person signing in with the old address while every admin
-      // surface showed the new one. Worse, the two then disagree about who
-      // owns an email, which is what let a re-provision reset a live
-      // employee's password. Changing a sign-in identity needs a callable that
-      // moves both stores together; until then the honest UI is not-editable.
+      // Editable again since the `changeEmployeeEmail` callable exists: this is
+      // the person's SIGN-IN identity, and the repository routes a change
+      // through the server so Firebase Auth and the users doc move together.
+      // It was read-only while the field wrote Firestore alone — that left the
+      // person signing in at the old address and desynced the two stores
+      // `createEmployeeAccount` joins on.
       child: LabeledTextField(
         key: const Key('email'),
         label: l10n.employees_workEmail,
         controller: _emailController,
         required: true,
-        readOnly: widget.employee.uid.isNotEmpty,
         keyboard: TextInputType.emailAddress,
         textInputAction: TextInputAction.next,
         maxLength: TextLimits.email,

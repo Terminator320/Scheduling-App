@@ -23,7 +23,7 @@ Widget _wrap(Widget child) => MaterialApp(
 Widget _grid({
   int count = 0,
   ValueChanged<DateTime>? onDaySelected,
-  List<Color> dots = const [],
+  List<Color?> dots = const [],
   DateTime? selectedDay,
 }) => CalendarMonthGrid(
   month: _month,

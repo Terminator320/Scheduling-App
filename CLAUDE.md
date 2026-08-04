@@ -406,7 +406,8 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   happens AFTER the doc-level transaction claims the person as still-`invited`
   (`resetProvisionedPassword`, split out of `provisionAuthAccount` for exactly
   this).** Both halves are load-bearing and both were bugs: `users.email` is
-  admin-editable and is never written back to the Auth account, so an
+  admin-editable, and the two stores can still disagree on any doc edited
+  before `changeEmployeeEmail` existed (nothing back-fills those), so an
   email-only check can clear a doc that is NOT the account Auth hands back —
   which reset a live employee's password and minted a second `users` doc
   carrying their uid, and `syncUsersByUid` then DELETED their `usersByUid`
@@ -449,17 +450,35 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   build does; don't wire anything new to them, and drop the whole shim
   (`grep -rn "#compat-1.37.1"`) once 1.37.1 is off the field. Design:
   `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.
-- **An employee's email is READ-ONLY once their doc carries a `uid`**
-  (`edit_person_sheet.dart`, `readOnly: widget.employee.uid.isNotEmpty`).
-  `updateEmployee` writes only the Firestore doc, and **nothing anywhere syncs
-  that value back to the Firebase Auth account** — the only `auth.updateUser`
-  calls in `functions/` are the two `{disabled}` flips in `bridge.js` and the
-  provisioning password reset. So an edited email left the person signing in
-  with the old address while every admin surface showed the new one, and it
-  desynced the two stores that `createEmployeeAccount` joins on (see the
-  uid-not-email refusal above). Changing a sign-in identity needs a callable
-  that moves Auth and Firestore together; until that exists, not-editable is
-  the honest UI. Don't re-enable the field without building that callable.
+- **An employee's email is their SIGN-IN identity, so an edit to it moves BOTH
+  stores or neither** (2026-08-04, which re-enabled a field that had been
+  read-only since P4c). The joining callable is `changeEmployeeEmail`
+  (`functions/employee_accounts.js`), and `FirebaseEmployeesRepository
+  .updateEmployee` is its ONLY caller: it reads the stored doc first and, when
+  the email actually changed **and** the doc carries a `uid`, runs the callable
+  **before** its own Firestore write, which then merely re-states what the
+  server committed. The order is the whole fix — a Firestore-only change left
+  the person signing in at the old address while every admin surface showed the
+  new one, and desynced the two stores `createEmployeeAccount` joins on (see the
+  uid-not-email refusal above). Keep the call **inside** `updateEmployee` rather
+  than exposing it on `EmployeesRepository`: "an email edit always moves Auth
+  too" is then a property of the one save path, not a second method a call site
+  can forget to pair with it.
+  **Server-side the order is Auth FIRST, Firestore second, with a revert.**
+  Auth is the store that owns sign-in and the only one that can genuinely refuse
+  a duplicate, so it must never be the one left behind; if the doc write then
+  fails, the Auth email is put back and a failed revert `logger.error`s the
+  uid + docId (never the addresses — emails are PII). `performChangeEmail`'s
+  transaction re-checks BOTH the previous email and the uniqueness the
+  pre-flight checked, and raises `email-changed` on a concurrent edit, which the
+  client surfaces as the same "try again" its own transaction guard does.
+  A doc with **no** `uid` still takes the direct client write — there is no Auth
+  account to join, and that is the one path allowed to write `email` alone.
+  **The employee is pushed a `kind:"emailChanged"` notice naming the new
+  address**, after the commit and best-effort (`notifyEmailChanged`, through the
+  shared `sendToEmployee`). It is a courtesy, **not** a guarantee — no live FCM
+  token, no notice — so the admin still has to tell them; don't write it up as
+  if the person is reliably informed.
 - **`kDefaultStartingPassword` is hand-mirrored** in
   `employees/domain/policies/starting_password_policy.dart` and
   `DEFAULT_PASSWORD` in `functions/employee_accounts.js`; both carry a pointer to
@@ -851,6 +870,16 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   the dot row sits below it on the plain cell background, so suppressing them
   there made the day being looked at the one day whose crew was invisible.
   Every cell that has crew shows it — off-month, selected, today, all of them.
+  **A day's dots count JOBS, not distinct people** (owner call, 2026-08-04, which
+  reversed the P2 rule): `dayJobDotColors` (`calendar/domain/appointment_crew.dart`)
+  emits one entry per job in list order, capped at 3, each carrying that job's
+  first colour-resolvable assignee. The dots answer "how busy is this day", so
+  two jobs for the same person are two dots. It returns `List<Color?>` and a
+  **null entry is load-bearing, not a gap**: a job whose crew resolves to no
+  colour still gets a dot, painted `palette.textFaint` — the same neutral the
+  card's crew bar uses for an unassigned job. The old per-assignee version
+  simply skipped those, so a day holding only unassigned work read as empty.
+  The week strip renders the same list capped at 1, for the same reason.
   `today` always comes from
   `currentDayProvider`, never `DateTime.now()`, or the circle sticks on
   yesterday in an app left open across midnight.

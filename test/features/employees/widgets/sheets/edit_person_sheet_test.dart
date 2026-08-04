@@ -123,6 +123,32 @@ void main() {
     expect(capturedSave().name, 'Theo Roy');
   });
 
+  testWidgets('the email stays editable once an Auth account exists', (
+    tester,
+  ) async {
+    // It was read-only while the field wrote Firestore alone. The repository
+    // now routes a change through changeEmployeeEmail, so Auth and the users
+    // doc move together and the admin can fix a wrong address.
+    useTallViewport(tester);
+    await tester.pumpWidget(
+      wrap(
+        const EmployeeRecord(
+          id: 'e1',
+          name: 'Theo',
+          email: 'old@x.com',
+          uid: 'auth-uid',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('email')), 'new@x.com');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+
+    expect(capturedSave().email, 'new@x.com');
+  });
+
   testWidgets('a legacy single-name doc seeds First and survives a save', (
     tester,
   ) async {

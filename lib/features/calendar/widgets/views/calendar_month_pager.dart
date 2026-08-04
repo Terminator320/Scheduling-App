@@ -32,7 +32,7 @@ class CalendarMonthPager extends StatefulWidget {
   final DateTime today;
   final ValueChanged<DateTime> onDaySelected;
   final ValueChanged<DateTime> onMonthChanged;
-  final List<Color> Function(DateTime day) dotColorsFor;
+  final List<Color?> Function(DateTime day) dotColorsFor;
   final int Function(DateTime day) countFor;
 
   @override
