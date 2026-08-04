@@ -166,6 +166,34 @@ class FirebaseClientsRepository implements ClientsRepository {
   }
 
   @override
+  Future<void> setClientArchived(String id, {required bool archived}) async {
+    await _clients.doc(id).update({
+      'archived': archived,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    // Merges over the cached doc rather than replacing it — see _patchWindow.
+    _patchWindow(id, data: {'archived': archived});
+  }
+
+  @override
+  Future<List<ClientRecord>> fetchArchivedClients() async {
+    final window = await _clientScanWindow();
+    if (window == null) return const [];
+    final matches = [
+      for (final doc in window.docs)
+        if (doc.data['archived'] == true)
+          ClientRecord.fromMap(doc.id, doc.data),
+    ];
+    // Sort key computed once per record rather than twice per comparison
+    // (same shape as fetchClientsByType).
+    final keyed = [
+      for (final record in matches)
+        (sortKey: record.displayName.toLowerCase(), record: record),
+    ]..sort((a, b) => a.sortKey.compareTo(b.sortKey));
+    return [for (final entry in keyed) entry.record];
+  }
+
+  @override
   Future<List<ClientRecord>> fetchClientsByType(ClientType type) async {
     if (type == ClientType.unset) return const [];
     final window = await _clientScanWindow();
@@ -175,7 +203,10 @@ class FirebaseClientsRepository implements ClientsRepository {
     // than twice per comparison.
     final matches = [
       for (final doc in window.docs)
-        if (ClientType.fromRaw(doc.data['type']?.toString()) == type)
+        // Archived clients are out of the type filter for the same reason
+        // they're out of the list — the Archived chip is where they live.
+        if (doc.data['archived'] != true &&
+            ClientType.fromRaw(doc.data['type']?.toString()) == type)
           ClientRecord.fromMap(doc.id, doc.data),
     ];
     final keyed = [

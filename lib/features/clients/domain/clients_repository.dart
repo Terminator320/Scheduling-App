@@ -15,6 +15,16 @@ abstract class ClientsRepository {
   // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
   Future<void> deleteClient(String id);
 
+  /// Archives or un-archives a client. Archived clients drop out of the
+  /// paginated list and the type filter but stay searchable and stay bookable —
+  /// their `clientId` links on existing appointments are untouched.
+  Future<void> setClientArchived(String id, {required bool archived});
+
+  /// Archived clients, name-sorted, from the same bounded cached window
+  /// `searchClients` scans — so the Archived chip costs no extra read inside
+  /// the TTL and needs no composite index.
+  Future<List<ClientRecord>> fetchArchivedClients();
+
   Future<List<ClientRecord>> searchClients(String query);
 
   /// Fetches the next page of clients, newest first. Pass the previous page's last item
