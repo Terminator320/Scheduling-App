@@ -781,6 +781,32 @@ describe("importCustomers", () => {
         expect(op.data.updatedAt).toBe(TS);
       });
 
+  test("a new client doc carries archived: false", async () => {
+    const {db, batchLog} = importDb([]);
+    const graphql = graphqlSeq(listPage(1, 1, 1, [waveNode("w1", "Alpha")]));
+    await importCustomers({db, graphql, businessId: "biz-1", now});
+
+    // The clients list filters `archived == false` server-side, and Firestore
+    // excludes docs missing a filtered field — an import that skipped this
+    // would create clients invisible in the list but present in search.
+    expect(batchLog.sets[0].data.archived).toBe(false);
+  });
+
+  test("the update branch leaves an archived client archived", async () => {
+    const existingRef = {id: "existing-doc"};
+    const existingDoc = {
+      data: () => ({waveCustomerId: "w1", name: "Old", archived: true}),
+      ref: existingRef,
+    };
+    const {db, batchLog} = importDb([existingDoc]);
+    const graphql = graphqlSeq(listPage(1, 1, 1, [waveNode("w1", "Alpha")]));
+    await importCustomers({db, graphql, businessId: "biz-1", now});
+
+    // Writing archived here would un-archive every archived client on every
+    // scheduled import.
+    expect(batchLog.sets[0].data).not.toHaveProperty("archived");
+  });
+
   test("reads businessId from wave/connection when not injected", async () => {
     const {db} = importDb([], {businessId: "biz-xyz"});
     const graphql = graphqlSeq(listPage(1, 1, 0, []));

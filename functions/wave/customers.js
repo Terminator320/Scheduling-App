@@ -580,8 +580,17 @@ async function importCustomers(deps = {}) {
       } else {
         const newRef = db.collection("clients").doc();
         // createdAt/updatedAt are required: the clients list orders by
-        // createdAt, and Firestore excludes docs missing that field.
-        batch.set(newRef, {...docFields, createdAt: now(), updatedAt: now()});
+        // createdAt, and Firestore excludes docs missing that field. `archived`
+        // is required for the same reason — the list FILTERS on it, so a doc
+        // without it is invisible there while still turning up in search.
+        // Deliberately create-only: setting it on the update branch above
+        // would un-archive every archived client on every scheduled import.
+        batch.set(newRef, {
+          ...docFields,
+          archived: false,
+          createdAt: now(),
+          updatedAt: now(),
+        });
         summary.imported += 1;
         // Cache so duplicate Wave ids within the same import collapse to one.
         if (waveId) {
