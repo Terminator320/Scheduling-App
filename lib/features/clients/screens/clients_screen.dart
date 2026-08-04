@@ -43,6 +43,9 @@ class _ListInformationState extends State<ListInformation> {
   ClientRecord? _selectedClient;
   ClientsFilter _filter = const ClientsFilterAll();
 
+  /// Whether the list's first page has settled — gates the feature tour.
+  bool _listSettled = false;
+
   late final _tour = TourSteps(
     const DestinationTour(HubTab.clients),
     isAdmin: widget.isAdmin,
@@ -52,6 +55,11 @@ class _ListInformationState extends State<ListInformation> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onListSettled() {
+    if (_listSettled) return;
+    setState(() => _listSettled = true);
   }
 
   Future<void> _onAddClient() async {
@@ -94,6 +102,10 @@ class _ListInformationState extends State<ListInformation> {
       scope: _tour.scope,
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
+      // The client-row step has no target while the list is still its
+      // skeleton, and a tour started then drops it and marks the WHOLE scope
+      // seen — the row step would never be shown again.
+      ready: _listSettled,
       child: Scaffold(
         appBar: AppTopBar(
           title: context.l10n.common_clients,
@@ -151,10 +163,9 @@ class _ListInformationState extends State<ListInformation> {
                         ? _selectedClient?.id
                         : null,
                     onClientTap: _onClientTap,
-                    firstRowTourWrap: _tour.has(TourStepId.clientsRow)
-                        ? (child) =>
-                              _tour.step(TourStepId.clientsRow, child: child)
-                        : null,
+                    firstRowTourWrap: (child) =>
+                        _tour.stepIf(TourStepId.clientsRow, child),
+                    onFirstPageSettled: _onListSettled,
                   ),
                 ),
               ),

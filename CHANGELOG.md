@@ -10,6 +10,66 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.42.0+67] - 2026-08-04
+
+### Added
+- **The app tour now walks you through actually creating things.** Opening
+  "New appointment", "New client" or "Invite someone" for the first time
+  explains that form section by section — what the template chips do, why the
+  crew is required on a personal block, and that a job title is not the same
+  as an access level. Until now the tour stopped at the screen and left you
+  alone the moment a form opened.
+- **Every screen has a tour, not just some.** The dashboard and the day route
+  gained theirs, and the calendar, clients, team and history walkthroughs were
+  filled in — 43 steps in all, in English and French. Employees get their own
+  shorter version of each, covering only what they can actually reach.
+- **The menu has icons again.** Each row in the side menu carries a tinted icon
+  chip, so a destination is never identified by colour alone.
+
+### Changed
+- **A multi-day job names both its ends wherever it is described.** The detail
+  sheet and the booking-conflict warning now read "MON 3 AUG – FRI 7 AUG"
+  instead of naming only the first day, so a clash reported on the Thursday
+  makes sense.
+- **A day you have selected keeps its crew dots on the week strip**, matching
+  the month grid — the day you were looking at used to be the one day whose
+  crew was invisible.
+- **The team member's TODAY panel lists jobs in the order they are worked that
+  day**, rather than by when the job originally started.
+- **Error messages tell you what to do about it, and no longer end in a support
+  code.** "Couldn't save the client — you appear to be offline. (CLI-SAVE)" now
+  reads "Couldn't save the client. You appear to be offline — check your
+  connection and try again." The code in brackets was there for the test
+  builds; it still goes to the crash log, just not to the screen. Being signed
+  out, hitting a rate limit and having a value rejected are also called out by
+  name instead of all landing on "something went wrong".
+
+### Fixed
+- **Editing "this and all future" no longer strips All-day and Personal from
+  the other visits.** Those siblings were being rewritten as ordinary jobs
+  running midnight to 11:59 PM, which also brought back the bogus "time to
+  leave" push at 11:30 the night before.
+- **A client's corrected phone or suite number now reaches a crew already on
+  site.** Edits only propagated to jobs that hadn't started yet, so a crew
+  midway through a multi-day visit kept the old details.
+- **Disabling a team member now counts their jobs correctly.** Someone on day 3
+  of a 10-day run was reported as having 0 upcoming jobs, and a visit finished
+  or cancelled earlier the same day was counted as still needing reassignment.
+- **The app lock can no longer switch itself off for a whole session.** A
+  single failed read of the setting used to be treated as "lock is off"; it now
+  retries, and the app is covered while it sits in the app switcher rather than
+  showing your signed-in session there unprotected.
+- **A locked screen is properly hidden.** Its contents were still reachable by
+  a screen reader and by keyboard focus underneath the lock overlay.
+- **An emergency contact is no longer visible to the whole team.** That name
+  and number — a third party who never consented — was readable by every
+  employee, and is now restricted to the person themselves and admins.
+- **A tour no longer marks itself finished before the screen has loaded.** On
+  History, Clients and Team the walkthrough could run against an empty list,
+  silently skip the steps pointing at a row or the filter bar, and never offer
+  them again.
+- **The tour and invite text no longer describe the retired signup-code flow.**
+
 ## [1.41.0+66] - 2026-08-04
 
 ### Added

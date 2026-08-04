@@ -11,6 +11,7 @@ import 'package:scheduling/features/calendar/domain/models/appointment_image.dar
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:uuid/uuid.dart';
 
 class FirebaseAppointmentsRepository implements AppointmentsRepository {
@@ -101,7 +102,16 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         .get();
     return snapshot.docs
         .map((d) => AppointmentRecord.fromMap(d.id, d.data()))
-        .where((a) => !a.endTime.isBefore(now))
+        // Terminal jobs are not "still assigned". The old `startTime >= now`
+        // query excluded them incidentally, since a job can't be marked done
+        // before it starts; reaching a span back deliberately admits started
+        // jobs, so the status test has to be explicit or a visit completed
+        // this morning still tells the admin to reassign it.
+        .where(
+          (a) =>
+              !a.endTime.isBefore(now) &&
+              !AppointmentStatus.fromRaw(a.status).isTerminal,
+        )
         .length;
   }
 

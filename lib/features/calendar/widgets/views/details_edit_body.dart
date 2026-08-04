@@ -350,7 +350,6 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
               composeErrorNotice(
                 context,
                 intro: context.l10n.error_introSaveAppointment,
-                tag: 'APPT-SAVE',
                 error: error,
               ),
             );
@@ -384,7 +383,6 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
             composeErrorNotice(
               context,
               intro: context.l10n.error_introDeleteAppointment,
-              tag: 'APPT-DEL',
               error: error,
             ),
           );

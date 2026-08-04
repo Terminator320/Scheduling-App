@@ -24,12 +24,8 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         home: Builder(
           builder: (context) {
-            noticeFor = (error) => composeErrorNotice(
-              context,
-              intro: 'Intro',
-              tag: 'TAG',
-              error: error,
-            );
+            noticeFor = (error) =>
+                composeErrorNotice(context, intro: 'Intro', error: error);
             return const SizedBox.shrink();
           },
         ),
@@ -37,11 +33,7 @@ void main() {
     );
   }
 
-  String expected(String cause) => l10n.error_noticeWithCause(
-    'Intro',
-    cause,
-    'TAG',
-  );
+  String expected(String cause) => l10n.error_noticeWithCause('Intro', cause);
 
   group('error classification (via composeErrorNotice)', () {
     testWidgets('network-ish Firebase codes map to offline', (tester) async {
@@ -84,6 +76,34 @@ void main() {
       );
     });
 
+    testWidgets('unauthenticated maps to signedOut', (tester) async {
+      await pumpHost(tester);
+      expect(
+        noticeFor(_fb('unauthenticated')),
+        expected(l10n.error_causeSignedOut),
+      );
+    });
+
+    testWidgets('rate-limit codes map to tooManyAttempts', (tester) async {
+      await pumpHost(tester);
+      expect(
+        noticeFor(_fb('resource-exhausted')),
+        expected(l10n.error_causeTooManyAttempts),
+      );
+      expect(
+        noticeFor(_fb('too-many-requests')),
+        expected(l10n.error_causeTooManyAttempts),
+      );
+    });
+
+    testWidgets('rejected-payload codes map to invalidData', (tester) async {
+      await pumpHost(tester);
+      expect(
+        noticeFor(_fb('invalid-argument')),
+        expected(l10n.error_causeInvalidData),
+      );
+    });
+
     testWidgets('anything else maps to unknown', (tester) async {
       await pumpHost(tester);
       expect(noticeFor(Exception('boom')), expected(l10n.error_causeUnknown));
@@ -92,7 +112,9 @@ void main() {
   });
 
   group('composeErrorNotice', () {
-    testWidgets('formats intro, cause, and tag', (tester) async {
+    testWidgets('states what failed, then what the user can do', (
+      tester,
+    ) async {
       late String message;
       await tester.pumpWidget(
         MaterialApp(
@@ -103,7 +125,6 @@ void main() {
               message = composeErrorNotice(
                 context,
                 intro: "Couldn't delete the client",
-                tag: 'CLI-DEL',
                 error: _fb('unavailable'),
               );
               return const SizedBox.shrink();
@@ -113,8 +134,16 @@ void main() {
       );
       expect(
         message,
-        "Couldn't delete the client — you appear to be offline. (CLI-DEL)",
+        "Couldn't delete the client. You appear to be offline — check your "
+        'connection and try again.',
       );
+    });
+
+    testWidgets('never leaks the raw error or a support tag', (tester) async {
+      await pumpHost(tester);
+      final message = noticeFor(_fb('permission-denied'));
+      expect(message, isNot(contains('permission-denied')));
+      expect(message, isNot(contains('(')));
     });
   });
 }

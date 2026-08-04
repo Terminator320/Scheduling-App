@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
@@ -53,7 +54,15 @@ Future<bool> showBusyConflictDialog(
               ),
               const SizedBox(height: AppSpacing.sp4),
               Text(
-                DateUtilsHelper.formatWhenLine(start, end),
+                // The clash is a DAILY-window overlap, so the run being
+                // booked must name both its ends — otherwise a Mon–Fri job
+                // reports a Thursday conflict under a headline reading
+                // "MON 3 AUG".
+                DateUtilsHelper.formatWhenLine(
+                  start,
+                  end,
+                  lastDay: lastWorkDayOfWindow(start, end),
+                ),
                 style: theme.monoType.data,
               ),
               const SizedBox(height: AppSpacing.sp16),

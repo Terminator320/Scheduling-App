@@ -210,7 +210,6 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
           composeErrorNotice(
             context,
             intro: context.l10n.error_introLoadLiveMap,
-            tag: 'LIVEMAP-LOAD',
             error: next.error!,
           ),
         );

@@ -1583,36 +1583,45 @@
   "@settings_deletingAccount": {
     "description": "Progress label shown while the account is being deleted."
   },
-  "error_noticeWithCause": "{intro} — {cause}. ({tag})",
+  "error_noticeWithCause": "{intro}. {cause}",
   "@error_noticeWithCause": {
-    "description": "Error-notice template: operation intro, sanitized cause, short tag matching the Crashlytics log label",
+    "description": "Error-notice template: what failed, then why and what the user can do about it",
     "placeholders": {
       "intro": {
         "type": "String"
       },
       "cause": {
         "type": "String"
-      },
-      "tag": {
-        "type": "String"
       }
     }
   },
-  "error_causeOffline": "you appear to be offline",
+  "error_causeOffline": "You appear to be offline — check your connection and try again.",
   "@error_causeOffline": {
     "description": "Sanitized error cause: network/offline"
   },
-  "error_causePermissionDenied": "you don't have permission to do this",
+  "error_causePermissionDenied": "Your account doesn't have permission for this — ask an admin if you need access.",
   "@error_causePermissionDenied": {
     "description": "Sanitized error cause: permission denied"
   },
-  "error_causeNotFound": "it no longer exists",
+  "error_causeNotFound": "It may have been removed by someone else — refresh and try again.",
   "@error_causeNotFound": {
     "description": "Sanitized error cause: document not found"
   },
-  "error_causeUnknown": "something went wrong",
+  "error_causeSignedOut": "Your session has expired — sign in again to continue.",
+  "@error_causeSignedOut": {
+    "description": "Sanitized error cause: the request was rejected as unauthenticated"
+  },
+  "error_causeTooManyAttempts": "Too many attempts in a short time — wait a minute and try again.",
+  "@error_causeTooManyAttempts": {
+    "description": "Sanitized error cause: rate limited"
+  },
+  "error_causeInvalidData": "Some of the details weren't accepted — check the fields and try again.",
+  "@error_causeInvalidData": {
+    "description": "Sanitized error cause: the server rejected the submitted values"
+  },
+  "error_causeUnknown": "Please try again in a moment.",
   "@error_causeUnknown": {
-    "description": "Sanitized error cause: fallback"
+    "description": "Sanitized error cause: fallback — the intro already says what failed, so this only offers the next step"
   },
   "error_introChangeEmployeeStatus": "Couldn't update the employee's account status",
   "@error_introChangeEmployeeStatus": {

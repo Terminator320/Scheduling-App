@@ -300,6 +300,10 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       scope: _tour.scope,
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
+      // The roster-row step has no target while the body is the loading
+      // placeholder, and a tour started then drops it and marks the WHOLE
+      // scope seen — the row step would never be shown again.
+      ready: ref.watch(allUsersStreamProvider).hasValue,
       child: Scaffold(
         appBar: _buildAppBar(),
         endDrawer: AppNavDrawer(

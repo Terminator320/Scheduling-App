@@ -296,7 +296,9 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   `firestore.rules` doesn't constrain either instant, so the 14-day cap is
   client-side only. Consequences that must stay in sync:
   **`AppointmentDaySlice` (`calendar/domain/appointment_day_slice.dart`) is the
-  ONE owner of day-scoping** — `sliceFor` / `expandToDays` / `lastWorkDayOf`.
+  ONE owner of day-scoping** — `sliceFor` / `expandToDays` / `lastWorkDayOf`
+  (plus `lastWorkDayOfWindow`, its raw start/end form, for the one caller that
+  holds a resolved pair and no record yet: the booking-conflict dialog).
   Never re-derive a day index or a run length at a call site, the way the
   `displayStatusAt` ladder and `_who` were re-derived and drifted.
   **The end date names the last day the crew STARTS work**, never the morning an
@@ -342,11 +344,23 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   caused three separate bugs (no overdue prompt for multi-day runs, a digest
   that told an on-site crew "no jobs tomorrow", and a long job dropping out of
   its own travel context).
-  **The push diff gates on the run's END, not its start** —
-  `stillAhead(record)` in `notification_policy.js`. Gating on `startTime` meant
-  cancelling or deleting a job mid-run pushed NOTHING to the crew, who then
-  turned up the next morning; the Live Activity card still ended, so the only
-  signal was a card silently vanishing.
+  **"Is this job still live?" gates on the run's END, not its start, and has
+  ONE owner: `hasWorkLeft(record, nowMs)` in `functions/time_utils.js`.**
+  Gating on `startTime` meant cancelling or deleting a job mid-run pushed
+  NOTHING to the crew, who then turned up the next morning (the Live Activity
+  card still ended, so the only signal was a card silently vanishing), and it
+  meant `propagateClientEdits` never reached a crew already on site. It was a
+  per-module closure in `notification_policy.js` and `client_propagation.js` —
+  the same drift shape as `displayStatusAt` and `_who` — so route any new test
+  through the shared helper rather than re-deriving `endTime ?? startTime`.
+  **Widening a floor to admit started jobs makes a status filter MANDATORY
+  where it used to be free.** A `startTime >= now` query cannot match a job
+  already marked done, so terminal jobs were excluded incidentally; reaching a
+  span back admits them. `countFutureAssignments`
+  (`firebase_appointments_repository.dart`) therefore tests
+  `AppointmentStatus.fromRaw(status).isTerminal` explicitly, or a visit
+  completed this morning still tells the admin to reassign it before disabling
+  the person. Check every floor widened this way for the same gap.
   **NOT YET MIRRORED (owed by Plan 2):** the home widget, the Siri snapshot and
   `widget_payload_utils.js` still treat every job as single-day, so days 2+ of a
   run are invisible there. (`notification_messages.js` and `travel_utils.js`
@@ -382,6 +396,24 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   `SecureStorageKeys.all` or they never migrate. `isKeychainLockedError`
   classifies residual -25308 (pre-first-unlock) as log-only at the three
   flag-read catch sites.
+- **The app-lock flag is TRI-STATE, and BOTH lifecycle gates must honour it.**
+  `AppLockController` (`app_lock_provider.dart`) holds `false` until a read
+  actually settles, so "off" and "we could not find out" are the same value —
+  `isResolved` tells them apart and `retryIfUnresolved()` re-reads. That
+  distinction is the whole point: reading the bare bool meant ONE transient
+  keychain error (the pre-first-unlock -25308 window above) disabled biometrics
+  for the entire session with no sign anything was wrong. `AppLock`
+  (`core/security/app_lock.dart`) therefore **retries BEFORE deciding on
+  resume**, and — the half that was missed first time — **locks on
+  background/`inactive` while UNRESOLVED**, since that is the gate the OS grabs
+  its app-switcher snapshot behind and "we don't know yet" must not read there
+  as "no lock". A defensive lock is released by `_afterRetry` once the retry
+  settles: **a persistent read failure still degrades to unlocked**, on purpose
+  — someone who never enabled biometrics must never be trapped behind a prompt
+  they cannot satisfy — so the win is the switcher window, not a hard
+  guarantee. Don't write it up as one, and don't "simplify" either gate back to
+  a plain `ref.read(appLockEnabledProvider)`. Pinned by
+  `test/core/security/app_lock_test.dart`.
 - **Role cache:** Never read `isAdmin`/role from SharedPreferences — always Firestore.
 - **Routing:** `AppRoutes.onGenerateRoute` is the single source of truth.
   Pass typed arg classes via `Navigator.pushNamed(..., arguments: ...)`.
@@ -1125,9 +1157,21 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   while their body shows a loading/error placeholder** — the tour's targets
   don't exist yet, so an ungated start finds zero survivors and permanently
   marks the tab seen against an empty body (bit LiveMap: its FAB targets live in
-  the map stack, absent during the presence-data load). Calendar gates on
+  the map stack, absent during the presence-data load). **A PARTIAL start is
+  the same bug and is easier to miss** — the surviving steps run, the tour
+  finishes, and `markSeen` fires for the WHOLE scope, so the dropped steps are
+  gone for good (Settings › Replay is the only way back). Any scope holding
+  even ONE data-dependent target needs the gate, not just one whose body is
+  entirely a placeholder. Calendar gates on
   `!isLoading`; LiveMap gates on `_mapTargetsRendered` (the map stack, not the
-  placeholder, is showing); Dashboard and Day route gate on `AsyncData`.
+  placeholder, is showing); Dashboard and Day route gate on `AsyncData`; Team
+  gates on `allUsersStreamProvider.hasValue`. **Clients and History are
+  paginated, so they have no `AsyncValue` to read** — `ClientsListView` and
+  `AppointmentHistoryView` each expose `onFirstPageSettled`, fired post-frame
+  after the first page resolves (success OR failure — either way the skeleton
+  is gone and no further row arrives on its own), and the screen gates `ready`
+  on it. Wire any new paginated tour host the same way rather than starting
+  against the skeleton.
   Settings and the three form sheets instead FORCE their below-fold targets to
   mount via `autoScroll: true` + an inflated `scrollCacheExtent` — a lazy list
   won't build off-screen rows for `isTargetRendered` to find. Scopes are
@@ -1197,9 +1241,10 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   row that opened it.
 - **Every widget-layer offline write guard goes through `guardedOffline`**
   (`core/errors/error_cause.dart`, beside `composeErrorNotice`) — it reads
-  `isOfflineProvider`, pushes the cause+tag notice and returns true so the
-  caller returns. The block was copy-pasted at six sites; the `tag` must still
-  match the `logger.warn` prefix at the same site. The two `accept_invite_*`
+  `isOfflineProvider`, pushes the standard offline notice and returns true so
+  the caller returns. The block was copy-pasted at six sites. It takes no
+  `tag`: notices carry no support code (2026-08-04), so a tag now lives only in
+  the `logger.warn` label at the same site. The two `accept_invite_*`
   screens deliberately stay out — they surface offline through their own
   `AuthBanner`, not a notice. Controller-layer guards (`add_event`,
   `event_details`, `client_form`) keep returning a typed failure instead.

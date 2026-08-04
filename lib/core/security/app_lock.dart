@@ -23,6 +23,12 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
   bool _locked = false;
   bool _authenticating = false;
 
+  /// True when [_locked] was taken because the flag was UNRESOLVED rather than
+  /// because it is on. Resume clears such a lock once the retry settles, so a
+  /// user who never opted in can't be trapped behind a biometric prompt they
+  /// may have no way to satisfy.
+  bool _lockedUnresolved = false;
+
   @override
   void initState() {
     super.initState();
@@ -52,34 +58,65 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    final controller = ref.read(appLockEnabledProvider.notifier);
     if (state == AppLifecycleState.resumed) {
-      if (_locked) {
-        unawaited(_authenticate());
-        return;
-      }
       // A read that threw at launch leaves the flag unresolved, and a
       // resolved-looking `false` used to disable the lock for the WHOLE
       // session — one transient keychain error (the pre-first-unlock window
       // -25308 lives in) and the app opened straight into a signed-in session
-      // with no prompt and no sign anything was wrong. Retry until it settles;
-      // fail-open applies only to a resolved `false`.
-      final controller = ref.read(appLockEnabledProvider.notifier);
+      // with no prompt and no sign anything was wrong. Retry BEFORE deciding,
+      // so an unresolved flag can still settle on `true`; fail-open applies
+      // only to a resolved `false`.
       if (!controller.isResolved) {
-        unawaited(
-          controller.retryIfUnresolved().then((_) {
-            if (mounted) _lockIfEnabled();
-          }),
-        );
+        unawaited(controller.retryIfUnresolved().then((_) => _afterRetry()));
+        return;
       }
+      if (_locked) unawaited(_authenticate());
       return;
     }
-    if (!ref.read(appLockEnabledProvider)) return;
+    // Backgrounding: an UNRESOLVED flag locks too. This is the gate the OS
+    // grabs its app-switcher snapshot behind, so "we don't know yet" must not
+    // read as "no lock" — that was the same fail-open the resume path above
+    // closes, just at the other end. Resume releases it if it settles `false`.
+    if (controller.isResolved && !ref.read(appLockEnabledProvider)) return;
     // Lock on `inactive` too, since that's the state the OS grabs its
     // app-switcher snapshot during.
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
-      if (!_locked) setState(() => _locked = true);
+      if (!_locked) {
+        setState(() {
+          _locked = true;
+          _lockedUnresolved = !controller.isResolved;
+        });
+      }
+    }
+  }
+
+  /// Settles the lock after a resume-time retry of an unresolved flag.
+  ///
+  /// A retry that still can't read the flag RELEASES a defensive lock rather
+  /// than holding it: the snapshot window it existed for has passed, and a
+  /// persistent storage fault must never leave the app unusable for someone
+  /// who never enabled biometrics. So a durable read failure still degrades to
+  /// "unlocked" — the win here is that it no longer does so while the app sits
+  /// in the switcher.
+  void _afterRetry() {
+    if (!mounted) return;
+    if (!ref.read(appLockEnabledProvider)) {
+      if (_lockedUnresolved) {
+        setState(() {
+          _locked = false;
+          _lockedUnresolved = false;
+        });
+      }
+      return;
+    }
+    _lockedUnresolved = false;
+    if (_locked) {
+      unawaited(_authenticate());
+    } else {
+      _lockIfEnabled();
     }
   }
 
@@ -91,7 +128,12 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
         .read(biometricAuthServiceProvider)
         .authenticate(reason);
     _authenticating = false;
-    if (ok && mounted) setState(() => _locked = false);
+    if (ok && mounted) {
+      setState(() {
+        _locked = false;
+        _lockedUnresolved = false;
+      });
+    }
   }
 
   @override

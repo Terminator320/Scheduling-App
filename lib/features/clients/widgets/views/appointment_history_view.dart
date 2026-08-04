@@ -36,6 +36,7 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
     super.key,
     this.filterTourWrap,
     this.firstRowTourWrap,
+    this.onFirstPageSettled,
   });
 
   final String searchQuery;
@@ -47,6 +48,14 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
   /// Wraps the FIRST row only, as that row's feature-tour step. One row, not
   /// every row — the step's GlobalKey has to stay unique.
   final Widget Function(Widget child)? firstRowTourWrap;
+
+  /// Fires after the first page has settled and been laid out — success or
+  /// failure, since either way the skeleton is gone and no further row will
+  /// appear on its own. A tour host gates `FeatureTourHost.ready` on this:
+  /// the filter bar only renders once a page has supplied years/employees and
+  /// the first row doesn't exist before then, so a tour started earlier drops
+  /// BOTH steps and marks the WHOLE scope seen.
+  final VoidCallback? onFirstPageSettled;
 
   @override
   ConsumerState<AppointmentHistoryView> createState() =>
@@ -106,7 +115,19 @@ class _AppointmentHistoryViewState
           .read(loggerProvider)
           .warn('HIST-LOAD history page fetch error', e, st);
       rethrow;
+    } finally {
+      if (pageKey == 1) _notifyFirstPageSettled();
     }
+  }
+
+  /// Post-frame, so the filter bar and first row the tour targets have
+  /// actually been laid out by the time the host asks showcase about them.
+  void _notifyFirstPageSettled() {
+    final notify = widget.onFirstPageSettled;
+    if (notify == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) notify();
+    });
   }
 
   @override
@@ -433,7 +454,6 @@ class _AppointmentHistoryViewState
         body: composeErrorNotice(
           context,
           intro: context.l10n.error_introLoadHistory,
-          tag: 'HIST-LOAD',
           error: error,
         ),
         actionLabel: context.l10n.common_retry,

@@ -76,7 +76,6 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
       context,
       ref,
       intro: context.l10n.error_introSaveMyDetails,
-      tag: 'ME-SAVE',
     )) {
       return;
     }
@@ -103,7 +102,6 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
         composeErrorNotice(
           context,
           intro: l10n.error_introSaveMyDetails,
-          tag: 'ME-SAVE',
           error: error,
         ),
       );

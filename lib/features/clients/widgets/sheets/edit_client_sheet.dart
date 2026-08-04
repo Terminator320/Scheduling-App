@@ -222,7 +222,6 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
               composeErrorNotice(
                 context,
                 intro: context.l10n.error_introSaveClient,
-                tag: 'CLI-SAVE',
                 error: error,
               ),
             );

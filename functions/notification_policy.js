@@ -20,6 +20,7 @@ const {
   businessYmd,
   businessMidnight,
   businessMinutesOfDay,
+  hasWorkLeft,
   MAX_APPOINTMENT_SPAN_MS,
 } = require("./time_utils");
 
@@ -162,20 +163,11 @@ function diffAppointmentForNotifications(before, after, now, id) {
 
   const isCancelled = (d) =>
     d && String(d.status || "").toLowerCase() === "cancelled";
-  // "Is there still work left on this job?" — NOT "does it start in the
-  // future". A multi-day run can be days past its startTime and still have a
-  // week of work left, and gating on the start alone meant cancelling or
-  // deleting one mid-run pushed NOTHING to the assigned crew, who then turned
-  // up the next morning. Falls back to the start when endTime is missing.
-  const hasWorkLeft = (d) => {
-    if (!d) return false;
-    const ms = toMillis(d.endTime) ?? toMillis(d.startTime);
-    return ms != null && ms >= nowMs;
-  };
+  const stillLive = (d) => hasWorkLeft(d, nowMs);
 
   if (!before && after) {
     // Created.
-    if (isCancelled(after) || !hasWorkLeft(after)) return [];
+    if (isCancelled(after) || !stillLive(after)) return [];
     // Only the anchor (id === seriesId) sends the assignment push, so a
     // repeating series notifies once instead of once per pre-booked
     // occurrence. Non-repeating appointments (empty seriesId) are never
@@ -187,19 +179,19 @@ function diffAppointmentForNotifications(before, after, now, id) {
     }
   } else if (before && !after) {
     // Deleted.
-    if (!hasWorkLeft(before)) return [];
+    if (!stillLive(before)) return [];
     for (const id of toIdList(before.employeeIds)) {
       _accumulate(acc, id, "cancelled");
     }
   } else if (before && after) {
     // Updated.
     if (isCancelled(after) && !isCancelled(before)) {
-      if (!hasWorkLeft(after)) return [];
+      if (!stillLive(after)) return [];
       for (const id of toIdList(before.employeeIds)) {
         _accumulate(acc, id, "cancelled");
       }
     } else if (!isCancelled(after)) {
-      if (!hasWorkLeft(after)) return [];
+      if (!stillLive(after)) return [];
       const beforeIds = toIdList(before.employeeIds);
       const afterIds = toIdList(after.employeeIds);
       const beforeSet = new Set(beforeIds);

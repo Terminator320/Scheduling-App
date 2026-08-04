@@ -162,7 +162,6 @@ class DetailsViewBody extends ConsumerWidget {
               composeErrorNotice(
                 context,
                 intro: context.l10n.error_introUpdateAppointmentStatus,
-                tag: 'APPT-STATUS',
                 error: error,
               ),
             );

@@ -124,7 +124,6 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
       context,
       ref,
       intro: context.l10n.error_introSaveEmployee,
-      tag: 'EMP-CREATE',
     )) {
       return;
     }
@@ -167,7 +166,6 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
               composeErrorNotice(
                 context,
                 intro: context.l10n.error_introSaveEmployee,
-                tag: 'EMP-CREATE',
                 error: error,
               ),
             );

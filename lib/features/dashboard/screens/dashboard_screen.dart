@@ -69,7 +69,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             composeErrorNotice(
               context,
               intro: context.l10n.error_introLoadDashboard,
-              tag: 'DASH-LOAD',
               error: next.error!,
             ),
           );

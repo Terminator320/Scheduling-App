@@ -31,7 +31,7 @@
  */
 
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
-const {MAX_APPOINTMENT_SPAN_MS, toMillis} = require("./time_utils");
+const {MAX_APPOINTMENT_SPAN_MS, hasWorkLeft} = require("./time_utils");
 
 /** Firestore WriteBatch hard limit. */
 const BATCH_LIMIT = 500;
@@ -164,12 +164,6 @@ async function propagateClientChange(clientId, before, after, deps = {}) {
 
   const nowMs = now.getTime();
   const queryFloor = new Date(nowMs - MAX_APPOINTMENT_SPAN_MS);
-  // "Is there still work left on this job?" — mirrors `hasWorkLeft` in
-  // notification_policy.js. Falls back to the start when endTime is missing.
-  const hasWorkLeft = (d) => {
-    const ms = toMillis(d.endTime) ?? toMillis(d.startTime);
-    return ms != null && ms >= nowMs;
-  };
 
   let updated = 0;
   let cursor = null;
@@ -189,7 +183,7 @@ async function propagateClientChange(clientId, before, after, deps = {}) {
     for (const doc of docs) {
       const data = doc.data() || {};
       // The widened floor pulls in runs that already finished; drop those.
-      if (!hasWorkLeft(data)) continue;
+      if (!hasWorkLeft(data, nowMs)) continue;
       const patch = buildAppointmentPatch(change, data);
       if (!patch) continue;
       batch.update(doc.ref, patch);

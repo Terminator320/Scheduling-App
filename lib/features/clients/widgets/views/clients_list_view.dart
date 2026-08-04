@@ -31,6 +31,7 @@ class ClientsListView extends ConsumerStatefulWidget {
     this.onClientTap,
     this.selectedClientId,
     this.firstRowTourWrap,
+    this.onFirstPageSettled,
   });
 
   final String searchQuery;
@@ -46,6 +47,13 @@ class ClientsListView extends ConsumerStatefulWidget {
   /// every row — the step's GlobalKey has to stay unique. Null when the host
   /// has no tour (the booking flow's client picker).
   final Widget Function(Widget child)? firstRowTourWrap;
+
+  /// Fires after the first page has settled and been laid out — success or
+  /// failure, since either way the skeleton is gone and no further row will
+  /// appear on its own. A tour host gates `FeatureTourHost.ready` on this:
+  /// [firstRowTourWrap]'s target doesn't exist while the skeleton is up, and
+  /// a tour started then drops that step and marks the WHOLE scope seen.
+  final VoidCallback? onFirstPageSettled;
 
   @override
   ConsumerState<ClientsListView> createState() => _ClientsListViewState();
@@ -83,7 +91,19 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
     } catch (e, st) {
       ref.read(loggerProvider).warn('CLI-LIST clients page fetch error', e, st);
       rethrow;
+    } finally {
+      if (pageKey == 1) _notifyFirstPageSettled();
     }
+  }
+
+  /// Post-frame, so the row the tour targets has actually been laid out by the
+  /// time the host asks showcase whether it is rendered.
+  void _notifyFirstPageSettled() {
+    final notify = widget.onFirstPageSettled;
+    if (notify == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) notify();
+    });
   }
 
   @override
@@ -397,7 +417,6 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
         body: composeErrorNotice(
           context,
           intro: context.l10n.error_introLoadClients,
-          tag: 'CLI-LIST',
           error: error,
         ),
         actionLabel: context.l10n.common_retry,

@@ -20,7 +20,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Three ordering rules live here in ~40 lines with no compile-time
 /// protection, and both destructive client paths route through them:
 ///   1. a reentrancy-skipped write surfaces NOTHING — no success, no error
-///   2. the typed `has history` branch wins over the generic cause+tag notice
+///   2. the typed `has history` branch wins over the generic cause notice
 ///   3. delete confirms FIRST, and the offline guard runs after the dialog
 const _client = ClientRecord(id: 'c1', name: 'Acme Plumbing');
 
@@ -145,8 +145,13 @@ void main() {
 
       expect(log, isEmpty);
       expect(notices.single, isA<NoticeError>());
-      // The CLI-ARCH tag is what maps a user screenshot to a log line.
-      expect(notices.single.message, contains('CLI-ARCH'));
+      // The intro names the operation that failed; the CLI-ARCH tag lives in
+      // the log line only, never in what the admin reads.
+      expect(
+        notices.single.message,
+        startsWith("Couldn't archive the client."),
+      );
+      expect(notices.single.message, isNot(contains('CLI-ARCH')));
     });
   });
 
@@ -185,7 +190,8 @@ void main() {
       tester,
     ) async {
       // The typed branch must run before the generic composer: "archive it
-      // instead" tells the admin what to do, a cause+tag notice does not.
+      // instead" names the actual remedy, where the generic cause can only
+      // offer "try again".
       await pump(
         tester,
         onDelete: () async => throw const ClientsFailureHasHistory(),
@@ -198,7 +204,11 @@ void main() {
 
       expect(log, isEmpty);
       expect(notices.single, isA<NoticeError>());
-      expect(notices.single.message, isNot(contains('CLI-DEL')));
+      expect(
+        notices.single.message,
+        "This client has job history, so it can't be deleted. Archive it "
+        'instead.',
+      );
     });
 
     testWidgets('a second tap mid-flight is skipped and surfaces nothing', (
@@ -229,7 +239,7 @@ void main() {
       expect(notices.single, isA<NoticeSuccess>());
     });
 
-    testWidgets('an untyped failure falls back to the cause+tag notice', (
+    testWidgets('an untyped failure falls back to the cause notice', (
       tester,
     ) async {
       await pump(tester, onDelete: () async => throw Exception('boom'));
@@ -240,7 +250,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(log, isEmpty);
-      expect(notices.single.message, contains('CLI-DEL'));
+      expect(
+        notices.single.message,
+        "Couldn't delete the client. Please try again in a moment.",
+      );
     });
   });
 }

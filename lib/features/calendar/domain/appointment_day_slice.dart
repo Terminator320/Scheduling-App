@@ -60,7 +60,13 @@ bool _isOvernightWindow(DateTime start, DateTime end) {
   return endMinutes <= startMinutes;
 }
 
-DateTime _lastWorkDayOfWindow(DateTime start, DateTime end) =>
+/// The last day the crew STARTS work for a raw daily window — never the
+/// morning an overnight run finishes.
+///
+/// The window form of [lastWorkDayOf], for a caller holding only a resolved
+/// start/end pair and no record yet (the booking-conflict dialog, which
+/// describes a job that hasn't been saved).
+DateTime lastWorkDayOfWindow(DateTime start, DateTime end) =>
     _isOvernightWindow(start, end)
     ? addCalendarDays(end.dateOnly, -1)
     : end.dateOnly;
@@ -69,14 +75,14 @@ DateTime _lastWorkDayOfWindow(DateTime start, DateTime end) =>
 /// finishes. Keeps the count at `end - start + 1` for day jobs and night
 /// shifts alike.
 DateTime lastWorkDayOf(AppointmentRecord appointment) =>
-    _lastWorkDayOfWindow(appointment.startTime, appointment.endTime);
+    lastWorkDayOfWindow(appointment.startTime, appointment.endTime);
 
 /// How many days (or nights) a daily [start]–[end] window runs for.
 ///
 /// Can come back below 1 on a corrupt pair whose end precedes its start —
 /// every caller guards with `< 1` rather than trusting this is a valid count.
 int _dayCountOfWindow(DateTime start, DateTime end) =>
-    calendarDaysBetween(start.dateOnly, _lastWorkDayOfWindow(start, end)) + 1;
+    calendarDaysBetween(start.dateOnly, lastWorkDayOfWindow(start, end)) + 1;
 
 /// The concrete window a daily [start]–[end] pair occupies on [day].
 ({DateTime start, DateTime end}) _windowOn(
