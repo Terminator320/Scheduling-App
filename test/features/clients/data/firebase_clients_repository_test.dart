@@ -56,6 +56,9 @@ void main() {
 
     when(() => firestore.collection('clients')).thenReturn(collection);
     when(
+      () => collection.where(any(), isEqualTo: any(named: 'isEqualTo')),
+    ).thenReturn(query);
+    when(
       () => collection.orderBy(any(), descending: any(named: 'descending')),
     ).thenReturn(query);
     when(
@@ -125,12 +128,21 @@ void main() {
     test('first page orders by name + doc id without a cursor', () async {
       await repo().fetchClientsPage(limit: 50);
 
-      verify(() => collection.orderBy('name')).called(1);
+      verify(() => query.orderBy('name')).called(1);
       verify(() => query.orderBy(FieldPath.documentId)).called(1);
       verify(() => query.limit(50)).called(1);
       verifyNever(() => query.startAfter(any()));
       // Field-value cursor pagination must never refetch a boundary doc.
       verifyNever(() => collection.doc(any()));
+    });
+
+    test('filters archived out on the server, before ordering', () async {
+      await repo().fetchClientsPage(limit: 50);
+
+      // Server-side, deliberately: filtering a server page in Dart would
+      // shorten a page the server actually filled, and the list's
+      // `pages.last.length < pageSize` end-of-list test would truncate.
+      verify(() => collection.where('archived', isEqualTo: false)).called(1);
     });
 
     test(

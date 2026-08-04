@@ -84,8 +84,21 @@ class FirebaseClientsRepository implements ClientsRepository {
     required int limit,
     ClientRecord? after,
   }) async {
+    // Archived clients are filtered out SERVER-side, so the server still fills
+    // a whole page: `items.last` stays the true cursor and the list's
+    // `pages.last.length < pageSize` end-of-list test stays valid. Filtering
+    // here in Dart instead would shorten a full server page and truncate the
+    // list permanently at the first archived client.
+    //
+    // Firestore excludes docs missing a filtered field, so this depends on
+    // every client doc carrying `archived` — see the backfill script and the
+    // two create paths (`_normalizedMap` and Wave `importCustomers`).
+    //
     // Ordered alphabetically by name (with doc id as tiebreaker) to avoid skipping/duplicating clients with shared names.
-    var query = _clients.orderBy('name').orderBy(FieldPath.documentId);
+    var query = _clients
+        .where('archived', isEqualTo: false)
+        .orderBy('name')
+        .orderBy(FieldPath.documentId);
     if (after != null) {
       query = query.startAfter([
         _pageBoundaryNames[after.id] ?? after.name,
