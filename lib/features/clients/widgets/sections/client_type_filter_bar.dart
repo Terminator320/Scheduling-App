@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Residential / Commercial / Property mgmt filter chips above the clients list.
+/// Residential / Commercial / Property mgmt / Archived filter chips above the
+/// clients list.
 ///
-/// The options are the fixed [ClientType.pickable] set, so unlike a free-text
-/// vocabulary this needs no query to discover what to offer. Tapping the
-/// selected chip clears the filter, mirroring `ClientTypeChips`.
+/// The type options are the fixed [ClientType.pickable] set, so unlike a
+/// free-text vocabulary this needs no query to discover what to offer. Tapping
+/// the selected chip clears the filter, mirroring `ClientTypeChips`. Archived
+/// is a peer chip rather than a modifier: the chips are mutually exclusive, so
+/// the state is one sealed [ClientsFilter], not a type plus a flag.
 class ClientTypeFilterBar extends StatelessWidget {
   const ClientTypeFilterBar({
     required this.selected,
@@ -16,9 +20,8 @@ class ClientTypeFilterBar extends StatelessWidget {
     super.key,
   });
 
-  /// Null means no type filter is applied.
-  final ClientType? selected;
-  final ValueChanged<ClientType?> onChanged;
+  final ClientsFilter selected;
+  final ValueChanged<ClientsFilter> onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -38,11 +41,20 @@ class ClientTypeFilterBar extends StatelessWidget {
               for (final type in ClientType.pickable)
                 FilterChip(
                   label: Text(clientTypeLabel(l10n, type)),
-                  selected: selected == type,
+                  selected: selected == ClientsFilterType(type),
                   showCheckmark: false,
-                  onSelected: (isSelected) =>
-                      onChanged(isSelected ? type : null),
+                  onSelected: (_) => onChanged(
+                    toggledFilter(selected, ClientsFilterType(type)),
+                  ),
                 ),
+              FilterChip(
+                label: Text(l10n.clients_filterArchived),
+                selected: selected is ClientsFilterArchived,
+                showCheckmark: false,
+                onSelected: (_) => onChanged(
+                  toggledFilter(selected, const ClientsFilterArchived()),
+                ),
+              ),
             ],
           ),
         ),

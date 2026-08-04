@@ -9,6 +9,7 @@ import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
@@ -23,7 +24,7 @@ class ClientsListView extends ConsumerStatefulWidget {
     required this.searchQuery,
     required this.isAdmin,
     super.key,
-    this.selectedType,
+    this.filter = const ClientsFilterAll(),
     this.onClientTap,
     this.selectedClientId,
   });
@@ -31,9 +32,9 @@ class ClientsListView extends ConsumerStatefulWidget {
   final String searchQuery;
   final bool isAdmin;
 
-  /// When set, the list shows only clients of this type, read as one bounded
-  /// query rather than filtered out of the paginated list.
-  final ClientType? selectedType;
+  /// Which slice of the roster to show. Anything but [ClientsFilterAll] is
+  /// read as one bounded query rather than filtered out of the paginated list.
+  final ClientsFilter filter;
   final void Function(ClientRecord client)? onClientTap;
   final String? selectedClientId;
 
@@ -250,52 +251,53 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
         );
   }
 
-  // Pre-normalized index over the type-filtered list, memoized on the list
-  // identity for the same reason _loadedSearchIndex is — this view rebuilds on
-  // every keystroke, and re-indexing the whole filtered slice each time is the
+  // Pre-normalized index over the filtered list, memoized on the list identity
+  // for the same reason _loadedSearchIndex is — this view rebuilds on every
+  // keystroke, and re-indexing the whole filtered slice each time is the
   // expensive half of matching.
-  List<ClientRecord>? _typeIndexSource;
-  List<ClientSearchEntry> _typeIndex = const [];
+  List<ClientRecord>? _filterIndexSource;
+  List<ClientSearchEntry> _filterIndex = const [];
 
-  List<ClientSearchEntry> _typeSearchIndex(List<ClientRecord> all) {
-    if (!identical(all, _typeIndexSource)) {
-      _typeIndexSource = all;
-      _typeIndex = [for (final client in all) ClientSearchPolicy.index(client)];
+  List<ClientSearchEntry> _filterSearchIndex(List<ClientRecord> all) {
+    if (!identical(all, _filterIndexSource)) {
+      _filterIndexSource = all;
+      _filterIndex = [
+        for (final client in all) ClientSearchPolicy.index(client),
+      ];
     }
-    return _typeIndex;
+    return _filterIndex;
   }
 
-  // A type filter is a bounded, already-in-memory list, so searching within it
-  // is the shared local matcher rather than a second server query.
-  Widget _buildTypeResults(ClientType type) {
+  // Every non-All filter is a bounded, already-in-memory list, so searching
+  // within it is the shared local matcher rather than a second server query.
+  // Both filter branches render through here so they can't drift on the
+  // loading / error / empty handling.
+  Widget _buildFromAsync(
+    AsyncValue<List<ClientRecord>> async, {
+    required VoidCallback onRetry,
+    required Widget Function(String query) emptyState,
+  }) {
     final query = widget.searchQuery.trim();
-    return ref
-        .watch(clientsByTypeProvider(type))
-        .when(
-          data: (all) {
-            final q = ClientSearchPolicy.normalize(query);
-            final qDigits = ClientSearchPolicy.digitsOnly(query);
-            final items = query.isEmpty
-                ? all
-                : [
-                    for (final entry in _typeSearchIndex(all))
-                      if (ClientSearchPolicy.entryMatches(
-                        entry,
-                        queryText: q,
-                        queryDigits: qDigits,
-                      ))
-                        entry.client,
-                  ];
-            return items.isEmpty
-                ? _typeEmptyState(type: type, query: query)
-                : _resultsList(items);
-          },
-          loading: _fittedSkeleton,
-          error: (e, _) => _errorState(
-            e,
-            onRetry: () => ref.invalidate(clientsByTypeProvider(type)),
-          ),
-        );
+    return async.when(
+      data: (all) {
+        final q = ClientSearchPolicy.normalize(query);
+        final qDigits = ClientSearchPolicy.digitsOnly(query);
+        final items = query.isEmpty
+            ? all
+            : [
+                for (final entry in _filterSearchIndex(all))
+                  if (ClientSearchPolicy.entryMatches(
+                    entry,
+                    queryText: q,
+                    queryDigits: qDigits,
+                  ))
+                    entry.client,
+              ];
+        return items.isEmpty ? emptyState(query) : _resultsList(items);
+      },
+      loading: _fittedSkeleton,
+      error: (e, _) => _errorState(e, onRetry: onRetry),
+    );
   }
 
   Widget _typeEmptyState({required ClientType type, required String query}) =>
@@ -310,6 +312,16 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
             ? context.l10n.clients_typeFilterHint
             : context.l10n.common_tryADifferentSearchTerm,
       );
+
+  Widget _archivedEmptyState(String query) => AppEmptyState(
+    icon: Icons.inventory_2_outlined,
+    title: query.isEmpty
+        ? context.l10n.clients_noArchivedClients
+        : '${context.l10n.clients_noClientsMatch} "$query"',
+    body: query.isEmpty
+        ? context.l10n.clients_archivedFilterHint
+        : context.l10n.common_tryADifferentSearchTerm,
+  );
 
   // Retry re-runs the failed search by invalidating its provider instance;
   // this rebuild is already watching it, so it refetches immediately.
@@ -343,8 +355,22 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   Widget build(BuildContext context) {
     ref.listen(clientsRefreshProvider, (_, _) => _pagingController.refresh());
 
-    final type = widget.selectedType;
-    if (type != null) return _buildTypeResults(type);
+    switch (widget.filter) {
+      case ClientsFilterArchived():
+        return _buildFromAsync(
+          ref.watch(archivedClientsProvider),
+          onRetry: () => ref.invalidate(archivedClientsProvider),
+          emptyState: _archivedEmptyState,
+        );
+      case ClientsFilterType(:final type):
+        return _buildFromAsync(
+          ref.watch(clientsByTypeProvider(type)),
+          onRetry: () => ref.invalidate(clientsByTypeProvider(type)),
+          emptyState: (query) => _typeEmptyState(type: type, query: query),
+        );
+      case ClientsFilterAll():
+        break; // falls through to the search / paginated list below
+    }
 
     final query = widget.searchQuery.trim();
     if (query.isNotEmpty) return _buildSearchResults(query);

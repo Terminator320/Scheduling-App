@@ -45,3 +45,12 @@ final clientsByTypeProvider = FutureProvider.autoDispose
       ref.watch(clientsRefreshProvider);
       return ref.watch(clientsRepositoryProvider).fetchClientsByType(type);
     });
+
+/// Archived clients, read from the same bounded cached window as search and
+/// the type filter — so the Archived chip costs no extra read inside the TTL.
+final archivedClientsProvider = FutureProvider.autoDispose<List<ClientRecord>>((
+  ref,
+) async {
+  ref.watch(clientsRefreshProvider);
+  return ref.watch(clientsRepositoryProvider).fetchArchivedClients();
+});
