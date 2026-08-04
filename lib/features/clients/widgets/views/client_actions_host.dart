@@ -15,9 +15,14 @@ import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 /// each host — two copies of a rule whose answers must match is exactly the
 /// drift this codebase keeps paying for.
 mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
-  /// Called after a successful archive or delete so the host can refresh: the
-  /// list refreshes its paging controller, the detail dismisses itself.
-  void onClientMutated();
+  /// Called after a successful archive / un-archive. Deliberately separate
+  /// from [onClientDeleted]: the list just refreshes for both, but the detail
+  /// view must STAY OPEN here (so it can offer Unarchive) and dismiss there.
+  /// One shared hook could not express that difference.
+  void onClientArchived(ClientRecord client, {required bool archived});
+
+  /// Called after a successful delete, once the record is gone.
+  void onClientDeleted(ClientRecord client);
 
   /// Toggles [client]'s archived state.
   Future<void> archiveClient(ClientRecord client) async {
@@ -47,7 +52,7 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
               ? context.l10n.clients_archivedNotice(client.displayName)
               : context.l10n.clients_unarchivedNotice(client.displayName),
         );
-        onClientMutated();
+        onClientArchived(client, archived: archived);
       case ClientArchiveFailed(:final error):
         notices.error(
           composeErrorNotice(
@@ -87,7 +92,7 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     switch (outcome) {
       case ClientDeleted():
         notices.success(context.l10n.clients_deletedNotice(client.displayName));
-        onClientMutated();
+        onClientDeleted(client);
       case ClientDeleteFailed(:final error):
         // The typed branch runs first: "archive it instead" is actionable,
         // where the generic cause+tag notice would not be.

@@ -2,20 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
-import 'package:scheduling/core/notices/notice_service.dart';
-import 'package:scheduling/core/testing_flags.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/policies/client_delete_policy.dart';
 import 'package:scheduling/features/clients/widgets/sheets/edit_client_sheet.dart';
+import 'package:scheduling/features/clients/widgets/views/client_actions_host.dart';
 import 'package:scheduling/features/clients/widgets/views/client_view_body.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
@@ -39,14 +37,14 @@ class ClientDetailView extends ConsumerStatefulWidget {
   /// How the host dismisses this view once its record is gone — the sheet pops
   /// itself, the two-pane detail clears its selection. The host decides, since
   /// only it knows how it is presented.
-  // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
   final VoidCallback? onDeleted;
 
   @override
   ConsumerState<ClientDetailView> createState() => _ClientDetailViewState();
 }
 
-class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
+class _ClientDetailViewState extends ConsumerState<ClientDetailView>
+    with ClientActionsHost<ClientDetailView> {
   late ClientRecord _client;
 
   @override
@@ -63,43 +61,17 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     setState(() => _client = updated);
   }
 
-  // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
-  Future<void> _confirmTestingDelete() async {
-    final ok = await showConfirmDialog(
-      context,
-      title: 'Delete client? (testing only)',
-      message:
-          'Permanently deletes ${_client.displayName}. Past appointments keep '
-          'the name but stop linking to them. This action is debug-only and '
-          'must not ship.',
-      // The dialog's Cancel comes from l10n, so this reuses the existing key
-      // rather than sitting in English beside a translated button.
-      confirmLabel: context.l10n.common_delete,
-    );
-    if (!ok || !mounted) return;
-
-    final notices = ref.read(noticeServiceProvider);
-    final outcome = await ref
-        .read(clientFormControllerProvider.notifier)
-        .deleteClient(_client.id);
+  // Archiving keeps this view open: the record still exists, and the footer
+  // button flips to Unarchive so the action is reversible from where it was
+  // taken.
+  @override
+  void onClientArchived(ClientRecord client, {required bool archived}) {
     if (!mounted) return;
-    switch (outcome) {
-      case ClientDeleted():
-        notices.success('Client deleted.');
-        widget.onDeleted?.call();
-      case ClientDeleteFailed(:final error):
-        notices.error(
-          composeErrorNotice(
-            context,
-            // Debug-only affordance, so this string stays inline with the other
-            // five rather than adding an ARB key that has to be swept later.
-            intro: "Couldn't delete the client",
-            tag: 'CLI-DEL',
-            error: error,
-          ),
-        );
-    }
+    setState(() => _client = _client.copyWith(archived: archived));
   }
+
+  @override
+  void onClientDeleted(ClientRecord client) => widget.onDeleted?.call();
 
   Future<void> _bookJob() async {
     await showAddEventPopup(context, initialClient: _client);
@@ -107,6 +79,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
 
   @override
   Widget build(BuildContext context) {
+    final busy = ref.watch(clientFormControllerProvider);
     return DetailSheetListView(
       scrollController: widget.scrollController,
       showHandle: widget.showHandle,
@@ -115,19 +88,37 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
         _ProfileCard(client: _client, onEdit: _openEdit),
         const SizedBox(height: AppSpacing.sp16),
         ClientDetailViewBody(client: _client, onBookJob: _bookJob),
-        // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
-        if (kShowTestingDeleteClient) ...[
-          const SizedBox(height: AppSpacing.sp24),
+        const SizedBox(height: AppSpacing.sp24),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 48),
+          ),
+          onPressed: busy ? null : () => archiveClient(_client),
+          icon: Icon(
+            _client.archived
+                ? Icons.unarchive_outlined
+                : Icons.archive_outlined,
+            size: 18,
+          ),
+          label: Text(
+            _client.archived
+                ? context.l10n.clients_unarchive
+                : context.l10n.clients_archive,
+          ),
+        ),
+        // Advisory only — the callable re-checks with a live count(). Withheld
+        // rather than shown-and-refused, so the footer never offers an action
+        // the server will reject.
+        if (canDeleteClient(_client)) ...[
+          const SizedBox(height: AppSpacing.sp8),
           OutlinedButton.icon(
             style: destructiveOutlinedButtonStyle(
               context,
               minimumSize: const Size(double.infinity, 48),
             ),
-            onPressed: ref.watch(clientFormControllerProvider)
-                ? null
-                : _confirmTestingDelete,
+            onPressed: busy ? null : () => confirmDeleteClient(_client),
             icon: const Icon(Icons.delete_outline, size: 18),
-            label: const Text('Delete client (testing)'),
+            label: Text(context.l10n.common_delete),
           ),
         ],
       ],
@@ -248,8 +239,8 @@ class _ProfileCard extends StatelessWidget {
   }
 }
 
-/// Tinted Edit pill. The only shipping affordance on this surface — clients are
-/// never archived or deleted (owner decision 2026-08-01).
+/// Tinted Edit pill. Archive and delete live in the scroll footer instead, per
+/// the form-sheet convention that destructive actions never sit in the header.
 class _EditPill extends StatelessWidget {
   const _EditPill({required this.onEdit});
 

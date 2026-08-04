@@ -127,8 +127,14 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
     await showClientDetailSheet(context, client);
   }
 
+  // An archived client leaves this list and a deleted one is gone, so both
+  // are the same refresh here.
   @override
-  void onClientMutated() => _pagingController.refresh();
+  void onClientArchived(ClientRecord client, {required bool archived}) =>
+      _pagingController.refresh();
+
+  @override
+  void onClientDeleted(ClientRecord client) => _pagingController.refresh();
 
   // The Slidable wraps the tile HERE, not inside ClientTile — the booking
   // flow's client picker reuses that tile and must not gain archive/delete.

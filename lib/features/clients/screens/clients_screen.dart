@@ -153,7 +153,6 @@ class _ListInformationState extends State<ListInformation> {
               ? ClientDetailView(
                   key: ValueKey(_selectedClient!.id),
                   client: _selectedClient!,
-                  // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
                   onDeleted: () => setState(() => _selectedClient = null),
                 )
               : null,
