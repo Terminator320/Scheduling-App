@@ -515,12 +515,26 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data)
              .affectedKeys()
              .hasAny(['waveCustomerId', 'wave', 'jobCount']);
-      // Delete is Admin-SDK-only, via the `deleteClient` callable, which
-      // refuses a client that still has appointments. Rules cannot express
-      // "only when this client has no appointments" — there is no cheap way to
-      // count a foreign collection here — so the callable is the only place
-      // that guarantee can live. Granting delete here would let an admin
-      // session bypass it and orphan the client's job history.
+      // Delete belongs to the `deleteClient` callable, which refuses a client
+      // that still has appointments. Rules cannot express "only when this
+      // client has no appointments" — there is no cheap way to count a foreign
+      // collection here — so the callable is the only place that guarantee can
+      // live, and NOTHING in this build deletes a client directly.
+      //
+      // BACKWARD-COMPAT SHIM. This grant is retained ONLY for the 1.37.1+64
+      // build on the App Store, which predates the 2026-08-01 no-delete
+      // decision and still ships an ungated "Delete client" button doing a
+      // direct doc.delete() (client_detail_view.dart:72 at `2b1ace5`).
+      // Removing it now would fail that button with an opaque
+      // permission-denied.
+      //
+      // It is a REAL HOLE while it is here: a 1.37.1 admin can still delete a
+      // client with job history and orphan those appointments, which is exactly
+      // what the callable's live count() gate exists to prevent. Retire it with
+      // the rest of the shim once no 1.37.1 build remains in the field — grep
+      // `#compat-1.37.1` — and do NOT wire anything new to it.
+      // TODO(george): delete with the 1.37.1 shim (#compat-1.37.1)
+      allow delete: if isAdmin();
     }
 
     // ── wave (Wave Accounting connection metadata) ────────────────────────────

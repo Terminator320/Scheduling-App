@@ -596,8 +596,8 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   the app but a rules tightening later rejects it.
 - **A client is ARCHIVED, not deleted** (owner decision 2026-08-03, which
   REVERSED the 2026-08-01 "never removed — no delete, no archive" rule and
-  retired the `kShowTestingDeleteClient` `#pre-ship` hole with it — both
-  `lib/core/testing_flags.dart` and `allow delete` on `/clients` are gone).
+  retired the `kShowTestingDeleteClient` `#pre-ship` hole with it —
+  `lib/core/testing_flags.dart` is deleted).
   Archiving hides a client from the paginated list and the type filter but
   keeps it **searchable and bookable**: its `clientId` links on existing
   appointments are untouched, which is the whole point — deleting one orphaned
@@ -624,10 +624,19 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   callable** (`functions/clients.js`), which refuses with
   `failed-precondition / client-has-history` when a **live `count()` aggregate**
   finds any appointment — deliberately NOT the denormalized `jobCount`, which is
-  lazily backfilled and can be stale, missing or wrong. `allow delete` on
-  `/clients` is **withdrawn**, because rules cannot express "only when this
-  client has no appointments" (no cheap foreign-collection count), so the
-  callable is the only place that guarantee can live. `canDeleteClient`
+  lazily backfilled and can be stale, missing or wrong. Rules cannot express
+  "only when this client has no appointments" (no cheap foreign-collection
+  count), so the callable is the only place that guarantee can live and
+  **nothing in this build deletes a client directly**.
+  **`allow delete` on `/clients` nonetheless survives as a second
+  `#compat-1.37.1` shim entry** (owner call 2026-08-03): 1.37.1+64 predates the
+  no-delete decision and still ships an *ungated* Delete button doing a direct
+  `doc.delete()`, which withdrawing the grant would break with an opaque
+  `permission-denied`. Be precise about the cost — while that grant is there the
+  hole is REAL: a 1.37.1 admin can still orphan a client's job history, which is
+  the very thing the callable's count() gate prevents. It goes with the rest of
+  the shim (grep `#compat-1.37.1`); never wire anything new to it.
+  `canDeleteClient`
   (`domain/policies/client_delete_policy.dart`) is **advisory UI only** — it
   keeps the swipe and the detail footer from offering what the server would
   refuse, and treats a null `jobCount` as unknown, which withholds. The Admin
