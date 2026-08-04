@@ -14,27 +14,39 @@ const toured = <AppDestination>{
   PushedDestination.history,
   PushedDestination.settings,
   PushedDestination.dashboard,
+  PushedDestination.dayRoute,
+};
+
+/// The destinations an employee can actually reach — exactly the drawer rows
+/// `drawerGroups(isAdmin: false)` offers. Everything else is admin-only, so
+/// its employee catalog must be empty.
+const employeeToured = <AppDestination>{
+  HubTab.calendar,
+  PushedDestination.dayRoute,
+  PushedDestination.settings,
 };
 
 void main() {
-  test('employee tours exist only for calendar and settings', () {
-    for (final destination in allDestinations) {
-      final steps = tourStepsFor(
-        DestinationTour(destination),
-        isAdmin: false,
-      );
-      if (destination == HubTab.calendar ||
-          destination == PushedDestination.settings) {
-        expect(
-          steps,
-          isNotEmpty,
-          reason: '$destination should have an employee tour',
+  test(
+    'employee tours exist only for the destinations employees can reach',
+    () {
+      for (final destination in allDestinations) {
+        final steps = tourStepsFor(
+          DestinationTour(destination),
+          isAdmin: false,
         );
-      } else {
-        expect(steps, isEmpty, reason: '$destination is admin-only');
+        if (employeeToured.contains(destination)) {
+          expect(
+            steps,
+            isNotEmpty,
+            reason: '$destination should have an employee tour',
+          );
+        } else {
+          expect(steps, isEmpty, reason: '$destination is admin-only');
+        }
       }
-    }
-  });
+    },
+  );
 
   test('employee calendar tour has no admin-only steps', () {
     final steps = tourStepsFor(
@@ -82,6 +94,14 @@ void main() {
     const scope = DestinationTour(PushedDestination.dashboard);
     expect(tourStepsFor(scope, isAdmin: true), hasLength(4));
     expect(tourStepsFor(scope, isAdmin: false), isEmpty);
+  });
+
+  test('day route tours both roles, with the picker admin-only', () {
+    const scope = DestinationTour(PushedDestination.dayRoute);
+    expect(tourStepsFor(scope, isAdmin: true), hasLength(4));
+    final employee = tourStepsFor(scope, isAdmin: false);
+    expect(employee, hasLength(3));
+    expect(employee, isNot(contains(TourStepId.dayRouteEmployee)));
   });
 
   test('no catalog anywhere repeats a step', () {
