@@ -212,7 +212,7 @@ what production is running.
 | 2026-07-18 | — | functions, rules | 21 | `placesReverseGeocode`, travel-aware reminder rebuild |
 | 2026-08-01 | `d916b16` | functions, rules | 22 | P3 clients; added `recountClientJobs` |
 | 2026-08-03 | `95259db` | functions, rules | 25 | P4 + P4b + **P4c**: added `createEmployeeAccount`, `completeEmployeeSetup`, `deleteEmployeeAccount`; `private/emergency` rule; `isValidAppointmentData`. **Deleted nothing** — `revokeInvite`/`previewInvite` were never deployed (prod had 22, not the 24 an earlier draft of this row assumed), and `createEmployeeInvite`/`redeemSignupCode` were **kept as the `#compat-1.37.1` shim** for the 1.37.1+64 build on the App Store. No deletion prompt; 22 → 25. `firestore:indexes` omitted (file already in sync with prod). Verified post-deploy: 25 functions live, all three shim rules present, zero `unexpected-field` in logs. See the shim note above. |
-| _(pending)_ | — | functions, rules, **indexes** | 26 | Client archive + delete: adds `deleteClient` (25 → 26); **withdraws `allow delete` on `/clients`** (delete is Admin-SDK/callable only now, gated on a live `count()` of the client's appointments); `isValidClientData` accepts `archived`. **`firestore:indexes` IS required** — new `(archived, name, __name__)` composite for the list's server-side `where('archived','==',false)`. **Run `node functions/scripts/backfill-clients-archived.js` against prod FIRST** (dry-run first): Firestore excludes docs missing a filtered field, so any un-backfilled client vanishes from the list the moment the app build ships. Three ordered steps — backfill → deploy → wait for the index to finish building → cut the app build. Never `--force`. |
+| _(pending)_ | — | functions, rules, **indexes** | 26 | Client archive + delete: adds `deleteClient` (25 → 26), gated on a live `count()` of the client's appointments; `isValidClientData` accepts `archived` (optional, so 1.37.1 writes still pass). **`allow delete` on `/clients` is KEPT** as a second `#compat-1.37.1` shim entry (owner call 2026-08-03) — 1.37.1+64 ships an ungated Delete button doing a direct `doc.delete()`, and withdrawing the grant would fail it with an opaque `permission-denied`. Nothing in the new build uses it. **`firestore:indexes` IS required** — new `(archived, name, __name__)` composite for the list's server-side `where('archived','==',false)`. **Run `node functions/scripts/backfill-clients-archived.js` against prod FIRST** (dry-run first): Firestore excludes docs missing a filtered field, so any un-backfilled client vanishes from the list the moment the app build ships. Three ordered steps — backfill → deploy → wait for the index to finish building → cut the app build. Never `--force`. |
 
 ### The `#compat-1.37.1` shim
 
@@ -224,12 +224,19 @@ writes is a non-nullable `@Default('')` string (so nothing trips the
 `null is string` rejection); `isValidUserData` passes its `updateEmployee` field
 map; and the push `data` keys are unchanged.
 
-Two things would have broken, so they are shimmed rather than deleted:
+Three things would have broken, so they are shimmed rather than deleted:
 
 | What | Why 1.37.1 needs it |
 |---|---|
 | `createEmployeeInvite`, `redeemSignupCode` (+ `invites.js`, `signup_code_utils.js`, the `/signupCodes` rules block and its TTL entry) | Called from `firebase_employees_repository.dart:82` and `:109`. Deleting them kills the invite flow and strands anyone mid-invite. |
 | `allow delete` on `/users`, and the fourth `/users` read clause (`email_verified` + `invited` + email match) | "Delete employee" is a live button (`employee_details_view.dart:45`); the read clause is how the accept screen finds its own doc while `uid` is still empty. |
+| `allow delete` on `/clients` (added to the shim 2026-08-03) | 1.37.1 predates the 2026-08-01 no-delete decision and ships an **ungated** "Delete client" button doing a direct `doc.delete()` (`client_detail_view.dart:72`). Withdrawing the grant fails it with an opaque `permission-denied`. |
+
+**This last one is the only shim entry that leaves a real hole open.** The other
+two merely keep retired paths reachable; this one lets a 1.37.1 admin delete a
+client that still has appointments and orphan that history — precisely what the
+new `deleteClient` callable's live `count()` gate exists to prevent. The
+current build never deletes directly, so retiring it costs nothing here.
 
 Retire all of it in one sweep — `grep -rn "#compat-1.37.1"` — once no 1.37.1
 build remains in the field. Nothing in the current build calls any of it.
