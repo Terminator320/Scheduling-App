@@ -40,7 +40,14 @@ List<TourStepId> _destinationSteps(
     TourStepId.settingsNotifications,
     TourStepId.settingsReplay,
   ],
-  PushedDestination.dayRoute => const [],
+  // Employees reach the day route too, so this catalog isn't admin-gated —
+  // only the picker step is, since an employee sees just their own route.
+  PushedDestination.dayRoute => [
+    TourStepId.dayRouteDaySwitcher,
+    if (isAdmin) TourStepId.dayRouteEmployee,
+    TourStepId.dayRouteStops,
+    TourStepId.dayRouteNavigate,
+  ],
   PushedDestination.dashboard => [
     if (isAdmin) ...[
       TourStepId.dashboardHero,

@@ -7,6 +7,7 @@ import 'package:scheduling/core/launchers/route_map_launcher.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
@@ -17,6 +18,10 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
+import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/route_url_builder.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
@@ -48,6 +53,15 @@ class DayRouteScreen extends ConsumerStatefulWidget {
 class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
   late DateTime _day;
   late String _selectedEmployeeId;
+  late final _tour = TourSteps(
+    const DestinationTour(PushedDestination.dayRoute),
+    isAdmin: widget.isAdmin,
+  );
+
+  /// Wraps a target as its tour step, or leaves it alone when this role's
+  /// catalog doesn't include it.
+  Widget _step(TourStepId id, Widget child) =>
+      _tour.has(id) ? _tour.step(id, child: child) : child;
 
   @override
   void initState() {
@@ -113,6 +127,21 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
 
     final data = _prepareBuild(async.value ?? const <AppointmentRecord>[]);
 
+    return FeatureTourHost(
+      scope: _tour.scope,
+      isAdmin: widget.isAdmin,
+      stepKeys: _tour.keys,
+      // Gated on the data: an ungated start would target the loading
+      // skeletons and mark the screen seen against them.
+      ready: async is AsyncData<List<AppointmentRecord>>,
+      child: _buildScaffold(async, data),
+    );
+  }
+
+  Widget _buildScaffold(
+    AsyncValue<List<AppointmentRecord>> async,
+    _DayRouteData data,
+  ) {
     return Scaffold(
       appBar: AppTopBar(
         title: context.l10n.calendar_dayRouteTitle,
@@ -124,7 +153,10 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
       ),
-      bottomNavigationBar: _routeButton(data.stops),
+      bottomNavigationBar: _step(
+        TourStepId.dayRouteNavigate,
+        _routeButton(data.stops),
+      ),
       // A pushed route sits above the hub tabs' scopes, so it needs its own
       // or it attaches to the root PrimaryScrollController alongside any
       // other pushed route.
@@ -133,10 +165,20 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
           top: false,
           child: Column(
             children: [
-              _daySwitcher(),
+              _step(TourStepId.dayRouteDaySwitcher, _daySwitcher()),
+              // Absent on a day with no assignees, and for employees —
+              // isTargetRendered skips the step rather than failing.
               if (widget.isAdmin && data.assigneeEntries.isNotEmpty)
-                _employeePicker(data.assigneeEntries, data.employeeId),
-              Expanded(child: _timeline(async, data.jobs, data.employeeId)),
+                _step(
+                  TourStepId.dayRouteEmployee,
+                  _employeePicker(data.assigneeEntries, data.employeeId),
+                ),
+              Expanded(
+                child: _step(
+                  TourStepId.dayRouteStops,
+                  _timeline(async, data.jobs, data.employeeId),
+                ),
+              ),
             ],
           ),
         ),
