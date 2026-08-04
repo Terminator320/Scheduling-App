@@ -85,8 +85,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
         body: PrimaryScrollScope(
           child: ListenableBuilder(
             listenable: _searchController,
-            builder: (context, _) =>
-                AppointmentHistoryView(searchQuery: _searchController.text),
+            builder: (context, _) => AppointmentHistoryView(
+              searchQuery: _searchController.text,
+              filterTourWrap: _tour.has(TourStepId.historyFilter)
+                  ? (child) =>
+                        _tour.step(TourStepId.historyFilter, child: child)
+                  : null,
+              firstRowTourWrap: _tour.has(TourStepId.historyRow)
+                  ? (child) => _tour.step(TourStepId.historyRow, child: child)
+                  : null,
+            ),
           ),
         ),
       ),

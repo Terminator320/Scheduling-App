@@ -104,6 +104,15 @@ void main() {
     expect(employee, isNot(contains(TourStepId.dayRouteEmployee)));
   });
 
+  test('the gap-filled catalogs grew to their new lengths', () {
+    int len(AppDestination d) =>
+        tourStepsFor(DestinationTour(d), isAdmin: true).length;
+    expect(len(HubTab.calendar), 5);
+    expect(len(HubTab.clients), 4);
+    expect(len(HubTab.employees), 3);
+    expect(len(PushedDestination.history), 3);
+  });
+
   test('no catalog anywhere repeats a step', () {
     for (final scope in allTourScopes) {
       final steps = tourStepsFor(scope, isAdmin: true);

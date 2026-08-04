@@ -237,7 +237,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
               const Divider(height: 1, indent: 64),
           itemBuilder: (context, index) {
             final employee = filtered[index];
-            return FadeInItem(
+            final row = FadeInItem(
               key: ValueKey(employee.id),
               index: index,
               child: employee.isInvited
@@ -251,6 +251,10 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                       onTap: () => _onEmployeeTap(employee),
                     ),
             );
+            // The FIRST row only — the step's GlobalKey must stay unique.
+            return index == 0
+                ? _tour.stepIf(TourStepId.employeesRow, row)
+                : row;
           },
         );
       },

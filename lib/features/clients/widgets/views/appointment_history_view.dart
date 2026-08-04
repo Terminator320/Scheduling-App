@@ -31,9 +31,22 @@ typedef _HistorySearchEntry = ({
 /// Paginated history list, newest first. Filters and search both operate over the
 /// pages already loaded on the client, not a fresh server query.
 class AppointmentHistoryView extends ConsumerStatefulWidget {
-  const AppointmentHistoryView({required this.searchQuery, super.key});
+  const AppointmentHistoryView({
+    required this.searchQuery,
+    super.key,
+    this.filterTourWrap,
+    this.firstRowTourWrap,
+  });
 
   final String searchQuery;
+
+  /// Wraps the filter bar as its feature-tour step. Null when the host has
+  /// no tour for it.
+  final Widget Function(Widget child)? filterTourWrap;
+
+  /// Wraps the FIRST row only, as that row's feature-tour step. One row, not
+  /// every row — the step's GlobalKey has to stay unique.
+  final Widget Function(Widget child)? firstRowTourWrap;
 
   @override
   ConsumerState<AppointmentHistoryView> createState() =>
@@ -209,7 +222,41 @@ class _AppointmentHistoryViewState
   // whether a header shows is worked out by comparing against the previous item in
   // [items]. Shared by the paged and filtered list paths so grouping looks identical
   // either way.
+  /// The filter row is only rendered when there is something to filter by, so
+  /// on a thin history the tour step self-skips via isTargetRendered.
+  Widget _filterBar(List<int> years, List<HistoryEmployeeOption> employees) {
+    final bar = Padding(
+      padding: const EdgeInsets.only(
+        top: AppSpacing.sp8,
+        bottom: AppSpacing.sp4,
+      ),
+      child: HistoryFilterBar(
+        years: years,
+        selectedYear: _year,
+        onYearChanged: (v) => setState(() => _year = v),
+        employees: employees,
+        selectedEmployeeId: _employeeId,
+        onEmployeeChanged: (v) => setState(() => _employeeId = v),
+        allYearsLabel: context.l10n.clients_allYears,
+        allStaffLabel: context.l10n.clients_allStaff,
+      ),
+    );
+    return widget.filterTourWrap?.call(bar) ?? bar;
+  }
+
+  /// Both list paths (paged and filtered) build rows through here, so the
+  /// first-row tour wrap lives here rather than at each itemBuilder.
   Widget _historyItem(
+    List<AppointmentRecord> items,
+    int index,
+    Map<String, Color> colorMap,
+  ) {
+    final row = _historyRow(items, index, colorMap);
+    final wrap = widget.firstRowTourWrap;
+    return index == 0 && wrap != null ? wrap(row) : row;
+  }
+
+  Widget _historyRow(
     List<AppointmentRecord> items,
     int index,
     Map<String, Color> colorMap,
@@ -295,23 +342,7 @@ class _AppointmentHistoryViewState
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (showFilters)
-                Padding(
-                  padding: const EdgeInsets.only(
-                    top: AppSpacing.sp8,
-                    bottom: AppSpacing.sp4,
-                  ),
-                  child: HistoryFilterBar(
-                    years: years,
-                    selectedYear: _year,
-                    onYearChanged: (v) => setState(() => _year = v),
-                    employees: employees,
-                    selectedEmployeeId: _employeeId,
-                    onEmployeeChanged: (v) => setState(() => _employeeId = v),
-                    allYearsLabel: context.l10n.clients_allYears,
-                    allStaffLabel: context.l10n.clients_allStaff,
-                  ),
-                ),
+              if (showFilters) _filterBar(years, employees),
               Expanded(
                 child: _hasActiveFilter
                     ? _buildFiltered(colorMap)

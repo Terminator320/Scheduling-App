@@ -636,11 +636,14 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         // The line between the two sections IS the collapse control: drag it
         // up to fold the grid into the header's week strip, down to bring it
         // back. It stays put when collapsed so there is something to pull.
-        _CollapseHandle(
-          isCollapsed: _collapse.isCollapsed,
-          onDrag: _onCollapseDrag,
-          onDragEnd: _collapse.endDrag,
-          onToggle: _toggleCollapse,
+        _tour.step(
+          TourStepId.calendarCollapse,
+          child: _CollapseHandle(
+            isCollapsed: _collapse.isCollapsed,
+            onDrag: _onCollapseDrag,
+            onDragEnd: _collapse.endDrag,
+            onToggle: _toggleCollapse,
+          ),
         ),
         agendaHeader,
         Expanded(

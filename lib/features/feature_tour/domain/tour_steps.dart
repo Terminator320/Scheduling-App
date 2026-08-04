@@ -34,7 +34,24 @@ class TourSteps {
   /// screens have empty employee catalogs, so their wraps are guarded on this.
   bool has(TourStepId id) => ids.contains(id);
 
-  /// Wraps [child] as the tour step for [id].
+  /// Wraps [child] as the tour step for [id] when this scope+role catalog
+  /// includes it, and returns it untouched otherwise.
+  ///
+  /// This is the form nearly every call site wants: the admin-only screens
+  /// have empty employee catalogs, and [step] force-unwraps `keys[id]!`, so
+  /// an unguarded wrap crashes for an employee. Prefer this over
+  /// `has(id) ? step(id, child: c) : c`, which was being re-spelled per
+  /// screen.
+  Widget stepIf(
+    TourStepId id,
+    Widget child, {
+    BorderRadius? targetBorderRadius,
+  }) => has(id)
+      ? step(id, child: child, targetBorderRadius: targetBorderRadius)
+      : child;
+
+  /// Wraps [child] as the tour step for [id]. Throws if [id] isn't in this
+  /// catalog — use [stepIf] where that's possible.
   Widget step(
     TourStepId id, {
     required Widget child,

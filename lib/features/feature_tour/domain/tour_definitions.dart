@@ -22,16 +22,34 @@ List<TourStepId> _destinationSteps(
   HubTab.calendar => [
     TourStepId.calendarGrid,
     TourStepId.calendarDayList,
+    // Portrait only — the handle doesn't exist in the split layout, so
+    // isTargetRendered drops this step there.
+    TourStepId.calendarCollapse,
     if (isAdmin) TourStepId.calendarAddAppointment,
     TourStepId.calendarDayRoute,
   ],
   HubTab.clients => [
-    if (isAdmin) ...[TourStepId.clientsSearch, TourStepId.clientsAdd],
+    if (isAdmin) ...[
+      TourStepId.clientsSearch,
+      TourStepId.clientsFilter,
+      TourStepId.clientsAdd,
+      TourStepId.clientsRow,
+    ],
   ],
   HubTab.employees => [
-    if (isAdmin) ...[TourStepId.employeesSearch, TourStepId.employeesAdd],
+    if (isAdmin) ...[
+      TourStepId.employeesSearch,
+      TourStepId.employeesAdd,
+      TourStepId.employeesRow,
+    ],
   ],
-  PushedDestination.history => [if (isAdmin) TourStepId.historySearch],
+  PushedDestination.history => [
+    if (isAdmin) ...[
+      TourStepId.historySearch,
+      TourStepId.historyFilter,
+      TourStepId.historyRow,
+    ],
+  ],
   HubTab.liveMap => [
     if (isAdmin) ...[TourStepId.liveMapRoster, TourStepId.liveMapRecenter],
   ],

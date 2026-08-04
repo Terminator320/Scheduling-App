@@ -139,11 +139,6 @@ class _StatsList extends ConsumerWidget {
   /// above this subtree and owns the keys.
   final TourSteps tour;
 
-  /// Wraps a section as its tour step, or leaves it alone when this role's
-  /// catalog doesn't include it.
-  Widget _step(TourStepId id, Widget child) =>
-      tour.has(id) ? tour.step(id, child: child) : child;
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorMap = ref.watch(employeeColorMapProvider);
@@ -154,7 +149,7 @@ class _StatsList extends ConsumerWidget {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        _step(
+        tour.stepIf(
           TourStepId.dashboardHero,
           DashboardHero(ops: stats.todayOps, now: now),
         ),
@@ -163,7 +158,7 @@ class _StatsList extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _step(
+              tour.stepIf(
                 TourStepId.dashboardUpcoming,
                 UpcomingTodaySection(
                   ops: stats.todayOps,
@@ -173,7 +168,7 @@ class _StatsList extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.sp24),
-              _step(
+              tour.stepIf(
                 TourStepId.dashboardWorkload,
                 EmployeeWorkloadSection(workload: stats.workload),
               ),
@@ -183,7 +178,7 @@ class _StatsList extends ConsumerWidget {
                 busiestWeekday: stats.busiestWeekday,
               ),
               const SizedBox(height: AppSpacing.sp24),
-              _step(
+              tour.stepIf(
                 TourStepId.dashboardAttention,
                 AttentionFlagsSection(
                   flags: stats.flags,
