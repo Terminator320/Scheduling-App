@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_header_bar.dart';
@@ -25,6 +26,8 @@ class FormSheetFrame extends StatelessWidget {
     this.onCancel,
     this.isBusy = false,
     this.heightFactor = 0.92,
+    this.headerTourWrap,
+    this.scrollCacheExtent,
   });
 
   final String title;
@@ -38,6 +41,18 @@ class FormSheetFrame extends StatelessWidget {
   final VoidCallback? onCancel;
   final bool isBusy;
   final double heightFactor;
+
+  /// Wraps the header bar as a feature-tour step — the primary verb lives
+  /// there, and it's the last step of every create-flow walkthrough. Null on
+  /// a sheet with no tour (every edit sheet).
+  final Widget Function(Widget child)? headerTourWrap;
+
+  /// Inflates the scroll cache so below-fold rows are built. A tour needs
+  /// this: `isTargetRendered` can't find a step whose row a lazy list has
+  /// never built, and it would silently drop it.
+  final ScrollCacheExtent? scrollCacheExtent;
+
+  Widget _wrapHeader(Widget bar) => headerTourWrap?.call(bar) ?? bar;
 
   @override
   Widget build(BuildContext context) {
@@ -68,20 +83,23 @@ class FormSheetFrame extends StatelessWidget {
               type: MaterialType.transparency,
               child: Column(
                 children: [
-                  SheetHeaderBar(
-                    title: title,
-                    primaryLabel: primaryLabel,
-                    onPrimary: onPrimary,
-                    // Defaulting the dismiss here rather than in the bar keeps
-                    // SheetHeaderBar free of any assumption about how the
-                    // surface hosting it is closed.
-                    onCancel:
-                        onCancel ?? () => Navigator.maybePop(sheetContext),
-                    isBusy: isBusy,
+                  _wrapHeader(
+                    SheetHeaderBar(
+                      title: title,
+                      primaryLabel: primaryLabel,
+                      onPrimary: onPrimary,
+                      // Defaulting the dismiss here rather than in the bar
+                      // keeps SheetHeaderBar free of any assumption about how
+                      // the surface hosting it is closed.
+                      onCancel:
+                          onCancel ?? () => Navigator.maybePop(sheetContext),
+                      isBusy: isBusy,
+                    ),
                   ),
                   Expanded(
                     child: ListView(
                       controller: scrollController,
+                      scrollCacheExtent: scrollCacheExtent,
                       padding: EdgeInsets.only(
                         left: 18,
                         right: 18,

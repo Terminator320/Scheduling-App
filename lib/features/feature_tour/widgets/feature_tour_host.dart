@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
@@ -10,6 +11,12 @@ import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:showcaseview/showcaseview.dart';
+
+/// Cache extent a scrolling tour host should give its list, so below-fold
+/// steps are actually built. `isTargetRendered` can only find a target the
+/// list has built, and it drops the step silently otherwise — which reads as
+/// "that step just doesn't exist", not as a bug.
+const ScrollCacheExtent kTourScrollCacheExtent = ScrollCacheExtent.pixels(3000);
 
 /// Runs one scope's feature tour — registers the showcase scope, auto-starts
 /// once ready, and marks the scope seen when the tour finishes. A scope is a
@@ -201,6 +208,10 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
           _markSeen();
           return;
         }
+        // A form sheet may autofocus its first field, and the keyboard then
+        // covers the lower half of every target. Harmless on the screen
+        // tours — none of them autofocus.
+        FocusManager.instance.primaryFocus?.unfocus();
         _tourRunning = true;
         showcaseView.startShowCase(keys);
       } catch (e, st) {
