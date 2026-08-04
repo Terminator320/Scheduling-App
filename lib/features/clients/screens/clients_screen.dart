@@ -12,6 +12,7 @@ import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
@@ -42,7 +43,10 @@ class _ListInformationState extends State<ListInformation> {
   ClientRecord? _selectedClient;
   ClientsFilter _filter = const ClientsFilterAll();
 
-  late final _tour = TourSteps(HubTab.clients, isAdmin: widget.isAdmin);
+  late final _tour = TourSteps(
+    const DestinationTour(HubTab.clients),
+    isAdmin: widget.isAdmin,
+  );
 
   @override
   void dispose() {
@@ -87,7 +91,7 @@ class _ListInformationState extends State<ListInformation> {
       hintText: context.l10n.clients_searchByNameOrPhone,
     );
     return FeatureTourHost(
-      destination: HubTab.clients,
+      scope: _tour.scope,
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
       child: Scaffold(
@@ -99,7 +103,7 @@ class _ListInformationState extends State<ListInformation> {
           bottom: _tour.has(TourStepId.clientsSearch)
               ? TourShowcaseBar(
                   showcaseKey: _tour.keys[TourStepId.clientsSearch]!,
-                  destination: HubTab.clients,
+                  scope: _tour.scope,
                   id: TourStepId.clientsSearch,
                   index: _tour.ids.indexOf(TourStepId.clientsSearch),
                   count: _tour.ids.length,

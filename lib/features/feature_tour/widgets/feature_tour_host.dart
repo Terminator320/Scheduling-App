@@ -7,14 +7,16 @@ import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:showcaseview/showcaseview.dart';
 
-/// Runs one hub tab's feature tour — registers the scope, auto-starts once
-/// ready, and marks the tab seen when the tour finishes.
+/// Runs one scope's feature tour — registers the showcase scope, auto-starts
+/// once ready, and marks the scope seen when the tour finishes. A scope is a
+/// whole screen or one of the create-flow sheets.
 class FeatureTourHost extends ConsumerStatefulWidget {
   const FeatureTourHost({
-    required this.destination,
+    required this.scope,
     required this.isAdmin,
     required this.stepKeys,
     required this.child,
@@ -23,10 +25,10 @@ class FeatureTourHost extends ConsumerStatefulWidget {
     super.key,
   });
 
-  final AppDestination destination;
+  final TourScope scope;
   final bool isAdmin;
 
-  /// Gate for tabs whose content loads asynchronously — pass `!isLoading`
+  /// Gate for surfaces whose content loads asynchronously — pass `!isLoading`
   /// so the tour doesn't end up targeting skeleton placeholders.
   final bool ready;
 
@@ -51,22 +53,24 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
   /// didn't actually run.
   bool _tourRunning = false;
 
-  String get _scope => tourScopeName(widget.destination);
+  String get _scope => widget.scope.storageKey;
 
   /// Captured each build in route mode. ModalRoute.of cannot be called from
   /// a post-frame callback without registering a spurious dependency, so
   /// the one-shot recheck reads this field instead.
   ModalRoute<Object?>? _route;
 
-  /// A hub tab is visible when the shell says so; a pushed destination is
-  /// visible when its own route is on top. The sealed type picks the mode —
-  /// NOT a null HubShellScope, which also describes a hub screen hosted
-  /// standalone in a test, where "never start" must be preserved.
+  /// A hub tab is visible when the shell says so; a pushed destination and a
+  /// create-flow sheet are both visible when their own route is on top — a
+  /// ModalBottomSheetRoute IS a ModalRoute, so they share one branch. The
+  /// sealed type picks the mode — NOT a null HubShellScope, which also
+  /// describes a hub screen hosted standalone in a test, where "never start"
+  /// must be preserved.
   bool _isVisible(BuildContext context) {
-    switch (widget.destination) {
-      case final HubTab tab:
+    switch (widget.scope) {
+      case DestinationTour(destination: final HubTab tab):
         return HubShellScope.currentOf(context) == tab;
-      case PushedDestination():
+      case DestinationTour() || FormTour():
         // Depends on the route's _ModalScopeStatus, which notifies on
         // isCurrent changes — this dependency is the only rebuild trigger
         // route mode has, and it re-opens the gate when a route above pops.
@@ -132,7 +136,7 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
   }
 
   void _markSeen() {
-    unawaited(ref.read(tourSeenProvider.notifier).markSeen(widget.destination));
+    unawaited(ref.read(tourSeenProvider.notifier).markSeen(widget.scope));
   }
 
   @override
@@ -152,7 +156,7 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
       });
     }
     _wasVisible = visible;
-    if (seen.contains(widget.destination)) {
+    if (seen.contains(widget.scope)) {
       // Re-arm so a Settings "replay" reset can start the tour again.
       _started = false;
     } else if (visible && widget.ready && !_started) {
@@ -166,22 +170,23 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
     // Wait for ready — we never want to act on the optimistic empty default.
     await ref.read(tourSeenProvider.notifier).ready;
     if (!mounted) return;
-    if (ref.read(tourSeenProvider).contains(widget.destination)) return;
+    if (ref.read(tourSeenProvider).contains(widget.scope)) return;
     await _routeTransitionSettled();
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       // Reset _started when the destination's been navigated away from, so
       // we don't get stuck and can retry later.
-      final stillVisible = switch (widget.destination) {
-        final HubTab tab => HubShellScope.readCurrentOf(context) == tab,
-        PushedDestination() => _route?.isCurrent ?? false,
+      final stillVisible = switch (widget.scope) {
+        DestinationTour(destination: final HubTab tab) =>
+          HubShellScope.readCurrentOf(context) == tab,
+        DestinationTour() || FormTour() => _route?.isCurrent ?? false,
       };
       if (!stillVisible) {
         _started = false;
         return;
       }
-      final steps = tourStepsFor(widget.destination, isAdmin: widget.isAdmin);
+      final steps = tourStepsFor(widget.scope, isAdmin: widget.isAdmin);
       try {
         final showcaseView = ShowcaseView.getNamed(_scope);
         // showcaseview 5.x never forwards key to Element; use isTargetRendered.

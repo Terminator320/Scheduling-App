@@ -28,6 +28,7 @@ import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.
 import 'package:scheduling/features/calendar/widgets/views/calendar_week_strip.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
@@ -64,7 +65,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   late DateFormat _yearLabelFormat;
   String _lastLocale = '';
 
-  late final _tour = TourSteps(HubTab.calendar, isAdmin: widget.isAdmin);
+  late final _tour = TourSteps(
+    const DestinationTour(HubTab.calendar),
+    isAdmin: widget.isAdmin,
+  );
 
   /// Uses the "Split" layout (month grid | day agenda) when the nav rail shows.
   bool get _splitCalendar => context.isSplitLayout;
@@ -345,7 +349,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final data = _prepareBuild(context);
 
     return FeatureTourHost(
-      destination: HubTab.calendar,
+      scope: _tour.scope,
       isAdmin: widget.isAdmin,
       ready: !data.isLoading,
       stepKeys: _tour.keys,

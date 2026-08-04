@@ -1,15 +1,21 @@
 import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 
-/// The showcaseview scope name for a tab. Each tab needs its own scope
-/// because the hub's IndexedStack keeps every tab mounted — a shared scope
-/// would mix hidden tabs' targets into the visible tour.
-String tourScopeName(AppDestination destination) => 'tour_${destination.name}';
+/// Ordered step catalog for a scope and role. Clients, Employees, History,
+/// LiveMap, Dashboard and the three create-flow sheets are admin-only, so
+/// their employee catalogs are empty. A scope that mounts no tour host
+/// returns an empty catalog.
+List<TourStepId> tourStepsFor(TourScope scope, {required bool isAdmin}) =>
+    switch (scope) {
+      DestinationTour(:final destination) => _destinationSteps(
+        destination,
+        isAdmin: isAdmin,
+      ),
+      FormTour(:final form) => _formSteps(form, isAdmin: isAdmin),
+    };
 
-/// Ordered step catalog for a destination and role. Clients, Employees,
-/// History and LiveMap are admin-only, so their employee catalogs are empty.
-/// A destination that mounts no tour host returns an empty catalog.
-List<TourStepId> tourStepsFor(
+List<TourStepId> _destinationSteps(
   AppDestination destination, {
   required bool isAdmin,
 }) => switch (destination) {
@@ -37,3 +43,12 @@ List<TourStepId> tourStepsFor(
   PushedDestination.dayRoute => const [],
   PushedDestination.dashboard => const [],
 };
+
+/// The create-flow walkthroughs. Every one of these sheets is reachable only
+/// from an admin surface, so the employee catalogs are empty.
+List<TourStepId> _formSteps(TourForm form, {required bool isAdmin}) =>
+    switch (form) {
+      TourForm.addAppointment => const [],
+      TourForm.addClient => const [],
+      TourForm.invitePerson => const [],
+    };

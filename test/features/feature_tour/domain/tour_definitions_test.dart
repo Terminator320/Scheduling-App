@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 
 /// Destinations that mount a FeatureTourHost. A new destination must
@@ -17,7 +18,10 @@ const toured = <AppDestination>{
 void main() {
   test('employee tours exist only for calendar and settings', () {
     for (final destination in allDestinations) {
-      final steps = tourStepsFor(destination, isAdmin: false);
+      final steps = tourStepsFor(
+        DestinationTour(destination),
+        isAdmin: false,
+      );
       if (destination == HubTab.calendar ||
           destination == PushedDestination.settings) {
         expect(
@@ -32,12 +36,18 @@ void main() {
   });
 
   test('employee calendar tour has no admin-only steps', () {
-    final steps = tourStepsFor(HubTab.calendar, isAdmin: false);
+    final steps = tourStepsFor(
+      const DestinationTour(HubTab.calendar),
+      isAdmin: false,
+    );
     expect(steps, isNot(contains(TourStepId.calendarAddAppointment)));
   });
 
   test('admin calendar tour showcases booking', () {
-    final steps = tourStepsFor(HubTab.calendar, isAdmin: true);
+    final steps = tourStepsFor(
+      const DestinationTour(HubTab.calendar),
+      isAdmin: true,
+    );
     expect(steps, contains(TourStepId.calendarAddAppointment));
   });
 
@@ -45,7 +55,10 @@ void main() {
     'every toured destination has an admin tour and no catalog has duplicates',
     () {
       for (final destination in allDestinations) {
-        final steps = tourStepsFor(destination, isAdmin: true);
+        final steps = tourStepsFor(
+          DestinationTour(destination),
+          isAdmin: true,
+        );
         if (toured.contains(destination)) {
           expect(
             steps,
@@ -63,4 +76,15 @@ void main() {
       }
     },
   );
+
+  test('no catalog anywhere repeats a step', () {
+    for (final scope in allTourScopes) {
+      final steps = tourStepsFor(scope, isAdmin: true);
+      expect(
+        steps.toSet().length,
+        steps.length,
+        reason: '${scope.storageKey} catalog has duplicate steps',
+      );
+    }
+  });
 }
