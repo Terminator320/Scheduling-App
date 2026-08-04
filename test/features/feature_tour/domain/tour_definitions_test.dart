@@ -113,6 +113,19 @@ void main() {
     expect(len(PushedDestination.history), 3);
   });
 
+  test('the appointment walkthrough is admin-only and 6 steps in order', () {
+    const scope = FormTour(TourForm.addAppointment);
+    expect(tourStepsFor(scope, isAdmin: true), [
+      TourStepId.apptTemplates,
+      TourStepId.apptClient,
+      TourStepId.apptCrew,
+      TourStepId.apptSchedule,
+      TourStepId.apptDetails,
+      TourStepId.apptSave,
+    ]);
+    expect(tourStepsFor(scope, isAdmin: false), isEmpty);
+  });
+
   test('no catalog anywhere repeats a step', () {
     for (final scope in allTourScopes) {
       final steps = tourStepsFor(scope, isAdmin: true);

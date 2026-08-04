@@ -14,6 +14,7 @@ import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_pick
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_search_field.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
@@ -100,6 +101,7 @@ class AppointmentFormFields extends StatelessWidget {
     this.onRequestAddClient,
     this.onApplyTemplate,
     this.onPersonalChanged,
+    this.tourWrap,
   });
 
   final AppointmentFormControllers controllers;
@@ -136,6 +138,11 @@ class AppointmentFormFields extends StatelessWidget {
   final bool employeeRequired;
   final String materialsHint;
   final Widget photosSection;
+
+  /// Wraps a section as its feature-tour step. Injected by the ADD sheet
+  /// only — the edit flow has no walkthrough, and passes null, which leaves
+  /// every section untouched.
+  final Widget Function(TourStepId id, Widget child)? tourWrap;
 
   final ValueChanged<String> onSearchClients;
   final ValueChanged<ClientRecord> onSelectClient;
@@ -213,6 +220,11 @@ class AppointmentFormFields extends StatelessWidget {
     onUseCustomAddress(false);
   }
 
+  /// Wraps [child] as [id]'s tour step, or leaves it alone when the host
+  /// injected no tour.
+  Widget _tour(TourStepId id, Widget child) =>
+      tourWrap?.call(id, child) ?? child;
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -234,16 +246,19 @@ class AppointmentFormFields extends StatelessWidget {
     return [
       MonoSectionLabel(l10n.calendar_sectionTemplates),
       const SizedBox(height: AppSpacing.sp8),
-      Wrap(
-        spacing: AppSpacing.sp8,
-        runSpacing: AppSpacing.sp8,
-        children: [
-          for (final template in JobTemplate.values)
-            ActionChip(
-              label: Text(jobTemplateLabel(l10n, template)),
-              onPressed: () => onApplyTemplate!(template),
-            ),
-        ],
+      _tour(
+        TourStepId.apptTemplates,
+        Wrap(
+          spacing: AppSpacing.sp8,
+          runSpacing: AppSpacing.sp8,
+          children: [
+            for (final template in JobTemplate.values)
+              ActionChip(
+                label: Text(jobTemplateLabel(l10n, template)),
+                onPressed: () => onApplyTemplate!(template),
+              ),
+          ],
+        ),
       ),
       const SizedBox(height: AppSpacing.sp16),
     ];
@@ -280,17 +295,20 @@ class AppointmentFormFields extends StatelessWidget {
     // --- Client (a personal job has none) ---
     if (!isPersonal) ...[
       formLabel(context, l10n.calendar_client, required: true),
-      SheetFocusScroll(
-        child: ClientSearchField(
-          controller: controllers.clientSearch,
-          selectedClient: selectedClient,
-          results: clientResults,
-          isSearching: isSearchingClient,
-          onChanged: onSearchClients,
-          onSelect: _selectClient,
-          onClear: _clearClient,
-          errorText: _err(context, 'client'),
-          onAddNew: onRequestAddClient == null ? null : _addNewClient,
+      _tour(
+        TourStepId.apptClient,
+        SheetFocusScroll(
+          child: ClientSearchField(
+            controller: controllers.clientSearch,
+            selectedClient: selectedClient,
+            results: clientResults,
+            isSearching: isSearchingClient,
+            onChanged: onSearchClients,
+            onSelect: _selectClient,
+            onClear: _clearClient,
+            errorText: _err(context, 'client'),
+            onAddNew: onRequestAddClient == null ? null : _addNewClient,
+          ),
         ),
       ),
       const SizedBox(height: AppSpacing.sp16),
@@ -298,11 +316,14 @@ class AppointmentFormFields extends StatelessWidget {
     // --- Employees ---
     formLabel(context, employeeLabel, required: employeeRequired),
     const SizedBox(height: AppSpacing.sp4),
-    EmployeePicker(
-      allEmployees: allEmployees,
-      selectedEmployees: selectedEmployees,
-      onToggle: onToggleEmployee,
-      errorText: _err(context, 'employees'),
+    _tour(
+      TourStepId.apptCrew,
+      EmployeePicker(
+        allEmployees: allEmployees,
+        selectedEmployees: selectedEmployees,
+        onToggle: onToggleEmployee,
+        errorText: _err(context, 'employees'),
+      ),
     ),
     const SizedBox(height: AppSpacing.sp16),
   ];
@@ -366,22 +387,25 @@ class AppointmentFormFields extends StatelessWidget {
     return [
       MonoSectionLabel(l10n.calendar_sectionSchedule),
       const SizedBox(height: AppSpacing.sp8),
-      SheetPanel(
-        children: [
-          // --- All day — first row of the panel, since it decides whether the
-          // time rows below it exist at all. Offered on every job: a client
-          // visit can genuinely run whole days too.
-          _AllDaySwitch(value: isAllDay, onChanged: onAllDayChanged),
-          ..._dateRow(context, l10n),
-          // An all-day block has no times to show — the date rows are the whole
-          // schedule.
-          if (!isAllDay) ...timeRows(),
-          // --- Repeat: same panel as the date and times, so everything about
-          // when the job happens reads as one block. Not offered on a personal
-          // job.
-          if (!isPersonal)
-            RepeatIntervalPicker(current: repeat, onChanged: onSelectRepeat),
-        ],
+      _tour(
+        TourStepId.apptSchedule,
+        SheetPanel(
+          children: [
+            // --- All day — first row of the panel, since it decides whether
+            // the time rows below it exist at all. Offered on every job: a
+            // client visit can genuinely run whole days too.
+            _AllDaySwitch(value: isAllDay, onChanged: onAllDayChanged),
+            ..._dateRow(context, l10n),
+            // An all-day block has no times to show — the date rows are the
+            // whole schedule.
+            if (!isAllDay) ...timeRows(),
+            // --- Repeat: same panel as the date and times, so everything
+            // about when the job happens reads as one block. Not offered on a
+            // personal job.
+            if (!isPersonal)
+              RepeatIntervalPicker(current: repeat, onChanged: onSelectRepeat),
+          ],
+        ),
       ),
       const SizedBox(height: AppSpacing.sp16),
       // --- Status (edit flow only) ---
@@ -442,9 +466,24 @@ class AppointmentFormFields extends StatelessWidget {
   }
 
   /// Address, notes, materials and the host-supplied photos slot.
+  ///
+  /// The body is one Column rather than spread widgets so the tour has a
+  /// single target for the whole section — the step describes all four
+  /// fields, and highlighting only the first would misdescribe it. The
+  /// Column is stretch-aligned like its parent, so the layout is unchanged.
   List<Widget> _detailsSection(BuildContext context, AppLocalizations l10n) => [
     MonoSectionLabel(l10n.calendar_sectionDetails),
     const SizedBox(height: AppSpacing.sp8),
+    _tour(
+      TourStepId.apptDetails,
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: _detailsBody(context, l10n),
+      ),
+    ),
+  ];
+
+  List<Widget> _detailsBody(BuildContext context, AppLocalizations l10n) => [
     // --- Address (a personal job has none) ---
     if (!isPersonal) ...[
       AppointmentAddressField(

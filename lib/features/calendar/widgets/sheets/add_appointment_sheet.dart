@@ -16,6 +16,10 @@ import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.
 import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_host.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
+import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/sheets/form_sheet_frame.dart';
@@ -48,6 +52,13 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   );
   final _clientSearchDebounce = Debouncer(const Duration(milliseconds: 300));
   late final _provider = addEventControllerProvider(widget.initialDate);
+
+  // Admin-only surface: this sheet is only reachable from the calendar FAB
+  // and the client detail's Book job, both admin-gated.
+  final _tour = TourSteps(
+    const FormTour(TourForm.addAppointment),
+    isAdmin: true,
+  );
 
   AddEventController get _notifier => ref.read(_provider.notifier);
 
@@ -252,55 +263,66 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     // paired with a length of 1 would render "1 days".
     final spanLength = _spanLength(state);
 
-    return FormSheetFrame(
-      title: context.l10n.calendar_newAppointment,
-      primaryLabel: context.l10n.common_save,
-      isBusy: state.isSubmitting,
-      onPrimary: _submit,
-      children: [
-        AppointmentFormFields(
-          controllers: _controllers,
-          allEmployees: allEmployees,
-          selectedClient: state.selectedClient,
-          clientResults: state.clientResults,
-          isSearchingClient: state.isSearchingClient,
-          selectedEmployees: state.selectedEmployees,
-          repeat: state.repeat,
-          useCustomAddress: state.useCustomAddress,
-          isPersonal: state.isPersonal,
-          onPersonalChanged: (value) => _notifier.setPersonal(value: value),
-          isAllDay: state.isAllDay,
-          onAllDayChanged: (value) => _notifier.setAllDay(value: value),
-          errors: state.errors,
-          employeeLabel: context.l10n.calendar_assignEmployee,
-          employeeRequired: true,
-          materialsHint: context.l10n.calendar_typeTheMaterialsHere,
-          onApplyTemplate: _applyTemplate,
-          onSearchClients: _onClientSearchChanged,
-          onSelectClient: _notifier.selectClient,
-          onClearClient: _notifier.clearClient,
-          onRequestAddClient: requestAddClient,
-          onToggleEmployee: _notifier.toggleEmployee,
-          onPickDate: _pickDate,
-          onPickEndDate: _pickEndDate,
-          isMultiDay: spanLength > 1,
-          isOvernight: _isOvernight(state),
-          spanLength: spanLength,
-          onPickStartTime: _pickStartTime,
-          onPickEndTime: _pickEndTime,
-          onSelectRepeat: _notifier.selectRepeat,
-          onUseCustomAddress: (value) =>
-              _notifier.setUseCustomAddress(value: value),
-          photosSection: PhotoPickerSection(
-            existingImages: const [],
-            newImages: state.selectedImages,
-            isEditing: true,
-            onPickImages: _pickImages,
-            onRemoveExisting: (_) {},
-            onRemoveNew: _notifier.removeImage,
+    return FeatureTourHost(
+      scope: _tour.scope,
+      isAdmin: true,
+      stepKeys: _tour.keys,
+      // The form scrolls, so below-fold targets need building before
+      // isTargetRendered looks for them.
+      autoScroll: true,
+      child: FormSheetFrame(
+        title: context.l10n.calendar_newAppointment,
+        primaryLabel: context.l10n.common_save,
+        isBusy: state.isSubmitting,
+        onPrimary: _submit,
+        headerTourWrap: (child) => _tour.stepIf(TourStepId.apptSave, child),
+        scrollCacheExtent: kTourScrollCacheExtent,
+        children: [
+          AppointmentFormFields(
+            controllers: _controllers,
+            tourWrap: _tour.stepIf,
+            allEmployees: allEmployees,
+            selectedClient: state.selectedClient,
+            clientResults: state.clientResults,
+            isSearchingClient: state.isSearchingClient,
+            selectedEmployees: state.selectedEmployees,
+            repeat: state.repeat,
+            useCustomAddress: state.useCustomAddress,
+            isPersonal: state.isPersonal,
+            onPersonalChanged: (value) => _notifier.setPersonal(value: value),
+            isAllDay: state.isAllDay,
+            onAllDayChanged: (value) => _notifier.setAllDay(value: value),
+            errors: state.errors,
+            employeeLabel: context.l10n.calendar_assignEmployee,
+            employeeRequired: true,
+            materialsHint: context.l10n.calendar_typeTheMaterialsHere,
+            onApplyTemplate: _applyTemplate,
+            onSearchClients: _onClientSearchChanged,
+            onSelectClient: _notifier.selectClient,
+            onClearClient: _notifier.clearClient,
+            onRequestAddClient: requestAddClient,
+            onToggleEmployee: _notifier.toggleEmployee,
+            onPickDate: _pickDate,
+            onPickEndDate: _pickEndDate,
+            isMultiDay: spanLength > 1,
+            isOvernight: _isOvernight(state),
+            spanLength: spanLength,
+            onPickStartTime: _pickStartTime,
+            onPickEndTime: _pickEndTime,
+            onSelectRepeat: _notifier.selectRepeat,
+            onUseCustomAddress: (value) =>
+                _notifier.setUseCustomAddress(value: value),
+            photosSection: PhotoPickerSection(
+              existingImages: const [],
+              newImages: state.selectedImages,
+              isEditing: true,
+              onPickImages: _pickImages,
+              onRemoveExisting: (_) {},
+              onRemoveNew: _notifier.removeImage,
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

@@ -80,7 +80,16 @@ List<TourStepId> _destinationSteps(
 /// from an admin surface, so the employee catalogs are empty.
 List<TourStepId> _formSteps(TourForm form, {required bool isAdmin}) =>
     switch (form) {
-      TourForm.addAppointment => const [],
+      TourForm.addAppointment => [
+        if (isAdmin) ...[
+          TourStepId.apptTemplates,
+          TourStepId.apptClient,
+          TourStepId.apptCrew,
+          TourStepId.apptSchedule,
+          TourStepId.apptDetails,
+          TourStepId.apptSave,
+        ],
+      ],
       TourForm.addClient => const [],
       TourForm.invitePerson => const [],
     };
