@@ -879,6 +879,14 @@
   "@employees_selectAnEmployeeToViewDetails": {
     "description": "Select an employee to view details"
   },
+  "clients_deleteBlockedHasHistory": "This client has job history, so it can't be deleted. Archive it instead.",
+  "@clients_deleteBlockedHasHistory": {
+    "description": "Shown when an admin tries to delete a client that still has appointments."
+  },
+  "clients_deleteFailedNotFound": "That client no longer exists.",
+  "@clients_deleteFailedNotFound": {
+    "description": "Shown when a delete targets a client doc that is already gone."
+  },
   "clients_noClientsYet": "No clients yet",
   "@clients_noClientsYet": {
     "description": "No clients yet"
