@@ -20,6 +20,7 @@ import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/sheets/edit_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
+import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -53,9 +54,13 @@ const _fullClient = ClientRecord(
   jobCount: 128,
 );
 
-Widget _scaled({required Widget home, required double scale}) => ProviderScope(
+Widget _scaled({
+  required Widget home,
+  required double scale,
+  ClientsRepository? repo,
+}) => ProviderScope(
   overrides: [
-    clientsRepositoryProvider.overrideWithValue(_MockClientsRepo()),
+    clientsRepositoryProvider.overrideWithValue(repo ?? _MockClientsRepo()),
     // The Job History section reads the real appointments repo; serve an empty
     // history so the sweep never reaches Firebase.
     clientJobHistoryProvider.overrideWith(
@@ -87,10 +92,11 @@ Future<void> _pumpAt(
   WidgetTester tester, {
   required Widget home,
   required double scale,
+  ClientsRepository? repo,
 }) async {
   tester.view.physicalSize = _viewport * tester.view.devicePixelRatio;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(_scaled(home: home, scale: scale));
+  await tester.pumpWidget(_scaled(home: home, scale: scale, repo: repo));
   await tester.pumpAndSettle();
 }
 
@@ -137,6 +143,47 @@ void main() {
         scale: scale,
         home: const Scaffold(body: ClientTile(client: _fullClient)),
       );
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an archived client row survives textScale $scale', (
+      tester,
+    ) async {
+      // Two pills in one Wrap — the widest the subtitle strip ever gets.
+      await _pumpAt(
+        tester,
+        scale: scale,
+        home: Scaffold(
+          body: ClientTile(client: _fullClient.copyWith(archived: true)),
+        ),
+      );
+
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the open swipe pane survives textScale $scale', (
+      tester,
+    ) async {
+      final repo = _MockClientsRepo();
+      when(
+        () => repo.fetchClientsPage(
+          after: any(named: 'after'),
+          limit: any(named: 'limit'),
+        ),
+        // jobCount 0 so BOTH actions render — the widest the pane gets.
+      ).thenAnswer((_) async => [_fullClient.copyWith(jobCount: 0)]);
+
+      await _pumpAt(
+        tester,
+        scale: scale,
+        repo: repo,
+        home: const Scaffold(
+          body: ClientsListView(searchQuery: '', isAdmin: true),
+        ),
+      );
+      await tester.drag(find.byType(ClientTile).first, const Offset(-300, 0));
+      await tester.pumpAndSettle();
 
       expect(tester.takeException(), isNull);
     });

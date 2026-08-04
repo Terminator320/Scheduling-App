@@ -594,32 +594,61 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   `type`/`accessNotes`/`onSiteManager`/`billingTerms`/`autoInvoice`) —
   add the matching rule cap when you add a new client field, or the write passes
   the app but a rules tightening later rejects it.
-- **A client is never removed — no delete, no archive** (owner decision
-  2026-08-01, which withdrew a shipped delete). Deleting one orphaned its past
-  appointments: they keep the denormalized `clientName` but lose the `clientId`
-  link, so history silently detaches. The edit sheet's footer therefore holds no
-  destructive action. **The one exception is temporary and must not ship:** a
-  debug-gated testing delete (`kShowTestingDeleteClient` in
-  `lib/core/testing_flags.dart`) reopens both `ClientsRepository.deleteClient`
-  and `allow delete` on `/clients` so junk test data can be cleared. Rules are
-  not build-aware, so that hole IS open in production once deployed — remove
-  both together via the checklist in
-  `docs/plans/redesign-subdocs/2026-08-01-p3-HANDOFF.md` §5b (grep `#pre-ship`)
-  before submission. Archive was evaluated as the safe
-  alternative and also dropped — it would have forced every archived-doc filter
-  into Dart (pre-existing and Wave-imported docs have no such field, and
-  Firestore excludes docs missing a filter field), which in turn forces
-  `fetchClientsPage` to stop returning a plain `List`. It returns one today, and
-  the list's `items.length < pageSize` end-of-list test is correct **only**
-  because nothing filters the page after the server returns it. Reintroducing
-  any post-query filter breaks that test — one filtered-out doc in a full page
-  truncates the list permanently — so it would have to come back with a page
-  object carrying the raw page size and a raw cursor. The Admin SDK bypasses
-  rules, so console/support cleanup is unaffected.
+- **A client is ARCHIVED, not deleted** (owner decision 2026-08-03, which
+  REVERSED the 2026-08-01 "never removed — no delete, no archive" rule and
+  retired the `kShowTestingDeleteClient` `#pre-ship` hole with it — both
+  `lib/core/testing_flags.dart` and `allow delete` on `/clients` are gone).
+  Archiving hides a client from the paginated list and the type filter but
+  keeps it **searchable and bookable**: its `clientId` links on existing
+  appointments are untouched, which is the whole point — deleting one orphaned
+  its past visits, which keep the denormalized `clientName` but lose the link,
+  so history silently detached.
+  **`archived` must be on EVERY client doc, forever.** The list filters
+  `where('archived', isEqualTo: false)` **server-side**, and Firestore excludes
+  docs missing a filtered field — so a doc without it is invisible in the list
+  while still turning up in search: a partial disappearance with no error
+  anywhere. There are exactly two create paths and both stamp it: `_normalizedMap`
+  (`firebase_clients_repository.dart`, via `ClientRecord.toMap`) and Wave
+  `importCustomers` (`functions/wave/customers.js`). **The Wave UPDATE branch
+  must never write it**, or every scheduled import un-archives everything; a
+  test pins that half. Existing docs were backfilled by
+  `functions/scripts/backfill-clients-archived.js` (idempotent, `--dry-run`),
+  which must run against prod BEFORE the filtered query deploys.
+  The filter is server-side **specifically so `fetchClientsPage` keeps returning
+  a plain `List`**: the server still fills a whole page, so `items.last` stays
+  the true cursor and the list's `pages.last.length < pageSize` end-of-list test
+  stays valid. A Dart post-query filter would shorten a page the server actually
+  filled and truncate the list permanently at the first archived client — never
+  reintroduce one. Needs the `(archived, name, __name__)` composite index.
+  **Delete survives only for junk data, and only through the `deleteClient`
+  callable** (`functions/clients.js`), which refuses with
+  `failed-precondition / client-has-history` when a **live `count()` aggregate**
+  finds any appointment — deliberately NOT the denormalized `jobCount`, which is
+  lazily backfilled and can be stale, missing or wrong. `allow delete` on
+  `/clients` is **withdrawn**, because rules cannot express "only when this
+  client has no appointments" (no cheap foreign-collection count), so the
+  callable is the only place that guarantee can live. `canDeleteClient`
+  (`domain/policies/client_delete_policy.dart`) is **advisory UI only** — it
+  keeps the swipe and the detail footer from offering what the server would
+  refuse, and treats a null `jobCount` as unknown, which withholds. The Admin
+  SDK bypasses rules, so console/support cleanup is unaffected.
+  UI: `flutter_slidable` in `ClientsListView`'s item builder — **never inside
+  `ClientTile`**, which the booking-flow client picker reuses and must not gain
+  destructive actions. A full swipe commits **Archive only**; delete is never
+  gesture-committed. Both surfaces route through the one `ClientActionsHost`
+  mixin (`clients/widgets/views/client_actions_host.dart`) so the notices, the
+  CLI-ARCH/CLI-DEL tags and the confirm copy can't drift; its two hooks are
+  separate because the detail view must STAY OPEN after archiving (to offer
+  Unarchive) and dismiss after deleting.
 - **The clients type filter is a SEPARATE bounded read, never a filter over the
   paginated list.** `fetchClientsByType` scans the same cached 1000-doc window
   `searchClients` uses, so the chip row and its results cost no extra Firestore
-  read inside the 2-minute TTL and need no composite index.
+  read inside the 2-minute TTL and need no composite index. `fetchArchivedClients`
+  (the Archived chip) is the same shape over the same window, and the chips are
+  ONE sealed `ClientsFilter` — "archived AND commercial" is unexpressible, not
+  merely unhandled. The type filter **excludes archived clients** (the Archived
+  chip is where they live); `searchClients` deliberately does **not** — archived
+  clients stay findable and bookable, which is why the row badges them.
   Routing it through `fetchClientsPage` instead would filter a server page in
   Dart, shortening a page the server actually filled — which is exactly what
   stops `ClientsListView` paging early and hides every client below the first

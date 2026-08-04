@@ -120,6 +120,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin |
 | `waveSetImportSchedule` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings cadence picker) | — | App Check ✓ · admin |
 | `waveImportCustomers` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable 5/hr · 300s |
+| `deleteClient` | callable | `onCall` | `clients.js` | `firebase_clients_repository.dart` | — | App Check ✓ · admin · durable 20/hr |
 | `syncUsersByUid` | trigger | `onDocumentWritten users/{id}` | `bridge.js` | any `users` doc write | — | `retry: true` |
 | `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` |
 | `recountClientJobs` | trigger | `onDocumentWritten appointments/{id}` | `client_job_count.js` | a write that changes `clientId` | — | `retry: true` |
@@ -479,6 +480,23 @@ resurrected as a count-only stub, and swallows Firestore `NOT_FOUND` for the sam
 case. The pure `clientsToRecount(before, after)` is exported for jest. Served by
 the automatic single-field index on `clientId` — no composite index needed.
 **NOT yet deployed** (added 2026-08-01); no job count renders until it is.
+
+### `deleteClient` — `clients.js`
+Admin-only callable, the **only** delete path for a client: `allow delete` on
+`/clients` is withdrawn, because rules cannot express "only when this client has
+no appointments" — there is no cheap way to count a foreign collection there.
+Refuses with `failed-precondition / client-has-history` when a **live `count()`
+aggregate** over `appointments where clientId == …` returns non-zero, and with
+`not-found` when the doc is already gone. The count is deliberately NOT the
+denormalized `jobCount`: that field is lazily backfilled by `recountClientJobs`,
+so it can be stale, missing, or wrong on a client whose appointments were
+reassigned out-of-band — deleting on a stale zero is exactly the orphaned-history
+bug this gate exists to prevent. Guard order is auth → `assertAdmin` →
+`assertPayloadShape`/`requireString` (plus a `/`-in-id reject, since `.doc()`
+throws synchronously on one) → `enforceDurableRateLimit` (20/hr per admin uid) →
+work. The pure `performDeleteClient(db, clientId)` is exported for jest.
+Archive — not delete — is the normal way a client leaves the roster.
+**NOT yet deployed** (added 2026-08-03).
 
 ## Wave Accounting
 
