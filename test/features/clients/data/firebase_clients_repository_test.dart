@@ -2,10 +2,12 @@
 // ignore_for_file: subtype_of_sealed_class
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
+import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 
@@ -27,12 +29,20 @@ class _MockDocRef extends Mock
 
 class _FakeFieldValue extends Fake implements FieldValue {}
 
+class _MockFunctions extends Mock implements FirebaseFunctions {}
+
+class _MockCallable extends Mock implements HttpsCallable {}
+
+class _MockCallableResult extends Mock implements HttpsCallableResult<void> {}
+
 void main() {
   late _MockFirestore firestore;
   late _MockCollection collection;
   late _MockQuery query;
   late _MockQuerySnapshot snapshot;
   late _MockDocRef docRef;
+  late _MockFunctions functions;
+  late _MockCallable callable;
 
   setUpAll(() {
     registerFallbackValue(_FakeFieldValue());
@@ -74,10 +84,17 @@ void main() {
     when(() => docRef.update(any())).thenAnswer((_) async {});
     when(() => docRef.delete()).thenAnswer((_) async {});
     when(() => collection.add(any())).thenAnswer((_) async => docRef);
+
+    functions = _MockFunctions();
+    callable = _MockCallable();
+    when(() => functions.httpsCallable(any())).thenReturn(callable);
+    when(
+      () => callable.call<void>(any()),
+    ).thenAnswer((_) async => _MockCallableResult());
   });
 
   FirebaseClientsRepository repo({DateTime Function()? clock}) =>
-      FirebaseClientsRepository(firestore, clock: clock);
+      FirebaseClientsRepository(firestore, functions: functions, clock: clock);
 
   ClientRecord client({String id = 'c1', String name = 'Test Client'}) =>
       ClientRecord(
@@ -461,23 +478,71 @@ void main() {
     });
   });
 
-  group('deleteClient (testing-only)', () {
-    test('deletes the doc and drops it from the cached window', () async {
-      final docs = [
-        doc('c1', {'name': 'Junk'}),
-      ];
-      when(() => snapshot.docs).thenReturn(docs);
+  group('deleteClient', () {
+    test(
+      'calls the callable and drops the doc from the cached window',
+      () async {
+        final docs = [
+          doc('c1', {'name': 'Junk'}),
+        ];
+        when(() => snapshot.docs).thenReturn(docs);
 
-      final r = repo();
-      expect((await r.searchClients('Junk')).map((c) => c.id), ['c1']);
+        final r = repo();
+        expect((await r.searchClients('Junk')).map((c) => c.id), ['c1']);
 
-      await r.deleteClient('c1');
+        await r.deleteClient('c1');
 
-      verify(() => collection.doc('c1')).called(1);
-      verify(() => docRef.delete()).called(1);
-      // Evicted in memory, so search stops returning it with no second read.
-      expect(await r.searchClients('Junk'), isEmpty);
-      verify(() => query.get()).called(1);
+        verify(() => functions.httpsCallable('deleteClient')).called(1);
+        final sent = verify(
+          () => callable.call<void>(captureAny()),
+        ).captured.single;
+        expect((sent as Map).cast<String, dynamic>()['clientId'], 'c1');
+        // `allow delete` is withdrawn on /clients — the client never deletes
+        // the doc directly.
+        verifyNever(() => docRef.delete());
+        // Evicted in memory, so search stops returning it with no second read.
+        expect(await r.searchClients('Junk'), isEmpty);
+        verify(() => query.get()).called(1);
+      },
+    );
+
+    test('maps client-has-history to ClientsFailureHasHistory', () async {
+      when(() => callable.call<void>(any())).thenThrow(
+        FirebaseFunctionsException(
+          code: 'failed-precondition',
+          message: 'client-has-history',
+        ),
+      );
+
+      await expectLater(
+        repo().deleteClient('c1'),
+        throwsA(isA<ClientsFailureHasHistory>()),
+      );
+    });
+
+    test('maps client-not-found to ClientsFailureNotFound', () async {
+      when(() => callable.call<void>(any())).thenThrow(
+        FirebaseFunctionsException(
+          code: 'not-found',
+          message: 'client-not-found',
+        ),
+      );
+
+      await expectLater(
+        repo().deleteClient('c1'),
+        throwsA(isA<ClientsFailureNotFound>()),
+      );
+    });
+
+    test('rethrows an unrecognized callable failure untyped', () async {
+      when(() => callable.call<void>(any())).thenThrow(
+        FirebaseFunctionsException(code: 'internal', message: 'boom'),
+      );
+
+      await expectLater(
+        repo().deleteClient('c1'),
+        throwsA(isA<FirebaseFunctionsException>()),
+      );
     });
   });
 }
