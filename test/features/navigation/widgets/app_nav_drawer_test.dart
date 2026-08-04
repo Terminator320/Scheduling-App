@@ -8,7 +8,7 @@ import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 
-Widget _wrap({required bool isAdmin}) => ProviderScope(
+Widget _wrap({required bool isAdmin, TextScaler? textScaler}) => ProviderScope(
   child: MaterialApp(
     localizationsDelegates: const [
       AppLocalizations.delegate,
@@ -17,6 +17,12 @@ Widget _wrap({required bool isAdmin}) => ProviderScope(
     ],
     supportedLocales: AppLocalizations.supportedLocales,
     theme: lightTheme(),
+    builder: textScaler == null
+        ? null
+        : (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+            child: child!,
+          ),
     home: Scaffold(
       appBar: AppBar(actions: const [AppHeaderPair()]),
       endDrawer: AppNavDrawer(
@@ -136,5 +142,27 @@ void main() {
         reason: '$label row is below the tap minimum',
       );
     }
+  });
+
+  testWidgets('survives a 375x667 viewport at a 2.0 text scale', (
+    tester,
+  ) async {
+    // The icon chip added 28px of leading chrome to a 284px-wide row, so the
+    // label has that much less to wrap into.
+    //
+    // 375 wide, not the harness's usual 260: the drawer is a fixed 284px, so
+    // any viewport narrower than that overflows its own header no matter what
+    // this row does — a geometry no shipping phone has (narrowest is ~320dp).
+    tester.view.physicalSize = const Size(375, 667);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _wrap(isAdmin: true, textScaler: const TextScaler.linear(2)),
+    );
+    await tester.tap(find.byTooltip('Open menu'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
   });
 }

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/features/navigation/domain/drawer_catalog.dart';
@@ -37,5 +38,27 @@ void main() {
     ).expand((g) => g.rows)) {
       expect(drawerDotColor(destination), isNotNull, reason: '$destination');
     }
+  });
+
+  test('every destination has a row icon', () {
+    for (final destination in allDestinations) {
+      expect(
+        drawerRowIcon(destination),
+        isA<IconData>(),
+        reason: '$destination has no drawer icon',
+      );
+    }
+  });
+
+  test('no two destinations share an icon', () {
+    // Colour is never the sole indicator of a row, so the icon has to carry
+    // the row's identity on its own.
+    final icons = [for (final d in allDestinations) drawerRowIcon(d)];
+    expect(icons.toSet().length, icons.length);
+  });
+
+  test('no two destinations share a colour', () {
+    final colors = [for (final d in allDestinations) drawerDotColor(d)];
+    expect(colors.toSet().length, colors.length);
   });
 }

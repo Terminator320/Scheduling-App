@@ -221,6 +221,8 @@ class _NavRow extends ConsumerWidget {
     final scheme = theme.colorScheme;
     final isActive = _isActive(context);
     final count = _countFor(ref);
+    // The stored hue lifted for the current theme — never paint the raw value.
+    final tint = crewColorOf(theme, drawerDotColor(destination).toARGB32());
 
     return Material(
       color: isActive ? scheme.primaryContainer : Colors.transparent,
@@ -231,21 +233,32 @@ class _NavRow extends ConsumerWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 48),
           child: Padding(
+            // sp8, not sp12: the 28px chip plus 2x12 would make the row 52
+            // and grow the whole drawer. At sp8 the chip sits inside the
+            // 48px minimum above, so the row height is unchanged.
             padding: const EdgeInsets.symmetric(
               horizontal: 13,
-              vertical: AppSpacing.sp12,
+              vertical: AppSpacing.sp8,
             ),
             child: Row(
               children: [
+                // The tinted icon chip InfoCardRow already uses, at 28 rather
+                // than 34 to sit inside the row's 48px minimum. The icon is
+                // what identifies the row; the tint is decoration, so colour
+                // is never the only cue.
                 Container(
-                  width: 18,
-                  height: 18,
+                  width: 28,
+                  height: 28,
                   decoration: BoxDecoration(
-                    color: crewColorOf(
-                      theme,
-                      drawerDotColor(destination).toARGB32(),
+                    color: tint.withValues(
+                      alpha: theme.cardStyle.iconChipAlpha,
                     ),
-                    borderRadius: BorderRadius.circular(AppRadius.rThumb),
+                    borderRadius: BorderRadius.circular(AppRadius.r8),
+                  ),
+                  child: Icon(
+                    drawerRowIcon(destination),
+                    size: 16,
+                    color: tint,
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sp12),
