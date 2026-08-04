@@ -10,9 +10,9 @@ abstract class ClientsRepository {
 
   Future<void> updateClient(ClientRecord client);
 
-  /// Clients are never removed in shipping behaviour; this exists only for the
-  /// debug-gated testing affordance. See lib/core/testing_flags.dart.
-  // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
+  /// Deletes a client. Refuses (throws [ClientsFailureHasHistory]) when the
+  /// client still has appointments — the server re-checks with a live count()
+  /// aggregate and is the real boundary. Archive is the normal removal.
   Future<void> deleteClient(String id);
 
   /// Archives or un-archives a client. Archived clients drop out of the

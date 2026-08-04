@@ -1,7 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart' show compute;
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
@@ -10,13 +12,16 @@ import 'package:scheduling/features/clients/domain/policies/client_search_policy
 class FirebaseClientsRepository implements ClientsRepository {
   FirebaseClientsRepository(
     FirebaseFirestore firestore, {
+    FirebaseFunctions? functions,
     AppLogger? logger,
     DateTime Function()? clock,
   }) : _clients = firestore.collection('clients'),
+       _functions = functions ?? FirebaseFunctions.instance,
        _logger = logger ?? AppLogger(),
        _clock = clock ?? DateTime.now;
 
   final CollectionReference<Map<String, dynamic>> _clients;
+  final FirebaseFunctions _functions;
   final AppLogger _logger;
 
   /// Injectable time source so the search-cache TTL is testable.
@@ -48,8 +53,8 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   // For local writes we patch the written doc into the scan window directly, so
   // search can recompute without an extra read. A null [data] means the doc is
-  // gone (the testing-only delete) and is dropped rather than re-appended — one
-  // owner for the whole window/cache-invalidation contract.
+  // gone (a delete) and is dropped rather than re-appended — one owner for the
+  // whole window/cache-invalidation contract.
   void _patchWindow(String id, {Map<String, dynamic>? data}) {
     final window = _scanWindow;
     if (window != null && _isFresh(window.fetchedAt)) {
@@ -156,10 +161,24 @@ class FirebaseClientsRepository implements ClientsRepository {
     _patchWindow(client.id, data: map);
   }
 
-  // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
   @override
   Future<void> deleteClient(String id) async {
-    await _clients.doc(id).delete();
+    // Via the callable, not a direct doc delete: `allow delete` on /clients is
+    // withdrawn, because rules cannot express "only when this client has no
+    // appointments" and a direct delete would orphan the job history.
+    try {
+      await _functions.httpsCallable('deleteClient').call<void>({
+        'clientId': id,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      if (e.message == 'client-has-history') {
+        throw const ClientsFailureHasHistory();
+      }
+      if (e.message == 'client-not-found') {
+        throw const ClientsFailureNotFound();
+      }
+      rethrow;
+    }
     // Drops the doc out of the cached window so search and the filters stop
     // returning it without paying for a fresh read.
     _patchWindow(id);
