@@ -136,6 +136,18 @@ void main() {
     ]);
   });
 
+  test('the invite walkthrough separates job title from access, in order', () {
+    const scope = FormTour(TourForm.invitePerson);
+    final steps = tourStepsFor(scope, isAdmin: true);
+    expect(steps, hasLength(5));
+    // Conflating the two is the footgun this walkthrough exists to prevent:
+    // the job title grants nothing, the access toggle is the real switch.
+    expect(
+      steps.indexOf(TourStepId.personJobTitle),
+      lessThan(steps.indexOf(TourStepId.personAccess)),
+    );
+  });
+
   test('no catalog anywhere repeats a step', () {
     for (final scope in allTourScopes) {
       final steps = tourStepsFor(scope, isAdmin: true);

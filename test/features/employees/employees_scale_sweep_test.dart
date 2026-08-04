@@ -19,6 +19,8 @@ import 'package:scheduling/features/employees/widgets/sheets/invite_person_sheet
 import 'package:scheduling/features/employees/widgets/views/employee_details_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
+import '../../support/tour_test_support.dart';
+
 class _MockRepo extends Mock implements EmployeesRepository {}
 
 const _employee = EmployeeRecord(
@@ -82,6 +84,8 @@ Widget _wrap(Widget child, double scale, {EmployeesRepository? repo}) =>
     );
 
 void main() {
+  setUp(markFormToursSeen);
+
   setUpAll(() {
     registerFallbackValue(const EmployeeRecord(id: 'fallback'));
   });

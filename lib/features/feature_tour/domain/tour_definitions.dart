@@ -98,5 +98,16 @@ List<TourStepId> _formSteps(TourForm form, {required bool isAdmin}) =>
           TourStepId.clientSave,
         ],
       ],
-      TourForm.invitePerson => const [],
+      TourForm.invitePerson => [
+        if (isAdmin) ...[
+          TourStepId.personDetails,
+          // Before personAccess on purpose: the job title grants nothing and
+          // the access toggle is the real switch, so the tour has to separate
+          // them in that order.
+          TourStepId.personJobTitle,
+          TourStepId.personColour,
+          TourStepId.personAccess,
+          TourStepId.personCreate,
+        ],
+      ],
     };

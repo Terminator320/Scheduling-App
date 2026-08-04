@@ -13,12 +13,15 @@ import 'package:scheduling/features/employees/domain/models/new_account_credenti
 import 'package:scheduling/features/employees/widgets/sheets/invite_person_sheet.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
+import '../../../../support/tour_test_support.dart';
+
 class _MockRepo extends Mock implements EmployeesRepository {}
 
 void main() {
   late _MockRepo repo;
 
   setUp(() {
+    markFormToursSeen();
     repo = _MockRepo();
     when(
       () => repo.createEmployeeAccount(

@@ -15,6 +15,10 @@ import 'package:scheduling/features/employees/domain/policies/employee_name_poli
 import 'package:scheduling/features/employees/widgets/dialogs/new_account_dialog.dart';
 import 'package:scheduling/features/employees/widgets/fields/employee_color_grid.dart';
 import 'package:scheduling/features/employees/widgets/fields/job_title_chips.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
+import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
@@ -56,6 +60,12 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
   late int _selectedColor;
   bool _isAdmin = false;
   final Map<String, String?> errors = {};
+
+  // Admin-only surface: the Team tab's FAB is the only way in.
+  final _tour = TourSteps(
+    const FormTour(TourForm.invitePerson),
+    isAdmin: true,
+  );
 
   @override
   void initState() {
@@ -174,123 +184,139 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
     final l10n = context.l10n;
     final activity = ref.watch(employeeFormControllerProvider);
 
-    return FormSheetFrame(
-      title: l10n.employees_invitePerson,
-      primaryLabel: l10n.employees_sendInvite,
-      isBusy: activity.isSaving,
-      onPrimary: _save,
-      children: [
-        ..._detailsSection(theme, l10n),
-        ..._roleSection(theme, l10n),
-        ..._colourSection(theme, l10n),
-        ..._accessSection(theme, l10n),
-      ],
+    return FeatureTourHost(
+      scope: _tour.scope,
+      isAdmin: true,
+      stepKeys: _tour.keys,
+      autoScroll: true,
+      child: FormSheetFrame(
+        title: l10n.employees_invitePerson,
+        primaryLabel: l10n.employees_sendInvite,
+        isBusy: activity.isSaving,
+        onPrimary: _save,
+        headerTourWrap: (child) => _tour.stepIf(TourStepId.personCreate, child),
+        scrollCacheExtent: kTourScrollCacheExtent,
+        children: [
+          ..._detailsSection(theme, l10n),
+          ..._roleSection(theme, l10n),
+          ..._colourSection(theme, l10n),
+          ..._accessSection(theme, l10n),
+        ],
+      ),
     );
   }
 
-  List<Widget> _detailsSection(ThemeData theme, AppLocalizations l10n) => [
-    MonoSectionLabel(l10n.employees_sectionDetails),
+  /// Label + tour-wrapped body. One target per section, since each step
+  /// describes the whole section rather than its first field. Stretch-aligned
+  /// like its parent, so the layout is unchanged.
+  List<Widget> _section(TourStepId id, String label, List<Widget> body) => [
+    MonoSectionLabel(label),
     const SizedBox(height: AppSpacing.sp8),
-    SheetFocusScroll(
-      child: LabeledTextField(
-        key: const Key('firstName'),
-        label: l10n.employees_firstName,
-        controller: _firstNameController,
-        required: true,
-        textCapitalization: TextCapitalization.words,
-        textInputAction: TextInputAction.next,
-        maxLength: TextLimits.employeeNameHalf,
-        errorText: errors['name'],
-        onChanged: (_) => _clearError('name'),
-      ),
+    _tour.stepIf(
+      id,
+      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: body),
     ),
-    const SizedBox(height: AppSpacing.sp16),
-    SheetFocusScroll(
-      child: LabeledTextField(
-        key: const Key('lastName'),
-        label: l10n.employees_lastName,
-        controller: _lastNameController,
-        required: true,
-        textCapitalization: TextCapitalization.words,
-        textInputAction: TextInputAction.next,
-        maxLength: TextLimits.employeeNameHalf,
-        errorText: errors['lastName'],
-        onChanged: (_) => _clearError('lastName'),
-      ),
-    ),
-    const SizedBox(height: AppSpacing.sp16),
-    SheetFocusScroll(
-      child: LabeledTextField(
-        key: const Key('email'),
-        label: l10n.employees_workEmail,
-        controller: _emailController,
-        required: true,
-        keyboard: TextInputType.emailAddress,
-        textInputAction: TextInputAction.next,
-        maxLength: TextLimits.authEmail,
-        errorText: errors['email'],
-        onChanged: (_) => _clearError('email'),
-      ),
-    ),
-    const SizedBox(height: AppSpacing.sp16),
-    SheetFocusScroll(
-      child: LabeledTextField(
-        label: l10n.employees_phoneNumber,
-        controller: _phoneController,
-        optional: true,
-        keyboard: TextInputType.phone,
-        inputFormatters: const [PhoneInputFormatter()],
-        maxLength: TextLimits.phone,
-      ),
-    ),
-    const SizedBox(height: AppSpacing.sp24),
   ];
 
-  List<Widget> _roleSection(ThemeData theme, AppLocalizations l10n) => [
-    MonoSectionLabel(l10n.employees_sectionRole),
-    const SizedBox(height: AppSpacing.sp8),
-    JobTitleChips(
-      value: _jobTitle,
-      onChanged: (next) => setState(() => _jobTitle = next),
-    ),
-    const SizedBox(height: AppSpacing.sp24),
-  ];
+  List<Widget> _detailsSection(ThemeData theme, AppLocalizations l10n) =>
+      _section(TourStepId.personDetails, l10n.employees_sectionDetails, [
+        SheetFocusScroll(
+          child: LabeledTextField(
+            key: const Key('firstName'),
+            label: l10n.employees_firstName,
+            controller: _firstNameController,
+            required: true,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            maxLength: TextLimits.employeeNameHalf,
+            errorText: errors['name'],
+            onChanged: (_) => _clearError('name'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            key: const Key('lastName'),
+            label: l10n.employees_lastName,
+            controller: _lastNameController,
+            required: true,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            maxLength: TextLimits.employeeNameHalf,
+            errorText: errors['lastName'],
+            onChanged: (_) => _clearError('lastName'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            key: const Key('email'),
+            label: l10n.employees_workEmail,
+            controller: _emailController,
+            required: true,
+            keyboard: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            maxLength: TextLimits.authEmail,
+            errorText: errors['email'],
+            onChanged: (_) => _clearError('email'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: l10n.employees_phoneNumber,
+            controller: _phoneController,
+            optional: true,
+            keyboard: TextInputType.phone,
+            inputFormatters: const [PhoneInputFormatter()],
+            maxLength: TextLimits.phone,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+      ]);
 
-  List<Widget> _colourSection(ThemeData theme, AppLocalizations l10n) => [
-    MonoSectionLabel(l10n.employees_sectionColour),
-    const SizedBox(height: AppSpacing.sp8),
-    EmployeeColorGrid(
-      selectedColor: _selectedColor,
-      usedColors: widget.usedColors,
-      onColorSelected: (value) => setState(() => _selectedColor = value),
-    ),
-    const SizedBox(height: AppSpacing.sp8),
-    Text(
-      l10n.employees_coloursLeft(
-        availableCrewColorCount(widget.usedColors),
-      ),
-      style: theme.textTheme.labelSmall?.copyWith(
-        color: theme.palette.textTertiary,
-      ),
-    ),
-    const SizedBox(height: AppSpacing.sp24),
-  ];
+  List<Widget> _roleSection(ThemeData theme, AppLocalizations l10n) =>
+      _section(TourStepId.personJobTitle, l10n.employees_sectionRole, [
+        JobTitleChips(
+          value: _jobTitle,
+          onChanged: (next) => setState(() => _jobTitle = next),
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+      ]);
 
-  List<Widget> _accessSection(ThemeData theme, AppLocalizations l10n) => [
-    MonoSectionLabel(l10n.employees_sectionAccess),
-    const SizedBox(height: AppSpacing.sp8),
-    SwitchListTile.adaptive(
-      key: const Key('adminAccess'),
-      value: _isAdmin,
-      activeTrackColor: theme.colorScheme.primary,
-      contentPadding: EdgeInsets.zero,
-      title: Text(l10n.employees_adminAccess),
-      subtitle: Text(l10n.employees_adminAccessDescription),
-      onChanged: (value) => setState(() => _isAdmin = value),
-    ),
-    const SizedBox(height: AppSpacing.sp24),
-    WarningNote(message: context.l10n.employees_invitedNote),
-  ];
+  List<Widget> _colourSection(ThemeData theme, AppLocalizations l10n) =>
+      _section(TourStepId.personColour, l10n.employees_sectionColour, [
+        EmployeeColorGrid(
+          selectedColor: _selectedColor,
+          usedColors: widget.usedColors,
+          onColorSelected: (value) => setState(() => _selectedColor = value),
+        ),
+        const SizedBox(height: AppSpacing.sp8),
+        Text(
+          l10n.employees_coloursLeft(
+            availableCrewColorCount(widget.usedColors),
+          ),
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.palette.textTertiary,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+      ]);
+
+  List<Widget> _accessSection(ThemeData theme, AppLocalizations l10n) =>
+      _section(TourStepId.personAccess, l10n.employees_sectionAccess, [
+        SwitchListTile.adaptive(
+          key: const Key('adminAccess'),
+          value: _isAdmin,
+          activeTrackColor: theme.colorScheme.primary,
+          contentPadding: EdgeInsets.zero,
+          title: Text(l10n.employees_adminAccess),
+          subtitle: Text(l10n.employees_adminAccessDescription),
+          onChanged: (value) => setState(() => _isAdmin = value),
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+        WarningNote(message: context.l10n.employees_invitedNote),
+      ]);
 }
 
 /// The amber advisory under the form. Warning-toned on purpose — the account
