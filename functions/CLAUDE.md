@@ -3,7 +3,7 @@
 Loaded when working under `functions/`. Root context: `../CLAUDE.md`.
 
 Functions live in `functions/` (project `schedulingapp-88727`, region
-`us-central1`). `index.js` is now a thin wiring surface that re-exports all 23
+`us-central1`). `index.js` is now a thin wiring surface that re-exports all 26
 functions under their original names — the implementations are split into
 domain modules: `security.js` (shared callable guards — `assertPayloadShape`,
 `requireString`, `optionalString` (same trim/length/control-char checks but
@@ -13,7 +13,12 @@ carried verbatim into `employee_accounts.js`, which is why it now sits here),
 `NaN`/`Infinity`), `readSessionToken`, `enforceDurableRateLimit`, `assertAdmin`),
 `bridge.js` (`syncUsersByUid`), `client_propagation.js`
 (`propagateClientEdits`), `client_job_count.js` (`recountClientJobs`, backed by
-the pure `clientsToRecount`), `places.js`, `account.js`,
+the pure `clientsToRecount`), `clients.js` (`deleteClient` — admin-only, the
+ONLY client-delete path now that `allow delete` on `/clients` is withdrawn;
+refuses `client-has-history` on a **live `count()` aggregate**, deliberately not
+the lazily-backfilled `jobCount`, since deleting on a stale zero orphans the
+visits this gate exists to protect; pure `performDeleteClient` exported for
+jest), `places.js`, `account.js`,
 `employee_accounts.js` (the whole employee-account lifecycle, P4c 2026-08-02 —
 `createEmployeeAccount` (admin-only: mints the Firebase Auth account on the
 shared `DEFAULT_PASSWORD` and the `invited` `users` doc carrying its real
