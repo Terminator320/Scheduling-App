@@ -492,7 +492,8 @@ service cloud.firestore {
         && (!('onSiteManager' in data) || (data.onSiteManager is string && data.onSiteManager.size() <= 200))
         && (!('billingTerms' in data) || (data.billingTerms is string && data.billingTerms.size() <= 200))
         && (!('autoInvoice' in data) || data.autoInvoice is bool)
-        && (!('noFixedAddress' in data) || data.noFixedAddress is bool);
+        && (!('noFixedAddress' in data) || data.noFixedAddress is bool)
+        && (!('archived' in data) || data.archived is bool);
     }
 
     match /clients/{clientId} {
