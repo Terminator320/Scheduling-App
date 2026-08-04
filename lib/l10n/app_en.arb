@@ -2162,6 +2162,238 @@
   "@tour_settingsReplayDesc": {
     "description": "Tour step description: replay-tour settings row"
   },
+  "tour_calendarCollapseTitle": "Make room for the day",
+  "@tour_calendarCollapseTitle": {
+    "description": "Tour step title: calendar collapse handle"
+  },
+  "tour_calendarCollapseDesc": "Drag or tap this handle to hide the calendar and give the day's jobs the whole screen.",
+  "@tour_calendarCollapseDesc": {
+    "description": "Tour step description: calendar collapse handle"
+  },
+  "tour_clientsFilterTitle": "Filter by type",
+  "@tour_clientsFilterTitle": {
+    "description": "Tour step title: clients type filter chips"
+  },
+  "tour_clientsFilterDesc": "Show only residential, commercial or archived clients. Search still looks everywhere.",
+  "@tour_clientsFilterDesc": {
+    "description": "Tour step description: clients type filter chips"
+  },
+  "tour_clientsRowTitle": "Open or archive a client",
+  "@tour_clientsRowTitle": {
+    "description": "Tour step title: a client row in the list"
+  },
+  "tour_clientsRowDesc": "Tap a client for their details and job history, or swipe the row to archive them.",
+  "@tour_clientsRowDesc": {
+    "description": "Tour step description: a client row in the list"
+  },
+  "tour_employeesRowTitle": "Who is working today",
+  "@tour_employeesRowTitle": {
+    "description": "Tour step title: a team member row in the roster"
+  },
+  "tour_employeesRowDesc": "Each row shows how many jobs that person has today. Tap for their profile and schedule.",
+  "@tour_employeesRowDesc": {
+    "description": "Tour step description: a team member row in the roster"
+  },
+  "tour_historyFilterTitle": "Narrow the results",
+  "@tour_historyFilterTitle": {
+    "description": "Tour step title: history filter bar"
+  },
+  "tour_historyFilterDesc": "Filter past jobs by team member, status or date range.",
+  "@tour_historyFilterDesc": {
+    "description": "Tour step description: history filter bar"
+  },
+  "tour_historyRowTitle": "Revisit a job",
+  "@tour_historyRowTitle": {
+    "description": "Tour step title: a past job row in history"
+  },
+  "tour_historyRowDesc": "Tap any past job to reopen its details, notes and photos.",
+  "@tour_historyRowDesc": {
+    "description": "Tour step description: a past job row in history"
+  },
+  "tour_dashboardHeroTitle": "Today at a glance",
+  "@tour_dashboardHeroTitle": {
+    "description": "Tour step title: dashboard hero summary"
+  },
+  "tour_dashboardHeroDesc": "How many jobs are booked, under way and finished right now.",
+  "@tour_dashboardHeroDesc": {
+    "description": "Tour step description: dashboard hero summary"
+  },
+  "tour_dashboardUpcomingTitle": "What is next",
+  "@tour_dashboardUpcomingTitle": {
+    "description": "Tour step title: dashboard upcoming-today section"
+  },
+  "tour_dashboardUpcomingDesc": "The jobs still to come today, in the order they start.",
+  "@tour_dashboardUpcomingDesc": {
+    "description": "Tour step description: dashboard upcoming-today section"
+  },
+  "tour_dashboardWorkloadTitle": "How the work is spread",
+  "@tour_dashboardWorkloadTitle": {
+    "description": "Tour step title: dashboard employee workload section"
+  },
+  "tour_dashboardWorkloadDesc": "Jobs per team member this week, so you can see who is overloaded.",
+  "@tour_dashboardWorkloadDesc": {
+    "description": "Tour step description: dashboard employee workload section"
+  },
+  "tour_dashboardAttentionTitle": "Needs a decision",
+  "@tour_dashboardAttentionTitle": {
+    "description": "Tour step title: dashboard attention flags section"
+  },
+  "tour_dashboardAttentionDesc": "Jobs that are overdue or unassigned. Tap one to open it and sort it out.",
+  "@tour_dashboardAttentionDesc": {
+    "description": "Tour step description: dashboard attention flags section"
+  },
+  "tour_dayRouteDaySwitcherTitle": "Pick the day",
+  "@tour_dayRouteDaySwitcherTitle": {
+    "description": "Tour step title: day route day switcher"
+  },
+  "tour_dayRouteDaySwitcherDesc": "Step through days with the arrows, or tap the date to jump to any day.",
+  "@tour_dayRouteDaySwitcherDesc": {
+    "description": "Tour step description: day route day switcher"
+  },
+  "tour_dayRouteEmployeeTitle": "Whose route",
+  "@tour_dayRouteEmployeeTitle": {
+    "description": "Tour step title: day route employee picker"
+  },
+  "tour_dayRouteEmployeeDesc": "Switch between team members to see each person's stops for the day.",
+  "@tour_dayRouteEmployeeDesc": {
+    "description": "Tour step description: day route employee picker"
+  },
+  "tour_dayRouteStopsTitle": "The day's stops",
+  "@tour_dayRouteStopsTitle": {
+    "description": "Tour step title: day route stop timeline"
+  },
+  "tour_dayRouteStopsDesc": "Every job with an address, in driving order. Tap one to open it.",
+  "@tour_dayRouteStopsDesc": {
+    "description": "Tour step description: day route stop timeline"
+  },
+  "tour_dayRouteNavigateTitle": "Drive the whole route",
+  "@tour_dayRouteNavigateTitle": {
+    "description": "Tour step title: day route navigate button"
+  },
+  "tour_dayRouteNavigateDesc": "Opens all the day's stops in Google Maps as one trip, in order.",
+  "@tour_dayRouteNavigateDesc": {
+    "description": "Tour step description: day route navigate button"
+  },
+  "tour_apptTemplatesTitle": "Start from a job type",
+  "@tour_apptTemplatesTitle": {
+    "description": "Tour step title: appointment form job template chips"
+  },
+  "tour_apptTemplatesDesc": "One tap fills in the title and a typical duration. You can change both after.",
+  "@tour_apptTemplatesDesc": {
+    "description": "Tour step description: appointment form job template chips"
+  },
+  "tour_apptClientTitle": "Who the job is for",
+  "@tour_apptClientTitle": {
+    "description": "Tour step title: appointment form client picker"
+  },
+  "tour_apptClientDesc": "Search your clients by name, phone or address, or add a new one without leaving this form.",
+  "@tour_apptClientDesc": {
+    "description": "Tour step description: appointment form client picker"
+  },
+  "tour_apptCrewTitle": "Who is doing it",
+  "@tour_apptCrewTitle": {
+    "description": "Tour step title: appointment form employee picker"
+  },
+  "tour_apptCrewDesc": "Assign your team. Only the people you pick here can see this job in their calendar.",
+  "@tour_apptCrewDesc": {
+    "description": "Tour step description: appointment form employee picker, which is also the visibility rule"
+  },
+  "tour_apptScheduleTitle": "When it happens",
+  "@tour_apptScheduleTitle": {
+    "description": "Tour step title: appointment form schedule panel"
+  },
+  "tour_apptScheduleDesc": "Set the date and times, or switch on All day. On a job spanning several days, these times are the hours worked on each of those days.",
+  "@tour_apptScheduleDesc": {
+    "description": "Tour step description: appointment form schedule panel, which must state that a multi-day job's times are a daily window"
+  },
+  "tour_apptDetailsTitle": "Everything else",
+  "@tour_apptDetailsTitle": {
+    "description": "Tour step title: appointment form details section"
+  },
+  "tour_apptDetailsDesc": "Address, notes, materials and photos. All optional, and you can add them later.",
+  "@tour_apptDetailsDesc": {
+    "description": "Tour step description: appointment form details section"
+  },
+  "tour_apptSaveTitle": "Book it",
+  "@tour_apptSaveTitle": {
+    "description": "Tour step title: appointment form save button"
+  },
+  "tour_apptSaveDesc": "Saves the job and puts it on the calendar of everyone you assigned.",
+  "@tour_apptSaveDesc": {
+    "description": "Tour step description: appointment form save button"
+  },
+  "tour_clientWhoTitle": "Name the client",
+  "@tour_clientWhoTitle": {
+    "description": "Tour step title: client form who section"
+  },
+  "tour_clientWhoDesc": "A person's name, a business name, or both. This is what you will search for later.",
+  "@tour_clientWhoDesc": {
+    "description": "Tour step description: client form who section"
+  },
+  "tour_clientReachTitle": "How to reach them",
+  "@tour_clientReachTitle": {
+    "description": "Tour step title: client form contact section"
+  },
+  "tour_clientReachDesc": "Phone and email. Tapping these on the client's page calls or writes to them directly.",
+  "@tour_clientReachDesc": {
+    "description": "Tour step description: client form contact section"
+  },
+  "tour_clientSiteTitle": "Where the work happens",
+  "@tour_clientSiteTitle": {
+    "description": "Tour step title: client form site address section"
+  },
+  "tour_clientSiteDesc": "The site address, used for directions and the day route. Leave it off if there is no fixed address.",
+  "@tour_clientSiteDesc": {
+    "description": "Tour step description: client form site address section"
+  },
+  "tour_clientSaveTitle": "Save the client",
+  "@tour_clientSaveTitle": {
+    "description": "Tour step title: client form save button"
+  },
+  "tour_clientSaveDesc": "They are bookable right away, and you can fill in the rest any time.",
+  "@tour_clientSaveDesc": {
+    "description": "Tour step description: client form save button"
+  },
+  "tour_personDetailsTitle": "Who they are",
+  "@tour_personDetailsTitle": {
+    "description": "Tour step title: invite form details section"
+  },
+  "tour_personDetailsDesc": "Their name and phone, plus the email address they will sign in with.",
+  "@tour_personDetailsDesc": {
+    "description": "Tour step description: invite form details section"
+  },
+  "tour_personJobTitleTitle": "What they do",
+  "@tour_personJobTitleTitle": {
+    "description": "Tour step title: invite form job title chips"
+  },
+  "tour_personJobTitleDesc": "Their role on site. This is a label only, and it does not change what they can see or do in the app.",
+  "@tour_personJobTitleDesc": {
+    "description": "Tour step description: invite form job title chips, which must state that a job title grants no access"
+  },
+  "tour_personColourTitle": "Their colour",
+  "@tour_personColourTitle": {
+    "description": "Tour step title: invite form colour picker"
+  },
+  "tour_personColourDesc": "Identifies them on job cards and calendar dots. Colours already taken are not offered.",
+  "@tour_personColourDesc": {
+    "description": "Tour step description: invite form colour picker"
+  },
+  "tour_personAccessTitle": "What they can do",
+  "@tour_personAccessTitle": {
+    "description": "Tour step title: invite form access role toggle"
+  },
+  "tour_personAccessDesc": "This is the real permission switch. An admin manages everything; an employee sees only the jobs they are assigned.",
+  "@tour_personAccessDesc": {
+    "description": "Tour step description: invite form access role toggle, the real permission switch as opposed to the job title"
+  },
+  "tour_personCreateTitle": "Create the account",
+  "@tour_personCreateTitle": {
+    "description": "Tour step title: invite form create button"
+  },
+  "tour_personCreateDesc": "You get their email and a starting password to hand over yourself, since the app does not send it. They choose their own password the first time they sign in.",
+  "@tour_personCreateDesc": {
+    "description": "Tour step description: invite form create button, which must state that the admin delivers the credentials themselves"
+  },
   "settings_help": "Help",
   "@settings_help": {
     "description": "Settings section header for help/tour actions"
