@@ -154,4 +154,43 @@ void main() {
       expect(refreshCount(), 0);
     });
   });
+
+  group('setArchived', () {
+    test('archives, bumps the refresh and reports the new state', () async {
+      when(
+        () => repo.setClientArchived(any(), archived: any(named: 'archived')),
+      ).thenAnswer((_) async {});
+
+      final outcome = await notifier().setArchived('c1', archived: true);
+
+      expect(outcome, isA<ClientArchived>());
+      expect((outcome as ClientArchived).archived, isTrue);
+      verify(() => repo.setClientArchived('c1', archived: true)).called(1);
+      expect(refreshCount(), 1);
+      expect(container.read(clientFormControllerProvider), isFalse);
+    });
+
+    test('un-archives through the same action', () async {
+      when(
+        () => repo.setClientArchived(any(), archived: any(named: 'archived')),
+      ).thenAnswer((_) async {});
+
+      final outcome = await notifier().setArchived('c1', archived: false);
+
+      expect((outcome as ClientArchived).archived, isFalse);
+      verify(() => repo.setClientArchived('c1', archived: false)).called(1);
+    });
+
+    test('reports the failure without bumping the refresh', () async {
+      when(
+        () => repo.setClientArchived(any(), archived: any(named: 'archived')),
+      ).thenThrow(Exception('boom'));
+
+      final outcome = await notifier().setArchived('c1', archived: true);
+
+      expect(outcome, isA<ClientArchiveFailed>());
+      expect(refreshCount(), 0);
+      expect(container.read(clientFormControllerProvider), isFalse);
+    });
+  });
 }

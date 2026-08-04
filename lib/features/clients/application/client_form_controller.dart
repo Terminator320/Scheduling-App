@@ -34,8 +34,7 @@ class ClientSaveBusy extends ClientSaveOutcome {
   const ClientSaveBusy();
 }
 
-/// Outcome of the testing-only client delete.
-// TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
+/// Outcome of a client delete.
 sealed class ClientDeleteOutcome {
   const ClientDeleteOutcome();
 }
@@ -49,13 +48,32 @@ class ClientDeleteFailed extends ClientDeleteOutcome {
   final Object error;
 }
 
+/// Outcome of an archive / un-archive.
+sealed class ClientArchiveOutcome {
+  const ClientArchiveOutcome();
+}
+
+class ClientArchived extends ClientArchiveOutcome {
+  const ClientArchived({required this.archived});
+  final bool archived;
+}
+
+class ClientArchiveFailed extends ClientArchiveOutcome {
+  const ClientArchiveFailed(this.error);
+  final Object error;
+}
+
+/// A write the reentrancy guard skipped. Surfaces NOTHING — see
+/// [ClientSaveBusy] for why this is a member and not a fabricated exception.
+class ClientArchiveBusy extends ClientArchiveOutcome {
+  const ClientArchiveBusy();
+}
+
 /// Write orchestration shared by the add/edit/detail views. Handles the
 /// repository write, the list refresh, and a best-effort phone-contact sync.
 ///
-/// State is the Save spinner flag. Shipping clients are never deleted (owner
-/// decision 2026-08-01); the only delete is the debug-gated testing affordance
-/// (`lib/core/testing_flags.dart`), which reuses that same flag rather than
-/// adding a second one.
+/// State is the Save spinner flag, shared by every write here — archive and
+/// delete reuse it rather than adding flags of their own.
 class ClientFormController extends Notifier<bool> {
   @override
   bool build() => false;
@@ -122,9 +140,33 @@ class ClientFormController extends Notifier<bool> {
     }
   }
 
-  /// Deletes a client and drops its device-local phone-contact link. Shipping
-  /// behaviour never removes a client — see lib/core/testing_flags.dart.
-  // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
+  /// Archives or un-archives a client. Archived clients leave the paginated
+  /// list and the type filter but stay searchable and bookable.
+  Future<ClientArchiveOutcome> setArchived(
+    String clientId, {
+    required bool archived,
+  }) async {
+    // Reentrancy guard, synchronously before the first await (see addClient).
+    if (state) return const ClientArchiveBusy();
+    final repo = ref.read(clientsRepositoryProvider);
+    final refresh = ref.read(clientsRefreshProvider.notifier);
+    final logger = ref.read(loggerProvider);
+    state = true;
+    try {
+      await repo.setClientArchived(clientId, archived: archived);
+      refresh.bump();
+      return ClientArchived(archived: archived);
+    } catch (e, st) {
+      logger.warn('CLI-ARCH setArchived failed', e, st);
+      return ClientArchiveFailed(e);
+    } finally {
+      if (ref.mounted) state = false;
+    }
+  }
+
+  /// Deletes a client and drops its device-local phone-contact link. Refused
+  /// server-side when the client still has appointments — archive is the
+  /// normal removal.
   Future<ClientDeleteOutcome> deleteClient(String clientId) async {
     // Resolved before the first await (see addClient).
     final repo = ref.read(clientsRepositoryProvider);
