@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:scheduling/core/errors/failure.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Typed failures for client writes. Mirrors [EmployeesFailure].
+/// Typed failures for client writes. Mirrors `EmployeesFailure`.
 sealed class ClientsFailure extends Failure {
   const ClientsFailure();
 }

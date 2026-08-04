@@ -89,7 +89,7 @@ void main() {
     callable = _MockCallable();
     when(() => functions.httpsCallable(any())).thenReturn(callable);
     when(
-      () => callable.call<void>(any()),
+      () => callable.call<void>(any<Object?>()),
     ).thenAnswer((_) async => _MockCallableResult());
   });
 
@@ -494,7 +494,7 @@ void main() {
 
         verify(() => functions.httpsCallable('deleteClient')).called(1);
         final sent = verify(
-          () => callable.call<void>(captureAny()),
+          () => callable.call<void>(captureAny<Object?>()),
         ).captured.single;
         expect((sent as Map).cast<String, dynamic>()['clientId'], 'c1');
         // `allow delete` is withdrawn on /clients — the client never deletes
@@ -507,7 +507,7 @@ void main() {
     );
 
     test('maps client-has-history to ClientsFailureHasHistory', () async {
-      when(() => callable.call<void>(any())).thenThrow(
+      when(() => callable.call<void>(any<Object?>())).thenThrow(
         FirebaseFunctionsException(
           code: 'failed-precondition',
           message: 'client-has-history',
@@ -521,7 +521,7 @@ void main() {
     });
 
     test('maps client-not-found to ClientsFailureNotFound', () async {
-      when(() => callable.call<void>(any())).thenThrow(
+      when(() => callable.call<void>(any<Object?>())).thenThrow(
         FirebaseFunctionsException(
           code: 'not-found',
           message: 'client-not-found',
@@ -535,7 +535,7 @@ void main() {
     });
 
     test('rethrows an unrecognized callable failure untyped', () async {
-      when(() => callable.call<void>(any())).thenThrow(
+      when(() => callable.call<void>(any<Object?>())).thenThrow(
         FirebaseFunctionsException(code: 'internal', message: 'boom'),
       );
 

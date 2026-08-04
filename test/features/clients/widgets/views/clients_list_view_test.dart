@@ -11,6 +11,7 @@ import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
@@ -27,13 +28,13 @@ const _sophie = ClientRecord(
 Widget _wrap(
   ClientsRepository repo, {
   String searchQuery = '',
-  ClientType? selectedType,
+  ClientsFilter filter = const ClientsFilterAll(),
   double? height,
 }) {
   final view = ClientsListView(
     searchQuery: searchQuery,
     isAdmin: true,
-    selectedType: selectedType,
+    filter: filter,
   );
   return ProviderScope(
     overrides: [clientsRepositoryProvider.overrideWithValue(repo)],
@@ -150,7 +151,9 @@ void main() {
       ],
     );
 
-    await tester.pumpWidget(_wrap(repo, selectedType: ClientType.commercial));
+    await tester.pumpWidget(
+      _wrap(repo, filter: const ClientsFilterType(ClientType.commercial)),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Commercial Client'), findsOneWidget);
@@ -160,7 +163,9 @@ void main() {
   testWidgets('the type filter never touches the paginated list', (
     tester,
   ) async {
-    await tester.pumpWidget(_wrap(repo, selectedType: ClientType.commercial));
+    await tester.pumpWidget(
+      _wrap(repo, filter: const ClientsFilterType(ClientType.commercial)),
+    );
     await tester.pumpAndSettle();
 
     // It is a separate bounded read. Filtering the paginated list in Dart would
@@ -172,6 +177,44 @@ void main() {
       ),
     );
     verify(() => repo.fetchClientsByType(ClientType.commercial)).called(1);
+  });
+
+  testWidgets('the archived filter reads its own bounded query', (
+    tester,
+  ) async {
+    when(() => repo.fetchArchivedClients()).thenAnswer(
+      (_) async => const [ClientRecord(id: 'a1', name: 'Retired Co')],
+    );
+
+    await tester.pumpWidget(
+      _wrap(repo, filter: const ClientsFilterArchived()),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Retired Co'), findsOneWidget);
+    // Same shape as the type filter: a separate bounded read, never a Dart
+    // filter over a server page.
+    verifyNever(
+      () => repo.fetchClientsPage(
+        after: any(named: 'after'),
+        limit: any(named: 'limit'),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the archived filter shows an empty state when none are', (
+    tester,
+  ) async {
+    when(() => repo.fetchArchivedClients()).thenAnswer((_) async => const []);
+
+    await tester.pumpWidget(
+      _wrap(repo, filter: const ClientsFilterArchived()),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('No archived clients'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('searching within a type filters that type', (tester) async {
@@ -191,7 +234,11 @@ void main() {
     );
 
     await tester.pumpWidget(
-      _wrap(repo, selectedType: ClientType.commercial, searchQuery: 'sophie'),
+      _wrap(
+        repo,
+        filter: const ClientsFilterType(ClientType.commercial),
+        searchQuery: 'sophie',
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -226,7 +273,9 @@ void main() {
   testWidgets('an empty type result shows the type empty state', (
     tester,
   ) async {
-    await tester.pumpWidget(_wrap(repo, selectedType: ClientType.commercial));
+    await tester.pumpWidget(
+      _wrap(repo, filter: const ClientsFilterType(ClientType.commercial)),
+    );
     await tester.pumpAndSettle();
 
     expect(find.textContaining('No Commercial clients'), findsOneWidget);

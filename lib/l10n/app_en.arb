@@ -879,6 +879,18 @@
   "@employees_selectAnEmployeeToViewDetails": {
     "description": "Select an employee to view details"
   },
+  "clients_noArchivedClients": "No archived clients",
+  "@clients_noArchivedClients": {
+    "description": "Empty state when the Archived filter chip is on and no client is archived."
+  },
+  "clients_archivedFilterHint": "Archived clients stay searchable and can still be booked.",
+  "@clients_archivedFilterHint": {
+    "description": "Body text under the empty state for the Archived clients filter."
+  },
+  "clients_filterArchived": "Archived",
+  "@clients_filterArchived": {
+    "description": "Filter chip above the clients list showing only archived clients; also the badge on an archived client's row."
+  },
   "clients_deleteBlockedHasHistory": "This client has job history, so it can't be deleted. Archive it instead.",
   "@clients_deleteBlockedHasHistory": {
     "description": "Shown when an admin tries to delete a client that still has appointments."

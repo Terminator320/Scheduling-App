@@ -6,7 +6,7 @@ import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
 import 'package:scheduling/features/clients/widgets/sections/client_type_filter_bar.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
@@ -40,10 +40,9 @@ class ListInformation extends StatefulWidget {
 class _ListInformationState extends State<ListInformation> {
   final TextEditingController _searchController = TextEditingController();
   ClientRecord? _selectedClient;
-  ClientType? _selectedType;
+  ClientsFilter _filter = const ClientsFilterAll();
 
   late final _tour = TourSteps(HubTab.clients, isAdmin: widget.isAdmin);
-
 
   @override
   void dispose() {
@@ -130,8 +129,8 @@ class _ListInformationState extends State<ListInformation> {
           master: Column(
             children: [
               ClientTypeFilterBar(
-                selected: _selectedType,
-                onChanged: (next) => setState(() => _selectedType = next),
+                selected: _filter,
+                onChanged: (next) => setState(() => _filter = next),
               ),
               Expanded(
                 child: ListenableBuilder(
@@ -139,7 +138,7 @@ class _ListInformationState extends State<ListInformation> {
                   builder: (context, _) => ClientsListView(
                     searchQuery: _searchController.text,
                     isAdmin: widget.isAdmin,
-                    selectedType: _selectedType,
+                    filter: _filter,
                     // Only highlight the selected row when the detail pane is shown (two-pane).
                     selectedClientId: context.isTwoPane
                         ? _selectedClient?.id
