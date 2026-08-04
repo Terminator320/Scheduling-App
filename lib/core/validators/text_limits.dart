@@ -27,6 +27,15 @@ class TextLimits {
   static const int mobile = 32;
   static const int email = 320;
 
+  /// 254. An email that is ALSO a sign-in identity, so it passes through
+  /// `createEmployeeAccount` / `changeEmployeeEmail`, both of which
+  /// `requireString(..., 254)`. A client cap must never be looser than the
+  /// callable's, or the field accepts a value the callable rejects as
+  /// `invalid-argument` and the admin sees an unexplained "Something went
+  /// wrong" they cannot fix by editing. Client records keep [email] (320),
+  /// which matches `isValidClientData`.
+  static const int authEmail = 254;
+
   static const int aptUnit = 32;
   static const int city = 100;
   static const int province = 100;

@@ -157,6 +157,14 @@ const redeemSignupCode = onCall(APP_CHECK, async (req) => {
   if (typeof tokenEmail !== "string" || tokenEmail === "") {
     throw new HttpsError("failed-precondition", "no-email-claim");
   }
+  // NO email_verified gate here, deliberately (tried and reverted 2026-08-04).
+  // The 1.37.1 build this shim exists for calls `register()` and then
+  // `redeemSignupCode` on the very next line, so its token is ALWAYS
+  // unverified — and its `_mapRedemptionError` has no case for the rejection,
+  // so it would surface "Something went wrong" and then ROLL BACK (delete) the
+  // Auth account it just created. That is every invite acceptance on the
+  // App Store build, permanently, with no in-app recovery.
+  // The gate belongs in the same sweep that retires the shim, not before it.
   // Key the limit by target email, not caller uid — a failed signup deletes
   // and re-registers to mint a fresh uid, which would reset a uid-keyed cap.
   const rateKey = tokenEmail.trim().toLowerCase();

@@ -20,6 +20,14 @@ const _jane = EmployeeRecord(
   status: 'active',
 );
 
+// The screen opens on TODAY and scopes the stream to that day — the range
+// query deliberately reaches 14 days back, so a fixture pinned to a fixed
+// calendar date would (correctly) render nothing.
+DateTime _at(int hour, [int dayOffset = 0]) {
+  final now = DateTime.now();
+  return DateTime(now.year, now.month, now.day + dayOffset, hour);
+}
+
 AppointmentRecord _job({
   required int id,
   required int hour,
@@ -27,11 +35,13 @@ AppointmentRecord _job({
   String address = '',
   List<String> employeeIds = const [],
   List<String> employeeNames = const [],
+  int dayOffset = 0,
+  int? endDayOffset,
 }) => AppointmentRecord(
   id: 'a$id',
   title: 'Appt $id',
-  startTime: DateTime(2026, 5, 16, hour),
-  endTime: DateTime(2026, 5, 16, hour + 1),
+  startTime: _at(hour, dayOffset),
+  endTime: _at(hour + 1, endDayOffset ?? dayOffset),
   status: status,
   address: address,
   employeeIds: employeeIds,
@@ -146,6 +156,52 @@ void main() {
     expect(y1, lessThan(y2));
     expect(y2, lessThan(y3));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a job from a previous day is not a stop today', (tester) async {
+    // The range stream reaches `maxAppointmentSpanDays` back so a run already
+    // under way is fetched. Taking that list raw listed a FORTNIGHT of jobs
+    // as today's route and built the Maps URL from the first 10 of them.
+    await _pump(
+      tester,
+      _wrap(
+        jobs: [
+          _job(id: 1, hour: 9, status: 'pending', address: '1 A St'),
+          _job(
+            id: 2,
+            hour: 9,
+            status: 'pending',
+            address: '9 Old Rd',
+            dayOffset: -7,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('Appt 1'), findsOneWidget);
+    expect(find.text('Appt 2'), findsNothing);
+    expect(find.byType(AppointmentCard), findsOneWidget);
+  });
+
+  testWidgets('a multi-day run is a stop on each of its days', (tester) async {
+    await _pump(
+      tester,
+      _wrap(
+        jobs: [
+          _job(
+            id: 3,
+            hour: 9,
+            status: 'pending',
+            address: '5 Long Rd',
+            dayOffset: -2,
+            endDayOffset: 2,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('Appt 3'), findsOneWidget);
+    expect(find.byType(AppointmentCard), findsOneWidget);
   });
 
   testWidgets('cancelled jobs are excluded from the timeline', (tester) async {

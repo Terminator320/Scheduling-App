@@ -14,9 +14,10 @@
  * would be continuous log noise. This is stated as an invariant in
  * functions/CLAUDE.md; nothing enforced it.
  *
- * (maintenance.js deliberately has no sibling test: it eagerly resolves a
- * Storage bucket at load, so `require()` throws "Missing bucket name" outside
- * the emulator. Its pure logic lives in image_magic.js and is tested there.)
+ * (maintenance.js still has no sibling test: it resolves a Storage bucket at
+ * load, so `require()` throws "Missing bucket name" outside the emulator.
+ * Its logic lives in image_magic.js and maintenance_policy.js — the purge
+ * orchestration moved to the latter precisely so it could be tested.)
  */
 
 const fs = require("fs");

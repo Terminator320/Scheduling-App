@@ -390,9 +390,14 @@ Free-text input length caps live in `lib/core/validators/text_limits.dart`. The 
 
 A rules cap is **not** required to match the client cap, and for user docs it
 deliberately doesn't: it mirrors the widest value a shipped write path can
-produce. `TextLimits.phone` is 15 but `isValidUserData` caps `phone` and
-`emergencyPhone` at 40, because `createEmployeeAccount` accepts 40 — a tighter
-rule would leave a server-created doc permanently un-updatable.
+produce. `TextLimits.phone` is **24** (raised deliberately — at 15 the
+`PhoneInputFormatter` pass-throughs were unreachable, because the limiter runs
+AFTER the mask and silently re-truncated every keystroke past the 10th digit;
+never size that cap to the 14-char happy path) while `isValidUserData` caps
+`phone` and `emergencyPhone` at 40, because `createEmployeeAccount` accepts 40 —
+a tighter rule would leave a server-created doc permanently un-updatable.
+`test/core/validators/text_limits_test.dart` now reads `firestore.rules` back
+and fails the build if a client cap ever exceeds its rules cap.
 
 `LabeledTextField(inputFormatters:)` takes extra formatters, applied **before**
 the length cap so the cap measures the formatted text the field will hold. Its
@@ -795,9 +800,16 @@ clients/{docId}
                        Functions (Admin SDK). The app reads `wave.syncState` /
                        `wave.syncError` for the per-client sync badge; `toMap`
                        must never emit these (firestore.rules rejects it)
-  createdAt, updatedAt         server timestamps; the list/search order by
-                       `createdAt`, so Firestore excludes any doc missing it
-                       (legacy docs without it are invisible in-app)
+  archived             bool, REQUIRED on every client doc forever. The list
+                       filters `where('archived','==',false)` SERVER-side, and
+                       Firestore excludes docs missing a filtered field — so a
+                       doc without it is invisible in the list while still
+                       turning up in search. Both create paths stamp it; the
+                       Wave UPDATE branch must never write it.
+  createdAt, updatedAt         server timestamps. The paginated list and search
+                       order by `name` (not `createdAt`), so Firestore excludes
+                       any doc missing `name` — see the `name`/`businessName`
+                       fallback above.
 ```
 
 Backend-managed collections (Admin SDK only — `firestore.rules` denies client writes;
@@ -818,9 +830,14 @@ rateLimits/{route__uid}  True sliding window written by enforceDurableRateLimit.
                        dropped each call, and a call is rejected when >= max remain
   expiresAt: timestamp optional Firestore TTL target
 
-(signupCodes was RETIRED by P4c, 2026-08-02 — no code reads or writes it, its
- rules block and its TTL fieldOverride are gone. Orphaned documents may still
- exist in production and need a one-off Admin SDK / console cleanup.)
+(signupCodes was retired from the APP by P4c, 2026-08-02, but it is NOT gone:
+ the collection, its `/signupCodes` rules block (firestore.rules), its TTL
+ fieldOverride (firestore.indexes.json) and the `createEmployeeInvite` /
+ `redeemSignupCode` callables that read and write it all survive as the
+ `#compat-1.37.1` shim for the build still on the App Store. Nothing in THIS
+ build touches it. Do not "clean up" the rules block or the TTL entry ahead of
+ the shim sweep — removing a fieldOverride and deploying `firestore:indexes`
+ drops the live TTL policy. Retire the lot together; see docs/DEPLOYMENT.md.)
 
 appointmentReminders/{apptId_startMs_employeeDocId}   Per-recipient idempotency
                        ledger for the 30-min reminder sweep: create() fails if
@@ -876,7 +893,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (1456 test cases as of 2026-08-02; `functions` adds 692 jest
+Run: `flutter test` (1544 test cases as of 2026-08-04; `functions` adds 725 jest
 tests in `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0 info
 lints** — see Analysis & Linting below; see

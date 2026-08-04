@@ -215,6 +215,8 @@ what production is running.
 | 2026-08-04 | `56cfb5e` | functions | 27 | Employee email → Auth sync: adds `changeEmployeeEmail` (26 → 27), which moves the sign-in email in Firebase Auth AND on the `users` doc together and is what re-enables the read-only email field in `edit_person_sheet`. It also pushes the employee a `kind:"emailChanged"` notice naming the new address (best-effort, after the commit). **Deploy BEFORE the app build ships** — the client calls it from inside `updateEmployee` whenever the email changed on a doc carrying a `uid`, so an un-deployed function turns every such save into a `not-found` and the admin cannot save the person at all. No rules change (`email` was already admin-writable on `/users`, and this write is Admin SDK anyway) and no index change, so `firestore:rules`/`firestore:indexes` are optional here. 1.37.1 is unaffected: it never calls this, and its Firestore-only email edit keeps working exactly as before (desynced, as it always was). Verified post-deploy: 27 functions live and an exact match against `index.js`'s 27 exports (no orphans), `changeEmployeeEmail` ACTIVE with its startup TCP probe passing on the first attempt. No deletion or secret prompts. Deployed without `--force`. A second run the same day added `firestore:rules,storage` for completeness — both were already byte-identical to prod (unchanged since the `1c6a949` rules deploy), so the CLI skipped both uploads and merely re-released them, and every function reported "Skipped (No changes detected)". Rules compiled with only the 3 known `isAvailabilityOnlyChange` warnings. `firestore:indexes` still deliberately omitted (file in sync with prod). Both runs went out from an uncommitted tree; that tree was committed as `56cfb5e` immediately after, which is the hash above. |
 | 2026-08-03 | `1c6a949` | functions, rules, **indexes** | 26 | Client archive + delete: adds `deleteClient` (25 → 26), gated on a live `count()` of the client's appointments; `isValidClientData` accepts `archived` (optional, so 1.37.1 writes still pass). **`allow delete` on `/clients` is KEPT** as a second `#compat-1.37.1` shim entry (owner call 2026-08-03) — 1.37.1+64 ships an ungated Delete button doing a direct `doc.delete()`, and withdrawing the grant would fail it with an opaque `permission-denied`. Nothing in the new build uses it. **`firestore:indexes` IS required** — new `(archived, name, __name__)` composite for the list's server-side `where('archived','==',false)`. Backfill ran BEFORE the deploy, as required (Firestore excludes docs missing a filtered field, so an un-backfilled client vanishes from the list the moment the app build ships): **674 patched, 0 already had the field**; the confirming dry-run then reported `0 patched, 674 already had the field`. Verified post-deploy: 26 functions live, `deleteClient` ACTIVE with a clean startup probe, zero `unexpected-field` in logs, rules compiled with only the 3 known `isAvailabilityOnlyChange` warnings. **The `(archived, name, __name__)` index was still `CREATING` when the deploy finished — the app build must NOT ship until it reads `READY`,** or the list query fails `FAILED_PRECONDITION`. Deployed without `--force`. (The first `firebase deploy` invocation exited 9 at the tail; an immediate re-run reported every function "Skipped (No changes detected)" and exited 0, so the first run had in fact converged.) |
 
+| 2026-08-04 | (audit pass, uncommitted at deploy time) | functions, rules, storage | 27 | **Codebase-audit fixes. No export change** — 27 → 27, so no deletion prompt. Backend halves of the multi-day gaps: the push diff now gates on the run's END (`hasWorkLeft`) so a job cancelled mid-run still reaches its crew; the overdue floor widens to 24h + 14d; the digest queries and buckets on OVERLAP with tomorrow and orders by clock time. Hardening: `toIdList` rejects slash/over-long ids (one poisoned `employeeIds` element could reject the whole `Promise.all` digest batch and silence it nightly), `runDailyDigest` is wrapped like the reminder sweep, `waveSetImportSchedule` gains a 20/hr durable limit, and the travel context query warns at its 50-doc cap. `maintenance_policy.js` added as an internal module (NOT an export) so `purgeExpiredHistory` — the only unattended irreversible deletion — is testable. **Rules: additive caps only** — `pictures` ≤ 100 and `isValidDocIdField(seriesOpId)` on `isValidAppointmentData`; both pass anything either build writes. **Two fixes were REVERTED before deploying**, each after review showed it traded a known gap for a worse one: an `email_verified` gate on `redeemSignupCode` (1.37.1 redeems on an unverified token and would have deleted the account it just created — every invite on the App Store build), and widening `MAX_BOOKING_MS` to 14d (`decideOrigin` tests raw instants, so a long run becomes a wrong origin at any hour). Verified post-deploy: 27 live matching `index.js`, zero ERROR log entries. Deployed without `--force`. |
+
 ### The `#compat-1.37.1` shim
 
 1.37.1+64 (`2b1ace5`, head of `origin/notification`) is the build on the App
@@ -233,11 +235,30 @@ Three things would have broken, so they are shimmed rather than deleted:
 | `allow delete` on `/users`, and the fourth `/users` read clause (`email_verified` + `invited` + email match) | "Delete employee" is a live button (`employee_details_view.dart:45`); the read clause is how the accept screen finds its own doc while `uid` is still empty. |
 | `allow delete` on `/clients` (added to the shim 2026-08-03) | 1.37.1 predates the 2026-08-01 no-delete decision and ships an **ungated** "Delete client" button doing a direct `doc.delete()` (`client_detail_view.dart:72`). Withdrawing the grant fails it with an opaque `permission-denied`. |
 
-**This last one is the only shim entry that leaves a real hole open.** The other
-two merely keep retired paths reachable; this one lets a 1.37.1 admin delete a
-client that still has appointments and orphan that history — precisely what the
-new `deleteClient` callable's live `count()` gate exists to prevent. The
-current build never deletes directly, so retiring it costs nothing here.
+**Three of these leave a real hole open, not one** (corrected 2026-08-04 — an
+earlier revision of this section claimed only the `/clients` grant did):
+
+1. **`allow delete` on `/clients`** lets a 1.37.1 admin delete a client that
+   still has appointments and orphan that history — precisely what the new
+   `deleteClient` callable's live `count()` gate exists to prevent.
+2. **`allow delete` on `/users`** lets that same build delete a `users` doc,
+   orphaning every past appointment's `employeeIds` crew link. That is the very
+   thing the 2026-08-02 no-delete decision withdrew. Access itself fails closed
+   (`authAccessChange` disables the Auth account), but the crew-link orphaning
+   is permanent.
+3. **A direct `email` write on `/users`** — not a shim *entry*, but the same
+   kind of hole and worth stating here. `allow update` denylists only
+   `uid`/`termsAcceptedAt`/`locationConsentAt`, so 1.37.1's employee edit
+   (which writes `email` straight to Firestore with no Auth call) silently
+   desyncs the two stores: the person keeps signing in at the old address while
+   every admin surface shows the new one. This build routes every email edit
+   through `changeEmployeeEmail` instead, so tightening the rule costs the
+   current build nothing — but it would break 1.37.1's employee edit with an
+   opaque `permission-denied`, which is why it waits for the same sweep. The
+   suggested clause is in `docs/audits/CODEBASE_AUDIT.md`.
+
+The current build never deletes directly and never writes `email` directly, so
+retiring all of it costs nothing here.
 
 Retire all of it in one sweep — `grep -rn "#compat-1.37.1"` — once no 1.37.1
 build remains in the field. Nothing in the current build calls any of it.

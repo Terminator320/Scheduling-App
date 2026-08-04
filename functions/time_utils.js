@@ -15,6 +15,42 @@
 const BUSINESS_TIME_ZONE = "America/Toronto";
 
 /**
+ * The longest span a job may be booked for, in days.
+ *
+ * HAND-MIRRORED from `maxAppointmentSpanDays` in
+ * `lib/features/calendar/domain/appointment_day_slice.dart` — the cap is
+ * enforced client-side only (firestore.rules constrains neither instant), so
+ * this copy exists purely to size the backend's query windows. Every sweep
+ * that filters on `startTime` must reach at least this far back, or a job
+ * already under way is invisible to it. Raise both together.
+ */
+const MAX_APPOINTMENT_SPAN_DAYS = 14;
+
+/**
+ * The same cap in milliseconds — the usual form for widening a query floor.
+ */
+const MAX_APPOINTMENT_SPAN_MS = MAX_APPOINTMENT_SPAN_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * Minutes past business-local midnight for an instant, or null.
+ *
+ * The ordering key for anything listing a DAY's jobs. A multi-day run's stored
+ * `startTime` is the first morning of the run, so sorting a day's list by the
+ * absolute instant floats that run to the front however late in the day it
+ * actually works — the two stored times are a daily WINDOW, and this is the
+ * clock time inside it.
+ * @param {*} value Timestamp/Date/number.
+ * @return {?number}
+ */
+function businessMinutesOfDay(value) {
+  const ms = toMillis(value);
+  if (ms == null) return null;
+  const local = ms + businessOffsetMs(new Date(ms));
+  const dayMs = 24 * 60 * 60 * 1000;
+  return Math.floor((((local % dayMs) + dayMs) % dayMs) / 60000);
+}
+
+/**
  * Milliseconds since epoch for a Firestore Timestamp / Date / number, else
  * null.
  * @param {*} value
@@ -130,6 +166,9 @@ function businessMidnight(year, month, day) {
 
 module.exports = {
   BUSINESS_TIME_ZONE,
+  MAX_APPOINTMENT_SPAN_DAYS,
+  MAX_APPOINTMENT_SPAN_MS,
+  businessMinutesOfDay,
   toMillis,
   formatBusinessTime,
   formatTimeOfDay,

@@ -31,6 +31,11 @@ const IMPORT_SCHEDULE_SET = new Set(SCHEDULE_VALUES);
 // Wave pages), so a modest cap keeps a stuck/retried admin from hammering Wave.
 const WAVE_IMPORT_RATE_MAX = 5;
 const WAVE_IMPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
+
+// Cadence is a single enum field, so the cap is looser than the import's —
+// generous enough that an admin toggling the picker never trips it.
+const WAVE_SCHEDULE_RATE_MAX = 20;
+const WAVE_SCHEDULE_RATE_WINDOW_MS = 60 * 60 * 1000;
 // Caps how many live Wave calls (whoami + listBusinesses) an admin can make.
 // The already-connected short-circuit runs first and isn't rate-limited.
 const WAVE_BOOTSTRAP_RATE_MAX = 10;
@@ -224,8 +229,10 @@ const waveGetConnection = onCall(
 );
 
 // waveSetImportSchedule — admin-only setter for the auto-import cadence on
-// the wave/connection doc. Just needs App Check + admin, no secret or rate
-// limit.
+// the wave/connection doc. No secret, but rate-limited like every other admin
+// write callable: defense-in-depth so a compromised admin session can't spin
+// the doc. The limit sits AFTER the payload validation, so a burst of
+// malformed submissions can't burn a legitimate caller's window.
 const waveSetImportSchedule = onCall(
     {enforceAppCheck: true},
     async (req) => {
@@ -239,6 +246,12 @@ const waveSetImportSchedule = onCall(
       if (typeof schedule !== "string" || !IMPORT_SCHEDULE_SET.has(schedule)) {
         throw new HttpsError("invalid-argument", "wave/invalid-schedule");
       }
+      await enforceDurableRateLimit(
+          "wave-schedule",
+          req.auth.uid,
+          WAVE_SCHEDULE_RATE_MAX,
+          WAVE_SCHEDULE_RATE_WINDOW_MS,
+      );
 
       const ref = getFirestore().collection("wave").doc("connection");
       const snap = await ref.get();

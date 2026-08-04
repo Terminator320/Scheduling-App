@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-02 by auditing the source against the app's call sites and
+refreshed 2026-08-04 by auditing the source against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -34,17 +34,13 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 > wrong before — verify against the live list rather than trusting it.
 
 
-- **23 functions defined** in code; **22 deployed, but the deployed set no
-  longer matches the code** — the live list was verified against
-  `schedulingapp-88727` on 2026-08-02 via `functions_list_functions`, *before*
-  the P4c rebuild. P4c (2026-08-02) deletes `createEmployeeInvite`,
-  `redeemSignupCode`, `revokeInvite` and `previewInvite` and adds
-  `createEmployeeAccount`, `completeEmployeeSetup` and `deleteEmployeeAccount`,
-  so the live count goes 24 → 23 once it lands. **That deploy is
-  ordering-sensitive in BOTH directions** — deploying deletes the four invite
-  callables, breaking employee creation for any already-installed build; and the
-  new client calls three callables that do not exist until it deploys. Ship the
-  app build and the backend together; there is no safe interleaving. (v2, Node.js 24, 256 MB; `us-central1`
+- **27 functions defined** in code and **27 deployed** as of 2026-08-04
+  (corrected — an earlier revision said 23/22 and claimed P4c *deleted* the
+  invite callables). P4c added `createEmployeeAccount`,
+  `completeEmployeeSetup` and `deleteEmployeeAccount` but **kept**
+  `createEmployeeInvite` and `redeemSignupCode` as the `#compat-1.37.1` shim;
+  `revokeInvite` and `previewInvite` were never deployed and do not exist in
+  code. `changeEmployeeEmail` landed 2026-08-04 (26 → 27). (v2, Node.js 24, 256 MB; `us-central1`
   except `validateUploadedImage` in `us-east1`). The 2026-07-18 deploy shipped
   `placesReverseGeocode`, the travel-aware `sendUpcomingJobReminders` rebuild,
   and the codebase-audit fixes (overdue-sweep ordering, bounded travel-context
@@ -58,10 +54,11 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   **enabled in the console 2026-07-11** — this list previously said it was still
   outstanding, which was wrong. Still outstanding: on-device push verification.
   TTL was extended to `liveActivityTokens`, `rateLimits`, and `signupCodes` on
-  2026-07-20 (the `signupCodes` policy is **retired by P4c** — its
-  `fieldOverride` is out of `firestore.indexes.json`, so the next
-  `firestore:indexes` deploy drops it; the orphaned documents still need a
-  one-off console/Admin-SDK cleanup), and a `fieldOverride` for the new `appointmentSeriesNotices` claim
+  2026-07-20 (the `signupCodes` policy is **still live and its `fieldOverride`
+  is still in `firestore.indexes.json`** — corrected 2026-08-04; an earlier
+  revision claimed it had been removed, which would have dropped a live TTL
+  policy on the next `firestore:indexes` deploy. It retires with the rest of
+  the `#compat-1.37.1` shim), and a `fieldOverride` for the new `appointmentSeriesNotices` claim
   ledger was added to `firestore.indexes.json` on 2026-07-21 (that ledger has no
   in-code reaper, so the TTL is its only cleanup). Every policy's **expiration
   offset normalized to `0`** — the
@@ -119,7 +116,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `changeEmployeeEmail` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (inside `updateEmployee`, when the email changed on a doc with a `uid`) | — | App Check ✓ · admin · durable 20/hr·uid |
 | `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
 | `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin |
-| `waveSetImportSchedule` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings cadence picker) | — | App Check ✓ · admin |
+| `waveSetImportSchedule` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings cadence picker) | — | App Check ✓ · admin · durable 20/hr |
 | `waveImportCustomers` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable 5/hr · 300s |
 | `deleteClient` | callable | `onCall` | `clients.js` | `firebase_clients_repository.dart` | — | App Check ✓ · admin · durable 20/hr |
 | `syncUsersByUid` | trigger | `onDocumentWritten users/{id}` | `bridge.js` | any `users` doc write | — | `retry: true` |
@@ -152,10 +149,12 @@ slot if the Auth delete fails server-side. Auth user is deleted **first**
 
 ## Employee accounts (admin invites, employee sets up)
 
-Rebuilt by **P4c, 2026-08-02**, replacing the one-time signup-code flow
-entirely. `invites.js` and `signup_code_utils.js` are deleted along with
-`createEmployeeInvite`, `redeemSignupCode`, `revokeInvite` and `previewInvite`
-— the codebase no longer has an unauthenticated callable. All three callables
+Rebuilt by **P4c, 2026-08-02**, replacing the one-time signup-code flow in the
+APP. `revokeInvite` and `previewInvite` were never deployed and do not exist in
+code, but `invites.js`, `signup_code_utils.js`, `createEmployeeInvite` and
+`redeemSignupCode` all SURVIVE as the `#compat-1.37.1` shim (corrected
+2026-08-04 — an earlier revision said they were deleted). Nothing in this build
+calls them. All four callables
 below share `APP_CHECK = {enforceAppCheck: true}`. Full design:
 `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.
 
@@ -244,9 +243,12 @@ the difference between a findable leftover and a silent one. Guard
 order is the standard one (auth → `assertAdmin` → payload →
 `enforceDurableRateLimit` 20/hr per admin uid → work), and an id containing `/`
 is rejected up front because `.doc()` throws synchronously on it and would
-surface as an opaque `internal`. No rules change: the deletes are Admin SDK, and
-`allow delete` on `/users` stays withdrawn. Transactional core exported as
-`performDeleteAccount` for jest.
+surface as an opaque `internal`. No rules change: the deletes are Admin SDK.
+Note `allow delete` on `/users` is withdrawn from THIS build's code path but is
+still granted in `firestore.rules` as a `#compat-1.37.1` shim, so a 1.37.1
+client can still delete a users doc and orphan its crew links — see
+docs/DEPLOYMENT.md. Transactional core exported as `performDeleteAccount` for
+jest.
 
 ### `changeEmployeeEmail` — `employee_accounts.js`
 Admin-only. Moves an employee's **sign-in identity** in Firebase Auth and on
@@ -342,6 +344,14 @@ rejected at deploy, not silently clamped) — so a quarter of newly-expired
 history clears in one run; the loop commits page-by-page, so any leftovers (a
 timeout, or a full page whose image deletes all fail) carry to the next run —
 ~3 months away at this cadence.
+**Its orchestration lives in `maintenance_policy.js`** (extracted 2026-08-04),
+taking `db`/`deleteImages`/`now` injected: `maintenance.js` resolves a Storage
+bucket at load and throws on `require()` outside the emulator, so the only
+unattended irreversible deletion in the codebase had **no test at all** until
+that split. `functions/__tests__/maintenance_policy.test.js` now pins the three
+rules that destroy data if they regress — the status gate (live work is never
+purged at any age), the images-before-doc ordering, and the loop's termination
+on a page that made no progress.
 
 ## Push notifications (FCM)
 
@@ -521,11 +531,15 @@ rather than `set({merge: true})` so a client removed out-of-band is never
 resurrected as a count-only stub, and swallows Firestore `NOT_FOUND` for the same
 case. The pure `clientsToRecount(before, after)` is exported for jest. Served by
 the automatic single-field index on `clientId` — no composite index needed.
-**NOT yet deployed** (added 2026-08-01); no job count renders until it is.
+**Deployed 2026-08-01** (`d916b16`).
 
 ### `deleteClient` — `clients.js`
-Admin-only callable, the **only** delete path for a client: `allow delete` on
-`/clients` is withdrawn, because rules cannot express "only when this client has
+Admin-only callable, the **only** delete path for a client in this build.
+`allow delete` on `/clients` is withdrawn from this build's code path but is
+STILL GRANTED in `firestore.rules` as a `#compat-1.37.1` shim (1.37.1 ships an
+ungated Delete button), so the orphaning hole is real until that shim goes —
+see docs/DEPLOYMENT.md. The callable exists because rules cannot express
+"only when this client has
 no appointments" — there is no cheap way to count a foreign collection there.
 Refuses with `failed-precondition / client-has-history` when a **live `count()`
 aggregate** over `appointments where clientId == …` returns non-zero, and with
@@ -538,7 +552,7 @@ bug this gate exists to prevent. Guard order is auth → `assertAdmin` →
 throws synchronously on one) → `enforceDurableRateLimit` (20/hr per admin uid) →
 work. The pure `performDeleteClient(db, clientId)` is exported for jest.
 Archive — not delete — is the normal way a client leaves the roster.
-**NOT yet deployed** (added 2026-08-03).
+**Deployed 2026-08-03** (`1c6a949`), verified ACTIVE.
 
 ## Wave Accounting
 
@@ -572,7 +586,10 @@ secret, no rate limit.
 Admin-only setter for the automatic-import cadence — writes the `importSchedule`
 field (`off` | `weekly` | `monthly`) on `wave/connection`. Validates the value
 against the shared `SCHEDULE_VALUES` set and requires an already-bootstrapped
-connection. No secret, no rate limit (a single cheap Firestore write).
+connection. No secret. **Durably rate-limited at 20/hour per admin uid** (added
+2026-08-04) — every other admin write callable is, and the audit flagged this as
+the lone exception. The limiter sits AFTER the payload validation so a burst of
+malformed submissions can't exhaust a legitimate caller's window.
 
 ### `waveImportCustomers` — `wave/callables.js`
 Admin one-shot Wave → app customer seed (paginates ~650 customers over ~7 Wave

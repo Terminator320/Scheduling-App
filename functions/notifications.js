@@ -137,7 +137,14 @@ const sendDailyJobDigest = onSchedule(
     },
     async () => {
       const deps = liveDeps();
-      await runDailyDigest(deps);
+      try {
+        await runDailyDigest(deps);
+      } catch (err) {
+        // Log rather than rethrow, matching the reminder sweep: the digest
+        // fans out with Promise.all, so one bad appointment rejecting the
+        // batch must not also skip the TTL prune below it.
+        logger.error("sendDailyJobDigest failed", {err});
+      }
       // Rides the digest rather than adding a whole new scheduler for it.
       // Isolated in its own try so a failed prune can't fail the digest,
       // which has already sent by this point.

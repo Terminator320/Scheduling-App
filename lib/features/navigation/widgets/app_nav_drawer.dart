@@ -6,6 +6,7 @@ import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
 import 'package:scheduling/features/navigation/domain/drawer_catalog.dart';
 import 'package:scheduling/features/presence/application/live_map_providers.dart';
@@ -14,6 +15,7 @@ import 'package:scheduling/features/settings/application/app_info_provider.dart'
 import 'package:scheduling/features/settings/domain/role_label.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
+import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 const double _kDrawerWidth = 284;
@@ -229,7 +231,10 @@ class _NavRow extends ConsumerWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 48),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 12),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 13,
+              vertical: AppSpacing.sp12,
+            ),
             child: Row(
               children: [
                 Container(
@@ -289,7 +294,17 @@ class _NavRow extends ConsumerWidget {
         : ref.watch(
             myAppointmentsProvider((employeeId: employeeId, range: range)),
           );
-    return jobs.value?.length;
+    final today = jobs.value;
+    if (today == null) return null;
+    // Re-scoped: the range stream is a 14-day superset — see runsOn. Cancelled
+    // visits aren't load, matching employeeJobsTodayProvider.
+    return today
+        .where(
+          (j) =>
+              !AppointmentStatus.fromRaw(j.status).isCancelled &&
+              runsOn(j, range.start),
+        )
+        .length;
   }
 
   int? _onTheClockCount(WidgetRef ref) {

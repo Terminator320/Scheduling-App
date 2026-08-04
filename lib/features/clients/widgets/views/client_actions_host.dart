@@ -90,6 +90,9 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
         .deleteClient(client.id);
     if (!mounted) return;
     switch (outcome) {
+      // Skipped by the reentrancy guard — nothing committed, nothing failed.
+      case ClientDeleteBusy():
+        return;
       case ClientDeleted():
         notices.success(context.l10n.clients_deletedNotice(client.displayName));
         onClientDeleted(client);

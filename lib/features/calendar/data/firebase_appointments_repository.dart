@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show compute;
 
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/retry.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -469,6 +470,22 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         // since Firestore won't let us combine another filter with arrayContainsAny.
         final status = (data['status'] ?? '').toString().toLowerCase();
         if (_terminalStatuses.contains(status)) continue;
+        // The query above is only a coarse prefilter: it overlaps the raw
+        // stored instants, but the pair is a DAILY window. Without this a
+        // multi-day 9-5 run reports its crew busy at 7 pm on every one of its
+        // days, and the admin has to force through a phantom clash.
+        final docStart = (data['startTime'] as Timestamp?)?.toDate();
+        final docEnd = (data['endTime'] as Timestamp?)?.toDate();
+        if (docStart != null &&
+            docEnd != null &&
+            !dailyWindowsOverlap(
+              aStart: docStart,
+              aEnd: docEnd,
+              bStart: start,
+              bEnd: end,
+            )) {
+          continue;
+        }
         final empIds = data['employeeIds'] as List<dynamic>? ?? const [];
         busyIds.addAll(empIds.whereType<String>());
       }

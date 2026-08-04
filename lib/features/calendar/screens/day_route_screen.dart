@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
@@ -13,6 +12,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
@@ -145,16 +145,20 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
   // filter+sort into driving order, resolve which assignee's route to show,
   // then the jobs for that assignee and their navigable stops.
   _DayRouteData _prepareBuild(List<AppointmentRecord> source) {
-    final dayAppointments =
+    // Re-scoped to `_day`: the range stream is a 14-day superset — see runsOn.
+    // Slices, not records, so a continuing job carries THAT day's window.
+    final daySlices =
         source
             .where((a) => !AppointmentStatus.fromRaw(a.status).isCancelled)
+            .map((a) => sliceFor(a, _day))
+            .nonNulls
             .toList()
-          // Sort defensively to ensure numbering and launched route stay in driving order.
-          ..sort((a, b) => a.startTime.compareTo(b.startTime));
+          // Sort defensively to keep numbering and the route in driving order.
+          ..sort((a, b) => a.windowStart.compareTo(b.windowStart));
 
     // Collect the distinct employees assigned that day, falling back to the denormalized names for anyone who's since been removed.
     final assigneeEntries = widget.isAdmin
-        ? _assigneesWithJobs(dayAppointments)
+        ? _assigneesWithJobs(daySlices)
         : const <MapEntry<String, String>>[];
     final employeeId = _resolveEmployeeId([
       for (final e in assigneeEntries) e.key,
@@ -162,13 +166,17 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
 
     // For admins, filter the whole-day list down to the picked assignee. The employee's own query is already scoped, so nothing more to do there.
     final jobs = widget.isAdmin
-        ? dayAppointments
-              .where((a) => a.employeeIds.contains(employeeId))
+        ? daySlices
+              .where((s) => s.appointment.employeeIds.contains(employeeId))
               .toList()
-        : dayAppointments;
+        : daySlices;
     final stops = jobs
-        .where((a) => _isOpen(a.status) && a.address.trim().isNotEmpty)
-        .map((a) => a.address)
+        .where(
+          (s) =>
+              _isOpen(s.appointment.status) &&
+              s.appointment.address.trim().isNotEmpty,
+        )
+        .map((s) => s.appointment.address)
         .toList();
 
     return _DayRouteData(
@@ -181,11 +189,12 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
 
   // Distinct id → display name for every employee assigned to a job that day.
   List<MapEntry<String, String>> _assigneesWithJobs(
-    List<AppointmentRecord> dayAppointments,
+    List<AppointmentDaySlice> daySlices,
   ) {
     final nameMap = ref.watch(employeeNameMapProvider);
     final byId = <String, String>{};
-    for (final a in dayAppointments) {
+    for (final slice in daySlices) {
+      final a = slice.appointment;
       for (var i = 0; i < a.employeeIds.length; i++) {
         final id = a.employeeIds[i];
         if (id.isEmpty) continue;
@@ -218,9 +227,9 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
   Widget _daySwitcher() {
     final l10n = context.l10n;
     final theme = Theme.of(context);
-    final label = DateFormat.MMMMEEEEd(
-      Localizations.localeOf(context).toString(),
-    ).format(_day);
+    // The one day-header formatter, memoized per locale — the calendar agenda,
+    // history day groups and dashboard hero all render through it too.
+    final label = DateUtilsHelper.formatDayHeader(_day);
     final isToday = _day == DateTime.now().dateOnly;
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -232,8 +241,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
           IconButton(
             icon: const Icon(Icons.chevron_left),
             tooltip: l10n.calendar_dayRoutePreviousDay,
-            onPressed: () =>
-                setState(() => _day = _day.subtract(const Duration(days: 1))),
+            onPressed: () => setState(() => _day = addCalendarDays(_day, -1)),
           ),
           Expanded(
             child: InkWell(
@@ -273,8 +281,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
           IconButton(
             icon: const Icon(Icons.chevron_right),
             tooltip: l10n.calendar_dayRouteNextDay,
-            onPressed: () =>
-                setState(() => _day = _day.add(const Duration(days: 1))),
+            onPressed: () => setState(() => _day = addCalendarDays(_day, 1)),
           ),
         ],
       ),
@@ -367,7 +374,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
 
   Widget _timeline(
     AsyncValue<List<AppointmentRecord>> async,
-    List<AppointmentRecord> jobs,
+    List<AppointmentDaySlice> jobs,
     String employeeId,
   ) {
     final l10n = context.l10n;
@@ -395,7 +402,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     final numbers = <int?>[];
     var open = 0;
     for (final j in jobs) {
-      numbers.add(_isOpen(j.status) ? ++open : null);
+      numbers.add(_isOpen(j.appointment.status) ? ++open : null);
     }
     final colorMap = ref.watch(employeeColorMapProvider);
     final nameMap = ref.watch(employeeNameMapProvider);
@@ -411,10 +418,14 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
       ),
       itemCount: jobs.length,
       itemBuilder: (context, i) => _StopTile(
-        job: jobs[i],
+        slice: jobs[i],
         number: numbers[i],
         employeeColor: empColor,
-        crew: crewFor(jobs[i], colorMap: colorMap, nameMap: nameMap),
+        crew: crewFor(
+          jobs[i].appointment,
+          colorMap: colorMap,
+          nameMap: nameMap,
+        ),
         showConnector: i < jobs.length - 1,
         navigateLabel: l10n.calendar_dayRouteNavigate,
         isAdmin: widget.isAdmin,
@@ -434,13 +445,13 @@ class _DayRouteData {
 
   final List<MapEntry<String, String>> assigneeEntries;
   final String employeeId;
-  final List<AppointmentRecord> jobs;
+  final List<AppointmentDaySlice> jobs;
   final List<String> stops;
 }
 
 class _StopTile extends StatelessWidget {
   const _StopTile({
-    required this.job,
+    required this.slice,
     required this.number,
     required this.employeeColor,
     required this.crew,
@@ -449,7 +460,9 @@ class _StopTile extends StatelessWidget {
     required this.isAdmin,
   });
 
-  final AppointmentRecord job;
+  /// This stop as it runs on the day being shown — day 3 of a run carries that
+  /// day's own window, not the run's first morning.
+  final AppointmentDaySlice slice;
   final int? number;
 
   /// The route's own employee — the rail badge, not the card's crew bar.
@@ -465,6 +478,7 @@ class _StopTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final statusColors = Theme.of(context).statusColors;
     final isOpen = number != null;
+    final job = slice.appointment;
     final hasAddress = job.address.trim().isNotEmpty;
 
     return IntrinsicHeight(
@@ -488,6 +502,7 @@ class _StopTile extends StatelessWidget {
                 child: AppointmentCard(
                   appointment: job,
                   crew: crew,
+                  slice: slice,
                   onTap: () =>
                       showEventDetails(context, job, showActions: isAdmin),
                   footer: (isOpen && hasAddress)

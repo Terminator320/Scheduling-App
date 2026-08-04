@@ -1,5 +1,15 @@
 # App Workflow & UI Map
 
+> **SUPERSEDED — describes the PRE-REDESIGN app (as of ~2026-07-29).**
+> Kept for its §6 constraints and as a record of the brief the redesign was
+> written against. Do NOT use it as a description of the current app: the nav
+> rail, `table_calendar`, `AppointmentTile`, `AuthBrandHeader`, `google_fonts`,
+> the `todayFab` and the signup-code flow are all deleted, there are four hub
+> tabs rather than six, and it predates personal jobs, all-day blocks and
+> multi-day appointments. Current sources of truth: `CLAUDE.md`,
+> `docs/ARCHITECTURE.md`.
+
+
 How the app actually works from the *user's* side — roles, navigation chromes,
 screen anatomy, and the flows that connect them. Written as a redesign brief:
 `ARCHITECTURE.md` covers layers and data flow, this covers what's on screen and

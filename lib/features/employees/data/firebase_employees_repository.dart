@@ -233,7 +233,11 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     // since the uniqueness check — say, a concurrent admin edit.
     await ref.firestore.runTransaction<void>((txn) async {
       final snapshot = await txn.get(ref);
-      final currentEmail = snapshot.data()?['email'] as String?;
+      // Same `?? ''` normalization the pre-flight read uses: a doc with no
+      // `email` field reads as null here and would never equal the `''` the
+      // check above settled on, so the guard would abort EVERY save on such a
+      // doc rather than only a concurrent one.
+      final currentEmail = (snapshot.data()?['email'] as String?) ?? '';
       if (currentEmail != emailAtCheck) {
         // Concurrent edit — surface a retryable "try again" instead of
         // committing on top of state the uniqueness check never saw.

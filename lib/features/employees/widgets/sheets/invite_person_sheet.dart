@@ -227,7 +227,7 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
         required: true,
         keyboard: TextInputType.emailAddress,
         textInputAction: TextInputAction.next,
-        maxLength: TextLimits.email,
+        maxLength: TextLimits.authEmail,
         errorText: errors['email'],
         onChanged: (_) => _clearError('email'),
       ),

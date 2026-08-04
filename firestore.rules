@@ -424,6 +424,15 @@ service cloud.firestore {
         && (!('clientPhone' in d.keys()) || isBoundedString(d.clientPhone, 40))
         && (!('clientId' in d.keys()) || isValidDocIdField(d.clientId))
         && (!('seriesId' in d.keys()) || isValidDocIdField(d.seriesId))
+        // Same reasoning as the ids above: `seriesOpId` is interpolated into
+        // the `appointmentSeriesNotices/op_<opId>_<kind>_<emp>` doc id.
+        && (!('seriesOpId' in d.keys()) || isValidDocIdField(d.seriesOpId))
+        // Photos are appended by arrayUnion from the offline upload queue, so
+        // nothing client-side bounds the array. A doc has a hard 1 MB ceiling
+        // and hitting it makes the job permanently un-updatable — cap well
+        // clear of any real job's photo count.
+        && (!('pictures' in d.keys())
+            || (d.pictures is list && d.pictures.size() <= 100))
         // 500 = `_userStreamLimit`, the ceiling on how many employees the
         // picker can even surface. NOT 30: that is the whereArrayContainsAny
         // chunk size, which `findBusyEmployees` already batches around, so it
