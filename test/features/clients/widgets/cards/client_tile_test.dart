@@ -48,6 +48,25 @@ void main() {
     expect(find.text('514-555-0101'), findsOneWidget);
   });
 
+  testWidgets('an archived client shows the Archived pill', (tester) async {
+    await tester.pumpWidget(
+      _harness(ClientRecord.fromMap('c1', {'name': 'Acme', 'archived': true})),
+    );
+    await tester.pumpAndSettle();
+
+    // Archived clients still turn up in search, so the row has to say so.
+    expect(find.text('Archived'), findsOneWidget);
+  });
+
+  testWidgets('an active client shows no Archived pill', (tester) async {
+    await tester.pumpWidget(
+      _harness(ClientRecord.fromMap('c1', {'name': 'Acme'})),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Archived'), findsNothing);
+  });
+
   testWidgets('renders the job count when the trigger has written it', (
     tester,
   ) async {
