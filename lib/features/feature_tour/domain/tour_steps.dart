@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 
-import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 
@@ -18,12 +18,12 @@ import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 /// Build it once in the `State` as a `late final` field, exactly where the
 /// three members used to live.
 class TourSteps {
-  TourSteps(this.destination, {required bool isAdmin})
-    : ids = tourStepsFor(destination, isAdmin: isAdmin) {
+  TourSteps(this.scope, {required bool isAdmin})
+    : ids = tourStepsFor(scope, isAdmin: isAdmin) {
     keys = {for (final id in ids) id: GlobalKey()};
   }
 
-  final AppDestination destination;
+  final TourScope scope;
 
   /// Ordered — the index in this list IS the step number the tour shows.
   final List<TourStepId> ids;
@@ -41,7 +41,7 @@ class TourSteps {
     BorderRadius? targetBorderRadius,
   }) => TourShowcase(
     showcaseKey: keys[id]!,
-    destination: destination,
+    scope: scope,
     id: id,
     index: ids.indexOf(id),
     count: ids.length,

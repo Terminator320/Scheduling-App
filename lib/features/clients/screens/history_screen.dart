@@ -3,6 +3,7 @@ import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/features/clients/widgets/views/appointment_history_view.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
@@ -32,9 +33,12 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
 
-  late final _tour = TourSteps(PushedDestination.history, isAdmin: widget.isAdmin);
+  late final _tour = TourSteps(
+    const DestinationTour(PushedDestination.history),
+    isAdmin: widget.isAdmin,
+  );
 
-@override
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -52,7 +56,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       hintText: context.l10n.clients_searchByClientOrEmployee,
     );
     return FeatureTourHost(
-      destination: PushedDestination.history,
+      scope: _tour.scope,
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
       child: Scaffold(
@@ -64,7 +68,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           bottom: _tour.has(TourStepId.historySearch)
               ? TourShowcaseBar(
                   showcaseKey: _tour.keys[TourStepId.historySearch]!,
-                  destination: PushedDestination.history,
+                  scope: _tour.scope,
                   id: TourStepId.historySearch,
                   index: _tour.ids.indexOf(TourStepId.historySearch),
                   count: _tour.ids.length,

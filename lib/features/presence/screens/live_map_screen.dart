@@ -13,6 +13,7 @@ import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
@@ -98,8 +99,10 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   // targets yet.
   bool _mapTargetsRendered = false;
 
-  late final _tour = TourSteps(HubTab.liveMap, isAdmin: widget.isAdmin);
-
+  late final _tour = TourSteps(
+    const DestinationTour(HubTab.liveMap),
+    isAdmin: widget.isAdmin,
+  );
 
   @override
   void dispose() {
@@ -135,7 +138,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     }
 
     return FeatureTourHost(
-      destination: HubTab.liveMap,
+      scope: _tour.scope,
       isAdmin: widget.isAdmin,
       ready: _mapTargetsRendered,
       stepKeys: _tour.keys,

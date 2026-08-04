@@ -21,6 +21,7 @@ import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
@@ -80,7 +81,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   bool _isDeletingAccount = false;
 
   late final _tour = TourSteps(
-    PushedDestination.settings,
+    const DestinationTour(PushedDestination.settings),
     isAdmin: widget.role == 'admin',
   );
 
@@ -270,7 +271,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   @override
   Widget build(BuildContext context) {
     return FeatureTourHost(
-      destination: PushedDestination.settings,
+      scope: _tour.scope,
       isAdmin: _isAdmin,
       stepKeys: _tour.keys,
       autoScroll: true,

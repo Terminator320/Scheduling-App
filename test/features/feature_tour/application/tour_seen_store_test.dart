@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -23,10 +24,12 @@ void main() {
     });
     container = newContainer();
     await container.read(tourSeenProvider.notifier).ready;
-    expect(
-      container.read(tourSeenProvider),
-      {HubTab.calendar, PushedDestination.settings},
-    );
+    // The bare destination names devices already hold still resolve — the
+    // TourScope change must not orphan them.
+    expect(container.read(tourSeenProvider), {
+      const DestinationTour(HubTab.calendar),
+      const DestinationTour(PushedDestination.settings),
+    });
   });
 
   test('markSeen adds the tab and persists it', () async {
@@ -34,18 +37,28 @@ void main() {
     container = newContainer();
     final notifier = container.read(tourSeenProvider.notifier);
     await notifier.ready;
-    await notifier.markSeen(HubTab.clients);
+    await notifier.markSeen(const DestinationTour(HubTab.clients));
     expect(
       container.read(tourSeenProvider),
-      contains(HubTab.clients),
+      contains(const DestinationTour(HubTab.clients)),
     );
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getStringList('tour_seen_tabs'), contains('clients'));
   });
 
+  test('a form tour persists under its namespaced key', () async {
+    SharedPreferences.setMockInitialValues({});
+    container = newContainer();
+    final notifier = container.read(tourSeenProvider.notifier);
+    await notifier.ready;
+    await notifier.markSeen(const FormTour(TourForm.addAppointment));
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getStringList('tour_seen_tabs'), ['sheet_addAppointment']);
+  });
+
   test('resetAll clears state and storage', () async {
     SharedPreferences.setMockInitialValues({
-      'tour_seen_tabs': ['calendar'],
+      'tour_seen_tabs': ['calendar', 'sheet_addClient'],
     });
     container = newContainer();
     final notifier = container.read(tourSeenProvider.notifier);
@@ -62,6 +75,8 @@ void main() {
     });
     container = newContainer();
     await container.read(tourSeenProvider.notifier).ready;
-    expect(container.read(tourSeenProvider), {HubTab.calendar});
+    expect(container.read(tourSeenProvider), {
+      const DestinationTour(HubTab.calendar),
+    });
   });
 }

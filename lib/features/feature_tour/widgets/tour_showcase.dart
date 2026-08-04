@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/widgets/tour_step_text.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -11,7 +10,7 @@ import 'package:showcaseview/showcaseview.dart';
 class TourShowcase extends StatelessWidget {
   const TourShowcase({
     required this.showcaseKey,
-    required this.destination,
+    required this.scope,
     required this.id,
     required this.index,
     required this.count,
@@ -21,7 +20,7 @@ class TourShowcase extends StatelessWidget {
   });
 
   final GlobalKey showcaseKey;
-  final AppDestination destination;
+  final TourScope scope;
   final TourStepId id;
   final int index;
   final int count;
@@ -38,7 +37,7 @@ class TourShowcase extends StatelessWidget {
     final noMotion = MediaQuery.disableAnimationsOf(context);
     return Showcase(
       key: showcaseKey,
-      scope: tourScopeName(destination),
+      scope: scope.storageKey,
       title: text.title,
       description: text.description,
       titleTextStyle: theme.textTheme.titleMedium?.copyWith(
@@ -102,7 +101,7 @@ class TourShowcase extends StatelessWidget {
 class TourShowcaseBar extends StatelessWidget implements PreferredSizeWidget {
   const TourShowcaseBar({
     required this.showcaseKey,
-    required this.destination,
+    required this.scope,
     required this.id,
     required this.index,
     required this.count,
@@ -111,7 +110,7 @@ class TourShowcaseBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
   final GlobalKey showcaseKey;
-  final AppDestination destination;
+  final TourScope scope;
   final TourStepId id;
   final int index;
   final int count;
@@ -123,7 +122,7 @@ class TourShowcaseBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) => TourShowcase(
     showcaseKey: showcaseKey,
-    destination: destination,
+    scope: scope,
     id: id,
     index: index,
     count: count,

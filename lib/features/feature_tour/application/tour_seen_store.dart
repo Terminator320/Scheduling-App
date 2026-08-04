@@ -2,19 +2,21 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
-import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// SharedPreferences key: names of hub tabs whose tour has been seen.
+/// SharedPreferences key: storage keys of the tours this device has seen.
+/// The entry name predates form tours and is deliberately unchanged — the
+/// destination keys inside it are still bare destination names.
 const _keyTourSeenTabs = 'tour_seen_tabs';
 
 /// Tracks which tours this device has already seen. Await `ready` before
 /// reading it, or a cold start can replay a tour that was already seen.
-class TourSeenController extends Notifier<Set<AppDestination>> {
+class TourSeenController extends Notifier<Set<TourScope>> {
   late final Future<void> ready = _load();
 
   @override
-  Set<AppDestination> build() {
+  Set<TourScope> build() {
     unawaited(ready);
     return const {};
   }
@@ -22,10 +24,10 @@ class TourSeenController extends Notifier<Set<AppDestination>> {
   Future<void> _load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final names = prefs.getStringList(_keyTourSeenTabs) ?? const [];
-      // Lookup-based, so a name that no longer maps to a destination is
-      // dropped rather than resurrecting a dead tour.
-      state = {for (final name in names) ?destinationByName(name)};
+      final keys = prefs.getStringList(_keyTourSeenTabs) ?? const [];
+      // Lookup-based, so a key that no longer maps to a scope is dropped
+      // rather than resurrecting a dead tour.
+      state = {for (final key in keys) ?tourScopeByKey(key)};
     } catch (e, st) {
       // This is unawaited from build(), so on failure we just fall back to
       // treating the device like a fresh install.
@@ -33,8 +35,8 @@ class TourSeenController extends Notifier<Set<AppDestination>> {
     }
   }
 
-  Future<void> markSeen(AppDestination tab) async {
-    state = {...state, tab};
+  Future<void> markSeen(TourScope scope) async {
+    state = {...state, scope};
     await _save();
   }
 
@@ -48,7 +50,7 @@ class TourSeenController extends Notifier<Set<AppDestination>> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_keyTourSeenTabs, [
-        for (final tab in state) tab.name,
+        for (final scope in state) scope.storageKey,
       ]);
     } catch (e, st) {
       ref.read(loggerProvider).warn('TOUR write seen flags failed', e, st);
@@ -56,7 +58,6 @@ class TourSeenController extends Notifier<Set<AppDestination>> {
   }
 }
 
-final tourSeenProvider =
-    NotifierProvider<TourSeenController, Set<AppDestination>>(
-      TourSeenController.new,
-    );
+final tourSeenProvider = NotifierProvider<TourSeenController, Set<TourScope>>(
+  TourSeenController.new,
+);

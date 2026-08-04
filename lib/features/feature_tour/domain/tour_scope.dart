@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 
 /// Anything that can own a feature tour. Sealed so `tourStepsFor` stays
 /// exhaustive — a new scope is a compile error, not a silently tour-less
 /// surface.
+@immutable
 sealed class TourScope {
   const TourScope();
 

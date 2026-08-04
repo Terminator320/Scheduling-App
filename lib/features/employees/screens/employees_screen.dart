@@ -16,6 +16,7 @@ import 'package:scheduling/features/employees/widgets/sheets/edit_person_sheet.d
 import 'package:scheduling/features/employees/widgets/sheets/employee_details_sheet.dart';
 import 'package:scheduling/features/employees/widgets/sheets/invite_person_sheet.dart';
 import 'package:scheduling/features/employees/widgets/views/employee_details_view.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
@@ -48,7 +49,10 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   final TextEditingController _searchController = TextEditingController();
   EmployeeRecord? _selectedEmployee;
 
-  late final _tour = TourSteps(HubTab.employees, isAdmin: widget.isAdmin);
+  late final _tour = TourSteps(
+    const DestinationTour(HubTab.employees),
+    isAdmin: widget.isAdmin,
+  );
 
   @override
   void dispose() {
@@ -161,7 +165,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       bottom: _tour.has(TourStepId.employeesSearch)
           ? TourShowcaseBar(
               showcaseKey: _tour.keys[TourStepId.employeesSearch]!,
-              destination: HubTab.employees,
+              scope: _tour.scope,
               id: TourStepId.employeesSearch,
               index: _tour.ids.indexOf(TourStepId.employeesSearch),
               count: _tour.ids.length,
@@ -289,7 +293,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     });
     final selected = _liveSelectedEmployee();
     return FeatureTourHost(
-      destination: HubTab.employees,
+      scope: _tour.scope,
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
       child: Scaffold(

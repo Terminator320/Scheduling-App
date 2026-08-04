@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
@@ -39,7 +40,7 @@ class _FakeShell implements HubTabSelector {
 void main() {
   Widget harness({
     required HubTab current,
-    required AppDestination destination,
+    required TourScope scope,
     required Map<TourStepId, GlobalKey> stepKeys,
     required Widget child,
     required ProviderContainer container,
@@ -58,7 +59,7 @@ void main() {
           shell: _FakeShell(),
           current: current,
           child: FeatureTourHost(
-            destination: destination,
+            scope: scope,
             isAdmin: true,
             stepKeys: stepKeys,
             child: Scaffold(body: child),
@@ -82,12 +83,12 @@ void main() {
     await tester.pumpWidget(
       harness(
         current: HubTab.calendar, // another tab is visible
-        destination: HubTab.clients,
+        scope: const DestinationTour(HubTab.clients),
         stepKeys: {TourStepId.clientsSearch: key},
         container: container,
         child: TourShowcase(
           showcaseKey: key,
-          destination: HubTab.clients,
+          scope: const DestinationTour(HubTab.clients),
           id: TourStepId.clientsSearch,
           index: 0,
           count: 2,
@@ -100,7 +101,7 @@ void main() {
     expect(find.text('Find a client'), findsNothing);
     expect(
       container.read(tourSeenProvider),
-      isNot(contains(HubTab.clients)),
+      isNot(contains(const DestinationTour(HubTab.clients))),
     );
   });
 
@@ -112,7 +113,7 @@ void main() {
     await tester.pumpWidget(
       harness(
         current: HubTab.clients,
-        destination: HubTab.clients,
+        scope: const DestinationTour(HubTab.clients),
         stepKeys: {TourStepId.clientsSearch: GlobalKey()}, // never attached
         container: container,
         child: const Text('no showcase targets here'),
@@ -122,7 +123,7 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(
       container.read(tourSeenProvider),
-      contains(HubTab.clients),
+      contains(const DestinationTour(HubTab.clients)),
     );
   });
 
@@ -136,7 +137,7 @@ void main() {
     await tester.pumpWidget(
       harness(
         current: HubTab.clients,
-        destination: HubTab.clients,
+        scope: const DestinationTour(HubTab.clients),
         stepKeys: {
           TourStepId.clientsSearch: searchKey,
           TourStepId.clientsAdd: addKey,
@@ -146,7 +147,7 @@ void main() {
           children: [
             TourShowcase(
               showcaseKey: searchKey,
-              destination: HubTab.clients,
+              scope: const DestinationTour(HubTab.clients),
               id: TourStepId.clientsSearch,
               index: 0,
               count: 2,
@@ -154,7 +155,7 @@ void main() {
             ),
             TourShowcase(
               showcaseKey: addKey,
-              destination: HubTab.clients,
+              scope: const DestinationTour(HubTab.clients),
               id: TourStepId.clientsAdd,
               index: 1,
               count: 2,
@@ -180,12 +181,12 @@ void main() {
     await tester.pumpWidget(
       harness(
         current: HubTab.clients,
-        destination: HubTab.clients,
+        scope: const DestinationTour(HubTab.clients),
         stepKeys: {TourStepId.clientsSearch: key},
         container: container,
         child: TourShowcase(
           showcaseKey: key,
-          destination: HubTab.clients,
+          scope: const DestinationTour(HubTab.clients),
           id: TourStepId.clientsSearch,
           index: 0,
           count: 2,
@@ -229,7 +230,7 @@ void main() {
         navigatorKey.currentState!.push(
           MaterialPageRoute<void>(
             builder: (_) => FeatureTourHost(
-              destination: PushedDestination.settings,
+              scope: const DestinationTour(PushedDestination.settings),
               isAdmin: true,
               // Never attached, so a start would mark seen instead.
               stepKeys: {TourStepId.settingsAppearance: GlobalKey()},
@@ -251,7 +252,7 @@ void main() {
       expect(find.text('on-top'), findsOneWidget);
       expect(
         container.read(tourSeenProvider),
-        isNot(contains(PushedDestination.settings)),
+        isNot(contains(const DestinationTour(PushedDestination.settings))),
         reason: 'a buried route must not start its tour',
       );
 
@@ -263,8 +264,65 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(
         container.read(tourSeenProvider),
-        contains(PushedDestination.settings),
+        contains(const DestinationTour(PushedDestination.settings)),
       );
     },
   );
+
+  testWidgets('a form sheet gates on its own modal route being current', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final container = newContainer();
+    final navigatorKey = GlobalKey<NavigatorState>();
+    const scope = FormTour(TourForm.addAppointment);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          navigatorKey: navigatorKey,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Scaffold(body: Text('root')),
+        ),
+      ),
+    );
+
+    expect(
+      container.read(tourSeenProvider),
+      isNot(contains(scope)),
+      reason: 'nothing has opened the sheet yet',
+    );
+
+    // A ModalBottomSheetRoute is a ModalRoute, so the host's route branch
+    // covers it with no third visibility mode.
+    unawaited(
+      showModalBottomSheet<void>(
+        context: navigatorKey.currentContext!,
+        builder: (_) => const FeatureTourHost(
+          scope: scope,
+          isAdmin: true,
+          // Never attached, so a start marks seen rather than showing a step.
+          stepKeys: {},
+          child: Text('sheet-body'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('sheet-body'), findsOneWidget);
+    expect(
+      container.read(tourSeenProvider),
+      contains(scope),
+      reason: 'the sheet route is current, so its tour ran',
+    );
+  });
 }

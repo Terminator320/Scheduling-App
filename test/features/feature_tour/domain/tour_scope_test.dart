@@ -32,10 +32,12 @@ void main() {
       const DestinationTour(HubTab.calendar),
       const DestinationTour(HubTab.calendar),
     );
-    expect({
-      const DestinationTour(HubTab.calendar),
-      const DestinationTour(HubTab.calendar),
-    }, hasLength(1));
+    // Built from a list so the analyzer doesn't flag the deliberate duplicate.
+    const pair = [
+      DestinationTour(HubTab.calendar),
+      DestinationTour(HubTab.calendar),
+    ];
+    expect(pair.toSet(), hasLength(1));
   });
 
   test('every scope key is unique', () {
