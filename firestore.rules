@@ -515,15 +515,12 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data)
              .affectedKeys()
              .hasAny(['waveCustomerId', 'wave', 'jobCount']);
-      // TODO(george): remove with kShowTestingDeleteClient (#pre-ship)
-      // Clients are never deleted in shipping behaviour (owner decision
-      // 2026-08-01) — deleting one orphans its past appointments, which keep a
-      // denormalized clientName but lose the link. This rule exists ONLY so the
-      // debug-gated testing delete works; rules are not build-aware, so it is
-      // open in production for as long as it is here. Delete it together with
-      // lib/core/testing_flags.dart. (The Admin SDK bypasses rules, so
-      // support/console cleanup never needed this.)
-      allow delete: if isAdmin();
+      // Delete is Admin-SDK-only, via the `deleteClient` callable, which
+      // refuses a client that still has appointments. Rules cannot express
+      // "only when this client has no appointments" — there is no cheap way to
+      // count a foreign collection here — so the callable is the only place
+      // that guarantee can live. Granting delete here would let an admin
+      // session bypass it and orphan the client's job history.
     }
 
     // ── wave (Wave Accounting connection metadata) ────────────────────────────
