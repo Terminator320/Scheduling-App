@@ -323,21 +323,76 @@ void main() {
     );
   });
 
-  testWidgets('the only delete is the debug-gated testing one', (tester) async {
+  testWidgets('the footer offers Archive, and withholds Delete for a client '
+      'with history', (tester) async {
     tester.view.physicalSize = const Size(800, 2600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      _wrap(repo, const ClientRecord(id: 'c1', name: 'Acme')),
+      _wrap(repo, const ClientRecord(id: 'c1', name: 'Acme', jobCount: 4)),
     );
     await tester.pumpAndSettle();
 
-    // Shipping behaviour never removes a client (owner decision 2026-08-01).
-    // Tests run in debug, so the testing-only affordance IS rendered here — it
-    // is gated by kShowTestingDeleteClient and labelled as such, and it must
-    // stay the ONLY delete entry point on this surface.
-    expect(find.text('Delete client (testing)'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Archive'), findsOneWidget);
+    // The callable would refuse this delete, so the footer must not offer it.
     expect(find.widgetWithText(OutlinedButton, 'Delete'), findsNothing);
+  });
+
+  testWidgets('the footer offers Delete for a client with no jobs', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(repo, const ClientRecord(id: 'c1', name: 'Acme', jobCount: 0)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(OutlinedButton, 'Delete'), findsOneWidget);
+  });
+
+  testWidgets('an archived client is offered Unarchive instead', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        ClientRecord.fromMap('c1', {'name': 'Acme', 'archived': true}),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(OutlinedButton, 'Unarchive'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Archive'), findsNothing);
+  });
+
+  testWidgets('archiving keeps the view open and flips the button', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    when(
+      () => repo.setClientArchived(any(), archived: any(named: 'archived')),
+    ).thenAnswer((_) async {});
+
+    await tester.pumpWidget(
+      _wrap(repo, const ClientRecord(id: 'c1', name: 'Acme', jobCount: 4)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Archive'));
+    await tester.pumpAndSettle();
+
+    // Archiving is reversible from where it was taken — the record still
+    // exists, so this surface must not dismiss itself.
+    verify(() => repo.setClientArchived('c1', archived: true)).called(1);
+    expect(find.widgetWithText(OutlinedButton, 'Unarchive'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('the profile card states the type and the month joined', (
