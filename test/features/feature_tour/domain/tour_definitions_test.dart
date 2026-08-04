@@ -13,6 +13,7 @@ const toured = <AppDestination>{
   HubTab.liveMap,
   PushedDestination.history,
   PushedDestination.settings,
+  PushedDestination.dashboard,
 };
 
 void main() {
@@ -76,6 +77,12 @@ void main() {
       }
     },
   );
+
+  test('dashboard has a 4-step admin tour and none for employees', () {
+    const scope = DestinationTour(PushedDestination.dashboard);
+    expect(tourStepsFor(scope, isAdmin: true), hasLength(4));
+    expect(tourStepsFor(scope, isAdmin: false), isEmpty);
+  });
 
   test('no catalog anywhere repeats a step', () {
     for (final scope in allTourScopes) {
