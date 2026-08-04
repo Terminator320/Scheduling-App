@@ -43,6 +43,12 @@ class ClientTile extends StatelessWidget {
         : client.phone;
     final count = client.jobCount;
     final hasType = client.type != ClientType.unset;
+    // Archived clients drop out of the list but stay in search results, so the
+    // row is the only place that can say why one looks "missing".
+    final badges = <Widget>[
+      if (client.archived) const _ArchivedPill(),
+      if (hasType) _TypeChip(type: client.type),
+    ];
 
     // No explicit label needed — ListItemTile's InkWell already exposes button
     // semantics and reads out the visible name and subtitle.
@@ -50,12 +56,37 @@ class ClientTile extends StatelessWidget {
       avatarName: client.displayName,
       title: client.displayName,
       subtitle: subtitle,
-      subtitleExtra: hasType ? _TypeChip(type: client.type) : null,
+      subtitleExtra: badges.isEmpty
+          ? null
+          : Wrap(
+              spacing: AppSpacing.sp8,
+              runSpacing: AppSpacing.sp4,
+              children: badges,
+            ),
       selected: selected,
       onTap: () => _open(context),
       // Null until the recount trigger has run for this client — an unknown
       // count renders nothing rather than a misleading zero.
       trailing: count == null ? null : _JobCount(count: count),
+    );
+  }
+}
+
+/// "Archived", as a neutral pill under the address. Neutral rather than
+/// warning-tinted: archiving is a routine filing action, not a fault. Takes
+/// the same slot colours `UserStatusChip` gives a disabled account, which
+/// carries the same "out of the working set" meaning.
+class _ArchivedPill extends StatelessWidget {
+  const _ArchivedPill();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return StatusPill(
+      label: context.l10n.clients_filterArchived,
+      background: scheme.surfaceContainerHighest,
+      foreground: scheme.onSurfaceVariant,
+      radius: AppRadius.r8,
     );
   }
 }
