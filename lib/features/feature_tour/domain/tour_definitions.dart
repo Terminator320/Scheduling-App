@@ -41,7 +41,14 @@ List<TourStepId> _destinationSteps(
     TourStepId.settingsReplay,
   ],
   PushedDestination.dayRoute => const [],
-  PushedDestination.dashboard => const [],
+  PushedDestination.dashboard => [
+    if (isAdmin) ...[
+      TourStepId.dashboardHero,
+      TourStepId.dashboardUpcoming,
+      TourStepId.dashboardWorkload,
+      TourStepId.dashboardAttention,
+    ],
+  ],
 };
 
 /// The create-flow walkthroughs. Every one of these sheets is reachable only

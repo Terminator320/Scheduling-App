@@ -5,6 +5,7 @@ import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/dashboard/application/dashboard_providers.dart';
@@ -15,6 +16,10 @@ import 'package:scheduling/features/dashboard/widgets/sections/dashboard_hero.da
 import 'package:scheduling/features/dashboard/widgets/sections/employee_workload_section.dart';
 import 'package:scheduling/features/dashboard/widgets/sections/upcoming_today_section.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
+import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
@@ -42,7 +47,10 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  // Key for the end drawer, matching the pattern used by the hub screens.
+  late final _tour = TourSteps(
+    const DestinationTour(PushedDestination.dashboard),
+    isAdmin: widget.isAdmin,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +75,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           );
     });
 
+    return FeatureTourHost(
+      scope: _tour.scope,
+      isAdmin: widget.isAdmin,
+      stepKeys: _tour.keys,
+      // Gated on the data: an ungated start against the loading skeleton
+      // finds zero targets and permanently marks the screen seen.
+      ready: stats is AsyncData<DashboardStats>,
+      autoScroll: true,
+      child: _buildScaffold(context, stats),
+    );
+  }
+
+  Widget _buildScaffold(
+    BuildContext context,
+    AsyncValue<DashboardStats> stats,
+  ) {
     return Scaffold(
       appBar: AppTopBar(
         title: context.l10n.dashboard_title,
@@ -87,6 +111,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           AsyncData(:final value) => _StatsList(
             stats: value,
             isAdmin: widget.isAdmin,
+            tour: _tour,
           ),
           AsyncError() => CenteredErrorText(
             message: context.l10n.error_introLoadDashboard,
@@ -99,12 +124,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 }
 
 class _StatsList extends ConsumerWidget {
-  const _StatsList({required this.stats, required this.isAdmin});
+  const _StatsList({
+    required this.stats,
+    required this.isAdmin,
+    required this.tour,
+  });
 
   final DashboardStats stats;
 
   /// Gates the admin-only actions on the appointment sheets these cards open.
   final bool isAdmin;
+
+  /// Passed down rather than read from an inherited widget — the host lives
+  /// above this subtree and owns the keys.
+  final TourSteps tour;
+
+  /// Wraps a section as its tour step, or leaves it alone when this role's
+  /// catalog doesn't include it.
+  Widget _step(TourStepId id, Widget child) =>
+      tour.has(id) ? tour.step(id, child: child) : child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -116,31 +154,43 @@ class _StatsList extends ConsumerWidget {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        DashboardHero(ops: stats.todayOps, now: now),
+        _step(
+          TourStepId.dashboardHero,
+          DashboardHero(ops: stats.todayOps, now: now),
+        ),
         Padding(
           padding: const EdgeInsets.all(AppSpacing.sp16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              UpcomingTodaySection(
-                ops: stats.todayOps,
-                colorMap: colorMap,
-                nameMap: nameMap,
-                isAdmin: isAdmin,
+              _step(
+                TourStepId.dashboardUpcoming,
+                UpcomingTodaySection(
+                  ops: stats.todayOps,
+                  colorMap: colorMap,
+                  nameMap: nameMap,
+                  isAdmin: isAdmin,
+                ),
               ),
               const SizedBox(height: AppSpacing.sp24),
-              EmployeeWorkloadSection(workload: stats.workload),
+              _step(
+                TourStepId.dashboardWorkload,
+                EmployeeWorkloadSection(workload: stats.workload),
+              ),
               const SizedBox(height: AppSpacing.sp24),
               BusinessTrendsSection(
                 buckets: stats.weekBuckets,
                 busiestWeekday: stats.busiestWeekday,
               ),
               const SizedBox(height: AppSpacing.sp24),
-              AttentionFlagsSection(
-                flags: stats.flags,
-                colorMap: colorMap,
-                nameMap: nameMap,
-                isAdmin: isAdmin,
+              _step(
+                TourStepId.dashboardAttention,
+                AttentionFlagsSection(
+                  flags: stats.flags,
+                  colorMap: colorMap,
+                  nameMap: nameMap,
+                  isAdmin: isAdmin,
+                ),
               ),
               const SizedBox(height: AppSpacing.sp16),
             ],
