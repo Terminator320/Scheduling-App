@@ -1,9 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/security/biometric_auth_service.dart';
-import 'package:scheduling/core/storage/secure_storage_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -36,29 +36,43 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  /// Resolves the flag through the controller — the ONE reader of the stored
+  /// value, so the widget and the Settings switch can't disagree about it.
   Future<void> _lockOnStartIfEnabled() async {
-    bool enabled;
-    try {
-      enabled = await ref
-          .read(secureStorageServiceProvider)
-          .readFlag(SecureStorageKeys.biometricEnabled);
-    } catch (e, st) {
-      // Don't lock the app if we can't read the flag — that risks bricking
-      // someone out. A locked keychain is just environmental, not a real failure.
-      if (isKeychainLockedError(e)) {
-        ref.read(loggerProvider).warn('APPLOCK read skipped: keychain locked');
-      } else {
-        ref.read(loggerProvider).warn('APPLOCK read flag failed', e, st);
-      }
-      return;
-    }
-    if (!enabled || !mounted) return;
+    await ref.read(appLockEnabledProvider.notifier).ensureLoaded();
+    if (!mounted) return;
+    _lockIfEnabled();
+  }
+
+  void _lockIfEnabled() {
+    if (_locked || !ref.read(appLockEnabledProvider)) return;
     setState(() => _locked = true);
-    await _authenticate();
+    unawaited(_authenticate());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (_locked) {
+        unawaited(_authenticate());
+        return;
+      }
+      // A read that threw at launch leaves the flag unresolved, and a
+      // resolved-looking `false` used to disable the lock for the WHOLE
+      // session — one transient keychain error (the pre-first-unlock window
+      // -25308 lives in) and the app opened straight into a signed-in session
+      // with no prompt and no sign anything was wrong. Retry until it settles;
+      // fail-open applies only to a resolved `false`.
+      final controller = ref.read(appLockEnabledProvider.notifier);
+      if (!controller.isResolved) {
+        unawaited(
+          controller.retryIfUnresolved().then((_) {
+            if (mounted) _lockIfEnabled();
+          }),
+        );
+      }
+      return;
+    }
     if (!ref.read(appLockEnabledProvider)) return;
     // Lock on `inactive` too, since that's the state the OS grabs its
     // app-switcher snapshot during.
@@ -66,8 +80,6 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
       if (!_locked) setState(() => _locked = true);
-    } else if (state == AppLifecycleState.resumed && _locked) {
-      _authenticate();
     }
   }
 
@@ -86,7 +98,14 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        widget.child,
+        // The overlay only PAINTS over the child, which stays mounted — so
+        // without these a screen reader could still traverse and read the
+        // client names, addresses and phone numbers underneath a locked app,
+        // and focus could still land in them.
+        ExcludeSemantics(
+          excluding: _locked,
+          child: ExcludeFocus(excluding: _locked, child: widget.child),
+        ),
         if (_locked)
           Positioned.fill(child: _LockOverlay(onUnlock: _authenticate)),
       ],

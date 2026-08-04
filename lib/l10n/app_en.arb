@@ -2110,7 +2110,7 @@
   "@tour_employeesAddTitle": {
     "description": "Tour step title: invite-employee FAB"
   },
-  "tour_employeesAddDesc": "Create an invite with a one-time signup code to share with your new team member.",
+  "tour_employeesAddDesc": "Create an account for a new team member, then give them the email and starting password shown here.",
   "@tour_employeesAddDesc": {
     "description": "Tour step description: invite-employee FAB"
   },
@@ -2420,7 +2420,7 @@
   "@employees_invitePerson": {
     "description": "Title of the invite-person form sheet"
   },
-  "employees_invitedNote": "They'll appear as Invited until they sign up with the code you share.",
+  "employees_invitedNote": "They'll appear as Invited until they sign in with the starting password and set up their account.",
   "@employees_invitedNote": {
     "description": "Advisory note at the bottom of the invite sheet"
   },

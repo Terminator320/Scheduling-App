@@ -42,7 +42,6 @@ class AppointmentDaySlice {
   final DateTime windowEnd;
 
   bool get isMultiDay => dayCount > 1;
-  bool get isFirstDay => dayIndex == 1;
   bool get isLastDay => dayIndex == dayCount;
 
   /// The window crosses midnight, so the run counts NIGHTS, not days.

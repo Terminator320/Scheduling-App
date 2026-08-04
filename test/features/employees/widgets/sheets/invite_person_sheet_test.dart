@@ -200,7 +200,12 @@ void main() {
     await tester.pumpWidget(wrap());
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('until they sign up'), findsOneWidget);
+    // Wording follows P4c: the admin hands over a starting password, there is
+    // no signup code to "sign up with" any more.
+    expect(
+      find.textContaining('starting password'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('survives 260x640 at 2.0 text scale', (tester) async {

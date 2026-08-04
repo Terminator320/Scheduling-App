@@ -500,6 +500,37 @@ void main() {
       expect(saved.employeeNames, ['Alex', 'Zoe']);
     });
 
+    test('a genuinely-empty active list retains every original assignee', () {
+      // The counterpart to the retain rule above. When NOBODY is active,
+      // nobody is deselectable, so keeping all of them is correct — the
+      // failure mode the invariant guards against is reading a COLD stream
+      // value and mistaking it for this, which is why
+      // `_resolveActiveEmployees` awaits a real emission (pinned by the
+      // seed-race test below). Recorded so a future change doesn't "fix" this
+      // into dropping assignees.
+      when(employees.watchEmployees).thenAnswer((_) => Stream.value(const []));
+
+      final withTwo = _appointment.copyWith(
+        id: 'appt-empty-active',
+        employeeIds: const ['e1', 'e2'],
+        employeeNames: const ['Alex', 'Bea'],
+      );
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(withTwo)),
+        (_, _) {},
+      );
+
+      // Seeded from the record itself, so the picker still names them even
+      // though none resolves against the (empty) active set.
+      expect(
+        container
+            .read(eventDetailsControllerProvider(EventDetailsKey(withTwo)))
+            .selectedEmployees
+            .map((e) => e.id),
+        ['e1', 'e2'],
+      );
+    });
+
     test(
       'awaits the employee seed before validating (B1 race): a save fired '
       'before seeding settles keeps active assignees, not "employees required"',

@@ -4,6 +4,7 @@ const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
 
 const {assertPayloadShape, enforceDurableRateLimit} = require("./security");
+const {runAccountDeletion} = require("./account_policy");
 
 // deleteAccount is capped at AUTH_RATE_MAX attempts per AUTH_RATE_WINDOW_MS,
 // enforced in Firestore (not in-memory) so the cap holds across instances
@@ -64,83 +65,20 @@ const deleteAccount = onCall(
           AUTH_RATE_MAX,
           AUTH_RATE_WINDOW_MS,
       );
-      const uid = req.auth.uid;
-      const db = getFirestore();
-
-      // Resolve the users doc before any destructive step — once the Auth
-      // user is gone the caller can no longer retry.
-      const bridgeSnap = await db
-          .collection("usersByUid")
-          .doc(uid)
-          .get()
-          .catch((err) => {
-            logger.warn("deleteAccount: bridge read failed", {
-              uid,
-              err: err.message,
-            });
-            return null;
-          });
-
-      let docId = bridgeSnap?.exists ? bridgeSnap.data().docId : null;
-
-      if (!docId) {
-        // No bridge row — fall back to a direct uid lookup so we don't
-        // strand the profile doc.
-        logger.warn("deleteAccount: no bridge for uid; querying users by uid", {
-          uid,
-        });
-        try {
-          const q = await db
-              .collection("users")
-              .where("uid", "==", uid)
-              .limit(1)
-              .get();
-          if (!q.empty) docId = q.docs[0].id;
-        } catch (err) {
-          logger.warn("deleteAccount: uid-fallback lookup failed", {
-            uid,
-            err: err.message,
-          });
-        }
-      }
-
-      // Delete the Auth user FIRST — doing it the other way round risks a
-      // live login with no profile doc. A failed doc delete after Auth is
-      // already gone just leaves recoverable orphaned data.
-      try {
-        await getAuth().deleteUser(uid);
-      } catch (err) {
-        logger.error("deleteAccount: auth delete failed", {
-          uid,
-          err: err.message,
-        });
-        // Refund the rate-limit slot on a best-effort basis — this was a
-        // server-side failure, so legitimate retries shouldn't get locked
-        // out by our own errors.
-        await limiter.refund();
-        throw new HttpsError("internal", "delete-auth-user-failed");
-      }
-
-      if (docId) {
-        try {
-          // recursiveDelete removes the users doc and all its subcollections
-          // (fcmTokens now, presence later). A plain doc delete would orphan
-          // them, leaving a deleted account that still receives pushes.
-          await db.recursiveDelete(db.collection("users").doc(docId));
-        } catch (err) {
-          // The Auth user is already gone, so log for cleanup but report
-          // success — the caller's credentials no longer work anyway.
-          logger.error("deleteAccount: users doc delete failed after auth " +
-              "delete — orphaned users doc needs cleanup", {
-            uid,
-            docId,
-            err: err.message,
-          });
-        }
-      }
-
-      logger.info("deleteAccount: user account deleted", {uid, docId});
-      return {deleted: true};
+      // The ordering rules live in account_policy.js so they can be tested
+      // with injected doubles — this callable owns only the guards above.
+      const {deleted} = await runAccountDeletion(
+          {
+            db: getFirestore(),
+            auth: getAuth(),
+            logger,
+            limiter,
+            onAuthFailure: () =>
+              new HttpsError("internal", "delete-auth-user-failed"),
+          },
+          req.auth.uid,
+      );
+      return {deleted};
     },
 );
 

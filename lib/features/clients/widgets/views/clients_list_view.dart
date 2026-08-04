@@ -156,7 +156,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
             SlidableAction(
               onPressed: (_) => confirmDeleteClient(client),
               backgroundColor: Theme.of(context).palette.dangerFill,
-              foregroundColor: Colors.white,
+              foregroundColor: Theme.of(context).palette.onDangerFill,
               icon: Icons.delete_outline,
               label: context.l10n.common_delete,
             ),

@@ -68,7 +68,7 @@ void main() {
     expect(picked, DateTime(2026, 5, 12));
   });
 
-  testWidgets('the selected day drops its dot, an unselected day keeps it', (
+  testWidgets('the selected day keeps its dot, like the month grid', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -76,9 +76,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Every day has work, so a dot per cell except the selected one, whose
-    // filled circle already carries the state.
-    expect(find.byKey(const ValueKey('calendar-strip-dot')), findsNWidgets(6));
+    // Every day has work, so every one of the 7 cells shows a dot — the
+    // selected day included. Suppressing it there made the day being looked
+    // at the one day whose crew was invisible, which is the same reason the
+    // month grid keeps its dots under the selection circle.
+    expect(find.byKey(const ValueKey('calendar-strip-dot')), findsNWidgets(7));
   });
 
   testWidgets('a day whose job has no crew colour still gets its dot', (
@@ -87,7 +89,7 @@ void main() {
     await tester.pumpWidget(_wrap(_strip(dotColorsFor: (_) => const [null])));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('calendar-strip-dot')), findsNWidgets(6));
+    expect(find.byKey(const ValueKey('calendar-strip-dot')), findsNWidgets(7));
     expect(tester.takeException(), isNull);
   });
 

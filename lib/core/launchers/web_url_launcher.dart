@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/launchers/external_uri_launcher.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -13,6 +14,10 @@ Future<void> launchWebUrl(
 ) async {
   final uri = Uri.tryParse(url.trim());
   if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
+    // Not a catch, but still a user-visible failure — without this it is the
+    // one launch path that leaves no Crashlytics trail to match a screenshot
+    // against. The URL is a compile-time constant, so it is safe to carry.
+    ref.read(loggerProvider).breadcrumb('LAUNCH-URL malformed uri: $url');
     ref.read(noticeServiceProvider).error(context.l10n.error_couldNotOpenLink);
     return;
   }

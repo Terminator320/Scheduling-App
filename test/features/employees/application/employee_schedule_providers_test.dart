@@ -160,5 +160,27 @@ void main() {
       ]);
       expect(container.read(employeeTodayJobsProvider('e1')), isEmpty);
     });
+
+    test('orders by today’s clock time, not the stored instant', () async {
+      final container = await _containerWith([
+        // A 5-day run booked Aug 1, daily window 17:00-19:00. Its stored
+        // startTime is Aug 1, so `orderBy('startTime')` floats it to the front
+        // even though it is the LAST thing this person does today.
+        _job(
+          id: 'run',
+          start: DateTime(2026, 8, 1, 17),
+          end: DateTime(2026, 8, 5, 19),
+        ),
+        _job(
+          id: 'morning',
+          start: DateTime(2026, 8, 4, 8),
+          end: DateTime(2026, 8, 4, 10),
+        ),
+      ]);
+      expect(
+        container.read(employeeTodayJobsProvider('e1')).map((j) => j.id),
+        ['morning', 'run'],
+      );
+    });
   });
 }
