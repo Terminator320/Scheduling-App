@@ -30,6 +30,7 @@ class ClientsListView extends ConsumerStatefulWidget {
     this.filter = const ClientsFilterAll(),
     this.onClientTap,
     this.selectedClientId,
+    this.firstRowTourWrap,
   });
 
   final String searchQuery;
@@ -40,6 +41,11 @@ class ClientsListView extends ConsumerStatefulWidget {
   final ClientsFilter filter;
   final void Function(ClientRecord client)? onClientTap;
   final String? selectedClientId;
+
+  /// Wraps the FIRST row only, as that row's feature-tour step. One row, not
+  /// every row — the step's GlobalKey has to stay unique. Null when the host
+  /// has no tour (the booking flow's client picker).
+  final Widget Function(Widget child)? firstRowTourWrap;
 
   @override
   ConsumerState<ClientsListView> createState() => _ClientsListViewState();
@@ -138,7 +144,13 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
 
   // The Slidable wraps the tile HERE, not inside ClientTile — the booking
   // flow's client picker reuses that tile and must not gain archive/delete.
-  Widget _clientTile(ClientRecord client, int index) => FadeInItem(
+  Widget _clientTile(ClientRecord client, int index) {
+    final tile = _slidableTile(client, index);
+    final wrap = widget.firstRowTourWrap;
+    return index == 0 && wrap != null ? wrap(tile) : tile;
+  }
+
+  Widget _slidableTile(ClientRecord client, int index) => FadeInItem(
     key: ValueKey(client.id),
     index: index,
     child: Slidable(

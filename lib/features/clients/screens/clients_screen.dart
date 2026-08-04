@@ -132,9 +132,12 @@ class _ListInformationState extends State<ListInformation> {
         body: MasterDetailScaffold(
           master: Column(
             children: [
-              ClientTypeFilterBar(
-                selected: _filter,
-                onChanged: (next) => setState(() => _filter = next),
+              _tour.stepIf(
+                TourStepId.clientsFilter,
+                ClientTypeFilterBar(
+                  selected: _filter,
+                  onChanged: (next) => setState(() => _filter = next),
+                ),
               ),
               Expanded(
                 child: ListenableBuilder(
@@ -148,6 +151,10 @@ class _ListInformationState extends State<ListInformation> {
                         ? _selectedClient?.id
                         : null,
                     onClientTap: _onClientTap,
+                    firstRowTourWrap: _tour.has(TourStepId.clientsRow)
+                        ? (child) =>
+                              _tour.step(TourStepId.clientsRow, child: child)
+                        : null,
                   ),
                 ),
               ),

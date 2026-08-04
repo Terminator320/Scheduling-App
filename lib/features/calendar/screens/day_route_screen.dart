@@ -58,11 +58,6 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     isAdmin: widget.isAdmin,
   );
 
-  /// Wraps a target as its tour step, or leaves it alone when this role's
-  /// catalog doesn't include it.
-  Widget _step(TourStepId id, Widget child) =>
-      _tour.has(id) ? _tour.step(id, child: child) : child;
-
   @override
   void initState() {
     super.initState();
@@ -153,7 +148,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         isAdmin: widget.isAdmin,
         employeeId: widget.employeeId,
       ),
-      bottomNavigationBar: _step(
+      bottomNavigationBar: _tour.stepIf(
         TourStepId.dayRouteNavigate,
         _routeButton(data.stops),
       ),
@@ -165,16 +160,16 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
           top: false,
           child: Column(
             children: [
-              _step(TourStepId.dayRouteDaySwitcher, _daySwitcher()),
+              _tour.stepIf(TourStepId.dayRouteDaySwitcher, _daySwitcher()),
               // Absent on a day with no assignees, and for employees —
               // isTargetRendered skips the step rather than failing.
               if (widget.isAdmin && data.assigneeEntries.isNotEmpty)
-                _step(
+                _tour.stepIf(
                   TourStepId.dayRouteEmployee,
                   _employeePicker(data.assigneeEntries, data.employeeId),
                 ),
               Expanded(
-                child: _step(
+                child: _tour.stepIf(
                   TourStepId.dayRouteStops,
                   _timeline(async, data.jobs, data.employeeId),
                 ),
