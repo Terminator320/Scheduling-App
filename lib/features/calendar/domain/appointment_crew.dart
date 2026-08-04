@@ -40,26 +40,33 @@ List<AppointmentCrew> crewFor(
   return crew;
 }
 
-/// The month grid's per-day dots: the distinct people working that day, in
-/// first-appointment order, capped at [max].
+/// The month grid's per-day dots: **one per job** that day, in list order,
+/// capped at [max] (owner call, 2026-08-04 — the dots read as "how busy is this
+/// day", so they count jobs, not the distinct people working them).
 ///
-/// Deliberately keyed on the *assignee*, not the appointment — the old
-/// per-appointment dots rendered grey for any multi-crew job.
-List<Color> dayCrewColors(
+/// Each entry is the job's FIRST assignee with a resolvable stored crew colour.
+/// A **null** entry means that job has no such assignee; the cell paints it with
+/// the same neutral an unassigned card uses, so a job is never silently dotless.
+List<Color?> dayJobDotColors(
   Iterable<AppointmentRecord> dayAppointments,
   Map<String, Color> colorMap, {
   int max = 3,
 }) {
-  final seen = <String>{};
-  final colors = <Color>[];
+  final colors = <Color?>[];
   for (final appointment in dayAppointments) {
-    for (final id in appointment.employeeIds) {
-      if (!seen.add(id)) continue;
-      final color = colorMap[id];
-      if (color == null) continue;
-      colors.add(color);
-      if (colors.length == max) return colors;
-    }
+    colors.add(_leadCrewColor(appointment, colorMap));
+    if (colors.length == max) break;
   }
   return colors;
+}
+
+Color? _leadCrewColor(
+  AppointmentRecord appointment,
+  Map<String, Color> colorMap,
+) {
+  for (final id in appointment.employeeIds) {
+    final color = colorMap[id];
+    if (color != null) return color;
+  }
+  return null;
 }

@@ -65,11 +65,11 @@ void main() {
     expect(crewFor(_appt(ids: const []), colorMap: const {}), isEmpty);
   });
 
-  test('dayCrewColors dedupes assignees across the day and caps at three', () {
-    final colors = dayCrewColors(
+  test('dayJobDotColors gives one dot per job, capped at three', () {
+    final colors = dayJobDotColors(
       [
-        _appt(ids: ['e1', 'e2'], hour: 8),
-        _appt(ids: ['e1'], hour: 10),
+        _appt(ids: ['e1'], hour: 8),
+        _appt(ids: ['e2'], hour: 10),
         _appt(ids: ['e3'], hour: 12),
         _appt(ids: ['e4'], hour: 14),
       ],
@@ -78,20 +78,42 @@ void main() {
     expect(colors, [_blue, _green, _amber]);
   });
 
-  test('dayCrewColors skips ids with no colour', () {
-    final colors = dayCrewColors(
+  test('dayJobDotColors counts jobs, not distinct people', () {
+    final colors = dayJobDotColors(
       [
-        _appt(ids: ['ghost', 'e1']),
+        _appt(ids: ['e1'], hour: 8),
+        _appt(ids: ['e1'], hour: 10),
       ],
       const {'e1': _blue},
     );
-    expect(colors, [_blue]);
+    expect(colors, [_blue, _blue]);
   });
 
-  test('dayCrewColors honours a lower cap for the week strip', () {
-    final colors = dayCrewColors(
+  test('dayJobDotColors takes each job first colour-resolvable assignee', () {
+    final colors = dayJobDotColors(
       [
-        _appt(ids: ['e1', 'e2']),
+        _appt(ids: ['ghost', 'e2']),
+      ],
+      const {'e2': _green},
+    );
+    expect(colors, [_green]);
+  });
+
+  test('dayJobDotColors still dots a job with no resolvable crew colour', () {
+    final colors = dayJobDotColors(
+      [
+        _appt(ids: const []),
+      ],
+      const {'e1': _blue},
+    );
+    expect(colors, [null]);
+  });
+
+  test('dayJobDotColors honours a lower cap for the week strip', () {
+    final colors = dayJobDotColors(
+      [
+        _appt(ids: ['e1'], hour: 8),
+        _appt(ids: ['e2'], hour: 10),
       ],
       const {'e1': _blue, 'e2': _green},
       max: 1,
@@ -99,7 +121,7 @@ void main() {
     expect(colors, [_blue]);
   });
 
-  test('dayCrewColors returns empty for an empty day', () {
-    expect(dayCrewColors(const [], const {'e1': _blue}), isEmpty);
+  test('dayJobDotColors returns empty for an empty day', () {
+    expect(dayJobDotColors(const [], const {'e1': _blue}), isEmpty);
   });
 }

@@ -21,7 +21,7 @@ class CalendarWeekStrip extends StatelessWidget {
     required this.selectedDay,
     required this.today,
     required this.onDaySelected,
-    required this.dotColorFor,
+    required this.dotColorsFor,
     super.key,
   });
 
@@ -32,8 +32,11 @@ class CalendarWeekStrip extends StatelessWidget {
   final DateTime today;
   final ValueChanged<DateTime> onDaySelected;
 
-  /// One STORED crew colour for the day, or null for a day with no work.
-  final Color? Function(DateTime day) dotColorFor;
+  /// The day's dot colours, capped at one — same shape as the month grid's so
+  /// both read the one `dayJobDotColors`. Empty means no work at all; a single
+  /// null entry means work whose lead assignee has no colour, which still earns
+  /// a (neutral) dot.
+  final List<Color?> Function(DateTime day) dotColorsFor;
 
   static double _circleSize(BuildContext context) => math.max(
     _kStripCircleMin,
@@ -74,7 +77,7 @@ class CalendarWeekStrip extends StatelessWidget {
                   isToday: isSameDate(day, today),
                   label: abbrev.format(day).toUpperCase(),
                   circleSize: circle,
-                  dotColor: dotColorFor(day),
+                  dotColors: dotColorsFor(day),
                   onTap: onDaySelected,
                 ),
               ),
@@ -92,7 +95,7 @@ class _StripCell extends StatelessWidget {
     required this.isToday,
     required this.label,
     required this.circleSize,
-    required this.dotColor,
+    required this.dotColors,
     required this.onTap,
   });
 
@@ -101,7 +104,7 @@ class _StripCell extends StatelessWidget {
   final bool isToday;
   final String label;
   final double circleSize;
-  final Color? dotColor;
+  final List<Color?> dotColors;
   final ValueChanged<DateTime> onTap;
 
   @override
@@ -164,7 +167,7 @@ class _StripCell extends StatelessWidget {
               height: _kStripDot + _kStripDotGap,
               // The selected day's filled circle already carries the state, so
               // it drops its dot — same rule as the month grid's cells.
-              child: dotColor == null || isSelected
+              child: dotColors.isEmpty || isSelected
                   ? null
                   : Padding(
                       padding: const EdgeInsets.only(top: _kStripDotGap),
@@ -174,7 +177,12 @@ class _StripCell extends StatelessWidget {
                         height: _kStripDot,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: crewColorOf(theme, dotColor!.toARGB32()),
+                          color: dotColors.first == null
+                              ? theme.palette.textFaint
+                              : crewColorOf(
+                                  theme,
+                                  dotColors.first!.toARGB32(),
+                                ),
                         ),
                       ),
                     ),

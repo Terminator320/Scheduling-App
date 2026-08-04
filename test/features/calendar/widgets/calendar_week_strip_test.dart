@@ -31,13 +31,13 @@ Widget _wrap(Widget child, {double textScale = 1}) => MaterialApp(
 
 CalendarWeekStrip _strip({
   ValueChanged<DateTime>? onDaySelected,
-  Color? Function(DateTime day)? dotColorFor,
+  List<Color?> Function(DateTime day)? dotColorsFor,
 }) => CalendarWeekStrip(
   weekDays: _week,
   selectedDay: _selected,
   today: _today,
   onDaySelected: onDaySelected ?? (_) {},
-  dotColorFor: dotColorFor ?? (_) => null,
+  dotColorsFor: dotColorsFor ?? (_) => const [],
 );
 
 void main() {
@@ -72,13 +72,23 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      _wrap(_strip(dotColorFor: (_) => const Color(0xFF2E7D32))),
+      _wrap(_strip(dotColorsFor: (_) => const [Color(0xFF2E7D32)])),
     );
     await tester.pumpAndSettle();
 
     // Every day has work, so a dot per cell except the selected one, whose
     // filled circle already carries the state.
     expect(find.byKey(const ValueKey('calendar-strip-dot')), findsNWidgets(6));
+  });
+
+  testWidgets('a day whose job has no crew colour still gets its dot', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(_strip(dotColorsFor: (_) => const [null])));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('calendar-strip-dot')), findsNWidgets(6));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('heightFor grows with the text scale', (tester) async {

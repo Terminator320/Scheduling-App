@@ -55,6 +55,12 @@ abstract class EmployeesRepository {
   /// The repository builds a field-scoped allowlist from the record — `uid` is
   /// rules-forbidden and `status` belongs to deactivate/reactivate, so neither
   /// is ever in the update map no matter what the record carries.
+  ///
+  /// A changed `email` on a doc that carries a `uid` is routed through the
+  /// `changeEmployeeEmail` callable FIRST, so the Firebase Auth account and the
+  /// users doc move together — a Firestore-only change would leave the person
+  /// signing in at the old address. Throws
+  /// `EmployeesFailureEmailAlreadyExists` if the new address is taken.
   Future<void> updateEmployee({
     required String docId,
     required EmployeeRecord employee,

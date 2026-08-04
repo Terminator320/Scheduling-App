@@ -12,9 +12,12 @@ const {
   resetProvisionedPassword,
   performCreateAccount,
   performDeleteAccount,
+  performChangeEmail,
+  notifyEmailChanged,
   buildActivationPatch,
   DEFAULT_PASSWORD,
 } = require("../employee_accounts");
+const {buildEmailChangedMessage} = require("../notification_messages");
 
 const TS = {__serverTimestamp: true};
 const serverTimestamp = () => TS;
@@ -370,6 +373,184 @@ describe("buildActivationPatch", () => {
     const patch = buildActivationPatch(base, {userData: {}, serverTimestamp});
 
     expect("uid" in patch).toBe(false);
+  });
+});
+
+describe("performChangeEmail", () => {
+  const stored = (email) => ({exists: true, data: () => ({email})});
+
+  test("moves the doc onto the new email", async () => {
+    const {db, ops} = fakeDb({doc: stored("old@company.test")});
+
+    const out = await performChangeEmail(
+        db, "doc-1", "new@company.test", "old@company.test", {serverTimestamp});
+
+    expect(out).toEqual({ok: true});
+    const update = ops.find((o) => o.op === "update");
+    expect(update.data).toEqual({email: "new@company.test", updatedAt: TS});
+  });
+
+  test("refuses when another doc already holds the new email", async () => {
+    const {db, ops} = fakeDb({
+      doc: stored("old@company.test"),
+      existingUser: userDoc({email: "new@company.test"}, "someone-else"),
+    });
+
+    await expect(performChangeEmail(
+        db, "doc-1", "new@company.test", "old@company.test", {serverTimestamp}),
+    ).rejects.toThrow("email-exists");
+    expect(ops.some((o) => o.op === "update")).toBe(false);
+  });
+
+  test("the target's OWN doc does not count as a duplicate", async () => {
+    // A retried call re-reads a doc that already holds the new email.
+    const {db, ops} = fakeDb({
+      doc: stored("old@company.test"),
+      existingUser: userDoc({email: "new@company.test"}, "doc-1"),
+    });
+
+    await performChangeEmail(
+        db, "doc-1", "new@company.test", "old@company.test", {serverTimestamp});
+
+    expect(ops.some((o) => o.op === "update")).toBe(true);
+  });
+
+  test("aborts when the email moved under us", async () => {
+    // A concurrent admin edit. Committing here would overwrite state the
+    // uniqueness pre-flight never saw, and Auth has already been moved — the
+    // caller reverts it on this throw.
+    const {db, ops} = fakeDb({doc: stored("someone-else-set-this@x.test")});
+
+    await expect(performChangeEmail(
+        db, "doc-1", "new@company.test", "old@company.test", {serverTimestamp}),
+    ).rejects.toThrow("email-changed");
+    expect(ops.some((o) => o.op === "update")).toBe(false);
+  });
+
+  test("reports not-found for a missing doc", async () => {
+    const {db} = fakeDb({doc: {exists: false, data: () => null}});
+
+    await expect(performChangeEmail(
+        db, "nope", "new@company.test", "old@company.test", {serverTimestamp}),
+    ).rejects.toThrow("account-not-found");
+  });
+
+  test("reads before it writes", async () => {
+    const {db, ops} = fakeDb({doc: stored("old@company.test")});
+
+    await performChangeEmail(
+        db, "doc-1", "new@company.test", "old@company.test", {serverTimestamp});
+
+    const firstWrite = ops.findIndex((o) => o.op !== "get");
+    const lastRead = ops.map((o) => o.op).lastIndexOf("get");
+    expect(lastRead).toBeLessThan(firstWrite);
+  });
+});
+
+describe("buildEmailChangedMessage", () => {
+  test("names the new address, so the push is actionable as it lands", () => {
+    // This push is the only warning before the old address stops working.
+    expect(buildEmailChangedMessage("new@company.test", "en").body)
+        .toContain("new@company.test");
+    expect(buildEmailChangedMessage("new@company.test", "fr").body)
+        .toContain("new@company.test");
+  });
+
+  test("falls back to a manager prompt when the address is missing", () => {
+    const en = buildEmailChangedMessage("", "en");
+    expect(en.body).toContain("manager");
+    expect(buildEmailChangedMessage("", "fr").body).toContain("gestionnaire");
+  });
+
+  test("titles differ by locale", () => {
+    expect(buildEmailChangedMessage("a@b.test", "fr").title)
+        .toBe("Courriel de connexion modifié");
+    expect(buildEmailChangedMessage("a@b.test", "en").title)
+        .toBe("Sign-in email changed");
+  });
+});
+
+describe("notifyEmailChanged", () => {
+  /**
+   * Fake db exposing only what sendToEmployee reads: the users doc and its
+   * fcmTokens subcollection.
+   * @param {!Object} user stored users-doc data.
+   * @param {!Array<string>} locales one token per entry.
+   * @return {!Object}
+   */
+  function tokenDb(user, locales) {
+    const tokenDocs = locales.map((locale, i) => ({
+      id: `token-${i}`,
+      data: () => ({locale}),
+      ref: {delete: jest.fn(async () => {})},
+    }));
+    return {
+      collection: () => ({
+        doc: () => ({
+          get: async () => ({exists: true, data: () => user}),
+          collection: () => ({get: async () => ({docs: tokenDocs})}),
+        }),
+      }),
+    };
+  }
+
+  const active = {role: "employee", status: "active"};
+  const okResponses = (n) => ({
+    responses: Array.from({length: n}, () => ({success: true})),
+  });
+
+  test("pushes the new address to every device in its own locale", async () => {
+    const messaging = {sendEach: jest.fn(async () => okResponses(2))};
+
+    await notifyEmailChanged(
+        {db: tokenDb(active, ["en", "fr"]), messaging, logger: null},
+        "doc-1", "new@company.test");
+
+    const sent = messaging.sendEach.mock.calls[0][0];
+    expect(sent).toHaveLength(2);
+    expect(sent[0].notification.title).toBe("Sign-in email changed");
+    expect(sent[1].notification.title).toBe("Courriel de connexion modifié");
+    expect(sent[0].data).toEqual({kind: "emailChanged"});
+  });
+
+  test("reaches an admin too, unlike change-driven job pushes", async () => {
+    // CHANGE_RECIPIENT_ROLES is employees-only because an admin normally makes
+    // those edits themselves. Here the admin editing the row is a DIFFERENT
+    // person from the one whose sign-in is moving.
+    const messaging = {sendEach: jest.fn(async () => okResponses(1))};
+
+    await notifyEmailChanged(
+        {
+          db: tokenDb({role: "admin", status: "active"}, ["en"]),
+          messaging,
+          logger: null,
+        },
+        "doc-1", "new@company.test");
+
+    expect(messaging.sendEach).toHaveBeenCalled();
+  });
+
+  test("a send failure never escapes — the change committed", async () => {
+    // Raising here would hand the admin an error for something that worked.
+    const messaging = {
+      sendEach: jest.fn(async () => {
+        throw new Error("fcm down");
+      }),
+    };
+
+    await expect(notifyEmailChanged(
+        {db: tokenDb(active, ["en"]), messaging, logger: null},
+        "doc-1", "new@company.test")).resolves.toBeUndefined();
+  });
+
+  test("a person with no device is simply not notified", async () => {
+    const messaging = {sendEach: jest.fn()};
+
+    await notifyEmailChanged(
+        {db: tokenDb(active, []), messaging, logger: null},
+        "doc-1", "new@company.test");
+
+    expect(messaging.sendEach).not.toHaveBeenCalled();
   });
 });
 

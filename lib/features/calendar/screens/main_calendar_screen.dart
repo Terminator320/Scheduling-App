@@ -420,14 +420,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         selectedDay: selectedDay,
         today: today,
         onDaySelected: _onDaySelected,
-        dotColorFor: (day) {
-          final colors = dayCrewColors(
-            _appointmentsOn(day),
-            colorMap,
-            max: 1,
-          );
-          return colors.isEmpty ? null : colors.first;
-        },
+        dotColorsFor: (day) =>
+            dayJobDotColors(_appointmentsOn(day), colorMap, max: 1),
       ),
     );
   }
@@ -511,7 +505,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           today: today,
           onDaySelected: _onDaySelected,
           onMonthChanged: _setFocusedDay,
-          dotColorsFor: (day) => dayCrewColors(_appointmentsOn(day), colorMap),
+          dotColorsFor: (day) =>
+              dayJobDotColors(_appointmentsOn(day), colorMap),
           countFor: (day) => _getEventsForDay(day).length,
         ),
       );

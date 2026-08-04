@@ -259,7 +259,38 @@ function buildDigestMessage(jobs, locale) {
   };
 }
 
+/**
+ * Builds the "an admin changed your sign-in email" {title, body}. Pure.
+ *
+ * The new address is IN the body on purpose: this push is the only warning the
+ * person gets before their old address stops working, so it has to be
+ * actionable on the lock screen rather than send them hunting. It is their own
+ * address going to their own device — not a disclosure.
+ *
+ * @param {string} email The new sign-in email.
+ * @param {string} locale 'en' | 'fr'.
+ * @return {{title: string, body: string}}
+ */
+function buildEmailChangedMessage(email, locale) {
+  const address = String(email || "").trim();
+  if (locale === "fr") {
+    return {
+      title: "Courriel de connexion modifié",
+      body: address ?
+        `Utilisez ${address} pour vous connecter dorénavant.` :
+        "Votre adresse de connexion a changé. Contactez votre gestionnaire.",
+    };
+  }
+  return {
+    title: "Sign-in email changed",
+    body: address ?
+      `Use ${address} to sign in from now on.` :
+      "Your sign-in address changed. Check with your manager.",
+  };
+}
+
 module.exports = {
   buildNotificationMessage,
   buildDigestMessage,
+  buildEmailChangedMessage,
 };

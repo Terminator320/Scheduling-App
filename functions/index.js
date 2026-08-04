@@ -33,6 +33,7 @@ exports.deleteAccount = account.deleteAccount;
 exports.createEmployeeAccount = employeeAccounts.createEmployeeAccount;
 exports.completeEmployeeSetup = employeeAccounts.completeEmployeeSetup;
 exports.deleteEmployeeAccount = employeeAccounts.deleteEmployeeAccount;
+exports.changeEmployeeEmail = employeeAccounts.changeEmployeeEmail;
 // BACKWARD-COMPAT SHIM for the 1.37.1+64 build still on the App Store, which
 // calls these two from firebase_employees_repository.dart (:82 and :109). P4c
 // replaced the signup-code flow with createEmployeeAccount /

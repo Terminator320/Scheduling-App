@@ -651,6 +651,10 @@ module.exports = {
   tomorrowWindowToronto,
   overduePromptLedgerId,
   isStaleTokenError,
+  // The one owner of "push to an employee's live tokens" — token fetch, role +
+  // active gate, and stale-token pruning. A new push path calls this rather
+  // than re-deriving any of it (changeEmployeeEmail is the first non-job one).
+  sendToEmployee,
   deliverRecipientOnce: _deliverRecipientOnce,
   handleAppointmentWrite,
   runDailyDigest,

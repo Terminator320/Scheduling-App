@@ -2,6 +2,7 @@ const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
+const {getMessaging} = require("firebase-admin/messaging");
 const {
   assertPayloadShape,
   requireString,
@@ -9,6 +10,14 @@ const {
   assertAdmin,
   enforceDurableRateLimit,
 } = require("./security");
+// index.js already loads notifications.js in every container, so this costs no
+// extra cold start. sendToEmployee is the one owner of the token fetch, the
+// role + active gate and stale-token pruning — never re-derive them here.
+const {
+  sendToEmployee,
+  TIMED_RECIPIENT_ROLES,
+} = require("./notification_utils");
+const {buildEmailChangedMessage} = require("./notification_messages");
 
 /**
  * The shared starting password every new employee account is created with.
@@ -292,6 +301,170 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
 });
 
 /**
+ * Transactional core of changeEmployeeEmail, extracted for unit testing.
+ *
+ * Re-checks BOTH things the pre-flight checked, because the pre-flight is only
+ * an optimization: that this doc still holds [previousEmail] (nobody edited it
+ * underneath us) and that no other doc holds the new one.
+ *
+ * @param {!Object} db Firestore instance.
+ * @param {string} docId users-doc id.
+ * @param {string} email the new, lowercased email.
+ * @param {string} previousEmail what the doc held when we read it.
+ * @param {{serverTimestamp: !Function}} opts Timestamp factory (injectable).
+ * @return {!Promise<{ok: boolean}>}
+ */
+async function performChangeEmail(db, docId, email, previousEmail, opts) {
+  const {serverTimestamp} = opts;
+  return db.runTransaction(async (tx) => {
+    const ref = db.collection("users").doc(docId);
+    const snap = await tx.get(ref);
+    if (!snap.exists) {
+      throw new HttpsError("not-found", "account-not-found");
+    }
+    if ((snap.data().email || "") !== previousEmail) {
+      throw new HttpsError("aborted", "email-changed");
+    }
+    const dup = await tx.get(
+        db.collection("users").where("email", "==", email).limit(2),
+    );
+    if (dup.docs.some((d) => d.id !== docId)) {
+      throw new HttpsError("already-exists", "email-exists");
+    }
+    tx.update(ref, {email, updatedAt: serverTimestamp()});
+    return {ok: true};
+  });
+}
+
+/**
+ * Moves an employee's sign-in email in Firebase Auth AND on their users doc.
+ *
+ * This exists because nothing else joins those two stores: `updateEmployee`
+ * writes only Firestore, so an admin edit left the person signing in with the
+ * old address while every admin surface showed the new one — and it desynced
+ * the two stores that createEmployeeAccount joins on.
+ *
+ * Only for a doc that already carries a `uid`. A pending doc with no Auth
+ * account behind it has nothing to join, and the client writes its email
+ * directly under the rules.
+ */
+const changeEmployeeEmail = onCall(APP_CHECK, async (req) => {
+  if (!req.auth || !req.auth.uid) {
+    throw new HttpsError("unauthenticated", "auth-required");
+  }
+  await assertAdmin(req.auth.uid);
+  assertPayloadShape(req.data, new Set(["docId", "email"]));
+  const docId = requireString(req.data, "docId", 128);
+  // `.doc()` throws synchronously on an id containing a slash, which would
+  // surface as an opaque `internal` instead of a shaped rejection.
+  if (docId.includes("/")) {
+    throw new HttpsError("invalid-argument", "invalid-docId");
+  }
+  const email = requireString(req.data, "email", 254).toLowerCase();
+  // Same per-admin budget as account creation: this rewrites a sign-in
+  // identity, so a compromised session must not be able to walk the roster.
+  await enforceDurableRateLimit(
+      "changeEmployeeEmail", req.auth.uid, CREATE_RATE_MAX,
+      CREATE_RATE_WINDOW_MS);
+
+  const db = getFirestore();
+  const auth = getAuth();
+
+  const snap = await db.collection("users").doc(docId).get();
+  if (!snap.exists) {
+    throw new HttpsError("not-found", "account-not-found");
+  }
+  const previousEmail = snap.data().email || "";
+  const uid = snap.data().uid || "";
+  if (!uid) {
+    throw new HttpsError("failed-precondition", "account-has-no-auth");
+  }
+  if (email === previousEmail) return {ok: true};
+
+  // Cheap pre-flight so the common conflict costs no Auth write plus rollback.
+  // performChangeEmail's transaction is the authoritative check.
+  const claimed = await db.collection("users")
+      .where("email", "==", email).limit(2).get();
+  if (claimed.docs.some((d) => d.id !== docId)) {
+    throw new HttpsError("already-exists", "email-exists");
+  }
+
+  // Auth FIRST, Firestore second, deliberately. The failure being fixed is a
+  // doc that moved while Auth did not, so the store that owns sign-in must be
+  // the one never left behind — and it is the one that can actually refuse a
+  // duplicate. `emailVerified` resets because the new address is unproven.
+  try {
+    await auth.updateUser(uid, {email, emailVerified: false});
+  } catch (e) {
+    if (e && e.code === "auth/email-already-exists") {
+      throw new HttpsError("already-exists", "email-exists");
+    }
+    if (e && e.code === "auth/user-not-found") {
+      throw new HttpsError("not-found", "account-not-found");
+    }
+    throw e;
+  }
+
+  try {
+    await performChangeEmail(db, docId, email, previousEmail, {
+      serverTimestamp: () => FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    // Put Auth back where the doc still says it is. A failed revert leaves the
+    // person signing in with an address no admin surface shows — the exact
+    // desync this callable exists to prevent — and nothing in-app can find it,
+    // so it MUST be loud. Emails are PII: the uid pair is what makes it
+    // findable in the console.
+    await auth.updateUser(uid, {email: previousEmail}).catch((revertError) => {
+      logger.error(
+          "changeEmployeeEmail: auth/users email desync; fix it by hand",
+          {uid, docId, err: String(revertError)},
+      );
+    });
+    throw e;
+  }
+
+  await notifyEmailChanged(
+      {db, messaging: getMessaging(), logger}, docId, email);
+  return {ok: true};
+});
+
+/**
+ * Tells the employee their sign-in address moved.
+ *
+ * **Best-effort, and deliberately AFTER the commit**: the change is already
+ * durable in both stores, so a push failure must not fail the callable and
+ * hand the admin an error for something that worked. It is a courtesy, not a
+ * guarantee — an employee with no live FCM token (app never installed, signed
+ * out, notifications denied) still learns the hard way, which is why the admin
+ * should tell them directly too.
+ *
+ * Roles are the TIMED set, not the change set: the change set is
+ * employees-only because an admin normally makes those edits themselves, and
+ * here the admin editing the row is a DIFFERENT person from the one whose
+ * sign-in is moving.
+ *
+ * @param {!Object} deps `{db, messaging, logger}`.
+ * @param {string} docId users doc id of the employee.
+ * @param {string} email The new sign-in email.
+ * @return {!Promise<void>}
+ */
+async function notifyEmailChanged(deps, docId, email) {
+  try {
+    await sendToEmployee(
+        deps,
+        docId,
+        {kind: "emailChanged"},
+        (locale) => buildEmailChangedMessage(email, locale),
+        TIMED_RECIPIENT_ROLES,
+    );
+  } catch (e) {
+    // Never the address itself — emails are PII and this is a log line.
+    logger.warn("changeEmployeeEmail: notify failed", {docId, err: String(e)});
+  }
+}
+
+/**
  * Builds the activation patch completeEmployeeSetup applies to the invited
  * users doc. Pure, and exported so the never-empty-`name` contract is pinned
  * by tests rather than by the transaction that happens to use it.
@@ -455,10 +628,13 @@ module.exports = {
   createEmployeeAccount,
   completeEmployeeSetup,
   deleteEmployeeAccount,
+  changeEmployeeEmail,
   // Exported for unit tests of the transactional flows and the pure patch.
   provisionAuthAccount,
   resetProvisionedPassword,
   performCreateAccount,
   performDeleteAccount,
+  performChangeEmail,
+  notifyEmailChanged,
   buildActivationPatch,
 };

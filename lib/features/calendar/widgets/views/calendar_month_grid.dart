@@ -40,8 +40,9 @@ class CalendarMonthGrid extends StatelessWidget {
 
   final ValueChanged<DateTime> onDaySelected;
 
-  /// STORED crew colours for the day; the cell resolves them per theme.
-  final List<Color> Function(DateTime day) dotColorsFor;
+  /// One STORED crew colour per job that day; the cell resolves them per theme.
+  /// A null entry is a job with no colour-resolvable assignee.
+  final List<Color?> Function(DateTime day) dotColorsFor;
   final int Function(DateTime day) countFor;
 
   static double _circleSize(BuildContext context) =>
@@ -168,7 +169,9 @@ class CalendarDayCell extends StatelessWidget {
   final DateTime selectedDay;
   final DateTime today;
   final double circleSize;
-  final List<Color> dotColors;
+
+  /// One entry per job that day; null paints the unassigned neutral.
+  final List<Color?> dotColors;
   final int count;
   final ValueChanged<DateTime> onTap;
 
@@ -242,7 +245,11 @@ class CalendarDayCell extends StatelessWidget {
                           height: _kDotSize,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: crewColorOf(theme, stored.toARGB32()),
+                            // Same neutral the card's crew bar uses for a job
+                            // with nobody on it.
+                            color: stored == null
+                                ? theme.palette.textFaint
+                                : crewColorOf(theme, stored.toARGB32()),
                           ),
                         ),
                     ],

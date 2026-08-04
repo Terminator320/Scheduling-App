@@ -166,25 +166,34 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     required EmployeeRecord employee,
   }) async {
     final normalizedEmail = employee.email.trim().toLowerCase();
+    final ref = _users.doc(docId);
+    final stored = (await ref.get()).data();
+    final storedEmail = stored?['email'] as String? ?? '';
+    final storedUid = stored?['uid'] as String? ?? '';
 
-    // Check uniqueness up front. This isn't atomic, but the server-side
-    // invite flow is the real authority here.
-    final existing = await _users
-        .where('email', isEqualTo: normalizedEmail)
-        .get();
+    // What we believe the doc holds going into the commit below.
+    var emailAtCheck = storedEmail;
 
-    final emailUsedByAnotherEmployee = existing.docs.any(
-      (doc) => doc.id != docId,
-    );
-
-    if (emailUsedByAnotherEmployee) {
-      throw const EmployeesFailureEmailAlreadyExists();
+    if (normalizedEmail != storedEmail) {
+      if (storedUid.isEmpty) {
+        // No Auth account behind this doc, so the email is ours to write.
+        // Uniqueness isn't atomic here; the transaction below re-checks.
+        final existing = await _users
+            .where('email', isEqualTo: normalizedEmail)
+            .get();
+        if (existing.docs.any((doc) => doc.id != docId)) {
+          throw const EmployeesFailureEmailAlreadyExists();
+        }
+      } else {
+        // The sign-in identity moves through the callable, which owns BOTH
+        // stores. It runs FIRST and the write below merely re-states what it
+        // committed — the reverse order is the bug this closes: a
+        // Firestore-only change leaves the person signing in at the old
+        // address while every admin surface shows the new one.
+        await _changeAuthEmail(docId: docId, email: normalizedEmail);
+        emailAtCheck = normalizedEmail;
+      }
     }
-
-    final targetInQuery = existing.docs.where((doc) => doc.id == docId);
-    final emailAtCheck = targetInQuery.isNotEmpty
-        ? normalizedEmail
-        : (await _users.doc(docId).get()).data()?['email'] as String?;
 
     // Field-scoped allowlist. `uid` is rejected by firestore.rules and `status`
     // belongs to deactivate/reactivate — neither may appear here regardless of
@@ -222,7 +231,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     // This is the best client-side hardening we can do: commit inside a
     // transaction that re-reads the doc and aborts if the email changed
     // since the uniqueness check — say, a concurrent admin edit.
-    final ref = _users.doc(docId);
     await ref.firestore.runTransaction<void>((txn) async {
       final snapshot = await txn.get(ref);
       final currentEmail = snapshot.data()?['email'] as String?;
@@ -233,6 +241,35 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       }
       txn.update(ref, updateData);
     });
+  }
+
+  /// Moves the sign-in email in Firebase Auth AND on the users doc.
+  ///
+  /// Private on purpose: `updateEmployee` is the only caller, so "an email edit
+  /// always moves both stores" is a property of the save path rather than a
+  /// second method a call site could forget to pair with it.
+  Future<void> _changeAuthEmail({
+    required String docId,
+    required String email,
+  }) async {
+    try {
+      await _functions
+          .httpsCallable(
+            'changeEmployeeEmail',
+            options: HttpsCallableOptions(timeout: _callableTimeout),
+          )
+          .call<dynamic>({'docId': docId, 'email': email});
+    } on FirebaseFunctionsException catch (e) {
+      if (e.message == 'email-exists') {
+        throw const EmployeesFailureEmailAlreadyExists();
+      }
+      // A concurrent admin edit landed between our read and the commit. Same
+      // "try again" the local transaction guard raises for the same race.
+      if (e.message == 'email-changed') {
+        throw const EmployeesFailureUnknown();
+      }
+      rethrow;
+    }
   }
 
   /// `users/{docId}/private/emergency` — one doc, fixed id.
