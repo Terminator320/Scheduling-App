@@ -20,20 +20,37 @@ const _blue = Color(0xFF005CC8);
 const _green = Color(0xFF0E9B6E);
 const _theo = [AppointmentCrew(name: 'Theo Bell', color: _blue)];
 
+/// An ordinary, NOT-overdue visit: tomorrow, 10:30–12:00.
+///
+/// Relative to today on purpose. The card renders `displayStatus`, which
+/// derives `overdue` from the wall clock, so a fixture pinned to a calendar
+/// literal silently flips to overdue the moment that date passes — this one
+/// was `DateTime(2026, 8, 4, 12)` and started failing the warning-glyph test
+/// at noon on 2026-08-04. `appointment_record_test.dart` already expresses
+/// every clock-dependent fixture this way; match it.
+///
+/// A fixed time-of-day on a future DATE, not `now + offset`: an offset from
+/// now straddles midnight when the suite runs late, which would turn this
+/// into an overnight window and change how the card labels it. Calendar
+/// arithmetic (`day + 1`), never `add(Duration(days: 1))` — the project's
+/// DST rule.
 AppointmentRecord _appt({
   String status = 'pending',
   String clientName = 'Marchetti Residence',
   String title = 'Water heater swap',
-}) => AppointmentRecord(
-  id: 'a1',
-  title: title,
-  startTime: DateTime(2026, 8, 4, 10, 30),
-  endTime: DateTime(2026, 8, 4, 12),
-  clientName: clientName,
-  employeeIds: const ['e1'],
-  employeeNames: const ['Theo Bell'],
-  status: status,
-);
+}) {
+  final today = DateTime.now();
+  return AppointmentRecord(
+    id: 'a1',
+    title: title,
+    startTime: DateTime(today.year, today.month, today.day + 1, 10, 30),
+    endTime: DateTime(today.year, today.month, today.day + 1, 12),
+    clientName: clientName,
+    employeeIds: const ['e1'],
+    employeeNames: const ['Theo Bell'],
+    status: status,
+  );
+}
 
 AppointmentRecord _multiDay({
   required DateTime start,
