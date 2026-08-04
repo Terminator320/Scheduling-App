@@ -339,7 +339,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       context,
       ref,
       intro: context.l10n.error_introDeleteAccount,
-      tag: 'ACCT-DEL',
     )) {
       return;
     }
@@ -392,7 +391,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         composeErrorNotice(
           context,
           intro: context.l10n.error_introDeleteAccount,
-          tag: 'ACCT-DEL',
           error: e,
         ),
       );

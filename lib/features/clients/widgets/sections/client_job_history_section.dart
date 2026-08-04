@@ -51,7 +51,6 @@ class ClientJobHistorySection extends ConsumerWidget {
             text: composeErrorNotice(
               context,
               intro: context.l10n.error_introLoadHistory,
-              tag: 'CLI-JOBS',
               error: e,
             ),
           ),

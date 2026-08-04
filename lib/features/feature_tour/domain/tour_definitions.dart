@@ -77,37 +77,34 @@ List<TourStepId> _destinationSteps(
 };
 
 /// The create-flow walkthroughs. Every one of these sheets is reachable only
-/// from an admin surface, so the employee catalogs are empty.
-List<TourStepId> _formSteps(TourForm form, {required bool isAdmin}) =>
-    switch (form) {
-      TourForm.addAppointment => [
-        if (isAdmin) ...[
-          TourStepId.apptTemplates,
-          TourStepId.apptClient,
-          TourStepId.apptCrew,
-          TourStepId.apptSchedule,
-          TourStepId.apptDetails,
-          TourStepId.apptSave,
-        ],
-      ],
-      TourForm.addClient => [
-        if (isAdmin) ...[
-          TourStepId.clientWho,
-          TourStepId.clientReach,
-          TourStepId.clientSite,
-          TourStepId.clientSave,
-        ],
-      ],
-      TourForm.invitePerson => [
-        if (isAdmin) ...[
-          TourStepId.personDetails,
-          // Before personAccess on purpose: the job title grants nothing and
-          // the access toggle is the real switch, so the tour has to separate
-          // them in that order.
-          TourStepId.personJobTitle,
-          TourStepId.personColour,
-          TourStepId.personAccess,
-          TourStepId.personCreate,
-        ],
-      ],
-    };
+/// from an admin surface, so ALL the employee catalogs are empty — hence the
+/// one guard here rather than a copy of it wrapping each list.
+List<TourStepId> _formSteps(TourForm form, {required bool isAdmin}) {
+  if (!isAdmin) return const [];
+  return switch (form) {
+    TourForm.addAppointment => [
+      TourStepId.apptTemplates,
+      TourStepId.apptClient,
+      TourStepId.apptCrew,
+      TourStepId.apptSchedule,
+      TourStepId.apptDetails,
+      TourStepId.apptSave,
+    ],
+    TourForm.addClient => [
+      TourStepId.clientWho,
+      TourStepId.clientReach,
+      TourStepId.clientSite,
+      TourStepId.clientSave,
+    ],
+    TourForm.invitePerson => [
+      TourStepId.personDetails,
+      // Before personAccess on purpose: the job title grants nothing and the
+      // access toggle is the real switch, so the tour has to separate them in
+      // that order.
+      TourStepId.personJobTitle,
+      TourStepId.personColour,
+      TourStepId.personAccess,
+      TourStepId.personCreate,
+    ],
+  };
+}

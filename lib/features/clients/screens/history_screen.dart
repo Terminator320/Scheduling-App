@@ -33,6 +33,9 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
 
+  /// Whether the list's first page has settled — gates the feature tour.
+  bool _listSettled = false;
+
   late final _tour = TourSteps(
     const DestinationTour(PushedDestination.history),
     isAdmin: widget.isAdmin,
@@ -42,6 +45,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onListSettled() {
+    if (_listSettled) return;
+    setState(() => _listSettled = true);
   }
 
   // A pushed route now, so back means back. The Calendar pill covers
@@ -59,6 +67,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
       scope: _tour.scope,
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
+      // The filter bar only renders once a page has supplied years/employees,
+      // and the first row doesn't exist before then. A tour started against
+      // the skeleton finds only the search bar, drops the other two steps and
+      // marks the WHOLE scope seen.
+      ready: _listSettled,
       child: Scaffold(
         appBar: AppTopBar(
           title: context.l10n.common_history,
@@ -87,13 +100,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
             listenable: _searchController,
             builder: (context, _) => AppointmentHistoryView(
               searchQuery: _searchController.text,
-              filterTourWrap: _tour.has(TourStepId.historyFilter)
-                  ? (child) =>
-                        _tour.step(TourStepId.historyFilter, child: child)
-                  : null,
-              firstRowTourWrap: _tour.has(TourStepId.historyRow)
-                  ? (child) => _tour.step(TourStepId.historyRow, child: child)
-                  : null,
+              filterTourWrap: (child) =>
+                  _tour.stepIf(TourStepId.historyFilter, child),
+              firstRowTourWrap: (child) =>
+                  _tour.stepIf(TourStepId.historyRow, child),
+              onFirstPageSettled: _onListSettled,
             ),
           ),
         ),

@@ -244,7 +244,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           composeErrorNotice(
             context,
             intro: context.l10n.error_introLoadAppointments,
-            tag: 'APPT-LOAD',
             error: next.error ?? Exception('unknown'),
           ),
         );

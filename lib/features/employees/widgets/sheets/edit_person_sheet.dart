@@ -264,7 +264,6 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
       context,
       ref,
       intro: context.l10n.error_introSaveEmployee,
-      tag: 'EMP-SAVE',
     )) {
       return;
     }
@@ -318,7 +317,6 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
               composeErrorNotice(
                 context,
                 intro: context.l10n.error_introSaveEmployee,
-                tag: 'EMP-SAVE',
                 error: error,
               ),
             );
@@ -366,7 +364,6 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
               composeErrorNotice(
                 context,
                 intro: l10n.error_introChangeEmployeeStatus,
-                tag: 'EMP-STATUS',
                 error: error,
               ),
             );

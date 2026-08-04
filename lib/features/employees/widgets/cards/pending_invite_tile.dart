@@ -72,7 +72,6 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
       context,
       ref,
       intro: context.l10n.error_introSaveEmployee,
-      tag: 'EMP-CREATE',
     )) {
       return;
     }
@@ -101,7 +100,6 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
           composeErrorNotice(
             context,
             intro: l10n.error_introSaveEmployee,
-            tag: 'EMP-CREATE',
             error: error,
           ),
         );
@@ -119,7 +117,6 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
       context,
       ref,
       intro: context.l10n.error_introRemoveAccount,
-      tag: 'EMP-DELETE',
     )) {
       return;
     }
@@ -149,7 +146,6 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
               : composeErrorNotice(
                   context,
                   intro: l10n.error_introRemoveAccount,
-                  tag: 'EMP-DELETE',
                   error: error,
                 ),
         );

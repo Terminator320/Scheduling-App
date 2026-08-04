@@ -74,6 +74,31 @@ function toMillis(value) {
 }
 
 /**
+ * True when an appointment still has work left at `nowMs` — NOT "does it start
+ * in the future".
+ *
+ * Under the daily-window model a run can be days past its `startTime` and
+ * still have a week of work left, so every sweep asking "is this job still
+ * live?" must test the END. Gating on the start meant cancelling or deleting a
+ * job mid-run pushed NOTHING to the crew (who turned up the next morning), and
+ * a client's corrected suite number never reached a tech already on site.
+ * Falls back to the start when `endTime` is missing.
+ *
+ * This is the ONE owner: it was a per-module closure in `notification_policy`
+ * and `client_propagation`, which is the drift shape that bit `displayStatusAt`
+ * and `_who` — a future carve-out patched into one copy and missed in the
+ * other. Route any new "is this job still live?" test through it.
+ * @param {*} record Appointment data; null/undefined reads as no work left.
+ * @param {number} nowMs Reference instant, ms since epoch.
+ * @return {boolean}
+ */
+function hasWorkLeft(record, nowMs) {
+  if (!record) return false;
+  const ms = toMillis(record.endTime) ?? toMillis(record.startTime);
+  return ms != null && ms >= nowMs;
+}
+
+/**
  * Formats an instant in the business time zone, or "" when it isn't one.
  * @param {string} locale 'en' | 'fr'.
  * @param {*} value Timestamp/Date/number.
@@ -170,6 +195,7 @@ module.exports = {
   MAX_APPOINTMENT_SPAN_MS,
   businessMinutesOfDay,
   toMillis,
+  hasWorkLeft,
   formatBusinessTime,
   formatTimeOfDay,
   businessYmd,

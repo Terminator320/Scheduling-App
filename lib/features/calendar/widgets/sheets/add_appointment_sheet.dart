@@ -244,7 +244,6 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
               composeErrorNotice(
                 context,
                 intro: context.l10n.error_introCreateAppointment,
-                tag: 'APPT-CREATE',
                 error: error,
               ),
             );

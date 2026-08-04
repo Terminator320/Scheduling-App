@@ -183,7 +183,6 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
               composeErrorNotice(
                 context,
                 intro: context.l10n.error_introAddClient,
-                tag: 'CLI-ADD',
                 error: error,
               ),
             );

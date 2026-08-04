@@ -31,7 +31,6 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       context,
       ref,
       intro: context.l10n.error_introArchiveClient,
-      tag: 'CLI-ARCH',
     )) {
       return;
     }
@@ -58,7 +57,6 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
           composeErrorNotice(
             context,
             intro: context.l10n.error_introArchiveClient,
-            tag: 'CLI-ARCH',
             error: error,
           ),
         );
@@ -79,7 +77,6 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       context,
       ref,
       intro: context.l10n.error_introDeleteClient,
-      tag: 'CLI-DEL',
     )) {
       return;
     }
@@ -107,7 +104,6 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
           composeErrorNotice(
             context,
             intro: context.l10n.error_introDeleteClient,
-            tag: 'CLI-DEL',
             error: error,
           ),
         );

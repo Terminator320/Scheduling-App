@@ -90,7 +90,6 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
           composeErrorNotice(
             context,
             intro: context.l10n.error_introLoadAppointments,
-            tag: 'APPT-LOAD',
             error: next.error ?? Exception('unknown'),
           ),
         );
