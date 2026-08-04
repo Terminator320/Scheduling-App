@@ -376,6 +376,91 @@ void main() {
     });
   });
 
+  group('archiving', () {
+    test('setClientArchived writes the flag with updatedAt', () async {
+      await repo().setClientArchived('c1', archived: true);
+
+      verify(() => collection.doc('c1')).called(1);
+      final captured =
+          (verify(() => docRef.update(captureAny())).captured.single as Map)
+              .cast<String, dynamic>();
+      expect(captured['archived'], isTrue);
+      expect(captured.containsKey('updatedAt'), isTrue);
+    });
+
+    test(
+      'setClientArchived merges into the window, keeping jobCount',
+      () async {
+        final docs = [
+          doc('c1', {'name': 'Acme', 'archived': false, 'jobCount': 7}),
+        ];
+        when(() => snapshot.docs).thenReturn(docs);
+
+        final r = repo();
+        expect((await r.searchClients('Acme')).single.jobCount, 7);
+
+        await r.setClientArchived('c1', archived: true);
+
+        // Merged, never substituted: a plain replace drops the function-owned
+        // jobCount and blanks the count on every search result until the TTL.
+        final after = (await r.searchClients('Acme')).single;
+        expect(after.archived, isTrue);
+        expect(after.jobCount, 7);
+        verify(() => query.get()).called(1);
+      },
+    );
+
+    test('fetchArchivedClients returns only archived, name-sorted', () async {
+      final docs = [
+        doc('c1', {'name': 'Zeta', 'archived': true}),
+        doc('c2', {'name': 'Acme', 'archived': true}),
+        doc('c3', {'name': 'Bell', 'archived': false}),
+        doc('c4', {'name': 'Legacy'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final result = await repo().fetchArchivedClients();
+
+      expect(result.map((c) => c.name), ['Acme', 'Zeta']);
+    });
+
+    test('fetchArchivedClients shares the search scan window', () async {
+      final docs = [
+        doc('c1', {'name': 'Acme', 'archived': true}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final r = repo();
+      await r.fetchArchivedClients();
+      await r.searchClients('Acme');
+
+      verify(() => query.get()).called(1);
+    });
+
+    test('fetchClientsByType excludes archived clients', () async {
+      final docs = [
+        doc('c1', {'name': 'Acme', 'type': 'commercial', 'archived': false}),
+        doc('c2', {'name': 'Bell', 'type': 'commercial', 'archived': true}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final result = await repo().fetchClientsByType(ClientType.commercial);
+
+      expect(result.map((c) => c.name), ['Acme']);
+    });
+
+    test('searchClients still returns archived clients', () async {
+      final docs = [
+        doc('c1', {'name': 'Acme', 'archived': true}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      // Archived clients stay searchable and bookable by design — only the
+      // paginated list and the type filter hide them.
+      expect((await repo().searchClients('Acme')).single.id, 'c1');
+    });
+  });
+
   group('deleteClient (testing-only)', () {
     test('deletes the doc and drops it from the cached window', () async {
       final docs = [
