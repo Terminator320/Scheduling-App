@@ -47,9 +47,17 @@ only while `invited` — doc first, Auth second, so a partial run converges).
 Pure helpers `performCreateAccount`, `performDeleteAccount` and
 `buildActivationPatch` are exported for unit tests; the last one owns the
 never-empty-`name` contract that keeps a person inside `watchAllUsers`'
-`orderBy('name')`. **`invites.js` and `signup_code_utils.js` are DELETED**
-along with `createEmployeeInvite`, `redeemSignupCode`, `revokeInvite` and
-`previewInvite` — the codebase no longer has an unauthenticated callable),
+`orderBy('name')`. `revokeInvite` and `previewInvite` are **deleted**.
+**`invites.js`, `signup_code_utils.js`, `createEmployeeInvite` and
+`redeemSignupCode` survive ONLY as a backward-compat shim** (`#compat-1.37.1`)
+for the 1.37.1+64 build still on the App Store, which calls the latter two from
+`firebase_employees_repository.dart` — deleting them while that build is live
+breaks every invite in flight and the admin's "Invite employee" button. No
+current-build path calls them. Retire them together with the `/signupCodes`
+rules block, its `firestore.indexes.json` TTL entry, the fourth `/users` read
+clause and the `/users` `allow delete` grant once no 1.37.1 build remains in
+the field — grep `#compat-1.37.1`. Until then the codebase still has one
+unauthenticated callable (`redeemSignupCode`)),
 `maintenance.js`
 (image validation + history purge; the pure JPEG/PNG magic-byte check lives in
 `image_magic.js`), `notifications.js` (FCM push triggers, backed by

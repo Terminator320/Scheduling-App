@@ -357,10 +357,12 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   admin, `status == 'active'`, or `uid == request.auth.uid` (own doc). New
   queries on `users` must satisfy one clause via their WHERE constraints or
   they'll be rejected. A fourth
-  `email_verified && status == 'invited' && email == token.email` clause existed
+  `email_verified && status == 'invited' && email == token.email` clause exists
   only because the retired code flow left `uid` empty until redemption; P4c
   mints the Auth account up front, so an invited person now reads their own doc
-  through clause 3 and the fourth clause was deleted as uncallable. An ordinary
+  through clause 3 and **no current-build path calls clause 4** — it is retained
+  purely as the `#compat-1.37.1` shim for the build still on the App Store, and
+  goes when that does. An ordinary
   employee still cannot see a pending account: clause 2 requires `active`.
 - **Employee accounts: the admin invites, the employee sets up** (P4c,
   2026-08-02 — this REPLACED the one-time signup-code flow entirely). The
@@ -437,10 +439,15 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   the account when you are handing the credentials over, not weeks ahead). That
   mitigation is operational, not technical, and belongs in the onboarding
   instructions. `create_account_screen.dart`, both `accept_invite_*` screens,
-  `CodeEntryBoxes`, `signup_code_dialog`, `InvitePreview`, the `signupCodes`
-  collection and the `createEmployeeInvite`/`redeemSignupCode`/`revokeInvite`/
-  `previewInvite` callables are all **deleted** — there is nothing left to
-  "accept", which is why sign-in's bottom prompt went with them. Design:
+  `CodeEntryBoxes`, `signup_code_dialog`, `InvitePreview` and the
+  `revokeInvite`/`previewInvite` callables are all **deleted** — there is
+  nothing left to "accept" in THIS build, which is why sign-in's bottom prompt
+  went with them. **The Dart side is gone; the backend side is not.** The
+  `signupCodes` collection and the `createEmployeeInvite`/`redeemSignupCode`
+  callables are still deployed as the `#compat-1.37.1` shim, because the build
+  on the App Store still calls them — see `docs/DEPLOYMENT.md`. Nothing in this
+  build does; don't wire anything new to them, and drop the whole shim
+  (`grep -rn "#compat-1.37.1"`) once 1.37.1 is off the field. Design:
   `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.
 - **An employee's email is READ-ONLY once their doc carries a `uid`**
   (`edit_person_sheet.dart`, `readOnly: widget.employee.uid.isNotEmpty`).

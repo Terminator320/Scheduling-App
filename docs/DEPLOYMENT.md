@@ -211,4 +211,24 @@ what production is running.
 |---|---|---|---|---|
 | 2026-07-18 | — | functions, rules | 21 | `placesReverseGeocode`, travel-aware reminder rebuild |
 | 2026-08-01 | `d916b16` | functions, rules | 22 | P3 clients; added `recountClientJobs` |
-| _(pending)_ | — | functions, rules | 23 | P4 + P4b + **P4c**: deletes `createEmployeeInvite`, `redeemSignupCode`, `revokeInvite`, `previewInvite` and adds `createEmployeeAccount`, `completeEmployeeSetup`, `deleteEmployeeAccount`; drops the `signupCodes` rules block and `codeExpiresAt`; narrows `/users` read to three clauses; `private/emergency` rule; `isValidAppointmentData`. **Ordering-sensitive in BOTH directions — ship the app build and the backend together.** The CLI will prompt to confirm the four deletions; that is expected. |
+| _(pending)_ | — | functions, rules | 25 | P4 + P4b + **P4c**: adds `createEmployeeAccount`, `completeEmployeeSetup`, `deleteEmployeeAccount`; `private/emergency` rule; `isValidAppointmentData`. **Deletes nothing** — `revokeInvite`/`previewInvite` were never deployed (prod had 22, not the 24 an earlier draft of this row assumed), and `createEmployeeInvite`/`redeemSignupCode` are **kept as the `#compat-1.37.1` shim** for the 1.37.1+64 build still on the App Store. So there is no deletion prompt, and 22 → 25. **Omit `firestore:indexes`** — the file is back in sync with prod and nothing new is needed. See the shim note below. |
+
+### The `#compat-1.37.1` shim
+
+1.37.1+64 (`2b1ace5`, head of `origin/notification`) is the build on the App
+Store. Verified compatible with this backend without changes: all 8 callables it
+uses have byte-identical `assertPayloadShape` allowlists; the new
+`isValidAppointmentData` caps equal its `TextLimits` exactly and every field it
+writes is a non-nullable `@Default('')` string (so nothing trips the
+`null is string` rejection); `isValidUserData` passes its `updateEmployee` field
+map; and the push `data` keys are unchanged.
+
+Two things would have broken, so they are shimmed rather than deleted:
+
+| What | Why 1.37.1 needs it |
+|---|---|
+| `createEmployeeInvite`, `redeemSignupCode` (+ `invites.js`, `signup_code_utils.js`, the `/signupCodes` rules block and its TTL entry) | Called from `firebase_employees_repository.dart:82` and `:109`. Deleting them kills the invite flow and strands anyone mid-invite. |
+| `allow delete` on `/users`, and the fourth `/users` read clause (`email_verified` + `invited` + email match) | "Delete employee" is a live button (`employee_details_view.dart:45`); the read clause is how the accept screen finds its own doc while `uid` is still empty. |
+
+Retire all of it in one sweep — `grep -rn "#compat-1.37.1"` — once no 1.37.1
+build remains in the field. Nothing in the current build calls any of it.
