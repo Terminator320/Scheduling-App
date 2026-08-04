@@ -47,6 +47,10 @@ abstract class ClientRecord with _$ClientRecord {
     @Default('') String email,
     @Default(<ClientContact>[]) List<ClientContact> contacts,
     @Default(false) bool noFixedAddress,
+    // Hidden from the paginated list, still searchable and still bookable. The
+    // list filters on it SERVER-side, and Firestore excludes docs missing a
+    // filtered field — so every client doc has to carry it, always.
+    @Default(false) bool archived,
     @Default(ClientType.unset) ClientType type,
     @Default('') String accessNotes,
     @Default('') String onSiteManager,
@@ -101,6 +105,7 @@ abstract class ClientRecord with _$ClientRecord {
           .map((c) => ClientContact.fromMap(Map<String, dynamic>.from(c)))
           .toList(),
       noFixedAddress: (data['noFixedAddress'] as bool?) ?? false,
+      archived: (data['archived'] as bool?) ?? false,
       type: ClientType.fromRaw(data['type']?.toString()),
       accessNotes: (data['accessNotes'] ?? '').toString(),
       onSiteManager: (data['onSiteManager'] ?? '').toString(),
@@ -131,6 +136,7 @@ abstract class ClientRecord with _$ClientRecord {
     'email': email.trim(),
     'contacts': contacts.map((c) => c.toMap()).toList(),
     'noFixedAddress': noFixedAddress,
+    'archived': archived,
     'type': type.raw,
     'accessNotes': accessNotes.trim(),
     'onSiteManager': onSiteManager.trim(),

@@ -165,6 +165,33 @@ void main() {
       expect(restored, equals(original));
     });
 
+    group('archived', () {
+      test('defaults to false when the field is absent', () {
+        expect(ClientRecord.fromMap('c1', {'name': 'Acme'}).archived, isFalse);
+      });
+
+      test('round-trips through fromMap and toMap', () {
+        final record = ClientRecord.fromMap('c1', {
+          'name': 'Acme',
+          'archived': true,
+        });
+        expect(record.archived, isTrue);
+        expect(record.toMap()['archived'], isTrue);
+      });
+
+      test('toMap emits it while still omitting function-owned fields', () {
+        final map = ClientRecord.fromMap('c1', {
+          'name': 'Acme',
+          'jobCount': 7,
+          'waveCustomerId': 'w1',
+        }).toMap();
+
+        expect(map.containsKey('archived'), isTrue);
+        expect(map.containsKey('jobCount'), isFalse);
+        expect(map.containsKey('waveCustomerId'), isFalse);
+      });
+    });
+
     group('createdAt', () {
       test('fromMap parses a DateTime createdAt', () {
         final record = ClientRecord.fromMap('c1', {
