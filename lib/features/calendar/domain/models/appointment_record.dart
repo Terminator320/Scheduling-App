@@ -132,9 +132,13 @@ class AppointmentDateRange {
   factory AppointmentDateRange.visibleMonth(DateTime focusedDay) {
     final firstOfMonth = DateTime(focusedDay.year, focusedDay.month);
     final firstOfNextMonth = DateTime(focusedDay.year, focusedDay.month + 1);
+    // Calendar arithmetic, for the same reason `forDay` uses it: a Duration
+    // lands an hour off real midnight on the two DST-shift days, which clipped
+    // a day off the overscan (Oct 2026 ended at Nov 14 23:00, so Nov 15 fell
+    // outside) and left `fetchStart` carrying the drift.
     return AppointmentDateRange(
-      start: firstOfMonth.subtract(_gridOverscan),
-      end: firstOfNextMonth.add(_gridOverscan),
+      start: addCalendarDays(firstOfMonth, -_gridOverscanDays),
+      end: addCalendarDays(firstOfNextMonth, _gridOverscanDays),
     );
   }
 
@@ -153,6 +157,28 @@ class AppointmentDateRange {
       start: start,
       end: DateTime(start.year, start.month, start.day + 1),
     );
+  }
+
+  /// A stable 7-day fetch window containing [day].
+  ///
+  /// For a surface that pages one day at a time but re-scopes in Dart anyway
+  /// (the day route, via `sliceFor`). `forDay` is the wrong window there:
+  /// `fetchStart` widens ONE day into a 15-day query, so arrowing across a
+  /// week opened seven overlapping 15-day listeners — each kept warm by the
+  /// eviction grace — instead of one 21-day listener covering the lot.
+  ///
+  /// Bucketed on a fixed epoch boundary rather than the locale's week start,
+  /// because this is a FETCH window, not a display week: a locale-dependent
+  /// bucket would give two surfaces looking at the same day unequal ranges,
+  /// and `appointmentsInRangeProvider` is keyed by value, so that forks a
+  /// second Firestore query for the same documents.
+  factory AppointmentDateRange.forWeekBucketOf(DateTime day) {
+    final d = day.dateOnly;
+    // UTC-normalized, so the two DST-shift days can't move a day into the
+    // neighbouring bucket and fork a listener.
+    final offset = calendarDaysBetween(DateTime(1970), d) % 7;
+    final start = addCalendarDays(d, -offset);
+    return AppointmentDateRange(start: start, end: addCalendarDays(start, 7));
   }
 
   /// The window the calendar screen actually needs: the visible month's grid
@@ -191,7 +217,7 @@ class AppointmentDateRange {
   /// window: it is a superset of every grid shape, and narrowing it buys one
   /// query's worth of documents at the cost of dotless edge cells if the grid
   /// ever grows a row back.
-  static const Duration _gridOverscan = Duration(days: 14);
+  static const int _gridOverscanDays = 14;
 
   final DateTime start;
   final DateTime end;

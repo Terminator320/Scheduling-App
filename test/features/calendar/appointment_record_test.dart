@@ -196,6 +196,42 @@ void main() {
     });
   });
 
+  group('AppointmentDateRange.forWeekBucketOf', () {
+    test('every day of a bucket yields the SAME range', () {
+      // The whole point: the day route re-scopes in Dart, so seven ◀/▶ taps
+      // must share one listener instead of minting seven 15-day queries.
+      final first = AppointmentDateRange.forWeekBucketOf(DateTime(2026, 8, 4));
+      for (var i = 0; i < 7; i++) {
+        final day = first.start.add(Duration(days: i));
+        expect(AppointmentDateRange.forWeekBucketOf(day), first);
+      }
+    });
+
+    test('spans exactly seven days', () {
+      final range = AppointmentDateRange.forWeekBucketOf(DateTime(2026, 8, 4));
+      expect(range.end.difference(range.start).inDays, 7);
+    });
+
+    test('an adjacent bucket is a different range', () {
+      final a = AppointmentDateRange.forWeekBucketOf(DateTime(2026, 8, 4));
+      final b = AppointmentDateRange.forWeekBucketOf(
+        a.end.add(const Duration(days: 1)),
+      );
+      expect(a, isNot(b));
+      expect(b.start, a.end);
+    });
+
+    test('buckets land on midnight across a DST boundary', () {
+      // Drift here would both mis-bucket a day and fork a second listener for
+      // the same documents, since the provider is keyed by range VALUE.
+      for (final day in [DateTime(2026, 3, 8), DateTime(2026, 11)]) {
+        final range = AppointmentDateRange.forWeekBucketOf(day);
+        expect(range.start.hour, 0);
+        expect(range.end.hour, 0);
+      }
+    });
+  });
+
   group('AppointmentImage', () {
     test('value equality works', () {
       const a = AppointmentImage(url: 'u', storagePath: 'p');

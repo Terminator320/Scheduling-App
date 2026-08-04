@@ -1,0 +1,372 @@
+"use strict";
+
+/**
+ * Ordering tests for the two employee-account callables.
+ *
+ * Every PURE piece here already has a suite (`performCreateAccount`,
+ * `provisionAuthAccount`, `performChangeEmail`, `buildActivationPatch`). What
+ * had none was the sequencing BETWEEN them — which is the entire security
+ * story, and where both known bugs lived:
+ *
+ *   - the password reset must run only AFTER the doc transaction has claimed
+ *     the person as still-`invited`;
+ *   - the create rollback must delete the Auth account only when WE minted it;
+ *   - the email change must write Auth FIRST and revert it if the doc fails,
+ *     logging uid+docId and never the addresses (PII).
+ *
+ * A refactor that drops any of those passes the rest of the suite.
+ */
+
+jest.mock("firebase-admin/firestore");
+jest.mock("firebase-admin/auth");
+jest.mock("firebase-admin/messaging");
+jest.mock("firebase-functions/logger", () => ({
+  info: jest.fn(),
+  warn: jest.fn(),
+  debug: jest.fn(),
+  error: jest.fn(),
+}));
+jest.mock("../security", () => {
+  const actual = jest.requireActual("../security");
+  return {
+    ...actual,
+    assertAdmin: jest.fn().mockResolvedValue(undefined),
+    enforceDurableRateLimit: jest.fn().mockResolvedValue({
+      refund: jest.fn().mockResolvedValue(undefined),
+    }),
+  };
+});
+jest.mock("../notification_utils", () => ({
+  sendToEmployee: jest.fn().mockResolvedValue(0),
+  TIMED_RECIPIENT_ROLES: ["employee", "admin"],
+}));
+
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getAuth} = require("firebase-admin/auth");
+const {getMessaging} = require("firebase-admin/messaging");
+const logger = require("firebase-functions/logger");
+const {
+  createEmployeeAccount,
+  changeEmployeeEmail,
+} = require("../employee_accounts");
+
+const ADMIN = {uid: "admin-uid"};
+
+const VALID_CREATE = {
+  name: "Ada Lovelace",
+  firstName: "Ada",
+  lastName: "Lovelace",
+  email: "Ada@Example.com",
+  phone: "(514) 555-1234",
+  colorValue: "4280391411",
+  jobTitle: "technician",
+  isAdmin: false,
+};
+
+/**
+ * Firestore double. `docs` is the users collection keyed by doc id.
+ * Records an ordered trace of the operations the callables perform.
+ * @param {!Object} docs Map of docId -> doc data.
+ * @param {!Array<string>} trace Shared ordered call log.
+ * @return {!Object}
+ */
+function makeDb(docs, trace) {
+  const snapOf = (id) => ({
+    id,
+    exists: Object.prototype.hasOwnProperty.call(docs, id),
+    data: () => docs[id],
+    ref: {id},
+  });
+  const queryFor = (field, value) => {
+    const matches = Object.keys(docs)
+        .filter((id) => (docs[id] || {})[field] === value)
+        .map(snapOf);
+    return {empty: matches.length === 0, docs: matches};
+  };
+
+  const makeQuery = (field, value) => ({
+    limit: () => makeQuery(field, value),
+    get: async () => queryFor(field, value),
+    __field: field,
+    __value: value,
+  });
+
+  const db = {
+    collection: () => ({
+      where: (field, _op, value) => makeQuery(field, value),
+      doc: (id) => ({
+        id: id || "generated-doc-id",
+        get: async () => snapOf(id),
+      }),
+    }),
+    runTransaction: async (fn) => {
+      const tx = {
+        get: async (target) => (target && target.__field ?
+          queryFor(target.__field, target.__value) :
+          snapOf(target.id)),
+        update: (ref, patch) => {
+          trace.push("db.update");
+          docs[ref.id] = {...(docs[ref.id] || {}), ...patch};
+        },
+        set: (ref, value) => {
+          trace.push("db.set");
+          docs[ref.id] = value;
+        },
+      };
+      const out = await fn(tx);
+      trace.push("db.commit");
+      return out;
+    },
+  };
+  return db;
+}
+
+/**
+ * Auth double recording every call into the shared trace.
+ * @param {!Array<string>} trace Shared ordered call log.
+ * @param {!Object} opts Behaviour overrides.
+ * @return {!Object}
+ */
+function makeAuth(trace, opts = {}) {
+  return {
+    getUserByEmail: jest.fn(async (email) => {
+      trace.push("auth.getUserByEmail");
+      if (opts.existingUser) return opts.existingUser;
+      const err = new Error("no user");
+      err.code = "auth/user-not-found";
+      throw err;
+    }),
+    createUser: jest.fn(async () => {
+      trace.push("auth.createUser");
+      if (opts.createUserError) throw opts.createUserError;
+      return {uid: "new-uid"};
+    }),
+    updateUser: jest.fn(async () => {
+      trace.push("auth.updateUser");
+      if (opts.updateUserError) throw opts.updateUserError;
+      return {};
+    }),
+    deleteUser: jest.fn(async () => {
+      trace.push("auth.deleteUser");
+      if (opts.deleteUserError) throw opts.deleteUserError;
+    }),
+  };
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  FieldValue.serverTimestamp = jest.fn(() => "TS");
+  getMessaging.mockReturnValue({});
+});
+
+describe("createEmployeeAccount ordering", () => {
+  test("mints a brand-new account and never resets its password", async () => {
+    const trace = [];
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb({}, trace));
+    getAuth.mockReturnValue(auth);
+
+    const out = await createEmployeeAccount.run({
+      data: VALID_CREATE,
+      auth: ADMIN,
+    });
+
+    expect(out.email).toBe("ada@example.com");
+    expect(trace).toEqual([
+      "auth.getUserByEmail", // pre-flight: is this email taken?
+      "auth.createUser",
+      "db.set",
+      "db.commit",
+    ]);
+    // reused === false, so the reset path must not run.
+    expect(auth.updateUser).not.toHaveBeenCalled();
+  });
+
+  test("resets a pending account's password only AFTER the doc transaction",
+      async () => {
+        const trace = [];
+        const auth = makeAuth(trace, {existingUser: {uid: "existing-uid"}});
+        getFirestore.mockReturnValue(makeDb({
+          d1: {
+            email: "ada@example.com",
+            uid: "existing-uid",
+            status: "invited",
+          },
+        }, trace));
+        getAuth.mockReturnValue(auth);
+
+        await createEmployeeAccount.run({data: VALID_CREATE, auth: ADMIN});
+
+        // The rotation must come after "db.commit". Resetting first meant a
+        // setup committing in that window left the person ACTIVE on a password
+        // nobody told them had been reverted.
+        expect(trace.indexOf("auth.updateUser"))
+            .toBeGreaterThan(trace.indexOf("db.commit"));
+      });
+
+  test("never deletes the Auth account of a REUSED (existing) user",
+      async () => {
+        const trace = [];
+        const auth = makeAuth(trace, {existingUser: {uid: "existing-uid"}});
+        // Status is no longer `invited`, so performCreateAccount returns
+        // ok:false and the callable throws.
+        getFirestore.mockReturnValue(makeDb({
+          d1: {
+            email: "ada@example.com",
+            uid: "existing-uid",
+            status: "invited",
+          },
+          d2: {email: "other@example.com", uid: "existing-uid"},
+        }, trace));
+        getAuth.mockReturnValue(auth);
+
+        await expect(
+            createEmployeeAccount.run({data: VALID_CREATE, auth: ADMIN}),
+        ).rejects.toThrow(/email-exists/);
+
+        // Rolling back a reused account would delete a real employee's Auth
+        // record — the account was theirs before this call started.
+        expect(auth.deleteUser).not.toHaveBeenCalled();
+      });
+
+  test("rolls back an account it just minted when the doc write fails",
+      async () => {
+        const trace = [];
+        const auth = makeAuth(trace);
+        const db = makeDb({}, trace);
+        db.runTransaction = async () => {
+          throw new Error("firestore unavailable");
+        };
+        getFirestore.mockReturnValue(db);
+        getAuth.mockReturnValue(auth);
+
+        await expect(
+            createEmployeeAccount.run({data: VALID_CREATE, auth: ADMIN}),
+        ).rejects.toThrow(/unavailable/);
+
+        // An Auth account with no users doc is a sign-in SplashScreen cannot
+        // resolve and no admin surface can see.
+        expect(auth.deleteUser).toHaveBeenCalledWith("new-uid");
+      });
+
+  test("a failed rollback is logged loudly with the orphaned uid", async () => {
+    const trace = [];
+    const auth = makeAuth(trace, {
+      deleteUserError: new Error("auth down"),
+    });
+    const db = makeDb({}, trace);
+    db.runTransaction = async () => {
+      throw new Error("firestore unavailable");
+    };
+    getFirestore.mockReturnValue(db);
+    getAuth.mockReturnValue(auth);
+
+    await expect(
+        createEmployeeAccount.run({data: VALID_CREATE, auth: ADMIN}),
+    ).rejects.toThrow();
+
+    // Unrecoverable in-app and it bricks that email, so silence is the one
+    // unacceptable outcome.
+    expect(logger.error).toHaveBeenCalledWith(
+        expect.stringContaining("orphaned auth account"),
+        expect.objectContaining({uid: "new-uid"}),
+    );
+  });
+});
+
+describe("changeEmployeeEmail ordering", () => {
+  const PAYLOAD = {docId: "d1", email: "New@Example.com"};
+  const seedDocs = () => ({
+    d1: {email: "old@example.com", uid: "u1", status: "active"},
+  });
+
+  test("updates Auth BEFORE Firestore", async () => {
+    const trace = [];
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace));
+    getAuth.mockReturnValue(auth);
+
+    await changeEmployeeEmail.run({data: PAYLOAD, auth: ADMIN});
+
+    // Auth owns sign-in and is the only store that can truly refuse a
+    // duplicate, so it must never be the one left behind.
+    expect(trace.indexOf("auth.updateUser"))
+        .toBeLessThan(trace.indexOf("db.update"));
+    expect(auth.updateUser).toHaveBeenCalledWith("u1", {
+      email: "new@example.com",
+      emailVerified: false,
+    });
+  });
+
+  test("reverts the Auth email when the doc write fails", async () => {
+    const trace = [];
+    const auth = makeAuth(trace);
+    const db = makeDb(seedDocs(), trace);
+    const realTx = db.runTransaction;
+    let calls = 0;
+    db.runTransaction = async (fn) => {
+      calls += 1;
+      if (calls === 1) throw new Error("firestore unavailable");
+      return realTx(fn);
+    };
+    getFirestore.mockReturnValue(db);
+    getAuth.mockReturnValue(auth);
+
+    await expect(
+        changeEmployeeEmail.run({data: PAYLOAD, auth: ADMIN}),
+    ).rejects.toThrow(/unavailable/);
+
+    expect(auth.updateUser).toHaveBeenLastCalledWith("u1", {
+      email: "old@example.com",
+    });
+  });
+
+  test("a failed revert logs uid + docId and never an email address",
+      async () => {
+        const trace = [];
+        const auth = makeAuth(trace);
+        // First call (the real change) succeeds, the revert then fails.
+        auth.updateUser
+            .mockImplementationOnce(async () => {
+              trace.push("auth.updateUser");
+              return {};
+            })
+            .mockImplementationOnce(async () => {
+              throw new Error("auth down");
+            });
+        const db = makeDb(seedDocs(), trace);
+        db.runTransaction = async () => {
+          throw new Error("firestore unavailable");
+        };
+        getFirestore.mockReturnValue(db);
+        getAuth.mockReturnValue(auth);
+
+        await expect(
+            changeEmployeeEmail.run({data: PAYLOAD, auth: ADMIN}),
+        ).rejects.toThrow();
+
+        expect(logger.error).toHaveBeenCalledWith(
+            expect.stringContaining("desync"),
+            expect.objectContaining({uid: "u1", docId: "d1"}),
+        );
+        // Emails are PII — the uid pair is what makes it findable instead.
+        const [, payload] = logger.error.mock.calls[0];
+        expect(JSON.stringify(payload)).not.toContain("@example.com");
+      });
+
+  test("refuses a doc with no Auth account rather than writing one store",
+      async () => {
+        const trace = [];
+        const auth = makeAuth(trace);
+        getFirestore.mockReturnValue(makeDb({
+          d1: {email: "old@example.com", status: "invited"},
+        }, trace));
+        getAuth.mockReturnValue(auth);
+
+        await expect(
+            changeEmployeeEmail.run({data: PAYLOAD, auth: ADMIN}),
+        ).rejects.toThrow(/account-has-no-auth/);
+
+        expect(auth.updateUser).not.toHaveBeenCalled();
+      });
+});

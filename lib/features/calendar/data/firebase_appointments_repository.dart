@@ -81,17 +81,28 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   @override
   Future<int> countFutureAssignments(String employeeId) async {
-    // Served by the existing (employeeIds CONTAINS, startTime ASC) composite
-    // index — no firestore.indexes.json change.
+    final now = DateTime.now();
+    // "Has work left", NOT "starts in the future". A tech can be on day 3 of a
+    // 10-day run with nothing else booked — counting from `now` reported "0
+    // upcoming jobs" under Disable account, so the admin disabled someone who
+    // was standing on a job site. The query floor therefore reaches back a full
+    // span and the real endTime test runs below (Firestore takes only the one
+    // inequality the index serves), which is also why this can't stay a
+    // count() aggregate. Served by the existing
+    // (employeeIds CONTAINS, startTime ASC) composite index.
+    final floor = DateTime(
+      now.year,
+      now.month,
+      now.day - maxAppointmentSpanDays,
+    );
     final snapshot = await _appointments
         .where('employeeIds', arrayContains: employeeId)
-        .where(
-          'startTime',
-          isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime.now()),
-        )
-        .count()
+        .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(floor))
         .get();
-    return snapshot.count ?? 0;
+    return snapshot.docs
+        .map((d) => AppointmentRecord.fromMap(d.id, d.data()))
+        .where((a) => !a.endTime.isBefore(now))
+        .length;
   }
 
   @override

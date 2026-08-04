@@ -75,11 +75,21 @@ final employeeTodayJobsProvider = Provider.autoDispose
       final range = ref.watch(todayRangeProvider);
       final jobs =
           ref.watch(appointmentsInRangeProvider(range)).value ?? const [];
-      return [
+      final today = [
         for (final job in jobs)
           if (job.status != 'cancelled' &&
               job.employeeIds.contains(employeeId) &&
               runsOn(job, range.start))
             job,
       ];
+      // Sort by THIS DAY's window start, not the stored instant. The stream
+      // arrives in `orderBy('startTime')` order, so a run that began days ago
+      // sorted ahead of everything — a 5-day 17:00 job listed above today's
+      // 08:00 one. `notification_policy.js` sorts by the day's clock time for
+      // exactly this reason; this is the Dart mirror of that rule.
+      return today..sort((a, b) {
+        final aStart = sliceFor(a, range.start)?.windowStart ?? a.startTime;
+        final bStart = sliceFor(b, range.start)?.windowStart ?? b.startTime;
+        return aStart.compareTo(bStart);
+      });
     });

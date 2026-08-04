@@ -99,7 +99,10 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final range = AppointmentDateRange.forDay(_day);
+    // A WEEK window, not a day: `_prepareBuild` re-scopes to `_day` with
+    // `sliceFor` regardless, and a per-day range would mint a new provider key
+    // — and a new 15-day Firestore query — on every ◀/▶ tap.
+    final range = AppointmentDateRange.forWeekBucketOf(_day);
 
     // Admins read the whole day's appointments so the employee picker has something to show. Employees just read their own visible jobs.
     final provider = widget.isAdmin

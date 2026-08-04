@@ -162,13 +162,13 @@ service cloud.firestore {
       // `usersByUid` bridge that every rules gate resolves through.
       // No shipped client path creates a users doc: employee accounts go
       // through the Admin-SDK-only `createEmployeeAccount`.
-      // `emergencyContact`/`emergencyPhone` are denied on CREATE only. They
+      // `emergencyContact`/`emergencyPhone` are banned OUTRIGHT here. They
       // moved to private/emergency, and nothing should ever mint a new users
-      // doc carrying them. The UPDATE side deliberately still permits them
-      // until `scripts/backfill-emergency.js` has run against prod: a partial
-      // update (deactivateEmployee) presents every untouched field in
-      // request.resource.data, so denying them there first would make any doc
-      // that still carries them permanently un-updatable.
+      // doc carrying them — a create has no existing doc to protect, so the
+      // flat denylist is safe. The UPDATE side cannot use this form (it would
+      // reject the FieldValue.delete() scrub and brick any doc that still
+      // carried the pair); it goes through `emergencyFieldNotSet` instead,
+      // which permits a removal and refuses a value. See that function.
       allow create: if isAdmin()
             && !request.resource.data.keys()
                  .hasAny(['uid', 'termsAcceptedAt', 'locationConsentAt',
@@ -224,9 +224,13 @@ service cloud.firestore {
           // emergencyContact/emergencyPhone moved to
           // users/{userId}/private/emergency — this doc is readable by every
           // active peer, and rules cannot hide a field from a document reader.
-          // The caps stay only so a pre-move doc that still carries them can be
-          // updated (updateEmployee deletes the keys on every save); no shipped
-          // path writes a value here any more.
+          // No write path can put a VALUE here any more: `allow create` denies
+          // the keys outright and `allow update` goes through
+          // emergencyFieldNotSet above. These caps therefore only ever see a
+          // legacy value passing through untouched on an unrelated update, and
+          // they are what keeps that doc updatable instead of bricked. Cheap,
+          // and the one thing standing between a straggler and a hard failure —
+          // don't remove them as unreachable.
           && (!('emergencyContact' in d.keys())
               || isBoundedString(d.emergencyContact, 200))
           && (!('emergencyPhone' in d.keys())
@@ -258,6 +262,27 @@ service cloud.firestore {
               || d.locationConsentAt is timestamp);
       }
 
+      // The emergency pair may be REMOVED but never WRITTEN on this doc. They
+      // live in users/{userId}/private/emergency, because this doc is readable
+      // by every active peer and the pair names a third party who is not an app
+      // user and never consented.
+      //
+      // Deliberately NOT a plain denylist entry beside `uid`. That form rejects
+      // any write that touches the key at all — including the
+      // `FieldValue.delete()` scrub `updateEmployee` sends on every save — so a
+      // doc that still carried the pair would become permanently un-updatable,
+      // including by deactivateEmployee (a partial update presents every
+      // untouched field in request.resource.data). This form instead says:
+      // leaving it alone is fine, and touching it is fine only when the field
+      // ends up ABSENT. A value can never land here, no doc can ever be
+      // bricked, and the client scrub still heals any straggler — so this
+      // needs no backfill and no migration.
+      function emergencyFieldNotSet(f) {
+        return !request.resource.data.diff(resource.data)
+                  .affectedKeys().hasAny([f])
+            || !(f in request.resource.data);
+      }
+
       // Built for P5's own-doc self-service clause, which is the only thing that
       // will ever call it. P4 keeps `allow update` admin-only: there is no
       // self-service UI yet, so opening the write early would widen the surface
@@ -282,6 +307,8 @@ service cloud.firestore {
             && !request.resource.data.diff(resource.data)
                  .affectedKeys()
                  .hasAny(['uid', 'termsAcceptedAt', 'locationConsentAt'])
+            && emergencyFieldNotSet('emergencyContact')
+            && emergencyFieldNotSet('emergencyPhone')
             && isValidUserData(request.resource.data);
 
       // Emergency contact — the ONLY users data gated to the admin and the

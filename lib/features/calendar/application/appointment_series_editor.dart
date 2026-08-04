@@ -89,6 +89,14 @@ class AppointmentSeriesEditor {
         notes: updated.notes,
         materialsNeeded: updated.materialsNeeded,
         repeat: updated.repeat,
+        // Both flags MUST travel with the instants derived from them. Omitting
+        // isAllDay wrote a sibling spanning midnight-23:59 while still reading
+        // isAllDay:false, which every off-screen mirror keys on — the travel
+        // sweep stopped skipping it and fired a "time to leave" push at ~23:30
+        // for a block with no departure time. Any new AppointmentRecord field
+        // that the edit form can change belongs in this list too.
+        isAllDay: updated.isAllDay,
+        isPersonal: updated.isPersonal,
         startTime: copyStart,
         endTime: occurrenceEnd(
           originalStart: start,

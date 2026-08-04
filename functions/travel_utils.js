@@ -601,31 +601,48 @@ async function runTravelAwareReminderSweep(deps) {
   // Warm-instance memo, injectable so tests get a clean map per run.
   const estimates = deps.estimateCache || _estimateCache;
   pruneEstimates(estimates, nowMs);
+  // Each (job, assignee) pair is an independent chain — a ledger get(), maybe
+  // a Routes round trip, then delivery — so they run concurrently, the same
+  // shape runOverduePromptSweep and runDailyDigest already use. Serialising
+  // them only added wall-clock: at ~200 pairs the sweep approached its 120 s
+  // budget, and a sweep killed under `maxInstances: 1` slips its reminders to
+  // the next run, i.e. a LATE "time to leave" push — the one failure this
+  // feature cannot absorb. The shared `cache`/`estimates` Maps are safe for
+  // the reason documented on the overdue sweep: JS is single-threaded, so the
+  // worst case is a duplicated read when two pairs miss simultaneously.
+  const pairs = [];
   for (const c of candidates) {
     const startMs = toMillis(c.startTime);
     if (startMs == null) continue;
     for (const employeeDocId of toIdList(c.employeeIds)) {
-      try {
-        const outcome = await resolveReminderForAssignee(deps, {
-          candidate: c,
-          employeeDocId,
-          startMs,
-          nowDate,
-          nowMs,
-          presence: presenceByEmployee.get(employeeDocId) || null,
-          employeeAppointments: contextByEmployee.get(employeeDocId) || [],
-          estimates,
-          cache,
-        });
-        reminded += outcome.reminded;
-        started += outcome.started;
-      } catch (err) {
-        // One failing pair must not stop the sweep.
-        if (logger) {
-          logger.warn("travel: pair failed", {id: c.id, employeeDocId, err});
-        }
-      }
+      pairs.push({c, startMs, employeeDocId});
     }
+  }
+  const outcomes = await Promise.all(pairs.map(
+      async ({c, startMs, employeeDocId}) => {
+        try {
+          return await resolveReminderForAssignee(deps, {
+            candidate: c,
+            employeeDocId,
+            startMs,
+            nowDate,
+            nowMs,
+            presence: presenceByEmployee.get(employeeDocId) || null,
+            employeeAppointments: contextByEmployee.get(employeeDocId) || [],
+            estimates,
+            cache,
+          });
+        } catch (err) {
+          // One failing pair must not stop the sweep.
+          if (logger) {
+            logger.warn("travel: pair failed", {id: c.id, employeeDocId, err});
+          }
+          return {reminded: 0, started: 0};
+        }
+      }));
+  for (const outcome of outcomes) {
+    reminded += outcome.reminded;
+    started += outcome.started;
   }
   const flipped = await runOnSiteFlipPass(deps);
   return {reminded, liveActivitiesStarted: started, liveActivitiesFlipped:

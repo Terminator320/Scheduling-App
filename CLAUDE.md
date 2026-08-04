@@ -69,10 +69,14 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   active set, or that staff is silently unassigned (which also changes who can
   see the visit). The merge itself is the pure, tested `mergeRetainedAssignees`
   (`calendar/domain/assignee_resolver.dart`) — route the retain logic through it.
-  Resolve the active set the way `_enrichSelectedEmployees` does
-  (cached `employeesStreamProvider` value, falling back to a fresh
-  `watchEmployees().first`) — never trust a cold/empty stream value at save time,
-  or every original assignee is wrongly retained and real deselections are undone.
+  Resolve the active set through the ONE owner, `_resolveActiveEmployees`
+  (`event_details_controller.dart`), which awaits `watchEmployees().first` —
+  never a cached provider value, and never a `.value ?? []` read. The await is
+  the point: a cold or empty stream value at save time makes every original
+  assignee look inactive, so all of them are retained and a real deselection is
+  silently undone. (This bullet previously described a two-tier "cached value
+  falling back to a fresh read" that the code does not have and should not
+  grow — the single awaited read is both simpler and strictly safer.)
 - **Image validation:** Reject uploads where first 4 bytes aren't JPEG
   (`FF D8 FF`) or PNG (`89 50 4E`). Extension alone is not sufficient.
 - **Image upload pipeline:** Single stage — `ImagePickerService` resizes +
@@ -548,8 +552,12 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   *different* employee's action, which `EmployeeSaveBusy` then dropped with no
   spinner and no notice. **So `_save` takes a `docId` and guards per key:** the
   same person twice is a double-tap and must be refused; a different person is a
-  real action and must proceed. `isSaving`/`isDeletingAccount` survive as
-  `isNotEmpty` getters for the two person sheets (modal, one at a time); a row
+  real action and must proceed. `isSaving` survives as an `isNotEmpty` getter
+  for the two person sheets (modal, one at a time). Its sibling
+  `isDeletingAccount` has **no** in-app caller — the sheets have no
+  delete-account affordance, only `PendingInviteTile` does, and it correctly
+  asks the id-keyed form — so it is an aggregate read for tests alone; don't
+  wire a surface to it without re-checking that the surface really is modal. A row
   asks `isSavingId(id)`/`isDeletingAccountId(id)` through a Riverpod `select`,
   so it rebuilds only when its OWN state flips. A brand-new person keys on `''`
   — correct, not a gap, since the invite sheet is modal. Never collapse this
@@ -851,13 +859,29 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   **Never move these back onto the users doc, and never widen a `/users` read
   clause to reach them.** Consequences to keep in sync:
   `EmployeeRecord` does **not** carry them (`EmergencyContact` does, read via
-  `emergencyContactProvider`); `updateEmployee` sends
-  `FieldValue.delete()` for both on every save, scrubbing any value a pre-move
-  build left on the parent doc — drop that scrub only once no doc can still
-  carry them; `isAvailabilityOnlyChange()` no longer lists them, because P5's
-  self-service clause governs the users doc and these are not on it; and a read
+  `emergencyContactProvider`); `isAvailabilityOnlyChange()` no longer lists
+  them, because P5's self-service clause governs the users doc and these are
+  not on it; and a read
   failure on this path means "not entitled", so a surface must render it as
   *not shown*, never as *none on file*.
+  **The rules now make a value on the parent doc unreachable, with NO migration
+  (owner call 2026-08-04: nobody had entered one, so there was no data to move,
+  and the feature is treated as clean-slate).** `allow create` bans both keys
+  outright; `allow update` routes them through **`emergencyFieldNotSet(f)`**,
+  which permits a write that leaves the field ABSENT and refuses one that
+  leaves a value. That asymmetry is the whole design and must not be
+  "simplified" into a plain denylist entry beside `uid`: the denylist form
+  rejects any write that touches the key at all, which would reject the
+  `FieldValue.delete()` scrub `updateEmployee` still sends on every save AND
+  leave any doc that somehow carried the pair permanently un-updatable —
+  including by `deactivateEmployee`, since a partial update presents every
+  untouched field in `request.resource.data`. As written, an untouched legacy
+  value simply passes through (so the doc stays updatable) and the client scrub
+  heals it on the next save. The length caps in `isValidUserData` stay for that
+  pass-through case — they are not dead. `functions/scripts/backfill-emergency.js`
+  is **deleted**; it has nothing to do. Pinned by
+  `test/core/security/emergency_contact_rules_test.dart`, which reads
+  `firestore.rules` back (rules can't be unit-tested without the emulator).
 - **`MyDetailsScreen` (Settings › My details) is the ONLY surface where a person
   edits their own record**, and it exists solely to exercise the owner half of
   the grant above — the employee detail and edit sheets are admin-only. Keep it

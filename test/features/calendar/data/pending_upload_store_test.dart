@@ -122,4 +122,35 @@ void main() {
     final store = PendingUploadStore();
     expect(await store.load(), isEmpty);
   });
+
+  test('an overlapping add and remove do not erase each other', () async {
+    // Every other test here drives ONE mutation at a time, which is exactly
+    // the shape that passed while this bug was live. `add`/`remove`/`prune`
+    // are each load() -> mutate -> _save() over ONE SharedPreferences key, so
+    // without `_serialized` both callers read the same list and the second
+    // save wipes the first's change: a save staging a batch while a drain
+    // removed a finished one wrote [E1, E2] then [], stranding E2's files
+    // with no queue entry and no failure notice.
+    final store = PendingUploadStore();
+    const first = PendingUpload(
+      appointmentId: 'a1',
+      paths: ['/x/1.jpg'],
+      enqueuedAtMs: 1000,
+    );
+    const second = PendingUpload(
+      appointmentId: 'a2',
+      paths: ['/x/2.jpg'],
+      enqueuedAtMs: 2000,
+    );
+    await store.add(first);
+
+    // Deliberately NOT awaited between the two — that interleaving is the
+    // whole point.
+    final adding = store.add(second);
+    final removing = store.remove(first.id);
+    await Future.wait([adding, removing]);
+
+    final loaded = await store.load();
+    expect(loaded.map((e) => e.appointmentId), ['a2']);
+  });
 }

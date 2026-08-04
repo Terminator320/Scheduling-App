@@ -11,8 +11,14 @@
  *   - `address` follows the client only when the appointment's stored address
  *     still equals the client's previous (non-empty) address — a differing
  *     or empty address is treated as custom/none and left untouched.
- *   - Only FUTURE appointments (`startTime >= now`) are rewritten — history
- *     records what was true at the time of the visit.
+ *   - Only appointments with WORK LEFT are rewritten — history records what
+ *     was true at the time of the visit. That is `endTime >= now`, NOT
+ *     `startTime >= now`: under the daily-window model a run started up to
+ *     MAX_APPOINTMENT_SPAN_DAYS ago can still have days of work left, and
+ *     gating on the start meant a client's corrected phone or suite number
+ *     never reached a crew that was already on site. Firestore can only take
+ *     the one inequality that matches the index, so the QUERY floor is widened
+ *     by the span and the real endTime test is applied in code below.
  *
  * Every write is an absolute value, so this is idempotent and the trigger
  * runs with `retry: true`. Updates go out in WriteBatches of ≤500 (the
@@ -25,6 +31,7 @@
  */
 
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {MAX_APPOINTMENT_SPAN_MS, toMillis} = require("./time_utils");
 
 /** Firestore WriteBatch hard limit. */
 const BATCH_LIMIT = 500;
@@ -155,12 +162,21 @@ async function propagateClientChange(clientId, before, after, deps = {}) {
   const change = relevantClientChange(before, after);
   if (!change) return {updated: 0};
 
+  const nowMs = now.getTime();
+  const queryFloor = new Date(nowMs - MAX_APPOINTMENT_SPAN_MS);
+  // "Is there still work left on this job?" — mirrors `hasWorkLeft` in
+  // notification_policy.js. Falls back to the start when endTime is missing.
+  const hasWorkLeft = (d) => {
+    const ms = toMillis(d.endTime) ?? toMillis(d.startTime);
+    return ms != null && ms >= nowMs;
+  };
+
   let updated = 0;
   let cursor = null;
   for (;;) {
     let query = db.collection("appointments")
         .where("clientId", "==", clientId)
-        .where("startTime", ">=", now)
+        .where("startTime", ">=", queryFloor)
         .orderBy("startTime")
         .limit(PAGE_SIZE);
     if (cursor) query = query.startAfter(cursor);
@@ -171,7 +187,10 @@ async function propagateClientChange(clientId, before, after, deps = {}) {
     const batch = db.batch();
     let ops = 0;
     for (const doc of docs) {
-      const patch = buildAppointmentPatch(change, doc.data() || {});
+      const data = doc.data() || {};
+      // The widened floor pulls in runs that already finished; drop those.
+      if (!hasWorkLeft(data)) continue;
+      const patch = buildAppointmentPatch(change, data);
       if (!patch) continue;
       batch.update(doc.ref, patch);
       ops += 1;
@@ -213,7 +232,9 @@ const propagateClientEdits = onDocumentUpdated(
 module.exports = {
   propagateClientEdits,
   // Exported so the orchestrator can be driven with injected {db, logger,
-  // now}. Test coverage today only covers the pure helpers below.
+  // now} — that injection is what makes the has-work-left gate testable
+  // without touching firebase-admin.
+  propagateClientChange,
   relevantClientChange,
   buildAppointmentPatch,
   clientDisplayName,

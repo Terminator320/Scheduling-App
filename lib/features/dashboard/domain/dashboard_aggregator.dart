@@ -183,6 +183,16 @@ class DashboardAggregator {
     return BusiestWeekday(weekday: bestDay, count: bestCount);
   }
 
+  /// Deliberately the ONE reducer here with no range predicate.
+  ///
+  /// The list starts at `fetchStart` (14 days before the range), so Attention
+  /// draws on ~10 weeks where the trend sections use 8. That is intended: a job
+  /// that went overdue nine weeks ago still needs an admin to close it, and
+  /// clipping to the chart window would silently drop the oldest — and most
+  /// neglected — work from the one list whose entire job is to surface it.
+  /// Both branches are already time-bounded on their own terms (`pendingSoon`
+  /// by the soon-window, `overdueOpen` by `displayStatusAt`), so an unbounded
+  /// scan can't pull in anything that isn't genuinely actionable.
   static AttentionFlags computeAttentionFlags(
     List<AppointmentRecord> appointments,
     DateTime now,

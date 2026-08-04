@@ -165,9 +165,12 @@ class _StripCell extends StatelessWidget {
             ),
             SizedBox(
               height: _kStripDot + _kStripDotGap,
-              // The selected day's filled circle already carries the state, so
-              // it drops its dot — same rule as the month grid's cells.
-              child: dotColors.isEmpty || isSelected
+              // Kept on the selected day too — the same rule as the month
+              // grid's cells (owner call, 2026-07-31). The selection circle
+              // only fills the day number, so the dot below it stays legible,
+              // and hiding it made the day being looked at the one day whose
+              // crew was invisible.
+              child: dotColors.isEmpty
                   ? null
                   : Padding(
                       padding: const EdgeInsets.only(top: _kStripDotGap),

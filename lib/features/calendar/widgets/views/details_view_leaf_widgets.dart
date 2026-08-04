@@ -4,6 +4,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
@@ -107,6 +108,10 @@ class DetailsHeader extends StatelessWidget {
               allDayLabel: appointment.isAllDay
                   ? context.l10n.calendar_allDay
                   : null,
+              // The sheet is not day-scoped, so it names the whole run rather
+              // than a "Day N of M" counter — otherwise a 5-day job opened
+              // from its day 3 card still read as day 1 with no hint it ran on.
+              lastDay: lastWorkDayOf(appointment),
             ),
             style: theme.monoType.data,
           ),

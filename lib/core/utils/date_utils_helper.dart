@@ -45,16 +45,28 @@ class DateUtilsHelper {
   /// An all-day block passes its localized label as [allDayLabel] and gets
   /// `TUE 4 AUG · ALL DAY` — its stored instants are a real midnight → 23:59
   /// span, which would otherwise read as a suspiciously precise workday.
+  ///
+  /// A run spanning several days passes the last day the crew starts work as
+  /// [lastDay] and gets `TUE 4 AUG – SAT 8 AUG · 9:00 AM – 5:00 PM`. The times
+  /// are a DAILY window, so they describe each of those days rather than one
+  /// unbroken stretch. Without the range the sheet showed day 1's date alone,
+  /// which on an overnight run was indistinguishable from a single night
+  /// shift. Resolve [lastDay] through `lastWorkDayOf` — never by reading
+  /// `endTime.dateOnly`, which names the morning an overnight run finishes.
   static String formatWhenLine(
     DateTime start,
     DateTime end, {
     String? allDayLabel,
+    DateTime? lastDay,
   }) {
     final format = _whenLineFormats.putIfAbsent(
       _locale,
       () => DateFormat('EEE d MMM', _locale),
     );
-    final day = format.format(start).toUpperCase();
+    var day = format.format(start).toUpperCase();
+    if (lastDay != null && lastDay.dateOnly.isAfter(start.dateOnly)) {
+      day = '$day – ${format.format(lastDay).toUpperCase()}';
+    }
     if (allDayLabel != null) return '$day · ${allDayLabel.toUpperCase()}';
     return '$day · ${formatTime(start)} – ${formatTime(end)}';
   }

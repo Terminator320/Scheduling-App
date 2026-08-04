@@ -123,8 +123,16 @@ class PresenceSyncController with ReentrantSync {
           .read(locationPermissionServiceProvider)
           .ensureLocation();
       // Silent no-op on any non-grant (never nag) — the server's
-      // address-fallback chain covers an untracked user.
-      if (permission != LocationPermissionResult.granted) return;
+      // address-fallback chain covers an untracked user. Silent to the USER,
+      // not to us: the three non-grant reasons need different remedies
+      // (re-prompt vs. open Settings vs. turn Location Services on), and
+      // collapsing them to one early return left "presence never starts" with
+      // nothing anywhere saying why. A breadcrumb, not a warn — a declined
+      // permission is a choice, not a defect.
+      if (permission != LocationPermissionResult.granted) {
+        _logger.breadcrumb('PRESENCE not tracking: ${permission.name}');
+        return;
+      }
 
       final match = await _ref
           .read(employeesRepositoryProvider)
