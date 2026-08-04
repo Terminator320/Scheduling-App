@@ -90,6 +90,13 @@ List<TourStepId> _formSteps(TourForm form, {required bool isAdmin}) =>
           TourStepId.apptSave,
         ],
       ],
-      TourForm.addClient => const [],
+      TourForm.addClient => [
+        if (isAdmin) ...[
+          TourStepId.clientWho,
+          TourStepId.clientReach,
+          TourStepId.clientSite,
+          TourStepId.clientSave,
+        ],
+      ],
       TourForm.invitePerson => const [],
     };
