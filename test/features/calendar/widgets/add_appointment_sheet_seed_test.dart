@@ -4,10 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/add_appointment_sheet.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
+
+import '../../../support/tour_test_support.dart';
 
 const _client = ClientRecord(
   id: 'c1',
@@ -34,7 +37,10 @@ Widget _harness({ClientRecord? initialClient, DateTime? initialDate}) =>
     );
 
 void main() {
-  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  setUp(() {
+    FlutterSecureStorage.setMockInitialValues({});
+    markFormToursSeen();
+  });
 
   testWidgets('initialClient pre-seeds the client field', (tester) async {
     tester.view.physicalSize = const Size(800, 2400);

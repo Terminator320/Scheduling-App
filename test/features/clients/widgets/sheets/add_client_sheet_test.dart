@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -11,7 +12,10 @@ import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/l10n/l10n.dart';
+
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
+
+import '../../../../support/tour_test_support.dart';
 
 class _FakeClientsRepository implements ClientsRepository {
   ClientRecord? added;
@@ -29,6 +33,7 @@ class _FakeClientsRepository implements ClientsRepository {
 void main() {
   setUp(() {
     FlutterSecureStorage.setMockInitialValues({});
+    markFormToursSeen();
     _lastResult = null;
   });
 

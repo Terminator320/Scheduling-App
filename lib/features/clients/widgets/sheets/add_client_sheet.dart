@@ -14,6 +14,10 @@ import 'package:scheduling/features/clients/domain/policies/client_form_validato
 import 'package:scheduling/features/clients/widgets/client_form_state.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_type_chips.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
+import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
@@ -80,6 +84,10 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
   final _countryController = TextEditingController();
 
   ClientType _type = ClientType.unset;
+
+  // Admin-only surface: reached from the Clients FAB and the appointment
+  // form's inline add-client, both admin-gated.
+  final _tour = TourSteps(const FormTour(TourForm.addClient), isAdmin: true);
 
   @override
   void initState() {
@@ -188,114 +196,134 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     final l10n = context.l10n;
     final isSaving = ref.watch(clientFormControllerProvider);
 
-    return FormSheetFrame(
-      title: l10n.clients_newClient,
-      primaryLabel: l10n.common_add,
-      heightFactor: 0.88,
-      isBusy: isSaving,
-      onPrimary: () => _save(next: AddClientNext.none),
-      children: [
-        ..._whoSection(theme, l10n),
-        ..._reachThemSection(theme, l10n),
-        ..._siteSection(theme, l10n, isSaving: isSaving),
-      ],
+    return FeatureTourHost(
+      scope: _tour.scope,
+      isAdmin: true,
+      stepKeys: _tour.keys,
+      autoScroll: true,
+      child: FormSheetFrame(
+        title: l10n.clients_newClient,
+        primaryLabel: l10n.common_add,
+        heightFactor: 0.88,
+        isBusy: isSaving,
+        onPrimary: () => _save(next: AddClientNext.none),
+        headerTourWrap: (child) => _tour.stepIf(TourStepId.clientSave, child),
+        scrollCacheExtent: kTourScrollCacheExtent,
+        children: [
+          ..._whoSection(theme, l10n),
+          ..._reachThemSection(theme, l10n),
+          ..._siteSection(theme, l10n, isSaving: isSaving),
+        ],
+      ),
     );
   }
 
-  List<Widget> _whoSection(ThemeData theme, AppLocalizations l10n) => [
-    MonoSectionLabel(l10n.clients_sectionWho),
+  /// Label + tour-wrapped body. The body is one Column so the walkthrough has
+  /// a single target per section — each step describes the whole section, and
+  /// highlighting only its first field would misdescribe it. Stretch-aligned
+  /// like its parent, so the layout is unchanged.
+  List<Widget> _section(TourStepId id, String label, List<Widget> body) => [
+    MonoSectionLabel(label),
     const SizedBox(height: AppSpacing.sp8),
-    SheetFocusScroll(
-      child: LabeledTextField(
-        label: l10n.clients_nameOrBusiness,
-        controller: _nameController,
-        required: true,
-        textCapitalization: TextCapitalization.words,
-        textInputAction: TextInputAction.next,
-        autofillHints: const [AutofillHints.name],
-        maxLength: TextLimits.personName,
-        errorText: errors['name'],
-        // LabeledTextField has no `onCleared` — its built-in ClearTextButton
-        // routes through onChanged(''), so clearing the error here covers
-        // both typing and the clear "x".
-        onChanged: (_) => clearError('name'),
-      ),
+    _tour.stepIf(
+      id,
+      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: body),
     ),
-    const SizedBox(height: AppSpacing.sp16),
-    // Owner change 6: always rendered, both optional. The type chips never
-    // swap these in or out.
-    SheetFocusScroll(
-      child: LabeledTextField(
-        label: l10n.clients_firstName,
-        controller: _firstNameController,
-        optional: true,
-        textCapitalization: TextCapitalization.words,
-        textInputAction: TextInputAction.next,
-        autofillHints: const [AutofillHints.givenName],
-        maxLength: TextLimits.firstName,
-      ),
-    ),
-    const SizedBox(height: AppSpacing.sp16),
-    SheetFocusScroll(
-      child: LabeledTextField(
-        label: l10n.clients_lastName,
-        controller: _lastNameController,
-        optional: true,
-        textCapitalization: TextCapitalization.words,
-        textInputAction: TextInputAction.next,
-        autofillHints: const [AutofillHints.familyName],
-        maxLength: TextLimits.lastName,
-      ),
-    ),
-    const SizedBox(height: AppSpacing.sp12),
-    ClientTypeChips(
-      value: _type,
-      onChanged: (next) => setState(() => _type = next),
-    ),
-    const SizedBox(height: AppSpacing.sp24),
   ];
 
-  List<Widget> _reachThemSection(ThemeData theme, AppLocalizations l10n) => [
-    MonoSectionLabel(l10n.clients_sectionReachThem),
-    const SizedBox(height: AppSpacing.sp8),
-    SheetFocusScroll(
-      child: LabeledTextField(
-        label: l10n.clients_phone,
-        controller: _phoneController,
-        optional: true,
-        keyboard: TextInputType.phone,
-        inputFormatters: const [PhoneInputFormatter()],
-        textInputAction: TextInputAction.next,
-        maxLength: TextLimits.phone,
+  List<Widget> _whoSection(ThemeData theme, AppLocalizations l10n) => _section(
+    TourStepId.clientWho,
+    l10n.clients_sectionWho,
+    [
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: l10n.clients_nameOrBusiness,
+          controller: _nameController,
+          required: true,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.name],
+          maxLength: TextLimits.personName,
+          errorText: errors['name'],
+          // LabeledTextField has no `onCleared` — its built-in ClearTextButton
+          // routes through onChanged(''), so clearing the error here covers
+          // both typing and the clear "x".
+          onChanged: (_) => clearError('name'),
+        ),
       ),
-    ),
-    const SizedBox(height: AppSpacing.sp16),
-    SheetFocusScroll(
-      child: LabeledTextField(
-        label: l10n.common_email,
-        controller: _emailController,
-        optional: true,
-        keyboard: TextInputType.emailAddress,
-        textInputAction: TextInputAction.next,
-        maxLength: TextLimits.email,
-        errorText: errors['email'],
-        onChanged: (_) => clearError('email'),
+      const SizedBox(height: AppSpacing.sp16),
+      // Owner change 6: always rendered, both optional. The type chips never
+      // swap these in or out.
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: l10n.clients_firstName,
+          controller: _firstNameController,
+          optional: true,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.givenName],
+          maxLength: TextLimits.firstName,
+        ),
       ),
-    ),
-    const SizedBox(height: AppSpacing.sp24),
+      const SizedBox(height: AppSpacing.sp16),
+      SheetFocusScroll(
+        child: LabeledTextField(
+          label: l10n.clients_lastName,
+          controller: _lastNameController,
+          optional: true,
+          textCapitalization: TextCapitalization.words,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.familyName],
+          maxLength: TextLimits.lastName,
+        ),
+      ),
+      const SizedBox(height: AppSpacing.sp12),
+      ClientTypeChips(
+        value: _type,
+        onChanged: (next) => setState(() => _type = next),
+      ),
+      const SizedBox(height: AppSpacing.sp24),
+    ],
+  );
 
-    // SITE keeps the full address block, because the appointment form's
-    // inline add-client path opens this same sheet and the booking needs a
-    // split address there.,
-  ];
+  List<Widget> _reachThemSection(ThemeData theme, AppLocalizations l10n) =>
+      _section(TourStepId.clientReach, l10n.clients_sectionReachThem, [
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: l10n.clients_phone,
+            controller: _phoneController,
+            optional: true,
+            keyboard: TextInputType.phone,
+            inputFormatters: const [PhoneInputFormatter()],
+            textInputAction: TextInputAction.next,
+            maxLength: TextLimits.phone,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        SheetFocusScroll(
+          child: LabeledTextField(
+            label: l10n.common_email,
+            controller: _emailController,
+            optional: true,
+            keyboard: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            maxLength: TextLimits.email,
+            errorText: errors['email'],
+            onChanged: (_) => clearError('email'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+
+        // SITE keeps the full address block, because the appointment form's
+        // inline add-client path opens this same sheet and the booking needs a
+        // split address there.,
+      ]);
 
   List<Widget> _siteSection(
     ThemeData theme,
     AppLocalizations l10n, {
     required bool isSaving,
-  }) => [
-    MonoSectionLabel(l10n.clients_sectionSite),
-    const SizedBox(height: AppSpacing.sp8),
+  }) => _section(TourStepId.clientSite, l10n.clients_sectionSite, [
     Material(
       type: MaterialType.transparency,
       child: SwitchListTile.adaptive(
@@ -349,5 +377,5 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
       onPressed: isSaving ? null : () => _save(next: AddClientNext.bookJob),
       child: Text(l10n.clients_addAndBookAJob),
     ),
-  ];
+  ]);
 }

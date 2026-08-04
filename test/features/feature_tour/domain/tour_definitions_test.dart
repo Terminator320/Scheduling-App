@@ -126,6 +126,16 @@ void main() {
     expect(tourStepsFor(scope, isAdmin: false), isEmpty);
   });
 
+  test('the client walkthrough is 4 steps in order', () {
+    const scope = FormTour(TourForm.addClient);
+    expect(tourStepsFor(scope, isAdmin: true), [
+      TourStepId.clientWho,
+      TourStepId.clientReach,
+      TourStepId.clientSite,
+      TourStepId.clientSave,
+    ]);
+  });
+
   test('no catalog anywhere repeats a step', () {
     for (final scope in allTourScopes) {
       final steps = tourStepsFor(scope, isAdmin: true);
