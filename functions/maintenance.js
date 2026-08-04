@@ -4,6 +4,11 @@ const {getStorage} = require("firebase-admin/storage");
 const {getFirestore} = require("firebase-admin/firestore");
 const logger = require("firebase-functions/logger");
 const {hasValidImageMagic} = require("./image_magic");
+const {
+  HISTORY_RETENTION_YEARS,
+  isAppointmentImagePath,
+  runHistoryPurge,
+} = require("./maintenance_policy");
 
 // Validates magic bytes of newly uploaded appointment images and deletes any
 // file that isn't JPEG or PNG — the Storage rule trusts client-provided
@@ -12,7 +17,7 @@ const validateUploadedImage = onObjectFinalized(async (event) => {
   const obj = event.data;
   const filePath = obj.name ?? "";
 
-  if (!filePath.match(/^appointments\/[^/]+\/images\//)) return;
+  if (!isAppointmentImagePath(filePath)) return;
 
   const file = getStorage().bucket(obj.bucket).file(filePath);
   let buffer;
@@ -56,11 +61,9 @@ const validateUploadedImage = onObjectFinalized(async (event) => {
 //
 // Purges done/cancelled appointments (Firestore doc + Storage images) once
 // HISTORY_RETENTION_YEARS has elapsed since `startTime`. Non-terminal
-// appointments are never touched.
-const HISTORY_RETENTION_YEARS = 2;
-const PURGE_STATUSES = ["done", "cancelled"];
-// Well under Firestore's 500-writes-per-batch ceiling, with headroom.
-const PURGE_BATCH_SIZE = 200;
+// appointments are never touched. The orchestration itself lives in
+// maintenance_policy.js, which takes its I/O injected and is tested there —
+// this module can't be required outside the emulator.
 
 /**
  * Deletes every Storage object under an appointment's image prefix
@@ -97,51 +100,11 @@ const purgeExpiredHistory = onSchedule(
       timeoutSeconds: 1800,
     },
     async () => {
-      const db = getFirestore();
-      const cutoff = new Date();
-      cutoff.setFullYear(cutoff.getFullYear() - HISTORY_RETENTION_YEARS);
-      const col = db.collection("appointments");
-
-      let purged = 0;
-      let imageFailures = 0;
-      // A plain limit loop advances without a cursor, since cleared docs
-      // are deleted. The loop stops when a page makes no progress —
-      // meaning all image cleanups failed, so retrying would just repeat
-      // them.
-      for (;;) {
-        const snap = await col
-            .where("status", "in", PURGE_STATUSES)
-            .where("startTime", "<", cutoff)
-            .orderBy("startTime")
-            .limit(PURGE_BATCH_SIZE)
-            .get();
-        if (snap.empty) break;
-
-        // Delete each doc's image prefix FIRST (concurrently), then delete
-        // only the docs whose prefix actually cleared — reversed order would
-        // orphan the images forever on a Storage failure.
-        const results = await Promise.all(
-            snap.docs.map((doc) => deleteAppointmentImages(doc.id)),
-        );
-
-        const batch = db.batch();
-        let deletable = 0;
-        snap.docs.forEach((doc, i) => {
-          if (results[i]) {
-            batch.delete(doc.ref);
-            deletable += 1;
-          } else {
-            imageFailures += 1;
-          }
-        });
-        if (deletable > 0) await batch.commit();
-        purged += deletable;
-
-        // No page progress, so bail rather than refetching the same stuck
-        // docs forever — the next quarterly run will retry them.
-        if (deletable === 0) break;
-        if (snap.size < PURGE_BATCH_SIZE) break;
-      }
+      const {purged, imageFailures, cutoff} = await runHistoryPurge({
+        db: getFirestore(),
+        deleteImages: deleteAppointmentImages,
+        now: new Date(),
+      });
 
       logger.info("purgeExpiredHistory: done", {
         purged,

@@ -48,6 +48,12 @@ class ClientDeleteFailed extends ClientDeleteOutcome {
   final Object error;
 }
 
+/// A delete the reentrancy guard skipped. Surfaces NOTHING — see
+/// [ClientSaveBusy] for why this is a member and not a fabricated exception.
+class ClientDeleteBusy extends ClientDeleteOutcome {
+  const ClientDeleteBusy();
+}
+
 /// Outcome of an archive / un-archive.
 sealed class ClientArchiveOutcome {
   const ClientArchiveOutcome();
@@ -168,6 +174,11 @@ class ClientFormController extends Notifier<bool> {
   /// server-side when the client still has appointments — archive is the
   /// normal removal.
   Future<ClientDeleteOutcome> deleteClient(String clientId) async {
+    // See addClient — the guard runs before every other check. Without it a
+    // double-tap fires the callable twice and the second returns
+    // `client-not-found`, so a delete that worked reports a success notice
+    // immediately followed by an error one.
+    if (state) return const ClientDeleteBusy();
     // Resolved before the first await (see addClient).
     final repo = ref.read(clientsRepositoryProvider);
     final refresh = ref.read(clientsRefreshProvider.notifier);

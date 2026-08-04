@@ -438,7 +438,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
         required: true,
         keyboard: TextInputType.emailAddress,
         textInputAction: TextInputAction.next,
-        maxLength: TextLimits.email,
+        maxLength: TextLimits.authEmail,
         errorText: errors['email'],
         onChanged: (_) => _clearError('email'),
       ),

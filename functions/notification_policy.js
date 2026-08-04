@@ -19,6 +19,8 @@ const {
   toMillis,
   businessYmd,
   businessMidnight,
+  businessMinutesOfDay,
+  MAX_APPOINTMENT_SPAN_MS,
 } = require("./time_utils");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -29,8 +31,11 @@ const OVERDUE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 
 // The overdue sweep queries by startTime (endTime would need a new index),
 // so its floor must cover the eligibility window PLUS the longest bookable
-// duration (the form caps a visit just under 24h): 48h total.
-const OVERDUE_QUERY_WINDOW_MS = 2 * OVERDUE_LOOKBACK_MS;
+// span. That span used to be just under 24h; since multi-day appointments it
+// is MAX_APPOINTMENT_SPAN_DAYS, and a 48h floor silently stopped matching any
+// run longer than a day — those jobs never became candidates and were never
+// prompted to close.
+const OVERDUE_QUERY_WINDOW_MS = OVERDUE_LOOKBACK_MS + MAX_APPOINTMENT_SPAN_MS;
 
 // Safety valve bounding the candidate set so one run can't blow the function
 // timeout. Logs a warning instead of silently truncating if it's ever hit.
@@ -83,13 +88,26 @@ const CHANGE_RECIPIENT_ROLES = new Set(["employee"]);
 const TIMED_RECIPIENT_ROLES = new Set(["employee", "admin"]);
 
 /**
- * Normalizes an employeeIds field to an array of strings.
+ * Normalizes an employeeIds field to an array of usable doc ids.
+ *
+ * Shape-validated, not merely type-checked: firestore.rules validates scalar
+ * id fields with `isValidDocIdField`, but rules cannot iterate a LIST, so
+ * `employeeIds` reaches here unchecked. Consumers feed these straight to
+ * `db.collection("users").doc(id)`, which throws SYNCHRONOUSLY on a slash —
+ * and one poisoned element in one appointment was enough to reject the whole
+ * daily-digest batch and silence it for every employee.
  * @param {*} value
  * @return {!Array<string>}
  */
 function toIdList(value) {
   if (!Array.isArray(value)) return [];
-  return value.filter((v) => typeof v === "string" && v !== "");
+  return value.filter(
+      (v) =>
+        typeof v === "string" &&
+      v !== "" &&
+      v.length <= 128 &&
+      !v.includes("/"),
+  );
 }
 
 /**
@@ -126,8 +144,10 @@ function _accumulate(acc, employeeDocId, kind) {
  *   - status->cancelled -> cancelled for before.employeeIds.
  *   - ids removed       -> removed; ids added -> assigned; startTime changed
  *                          -> rescheduled for the ids that stayed.
- * Past appointments (relevant startTime < now) are skipped. One event per
- * employee, priority cancelled > removed > rescheduled > assigned.
+ * Finished appointments (relevant endTime < now) are skipped — the gate is the
+ * run's END, not its start, so a multi-day job cancelled mid-run still tells
+ * its crew. One event per employee, priority
+ * cancelled > removed > rescheduled > assigned.
  *
  * @param {?Object} before Pre-write appointment fields (null on create).
  * @param {?Object} after Post-write appointment fields (null on delete).
@@ -142,14 +162,20 @@ function diffAppointmentForNotifications(before, after, now, id) {
 
   const isCancelled = (d) =>
     d && String(d.status || "").toLowerCase() === "cancelled";
-  const notPast = (startTime) => {
-    const ms = toMillis(startTime);
+  // "Is there still work left on this job?" — NOT "does it start in the
+  // future". A multi-day run can be days past its startTime and still have a
+  // week of work left, and gating on the start alone meant cancelling or
+  // deleting one mid-run pushed NOTHING to the assigned crew, who then turned
+  // up the next morning. Falls back to the start when endTime is missing.
+  const hasWorkLeft = (d) => {
+    if (!d) return false;
+    const ms = toMillis(d.endTime) ?? toMillis(d.startTime);
     return ms != null && ms >= nowMs;
   };
 
   if (!before && after) {
     // Created.
-    if (isCancelled(after) || !notPast(after.startTime)) return [];
+    if (isCancelled(after) || !hasWorkLeft(after)) return [];
     // Only the anchor (id === seriesId) sends the assignment push, so a
     // repeating series notifies once instead of once per pre-booked
     // occurrence. Non-repeating appointments (empty seriesId) are never
@@ -161,19 +187,19 @@ function diffAppointmentForNotifications(before, after, now, id) {
     }
   } else if (before && !after) {
     // Deleted.
-    if (!notPast(before.startTime)) return [];
+    if (!hasWorkLeft(before)) return [];
     for (const id of toIdList(before.employeeIds)) {
       _accumulate(acc, id, "cancelled");
     }
   } else if (before && after) {
     // Updated.
     if (isCancelled(after) && !isCancelled(before)) {
-      if (!notPast(after.startTime)) return [];
+      if (!hasWorkLeft(after)) return [];
       for (const id of toIdList(before.employeeIds)) {
         _accumulate(acc, id, "cancelled");
       }
     } else if (!isCancelled(after)) {
-      if (!notPast(after.startTime)) return [];
+      if (!hasWorkLeft(after)) return [];
       const beforeIds = toIdList(before.employeeIds);
       const afterIds = toIdList(after.employeeIds);
       const beforeSet = new Set(beforeIds);
@@ -224,8 +250,15 @@ function selectOverdueCandidates(records, now) {
 }
 
 /**
- * Groups tomorrow's (Toronto) jobs by employee doc id, cancelled excluded,
- * each list sorted by startTime. Pure — unit-testable.
+ * Groups the jobs RUNNING tomorrow (Toronto) by employee doc id, cancelled
+ * excluded, each list sorted by clock time. Pure — unit-testable.
+ *
+ * A job counts when its run overlaps tomorrow, not merely when it starts
+ * then. This is an instant-span overlap rather than the app's daily-window
+ * model (`AppointmentDaySlice`), so an overnight run can still be listed on
+ * the morning it finishes — over-inclusive, which is the safe direction here.
+ * The full mirror is Plan 2 (`docs/plans/2026-08-02-multi-day-appointments.md`
+ * §8).
  * @param {!Array<!Object>} records Appointment records.
  * @param {(Date|number)} now
  * @return {!Object<string, !Array<!Object>>}
@@ -238,14 +271,26 @@ function groupTomorrowsJobsByEmployee(records, now) {
   for (const r of records || []) {
     if (String(r.status || "").toLowerCase() === "cancelled") continue;
     const ms = toMillis(r.startTime);
-    if (ms == null || ms < startMs || ms >= endMs) continue;
+    if (ms == null) continue;
+    // Overlap, not "starts tomorrow": a multi-day run booked days ago is
+    // still on site tomorrow, and testing startTime alone told that crew
+    // "no jobs tomorrow" while they were mid-run. Falls back to the start
+    // instant when endTime is missing.
+    const runEndsMs = toMillis(r.endTime) ?? ms;
+    if (ms >= endMs || runEndsMs < startMs) continue;
     for (const id of toIdList(r.employeeIds)) {
       (grouped[id] = grouped[id] || []).push(r);
     }
   }
+  // By CLOCK time, not the absolute instant: a run that began days ago still
+  // works its daily window tomorrow, and ordering on the raw instant floated
+  // it to the front of the list — so the digest named its time as the day's
+  // first job.
   for (const id of Object.keys(grouped)) {
     grouped[id].sort(
-        (a, b) => (toMillis(a.startTime) || 0) - (toMillis(b.startTime) || 0),
+        (a, b) =>
+          (businessMinutesOfDay(a.startTime) ?? 0) -
+        (businessMinutesOfDay(b.startTime) ?? 0),
     );
   }
   return grouped;

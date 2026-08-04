@@ -29,6 +29,7 @@ const {
   updateLiveActivity,
   endLiveActivity,
 } = require("./live_activity_dispatch");
+const {liveActivityCtx} = require("./live_activity_utils");
 const {
   listCardsDueForOnSite,
   clearCardMarker,
@@ -60,9 +61,22 @@ const PREV_APPOINTMENT_LOOKBACK_HOURS = 4;
 // every future appointment in a pre-booked series.
 const CONTEXT_QUERY_MAX = 50;
 
-// Longest bookable visit (24h cap). The context query's upper bound has to
-// clear the travel window plus one full visit, or a long intervening job
-// drops out of decideOrigin.
+// Longest single-day visit. The context query's upper bound has to clear the
+// travel window plus one full visit, or a long intervening job drops out of
+// decideOrigin.
+//
+// Deliberately NOT widened to MAX_APPOINTMENT_SPAN_MS (tried and reverted
+// 2026-08-04). Widening it does pull a multi-day run into the context — but
+// `decideOrigin`'s intervening prong tests the RAW instants
+// (`startMs < candidateStartMs && endMs > nowMs`), which a 10-day run
+// satisfies at every hour of every one of its days. A tech with an 08:00
+// one-off during an Aug 1-10 run then departs "from" that run's address at
+// 07:00, when they are at home and its window doesn't open until 09:00 —
+// a NEW wrong origin, traded for an old missing one.
+// Scoping that prong needs the daily-window model mirrored into JS, which is
+// owed by Plan 2 (docs/plans/2026-08-02-multi-day-appointments.md §8). Until
+// then a long run stays out of the context, exactly as before multi-day
+// booking existed — a known gap, not a regression.
 const MAX_BOOKING_MS = 24 * 60 * MINUTE_MS;
 
 // Sweep candidate window: MAX_LEAD_MINUTES ahead, so the longest computable
@@ -460,9 +474,15 @@ async function resolveReminderForAssignee(deps, args) {
     started = await startLiveActivity(deps, {
       appointmentId: String(c.id),
       employeeDocId,
+      // Through the one ctx owner, NOT a spread of the push-message ctx
+      // above: that one carries `address` raw, so seeding the card this way
+      // was the only path that could hand it an untrimmed/undefined address
+      // while every update trimmed.
       ctx: {
-        ...ctx,
-        leaveAt: new Date(startMs - leadMinutes * MINUTE_MS),
+        ...liveActivityCtx(c, {
+          leaveAt: new Date(startMs - leadMinutes * MINUTE_MS),
+          travelMinutes: ctx.travelMinutes,
+        }),
         // Persisted on the card marker so a later reschedule can rebuild
         // `leaveAt` off the new start instead of mislabelling the job's own
         // start time as the departure time.
@@ -552,6 +572,17 @@ async function runTravelAwareReminderSweep(deps) {
           .orderBy("endTime")
           .limit(CONTEXT_QUERY_MAX)
           .get();
+      // At the cap the query is a PREFIX ordered by endTime ASC, so the
+      // furthest-out docs are dropped — which is exactly where a multi-day run
+      // sorts. decideOrigin's near-term prongs are unaffected, but the
+      // intervening-job prong can silently stop seeing a long run. Warn rather
+      // than truncate in silence, like runOverduePromptSweep does.
+      if (logger && ctxSnap && ctxSnap.size === CONTEXT_QUERY_MAX) {
+        logger.warn("travel: context query hit the cap", {
+          employeeDocId,
+          cap: CONTEXT_QUERY_MAX,
+        });
+      }
       contextByEmployee.set(
           employeeDocId,
           ((ctxSnap && ctxSnap.docs) || []).map(
@@ -630,15 +661,7 @@ async function runOnSiteFlipPass(deps) {
         await endLiveActivity(deps, {
           appointmentId: String(marker.appointmentId),
           employeeDocId: marker.employeeDocId,
-          ctx: record ? {
-            clientName: record.clientName,
-            title: record.title,
-            address: _address(record),
-            startTime: record.startTime,
-            endTime: record.endTime,
-            leaveAt: null,
-            travelMinutes: null,
-          } : {},
+          ctx: liveActivityCtx(record),
           nowDate,
         });
         await clearCardMarker(deps, {employeeDocId: marker.employeeDocId});
@@ -647,15 +670,7 @@ async function runOnSiteFlipPass(deps) {
       flipped += await updateLiveActivity(deps, {
         appointmentId: String(marker.appointmentId),
         employeeDocId: marker.employeeDocId,
-        ctx: {
-          clientName: record.clientName,
-          title: record.title,
-          address: _address(record),
-          startTime: record.startTime,
-          endTime: record.endTime,
-          leaveAt: null,
-          travelMinutes: null,
-        },
+        ctx: liveActivityCtx(record),
         nowDate,
       });
     } catch (err) {

@@ -12,9 +12,9 @@
  */
 
 const {
-  toMillis,
   formatBusinessTime,
   formatTimeOfDay,
+  businessMinutesOfDay,
 } = require("./time_utils");
 
 /**
@@ -233,8 +233,11 @@ function buildNotificationMessage(kind, ctx, locale) {
  */
 function buildDigestMessage(jobs, locale) {
   const fr = locale === "fr";
+  // Clock time, matching groupTomorrowsJobsByEmployee — see the note there.
   const sorted = [...(jobs || [])].sort(
-      (a, b) => (toMillis(a.startTime) || 0) - (toMillis(b.startTime) || 0),
+      (a, b) =>
+        (businessMinutesOfDay(a.startTime) ?? 0) -
+      (businessMinutesOfDay(b.startTime) ?? 0),
   );
   const n = sorted.length;
   const first = sorted[0];

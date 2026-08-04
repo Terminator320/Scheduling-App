@@ -205,6 +205,10 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   on-site flip, the terminal end, the reschedule hook) must carry `title`, and
   `_stateFor` must forward it into `buildContentState` — the state builder
   field-picks its `ctx`, so a dropped field fails silently back to "Client".
+  **Build that `ctx` with `liveActivityCtx(record, opts)`
+  (`live_activity_utils.js`) — never a hand-written object literal.** There were
+  four copies and they had already drifted again (two normalized `address`, two
+  passed it raw), which is exactly the silent-failure shape above.
   `propagateClientEdits` can't touch these — it
   queries by `clientId`, which is empty. Also dropped from a personal job: the
   template chips, the repeat picker, materials and photos. The **title is
@@ -311,9 +315,38 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   timed job's middle day — the card reads `9:00 AM – 5:00 PM · Day 3 of 5`.
   A continuing *timed* job has a real start time that day and sorts in clock
   order; only all-day blocks pin above the day.
-  **NOT YET MIRRORED (owed by Plan 2):** the home widget, the Siri snapshot,
-  `notification_messages.js`, `travel_utils.js` and `widget_payload_utils.js`
-  still treat every job as single-day, so days 2+ of a run are invisible there.
+  **A RANGE STREAM IS A SUPERSET OF ITS RANGE — every consumer must re-scope**
+  (2026-08-04 audit). Because the query starts at `fetchStart`, the emitted list
+  holds every job that STARTED in the previous 14 days. Only the calendar
+  clipped it; the day route, the roster's "jobs today", the employee detail's
+  TODAY panel and the drawer's calendar badge all read it raw and silently
+  reported a fortnight of past jobs as today's. Re-scope through
+  **`runsOn(appointment, day)`** (beside `sliceFor` in the same owner file) —
+  never by comparing `startTime` at the call site. A reducer over
+  `appointmentsInRangeProvider` without a day predicate is a bug.
+  **A conflict check is a DAILY-window overlap, not an instant overlap.**
+  `findBusyEmployees`' Firestore query is only a coarse prefilter; its results
+  are filtered through **`dailyWindowsOverlap`** (same owner file). Testing the
+  raw instants reported a 9-5 run across a week as clashing with a 7 pm job
+  inside it — a phantom clash the admin had to force through on every evening
+  job. That helper compares ALL window pairs rather than matching day indices,
+  because an overnight window runs into the following calendar day.
+  **`MAX_APPOINTMENT_SPAN_DAYS`/`_MS` in `functions/time_utils.js` hand-mirrors
+  `maxAppointmentSpanDays`** (each carries a pointer to the other). Every
+  backend sweep that filters on `startTime` must reach at least that far back,
+  or a job already under way is invisible to it — that single missing constant
+  caused three separate bugs (no overdue prompt for multi-day runs, a digest
+  that told an on-site crew "no jobs tomorrow", and a long job dropping out of
+  its own travel context).
+  **The push diff gates on the run's END, not its start** —
+  `stillAhead(record)` in `notification_policy.js`. Gating on `startTime` meant
+  cancelling or deleting a job mid-run pushed NOTHING to the crew, who then
+  turned up the next morning; the Live Activity card still ended, so the only
+  signal was a card silently vanishing.
+  **NOT YET MIRRORED (owed by Plan 2):** the home widget, the Siri snapshot and
+  `widget_payload_utils.js` still treat every job as single-day, so days 2+ of a
+  run are invisible there. (`notification_messages.js` and `travel_utils.js`
+  were closed by the 2026-08-04 audit — see the two bullets above.)
   See `docs/plans/2026-08-02-multi-day-appointments.md` §8.
 - **Job templates are display-only quick-fill, NEVER stored.** `JobTemplate`
   (`calendar/domain/models/job_template.dart`) backs the one-tap chips on the
@@ -773,7 +806,18 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   `redeemSignupCode` exactly, rather than the 200-char `TextLimits.firstName`
   used for clients. `name` is the JOIN of those halves, so it legitimately
   reaches 201 — its server and rules caps are **250**, sized to the composed
-  value and never to a half.
+  value and never to a half. Same reason for **`TextLimits.authEmail` (254)**:
+  an employee's email is a sign-in identity and passes through
+  `createEmployeeAccount`/`changeEmployeeEmail`, which both
+  `requireString(..., 254)`, so the two employee sheets bind to it rather than
+  to the 320-char `TextLimits.email` the client records use.
+  **`test/core/validators/text_limits_test.dart` now reads `firestore.rules`
+  (and `employee_accounts.js`) back and fails the build if a client cap ever
+  exceeds its rules or callable cap.** Dart, CEL and JS cannot share a constant,
+  so that test is the only mechanism turning this rule into something enforced
+  rather than merely written down — four appointment pairs are currently
+  EXACTLY equal, so a one-character bump on either side breaks every long save
+  with an opaque `permission-denied`.
 - **Phone numbers are stored FORMATTED, not as raw digits** (owner call,
   2026-08-02). `PhoneInputFormatter` (`core/validators/phone_format.dart`) masks
   every phone field as it is typed, so `phone`, `emergencyPhone` and each
@@ -1158,6 +1202,21 @@ Functions live in `functions/` (project `schedulingapp-88727`, region
 Full guidance — module map, every function, push / Live Activities / Wave, the
 Firestore TTL rules — is in `functions/CLAUDE.md`, which loads when working
 under `functions/`. Per-function reference: `docs/CLOUD_FUNCTIONS.md`.
+
+**A module that resolves a firebase-admin handle at load can't be tested, so
+its decisions live in a pure `*_policy.js` sibling.** `maintenance.js` resolves
+a Storage bucket at load and therefore throws on `require()` outside the
+emulator — which is why the only unattended, irreversible deletion in the repo
+(`purgeExpiredHistory`) had ZERO tests until 2026-08-04. Its orchestration now
+lives in `maintenance_policy.js`, taking `db`/`deleteImages`/`now` injected,
+the same split `notification_policy.js` ↔ `notification_utils.js` already uses.
+Three rules there destroy data if they regress and are each pinned: the status
+gate (only `done`/`cancelled` are ever purged — live work must survive at any
+age), the ordering (images FIRST; a doc whose image cleanup failed is kept, or
+the Storage bytes orphan with nothing pointing at them), and loop termination
+(a full page that made no progress must end the loop, not respin it to the
+1800 s timeout). Put a new unattended-deletion decision there, never in the
+trigger module.
 
 **Release deploy runbook: `docs/DEPLOYMENT.md`** — ordering (backend BEFORE the
 app build, because `assertPayloadShape` rejects unknown keys), the

@@ -33,8 +33,11 @@ const {handleAppointmentWrite} = require("../notification_utils");
 const {runOnSiteFlipPass} = require("../travel_utils");
 const {buildContentState, PHASE_ON_SITE} = require("../live_activity_utils");
 
-// The job STARTED an hour ago, so the notification diff suppresses every
-// event for it — that's exactly the regression window we're testing.
+// The job STARTED an hour ago and has an hour left to run — the regression
+// window this file is about. The diff no longer suppresses events here: it
+// gates on the run's END, so a job cancelled mid-flight still reaches its
+// crew. The push itself goes nowhere because every read below comes back
+// empty; the card assertions are the point.
 const NOW = new Date("2026-07-21T15:00:00.000Z");
 const STARTED = new Date("2026-07-21T14:00:00.000Z");
 const ENDS = new Date("2026-07-21T16:00:00.000Z");
@@ -49,8 +52,21 @@ const startedJob = (extra) => ({
   ...(extra || {}),
 });
 
+// Every read resolves empty, so sendToEmployee bails at "no user doc" and
+// contributes 0 sends without needing a full Firestore fake.
+const emptyQuery = {
+  get: async () => ({docs: [], empty: true}),
+  where: () => emptyQuery,
+  orderBy: () => emptyQuery,
+  limit: () => emptyQuery,
+};
+const emptyDoc = {
+  get: async () => ({exists: false, data: () => null}),
+  collection: () => emptyQuery,
+};
+
 const deps = () => ({
-  db: {},
+  db: {collection: () => ({...emptyQuery, doc: () => emptyDoc})},
   messaging: {},
   now: NOW,
   logger: {warn: jest.fn()},
@@ -64,9 +80,10 @@ describe("handleAppointmentWrite terminal card ends", () => {
   test("DELETING a started job ends the card for every assignee", async () => {
     const res = await handleAppointmentWrite(
         "a1", startedJob(), null, deps());
-    // The diff correctly suppresses the past-start push...
-    expect(res).toEqual({events: 0, sent: 0});
-    // ...but the card end must fire anyway.
+    // One cancellation event per assignee — a job deleted while the crew is
+    // still on it must tell them. Nothing is delivered here (no user docs).
+    expect(res).toEqual({events: 2, sent: 0});
+    // ...and the card end must fire too.
     const targets = endLiveActivity.mock.calls.map((c) => c[1].employeeDocId);
     expect(targets.sort()).toEqual(["emp-1", "emp-2"]);
     expect(endLiveActivity.mock.calls[0][1].appointmentId).toBe("a1");

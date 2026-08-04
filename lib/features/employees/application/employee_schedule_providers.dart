@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
@@ -18,12 +19,20 @@ final todayRangeProvider = Provider<AppointmentDateRange>((ref) {
 /// ONE day-range listener reduced in Dart — never one query per roster row.
 /// Cancelled visits don't count: the row is answering "how loaded are they",
 /// and a cancelled job is not load.
-final employeeJobsTodayProvider = Provider<Map<String, int>>((ref) {
+///
+/// Re-scoped with [runsOn] — the range stream is a 14-day superset.
+///
+/// `autoDispose` on purpose: a keepAlive watcher of the `autoDispose` range
+/// stream is a permanent listener, so its eviction grace could never fire and
+/// one visit to the Team tab pinned a live appointments snapshot for the rest
+/// of the session.
+final employeeJobsTodayProvider = Provider.autoDispose<Map<String, int>>((ref) {
   final range = ref.watch(todayRangeProvider);
   final jobs = ref.watch(appointmentsInRangeProvider(range)).value ?? const [];
   final counts = <String, int>{};
   for (final job in jobs) {
     if (job.status == 'cancelled') continue;
+    if (!runsOn(job, range.start)) continue;
     for (final id in job.employeeIds) {
       counts[id] = (counts[id] ?? 0) + 1;
     }
@@ -68,7 +77,9 @@ final employeeTodayJobsProvider = Provider.autoDispose
           ref.watch(appointmentsInRangeProvider(range)).value ?? const [];
       return [
         for (final job in jobs)
-          if (job.status != 'cancelled' && job.employeeIds.contains(employeeId))
+          if (job.status != 'cancelled' &&
+              job.employeeIds.contains(employeeId) &&
+              runsOn(job, range.start))
             job,
       ];
     });

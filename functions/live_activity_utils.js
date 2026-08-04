@@ -74,6 +74,36 @@ function _who(c, generic) {
   return (c.clientName || "").trim() || (c.title || "").trim() || generic;
 }
 
+/**
+ * The `ctx` every start/update/end dispatch is fed, built from an appointment
+ * record.
+ *
+ * ONE owner on purpose. `_stateFor` FIELD-PICKS its ctx into
+ * `buildContentState`, so a call site that forgets a key fails SILENTLY — the
+ * Lock Screen card just reads "Client" instead of the job's title, which is
+ * exactly the bug that shipped once already. Four hand-written copies of this
+ * literal had also started to drift on address normalization (two trimmed, two
+ * passed `undefined` straight through).
+ *
+ * @param {?Object} record Appointment fields; null/undefined yields {}.
+ * @param {{leaveAt: *, travelMinutes: *}=} opts Travel overlay, both null on
+ *   an on-site or terminal card.
+ * @return {!Object}
+ */
+function liveActivityCtx(record, opts) {
+  if (!record) return {};
+  const o = opts || {};
+  return {
+    clientName: record.clientName,
+    title: record.title,
+    address: String(record.address || "").trim(),
+    startTime: record.startTime,
+    endTime: record.endTime,
+    leaveAt: o.leaveAt ?? null,
+    travelMinutes: o.travelMinutes ?? null,
+  };
+}
+
 const _STRINGS = {
   en: {
     who: (c) => _who(c, "Client"),
@@ -256,6 +286,7 @@ module.exports = {
   PHASE_TRAVEL,
   PHASE_ON_SITE,
   liveActivityStrings,
+  liveActivityCtx,
   phaseFor,
   buildContentState,
   buildStartPayload,

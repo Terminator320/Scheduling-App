@@ -48,6 +48,57 @@ describe("diffAppointmentForNotifications", () => {
     expect(evs).toEqual([]);
   });
 
+  test("cancelling a multi-day run mid-flight still tells the crew", () => {
+    // The gate is the run's END, not its start. Gating on the start meant a
+    // job cancelled on day 4 of 10 pushed nothing and the crew turned up.
+    const run = {
+      employeeIds: ["e1", "e2"],
+      startTime: future(-3 * 24 * HOUR),
+      endTime: future(6 * 24 * HOUR),
+    };
+    const evs = diffAppointmentForNotifications(
+        run,
+        {...run, status: "cancelled"},
+        NOW,
+    );
+    expect(kinds(evs)).toEqual(["e1:cancelled", "e2:cancelled"]);
+  });
+
+  test("deleting a multi-day run mid-flight still tells the crew", () => {
+    const evs = diffAppointmentForNotifications(
+        {
+          employeeIds: ["e1"],
+          startTime: future(-3 * 24 * HOUR),
+          endTime: future(6 * 24 * HOUR),
+        },
+        null,
+        NOW,
+    );
+    expect(kinds(evs)).toEqual(["e1:cancelled"]);
+  });
+
+  test("a run that has genuinely finished still emits nothing", () => {
+    const evs = diffAppointmentForNotifications(
+        {
+          employeeIds: ["e1"],
+          startTime: future(-9 * 24 * HOUR),
+          endTime: future(-2 * 24 * HOUR),
+        },
+        null,
+        NOW,
+    );
+    expect(evs).toEqual([]);
+  });
+
+  test("falls back to startTime when the record carries no endTime", () => {
+    const evs = diffAppointmentForNotifications(
+        {employeeIds: ["e1"], startTime: future(-3 * HOUR)},
+        null,
+        NOW,
+    );
+    expect(evs).toEqual([]);
+  });
+
   test("deleted cancels the before employees", () => {
     const evs = diffAppointmentForNotifications(
         {employeeIds: ["e1"], startTime: future(3 * HOUR)},
@@ -200,6 +251,34 @@ describe("groupTomorrowsJobsByEmployee", () => {
     const grouped = groupTomorrowsJobsByEmployee(jobs, NOW);
     expect(grouped.e1.map((j) => j.id)).toEqual(["j2", "j1"]);
     expect(grouped.e2.map((j) => j.id)).toEqual(["j2"]);
+  });
+
+  test("a multi-day run started days ago still counts for tomorrow", () => {
+    // The crew is on site tomorrow. Bucketing on startTime alone told them
+    // "no jobs tomorrow" while they were mid-run.
+    const grouped = groupTomorrowsJobsByEmployee(
+        [{
+          id: "run",
+          employeeIds: ["e1"],
+          startTime: new Date("2026-07-06T13:00:00Z"),
+          endTime: new Date("2026-07-15T21:00:00Z"),
+        }],
+        NOW,
+    );
+    expect(grouped.e1.map((j) => j.id)).toEqual(["run"]);
+  });
+
+  test("a run that ended before tomorrow is still excluded", () => {
+    const grouped = groupTomorrowsJobsByEmployee(
+        [{
+          id: "over",
+          employeeIds: ["e1"],
+          startTime: new Date("2026-07-01T13:00:00Z"),
+          endTime: new Date("2026-07-04T21:00:00Z"),
+        }],
+        NOW,
+    );
+    expect(grouped.e1).toBeUndefined();
   });
 });
 
@@ -855,12 +934,14 @@ describe("runOverduePromptSweep", () => {
     expect(ledgerCreates.map((c) => c.key)).toEqual([overdueKey]);
     expect(ledgerCreates[0].data.expiresAt).toBeInstanceOf(Date);
     expect(ledgerDeletes).toEqual([]);
-    // The query needs to cover open statuses across a 48h startTime window:
-    // 24h of eligibility plus the <24h max booking duration.
+    // The query needs to cover open statuses across a startTime window of
+    // 24h of eligibility PLUS the longest bookable span (14 days). A 48h
+    // floor silently stopped matching any run longer than a day, so those
+    // jobs were never prompted to close.
     expect(appointmentQueries).toEqual([
       {field: "status", op: "in",
         value: ["pending", "in_progress", "confirmed"]},
-      {field: "startTime", op: ">=", value: future(-48 * HOUR)},
+      {field: "startTime", op: ">=", value: future(-(24 + 14 * 24) * HOUR)},
       {field: "startTime", op: "<=", value: NOW},
     ]);
     expect(messaging.sent).toHaveLength(1);

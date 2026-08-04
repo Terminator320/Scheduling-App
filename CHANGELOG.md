@@ -10,6 +10,66 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.41.0+66] - 2026-08-04
+
+### Added
+- **A job can now run across several days.** Pick an end date as well as a
+  start and the visit books up to two weeks, showing up on the calendar,
+  the day route and the crew's schedule on **every** day it runs — each day
+  labelled "Day 3 of 5" so nobody has to count. The two times are the daily
+  window, not one long stretch: 9:00 AM–5:00 PM means 9 to 5 on each of those
+  days. An end time at or before the start time books a night shift, and the
+  end date is the last day the crew *starts* work, never the morning an
+  overnight run finishes.
+- **All-day is offered on every job, not just personal ones.** A client visit
+  can genuinely run whole days, so the switch stays on the schedule panel for
+  both. Turning "Personal" off no longer silently clears it.
+- **Clients are archived rather than deleted.** Archiving takes a client out of
+  the list and the type filter but keeps them searchable and bookable, and
+  leaves every past visit still linked to them — deleting used to detach that
+  history silently. Swipe a row to archive it, or use the new **Archived**
+  filter chip to find one again. Archived clients are badged wherever they
+  still turn up in search.
+- **Delete survives only for junk data.** It is refused outright for any client
+  that has ever had a visit, with a notice telling you to archive instead.
+- **An employee's work email can be edited again.** Changing it now moves their
+  actual sign-in as well as the roster, so the address you see is the one that
+  works — and the app pushes them a notice naming the new address. That notice
+  is a courtesy, not a guarantee, so still tell them yourself.
+
+### Changed
+- **The calendar's day dots now count jobs, not people.** Two jobs for the same
+  person are two dots, so the dots answer "how busy is this day". A job whose
+  crew has no colour still gets a neutral dot instead of vanishing.
+
+### Fixed
+- **The day route listed the last two weeks of jobs as though they were
+  today's** — and built the "Open in Maps" route out of them. It now shows only
+  the jobs actually running on the day you're looking at.
+- **Job counts across the app were inflated the same way.** The Team roster's
+  "jobs today", the employee detail's Today panel and the menu's calendar badge
+  each counted up to a fortnight of past work; the badge also counted cancelled
+  visits.
+- **The dashboard had the opposite problem** and missed days 2+ of a multi-day
+  run entirely, so a crew on site all week showed as free.
+- **Cancelling or deleting a job mid-run told nobody.** A visit that had already
+  started sent no notification to the assigned crew, who could turn up the next
+  morning to a job that no longer existed.
+- **Multi-day jobs never got the "job finished?" nudge** and so stayed open
+  indefinitely.
+- **The evening digest told crews they had "no jobs tomorrow"** while they were
+  in the middle of a run that continued the next day — and once that was fixed,
+  it named the continuing job's time as the day's first, hours off the real one.
+- **Booking someone for an evening job during a multi-day run reported a clash
+  that wasn't real** — their window that day had already ended.
+- Double-tapping Delete on a client no longer reports a failure over a delete
+  that actually worked.
+- An employee record missing an email address could not be saved at all, with
+  no explanation.
+- **Dates in French read in English word order** — "mercredi, août 5" rather
+  than "mercredi 5 août" — on the calendar agenda, the day route, history day
+  headings and the dashboard.
+
 ## [1.40.0+65] - 2026-08-02
 
 ### Added

@@ -21,8 +21,10 @@ const {
   updateLiveActivity,
   endLiveActivity,
 } = require("./live_activity_dispatch");
+const {liveActivityCtx} = require("./live_activity_utils");
 const {
   toMillis,
+  MAX_APPOINTMENT_SPAN_MS,
 } = require("./time_utils");
 const {
   buildNotificationMessage,
@@ -249,15 +251,7 @@ async function endCardOnTerminal(id, before, after, deps, now) {
       await endLiveActivity(deps, {
         appointmentId: String(id),
         employeeDocId,
-        ctx: {
-          clientName: src.clientName,
-          title: src.title,
-          address: src.address,
-          startTime: src.startTime,
-          endTime: src.endTime,
-          leaveAt: null,
-          travelMinutes: null,
-        },
+        ctx: liveActivityCtx(src),
         nowDate: now,
       });
     } catch (err) {
@@ -320,15 +314,11 @@ async function handleAppointmentWrite(id, before, after, deps) {
       await updateLiveActivity(deps, {
         appointmentId: String(id),
         employeeDocId,
-        ctx: {
-          clientName: ctx.clientName,
-          title: ctx.title,
-          address: ctx.address,
-          startTime: ctx.startTime,
-          endTime: ((after || before) || {}).endTime,
-          leaveAt: null,
-          travelMinutes: null,
-        },
+        // Spread, not a hand-picked field list: liveActivityCtx field-picks
+        // already, and re-listing here reintroduces the silent-drop the
+        // helper exists to prevent.
+        ctx: liveActivityCtx(
+            {...ctx, endTime: (after || before || {}).endTime}),
         nowDate: now,
       });
     }
@@ -594,10 +584,15 @@ async function runDailyDigest(deps) {
   const {db, now} = deps;
   const nowDate = now || new Date();
   const {start, end} = tomorrowWindowToronto(nowDate);
+  // Widened by the max span: the query filters on startTime, so a run that
+  // began days ago but is still on site tomorrow is only fetched if the floor
+  // reaches back that far. groupTomorrowsJobsByEmployee then does the real
+  // overlap test.
+  const queryStart = new Date(start.getTime() - MAX_APPOINTMENT_SPAN_MS);
   const snap = await db
       .collection("appointments")
       .where("status", "in", OPEN_STATUSES)
-      .where("startTime", ">=", start)
+      .where("startTime", ">=", queryStart)
       .where("startTime", "<", end)
       .get();
   const grouped = groupTomorrowsJobsByEmployee(

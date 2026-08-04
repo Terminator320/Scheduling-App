@@ -1,4 +1,5 @@
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -56,7 +57,9 @@ class DashboardAggregator {
     var unassigned = 0;
     final upcoming = <AppointmentRecord>[];
     for (final a in appointments) {
-      if (!_startsOnDay(a, dayStart)) continue;
+      // Re-scoped through the slice owner: the range stream is a superset,
+      // and testing `startTime` alone hid days 2+ of a multi-day run.
+      if (!runsOn(a, dayStart)) continue;
       final display = statusCountKey(
         AppointmentStatus.fromRaw(displayStatusAt(a, now)),
       );
@@ -92,10 +95,10 @@ class DashboardAggregator {
     final week = <String, int>{};
     for (final a in appointments) {
       if (_isCancelled(a)) continue;
-      if (a.startTime.isBefore(weekStart) || !a.startTime.isBefore(weekEnd)) {
-        continue;
-      }
-      final inDay = _startsOnDay(a, dayStart);
+      // Overlap, not "starts this week": a run booked last Friday is still
+      // this week's load on the Monday the crew is on it.
+      if (!runsInRange(a, weekStart, weekEnd)) continue;
+      final inDay = runsOn(a, dayStart);
       for (final id in a.employeeIds) {
         week[id] = (week[id] ?? 0) + 1;
         if (inDay) today[id] = (today[id] ?? 0) + 1;
@@ -220,11 +223,6 @@ class DashboardAggregator {
 
   static bool _isTerminal(AppointmentRecord a) =>
       AppointmentStatus.fromRaw(a.status).isTerminal;
-
-  static bool _startsOnDay(AppointmentRecord a, DateTime dayStart) {
-    final dayEnd = DateTime(dayStart.year, dayStart.month, dayStart.day + 1);
-    return !a.startTime.isBefore(dayStart) && a.startTime.isBefore(dayEnd);
-  }
 
   static DateTime _weekAfter(DateTime weekStart) =>
       DateTime(weekStart.year, weekStart.month, weekStart.day + 7);

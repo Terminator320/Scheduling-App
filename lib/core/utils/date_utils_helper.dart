@@ -25,12 +25,16 @@ class DateUtilsHelper {
     return format.format(date);
   }
 
-  /// "Tuesday, June 23" day header — the history day groups and the calendar
-  /// agenda both render it.
+  /// "Tuesday, June 23" day header — the history day groups, the calendar
+  /// agenda, the dashboard hero and the day route all render it.
+  ///
+  /// The locale SKELETON, not a hardcoded `'EEEE, MMMM d'` pattern: a fixed
+  /// pattern forces English word order onto every locale, so French read
+  /// "mercredi, août 5" instead of "mercredi 5 août". English is unaffected.
   static String formatDayHeader(DateTime date) {
     final format = _dayHeaderFormats.putIfAbsent(
       _locale,
-      () => DateFormat('EEEE, MMMM d', _locale),
+      () => DateFormat.MMMMEEEEd(_locale),
     );
     return format.format(date);
   }

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart' show immutable;
 
 import 'package:scheduling/core/utils/date_utils_helper.dart';
@@ -47,42 +49,82 @@ class AppointmentDaySlice {
   bool get isOvernight => windowEnd.dateOnly.isAfter(windowStart.dateOnly);
 }
 
-/// True when the record's daily window crosses midnight.
+/// True when a daily window crosses midnight.
 ///
 /// A multi-day booking at the same clock time (Aug 1 09:00 → Aug 3 09:00)
 /// must still read as continuous 24-hour windows on each of its days, so
 /// equal start/end minutes count as overnight too — a strict `<` would
 /// collapse those windows to zero length instead.
-bool _isOvernightRecord(AppointmentRecord appointment) {
-  final startMinutes =
-      appointment.startTime.hour * 60 + appointment.startTime.minute;
-  final endMinutes = appointment.endTime.hour * 60 + appointment.endTime.minute;
+bool _isOvernightWindow(DateTime start, DateTime end) {
+  final startMinutes = start.hour * 60 + start.minute;
+  final endMinutes = end.hour * 60 + end.minute;
   return endMinutes <= startMinutes;
 }
+
+DateTime _lastWorkDayOfWindow(DateTime start, DateTime end) =>
+    _isOvernightWindow(start, end)
+    ? addCalendarDays(end.dateOnly, -1)
+    : end.dateOnly;
 
 /// The last day the crew STARTS work — never the morning an overnight run
 /// finishes. Keeps the count at `end - start + 1` for day jobs and night
 /// shifts alike.
 DateTime lastWorkDayOf(AppointmentRecord appointment) =>
-    _isOvernightRecord(appointment)
-    ? addCalendarDays(appointment.endTime.dateOnly, -1)
-    : appointment.endTime.dateOnly;
+    _lastWorkDayOfWindow(appointment.startTime, appointment.endTime);
 
-/// How many days (or nights) the record runs for.
+/// How many days (or nights) a daily [start]–[end] window runs for.
 ///
-/// Can come back below 1 on a corrupt record whose `endTime` precedes its
-/// `startTime` — every caller guards with `< 1` rather than trusting this is
-/// always a valid count.
-int _dayCountOf(AppointmentRecord appointment) =>
-    calendarDaysBetween(
-      appointment.startTime.dateOnly,
-      lastWorkDayOf(appointment),
-    ) +
-    1;
+/// Can come back below 1 on a corrupt pair whose end precedes its start —
+/// every caller guards with `< 1` rather than trusting this is a valid count.
+int _dayCountOfWindow(DateTime start, DateTime end) =>
+    calendarDaysBetween(start.dateOnly, _lastWorkDayOfWindow(start, end)) + 1;
+
+/// The concrete window a daily [start]–[end] pair occupies on [day].
+({DateTime start, DateTime end}) _windowOn(
+  DateTime day,
+  DateTime start,
+  DateTime end,
+) {
+  final overnight = _isOvernightWindow(start, end);
+  return (
+    start: DateTime(day.year, day.month, day.day, start.hour, start.minute),
+    end: DateTime(
+      day.year,
+      day.month,
+      day.day + (overnight ? 1 : 0),
+      end.hour,
+      end.minute,
+    ),
+  );
+}
+
+/// True when [appointment]'s daily window runs on [day].
+///
+/// The range streams query from `AppointmentDateRange.fetchStart` — up to
+/// [maxAppointmentSpanDays] BEFORE the range's start, so that a job already
+/// under way is still fetched. That makes the stream a deliberate superset of
+/// the range: any surface that wants exactly one day's jobs has to re-scope,
+/// and it must do it through here rather than by comparing `startTime` at the
+/// call site, which silently reads a fortnight of history as "today".
+bool runsOn(AppointmentRecord appointment, DateTime day) =>
+    sliceFor(appointment, day) != null;
+
+/// True when [appointment] works on at least one day in `[start, end)`.
+///
+/// The range sibling of [runsOn], for a surface bucketing by week or month
+/// rather than by day. Testing `startTime` against the bounds instead drops a
+/// run from the very week it is being worked, whenever it began earlier.
+bool runsInRange(AppointmentRecord appointment, DateTime start, DateTime end) {
+  final firstDay = appointment.startTime.dateOnly;
+  final lastDay = lastWorkDayOf(appointment);
+  // Corrupt record — end precedes start, so there is no day it runs.
+  if (lastDay.isBefore(firstDay)) return false;
+  return firstDay.isBefore(end) && !lastDay.isBefore(start.dateOnly);
+}
 
 /// The record as it appears on [day], or null when it doesn't run that day.
 AppointmentDaySlice? sliceFor(AppointmentRecord appointment, DateTime day) {
-  final count = _dayCountOf(appointment);
+  final count = _dayCountOfWindow(appointment.startTime, appointment.endTime);
   if (count < 1) return null;
   final index = calendarDaysBetween(appointment.startTime.dateOnly, day) + 1;
   if (index < 1 || index > count) return null;
@@ -95,26 +137,56 @@ AppointmentDaySlice _sliceAt(
   required int index,
   required int count,
 }) {
-  final overnight = _isOvernightRecord(appointment);
+  final window = _windowOn(day, appointment.startTime, appointment.endTime);
   return AppointmentDaySlice(
     appointment: appointment,
     dayIndex: index,
     dayCount: count,
-    windowStart: DateTime(
-      day.year,
-      day.month,
-      day.day,
-      appointment.startTime.hour,
-      appointment.startTime.minute,
-    ),
-    windowEnd: DateTime(
-      day.year,
-      day.month,
-      day.day + (overnight ? 1 : 0),
-      appointment.endTime.hour,
-      appointment.endTime.minute,
+    windowStart: window.start,
+    windowEnd: window.end,
+  );
+}
+
+/// True when two daily windows have overlapping work on at least one day both
+/// of them run.
+///
+/// The two stored instants are a DAILY WINDOW, not one unbroken stretch, so the
+/// raw instant test (`aStart < bEnd && aEnd > bStart`) is wrong for anything
+/// multi-day: it reports a 9-5 run across a week as clashing with a 7 pm job
+/// inside that week, when nobody is on site at 7 pm on any of those days.
+bool dailyWindowsOverlap({
+  required DateTime aStart,
+  required DateTime aEnd,
+  required DateTime bStart,
+  required DateTime bEnd,
+}) {
+  // Every pair, not just matching day indices: an overnight window runs into
+  // the FOLLOWING calendar day, so a night shift's first window can overlap a
+  // job dated the next morning. Both sides are capped at
+  // maxAppointmentSpanDays, so this is at most 14x14 instant comparisons.
+  final bWindows = _windowsOf(bStart, bEnd);
+  return _windowsOf(aStart, aEnd).any(
+    (a) => bWindows.any(
+      (b) => a.start.isBefore(b.end) && b.start.isBefore(a.end),
     ),
   );
+}
+
+/// Each work day's concrete window for a daily [start]–[end] pair, clamped to
+/// [maxAppointmentSpanDays]. Empty for a corrupt pair whose end precedes its
+/// start.
+List<({DateTime start, DateTime end})> _windowsOf(
+  DateTime start,
+  DateTime end,
+) {
+  final count = _dayCountOfWindow(start, end);
+  if (count < 1) return const [];
+  final days = math.min(count, maxAppointmentSpanDays);
+  final firstDay = start.dateOnly;
+  return [
+    for (var i = 0; i < days; i++)
+      _windowOn(addCalendarDays(firstDay, i), start, end),
+  ];
 }
 
 /// Buckets [records] by the days they run, clipped to [range].
@@ -135,7 +207,10 @@ Map<DateTime, List<AppointmentDaySlice>> expandToDays(
 }) {
   final slicesByDay = <DateTime, List<AppointmentDaySlice>>{};
   for (final appointment in records) {
-    final rawCount = _dayCountOf(appointment);
+    final rawCount = _dayCountOfWindow(
+      appointment.startTime,
+      appointment.endTime,
+    );
     if (rawCount < 1) continue;
     // A corrupt endTime years out must not explode the index. Clamp, but
     // report it — a silently truncated run reads as a short job.
