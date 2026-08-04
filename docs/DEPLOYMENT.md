@@ -211,7 +211,7 @@ what production is running.
 |---|---|---|---|---|
 | 2026-07-18 | — | functions, rules | 21 | `placesReverseGeocode`, travel-aware reminder rebuild |
 | 2026-08-01 | `d916b16` | functions, rules | 22 | P3 clients; added `recountClientJobs` |
-| _(pending)_ | — | functions, rules | 25 | P4 + P4b + **P4c**: adds `createEmployeeAccount`, `completeEmployeeSetup`, `deleteEmployeeAccount`; `private/emergency` rule; `isValidAppointmentData`. **Deletes nothing** — `revokeInvite`/`previewInvite` were never deployed (prod had 22, not the 24 an earlier draft of this row assumed), and `createEmployeeInvite`/`redeemSignupCode` are **kept as the `#compat-1.37.1` shim** for the 1.37.1+64 build still on the App Store. So there is no deletion prompt, and 22 → 25. **Omit `firestore:indexes`** — the file is back in sync with prod and nothing new is needed. See the shim note below. |
+| 2026-08-03 | `95259db` | functions, rules | 25 | P4 + P4b + **P4c**: added `createEmployeeAccount`, `completeEmployeeSetup`, `deleteEmployeeAccount`; `private/emergency` rule; `isValidAppointmentData`. **Deleted nothing** — `revokeInvite`/`previewInvite` were never deployed (prod had 22, not the 24 an earlier draft of this row assumed), and `createEmployeeInvite`/`redeemSignupCode` were **kept as the `#compat-1.37.1` shim** for the 1.37.1+64 build on the App Store. No deletion prompt; 22 → 25. `firestore:indexes` omitted (file already in sync with prod). Verified post-deploy: 25 functions live, all three shim rules present, zero `unexpected-field` in logs. See the shim note above. |
 
 ### The `#compat-1.37.1` shim
 
