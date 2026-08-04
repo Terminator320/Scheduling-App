@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -10,10 +11,12 @@ import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
+import 'package:scheduling/features/clients/domain/policies/client_delete_policy.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
+import 'package:scheduling/features/clients/widgets/views/client_actions_host.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
@@ -42,7 +45,8 @@ class ClientsListView extends ConsumerStatefulWidget {
   ConsumerState<ClientsListView> createState() => _ClientsListViewState();
 }
 
-class _ClientsListViewState extends ConsumerState<ClientsListView> {
+class _ClientsListViewState extends ConsumerState<ClientsListView>
+    with ClientActionsHost<ClientsListView> {
   static const int _pageSize = 50;
   // Debounce before the server search, so we don't fire a read on every keystroke —
   // the local filter covers the gap in the meantime so it still feels immediate.
@@ -123,13 +127,51 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     await showClientDetailSheet(context, client);
   }
 
+  @override
+  void onClientMutated() => _pagingController.refresh();
+
+  // The Slidable wraps the tile HERE, not inside ClientTile — the booking
+  // flow's client picker reuses that tile and must not gain archive/delete.
   Widget _clientTile(ClientRecord client, int index) => FadeInItem(
     key: ValueKey(client.id),
     index: index,
-    child: ClientTile(
-      client: client,
-      selected: widget.selectedClientId == client.id,
-      onOpen: () => _openClient(client),
+    child: Slidable(
+      key: ValueKey('slide-${client.id}'),
+      endActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: canDeleteClient(client) ? 0.5 : 0.28,
+        // Full swipe commits Archive ONLY. Delete is never gesture-committed
+        // — it needs a deliberate tap plus a confirm.
+        dismissible: DismissiblePane(onDismissed: () => archiveClient(client)),
+        children: [
+          // Advisory: the callable re-checks with a live count(), so this only
+          // keeps the swipe from offering what the server would refuse.
+          if (canDeleteClient(client))
+            SlidableAction(
+              onPressed: (_) => confirmDeleteClient(client),
+              backgroundColor: Theme.of(context).palette.dangerFill,
+              foregroundColor: Colors.white,
+              icon: Icons.delete_outline,
+              label: context.l10n.common_delete,
+            ),
+          SlidableAction(
+            onPressed: (_) => archiveClient(client),
+            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+            icon: client.archived
+                ? Icons.unarchive_outlined
+                : Icons.archive_outlined,
+            label: client.archived
+                ? context.l10n.clients_unarchive
+                : context.l10n.clients_archive,
+          ),
+        ],
+      ),
+      child: ClientTile(
+        client: client,
+        selected: widget.selectedClientId == client.id,
+        onOpen: () => _openClient(client),
+      ),
     ),
   );
 
