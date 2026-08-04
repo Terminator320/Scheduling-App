@@ -879,6 +879,46 @@
   "@employees_selectAnEmployeeToViewDetails": {
     "description": "Select an employee to view details"
   },
+  "clients_archive": "Archive",
+  "@clients_archive": {
+    "description": "Swipe action and detail-footer button that archives a client."
+  },
+  "clients_unarchive": "Unarchive",
+  "@clients_unarchive": {
+    "description": "Detail-footer button that restores an archived client to the list."
+  },
+  "clients_archivedNotice": "Archived {name}",
+  "@clients_archivedNotice": {
+    "description": "Success notice after archiving a client.",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "clients_unarchivedNotice": "Restored {name}",
+  "@clients_unarchivedNotice": {
+    "description": "Success notice after un-archiving a client.",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "clients_deletedNotice": "Deleted {name}",
+  "@clients_deletedNotice": {
+    "description": "Success notice after deleting a client.",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "clients_deleteTitle": "Delete client?",
+  "@clients_deleteTitle": {
+    "description": "Title of the confirm dialog before deleting a client."
+  },
+  "clients_deleteMessage": "{name} will be removed permanently. This can't be undone.",
+  "@clients_deleteMessage": {
+    "description": "Body of the confirm dialog before deleting a client.",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "error_introArchiveClient": "Couldn't archive the client",
+  "@error_introArchiveClient": {
+    "description": "Notice intro when archiving or un-archiving a client fails."
+  },
+  "error_introDeleteClient": "Couldn't delete the client",
+  "@error_introDeleteClient": {
+    "description": "Notice intro when deleting a client fails."
+  },
   "clients_noArchivedClients": "No archived clients",
   "@clients_noArchivedClients": {
     "description": "Empty state when the Archived filter chip is on and no client is archived."
