@@ -2,7 +2,8 @@
 
 **Date:** 2026-08-04
 **Branch:** `redesgin`
-**Status:** approved design, not yet implemented
+**Status:** IMPLEMENTED 2026-08-04 (`2845d43a`..`fcc09cb`), uncommitted to origin.
+Built as designed, with three deviations recorded in §7.
 
 Two related pieces of navigation/onboarding work:
 
@@ -312,6 +313,32 @@ back empty for these keys.
   the row grew from 18px to 28px of leading chrome inside a 284px drawer.
 
 ---
+
+## 7. Deviations found while building
+
+1. **The drawer row padding dropped from `sp12` to `sp8`.** The 28px chip plus
+   2×12 made the row 52px instead of 48, which grew the whole drawer and
+   pushed the last row out of an 800px test viewport. At `sp8` the chip sits
+   inside the existing 48px minimum and the row height is unchanged.
+2. **The day route has an EMPLOYEE tour, not just an admin one** (3 steps; only
+   the employee-picker step is admin-gated). Employees reach the day route from
+   their own drawer, so an admin-only catalog would have left the screen
+   untoured for them. This widened the shipped "employee tours exist only for
+   calendar and settings" rule — the test now keys on the destinations an
+   employee can actually reach.
+3. **Form-sheet tours break `pumpAndSettle` in widget tests.** A sheet's tour
+   gates on `ModalRoute.isCurrent`, true the moment a test pumps the sheet, and
+   showcaseview's tooltip animation repeats forever — so on a fresh-install
+   preferences store the sweep times out. Hub tabs can't hit this (a standalone
+   screen has no `HubShellScope`). Fixed with
+   `test/support/tour_test_support.dart`'s `markFormToursSeen()`, called from
+   the five tests that pump these sheets. **Any new test that pumps
+   `AddEventSheet`, `AddClientSheet` or `InvitePersonSheet` must call it.**
+
+Also added along the way: `TourSteps.stepIf`, which replaces the
+`has(id) ? step(id, child: c) : c` ternary that was being re-spelled per
+screen (`step` force-unwraps `keys[id]!`, so forgetting the guard crashes for
+an employee), and `kTourScrollCacheExtent`.
 
 ## 6. Out of scope
 
