@@ -1,4 +1,4 @@
-import 'dart:ui' show Color;
+import 'package:flutter/material.dart' show Color, IconData, Icons;
 
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -52,7 +52,26 @@ String drawerRowLabel(AppLocalizations l10n, AppDestination destination) =>
       PushedDestination.settings => l10n.common_settings,
     };
 
-/// The row's colour square. These are crew-palette hues used as decoration,
+/// The row's icon. Seven of these are the icons the pre-redesign drawer used
+/// before P1 replaced them with bare colour squares; `dayRoute` is the one
+/// row that had no predecessor.
+///
+/// This is a second exhaustive switch beside [drawerDotColor] rather than a
+/// record returned from one, because the two answer different questions and a
+/// row's icon is stable while its hue is decoration. A new destination is a
+/// compile error in both.
+IconData drawerRowIcon(AppDestination destination) => switch (destination) {
+  HubTab.calendar => Icons.calendar_today_rounded,
+  PushedDestination.dayRoute => Icons.route_rounded,
+  HubTab.liveMap => Icons.map_rounded,
+  HubTab.employees => Icons.badge_rounded,
+  HubTab.clients => Icons.people_rounded,
+  PushedDestination.dashboard => Icons.insights_rounded,
+  PushedDestination.history => Icons.history_rounded,
+  PushedDestination.settings => Icons.settings_rounded,
+};
+
+/// The row's colour. These are crew-palette hues used as decoration,
 /// so a call site must resolve them through `crewColorOf` to get the dark
 /// lift — never paint the stored value directly.
 ///
