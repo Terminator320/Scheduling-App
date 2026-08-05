@@ -86,6 +86,11 @@ const DEFAULT_MAX_ATTEMPTS = 5;
  * about throughput sizing). */
 const DEFAULT_BATCH_LIMIT = 30;
 
+// Cap on the import's protect-list read (see listOutstandingClientIds). Sized
+// well above any realistic backlog; if it is ever hit the import protects a
+// prefix, which is why the callable logs when the set comes back at the cap.
+const OUTSTANDING_MAX = 2000;
+
 /** Base delay for exponential backoff in milliseconds (60 seconds). */
 const BASE_BACKOFF_MS = 60_000;
 
@@ -605,11 +610,14 @@ async function dispatchQueuedJobs(ctx) {
     // --- Dispatch -------------------------------------------------------
     const type = jobData.type;
     let dispatchError = null;
+    let upsertStatus;
 
     try {
       if (type === "customerUpsert") {
         const clientId = clientIdFromRefPath(jobData.refPath);
-        await dispatchUpsert(clientId, {
+        // The return value feeds tallyUpsert below — see the pointer on
+        // upsertCustomer in customers.js.
+        const outcome = await dispatchUpsert(clientId, {
           db,
           graphql: ctx.graphql,
           businessId: ctx.businessId,
@@ -618,6 +626,7 @@ async function dispatchQueuedJobs(ctx) {
           priorAttempts:
             typeof jobData.attempts === "number" ? jobData.attempts : 0,
         });
+        upsertStatus = (outcome || {}).status;
       } else {
         // Unknown job type — treat as a permanent failure (non-retryable).
         throw new TypeError(`Unknown job type: ${String(type)}`);
@@ -635,6 +644,7 @@ async function dispatchQueuedJobs(ctx) {
       });
       if (applied) {
         summary.done += 1;
+        tallyUpsert(summary, upsertStatus);
       } else {
         logger.info("WAVE-WORKER outcome superseded (done skipped)", {jobId});
       }
@@ -702,6 +712,32 @@ async function dispatchQueuedJobs(ctx) {
   }
 }
 
+/**
+ * Folds one `upsertCustomer` outcome into the drain summary's Wave-direction
+ * counters, so a caller can say what actually landed in Wave rather than just
+ * how many jobs ran.
+ *
+ * `linked` counts as an UPDATE, not a create: that path patches a customer a
+ * crashed earlier attempt had already created in Wave, so nothing new appears
+ * there. `noop`/`skipped` are deliberately uncounted — the admin should not be
+ * told a client was pushed when no Wave mutation was made.
+ *
+ * Called only where `summary.done` is incremented (a committed outcome), so
+ * `created + updated <= done` always holds and a superseded job can't be
+ * counted twice across two drains.
+ *
+ * @param {!Object} summary The mutable drain summary.
+ * @param {string|undefined} status An `upsertCustomer` status.
+ * @return {void}
+ */
+function tallyUpsert(summary, status) {
+  if (status === "created") {
+    summary.created += 1;
+  } else if (status === "patched" || status === "linked") {
+    summary.updated += 1;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // drainQueue
 // ---------------------------------------------------------------------------
@@ -739,7 +775,9 @@ async function dispatchQueuedJobs(ctx) {
  *   - `logger` {!Object} Logging facade with `.error(msg, meta)` etc.,
  *     defaulting to `firebase-functions/logger` (never `console`).
  * @return {!Promise<{processed:number, done:number, retried:number,
- *   dead:number, skipped:number, reclaimed:number}>} Summary of the drain run.
+ *   dead:number, skipped:number, reclaimed:number, created:number,
+ *   updated:number}>} Summary of the drain run. `created`/`updated` count what
+ *   landed in Wave (see `tallyUpsert`); the rest describe the queue.
  */
 async function drainQueue(deps = {}) {
   const db = deps.db || adminFirestore().getFirestore();
@@ -764,8 +802,11 @@ async function drainQueue(deps = {}) {
   // True once the wall-clock budget is exhausted (logged once).
   const pastDeadline = () => wallClock() > deadlineMs;
 
+  // `created`/`updated` describe what landed in WAVE (see tallyUpsert); the
+  // other counters describe the queue itself.
   const summary = {
     processed: 0, done: 0, retried: 0, dead: 0, skipped: 0, reclaimed: 0,
+    created: 0, updated: 0,
   };
 
   const ctx = {
@@ -780,8 +821,68 @@ async function drainQueue(deps = {}) {
   return summary;
 }
 
+/**
+ * Counts outbox jobs still waiting to reach Wave.
+ *
+ * Lives here rather than at the call site because this module owns
+ * `QUEUE_COLLECTION` and the job status vocabulary — a caller spelling the
+ * collection name and `"queued"` itself becomes a second owner, and a renamed
+ * status would then silently under-report a number shown to an admin.
+ *
+ * `inflight` is deliberately excluded: those are being dispatched right now,
+ * and the interactive sync uses this to say what is still OUTSTANDING after
+ * its own drain returned.
+ *
+ * @param {Object=} deps Injectable dependencies — `db`.
+ * @return {!Promise<number>} Jobs currently in `queued`.
+ */
+async function countQueuedJobs(deps = {}) {
+  const db = deps.db || adminFirestore().getFirestore();
+  const snap = await db.collection(QUEUE_COLLECTION)
+      .where("status", "==", "queued").count().get();
+  return snap.data().count;
+}
+
+/**
+ * Client ids with an outbox job that has not reached Wave yet.
+ *
+ * `importCustomers` MUST skip these. The import overwrites every mapped field
+ * of a linked client with Wave's values AND stamps `wave.lastSyncedHash` from
+ * them — so an edit still sitting in the queue is not merely overwritten, it
+ * is marked synced: the pending job then hashes the clobbered doc, matches,
+ * returns `noop`, and the admin's change is gone with the row reading
+ * "synced" and nothing logged.
+ *
+ * The push-before-pull ordering alone does NOT prevent this. The interactive
+ * drain is bounded, and its query only takes jobs whose `nextAttemptAt` has
+ * come due — so a job backed off after a transient Wave error is invisible to
+ * the drain and still live when the import runs milliseconds later.
+ *
+ * Includes `inflight`: those are being dispatched right now and their doc is
+ * every bit as unsafe to overwrite.
+ *
+ * @param {Object=} deps Injectable dependencies — `db`, `limit`.
+ * @return {!Promise<!Set<string>>} Client ids to leave alone.
+ */
+async function listOutstandingClientIds(deps = {}) {
+  const db = deps.db || adminFirestore().getFirestore();
+  const limit = typeof deps.limit === "number" ? deps.limit : OUTSTANDING_MAX;
+  const snap = await db.collection(QUEUE_COLLECTION)
+      .where("status", "in", ["queued", "inflight"])
+      .limit(limit)
+      .get();
+  const ids = new Set();
+  for (const doc of (snap && snap.docs) || []) {
+    const id = clientIdFromRefPath((doc.data() || {}).refPath);
+    if (id) ids.add(id);
+  }
+  return ids;
+}
+
 module.exports = {
   enqueueCustomerUpsert,
   drainQueue,
+  countQueuedJobs,
+  listOutstandingClientIds,
   shouldEnqueueClientWrite,
 };

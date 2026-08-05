@@ -143,7 +143,61 @@ directly. Jest tests live in **`functions/__tests__/` only** — the parallel
   - **Siri App Intents snapshot** (`features/siri` + `ios/SiriIntents`, iOS-only, **Phases 1–3: Dart + Swift landed 2026-07-19; the `SiriIntents` App Intents extension target was created + embedded in Runner 2026-07-19 and builds clean (bundle id `net.vogas.scheduling.SiriIntents`, entitlements `SiriIntentsExtension.entitlements` sharing the App Group, iOS 18.0). Phase-1 read intents (count / today / next), Phase-2 date intents (`TomorrowScheduleIntent` deterministic, `DayScheduleIntent` for any in-window day), and the Phase-3 `NthAppointmentIntent` ("read a specific appointment" → Siri prompts for a position) are all code-complete and pass the App Intents metadata compiler; on-device Siri phrase verification still pending — see `ios/SiriIntents/README.md`. Phases 2–3 added NO Dart/schema change (the snapshot already carries all 8 buckets). Note: a `Date` OR `Int` parameter cannot be interpolated into a spoken App Shortcut phrase (Siri only allows AppEnum/AppEntity there), so `DayScheduleIntent` and `NthAppointmentIntent` carry no such value in their phrases and Siri resolves it via its own locale-aware follow-up prompt ("For what day?" / "Which appointment?") — this prompt→answer is the only in-session multi-turn App Intents supports (there is no free-form "and tomorrow?" session), so don't "fix" it into a phrase parameter. A new `.swift` in `ios/SiriIntents/` must be hand-added to the target in `project.pbxproj` (all four sections)**): `ScheduleSnapshotService` writes a **today + 7 days** payload into the *same* App Group `group.net.vogas.scheduling` under a **separate key `schedule_snapshot`** (the widget's `schedulePayload` is untouched; the snapshot deliberately does NOT call `HomeWidget.updateWidget` — nothing renders it). Role-aware: employees get `myAppointmentsProvider`, admins the business-wide `appointmentsInRangeProvider`. Both off-screen schedule mirrors (this and the home-screen widget) resolve *who* they're for through the single `activeUserIdentityProvider` (`features/auth/application/active_user_identity_provider.dart` — active-status gate, employee-or-admin, `retryAsync(findUserByUid)` for the post-sign-in token lag); it returns `(role, docId)` and returning null is what wipes both mirrors on sign-out. Route any new mirror through it rather than re-deriving the identity. Both must also `ref.watch(currentDayProvider)` (`core/utils/`) for their day bucketing instead of a bare `DateTime.now()` — their appointment streams only re-emit on a write, so an app resident across midnight otherwise keeps publishing yesterday's buckets and Siri answers "no appointments today" while jobs exist. `buildScheduleSnapshot` (`siri/domain/schedule_snapshot.dart`) and the Swift `ScheduleSnapshot.swift` decoder are hand-mirrored — change one, change both, and bump `version` on both sides of a schema change. Cancelled visits and **records with a null/empty `id` are dropped at build** (Phase-4 write actions resolve their target by that id). **Sign-out wipes the snapshot implicitly** — `scheduleSnapshotProvider` emits `data(null)` and `AppSyncListeners._snapshotSync` (`core/app/app_sync_listeners.dart`) calls `clearSnapshot()`; don't add an explicit sign-out clear (same contract as the widget). The App Group stays readable while the device is locked, so the payload carries **only the fields the intents speak** (client name, times, address, status) — never notes, phone, or pictures. **Phases 1–3 keep the extension Firebase-free and network-free**; Phase 4 breaks that deliberately as its own reviewed increment (it's also blocked on App Attest's bundle-ID binding — see the implementation plan).
   - **Notification permission recovery:** Settings has a Notifications row (`notificationAuthStatusProvider`, read WITHOUT prompting) — `notDetermined` re-shows the one-time OS prompt; any other non-granted state (or a granted tap) opens system Settings, since iOS never re-shows the dialog once answered. On return (app-lifecycle `resumed`) it invalidates the status provider and re-runs `PushRegistrationController.sync()` so a just-enabled device actually stores its token.
 - **Wave Accounting** (`functions/wave/*`): admin callables (`waveBootstrap`,
-  `waveImportCustomers` — App Check + `assertAdmin` + `enforceDurableRateLimit`),
+  `waveImportCustomers` — App Check + `assertAdmin` + `enforceDurableRateLimit`).
+  **`waveImportCustomers` is a TWO-WAY sync despite its name** (2026-08-04): it
+  drains the outbox to Wave via `drainForSync` and only then imports. The name
+  stays because 1.37.1 calls it (`#compat-1.37.1`) — renaming a deployed
+  callable deletes the one that build depends on, so that tag marks a
+  **RENAME** site here, unlike every other hit, which is a deletion site.
+  **AN IMPORT MUST NEVER TOUCH A CLIENT WITH AN UN-PUSHED OUTBOX JOB.** This is
+  the invariant, and push-before-pull is only half of it. `importCustomers`
+  overwrites every mapped field of a linked client with Wave's values AND
+  stamps `wave.lastSyncedHash` from them — so a queued edit isn't merely
+  overwritten, it is marked *synced*: the pending job then hashes the clobbered
+  doc, matches, returns `noop`, and the edit is gone with the row reading
+  "synced" and nothing logged. Ordering alone does not prevent it, because the
+  drain is bounded AND its query only takes jobs already due — a job backed off
+  after a transient Wave error is invisible to the drain and still live
+  milliseconds later. Every caller of `importCustomers` therefore passes
+  `skipClientIds` from **`listOutstandingClientIds`** (`worker.js`, covers
+  `queued` AND `inflight`); the param is injected rather than read inside
+  `customers.js` because `worker.js` already requires that module and reaching
+  back would close a cycle. Both callers need it — the daily
+  `waveScheduledImport` most of all, since it runs unattended.
+  **The import is hash-gated, and `updated` counts REAL changes only.** It
+  skips any linked client whose stored `wave.lastSyncedHash` already equals
+  `mappedFieldsHash(fromWaveCustomer(node))` (counted as `skippedUnchanged`).
+  That equality is exact, not a heuristic — both sides hash the same
+  `toWaveCustomerInput` projection, which is the identity
+  `shouldEnqueueClientWrite`'s Rule 2 already depends on to stop an import
+  feeding every client back into the outbox. Without the gate the import
+  re-wrote all ~650 clients every run: ~650 writes AND ~650
+  `waveUpsertCustomer` invocations per press that all conclude "nothing to
+  do", and the app reported "650 clients updated in the app" after a sync that
+  changed nothing. **The `hasCreatedAt` half of the condition is
+  load-bearing** — the update branch is the only thing that backfills a missing
+  `createdAt`, and the clients list orders by it, so skipping a doc without one
+  hides it from the list forever. What remains O(all customers) is the Wave
+  page fetch; see the delta-import note in `docs/CLOUD_FUNCTIONS.md`.
+  The push is best-effort (bounded by `SYNC_PUSH_BATCH_LIMIT` /
+  `SYNC_PUSH_BUDGET_MS`, with `waveSyncWorker` finishing the rest) and its
+  failure must never fail the import. Those two bounds are sized against
+  `kWaveSyncTimeoutSeconds` (`wave_service.dart`, hand-mirrored) and NOT
+  against the 300 s function timeout: a callable cannot be cancelled, so past
+  the client's deadline the admin has already been told the sync failed and
+  will tap again.
+  **A zero counter must never be reported as success.** The response carries
+  `pushedPending` (a `count()` taken AFTER the drain), `pushedFailed`
+  (`drained.dead` — dead-lettered jobs are not `queued`, so the pending count
+  misses them and they never retry) and `pushIncomplete` (the drain or the
+  count threw). Without all three, a broken push, a bounded push and an empty
+  queue produce identical zeros, and the app says "everything was already up to
+  date" while edits sit undelivered. Response fields are additive only.
+  `drainQueue`'s `created`/`updated`
+  counters come from `tallyUpsert`, folded from each `upsertCustomer` status
+  and incremented only where `done` is (a committed outcome), so a superseded
+  job can't be counted in two drains; `linked` counts as an **update**, since
+  that path patches a customer a crashed attempt already created.
   the read-only `waveGetConnection` (admin + App Check; **no secret, no rate
   limit** — it only reads the `wave/connection` doc), `waveSetImportSchedule`
   (admin + App Check, no secret/rate limit — writes the `importSchedule` field

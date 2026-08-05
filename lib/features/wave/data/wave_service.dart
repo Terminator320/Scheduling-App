@@ -5,6 +5,12 @@ import 'package:scheduling/features/wave/domain/models/wave_connection.dart';
 import 'package:scheduling/features/wave/domain/models/wave_import_schedule.dart';
 import 'package:scheduling/features/wave/domain/wave_error_mapper.dart';
 
+/// How long the app waits on a "Sync with Wave" run before reporting failure.
+///
+/// Hand-mirrored by `SYNC_PUSH_BUDGET_MS` in `functions/wave/callables.js`,
+/// which is sized to leave most of this window to the import half.
+const int kWaveSyncTimeoutSeconds = 120;
+
 class WaveService {
   WaveService({FirebaseFunctions? functions, AppLogger? logger})
     : _functions =
@@ -65,13 +71,28 @@ class WaveService {
     }
   }
 
-  Future<WaveImportSummary> importCustomers() async {
+  /// Runs a two-way sync: pending app edits are pushed to Wave first, then
+  /// Wave customers are pulled back into `clients`.
+  ///
+  /// The callable keeps its `waveImportCustomers` name because the 1.37.1
+  /// build on the App Store still calls it (`#compat-1.37.1`) — renaming it
+  /// server-side would delete the function that build depends on. When that
+  /// shim is swept, this is a RENAME site, not a deletion site.
+  ///
+  /// A callable cannot be cancelled, so this timeout is not a limit on the
+  /// server — it is the point at which the admin is told the sync failed
+  /// while it keeps running. `SYNC_PUSH_BUDGET_MS` in `wave/callables.js` is
+  /// sized against it (hand-mirrored; each carries a pointer to the other):
+  /// the push takes a small slice and the import gets the rest.
+  Future<WaveSyncSummary> syncCustomers() async {
     final HttpsCallableResult<dynamic> result;
     try {
       result = await _functions
           .httpsCallable(
             'waveImportCustomers',
-            options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+            options: HttpsCallableOptions(
+              timeout: const Duration(seconds: kWaveSyncTimeoutSeconds),
+            ),
           )
           .call(<String, dynamic>{});
     } catch (e, st) {
@@ -82,7 +103,7 @@ class WaveService {
     try {
       // NOTE: `as Map?` — Android callables return Map<dynamic, dynamic>.
       final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
-      return WaveImportSummary.fromMap(data);
+      return WaveSyncSummary.fromMap(data);
     } catch (e, st) {
       _logger.warn(
         'WAVE-CUST waveImportCustomers response parse failed',

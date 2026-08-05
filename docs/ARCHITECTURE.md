@@ -71,7 +71,7 @@ lib/
     ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle, notification-permission recovery row, Live job card switch (iOS-only, hidden where unsupported), and my_details_screen — the ONLY self-service edit surface (own emergency contact; everything else about a person is admin-owned)
     ├── siri/                        Siri App Intents snapshot — ScheduleSnapshotService writes a today+7d payload under the App Group key `schedule_snapshot` (nothing renders it); buildScheduleSnapshot is hand-mirrored with ios/SiriIntents/ScheduleSnapshot.swift (schema v2 — bump scheduleSnapshotVersion and supportedVersion together); payload is field-limited because the App Group reads while locked
     ├── splash/                      Auth resolution on cold start (screen + routing logic)
-    └── wave/                        Wave Accounting integration — read-only connection status + per-client sync badge + auto-import cadence picker (all writes are Cloud-Function-owned)
+    └── wave/                        Wave Accounting integration — read-only connection status + per-client sync badge + auto-import cadence picker + the two-way "Sync with Wave" action (all writes are Cloud-Function-owned). `domain/wave_sync_notice.dart` composes the result notice from a `WaveSyncSummary`: one clause per direction, zero-valued clauses dropped, and clauses for still-queued / dead-lettered / push-failed so an all-zero run can't be reported as success
 ```
 
 ---
@@ -864,9 +864,14 @@ wave/{docId}           Wave Accounting connection metadata (e.g. wave/connection
                        callable — never client-side (read+write denied).
 
 waveSyncQueue/{jobId}  Outbox for Wave sync jobs — enqueued by the waveUpsertCustomer
-                       clients trigger, drained by the scheduled waveSyncWorker.
+                       clients trigger, drained by the scheduled waveSyncWorker
+                       AND (bounded) by the interactive waveImportCustomers sync.
                        Job claim + outcome write are transactional (read+write denied
-                       to clients).
+                       to clients). A job here also PROTECTS its client from the
+                       import: listOutstandingClientIds feeds importCustomers a
+                       skip set, because overwriting a client whose edit hasn't
+                       been pushed also re-stamps wave.lastSyncedHash and turns
+                       the pending push into a no-op — losing the edit silently.
 ```
 
 ---
@@ -893,7 +898,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (1591 test cases as of 2026-08-04; `functions` adds 757 jest
+Run: `flutter test` (1603 test cases as of 2026-08-04; `functions` adds 798 jest
 tests in `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0 info
 lints** — see Analysis & Linting below; see

@@ -197,12 +197,12 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // WaveImportSummary.fromMap
+  // WaveSyncSummary.fromMap
   // -------------------------------------------------------------------------
 
-  group('WaveImportSummary.fromMap', () {
+  group('WaveSyncSummary.fromMap', () {
     test('parses all numeric fields', () {
-      final summary = WaveImportSummary.fromMap(const {
+      final summary = WaveSyncSummary.fromMap(const {
         'totalCount': 100,
         'imported': 80,
         'updated': 15,
@@ -217,7 +217,7 @@ void main() {
     });
 
     test('defaults missing fields to zero', () {
-      final summary = WaveImportSummary.fromMap(const {});
+      final summary = WaveSyncSummary.fromMap(const {});
       expect(summary.totalCount, 0);
       expect(summary.imported, 0);
       expect(summary.updated, 0);
@@ -375,8 +375,8 @@ void main() {
       );
     });
 
-    group('importCustomers', () {
-      test('parses WaveImportSummary from callable result', () async {
+    group('syncCustomers', () {
+      test('parses WaveSyncSummary from callable result', () async {
         final result = _MockResult();
         when(() => result.data).thenReturn(<String, dynamic>{
           'totalCount': 50,
@@ -389,7 +389,7 @@ void main() {
           () => importCallable.call<dynamic>(any<Object?>()),
         ).thenAnswer((_) async => result);
 
-        final summary = await service.importCustomers();
+        final summary = await service.syncCustomers();
         expect(summary.totalCount, 50);
         expect(summary.imported, 30);
         expect(summary.updated, 10);
@@ -405,7 +405,7 @@ void main() {
           );
 
           await expectLater(
-            () => service.importCustomers(),
+            () => service.syncCustomers(),
             throwsA(isA<WaveNetwork>()),
           );
         },
@@ -417,7 +417,7 @@ void main() {
         );
 
         await expectLater(
-          () => service.importCustomers(),
+          () => service.syncCustomers(),
           throwsA(isA<WaveUnknown>()),
         );
       });

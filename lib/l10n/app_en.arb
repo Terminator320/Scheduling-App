@@ -1727,9 +1727,9 @@
   "@wave_connectToWave": {
     "description": "Button label: initiates the Wave connection bootstrap"
   },
-  "wave_importCustomers": "Import customers from Wave",
-  "@wave_importCustomers": {
-    "description": "Button label: triggers Wave customer import"
+  "wave_syncButton": "Sync with Wave",
+  "@wave_syncButton": {
+    "description": "Button label: runs a two-way Wave sync — pending app edits are pushed to Wave, then Wave customers are pulled into the app"
   },
   "wave_autoImportLabel": "Automatic import",
   "@wave_autoImportLabel": {
@@ -1761,23 +1761,77 @@
       }
     }
   },
-  "wave_importSuccess": "Wave import complete — {imported} added, {updated} updated, {skipped} skipped.",
-  "@wave_importSuccess": {
-    "description": "Success notice summarising a Wave customer import run",
+  "wave_syncResult": "Synced with Wave — {details}.",
+  "@wave_syncResult": {
+    "description": "Success notice after a two-way Wave sync. {details} is the joined list of what moved, each part naming its destination.",
     "placeholders": {
-      "imported": {
-        "type": "int",
-        "description": "Number of newly created client records"
-      },
-      "updated": {
-        "type": "int",
-        "description": "Number of existing client records updated"
-      },
-      "skipped": {
-        "type": "int",
-        "description": "Number of archived Wave customers skipped"
+      "details": {
+        "type": "String",
+        "description": "Comma-joined list of wave_syncAddedToWave / wave_syncUpdatedInWave / wave_syncAddedToApp / wave_syncUpdatedInApp / wave_syncStillQueued parts"
       }
     }
+  },
+  "wave_syncUpToDate": "Synced with Wave — everything was already up to date.",
+  "@wave_syncUpToDate": {
+    "description": "Success notice after a Wave sync that moved nothing in either direction."
+  },
+  "wave_syncAddedToWave": "{count, plural, =1{1 client added to Wave} other{{count} clients added to Wave}}",
+  "@wave_syncAddedToWave": {
+    "description": "Sync-result part: clients created in Wave from this app.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_syncUpdatedInWave": "{count, plural, =1{1 client updated in Wave} other{{count} clients updated in Wave}}",
+  "@wave_syncUpdatedInWave": {
+    "description": "Sync-result part: existing Wave customers patched from this app.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_syncAddedToApp": "{count, plural, =1{1 client added to the app} other{{count} clients added to the app}}",
+  "@wave_syncAddedToApp": {
+    "description": "Sync-result part: clients created in this app from Wave.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_syncUpdatedInApp": "{count, plural, =1{1 client updated in the app} other{{count} clients updated in the app}}",
+  "@wave_syncUpdatedInApp": {
+    "description": "Sync-result part: existing app clients refreshed from Wave.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_syncStillQueued": "{count, plural, =1{1 more still syncing to Wave} other{{count} more still syncing to Wave}}",
+  "@wave_syncStillQueued": {
+    "description": "Sync-result part: outbox jobs the interactive sync did not get through, which the scheduled worker finishes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_syncFailedToWave": "{count, plural, =1{1 client couldn't be sent to Wave} other{{count} clients couldn't be sent to Wave}}",
+  "@wave_syncFailedToWave": {
+    "description": "Sync-result part: dead-lettered outbox jobs. These will NOT retry on their own, so the admin has to open the client and fix what Wave rejected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_syncPushIncomplete": "your pending changes couldn't be sent to Wave this time",
+  "@wave_syncPushIncomplete": {
+    "description": "Sync-result part: the push half of the sync errored, so its counts are unknown rather than zero. Lowercase — it slots into the comma-joined list after the dash."
   },
   "wave_syncedWithWave": "Synced with Wave",
   "@wave_syncedWithWave": {

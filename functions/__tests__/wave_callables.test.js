@@ -12,6 +12,7 @@ jest.mock("../security");
 jest.mock("firebase-admin/firestore");
 jest.mock("../wave/client");
 jest.mock("../wave/customers");
+jest.mock("../wave/worker");
 
 const {HttpsError} = require("firebase-functions/v2/https");
 
@@ -19,6 +20,7 @@ const security = require("../security");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const waveClient = require("../wave/client");
 const waveCustomers = require("../wave/customers");
+const waveWorker = require("../wave/worker");
 
 const {
   selectBusiness,
@@ -66,6 +68,18 @@ function fakeFirestore(connection) {
 }
 
 /**
+ * A drainQueue summary with everything zeroed except the given overrides.
+ * @param {!Object=} overrides Counters to set.
+ * @return {!Object} A full drain summary.
+ */
+function drainSummary(overrides = {}) {
+  return {
+    processed: 0, done: 0, retried: 0, dead: 0, skipped: 0, reclaimed: 0,
+    created: 0, updated: 0, ...overrides,
+  };
+}
+
+/**
  * Builds a callable request.
  * @param {?string} uid Caller uid, or null for unauthenticated.
  * @param {*} data Payload.
@@ -106,6 +120,12 @@ function expectCalledBefore(first, second) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+
+  // The outbox is empty unless a test says otherwise, so the guard-order
+  // cases don't have to care that the sync pushes before it imports.
+  waveWorker.drainQueue.mockResolvedValue(drainSummary());
+  waveWorker.countQueuedJobs.mockResolvedValue(0);
+  waveWorker.listOutstandingClientIds.mockResolvedValue(new Set());
 
   // These mocks behave like the real guards, just without touching
   // Firestore.
@@ -306,6 +326,99 @@ describe("waveImportCustomers", () => {
         expect(err.message).toBe("wave/not-bootstrapped");
         expect(security.enforceDurableRateLimit).toHaveBeenCalled();
       });
+
+  test("pushes the outbox to Wave BEFORE importing", async () => {
+    // Order is the correctness rule, not a preference: the outbox holds edits
+    // the app already accepted, so importing first would overwrite them with
+    // the Wave rows they are on their way to replace.
+    getFirestore.mockReturnValue(fakeFirestore({businessId: "biz-1"}).db);
+    waveWorker.drainQueue.mockResolvedValue(drainSummary());
+    waveCustomers.importCustomers.mockResolvedValue({});
+
+    await waveImportCustomers.run(req(ADMIN_UID, {}));
+
+    expectCalledBefore(waveWorker.drainQueue, waveCustomers.importCustomers);
+  });
+
+  test("returns both directions plus what is still queued", async () => {
+    getFirestore.mockReturnValue(fakeFirestore({businessId: "biz-1"}).db);
+    waveWorker.drainQueue.mockResolvedValue(
+        drainSummary({done: 5, created: 2, updated: 3}));
+    waveWorker.countQueuedJobs.mockResolvedValue(7);
+    waveCustomers.importCustomers.mockResolvedValue({
+      totalCount: 40, imported: 4, updated: 6, skippedArchived: 1, pages: 1,
+    });
+
+    const result = await waveImportCustomers.run(req(ADMIN_UID, {}));
+
+    expect(result).toEqual({
+      totalCount: 40, imported: 4, updated: 6, skippedArchived: 1, pages: 1,
+      pushedCreated: 2, pushedUpdated: 3, pushedPending: 7,
+      pushedFailed: 0, pushIncomplete: false,
+    });
+  });
+
+  test("hands the import the clients whose edits have not reached Wave", () =>
+    (async () => {
+      // The bounded drain cannot guarantee push-before-pull on its own: a job
+      // backed off after a transient Wave error isn't due, so the drain skips
+      // it and the import would overwrite that client's edit AND mark it
+      // synced, which makes the loss permanent.
+      getFirestore.mockReturnValue(fakeFirestore({businessId: "biz-1"}).db);
+      const outstanding = new Set(["c1", "c2"]);
+      waveWorker.listOutstandingClientIds.mockResolvedValue(outstanding);
+      waveCustomers.importCustomers.mockResolvedValue({});
+
+      await waveImportCustomers.run(req(ADMIN_UID, {}));
+
+      expect(waveCustomers.importCustomers).toHaveBeenCalledWith(
+          expect.objectContaining({skipClientIds: outstanding}));
+      // Resolved after the drain, so a job the drain just finished isn't
+      // protected for nothing.
+      expectCalledBefore(
+          waveWorker.drainQueue, waveWorker.listOutstandingClientIds);
+    })());
+
+  test("a dead-lettered push is reported, not counted as nothing", async () => {
+    // Dead jobs are not `queued`, so countQueuedJobs returns 0 for them —
+    // without pushedFailed the admin reads "already up to date" about clients
+    // that can now only reach Wave by hand.
+    getFirestore.mockReturnValue(fakeFirestore({businessId: "biz-1"}).db);
+    waveWorker.drainQueue.mockResolvedValue(drainSummary({dead: 5}));
+    waveCustomers.importCustomers.mockResolvedValue({});
+
+    const result = await waveImportCustomers.run(req(ADMIN_UID, {}));
+
+    expect(result.pushedFailed).toBe(5);
+    expect(result.pushIncomplete).toBe(false);
+  });
+
+  test("a thrown push is flagged, so zeros can't read as success", async () => {
+    getFirestore.mockReturnValue(fakeFirestore({businessId: "biz-1"}).db);
+    waveWorker.drainQueue.mockRejectedValue(new Error("index missing"));
+    waveWorker.countQueuedJobs.mockRejectedValue(new Error("index missing"));
+    waveCustomers.importCustomers.mockResolvedValue({});
+
+    const result = await waveImportCustomers.run(req(ADMIN_UID, {}));
+
+    expect(result.pushIncomplete).toBe(true);
+    expect(result.pushedPending).toBe(0);
+  });
+
+  test("a failed push still lets the import run and return", async () => {
+    // The scheduled worker drains the same queue every 5 minutes, so the push
+    // half is a courtesy. Failing the whole sync over it would deny the admin
+    // the import they actually pressed the button for.
+    getFirestore.mockReturnValue(fakeFirestore({businessId: "biz-1"}).db);
+    waveWorker.drainQueue.mockRejectedValue(new Error("wave down"));
+    waveCustomers.importCustomers.mockResolvedValue({imported: 3});
+
+    const result = await waveImportCustomers.run(req(ADMIN_UID, {}));
+
+    expect(result.imported).toBe(3);
+    expect(result.pushedCreated).toBe(0);
+    expect(result.pushedUpdated).toBe(0);
+  });
 });
 
 describe("waveGetConnection", () => {

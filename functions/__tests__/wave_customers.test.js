@@ -7,7 +7,7 @@ const {
   sanitizeInputErrors,
 } = require("../wave/customers");
 const {WaveApiError} = require("../wave/client");
-const {mappedFieldsHash} = require("../wave/mappers");
+const {mappedFieldsHash, fromWaveCustomer} = require("../wave/mappers");
 
 // ---------------------------------------------------------------------------
 // Fakes
@@ -712,6 +712,8 @@ describe("importCustomers", () => {
           imported: 2, // Alpha + Gamma
           updated: 0,
           skippedArchived: 1, // Beta
+          skippedPending: 0,
+          skippedUnchanged: 0,
           pages: 2,
         });
         // Two new auto-id docs created; one final commit.
@@ -727,6 +729,136 @@ describe("importCustomers", () => {
         expect(first.data.createdAt).toBe(TS);
         expect(first.data.updatedAt).toBe(TS);
       });
+
+  test("leaves a client alone while its edit is still queued for Wave",
+      async () => {
+        // The import overwrites every mapped field AND stamps
+        // wave.lastSyncedHash from Wave's values — so overwriting a client
+        // whose edit hasn't been pushed yet doesn't just lose the edit, it
+        // marks it synced: the pending job then hashes the clobbered doc,
+        // matches, and no-ops. The change is gone with the row reading
+        // "synced" and nothing logged.
+        const protectedRef = {id: "pending-doc"};
+        const openRef = {id: "open-doc"};
+        const {db, batchLog} = importDb([
+          {data: () => ({waveCustomerId: "w1"}), ref: protectedRef},
+          {data: () => ({waveCustomerId: "w2"}), ref: openRef},
+        ]);
+        const graphql = graphqlSeq(
+            listPage(1, 1, 2, [
+              waveNode("w1", "Stale From Wave"),
+              waveNode("w2", "Fine To Refresh"),
+            ]),
+        );
+
+        const summary = await importCustomers({
+          db, graphql, businessId: "biz-1", now,
+          skipClientIds: new Set(["pending-doc"]),
+        });
+
+        expect(summary.skippedPending).toBe(1);
+        expect(summary.updated).toBe(1);
+        // Only the unprotected client was written.
+        expect(batchLog.sets).toHaveLength(1);
+        expect(batchLog.sets[0].ref).toBe(openRef);
+      });
+
+  test("skips a customer whose mapped fields already match", async () => {
+    // The equality is exact, not a heuristic: `lastSyncedHash` is taken over
+    // the same toWaveCustomerInput projection the write would produce, so a
+    // match means the write is byte-identical. Steady state is therefore ~0
+    // writes and ~0 waveUpsertCustomer trigger invocations, instead of one
+    // of each per customer per press.
+    const node = waveNode("w1", "Alpha");
+    const settledHash = mappedFieldsHash(fromWaveCustomer(node));
+    const {db, batchLog} = importDb([
+      {
+        data: () => ({
+          waveCustomerId: "w1",
+          createdAt: TS,
+          wave: {lastSyncedHash: settledHash},
+        }),
+        ref: {id: "settled-doc"},
+      },
+    ]);
+    const graphql = graphqlSeq(listPage(1, 1, 1, [node]));
+
+    const summary = await importCustomers({
+      db, graphql, businessId: "biz-1", now,
+    });
+
+    expect(summary.skippedUnchanged).toBe(1);
+    // `updated` counts real changes only — it used to count every existing
+    // customer written, so an untouched roster reported "650 updated".
+    expect(summary.updated).toBe(0);
+    expect(batchLog.sets).toHaveLength(0);
+  });
+
+  test("still writes a matching doc that is missing createdAt", async () => {
+    // The update branch is the only thing that backfills createdAt, and the
+    // clients list orders by it — Firestore excludes docs missing an orderBy
+    // field, so skipping here would hide a legacy doc from the list forever.
+    const node = waveNode("w1", "Alpha");
+    const settledHash = mappedFieldsHash(fromWaveCustomer(node));
+    const {db, batchLog} = importDb([
+      {
+        data: () => ({
+          waveCustomerId: "w1",
+          wave: {lastSyncedHash: settledHash},
+        }),
+        ref: {id: "legacy-doc"},
+      },
+    ]);
+    const graphql = graphqlSeq(listPage(1, 1, 1, [node]));
+
+    const summary = await importCustomers({
+      db, graphql, businessId: "biz-1", now,
+    });
+
+    expect(summary.skippedUnchanged).toBe(0);
+    expect(summary.updated).toBe(1);
+    expect(batchLog.sets[0].data.createdAt).toBe(TS);
+  });
+
+  test("writes when Wave's values have actually changed", async () => {
+    const {db, batchLog} = importDb([
+      {
+        data: () => ({
+          waveCustomerId: "w1",
+          createdAt: TS,
+          wave: {lastSyncedHash: mappedFieldsHash(
+              fromWaveCustomer(waveNode("w1", "Old Name")))},
+        }),
+        ref: {id: "changed-doc"},
+      },
+    ]);
+    const graphql = graphqlSeq(listPage(1, 1, 1, [waveNode("w1", "New Name")]));
+
+    const summary = await importCustomers({
+      db, graphql, businessId: "biz-1", now,
+    });
+
+    expect(summary.skippedUnchanged).toBe(0);
+    expect(summary.updated).toBe(1);
+    expect(batchLog.sets[0].data.name).toBe("New Name");
+  });
+
+  test("protects nothing when no skip set is supplied", async () => {
+    // Defaulting to an empty set keeps the helper callable in tests, but a
+    // production caller that forgets it silently reopens the clobber above.
+    const existingRef = {id: "existing-doc"};
+    const {db, batchLog} = importDb([
+      {data: () => ({waveCustomerId: "w1"}), ref: existingRef},
+    ]);
+    const graphql = graphqlSeq(listPage(1, 1, 1, [waveNode("w1", "Alpha")]));
+
+    const summary = await importCustomers({
+      db, graphql, businessId: "biz-1", now,
+    });
+
+    expect(summary.skippedPending).toBe(0);
+    expect(batchLog.sets).toHaveLength(1);
+  });
 
   test("idempotent: existing waveCustomerId updates same ref, no duplicate",
       async () => {

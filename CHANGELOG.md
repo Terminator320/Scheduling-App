@@ -10,6 +10,40 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.43.0+68] - 2026-08-04
+
+### Added
+- **Wave syncs both ways from one button now.** Settings › "Import customers
+  from Wave" is now **"Sync with Wave"**: it sends the client edits waiting to
+  go to Wave first, then pulls Wave's customers back into the app.
+
+### Changed
+- **The sync result says which side each number belongs to.** "Synced with
+  Wave — 2 clients added to Wave, 8 clients added to the app, 1 client updated
+  in the app", instead of the old "3 added, 5 updated, 2 skipped" that never
+  said added *where*. Parts that moved nothing are left out, and a run that
+  moved nothing at all says so.
+- **It tells you when the sync didn't finish, rather than looking clean.** If
+  more clients are queued for Wave than one press can get through, it says how
+  many are left. If a client was rejected by Wave and won't be retried, it says
+  so — those need you to open the client and fix what Wave objected to. And if
+  the sending half failed outright, it says that too, instead of reporting
+  "everything was already up to date".
+
+### Fixed
+- **Syncing no longer claims it updated every client.** A sync over an
+  unchanged roster reported "650 clients updated in the app" — it was counting
+  every client it rewrote, and it rewrote all of them whether or not anything
+  had changed. It now touches only the clients Wave actually changed, so the
+  count means what it says and a quiet sync finishes in a fraction of the time.
+- **Importing from Wave no longer wipes a client edit that hasn't reached Wave
+  yet.** An edit sitting in the queue — including one waiting to retry after a
+  Wave hiccup — was overwritten by the next import and marked as synced, so the
+  pending send then decided there was nothing to do. The change was gone, the
+  client looked fine, and nothing reported it. Both the Sync button and the
+  daily automatic import now leave those clients alone until their change has
+  been delivered.
+
 ## [1.42.0+67] - 2026-08-04
 
 ### Added

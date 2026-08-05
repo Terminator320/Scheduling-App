@@ -609,8 +609,8 @@
             <td class="idx">22</td>
             <td class="fn">waveImportCustomers</td>
             <td><span class="trig">onCall</span></td>
-            <td>Admin seeds clients from Wave</td>
-            <td class="num">&lt;2</td>
+            <td>Admin two-way sync with Wave (push outbox, then pull customers)</td>
+            <td class="num">&lt;10</td>
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
@@ -855,7 +855,7 @@
       <li>Free tiers cited: Functions <b>2M invocations + 180K vCPU-s</b>; Places <b>10K calls per SKU</b>; Firestore <b>50K reads / 20K writes / 20K deletes per day</b>; Storage <b>5 GB</b>; Scheduler <b>3 jobs</b> (six now run, so three bill at $0.10/job); FCM push <b>unlimited &amp; free</b>; Secret Manager <b>6 versions + 10K access</b>.</li>
       <li>Google Places replaced its $200 monthly credit (March 2025) with a per-SKU free monthly cap; session tokens can bill in-session autocomplete as $0.</li>
       <li>Wave Accounting, Firebase Cloud Messaging, and Apple's APNs (which carries the iOS Live Activity card) charge nothing per call &mdash; those functions cost only their (free-tier) Firebase compute.</li>
-      <li>All 27 functions are wired in <code>functions/index.js</code> for <code>schedulingapp-88727</code>; counts reflect the source as of 2026-08-04. Corrected on that date: an earlier revision said 23 and claimed P4c had <em>retired</em> the signup-code callables. It did not &mdash; <code>createEmployeeInvite</code> and <code>redeemSignupCode</code> are kept as the <code>#compat-1.37.1</code> shim for the build still on the App Store (<code>previewInvite</code> and <code>revokeInvite</code> were never deployed and do not exist in code). P4c added three account callables, client archive/delete added <code>deleteClient</code>, and <code>changeEmployeeEmail</code> landed 2026-08-04. None of them moves a cost lever &mdash; all sit in the free tier at &lt;10 calls/month.</li>
+      <li>All 27 functions are wired in <code>functions/index.js</code> for <code>schedulingapp-88727</code>; counts reflect the source as of 2026-08-04. Still 27 &mdash; the 2026-08-04 two-way Wave sync changed what <code>waveImportCustomers</code> does, not how many functions exist; it is pressed more often now that it is labelled &ldquo;Sync with Wave&rdquo;, but it stays admin-only and rate-limited at 5/hour, and its added Firestore work is one bounded queue drain plus two small reads per press. Corrected on that date: an earlier revision said 23 and claimed P4c had <em>retired</em> the signup-code callables. It did not &mdash; <code>createEmployeeInvite</code> and <code>redeemSignupCode</code> are kept as the <code>#compat-1.37.1</code> shim for the build still on the App Store (<code>previewInvite</code> and <code>revokeInvite</code> were never deployed and do not exist in code). P4c added three account callables, client archive/delete added <code>deleteClient</code>, and <code>changeEmployeeEmail</code> landed 2026-08-04. None of them moves a cost lever &mdash; all sit in the free tier at &lt;10 calls/month.</li>
     </ul>
   </div>
 </div>
