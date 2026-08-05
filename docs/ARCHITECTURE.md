@@ -1,7 +1,7 @@
 # Architecture Overview
 
 Scheduling app for a plumbing business — manages appointments, clients, and employees.
-Backend: Firebase (Auth, Firestore, Storage, App Check, Crashlytics). Targets Android and iOS.
+Backend: Firebase (Auth, Firestore, Storage, App Check, Crashlytics). **Targets iOS only** — `android/` was deleted 2026-08-05; the "Android no-op" notes below describe plugin behaviour the app no longer exercises.
 
 ---
 
@@ -47,7 +47,7 @@ lib/
 │
 ├── routes/
 │   ├── app_routes.dart              Single onGenerateRoute; typed arg classes per route; page transitions
-│   └── hub_shell.dart               HubShell — persistent IndexedStack of the five always-alive tabs (calendar/clients/employees/history/settings); switching tabs keeps state, TickerMode mutes hidden tabs, each tab scoped under its own PrimaryScrollScope + unique FAB heroTag
+│   └── hub_shell.dart               HubShell — persistent IndexedStack of the four HubTab panes (calendar/clients/employees/liveMap; history/dashboard/settings are PushedDestinations above the shell). Tabs are lazy-built on first visit (`_built` + `_screenCache`) and kept alive from then on, so switching keeps state; TickerMode mutes hidden tabs, each tab scoped under its own PrimaryScrollScope + unique FAB heroTag
 │
 ├── l10n/
 │   ├── app_en.arb                   English strings (source of truth — edit this)
@@ -141,6 +141,22 @@ DST-shift days. `todayRangeProvider`, the drawer's job count, the day route and
 hand-copied at four sites before, two of which named each other as the
 authority.
 
+**`fetchStart` is what the query actually starts at**, and it is a derived
+getter (`start − maxAppointmentSpanDays`), never a constructor field: `==` is
+keyed on `start`/`end`, so two surfaces asking for the same day still produce
+equal ranges and share one listener. Widening at a call site instead forks a
+second Firestore query for the same day. The widening exists because the query
+filters on `startTime` alone, so a job that began up to 14 days ago and is
+still running would otherwise be invisible.
+
+**A range stream is therefore a SUPERSET of its range, and every consumer must
+re-scope** — through `runsOn(appointment, day)` (or `runsInRange`), never by
+comparing `startTime` at the call site. Only the calendar clipped it at first;
+the day route, the roster's "jobs today", the employee detail's TODAY panel and
+the drawer's calendar badge each read the list raw and silently reported a
+fortnight of past jobs as today's. A reducer over `appointmentsInRangeProvider`
+with no day predicate is a bug.
+
 ### Services vs Repositories
 
 - **Repositories** speak Firestore. They take and return domain models. All Firestore reads/writes go through a repository.
@@ -168,7 +184,7 @@ Each detail surface (client, employee, appointment) is a thin coordinator that
 renders inside the shared `DetailSheetListView` (`shared/widgets/sheets/` —
 standard padding, optional drag handle, keyboard-inset-aware bottom gap) and
 toggles between a read-only **view body** and an **edit form**. The client
-(`client_view_body.dart` / `client_edit_form.dart`) and appointment
+(`client_view_body.dart` / `edit_client_sheet.dart`) and appointment
 (`details_view_body.dart` / `details_edit_body.dart`) views keep the two in
 separate widgets, and their edit `TextEditingController`s are built **lazily on
 first edit** — a view-only open never allocates them. Loading/destructive
@@ -289,6 +305,70 @@ shown, so `isAllDay` is threaded through all four mirrors:
 The version constant is stamped in `schedule_snapshot.dart` and gated in
 `ScheduleSnapshot.swift` — bump both together or the extension rejects the
 snapshot outright and answers "Open ES Pro to sync your schedule."
+
+### Multi-day appointments (2026-08-03)
+
+A job may span up to `maxAppointmentSpanDays` (**14**) days, and its two stored
+times are a **daily window**: 9:00 AM–5:00 PM means 9–5 on *each* of those days,
+not one unbroken stretch through the nights.
+
+**No schema change.** `startTime`/`endTime` already carry the span, `isMultiDay`
+is derived and never stored (the same discipline as display-only `overdue`), and
+`firestore.rules` doesn't constrain either instant — so the 14-day cap is
+client-side only. Design and the remaining work: `docs/plans/2026-08-02-multi-day-appointments.md`.
+
+**`AppointmentDaySlice` (`calendar/domain/appointment_day_slice.dart`) is the
+one owner of day-scoping.** Everything routes through it rather than
+re-deriving a day index or a run length at a call site — the same drift that
+bit the `displayStatusAt` ladder and `_who`:
+
+| Helper | What it answers |
+| --- | --- |
+| `sliceFor(appointment, day)` | That day's concrete window + `dayIndex`/`dayCount`, or null |
+| `runsOn` / `runsInRange` | Does this job run on that day / anywhere in that range — the re-scoping predicate every range-stream consumer needs |
+| `expandToDays(...)` | The whole run fanned into per-work-day slices, clamped at 14 |
+| `lastWorkDayOf` / `lastWorkDayOfWindow` | The last day the crew starts work (the raw-pair form is for the booking-conflict dialog, which holds a resolved pair and no record yet) |
+| `dailyWindowsOverlap(...)` | Whether two runs actually clash — all window pairs, not matching day indices |
+
+**The end date names the last day the crew STARTS work**, never the morning an
+overnight run finishes, so the length is `end − start + 1` for day jobs and
+night shifts alike, and slices are generated per **work** day rather than per
+calendar day the instant span touches. A window whose end time is at or before
+its start time crosses midnight and counts **nights** — which is why there is
+deliberately **no end-after-start validation**: that ordering *is* a night
+shift. Accepted consequence: 9:00–9:00 on a one-day job books 24 hours instead
+of erroring, because it is structurally identical to a legitimate one-night
+shift.
+
+**A conflict check is a daily-window overlap, not an instant overlap.**
+`findBusyEmployees`' Firestore query is only a coarse prefilter; its results are
+filtered through `dailyWindowsOverlap`. Testing the raw instants reported a 9–5
+run across a week as clashing with a 7 pm job inside it — a phantom clash the
+admin had to force through on every evening job.
+
+**Display:** the card reads `9:00 AM – 5:00 PM · Day 3 of 5`. "All day" stays
+reserved for `isAllDay` and is never borrowed for a timed job's middle day — a
+continuing timed job has a real start time that day and sorts in clock order;
+only all-day blocks pin above the day.
+
+**Backend:** `MAX_APPOINTMENT_SPAN_DAYS`/`_MS` in `functions/time_utils.js`
+hand-mirrors the Dart constant (each carries a pointer to the other). Every
+sweep that filters on `startTime` must reach at least that far back, or a job
+already under way is invisible to it — that one missing constant caused three
+separate bugs (no overdue prompt for multi-day runs, a digest telling an on-site
+crew "no jobs tomorrow", and a long job dropping out of its own travel context).
+"Is this job still live?" gates on the run's **end** and has one owner,
+`hasWorkLeft(record, nowMs)` — gating on `startTime` meant cancelling a job
+mid-run pushed nothing to the crew, who turned up the next morning. And
+widening a floor to admit started jobs makes a status filter **mandatory** where
+it used to be free: a `startTime >= now` query could never match a completed
+job, so `countFutureAssignments` now tests `isTerminal` explicitly.
+
+**Not yet mirrored** (owed by Plan 2 — `docs/plans/2026-08-03-multi-day-appointments-PLAN-2-mirrors.md`):
+the home widget, `functions/widget_payload_utils.js` and the Siri snapshot still
+treat every job as single-day, so days 2+ of a run are invisible there.
+`notification_messages.js` and `travel_utils.js` were closed by the 2026-08-04
+audit.
 
 ### Repeating Appointments
 
@@ -414,8 +494,12 @@ Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allo
 
 ### Platform Adaptivity (iOS)
 
-`lib/core/adaptive/` gives an iOS-native look on iOS/macOS while leaving Android
-untouched. `context.isCupertino` (`adaptive.dart`) — reading `Theme.of(context).platform`,
+`lib/core/adaptive/` gives an iOS-native look on iOS/macOS, falling back to
+Material everywhere else. Since `android/` was deleted (2026-08-05) the Material
+branch no longer ships anywhere — it survives as the `else` arm and is exercised
+only by widget tests that force `ThemeData(platform:)`; keep the branch rather
+than collapsing it, since that is how the two looks stay testable.
+`context.isCupertino` (`adaptive.dart`) — reading `Theme.of(context).platform`,
 so widget tests force either look via `ThemeData(platform:)` — is the single source of
 truth for platform branching; new platform-conditional UI routes through it, never ad-hoc
 `Platform.isIOS` / `defaultTargetPlatform`. The sole exception is real device *capability*
@@ -464,10 +548,13 @@ day and filters by year/employee via the reusable `HistoryFilterBar`
 (`clients/widgets/sections/`). It is no longer a `ClientsMode` of the clients
 screen.
 
-The five primary destinations live in one persistent `HubShell`
-(`routes/hub_shell.dart`) — an `IndexedStack` that keeps every tab mounted so
-switching is instant and state survives, with the Android back button returning
-to the calendar tab instead of exiting. Because all tabs are alive at once under
+The four `HubTab` panes live in one persistent `HubShell`
+(`routes/hub_shell.dart`) — an `IndexedStack` that builds a tab on its first
+visit and keeps it mounted from then on, so switching is instant and state
+survives. A system back gesture returns to the calendar tab instead of leaving
+the shell (`canPop: _current == HubTab.calendar`), which on iOS is what governs
+the left-edge swipe. (`history`, `dashboard` and `settings` are `PushedDestination`s above
+the shell, not panes inside it.) Because visited tabs stay alive at once under
 a single route (which offers one `PrimaryScrollController`), each tab — and each
 pane of the calendar/master-detail splits — is wrapped in `PrimaryScrollScope`
 so their always-attached primary scroll views don't pile onto one controller
@@ -736,7 +823,9 @@ users/{docId}/fcmTokens/{token}   FCM push tokens, one doc per device (doc id =
                        the token). Owner-only per firestore.rules, shape-locked
                        to these fields; deleteAccount recursiveDelete()s them
                        with the parent doc; stale tokens self-clean on send failure
-  platform: 'ios' | 'android'
+  platform: 'ios' | 'android'   'android' is retained in the shape, not dead:
+                       the 1.37.1 build on the App Store still writes it, and
+                       the app itself has been iOS-only since 2026-08-05
   locale: 'en' | 'fr'  drives per-device notification language server-side
   uid: string          must equal the caller's auth uid
   createdAt, updatedAt server timestamps
@@ -773,6 +862,15 @@ users/{docId}/presence/location   single live-location doc (id always
 
 appointments/{docId}
   title, startTime, endTime, status, address, notes, materialsNeeded
+                       startTime/endTime are a DAILY WINDOW and may span up to
+                       14 days; the span is the two instants, nothing else.
+                       isMultiDay is DERIVED (AppointmentDaySlice), never stored
+  isPersonal: bool     time blocked off for the crew — no client, no address
+                       (both written as empty strings); never derives
+                       in_progress/overdue
+  isAllDay: bool       stores a REAL midnight → 23:59 span, not a sentinel, so
+                       range queries and orderBy('startTime') are unaffected;
+                       the flag only changes how it is rendered/spoken
   repeat: 'none' | 'four_months' | 'six_months' | 'one_year'   stored on every visit of a series
   seriesId: string         links the visits of one repeat series (first visit's doc id; '' when not repeating)
   clientId: string         → clients/{docId}
@@ -896,9 +994,11 @@ rejected.
 - **Unit / policy tests** (`test()`): `ClientSearchPolicy`, `AppointmentFormValidator`, `AuthErrorMapper`, provider logic (`accountDisabledProvider`, `splashDestinationProvider`). No Firebase.
 - **Widget tests** (`testWidgets()`): UI behavior — button visibility, dialog appearance, error banners, overflow at 2× text scale.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
-- **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
+- **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. For overflow tests, pump the widget at a **small-phone size with 2× text** — set `tester.view.physicalSize` (a 260-wide logical viewport is the usual worst case) and wrap in a `MediaQuery` carrying `textScaler: TextScaler.linear(2)`. Each test file keeps its own local `_harness` helper for this; there is no shared one.
 
-Run: `flutter test` (1603 test cases as of 2026-08-04; `functions` adds 798 jest
+Run: `flutter test` (1647 passing as of 2026-08-05 — that is the runner's count;
+`grep`ing for `test(`/`testWidgets(` gives 1603, since some cases are generated
+inside loops; `functions` adds 798 jest
 tests in `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0 info
 lints** — see Analysis & Linting below; see

@@ -66,15 +66,9 @@ linked_*.ds
 unlinked.ds
 unlinked_spec.ds
 
-# Android related
-**/android/**/gradle-wrapper.jar
+# Android related — android/ was deleted 2026-08-05 (iOS-only). These stay so a
+# stray Gradle/keystore artifact can't be committed by accident.
 .gradle/
-**/android/captures/
-**/android/gradlew
-**/android/gradlew.bat
-**/android/local.properties
-**/android/**/GeneratedPluginRegistrant.java
-**/android/key.properties
 *.jks
 
 # iOS/XCode related

@@ -78,7 +78,8 @@ phone, or photos — so it adds no new collected data type.
   - `ios/GoogleService-Info.plist` → `ios/` **root** (NOT `ios/Runner/` — the
     Xcode project references it at the root group and it's already in the
     Resources build phase)
-  - `android/app/google-services.json` — NOT needed for iOS builds; skip.
+  - (`android/app/google-services.json` used to be listed here as "skip". The
+    whole `android/` tree was deleted on 2026-08-05 — iOS is the only platform.)
 
 ## Part 2. Mac environment
 
@@ -859,11 +860,11 @@ Export Compliance needs no action: `ITSAppUsesNonExemptEncryption = false` is in
   `firebase-admin`; nothing reachable on a call path, nothing shipped in the
   app. Do **not** force `firebase-admin@14`. Re-check on the next admin-SDK
   minor.
-- **Android / Play** — keystore, Data Safety, Play Integrity, monochrome icon,
-  R8 smoke test. Android is a dev-only harness on the Windows box; ignore unless
-  a Play release is revisited.
-- **Android foreground push banner** — FCM shows no banner while the app is
-  foregrounded on Android. Dev harness only; accepted.
+- **Android / Play** — moot. `android/` was **deleted** on 2026-08-05 and iOS
+  is the only platform, so keystore, Data Safety, Play Integrity, the monochrome
+  icon and the R8 smoke test are all off the table (as is the old caveat that
+  FCM shows no foreground banner on Android). Recover the tree from git history
+  if a Play release is ever revisited.
 - **Series bulk edits** write N appointment docs → N pushes. Accepted for v1
   (each is a real change).
 - The rest of the audit's findings live in `docs/audits/CODEBASE_AUDIT.md`.
