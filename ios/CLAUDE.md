@@ -46,6 +46,30 @@ iOS notes (Phase 0 of clean-architecture restructure):
   App Attest fails on the iOS Simulator — verify on real hardware.
 - `Info.plist` already declares `NSCameraUsageDescription`,
   `NSPhotoLibraryUsageDescription`, and `LSApplicationQueriesSchemes`.
+- **`NSLocationAlwaysAndWhenInUseUsageDescription` is declared on purpose even
+  though the app never requests Always — do NOT "clean it up".** It reads like a
+  dead over-declaration (the app calls `Geolocator.requestPermission()`, which
+  is when-in-use, and `UIBackgroundModes` carries only `remote-notification`),
+  but `geolocator_apple` compiles `requestAlwaysAuthorization` into the binary
+  (`PermissionHandler.m:68,77`), so App Store Connect's static scan emails
+  **ITMS-90683 "Missing purpose string"** on every upload if the key is absent.
+  Removing it buys nothing and costs a warning email per build. It also cannot
+  change behaviour: on iOS the plugin tests `NSLocationWhenInUseUsageDescription`
+  FIRST and only falls through to Always as an `else if`, so with both keys
+  present the Always branch is unreachable — which is what keeps the privacy
+  policy's "it only ever asks for 'While Using the App'" true. The purpose
+  string itself says the app only uses location while open, so a reviewer asking
+  why Always is declared has the answer in front of them. The plist carries a
+  comment saying all of this; keep them in sync.
+- **Each extension needs its OWN `PrivacyInfo.xcprivacy`, and only one of the
+  two gets it for free.** `ScheduleWidget` is a `PBXFileSystemSynchronizedRootGroup`
+  (Xcode 16 synchronized folder), so a file dropped in that directory is bundled
+  automatically — its empty Resources build phase looks like a bug and is not.
+  `SiriIntents` is a plain `PBXGroup`, so its manifest needs an explicit
+  fileRef + build file + Resources-phase entry, added 2026-08-05. Both
+  extensions read `UserDefaults(suiteName:)` (required-reason API `CA92.1`);
+  a missing declaration draws **ITMS-91053**. Adding a third extension means
+  adding its manifest by hand unless the group is synchronized too.
 - **Deep-link tap URLs must keep the `homeWidget` query item.** The three iOS
   producers (`ScheduleWidget.swift`, `LiveActivitiesAppAttributes.swift`,
   `SiriIntents/ScheduleSnapshot.swift`) emit

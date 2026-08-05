@@ -31,6 +31,7 @@
 		D9C4679D00D13B2280D28348 /* AppointmentCountIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35DDB15D85502485A5567909 /* AppointmentCountIntent.swift */; };
 		DA57DA1E5C4EDF0000000B01 /* DayScheduleIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57DA1E5C4EDF0000000D01 /* DayScheduleIntent.swift */; };
 		DA57DA1E5C4EDF0000000B02 /* TomorrowScheduleIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57DA1E5C4EDF0000000D02 /* TomorrowScheduleIntent.swift */; };
+		DA57DA1E5C4EDF0000000C01 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = DA57DA1E5C4EDF0000000E01 /* PrivacyInfo.xcprivacy */; };
 		DA57DA1E5C4EDF0000000B03 /* NthAppointmentIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA57DA1E5C4EDF0000000D03 /* NthAppointmentIntent.swift */; };
 /* End PBXBuildFile section */
 
@@ -127,6 +128,7 @@
 		DA57DA1E5C4EDF0000000D01 /* DayScheduleIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DayScheduleIntent.swift; sourceTree = "<group>"; };
 		DA57DA1E5C4EDF0000000D02 /* TomorrowScheduleIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TomorrowScheduleIntent.swift; sourceTree = "<group>"; };
 		DA57DA1E5C4EDF0000000D03 /* NthAppointmentIntent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NthAppointmentIntent.swift; sourceTree = "<group>"; };
+		DA57DA1E5C4EDF0000000E01 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		DD98B59A07DBABDD271F184D /* SiriIntentsExtension.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SiriIntentsExtension.swift; sourceTree = "<group>"; };
 		E1B3C4064AE19F11DBF0ABD0 /* SiriStrings.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SiriStrings.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -202,6 +204,7 @@
 		7763E386A3523EE05B866CB0 /* SiriIntents */ = {
 			isa = PBXGroup;
 			children = (
+				DA57DA1E5C4EDF0000000E01 /* PrivacyInfo.xcprivacy */,
 				35DDB15D85502485A5567909 /* AppointmentCountIntent.swift */,
 				DA57DA1E5C4EDF0000000D01 /* DayScheduleIntent.swift */,
 				B68B901D894CE9FE351D9D60 /* ESProShortcuts.swift */,
@@ -431,6 +434,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA57DA1E5C4EDF0000000C01 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
