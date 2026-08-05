@@ -12,6 +12,7 @@ import 'package:scheduling/features/wave/application/wave_providers.dart';
 import 'package:scheduling/features/wave/domain/models/wave_connection.dart';
 import 'package:scheduling/features/wave/domain/models/wave_import_schedule.dart';
 import 'package:scheduling/features/wave/domain/wave_failure.dart';
+import 'package:scheduling/features/wave/domain/wave_sync_notice.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 /// Localized label for an automatic-import cadence — used by the picker row and
@@ -39,11 +40,15 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   // [waveConnectionProvider] status right after connecting.
   WaveConnection? _connection;
   bool _connectBusy = false;
-  bool _importBusy = false;
+  bool _syncBusy = false;
   bool _scheduleBusy = false;
 
-  /// Fail-fast offline guard so the ~20s Wave callables don't hang. Surfaces
-  /// the network notice and returns true, so the caller can abort first.
+  /// True while either Wave round trip is in flight. The cadence picker adds
+  /// [_scheduleBusy] on top; the two buttons swap places, so neither needs it.
+  bool get _busy => _connectBusy || _syncBusy;
+
+  /// Fail-fast offline guard so the long-running Wave callables don't hang.
+  /// Surfaces the network notice and returns true, so the caller can abort.
   bool _blockedOffline() {
     if (!ref.read(isOfflineProvider)) return false;
     ref
@@ -99,23 +104,17 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
     );
   }
 
-  Future<void> _import() async {
+  Future<void> _sync() async {
     if (_blockedOffline()) return;
     await _runWaveAction(
-      tag: 'IMPORT',
-      setBusy: ({required busy}) => setState(() => _importBusy = busy),
+      tag: 'SYNC',
+      setBusy: ({required busy}) => setState(() => _syncBusy = busy),
       action: () async {
-        final summary = await ref.read(waveServiceProvider).importCustomers();
+        final summary = await ref.read(waveServiceProvider).syncCustomers();
         if (!mounted) return;
         ref
             .read(noticeServiceProvider)
-            .success(
-              context.l10n.wave_importSuccess(
-                summary.imported,
-                summary.updated,
-                summary.skippedArchived,
-              ),
-            );
+            .success(waveSyncNotice(context.l10n, summary));
       },
     );
   }
@@ -178,7 +177,7 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
           _ConnectedStatus(
             connection: connection,
             scheduleBusy: _scheduleBusy,
-            onTapSchedule: _connectBusy || _importBusy || _scheduleBusy
+            onTapSchedule: _busy || _scheduleBusy
                 ? null
                 : () => _pickSchedule(connection.importSchedule),
           ),
@@ -187,15 +186,15 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
           AnimatedLoadingButton(
             label: context.l10n.wave_connectToWave,
             isLoading: _connectBusy,
-            onPressed: _connectBusy || _importBusy ? null : _connect,
+            onPressed: _busy ? null : _connect,
           )
         else
-          // Import only makes sense once connected — a tap while disconnected
-          // is guaranteed to fail.
+          // Syncing only makes sense once connected — a tap while
+          // disconnected is guaranteed to fail.
           AnimatedLoadingButton(
-            label: context.l10n.wave_importCustomers,
-            isLoading: _importBusy,
-            onPressed: !_connectBusy && !_importBusy ? _import : null,
+            label: context.l10n.wave_syncButton,
+            isLoading: _syncBusy,
+            onPressed: _busy ? null : _sync,
             variant: AnimatedLoadingButtonVariant.outlined,
           ),
       ],

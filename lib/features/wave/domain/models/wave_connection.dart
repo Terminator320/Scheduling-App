@@ -47,23 +47,40 @@ class WaveConnection {
   int get hashCode => Object.hash(businessId, businessName, importSchedule);
 }
 
+/// What one "Sync with Wave" run moved, in both directions.
+///
+/// `imported`/`updated` are what landed in THIS APP; `pushedCreated`/
+/// `pushedUpdated` are what landed in WAVE. `pushedPending` is the outbox
+/// backlog the interactive sync didn't get through — the scheduled worker
+/// finishes those, and the notice says so rather than implying the sync
+/// covered everything.
 @immutable
-class WaveImportSummary {
-  const WaveImportSummary({
+class WaveSyncSummary {
+  const WaveSyncSummary({
     required this.totalCount,
     required this.imported,
     required this.updated,
     required this.skippedArchived,
     required this.pages,
+    required this.pushedCreated,
+    required this.pushedUpdated,
+    required this.pushedPending,
+    required this.pushedFailed,
+    required this.pushIncomplete,
   });
 
-  factory WaveImportSummary.fromMap(Map<String, dynamic> map) {
-    return WaveImportSummary(
+  factory WaveSyncSummary.fromMap(Map<String, dynamic> map) {
+    return WaveSyncSummary(
       totalCount: (map['totalCount'] as num?)?.toInt() ?? 0,
       imported: (map['imported'] as num?)?.toInt() ?? 0,
       updated: (map['updated'] as num?)?.toInt() ?? 0,
       skippedArchived: (map['skippedArchived'] as num?)?.toInt() ?? 0,
       pages: (map['pages'] as num?)?.toInt() ?? 0,
+      pushedCreated: (map['pushedCreated'] as num?)?.toInt() ?? 0,
+      pushedUpdated: (map['pushedUpdated'] as num?)?.toInt() ?? 0,
+      pushedPending: (map['pushedPending'] as num?)?.toInt() ?? 0,
+      pushedFailed: (map['pushedFailed'] as num?)?.toInt() ?? 0,
+      pushIncomplete: map['pushIncomplete'] == true,
     );
   }
 
@@ -72,19 +89,14 @@ class WaveImportSummary {
   final int updated;
   final int skippedArchived;
   final int pages;
+  final int pushedCreated;
+  final int pushedUpdated;
+  final int pushedPending;
 
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is WaveImportSummary &&
-          runtimeType == other.runtimeType &&
-          totalCount == other.totalCount &&
-          imported == other.imported &&
-          updated == other.updated &&
-          skippedArchived == other.skippedArchived &&
-          pages == other.pages;
+  /// Clients the push gave up on — dead-lettered, so they will NOT retry.
+  final int pushedFailed;
 
-  @override
-  int get hashCode =>
-      Object.hash(totalCount, imported, updated, skippedArchived, pages);
+  /// True when the push half itself errored. Distinguishes "the queue was
+  /// empty" from "we could not find out", which produce identical zeros.
+  final bool pushIncomplete;
 }

@@ -121,7 +121,7 @@ void main() {
     });
   });
 
-  group('importCustomers', () {
+  group('syncCustomers', () {
     test('parses the import summary', () async {
       bind('waveImportCustomers');
       final result = _MockResult();
@@ -136,7 +136,7 @@ void main() {
         () => callable.call<dynamic>(any<Object?>()),
       ).thenAnswer((_) async => result);
 
-      final summary = await service.importCustomers();
+      final summary = await service.syncCustomers();
 
       expect(summary.totalCount, 10);
       expect(summary.imported, 7);

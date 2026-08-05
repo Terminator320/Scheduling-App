@@ -11,6 +11,8 @@ const {importCustomers} = require("./customers");
 const {
   enqueueCustomerUpsert,
   drainQueue,
+  countQueuedJobs,
+  listOutstandingClientIds,
   shouldEnqueueClientWrite,
 } = require("./worker");
 const {mappedFieldsHash} = require("./mappers");
@@ -266,7 +268,87 @@ const waveSetImportSchedule = onCall(
     },
 );
 
-// waveImportCustomers — admin-only one-shot Wave → App seed.
+// The interactive sync drains the outbox itself so it can report what reached
+// Wave. Unlike waveSyncWorker, the bound here is the ADMIN'S PATIENCE, not the
+// function timeout: the client gives up at `kWaveSyncTimeoutSeconds` (120,
+// `wave_service.dart` — hand-mirrored, each carries a pointer to the other)
+// and a callable cannot be cancelled,
+// so anything past that is work the admin has already been told failed — and
+// will re-trigger by tapping again. Push therefore gets a small slice and the
+// import keeps the rest; waveSyncWorker mops up the backlog either way.
+//
+// The batch limit is sized to what the budget can actually chew: dispatch is
+// sequential (claim txn → Wave round trip → outcome txn, ~1s/job), and the
+// query fetches batchLimit docs up front, so a limit the deadline can't reach
+// just bills reads for jobs it discards. It is also a second consumer of
+// Wave's 60/min ceiling alongside the every-5-minute worker (see
+// DEFAULT_BATCH_LIMIT's sizing note in worker.js) — 20/min leaves room.
+const SYNC_PUSH_BATCH_LIMIT = 20;
+const SYNC_PUSH_BUDGET_MS = 20 * 1000;
+
+/**
+ * Pushes pending outbox jobs to Wave for the interactive sync, then counts
+ * what is still queued.
+ *
+ * Best-effort by design: this half is a courtesy — `waveSyncWorker` drains the
+ * same queue every 5 minutes — so a drain failure must not fail the sync the
+ * admin asked for. The import that follows is the part allowed to throw. The
+ * two steps are caught separately on purpose: the pending count matters MORE
+ * when the drain failed, since it is the only thing that then tells the admin
+ * work is still outstanding.
+ *
+ * @param {{businessId: string, uid: string}} params Connected business id and
+ *   the calling admin's uid (for the failure log only).
+ * @return {!Promise<{created: number, updated: number, pending: number,
+ *   failed: number, incomplete: boolean}>} What landed in Wave, what is still
+ *   queued, what dead-lettered, and whether the drain itself threw.
+ */
+async function drainForSync({businessId, uid}) {
+  const result =
+    {created: 0, updated: 0, pending: 0, failed: 0, incomplete: false};
+  try {
+    // No `graphql`/`upsertCustomer` — drainQueue defaults to the real Wave
+    // client and WAVE_FULL_ACCESS_TOKEN is in scope via the callable's
+    // `secrets` binding, same as waveSyncWorker below.
+    const drained = await drainQueue({
+      businessId,
+      batchLimit: SYNC_PUSH_BATCH_LIMIT,
+      deadlineMs: Date.now() + SYNC_PUSH_BUDGET_MS,
+    });
+    result.created = drained.created;
+    result.updated = drained.updated;
+    // Dead-lettered jobs are NOT queued and will never retry, so without
+    // this the admin is told "already up to date" about clients that can
+    // now only reach Wave by hand.
+    result.failed = drained.dead;
+  } catch (e) {
+    // `incomplete` is what stops the notice reporting an all-zero drain as
+    // "everything was already up to date" — a broken push and a quiet queue
+    // produce identical counters, and only one of them is good news.
+    result.incomplete = true;
+    logger.warn("WAVE-CUST sync push failed", {uid, error: String(e)});
+  }
+
+  // Counted AFTER the drain, so the number is what the admin still has to
+  // wait for. Without it a 3-of-200 drain would report "3 added to Wave" and
+  // read as a finished sync.
+  try {
+    result.pending = await countQueuedJobs();
+  } catch (e) {
+    result.incomplete = true;
+    logger.warn("WAVE-CUST sync pending count failed", {uid, error: String(e)});
+  }
+  return result;
+}
+
+// waveImportCustomers — admin-only two-way sync: push the outbox to Wave,
+// then pull Wave customers back into `clients`.
+//
+// #compat-1.37.1 — RENAME, NOT DELETE. Every other hit of that tag is a
+// deletion site; this one is the opposite instruction. The 1.37.1+64 App Store
+// build calls this name, and renaming a deployed callable deletes the function
+// that build depends on. When the shim is swept, rename to waveSyncCustomers
+// rather than removing anything (same for wave_service.dart's caller).
 const waveImportCustomers = onCall(
     {
       secrets: [WAVE_FULL_ACCESS_TOKEN],
@@ -291,13 +373,35 @@ const waveImportCustomers = onCall(
         throw new HttpsError("failed-precondition", "wave/not-bootstrapped");
       }
 
-      logger.info("WAVE-CUST import starting", {
+      logger.info("WAVE-CUST sync starting", {
         uid: req.auth.uid,
         businessId,
       });
+
+      // Push BEFORE pulling. Local edits are the newer truth here — the
+      // outbox holds writes the app already accepted — so importing first
+      // would overwrite them with the Wave rows they are about to replace.
+      const pushed = await drainForSync({businessId, uid: req.auth.uid});
+
+      // Ordering is NOT sufficient on its own. The drain is bounded and only
+      // takes jobs already due, so anything it left behind is still a live
+      // local edit — and the import would overwrite it AND mark it synced.
+      // Resolved after the drain so a job it completed isn't protected for
+      // nothing. Best-effort: an empty set on failure means the import
+      // behaves as it always did, which is the pre-existing risk, not a new
+      // one — but it must be logged, since the cost is silent data loss.
+      let skipClientIds = new Set();
+      try {
+        skipClientIds = await listOutstandingClientIds();
+      } catch (e) {
+        logger.error("WAVE-CUST outstanding-job read failed — import may " +
+          "overwrite un-pushed client edits", {uid: req.auth.uid,
+          error: String(e)});
+      }
+
       let summary;
       try {
-        summary = await importCustomers({businessId, graphql});
+        summary = await importCustomers({businessId, graphql, skipClientIds});
       } catch (e) {
         const {code, message} = classifyWaveError(e);
         logger.warn("WAVE-CUST import failed", {
@@ -308,15 +412,31 @@ const waveImportCustomers = onCall(
         throw new HttpsError(code, message);
       }
 
-      logger.info("WAVE-CUST import done", {
+      logger.info("WAVE-CUST sync done", {
         uid: req.auth.uid,
         totalCount: summary.totalCount,
         imported: summary.imported,
         updated: summary.updated,
         skippedArchived: summary.skippedArchived,
+        skippedPending: summary.skippedPending,
+        skippedUnchanged: summary.skippedUnchanged,
         pages: summary.pages,
+        pushedCreated: pushed.created,
+        pushedUpdated: pushed.updated,
+        pushedPending: pushed.pending,
+        pushedFailed: pushed.failed,
+        pushIncomplete: pushed.incomplete,
       });
-      return summary;
+      // Additive fields only — the 1.37.1 build parses the import half of
+      // this response by name and ignores the rest.
+      return {
+        ...summary,
+        pushedCreated: pushed.created,
+        pushedUpdated: pushed.updated,
+        pushedPending: pushed.pending,
+        pushedFailed: pushed.failed,
+        pushIncomplete: pushed.incomplete,
+      };
     },
 );
 
@@ -453,7 +573,12 @@ const waveScheduledImport = onSchedule(
       logger.info("WAVE-SCHED import starting", {businessId, schedule});
       let summary;
       try {
-        summary = await importCustomers({businessId, graphql});
+        // Same protect-list as the interactive sync, and it matters more
+        // here: this runs unattended, so a client edit clobbered by it is
+        // lost with nobody watching. There is no push first — waveSyncWorker
+        // owns that — so the set is simply whatever is still outstanding.
+        const skipClientIds = await listOutstandingClientIds();
+        summary = await importCustomers({businessId, graphql, skipClientIds});
       } catch (e) {
         const {code, message} = classifyWaveError(e);
         logger.warn("WAVE-SCHED import failed", {code, message});
@@ -467,6 +592,8 @@ const waveScheduledImport = onSchedule(
         imported: summary.imported,
         updated: summary.updated,
         skippedArchived: summary.skippedArchived,
+        skippedPending: summary.skippedPending,
+        skippedUnchanged: summary.skippedUnchanged,
         pages: summary.pages,
       });
     },

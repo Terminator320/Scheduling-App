@@ -117,7 +117,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
 | `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin |
 | `waveSetImportSchedule` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings cadence picker) | — | App Check ✓ · admin · durable 20/hr |
-| `waveImportCustomers` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable 5/hr · 300s |
+| `waveImportCustomers` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (`syncCustomers`, Settings "Sync with Wave") | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable 5/hr · 300s |
 | `deleteClient` | callable | `onCall` | `clients.js` | `firebase_clients_repository.dart` | — | App Check ✓ · admin · durable 20/hr |
 | `syncUsersByUid` | trigger | `onDocumentWritten users/{id}` | `bridge.js` | any `users` doc write | — | `retry: true` |
 | `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` |
@@ -592,10 +592,71 @@ the lone exception. The limiter sits AFTER the payload validation so a burst of
 malformed submissions can't exhaust a legitimate caller's window.
 
 ### `waveImportCustomers` — `wave/callables.js`
-Admin one-shot Wave → app customer seed (paginates ~650 customers over ~7 Wave
-pages). Writes `createdAt`/`updatedAt` on every client doc (the list/search order
-by `createdAt`, and Firestore excludes docs missing the orderBy field).
-Rate-limited 5/hr; 300s timeout.
+Admin **two-way** sync behind Settings › "Sync with Wave" (2026-08-04; the
+callable keeps its original name because the 1.37.1 App Store build still calls
+it — `#compat-1.37.1`).
+
+**Push, then pull, in that order.** `drainForSync` first drains pending
+`waveSyncQueue` jobs to Wave, then `importCustomers` pulls Wave customers back
+(paginates ~650 customers over ~7 Wave pages). The order is the correctness
+rule: the outbox holds edits the app already accepted, so importing first would
+overwrite them with the Wave rows they are on their way to replace.
+
+**Ordering is not sufficient on its own.** The import overwrites every mapped
+field of a linked client with Wave's values *and* stamps `wave.lastSyncedHash`
+from them, so a client edit still in the outbox is not just overwritten — it is
+marked synced, and the pending job then hashes the clobbered doc, matches, and
+no-ops. The drain is bounded and its query only takes jobs already due, so a job
+backed off after a transient Wave error survives it. Both this callable and
+`waveScheduledImport` therefore pass `importCustomers` a `skipClientIds` set
+from `listOutstandingClientIds` (`wave/worker.js`, covering `queued` and
+`inflight`); skipped clients are counted as `skippedPending`.
+
+The push half is **best-effort and bounded** — `SYNC_PUSH_BATCH_LIMIT` (20) and
+`SYNC_PUSH_BUDGET_MS` (20 s), with `waveSyncWorker` mopping up the rest every 5
+minutes — so a drain failure is logged and swallowed rather than failing the
+import the admin actually pressed the button for. Both bounds are sized against
+the *client's* deadline (`kWaveSyncTimeoutSeconds`, 120 s, in
+`wave_service.dart`), not the 300 s function timeout: a callable can't be
+cancelled, so past that deadline the admin has already been told the sync failed
+and will tap again.
+
+Response adds `pushedCreated` / `pushedUpdated` / `pushedPending` /
+`pushedFailed` / `pushIncomplete` to the existing import summary — **additive
+only**, since 1.37.1 parses the import half by name and ignores the rest. The
+last three exist because a bounded push, a dead-lettered job and a thrown drain
+all leave the counts at zero, which the app would otherwise render as "already
+up to date": `pushedPending` is a `count()` of still-queued jobs taken AFTER the
+drain, `pushedFailed` is `drained.dead` (dead-lettered jobs aren't `queued`, so
+the pending count misses them and they never retry), and `pushIncomplete` flags
+a drain or count that threw. The two success counts come from `drainQueue`'s
+`created`/`updated`, which `tallyUpsert` (`wave/worker.js`) folds from each
+`upsertCustomer` status; `linked` counts as an update, not a create, because
+that path patches a customer a crashed earlier attempt had already created.
+
+**The import is hash-gated.** A linked client whose stored
+`wave.lastSyncedHash` already equals `mappedFieldsHash(fromWaveCustomer(node))`
+is skipped (`skippedUnchanged`), so `updated` counts only real changes. The
+equality is exact — both sides hash the same `toWaveCustomerInput` projection,
+the identity `shouldEnqueueClientWrite`'s Rule 2 already relies on. Before the
+gate, every run re-wrote all ~650 clients: ~650 writes plus ~650
+`waveUpsertCustomer` invocations that each concluded "nothing to do", and the
+app's notice read "650 clients updated in the app" after a sync that changed
+nothing. The `hasCreatedAt` half of the condition is load-bearing — the update
+branch is the only `createdAt` backfill, and the clients list orders by it.
+
+Writes `createdAt`/`updatedAt` on every client doc it does write (the
+list/search order by `createdAt`, and Firestore excludes docs missing the
+orderBy field). Rate-limited 5/hr; 300s timeout.
+
+**Still O(all customers) on the Wave side.** The hash gate removes the writes
+and the trigger fan-out, not the ~7 `LIST_CUSTOMERS` pages or the
+`buildWaveIdIndex` scan. Making the run O(changes) needs a `MODIFIED_AT_*`
+sort plus a stored watermark — and whether `CustomerSort` offers one is a fact
+about Wave's schema, not an assumption to build on. Run
+`functions/scripts/wave-introspect-customer-sort.js` to settle it. A watermark
+would also need a periodic full resync, since it misses archives and deletes
+and drifts whenever a run half-fails.
 
 ### `waveUpsertCustomer` — `wave/callables.js`
 `clients/{id}` write trigger. When a client's Wave-mapped fields change, marks
@@ -621,3 +682,8 @@ Scheduled Wave → app auto-import, **every 24 hours**, single instance. Reads
 pure jest-testable helper — `off` or any unknown value never runs). Server-
 triggered, so no App Check / rate limit. A due run stamps `lastAutoImportAt`; a
 failed run leaves it unchanged so the next day retries. 300s timeout.
+
+It passes the same `skipClientIds` protect-list as `waveImportCustomers` (see
+that entry) — and needs it more, since it runs unattended: a client edit this
+overwrote before the guard existed was lost with nobody watching. It does not
+push first; `waveSyncWorker` owns that half.

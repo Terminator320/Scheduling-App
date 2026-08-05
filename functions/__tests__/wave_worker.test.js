@@ -270,8 +270,11 @@ describe("drainQueue happy path", () => {
         expect(lastUpdate.status).toBe("done");
         expect(lastUpdate.lastError).toBeNull();
 
+        // updated: 1 — the mock reports `patched`, so the job's Wave write
+        // is counted as an update to an existing customer, not a create.
         expect(summary).toEqual({
           processed: 1, done: 1, retried: 0, dead: 0, skipped: 0, reclaimed: 0,
+          created: 0, updated: 1,
         });
 
         expect(logger.error).not.toHaveBeenCalled();
@@ -289,6 +292,77 @@ describe("drainQueue happy path", () => {
       backoffFn: fixedBackoff(),
     });
     expect(mockUpsert).not.toHaveBeenCalled();
+  });
+
+  // The interactive "Sync with Wave" button reports these two numbers to the
+  // admin as "N added to Wave / N updated in Wave", so a miscount is a lie on
+  // screen rather than a silent internal drift.
+  test("tallies Wave-direction counts by upsert status", async () => {
+    const statuses = [
+      "created", "created", "patched", "linked", "noop", "skipped",
+    ];
+    const jobs = statuses.map((_, i) => ({
+      id: `customerUpsert__c${i}`,
+      data: {
+        type: "customerUpsert",
+        refPath: `clients/c${i}`,
+        status: "queued",
+        attempts: 0,
+        nextAttemptAt: new Date("2024-01-01"),
+        lastError: null,
+        idempotencyKey: `customerUpsert__c${i}`,
+      },
+    }));
+    const {db} = drainDb(jobs);
+    let call = 0;
+    const mockUpsert = jest.fn(() =>
+      Promise.resolve({status: statuses[call++]}));
+
+    const summary = await drainQueue({
+      db, now, logger: fakeLogger(),
+      upsertCustomer: mockUpsert,
+      backoffFn: fixedBackoff(),
+    });
+
+    expect(summary.done).toBe(6);
+    expect(summary.created).toBe(2);
+    // `linked` patches a customer a crashed attempt already created, so it
+    // is an update in Wave, not a new arrival there.
+    expect(summary.updated).toBe(2);
+  });
+
+  test("does not count a job whose outcome write was superseded", async () => {
+    // The Wave write happened, but a concurrent re-enqueue means the job runs
+    // again — counting it here would double-count it across the two drains.
+    const job = {
+      id: "customerUpsert__c1",
+      data: {
+        type: "customerUpsert",
+        refPath: "clients/c1",
+        status: "queued",
+        attempts: 0,
+        nextAttemptAt: new Date("2024-01-01"),
+        lastError: null,
+        idempotencyKey: "customerUpsert__c1",
+      },
+    };
+    const {db, refs} = drainDb([job]);
+    // Re-enqueued mid-dispatch: commitOutcome sees a different claim and
+    // declines to write `done`.
+    const mockUpsert = jest.fn(() => {
+      refs[0]._data.status = "queued";
+      refs[0]._data.claimedAt = new Date("2030-01-01");
+      return Promise.resolve({status: "created"});
+    });
+
+    const summary = await drainQueue({
+      db, now, logger: fakeLogger(),
+      upsertCustomer: mockUpsert,
+      backoffFn: fixedBackoff(),
+    });
+
+    expect(summary.done).toBe(0);
+    expect(summary.created).toBe(0);
   });
 
   test("respects batchLimit", async () => {
@@ -457,6 +531,7 @@ describe("drainQueue outcome guard", () => {
         expect(doneWrite).toBeUndefined();
         expect(summary).toEqual({
           processed: 1, done: 0, retried: 0, dead: 0, skipped: 0, reclaimed: 0,
+          created: 0, updated: 0,
         });
         expect(logger.error).not.toHaveBeenCalled();
       });
@@ -501,6 +576,7 @@ describe("drainQueue retryable errors", () => {
 
         expect(summary).toEqual({
           processed: 1, done: 0, retried: 1, dead: 0, skipped: 0, reclaimed: 0,
+          created: 0, updated: 0,
         });
 
         const finalUpdate = refs[0].updates[refs[0].updates.length - 1];
@@ -590,6 +666,7 @@ describe("drainQueue retryable errors", () => {
 
     expect(summary).toEqual({
       processed: 1, done: 0, retried: 0, dead: 1, skipped: 0, reclaimed: 0,
+      created: 0, updated: 0,
     });
 
     const finalUpdate = refs[0].updates[refs[0].updates.length - 1];
@@ -676,7 +753,7 @@ describe("drainQueue non-retryable errors", () => {
 
         expect(summary).toEqual({
           processed: 1, done: 0, retried: 0, dead: 1, skipped: 0,
-          reclaimed: 0,
+          reclaimed: 0, created: 0, updated: 0,
         });
         const finalUpdate = refs[0].updates[refs[0].updates.length - 1];
         expect(finalUpdate.status).toBe("dead");
@@ -718,7 +795,7 @@ describe("drainQueue non-retryable errors", () => {
 
         expect(summary).toEqual({
           processed: 1, done: 0, retried: 0, dead: 1, skipped: 0,
-          reclaimed: 0,
+          reclaimed: 0, created: 0, updated: 0,
         });
 
         const finalUpdate = refs[0].updates[refs[0].updates.length - 1];
@@ -1311,6 +1388,7 @@ describe("drainQueue non-retryable errors (additional)", () => {
 
     expect(summary).toEqual({
       processed: 1, done: 0, retried: 0, dead: 1, skipped: 0, reclaimed: 0,
+      created: 0, updated: 0,
     });
 
     const finalUpdate = refs[0].updates[refs[0].updates.length - 1];

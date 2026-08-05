@@ -237,7 +237,12 @@ function readMutationPayload(payload) {
  *   for a customer a crashed previous attempt may already have created, and
  *   links it instead of duplicating. No default touches real Firestore or
  *   network during a unit test.
- * @return {!Promise<!Object>} A status object (see decision flow).
+ * @return {!Promise<!Object>} A status object (see decision flow). The
+ *   `status` vocabulary — `skipped`/`noop`/`patched`/`linked`/`created` — is
+ *   READ FOR DISPLAY by `tallyUpsert` in `worker.js`, which turns it into the
+ *   "N clients added to Wave / N updated in Wave" counts the admin sees after
+ *   a sync. A sixth status added here lands in that helper's uncounted bucket
+ *   by default, with every test still passing — classify it there too.
  * @throws {WaveValidationError} On a Wave validation rejection.
  */
 async function upsertCustomer(clientId, deps = {}) {
@@ -504,10 +509,18 @@ const BATCH_LIMIT = 500;
  * use it as the doc id directly, since Wave Node ids are base64 and can
  * contain `/`, which isn't legal in a Firestore doc id.
  * @param {Object=} deps Injectable dependencies — `db`, `graphql`,
- *   `businessId`, `pageSize` (default 100), `now`. No default touches real
- *   Firestore/network during a unit test.
+ *   `businessId`, `pageSize` (default 100), `now`, `skipClientIds` (a Set of
+ *   client ids with an un-pushed outbox job — see below). No default touches
+ *   real Firestore/network during a unit test.
+ *
+ *   `skipClientIds` is passed in rather than read here on purpose:
+ *   `worker.js` owns the queue and already requires this module, so reaching
+ *   back for `listOutstandingClientIds` would close a require cycle. Every
+ *   caller must supply it — omitting it silently re-opens the clobber
+ *   described on that helper.
  * @return {!Promise<!Object>} Summary `{totalCount, imported, updated,
- *   skippedArchived, pages}`.
+ *   skippedArchived, skippedPending, skippedUnchanged, pages}`. `updated`
+ *   counts only customers whose Wave-mapped fields actually differed.
  */
 async function importCustomers(deps = {}) {
   const db = deps.db || adminFirestore().getFirestore();
@@ -516,14 +529,21 @@ async function importCustomers(deps = {}) {
   const pageSize = typeof deps.pageSize === "number" && deps.pageSize > 0 ?
     deps.pageSize : 100;
   const businessId = deps.businessId || await readBusinessId(db);
+  const skipClientIds = deps.skipClientIds || new Set();
 
   // Single pass over existing clients → Map<waveCustomerId, docRef>.
   const existingByWaveId = await buildWaveIdIndex(db);
 
   let batch = db.batch();
   let opsInBatch = 0;
-  const summary =
-    {totalCount: 0, imported: 0, updated: 0, skippedArchived: 0, pages: 0};
+  // `updated` counts REAL changes only — everything unchanged lands in
+  // `skippedUnchanged`. Before that split it counted every existing customer
+  // written, so a sync over an untouched roster told the admin "650 clients
+  // updated in the app" on every single press.
+  const summary = {
+    totalCount: 0, imported: 0, updated: 0, skippedArchived: 0,
+    skippedPending: 0, skippedUnchanged: 0, pages: 0,
+  };
 
   const flushIfFull = async () => {
     if (opsInBatch >= BATCH_LIMIT) {
@@ -570,6 +590,29 @@ async function importCustomers(deps = {}) {
       const waveId = fields.waveCustomerId;
       const existing = waveId ? existingByWaveId.get(waveId) : undefined;
       if (existing) {
+        // The local edit wins while it is still queued for Wave. Overwriting
+        // here would also stamp lastSyncedHash from Wave's values, which
+        // turns the pending push into a no-op and destroys the edit
+        // permanently — see listOutstandingClientIds in worker.js.
+        if (skipClientIds.has(existing.ref.id)) {
+          summary.skippedPending += 1;
+          continue;
+        }
+        // Nothing to write: `hash` is taken over the SAME `toWaveCustomerInput`
+        // projection that produced the stored `lastSyncedHash`, and the update
+        // below sets the doc's mapped fields to exactly `fields` — so a match
+        // means this write would be byte-identical. (That equality is already
+        // load-bearing: it is what `shouldEnqueueClientWrite`'s Rule 2 uses to
+        // stop an import feeding every client straight back into the outbox.)
+        //
+        // `hasCreatedAt` is NOT optional here. The branch below backfills a
+        // missing `createdAt`, and the clients list orders by it — Firestore
+        // excludes docs missing an orderBy field, so skipping one would leave
+        // a legacy doc permanently invisible in the list.
+        if (existing.hasCreatedAt && existing.lastSyncedHash === hash) {
+          summary.skippedUnchanged += 1;
+          continue;
+        }
         // Preserve the original createdAt. Only backfill it when the
         // existing doc lacks one (e.g. a doc from an earlier import that
         // omitted it).
@@ -614,28 +657,40 @@ async function importCustomers(deps = {}) {
 }
 
 /**
- * Builds a `Map<waveCustomerId, {ref, hasCreatedAt}>` over the `clients`
- * collection in one pass, skipping docs without a `waveCustomerId`. This
- * lets a re-run backfill a missing `createdAt` without clobbering an
- * existing one. It loads the whole collection into memory, which is fine at
- * the ~650-customer import scale we're at now, but should move to a cursor
- * if that grows.
+ * Builds a `Map<waveCustomerId, {ref, hasCreatedAt, lastSyncedHash}>` over the
+ * `clients` collection in one pass, skipping docs without a `waveCustomerId`.
+ * `hasCreatedAt` lets a re-run backfill a missing `createdAt` without
+ * clobbering an existing one; `lastSyncedHash` is what lets the import skip a
+ * customer whose Wave-mapped fields already match. It loads the whole
+ * collection into memory, which is fine at the ~650-customer import scale
+ * we're at now, but should move to a cursor if that grows.
  * @param {!Object} db Firestore instance.
- * @return {!Promise<!Map<string, {ref: !Object, hasCreatedAt: boolean}>>}
+ * @return {!Promise<!Map<string, {ref: !Object, hasCreatedAt: boolean,
+ *   lastSyncedHash: string}>>}
  */
 async function buildWaveIdIndex(db) {
   const index = new Map();
-  // select(): only these two fields are read, and a full client doc carries
-  // the address family and the contacts array. Billed reads are per-document
-  // either way, so this is pure transfer + parse + retained memory.
+  // select(): only these fields are read, and a full client doc carries the
+  // address family and the contacts array. Billed reads are per-document
+  // either way, so this is pure transfer + parse + retained memory. `wave` is
+  // taken whole rather than as a `wave.lastSyncedHash` field path — the map
+  // is three small scalars, and a nested projection is the kind of thing that
+  // silently returns undefined if the path is ever renamed.
   const snap = await db.collection("clients")
-      .select("waveCustomerId", "createdAt")
+      .select("waveCustomerId", "createdAt", "wave")
       .get();
   const docs = (snap && Array.isArray(snap.docs)) ? snap.docs : [];
   for (const doc of docs) {
     const d = doc.data() || {};
     const id = typeof d.waveCustomerId === "string" ? d.waveCustomerId : "";
-    if (id) index.set(id, {ref: doc.ref, hasCreatedAt: d.createdAt != null});
+    if (!id) continue;
+    const wave = (d.wave && typeof d.wave === "object") ? d.wave : {};
+    index.set(id, {
+      ref: doc.ref,
+      hasCreatedAt: d.createdAt != null,
+      lastSyncedHash: typeof wave.lastSyncedHash === "string" ?
+        wave.lastSyncedHash : "",
+    });
   }
   return index;
 }

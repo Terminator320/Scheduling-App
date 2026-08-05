@@ -120,7 +120,7 @@ void main() {
       expect(find.text('Connect to Wave'), findsOneWidget);
       // Import is gated on a live connection — a tap while disconnected is
       // guaranteed to fail, so it isn't offered until Connect succeeds.
-      expect(find.text('Import customers from Wave'), findsNothing);
+      expect(find.text('Sync with Wave'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 
@@ -141,20 +141,20 @@ void main() {
       expect(find.text('Persisted Co'), findsOneWidget);
       // Connect is hidden once connected; only Import remains.
       expect(find.text('Connect to Wave'), findsNothing);
-      expect(find.text('Import customers from Wave'), findsOneWidget);
+      expect(find.text('Sync with Wave'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('Import is not offered before connecting', (tester) async {
+    testWidgets('Sync is not offered before connecting', (tester) async {
       final service = _mockService();
 
       await tester.pumpWidget(_wrapSection(service));
       await tester.pumpAndSettle();
 
-      // Import only appears once connected, so a disconnected admin can't
-      // trigger a guaranteed-to-fail import in the first place.
-      expect(find.text('Import customers from Wave'), findsNothing);
-      verifyNever(service.importCustomers);
+      // Sync only appears once connected, so a disconnected admin can't
+      // trigger a guaranteed-to-fail sync in the first place.
+      expect(find.text('Sync with Wave'), findsNothing);
+      verifyNever(service.syncCustomers);
       expect(tester.takeException(), isNull);
     });
 
@@ -236,7 +236,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('Import success after Connect shows success notice', (
+    testWidgets('Sync success after Connect names both directions', (
       tester,
     ) async {
       final service = _mockService();
@@ -250,13 +250,18 @@ void main() {
           businessName: 'Test Biz',
         ),
       );
-      when(service.importCustomers).thenAnswer(
-        (_) async => const WaveImportSummary(
+      when(service.syncCustomers).thenAnswer(
+        (_) async => const WaveSyncSummary(
           totalCount: 10,
           imported: 8,
           updated: 2,
           skippedArchived: 0,
           pages: 1,
+          pushedCreated: 3,
+          pushedUpdated: 1,
+          pushedPending: 0,
+          pushedFailed: 0,
+          pushIncomplete: false,
         ),
       );
 
@@ -266,12 +271,14 @@ void main() {
       await tester.tap(find.text('Connect to Wave'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Import customers from Wave'));
+      await tester.tap(find.text('Sync with Wave'));
       await tester.pumpAndSettle();
 
-      // Import success notice contains the counts.
-      expect(emitted.last, contains('8'));
-      expect(emitted.last, contains('2'));
+      // The exact sentence is pinned by wave_sync_notice_test; here we only
+      // check the button routes the summary through that composer, so a copy
+      // tweak breaks one test instead of two.
+      expect(emitted.last, contains('added to Wave'));
+      expect(emitted.last, contains('added to the app'));
       expect(tester.takeException(), isNull);
     });
 
@@ -322,7 +329,7 @@ void main() {
           businessName: 'Test Biz',
         ),
       );
-      when(service.importCustomers).thenThrow(const WaveAuthInvalid());
+      when(service.syncCustomers).thenThrow(const WaveAuthInvalid());
 
       await tester.pumpWidget(_wrapSection(service, noticeService: notices));
       await tester.pumpAndSettle();
@@ -330,7 +337,7 @@ void main() {
       await tester.tap(find.text('Connect to Wave'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Import customers from Wave'));
+      await tester.tap(find.text('Sync with Wave'));
       await tester.pumpAndSettle();
 
       // The last notice must be an error (import failed), never a success.
