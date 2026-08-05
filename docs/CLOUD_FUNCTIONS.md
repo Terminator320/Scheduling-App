@@ -649,14 +649,34 @@ Writes `createdAt`/`updatedAt` on every client doc it does write (the
 list/search order by `createdAt`, and Firestore excludes docs missing the
 orderBy field). Rate-limited 5/hr; 300s timeout.
 
-**Still O(all customers) on the Wave side.** The hash gate removes the writes
-and the trigger fan-out, not the ~7 `LIST_CUSTOMERS` pages or the
-`buildWaveIdIndex` scan. Making the run O(changes) needs a `MODIFIED_AT_*`
-sort plus a stored watermark — and whether `CustomerSort` offers one is a fact
-about Wave's schema, not an assumption to build on. Run
-`functions/scripts/wave-introspect-customer-sort.js` to settle it. A watermark
-would also need a periodic full resync, since it misses archives and deletes
-and drifts whenever a run half-fails.
+**Still O(all customers) on the Wave side — but it needn't be.** The hash gate
+removes the writes and the trigger fan-out, not the ~7 `LIST_CUSTOMERS` pages
+or the `buildWaveIdIndex` scan.
+
+Introspection against the live API on 2026-08-04
+(`functions/scripts/wave-introspect-customer-sort.js`) settled what is
+available, so this is no longer a guess:
+
+- `CustomerSort` = `CREATED_AT_ASC/DESC`, `MODIFIED_AT_ASC/DESC`,
+  `NAME_ASC/DESC`.
+- `business.customers` accepts `page`, `pageSize`, `sort`, `email`,
+  **`modifiedAtAfter: DateTime`** and `modifiedAtBefore: DateTime`.
+
+`modifiedAtAfter` is the better lever than the sort: it filters server-side, so
+Wave returns only what changed instead of us paging everything and stopping
+early. A delta import is therefore `customers(modifiedAtAfter: $since, sort:
+[MODIFIED_AT_ASC], …)` with a watermark on `wave/connection`.
+
+Two constraints on that design, neither optional:
+- **Take the watermark from the run's START time (minus a small overlap), and
+  advance it only on a fully successful run.** A half-failed run must redo its
+  window; the overlap absorbs clock skew and edits landing mid-run.
+- **A periodic full resync is still required.** An archive flips `isArchived`
+  and so counts as a modification, but a customer *deleted* in Wave returns no
+  node at all and can never appear in a delta window.
+
+Not built. `LIST_CUSTOMERS` must keep passing its strings as variables when it
+gains `$since` — Wave refuses inline `String` arguments (see `functions/CLAUDE.md`).
 
 ### `waveUpsertCustomer` — `wave/callables.js`
 `clients/{id}` write trigger. When a client's Wave-mapped fields change, marks

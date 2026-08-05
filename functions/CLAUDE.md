@@ -179,6 +179,13 @@ directly. Jest tests live in **`functions/__tests__/` only** — the parallel
   `createdAt`, and the clients list orders by it, so skipping a doc without one
   hides it from the list forever. What remains O(all customers) is the Wave
   page fetch; see the delta-import note in `docs/CLOUD_FUNCTIONS.md`.
+  **Wave rejects INLINE STRING ARGUMENTS — every string must travel as a
+  GraphQL variable** (`GRAPHQL_VALIDATION_FAILED: Inline argument of type
+  String is not allowed`). Confirmed against the live API 2026-08-04. Inline
+  `Int`/`Boolean` are accepted; only `String` is refused. Every query in
+  `wave/customers.js` already parameterises, so this only bites a query
+  written by hand — write the variable in from the start rather than
+  discovering it as a 400.
   The push is best-effort (bounded by `SYNC_PUSH_BATCH_LIMIT` /
   `SYNC_PUSH_BUDGET_MS`, with `waveSyncWorker` finishing the rest) and its
   failure must never fail the import. Those two bounds are sized against
