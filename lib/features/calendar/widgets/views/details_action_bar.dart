@@ -14,6 +14,7 @@ class DetailsActionBar extends StatelessWidget {
     required this.isSaving,
     required this.onMarkDone,
     required this.onCancel,
+    required this.onEditCompleted,
     super.key,
     this.showCancel = true,
   });
@@ -22,9 +23,18 @@ class DetailsActionBar extends StatelessWidget {
   final bool isDone;
   final bool isCancelled;
   final bool isSaving;
+
+  /// Admin gate. Also decides what a completed job offers: an admin gets the
+  /// "Edit completed job" button, an employee the plain done indicator.
   final bool showCancel;
+
   final VoidCallback onMarkDone;
   final VoidCallback onCancel;
+
+  /// Opens the edit form on a finished job. That form owns the status picker,
+  /// which is the only way to move a job back off Complete — so for an admin
+  /// this replaces the dead indicator rather than sitting beside it.
+  final VoidCallback onEditCompleted;
 
   @override
   Widget build(BuildContext context) {
@@ -63,21 +73,31 @@ class DetailsActionBar extends StatelessWidget {
           ),
         if (isDone) ...[
           const SizedBox(height: AppSpacing.sp8),
+          // A finished job used to end in a DISABLED "Complete" button — a
+          // dead control in the one slot the eye goes to, and with Cancel
+          // hidden once done, the sheet offered an admin nothing at all. For
+          // an admin it is now the way into the edit form (which owns the
+          // status picker, so it is also how a mis-tapped "Mark as complete"
+          // gets undone). An employee still gets the plain indicator: the
+          // rules let an assignee write `status:'done'` and nothing else, so
+          // an editable control would only earn them a permission error.
           OutlinedButton(
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 48),
               foregroundColor: scheme.secondary,
               side: BorderSide(color: scheme.secondary),
             ),
-            onPressed: null,
+            onPressed: showCancel && !isSaving ? onEditCompleted : null,
             child: _ActionButtonContent(
               compact: compact,
               icon: Icon(
-                Icons.check_circle_outline,
+                showCancel ? Icons.edit_outlined : Icons.check_circle_outline,
                 size: 18,
                 color: scheme.secondary,
               ),
-              label: context.l10n.calendar_completed,
+              label: showCancel
+                  ? context.l10n.calendar_editCompletedJob
+                  : context.l10n.calendar_completed,
             ),
           ),
         ],
