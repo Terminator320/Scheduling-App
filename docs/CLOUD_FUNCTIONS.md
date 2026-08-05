@@ -363,8 +363,10 @@ server-side to `role == 'employee' && status == 'active'`; tokens live in
 `users/{docId}/fcmTokens/{token}` (doc id = token, keyed by users **doc id**
 so the send path needs no uid translation), and stale tokens are deleted on
 send failure. Text is localized per token doc (`locale: 'en'|'fr'`) from an
-inline EN/FR table; every message sets `android: {priority: 'high'}` and an
-APNs `sound` so delivery isn't doze-deferred/silent. **Deployed 2026-07-11**
+inline EN/FR table; every message sets an APNs `sound` so delivery isn't
+silent, plus a now-inert `android: {priority: 'high'}` (kept because it costs
+nothing and FCM ignores it for an APNs-only fleet — the app has been iOS-only
+since `android/` was deleted on 2026-08-05). **Deployed 2026-07-11**
 — see Deployment status. Design: `docs/archive/2026-07-08-push-notifications.md`.
 
 ### `notifyAppointmentChanges` — `notifications.js`

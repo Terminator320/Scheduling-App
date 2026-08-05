@@ -3,9 +3,10 @@
 The config side of the iOS port is **done** (deployment target 18.0 in
 `project.pbxproj` and `AppFrameworkInfo.plist`, `Info.plist` +
 `PrivacyInfo.xcprivacy` in place, `main.dart` already using
-`DefaultFirebaseOptions.currentPlatform`). What's left is Mac-only: native
-tooling, the two gitignored secret files, the Crashlytics build phase, the App
-Attest capability, and device verification.
+`DefaultFirebaseOptions.currentPlatform`, and the Crashlytics dSYM run-script
+phases committed on all three targets). What's left is Mac-only: native
+tooling, the two gitignored secret files, the App Attest capability, and device
+verification.
 
 > **This project uses Swift Package Manager — there is no `Podfile` and never
 > will be.** Ignore any older notes mentioning `pod install` / `${PODS_ROOT}`.
@@ -27,7 +28,7 @@ Bundle id: `net.vogas.scheduling`. iOS Firebase app:
    sudo xcodebuild -license accept
    xcode-select --install        # command-line tools
    ```
-2. Install **Flutter 3.44** (match the Windows SDK), add it to PATH, then:
+2. Install **Flutter 3.44** (3.44.2 is what the dev Mac runs), add it to PATH, then:
    ```bash
    flutter doctor                 # resolve any iOS-toolchain ✗ it reports
    ```
@@ -42,7 +43,9 @@ AirDrop/USB/secure channel; **never commit them**:
 |---|---|
 | `dev/.env` | Firebase client config (incl. `IOS_API_KEY` / `IOS_APP_ID`) |
 | `ios/GoogleService-Info.plist` | iOS Firebase — lives at the `ios/` **root**, not `ios/Runner/` |
-| `android/app/google-services.json` | only if also building Android on the Mac |
+
+(There is no third file — `android/` was deleted on 2026-08-05 and iOS is the
+only platform.)
 
 - Confirm `dev/.env` contains **`IOS_API_KEY`** and **`IOS_APP_ID`** —
   `firebase_options.dart`'s iOS block reads them. Do **not** re-run
@@ -81,13 +84,15 @@ on first open while it fetches the packages.
    match (see Phase G) or attestation is rejected. The app targets iOS 18.0
    (well above App Attest's 14+ requirement); App Attest **fails on the
    Simulator** — verify on real hardware.
-4. **Add the Crashlytics Run Script phase** (not present yet): Runner target →
-   *Build Phases* → `+` → *New Run Script Phase*, placed **after** the Flutter
-   build phases. NOTE: per CLAUDE.md the dSYM upload phase is wired on **all
-   three** code-bearing targets (Runner, ScheduleWidgetExtension, SiriIntents) —
-   the two extension phases pass `-gsp "${PROJECT_DIR}/GoogleService-Info.plist"`
-   and need `ENABLE_USER_SCRIPT_SANDBOXING = NO`. See `APP_STORE_SUBMISSION.md`
-   for the full three-target runbook.
+4. **Crashlytics Run Script phase — already wired, just verify.** It is
+   committed in `project.pbxproj` on **all three** code-bearing targets
+   (Runner, ScheduleWidgetExtension, SiriIntents), placed after the Flutter
+   build phases; the two extension phases pass
+   `-gsp "${PROJECT_DIR}/GoogleService-Info.plist"` and carry
+   `ENABLE_USER_SCRIPT_SANDBOXING = NO`. Nothing to add — confirm the three
+   phases are present (Runner target → *Build Phases*) and see
+   `APP_STORE_SUBMISSION.md` for the full three-target runbook. If you ever
+   have to recreate one:
    - **Script** (SPM checkout path, not `${PODS_ROOT}`):
      ```
      "${BUILD_DIR%/Build/*}/SourcePackages/checkouts/firebase-ios-sdk/Crashlytics/run"

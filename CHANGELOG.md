@@ -29,8 +29,24 @@ code; it increments by one on every store upload regardless of the semver part.
   so — those need you to open the client and fix what Wave objected to. And if
   the sending half failed outright, it says that too, instead of reporting
   "everything was already up to date".
+- **The Contacts permission prompt now describes what actually happens.** It
+  said the app "opens a pre-filled contact card"; it in fact saves the client
+  you choose into your contacts and keeps that one contact up to date when you
+  edit the client afterwards. The prompt says so, and adds that the rest of
+  your contacts are never read.
+- **The privacy policy and terms were brought up to date** (last updated
+  August 5, 2026) — they now cover how an administrator creates an employee
+  account and hands over a starting password, the optional emergency contact
+  and who can see it, saving a photo to your own library and sharing one out,
+  and the fact that the Wave integration moves customers in both directions.
 
 ### Fixed
+- **Uploading a build no longer draws two App Store warnings.** The location
+  purpose string Apple's scanner looks for was missing (ITMS-90683 on every
+  upload, because the location plugin compiles the "Always" API into the binary
+  even though the app only ever asks for "While Using the App"), and the Siri
+  extension shipped without its own privacy manifest (ITMS-91053). Both are
+  declared now. Neither changes what the app asks you for.
 - **Syncing no longer claims it updated every client.** A sync over an
   unchanged roster reported "650 clients updated in the app" — it was counting
   every client it rewrote, and it rewrote all of them whether or not anything
