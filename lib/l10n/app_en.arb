@@ -177,10 +177,6 @@
   "@calendar_personalJob": {
     "description": "Switch in the job form that marks the job as personal time for the crew rather than a client visit."
   },
-  "calendar_personalJobHint": "Time blocked off — no client or address needed.",
-  "@calendar_personalJobHint": {
-    "description": "Subtitle under the personal-job switch, explaining that it hides the client and address fields."
-  },
   "calendar_hideCalendar": "Hide calendar",
   "@calendar_hideCalendar": {
     "description": "Handle between the month grid and the day's jobs — drag or tap it up to fold the grid away."
@@ -1473,6 +1469,10 @@
   "@calendar_appointmentStatus": {
     "description": "Appointment Status"
   },
+  "calendar_editCompletedJob": "Edit completed job",
+  "@calendar_editCompletedJob": {
+    "description": "Admin-only button in place of the completed indicator on a finished job. Opens the edit form, where the status picker can move it back off Complete — the only way to undo a mis-tapped Mark as complete."
+  },
   "calendar_assignedEmployee": "Assigned Employee",
   "@calendar_assignedEmployee": {
     "description": "Assigned Employee"
@@ -1718,6 +1718,10 @@
   "settings_privacyPolicy": "Privacy Policy",
   "@settings_privacyPolicy": {
     "description": "Settings tile label that opens the hosted privacy policy in the browser"
+  },
+  "settings_termsOfService": "Terms of Service",
+  "@settings_termsOfService": {
+    "description": "Settings tile label that opens the hosted terms of service in the browser. This row is the durable route to the terms — the setup-screen consent link is shown once, and only to a new employee."
   },
   "error_couldNotOpenLink": "Couldn't open the link.",
   "@error_couldNotOpenLink": {
@@ -2847,7 +2851,11 @@
   },
   "auth_termsAndLocationConsent": "I accept the terms of service and agree to share my location while I'm on the clock.",
   "@auth_termsAndLocationConsent": {
-    "description": "Combined terms and location consent checkbox gating the Create account button"
+    "description": "Combined terms and location consent checkbox gating the Create account button. Must contain auth_termsOfServiceLink verbatim — the screen finds that substring and turns it into the tappable link to the hosted terms page."
+  },
+  "auth_termsOfServiceLink": "terms of service",
+  "@auth_termsOfServiceLink": {
+    "description": "The tappable portion of the consent checkbox, opening the hosted terms page. MUST appear verbatim inside auth_termsAndLocationConsent in the same locale, or the sentence renders as plain text with no link."
   },
   "auth_passwordStrengthSemantics": "Password strength: {label}",
   "@auth_passwordStrengthSemantics": {

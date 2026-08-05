@@ -56,9 +56,11 @@ class DetailsViewBody extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Cancelled visits still show the edit affordance — `showActions` is
-        // the only thing that gates it.
-        if (showActions)
+        // Cancelled visits still show the edit chip. A COMPLETED one doesn't:
+        // its "Edit completed job" button at the bottom of the sheet is the
+        // same action, and two edit affordances on one screen is one too many.
+        // Don't add the chip back for `isDone` without taking that button out.
+        if (showActions && !data.isDone)
           Align(
             alignment: compactHeader
                 ? Alignment.centerLeft
@@ -101,6 +103,7 @@ class DetailsViewBody extends ConsumerWidget {
           showCancel: showActions,
           onMarkDone: () => _onMarkDone(context, ref, notifier),
           onCancel: () => _onCancel(context, ref, notifier),
+          onEditCompleted: notifier.enterEditing,
         ),
       ],
     );

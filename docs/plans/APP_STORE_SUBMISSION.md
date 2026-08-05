@@ -612,6 +612,22 @@ and live since 2026-07-11. The dedicated support page wins.
 ```
 https://gvogas.github.io/es-pro-legal/
 ```
+Source: `docs/legal/privacy-policy.html`, published as the Pages repo's
+**index** — which is why the other legal pages link to it by absolute URL
+rather than a relative `privacy-policy.html` that would 404.
+
+**Terms of Service URL** (optional in ASC — App Information → "License
+Agreement" if you want it on the product page; **not optional to the app**)
+```
+https://gvogas.github.io/es-pro-legal/terms-of-service.html
+```
+Source: `docs/legal/terms-of-service.html` — publish it to the `es-pro-legal`
+Pages repo beside `support.html`. As of 2026-08-05 the app links to this URL in
+two places (`AppUrls.termsOfService`): the account-setup consent checkbox, whose
+tick stamps `termsAcceptedAt`, and the Settings › Legal row. **If the page is
+missing or the repo drifts from `docs/legal/`, every employee is accepting terms
+they can't read or that say something else** — republish it whenever that file
+changes, the same discipline as the accessibility page below.
 
 **Accessibility URL** (optional, App Store Connect → App Accessibility →
 Accessibility Nutrition Labels → "Manage the accessibility URL"; shown on the
@@ -829,6 +845,11 @@ block submission regardless of the build.
 - [ ] Paste the demo account's email + password into ASC → App Review
   Information → Sign-In Required, plus the Part 12 review notes and a contact
   phone.
+- [ ] ⚠️ **Publish `docs/legal/terms-of-service.html`** to the `es-pro-legal`
+  Pages repo (and republish the privacy policy if it changed — both were
+  updated 2026-08-05). As of that date the app links to the terms URL from the
+  account-setup consent checkbox and Settings › Legal, so a missing page means
+  every employee accepts terms they cannot read.
 
 **ASC content**
 - [ ] Confirm the app record (ES Pro, `net.vogas.scheduling`, Business /
