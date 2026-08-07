@@ -13,6 +13,16 @@ import 'package:scheduling/l10n/l10n.dart';
 
 class _MockClientsRepo extends Mock implements ClientsRepository {}
 
+/// The detail view holds a live listener on its doc. This test only cares about
+/// layout, so it yields nothing and the view renders the record it was handed.
+_MockClientsRepo _quietRepo() {
+  final repo = _MockClientsRepo();
+  when(
+    () => repo.watchClient(any()),
+  ).thenAnswer((_) => const Stream<ClientRecord?>.empty());
+  return repo;
+}
+
 const _client = ClientRecord(
   id: 'c1',
   name: 'Carol Smith',
@@ -32,7 +42,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          clientsRepositoryProvider.overrideWithValue(_MockClientsRepo()),
+          clientsRepositoryProvider.overrideWithValue(_quietRepo()),
         ],
         child: ThemeNotifier(
           themeMode: ThemeMode.light,
