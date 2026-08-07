@@ -158,6 +158,91 @@ describe("upsertCustomer no-op", () => {
     expect(graphql).not.toHaveBeenCalled();
     expect(ref.updates).toHaveLength(0);
   });
+
+  test("stale 'pending' is healed to 'synced' on a no-op", async () => {
+    // How a doc gets here: an edit marks it pending and enqueues, a second
+    // edit puts the mapped fields BACK, and shouldEnqueueClientWrite's rule 2
+    // skips that write — so the job the first edit left behind arrives with
+    // nothing to push. Nothing else clears the flag, and the client detail
+    // badge reads it, so the row would say "Sync pending" forever.
+    const hash = mappedFieldsHash(CLIENT);
+    const data = {
+      ...CLIENT,
+      waveCustomerId: "wave-1",
+      wave: {syncState: "pending", lastSyncedHash: hash},
+    };
+    const ref = clientRef(data);
+    const graphql = jest.fn();
+    const result = await upsertCustomer("c1", {
+      db: upsertDb(ref), graphql, businessId: "biz-1", now,
+    });
+
+    expect(result).toEqual({status: "noop"});
+    expect(graphql).not.toHaveBeenCalled();
+    expect(ref.updates).toEqual([
+      {"wave.syncState": "synced", "wave.syncError": null},
+    ]);
+    // Nothing reached Wave just now, so the stamp must keep naming the last
+    // real push.
+    expect(ref.updates[0]).not.toHaveProperty("wave.lastSyncedAt");
+  });
+
+  test("a stale 'error' is healed too", async () => {
+    const hash = mappedFieldsHash(CLIENT);
+    const data = {
+      ...CLIENT,
+      waveCustomerId: "wave-1",
+      wave: {syncState: "error", syncError: "boom", lastSyncedHash: hash},
+    };
+    const ref = clientRef(data);
+    const result = await upsertCustomer("c1", {
+      db: upsertDb(ref), graphql: jest.fn(), businessId: "biz-1", now,
+    });
+
+    expect(result).toEqual({status: "noop"});
+    expect(ref.updates).toEqual([
+      {"wave.syncState": "synced", "wave.syncError": null},
+    ]);
+  });
+
+  test("an edit landing during the no-op is NOT marked synced", async () => {
+    // The heal re-reads inside the transaction precisely for this: marking it
+    // synced here would put "Synced with Wave" on a client whose change is
+    // still sitting in the outbox — the exact lie the heal exists to remove.
+    const hash = mappedFieldsHash(CLIENT);
+    const data = {
+      ...CLIENT,
+      waveCustomerId: "wave-1",
+      wave: {syncState: "pending", lastSyncedHash: hash},
+    };
+    const fresh = {
+      ...data,
+      name: "Acme Corp Renamed",
+    };
+    const ref = clientRef(data, fresh);
+    const result = await upsertCustomer("c1", {
+      db: upsertDb(ref), graphql: jest.fn(), businessId: "biz-1", now,
+    });
+
+    expect(result).toEqual({status: "noop"});
+    expect(ref.updates).toHaveLength(0);
+  });
+
+  test("a doc deleted during the no-op is not resurrected", async () => {
+    const hash = mappedFieldsHash(CLIENT);
+    const data = {
+      ...CLIENT,
+      waveCustomerId: "wave-1",
+      wave: {syncState: "pending", lastSyncedHash: hash},
+    };
+    const ref = clientRef(data, null);
+    const result = await upsertCustomer("c1", {
+      db: upsertDb(ref), graphql: jest.fn(), businessId: "biz-1", now,
+    });
+
+    expect(result).toEqual({status: "noop"});
+    expect(ref.updates).toHaveLength(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
