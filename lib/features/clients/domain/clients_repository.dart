@@ -4,6 +4,16 @@ import 'package:scheduling/features/clients/domain/models/client_type.dart';
 abstract class ClientsRepository {
   Future<ClientRecord?> getClientById(String id);
 
+  /// Live stream of one client doc; emits null once the doc is gone.
+  ///
+  /// The Wave sync badge is why this exists and why it cannot be a one-shot
+  /// read. `wave.syncState` is written ONLY by Cloud Functions — the
+  /// `waveUpsertCustomer` trigger stamps `pending` after the save has already
+  /// returned, and the outbox worker flips it to `synced` up to five minutes
+  /// later — so any record a screen was handed necessarily predates the state
+  /// the badge is trying to show. See the sync-badge invariant in CLAUDE.md.
+  Stream<ClientRecord?> watchClient(String id);
+
   /// Persists a new client and returns it with the generated Firestore doc id, so the
   /// caller can link to it right away.
   Future<ClientRecord> addClient(ClientRecord client);

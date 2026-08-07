@@ -24,6 +24,22 @@ class ClientsRefresh extends Notifier<int> {
   void bump() => state++;
 }
 
+/// Live view of one client doc, keyed by doc id. AutoDispose so the listener is
+/// dropped the moment the detail surface closes.
+///
+/// The Wave sync badge is the reason this is a listener and not a read: every
+/// other client surface here is a one-shot read (a paginated page, or the
+/// cached scan window), and `wave.syncState` is function-owned — it goes
+/// `pending` after the save returns and `synced` up to five minutes later, so
+/// a record handed to a screen can never show it. It also deliberately does
+/// NOT patch the repository's search/scan cache: that cache is patched on
+/// WRITE (`_patchWindow`), and `ClientRecord.toMap()` omits `wave` there, so
+/// the cached copy keeps a stale sync state by design.
+final clientStreamProvider = StreamProvider.autoDispose
+    .family<ClientRecord?, String>(
+      (ref, id) => ref.watch(clientsRepositoryProvider).watchClient(id),
+    );
+
 /// Full client search with relevance scoring. AutoDispose frees the results once each
 /// query instance is no longer watched.
 final clientSearchProvider = FutureProvider.autoDispose

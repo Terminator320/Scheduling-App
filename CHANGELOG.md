@@ -10,6 +10,31 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [Unreleased]
+
+### Fixed
+- **The Wave badge on a client now reflects what's actually happening.** After
+  editing a client it stayed on "Synced with Wave" no matter what, because the
+  screen was still showing the copy of the client it had before you hit Save —
+  and the sync state isn't set by the app, it's set on the server a moment
+  later. So the one client you'd just changed was the one client whose badge
+  could never tell you anything. The detail screen now watches the client
+  itself: the badge turns to "Sync pending" as soon as the edit is queued and
+  back to "Synced with Wave" once it reaches Wave, with no reload and no
+  tapping anything. If the client can't be read (offline), the screen keeps
+  showing what it already had rather than going blank.
+  - Worth knowing, since it explains the other half of the confusion:
+    **Settings › "Sync with Wave" saying "everything was already up to date"
+    was usually telling the truth.** Client edits are sent to Wave
+    automatically every five minutes, so by the time you got to Settings there
+    was genuinely nothing left to send — the badge just gave you no way to see
+    that it had already happened.
+- **A client could get stuck on "Sync pending" permanently.** If you changed a
+  client and then changed those same fields back, the queued send arrived with
+  nothing to do and quietly left the client flagged as pending forever, while
+  every later sync correctly reported nothing outstanding. That flag is now
+  cleared when the send finds the client already up to date in Wave.
+
 ## [1.43.0+68] - 2026-08-04
 
 ### Added
