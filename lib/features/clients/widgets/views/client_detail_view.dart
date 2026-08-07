@@ -7,6 +7,7 @@ import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/application/client_form_controller.dart';
+import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_delete_policy.dart';
@@ -45,7 +46,26 @@ class ClientDetailView extends ConsumerStatefulWidget {
 
 class _ClientDetailViewState extends ConsumerState<ClientDetailView>
     with ClientActionsHost<ClientDetailView> {
+  /// Seed record, and the fallback whenever the live doc read has nothing to
+  /// give. Kept up to date by the edit/archive handlers so those still work if
+  /// the listener is unavailable.
   late ClientRecord _client;
+
+  /// The record this view renders: the live doc when the listener has one,
+  /// else [_client].
+  ///
+  /// The live read is what makes the Wave sync badge truthful. `wave.syncState`
+  /// is written by Cloud Functions AFTER the save returns — `pending` from the
+  /// `waveUpsertCustomer` trigger, then `synced` once the outbox reaches Wave —
+  /// so the record the edit sheet pops back (a `copyWith` of the record this
+  /// view was handed) still carries the PRE-EDIT sync state. Rendering that,
+  /// the badge could never change in response to an edit: it sat on "Synced
+  /// with Wave" while the push was still queued.
+  ///
+  /// The fallback is not a nicety: an offline or refused read must leave the
+  /// detail on screen with what we already had, never blank it.
+  ClientRecord get _resolved =>
+      ref.read(clientStreamProvider(_client.id)).value ?? _client;
 
   @override
   void initState() {
@@ -54,7 +74,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView>
   }
 
   Future<void> _openEdit() async {
-    final updated = await showEditClientSheet(context, _client);
+    final updated = await showEditClientSheet(context, _resolved);
     // Null means cancelled. Editing never removes the record, so this view
     // always has one to keep showing.
     if (!mounted || updated == null) return;
@@ -74,34 +94,36 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView>
   void onClientDeleted(ClientRecord client) => widget.onDeleted?.call();
 
   Future<void> _bookJob() async {
-    await showAddEventPopup(context, initialClient: _client);
+    await showAddEventPopup(context, initialClient: _resolved);
   }
 
   @override
   Widget build(BuildContext context) {
     final busy = ref.watch(clientFormControllerProvider);
+    // Watched, not read: the whole point is that the server keeps changing this
+    // doc after the user's save (the Wave sync state, and `jobCount`), so the
+    // view has to rebuild on those. See [_resolved] for the fallback.
+    final client = ref.watch(clientStreamProvider(_client.id)).value ?? _client;
     return DetailSheetListView(
       scrollController: widget.scrollController,
       showHandle: widget.showHandle,
       bottomPadding: widget.bottomPadding,
       children: [
-        _ProfileCard(client: _client, onEdit: _openEdit),
+        _ProfileCard(client: client, onEdit: _openEdit),
         const SizedBox(height: AppSpacing.sp16),
-        ClientDetailViewBody(client: _client, onBookJob: _bookJob),
+        ClientDetailViewBody(client: client, onBookJob: _bookJob),
         const SizedBox(height: AppSpacing.sp24),
         OutlinedButton.icon(
           style: OutlinedButton.styleFrom(
             minimumSize: const Size(double.infinity, 48),
           ),
-          onPressed: busy ? null : () => archiveClient(_client),
+          onPressed: busy ? null : () => archiveClient(client),
           icon: Icon(
-            _client.archived
-                ? Icons.unarchive_outlined
-                : Icons.archive_outlined,
+            client.archived ? Icons.unarchive_outlined : Icons.archive_outlined,
             size: 18,
           ),
           label: Text(
-            _client.archived
+            client.archived
                 ? context.l10n.clients_unarchive
                 : context.l10n.clients_archive,
           ),
@@ -109,14 +131,14 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView>
         // Advisory only — the callable re-checks with a live count(). Withheld
         // rather than shown-and-refused, so the footer never offers an action
         // the server will reject.
-        if (canDeleteClient(_client)) ...[
+        if (canDeleteClient(client)) ...[
           const SizedBox(height: AppSpacing.sp8),
           OutlinedButton.icon(
             style: destructiveOutlinedButtonStyle(
               context,
               minimumSize: const Size(double.infinity, 48),
             ),
-            onPressed: busy ? null : () => confirmDeleteClient(_client),
+            onPressed: busy ? null : () => confirmDeleteClient(client),
             icon: const Icon(Icons.delete_outline, size: 18),
             label: Text(context.l10n.common_delete),
           ),
