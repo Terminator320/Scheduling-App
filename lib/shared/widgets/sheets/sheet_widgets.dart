@@ -42,11 +42,7 @@ class DraggableSheetFrame extends StatelessWidget {
               ),
               boxShadow: AppShadow.sheet,
             ),
-            // A transparent Material sits between the decorated Container and
-            // the sheet content so descendant ListTiles paint their background
-            // and ink ripples here (above the Container's surface color) rather
-            // than on the modal Material below, where the Container would hide
-            // them.
+            // Transparent Material for ListTile backgrounds/ripples.
             child: Material(
               type: MaterialType.transparency,
               child: builder(sheetContext, scrollController),
@@ -111,10 +107,9 @@ class _SheetHandle extends StatelessWidget {
   }
 }
 
-/// Standard scrollable body for a detail view shown either in a bottom sheet
-/// (with a drag [showHandle]) or a master-detail pane. Centralises the detail
-/// padding and the keyboard-inset–aware bottom gap so every detail view stays
-/// consistent.
+/// Standard scrollable body for a detail view — a bottom sheet with a drag
+/// handle ([showHandle]), or a master-detail pane. Centralizes the padding
+/// and the keyboard-inset-aware bottom gap.
 class DetailSheetListView extends StatelessWidget {
   const DetailSheetListView({
     required this.children,
@@ -151,61 +146,6 @@ class DetailSheetListView extends StatelessWidget {
         ],
         ...children,
       ],
-    );
-  }
-}
-
-/// Standard chrome for an add/edit **form** shown in a bottom sheet: the
-/// [DraggableSheetFrame] container plus a scrollable body with the shared sheet
-/// padding, a drag [_SheetHandle], and a [headlineLarge] [title]. Put the
-/// divider and form fields in [children]. Mirrors [DetailSheetListView], which
-/// serves read-only detail views.
-class FormSheetScaffold extends StatelessWidget {
-  const FormSheetScaffold({
-    required this.title,
-    required this.children,
-    super.key,
-    this.initialChildSize = 0.7,
-    this.minChildSize = 0.5,
-    this.maxChildSize = 0.95,
-  });
-
-  final String title;
-  final List<Widget> children;
-  final double initialChildSize;
-  final double minChildSize;
-  final double maxChildSize;
-
-  @override
-  Widget build(BuildContext context) {
-    final isShort = _isShortSheetViewport(context);
-    return DraggableSheetFrame(
-      initialChildSize: initialChildSize,
-      minChildSize: minChildSize,
-      maxChildSize: maxChildSize,
-      builder: (sheetContext, scrollController) {
-        return ListView(
-          controller: scrollController,
-          padding: EdgeInsets.only(
-            left: AppSpacing.sp16,
-            right: AppSpacing.sp16,
-            top: AppSpacing.sp12,
-            bottom:
-                MediaQuery.of(sheetContext).viewInsets.bottom + AppSpacing.sp24,
-          ),
-          children: [
-            const _SheetHandle(),
-            SizedBox(height: isShort ? AppSpacing.sp12 : AppSpacing.sp16),
-            Text(
-              title,
-              style: isShort
-                  ? Theme.of(sheetContext).textTheme.headlineSmall
-                  : Theme.of(sheetContext).textTheme.headlineLarge,
-            ),
-            ...children,
-          ],
-        );
-      },
     );
   }
 }

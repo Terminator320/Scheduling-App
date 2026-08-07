@@ -1,0 +1,309 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
+
+import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/permissions/location_permission_service.dart';
+import 'package:scheduling/core/providers/firebase_providers.dart';
+import 'package:scheduling/core/utils/reentrant_sync.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/notifications/application/push_registration_controller.dart'
+    show shouldRegisterPush;
+import 'package:scheduling/features/presence/data/presence_repository.dart';
+
+final presenceRepositoryProvider = Provider<PresenceRepository>(
+  (ref) => PresenceRepository(
+    firestore: ref.watch(firestoreProvider),
+    logger: ref.watch(loggerProvider),
+  ),
+);
+
+final presenceSyncControllerProvider = Provider<PresenceSyncController>((ref) {
+  final controller = PresenceSyncController(ref);
+  ref.onDispose(controller.dispose);
+  return controller;
+});
+
+/// Movement uploads at most this often — the stream's 250 m `distanceFilter`
+/// handles granularity; this guards Firestore write volume on a highway.
+const minPresenceUploadGap = Duration(minutes: 2);
+
+/// Stationary re-upsert cadence that keeps `updatedAt` fresh. Keep this in
+/// sync with PRESENCE_STALE_MINUTES = 25 in functions/travel_utils.js — the
+/// window is comfortably above two missed heartbeats.
+const presenceHeartbeatEvery = Duration(minutes: 10);
+
+/// Pure gate — presence tracks exactly the timed-push audience. Delegates to
+/// [shouldRegisterPush] so the "presence audience == push audience" invariant
+/// holds by construction and can't drift apart.
+bool shouldTrackPresence({
+  required String role,
+  required String status,
+  required bool signedIn,
+}) => shouldRegisterPush(role: role, status: status, signedIn: signedIn);
+
+/// Pure throttle for movement-driven fixes.
+bool shouldWritePresenceFix({
+  required DateTime? lastUploadAt,
+  required DateTime now,
+}) =>
+    lastUploadAt == null ||
+    now.difference(lastUploadAt) >= minPresenceUploadGap;
+
+/// Pure gate for the heartbeat tick. Only re-upserts when no movement fix
+/// has gone out for a full heartbeat period — a fresh fix already reset the clock.
+bool shouldHeartbeat({
+  required DateTime? lastUploadAt,
+  required DateTime now,
+}) =>
+    lastUploadAt != null &&
+    now.difference(lastUploadAt) >= presenceHeartbeatEvery;
+
+/// Delay until a throttled fix is allowed, or null if it's already allowed.
+/// Used to arm the trailing-flush timer so the last fix in a burst still lands.
+Duration? trailingFlushDelay({
+  required DateTime? lastUploadAt,
+  required DateTime now,
+}) {
+  if (shouldWritePresenceFix(lastUploadAt: lastUploadAt, now: now)) return null;
+  return minPresenceUploadGap - now.difference(lastUploadAt!);
+}
+
+/// Owns the foreground position stream that keeps
+/// `users/{docId}/presence/location` fresh for travel-time reminders. iOS
+/// suspends it on background — see `_settingsForPlatform`.
+class PresenceSyncController with ReentrantSync {
+  PresenceSyncController(this._ref, {FirebaseAuth? auth})
+    : _auth = auth ?? FirebaseAuth.instance;
+
+  final Ref _ref;
+  final FirebaseAuth _auth;
+
+  StreamSubscription<Position>? _positionSub;
+  Timer? _heartbeat;
+  Timer? _trailingFlush;
+  AppLifecycleListener? _lifecycle;
+  String? _trackedUid;
+  String? _docId;
+  Position? _lastPosition;
+  DateTime? _lastUploadAt;
+
+  AppLogger get _logger => _ref.read(loggerProvider);
+
+  Future<void> sync() => runCoalesced(_syncGuarded);
+
+  Future<void> _syncGuarded() async {
+    try {
+      final signedIn = _auth.currentUser != null;
+      final doc = _ref.read(currentUserDocProvider).value ?? const {};
+      final role = (doc['role'] ?? '').toString().trim();
+      final status = (doc['status'] ?? '').toString().trim();
+      if (!shouldTrackPresence(
+        role: role,
+        status: status,
+        signedIn: signedIn,
+      )) {
+        _stop();
+        return;
+      }
+      // Restart stream if permission was flipped while running.
+      _lifecycle ??= AppLifecycleListener(onResume: () => unawaited(sync()));
+      final uid = _auth.currentUser?.uid;
+      if (uid == null) return;
+      // Fast path: already streaming for this uid.
+      if (uid == _trackedUid && _positionSub != null) return;
+
+      await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
+      final permission = await _ref
+          .read(locationPermissionServiceProvider)
+          .ensureLocation();
+      // Silent no-op on any non-grant (never nag) — the server's
+      // address-fallback chain covers an untracked user. Silent to the USER,
+      // not to us: the three non-grant reasons need different remedies
+      // (re-prompt vs. open Settings vs. turn Location Services on), and
+      // collapsing them to one early return left "presence never starts" with
+      // nothing anywhere saying why. A breadcrumb, not a warn — a declined
+      // permission is a choice, not a defect.
+      if (permission != LocationPermissionResult.granted) {
+        _logger.breadcrumb('PRESENCE not tracking: ${permission.name}');
+        return;
+      }
+
+      final match = await _ref
+          .read(employeesRepositoryProvider)
+          .findUserByUid(uid);
+      final docId = match?.id;
+      if (docId == null) {
+        _logger.warn('PRESENCE no users doc for uid; skip tracking');
+        return;
+      }
+      _start(docId: docId, uid: uid);
+    } catch (e, st) {
+      // sync() is called unawaited, so don't let failures escape as uncaught
+      // async errors.
+      _logger.warn('PRESENCE sync failed', e, st);
+    }
+  }
+
+  void _start({required String docId, required String uid}) {
+    _stop();
+    _trackedUid = uid;
+    _docId = docId;
+    _positionSub =
+        Geolocator.getPositionStream(
+          locationSettings: _settingsForPlatform(),
+        ).listen(
+          (position) {
+            _lastPosition = position;
+            final now = DateTime.now();
+            if (shouldWritePresenceFix(lastUploadAt: _lastUploadAt, now: now)) {
+              _trailingFlush?.cancel();
+              _trailingFlush = null;
+              _uploadThrottled(position, now);
+            } else {
+              _armTrailingFlush(now);
+            }
+          },
+          onError: (Object e, StackTrace st) {
+            // Expected permission loss logs without Crashlytics record.
+            if (_isExpectedLocationLoss(e)) {
+              _logger.warn('PRESENCE stream stopped: location access lost');
+            } else {
+              _logger.warn('PRESENCE stream error', e, st);
+            }
+            _stop();
+          },
+        );
+    _heartbeat = Timer.periodic(presenceHeartbeatEvery, (_) {
+      final position = _lastPosition;
+      if (position == null) return;
+      final now = DateTime.now();
+      if (shouldHeartbeat(lastUploadAt: _lastUploadAt, now: now)) {
+        _trailingFlush?.cancel();
+        _trailingFlush = null;
+        _uploadThrottled(position, now);
+      }
+    });
+  }
+
+  void _armTrailingFlush(DateTime now) {
+    final delay = trailingFlushDelay(lastUploadAt: _lastUploadAt, now: now);
+    if (delay == null) return;
+    _trailingFlush?.cancel();
+    _trailingFlush = Timer(delay, () {
+      _trailingFlush = null;
+      final position = _lastPosition;
+      final fireNow = DateTime.now();
+      if (position == null ||
+          !shouldWritePresenceFix(lastUploadAt: _lastUploadAt, now: fireNow)) {
+        return;
+      }
+      _uploadThrottled(position, fireNow);
+    });
+  }
+
+  /// Fires the write with the throttle clock set to [attemptedAt], and rolls
+  /// it back on failure so a dropped write doesn't push us toward the staleness window.
+  void _uploadThrottled(Position position, DateTime attemptedAt) {
+    final previous = _lastUploadAt;
+    _lastUploadAt = attemptedAt;
+    unawaited(
+      _upload(position).then((result) {
+        if (result == PresenceWriteResult.ok) return;
+        if (_lastUploadAt == attemptedAt) _lastUploadAt = previous;
+        if (result == PresenceWriteResult.denied) _stop();
+      }),
+    );
+  }
+
+  Future<PresenceWriteResult> _upload(Position position) {
+    final docId = _docId;
+    final uid = _trackedUid;
+    if (docId == null || uid == null) {
+      return Future.value(PresenceWriteResult.failed);
+    }
+    return _ref
+        .read(presenceRepositoryProvider)
+        .upsertLocation(
+          userDocId: docId,
+          uid: uid,
+          lat: position.latitude,
+          lng: position.longitude,
+        );
+  }
+
+  /// Expected, user-driven ways the position stream can die — permission
+  /// revoked, or Location Services turned off.
+  static bool _isExpectedLocationLoss(Object e) =>
+      e is PermissionDeniedException ||
+      e is LocationServiceDisabledException ||
+      (e is PositionUpdateException &&
+          (e.message ?? '').contains('kCLErrorDomain error 1'));
+
+  /// This is about device capability, not UI look, so we use
+  /// `defaultTargetPlatform` rather than `context.isCupertino` — there's no
+  /// BuildContext here anyway, same as in `AddressMapLauncher`.
+  LocationSettings _settingsForPlatform() {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return AppleSettings(
+        accuracy: LocationAccuracy.medium,
+        distanceFilter: 250,
+        activityType: ActivityType.automotiveNavigation,
+        pauseLocationUpdatesAutomatically: true,
+      );
+    }
+    return AndroidSettings(
+      accuracy: LocationAccuracy.medium,
+      distanceFilter: 250,
+      // The foreground-service notification is what keeps the stream alive in
+      // background on Android (dev harness only — never ships to Play, so the
+      // untranslated text is acceptable).
+      foregroundNotificationConfig: const ForegroundNotificationConfig(
+        notificationTitle: 'ES Pro',
+        notificationText:
+            'Sharing your location for time-to-leave alerts and the staff map.',
+      ),
+    );
+  }
+
+  void _stop() {
+    unawaited(_positionSub?.cancel());
+    _positionSub = null;
+    _heartbeat?.cancel();
+    _heartbeat = null;
+    _trailingFlush?.cancel();
+    _trailingFlush = null;
+    _trackedUid = null;
+    _docId = null;
+    _lastPosition = null;
+    _lastUploadAt = null;
+  }
+
+  /// Best-effort teardown for sign-out or account deletion — stops the stream
+  /// and deletes the presence doc. Never throws, since sign-out must not be blocked.
+  Future<void> unregister() async {
+    final docId = _docId;
+    _stop();
+    if (docId == null) return;
+    try {
+      await _ref
+          .read(presenceRepositoryProvider)
+          .deleteLocation(userDocId: docId);
+    } catch (e, st) {
+      _logger.warn('PRESENCE unregister failed', e, st);
+    }
+  }
+
+  /// Container-teardown cleanup — cancels the stream, timers, and lifecycle
+  /// listener without the network delete that [unregister] does on sign-out.
+  void dispose() {
+    _stop();
+    _lifecycle?.dispose();
+    _lifecycle = null;
+  }
+}

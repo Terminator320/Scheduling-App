@@ -3,17 +3,14 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_pill.dart';
 
-/// The account lifecycle for a `users`/employee doc: an [invited] account that
-/// has not yet redeemed its signup code, an [active] one, or a [disabled] one.
-/// Appointment lifecycle states live in `AppointmentStatus` (status_chip.dart).
+/// Account states: invited (not yet redeemed), active, or disabled.
 enum UserStatus {
   active,
   invited,
   disabled;
 
-  /// Canonical mapping from a stored user/account status string; anything that
-  /// isn't an explicit `active`/`disabled` (including a not-yet-redeemed
-  /// invite's `invited`/empty status) falls through to [invited].
+  /// Maps a stored status. Anything not explicitly recognized falls through
+  /// to invited.
   static UserStatus fromRaw(String raw) => switch (raw.toLowerCase()) {
     'active' => active,
     'disabled' => disabled,
@@ -21,7 +18,7 @@ enum UserStatus {
   };
 }
 
-/// Localized label for a user/account status.
+/// Localized account status label.
 String userStatusLabel(AppLocalizations l10n, UserStatus status) =>
     switch (status) {
       UserStatus.active => l10n.status_active,

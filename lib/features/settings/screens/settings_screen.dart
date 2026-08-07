@@ -1,33 +1,50 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
-import 'package:scheduling/core/constants/app_urls.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
-import 'package:scheduling/core/launchers/web_url_launcher.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/security/biometric_auth_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
+import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
+import 'package:scheduling/features/live_activity/application/live_activity_preference.dart';
+import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
+import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
+import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
+import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/settings/application/app_info_provider.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
+import 'package:scheduling/features/settings/widgets/cards/account_settings_card.dart';
+import 'package:scheduling/features/settings/widgets/cards/appearance_settings_card.dart';
+import 'package:scheduling/features/settings/widgets/cards/legal_settings_card.dart';
+import 'package:scheduling/features/settings/widgets/cards/notifications_settings_card.dart';
+import 'package:scheduling/features/settings/widgets/cards/security_settings_card.dart';
 import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
 import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
 import 'package:scheduling/features/wave/widgets/wave_settings_section.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
@@ -54,13 +71,43 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+class _SettingsScreenState extends ConsumerState<SettingsScreen>
+    with WidgetsBindingObserver {
   late final AccountDeletionService _deletionService =
       widget.accountDeletionService ?? ref.read(accountDeletionServiceProvider);
 
   _SettingsDetail? _selectedDetail;
   bool _isSigningOut = false;
   bool _isDeletingAccount = false;
+
+  late final _tour = TourSteps(
+    const DestinationTour(PushedDestination.settings),
+    isAdmin: widget.role == 'admin',
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-check on resume in case the user toggled notifications in OS Settings.
+    if (state == AppLifecycleState.resumed && mounted) {
+      ref
+        ..invalidate(notificationAuthStatusProvider)
+        // Live Activities support is also a cached, user-mutable OS Settings value.
+        ..invalidate(liveActivitySupportedProvider);
+      unawaited(ref.read(pushRegistrationControllerProvider).sync());
+    }
+  }
 
   String get _displayName {
     if (widget.name.isNotEmpty) return widget.name;
@@ -73,13 +120,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String get _email => widget.email.isNotEmpty
       ? widget.email
       : FirebaseAuth.instance.currentUser?.email ?? '';
-
-  String _textScaleLabel(BuildContext context, double scale) {
-    if (scale <= 0.85) return context.l10n.settings_textScaleSmall;
-    if (scale <= 1.05) return context.l10n.settings_textScaleMedium;
-    if (scale <= 1.25) return context.l10n.settings_textScaleLarge;
-    return context.l10n.settings_textScaleXL;
-  }
 
   bool get _isAdmin => widget.role == 'admin';
 
@@ -100,23 +140,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _onTextSizeTap() async {
-    if (context.isSplitLayout) {
+    if (context.isTwoPane) {
       setState(() => _selectedDetail = _SettingsDetail.textSize);
       return;
     }
     await Navigator.push<void>(
       context,
-      MaterialPageRoute(builder: (_) => const TextSizeScreen()),
+      MaterialPageRoute(
+        builder: (_) => TextSizeScreen(
+          isAdmin: _isAdmin,
+          employeeId: widget.employeeId,
+        ),
+      ),
     );
     if (mounted) setState(() {});
   }
 
   Widget _buildMaster() {
     final scheme = Theme.of(context).colorScheme;
-    final notifier = ThemeNotifier.of(context);
-    final langCode = Localizations.localeOf(context).languageCode;
 
     return ListView(
+      // Named so tests can target the master pane's scrollable directly: at
+      // tablet-class viewports MasterDetailScaffold renders a second one, so
+      // `find.byType(Scrollable).first` is ambiguous, and anchoring on a row
+      // instead breaks whenever a row is added above it.
+      key: const ValueKey('settingsMasterList'),
+      // Inflate the whole list up front so below-the-fold feature-tour targets register.
+      scrollCacheExtent: const ScrollCacheExtent.pixels(4000),
       padding: const EdgeInsets.all(AppSpacing.sp16),
       children: [
         SettingsProfileCard(
@@ -125,172 +175,63 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           role: widget.role,
         ),
         const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(
-          label: context.l10n.settings_appearance.toUpperCase(),
-        ),
-        _appearanceCard(scheme, notifier, langCode: langCode),
-        const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(
-          label: context.l10n.settings_account.toUpperCase(),
-        ),
-        _accountCard(scheme),
-        const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(
-          label: context.l10n.settings_security.toUpperCase(),
-        ),
-        _securityCard(scheme),
-        if (_isAdmin) ...[
-          const SizedBox(height: AppSpacing.sp24),
-          SettingsSectionHeader(
-            label: context.l10n.settings_integrations.toUpperCase(),
-          ),
-          const SettingsSectionCard(
-            child: Padding(
-              padding: EdgeInsets.symmetric(vertical: AppSpacing.sp12),
-              child: WaveSettingsSection(),
-            ),
-          ),
-        ],
-        const SizedBox(height: AppSpacing.sp24),
-        SettingsSectionHeader(
-          label: context.l10n.settings_legal.toUpperCase(),
-        ),
-        _legalCard(scheme),
-        const SizedBox(height: AppSpacing.sp24),
+        ..._settingsCards(scheme),
+        ..._legalAndHelpCards(scheme),
         _buildVersionFooter(scheme),
         const SizedBox(height: AppSpacing.sp32),
       ],
     );
   }
 
-  Widget _appearanceCard(
-    ColorScheme scheme,
-    ThemeNotifier notifier, {
-    required String langCode,
-  }) {
-    // Resolve against the live OS brightness via MediaQuery so the switch both
-    // matches what's on screen under the default `system` mode and rebuilds if
-    // the OS theme flips while this screen is open.
-    final isDark = isDarkMode(
-      notifier.themeMode,
-      MediaQuery.platformBrightnessOf(context),
-    );
-    return SettingsSectionCard(
-      child: Column(
-        children: [
-          SettingsTile(
-            iconBg: scheme.primaryContainer,
-            icon: isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
-            iconColor: scheme.primary,
-            label: context.l10n.settings_darkMode,
-            trailing: Switch.adaptive(
-              value: isDark,
-              onChanged: (_) => notifier.toggleTheme(),
-              activeTrackColor: scheme.primary,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-          ),
-          const SettingsTileDivider(),
-          SettingsTile(
-            iconBg: scheme.tertiaryContainer,
-            icon: Icons.text_fields_rounded,
-            iconColor: scheme.tertiary,
-            label: context.l10n.settings_textSize,
-            trailing: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: AppSpacing.sp4,
-              runSpacing: AppSpacing.sp4,
-              children: [
-                SettingsTrailingPill(
-                  label: _textScaleLabel(context, notifier.textScale),
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ],
-            ),
-            onTap: _onTextSizeTap,
-          ),
-          const SettingsTileDivider(),
-          SettingsTile(
-            iconBg: scheme.secondaryContainer,
-            icon: Icons.language_rounded,
-            iconColor: scheme.secondary,
-            label: context.l10n.common_language,
-            trailing: LanguageToggle(
-              currentCode: langCode,
-              onChanged: notifier.setLanguage,
-            ),
-            isLast: true,
-          ),
-        ],
-      ),
-    );
+  /// Turning this off unregisters the device, which ends any live card;
+  /// turning it back on re-registers. Best effort — it never throws.
+  Future<void> _toggleLiveActivity({required bool value}) async {
+    await ref
+        .read(liveActivityEnabledProvider.notifier)
+        .setEnabled(value: value);
+    final controller = ref.read(liveActivityRegistrationControllerProvider);
+    if (value) {
+      await controller.sync();
+    } else {
+      await controller.unregister();
+    }
   }
 
-  Widget _accountCard(ColorScheme scheme) {
-    return SettingsSectionCard(
-      child: Column(
-        children: [
-          SettingsTile(
-            iconBg: scheme.errorContainer,
-            icon: Icons.logout_rounded,
-            iconColor: scheme.error,
-            label: context.l10n.settings_logOut,
-            labelColor: scheme.error,
-            onTap: _signOut,
-          ),
-          const SettingsTileDivider(),
-          SettingsTile(
-            iconBg: scheme.errorContainer,
-            icon: Icons.delete_forever_rounded,
-            iconColor: scheme.error,
-            label: context.l10n.settings_deleteAccount,
-            labelColor: scheme.error,
-            isLast: true,
-            onTap: _confirmDeleteAccount,
-          ),
-        ],
-      ),
-    );
+  /// notDetermined shows the one-time OS prompt; any other status opens OS Settings.
+  Future<void> _onNotificationsTap(AuthorizationStatus status) async {
+    final service = ref.read(pushNotificationServiceProvider);
+    if (status == AuthorizationStatus.notDetermined) {
+      await service.requestPermission();
+    } else {
+      await service.openSystemSettings();
+    }
+    if (!mounted) return;
+    ref.invalidate(notificationAuthStatusProvider);
+    unawaited(ref.read(pushRegistrationControllerProvider).sync());
   }
 
-  Widget _securityCard(ColorScheme scheme) {
+  Widget _helpCard(ColorScheme scheme) {
     return SettingsSectionCard(
-      child: SettingsTile(
-        iconBg: scheme.primaryContainer,
-        icon: Icons.fingerprint_rounded,
-        iconColor: scheme.primary,
-        label: context.l10n.settings_appLock,
-        isLast: true,
-        trailing: Switch.adaptive(
-          value: ref.watch(appLockEnabledProvider),
-          onChanged: (value) => _toggleAppLock(value: value),
-          activeTrackColor: scheme.primary,
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      child: _tour.step(
+        TourStepId.settingsReplay,
+        child: SettingsTile(
+          iconBg: scheme.primaryContainer,
+          icon: Icons.tour_rounded,
+          iconColor: scheme.primary,
+          label: context.l10n.settings_replayTour,
+          isLast: true,
+          onTap: _onReplayTour,
         ),
       ),
     );
   }
 
-  Widget _legalCard(ColorScheme scheme) {
-    return SettingsSectionCard(
-      child: SettingsTile(
-        iconBg: scheme.secondaryContainer,
-        icon: Icons.privacy_tip_rounded,
-        iconColor: scheme.secondary,
-        label: context.l10n.settings_privacyPolicy,
-        isLast: true,
-        trailing: Icon(
-          Icons.open_in_new_rounded,
-          size: 18,
-          color: scheme.onSurfaceVariant,
-        ),
-        onTap: () => launchWebUrl(context, ref, AppUrls.privacyPolicy),
-      ),
-    );
+  Future<void> _onReplayTour() async {
+    await ref.read(tourSeenProvider.notifier).resetAll();
+    if (!mounted) return;
+    ref
+        .read(noticeServiceProvider)
+        .success(context.l10n.settings_replayTourDone);
   }
 
   Widget _buildVersionFooter(ColorScheme scheme) {
@@ -329,39 +270,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Scaffold(
-          appBar: AppTopBar(
-            title: context.l10n.common_settings,
-            compact: context.isLandscape,
-            onBack: () => navigateToDestination(
-              context,
-              AdaptiveDestination.calendar,
+    return FeatureTourHost(
+      scope: _tour.scope,
+      isAdmin: _isAdmin,
+      stepKeys: _tour.keys,
+      autoScroll: true,
+      child: Stack(
+        children: [
+          Scaffold(
+            appBar: AppTopBar(
+              title: context.l10n.common_settings,
+              compact: context.isLandscape,
+              // A pushed route now, so back means back. The Calendar pill
+              // covers go-home.
+              onBack: () => Navigator.maybePop(context),
+              actions: const [AppHeaderPair()],
+            ),
+            endDrawer: AppNavDrawer(
               isAdmin: _isAdmin,
               employeeId: widget.employeeId,
+              userName: widget.name,
+              email: widget.email,
             ),
-          ),
-          body: AdaptiveShell(
-            currentDestination: AdaptiveDestination.settings,
-            isAdmin: _isAdmin,
-            employeeId: widget.employeeId,
-            userName: _displayName,
-            userEmail: _email,
-            child: MasterDetailScaffold(
+            body: MasterDetailScaffold(
               master: _buildMaster(),
               detail: _buildDetail(),
               placeholder: _buildDetailPlaceholder(),
             ),
           ),
-        ),
-        // Blocks the UI during the multi-second, irreversible account
-        // deletion so it can't be re-triggered and the user sees progress.
-        if (_isDeletingAccount)
-          _BlockingProgressOverlay(
-            label: context.l10n.settings_deletingAccount,
-          ),
-      ],
+          // Blocks the UI during the irreversible account deletion.
+          if (_isDeletingAccount)
+            _BlockingProgressOverlay(
+              label: context.l10n.settings_deletingAccount,
+            ),
+        ],
+      ),
     );
   }
 
@@ -369,10 +312,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (_isSigningOut) return;
     setState(() => _isSigningOut = true);
     try {
+      // Clean up this device's push token, presence, and Live Activity state
+      // — best effort, so a failure here doesn't block sign-out.
+      await ref
+          .read(pushRegistrationControllerProvider)
+          .unregisterCurrentDevice();
+      await ref.read(presenceSyncControllerProvider).unregister();
+      await ref.read(liveActivityRegistrationControllerProvider).unregister();
       await ref.read(authServiceProvider).signOut();
     } catch (e, st) {
-      // signOut clears local state and effectively never throws; if it does,
-      // log it but still route to login so the user isn't stuck signed in.
+      // Log but still route to login so the user isn't stuck signed in.
       ref.read(loggerProvider).warn('ACCT-SIGNOUT signOut failed', e, st);
     }
     if (!mounted) return;
@@ -385,6 +334,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Future<void> _confirmDeleteAccount() async {
     if (_isDeletingAccount) return;
+    // Bail out early if we're offline — otherwise the call just hangs for ~30s.
+    if (guardedOffline(
+      context,
+      ref,
+      intro: context.l10n.error_introDeleteAccount,
+    )) {
+      return;
+    }
     final result = await showConfirmDialog(
       context,
       title: context.l10n.settings_deleteAccountConfirmTitle,
@@ -393,8 +350,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     if (!result || !mounted) return;
 
-    // Platform-matched presentation so the re-auth prompt looks like the
-    // adaptive confirm it directly follows.
+    // Match the platform presentation of the adaptive confirm dialog shown before this.
     final password = context.isCupertino
         ? await showCupertinoDialog<String>(
             context: context,
@@ -415,6 +371,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final logger = ref.read(loggerProvider);
     try {
       await _deletionService.reauthenticateWithPassword(password);
+      // Drop this device's push token while still authenticated, before deleteAccount revokes access.
+      await ref
+          .read(pushRegistrationControllerProvider)
+          .unregisterCurrentDevice();
+      await ref.read(presenceSyncControllerProvider).unregister();
+      await ref.read(liveActivityRegistrationControllerProvider).unregister();
       await _deletionService.deleteAccount();
     } on AuthFailure catch (e) {
       if (!mounted) return;
@@ -429,7 +391,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         composeErrorNotice(
           context,
           intro: context.l10n.error_introDeleteAccount,
-          tag: 'ACCT-DEL',
           error: e,
         ),
       );
@@ -444,11 +405,81 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     notices.success(message);
   }
+
+  /// Appearance, account, security, notifications and (admin-only) Wave.
+  List<Widget> _settingsCards(ColorScheme scheme) => [
+    SettingsSectionHeader(
+      label: context.l10n.settings_appearance.toUpperCase(),
+    ),
+    _tour.step(
+      TourStepId.settingsAppearance,
+      child: AppearanceSettingsCard(onTextSizeTap: _onTextSizeTap),
+    ),
+    const SizedBox(height: AppSpacing.sp24),
+    SettingsSectionHeader(
+      label: context.l10n.settings_account.toUpperCase(),
+    ),
+    SettingsSectionCard(
+      child: SettingsTile(
+        iconBg: scheme.primaryContainer,
+        icon: Icons.badge_outlined,
+        iconColor: scheme.primary,
+        label: context.l10n.settings_myDetails,
+        isLast: true,
+        onTap: () => Navigator.pushNamed(context, AppRoutes.myDetails),
+      ),
+    ),
+    const SizedBox(height: AppSpacing.sp12),
+    AccountSettingsCard(
+      onSignOut: _signOut,
+      onDeleteAccount: _confirmDeleteAccount,
+    ),
+    const SizedBox(height: AppSpacing.sp24),
+    SettingsSectionHeader(
+      label: context.l10n.settings_security.toUpperCase(),
+    ),
+    SecuritySettingsCard(onToggleAppLock: _toggleAppLock),
+    const SizedBox(height: AppSpacing.sp24),
+    SettingsSectionHeader(
+      label: context.l10n.settings_notifications.toUpperCase(),
+    ),
+    _tour.step(
+      TourStepId.settingsNotifications,
+      child: NotificationsSettingsCard(
+        onNotificationsTap: _onNotificationsTap,
+        onToggleLiveActivity: _toggleLiveActivity,
+      ),
+    ),
+    if (_isAdmin) ...[
+      const SizedBox(height: AppSpacing.sp24),
+      SettingsSectionHeader(
+        label: context.l10n.settings_integrations.toUpperCase(),
+      ),
+      const SettingsSectionCard(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.sp12),
+          child: WaveSettingsSection(),
+        ),
+      ),
+    ],
+    const SizedBox(height: AppSpacing.sp24),
+  ];
+
+  List<Widget> _legalAndHelpCards(ColorScheme scheme) => [
+    SettingsSectionHeader(
+      label: context.l10n.settings_legal.toUpperCase(),
+    ),
+    const LegalSettingsCard(),
+    const SizedBox(height: AppSpacing.sp24),
+    SettingsSectionHeader(
+      label: context.l10n.settings_help.toUpperCase(),
+    ),
+    _helpCard(scheme),
+    const SizedBox(height: AppSpacing.sp24),
+  ];
 }
 
-/// Full-screen modal barrier + spinner shown while a blocking, irreversible
-/// operation runs. The [ModalBarrier] absorbs all input so the action behind
-/// it can't be re-triggered.
+/// Full-screen modal barrier + spinner shown while a blocking, irreversible operation runs.
 class _BlockingProgressOverlay extends StatelessWidget {
   const _BlockingProgressOverlay({required this.label});
 

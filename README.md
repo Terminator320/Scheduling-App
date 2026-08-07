@@ -8,7 +8,7 @@ This repository is proprietary. The source code, architecture, and configuration
 
 ## Overview
 
-The Scheduling App is a cross-platform mobile application built with Flutter, targeting Android and iOS from a single codebase. It provides a centralized platform for business owners and their field teams to coordinate service appointments in real time — replacing manual scheduling, paper records, and fragmented communication.
+The Scheduling App is a mobile application for iPhone, built with Flutter. It provides a centralized platform for business owners and their field teams to coordinate service appointments in real time — replacing manual scheduling, paper records, and fragmented communication.
 
 The application is backed by Google Firebase, giving it a secure, cloud-based foundation with offline-capable data sync, enterprise-grade authentication, and scalable storage for appointment photos and client files.
 
@@ -23,11 +23,12 @@ The application is backed by Google Firebase, giving it a secure, cloud-based fo
 
    ```bash
    flutter run --dart-define=USE_FIREBASE_EMULATOR=true
-   # Override the emulator host if not on the Android emulator (default 10.0.2.2):
-   flutter run --dart-define=USE_FIREBASE_EMULATOR=true --dart-define=EMULATOR_HOST=127.0.0.1
+   # Host defaults to 127.0.0.1, which is what the iOS Simulator needs.
+   # Override it when running on a physical device on the same network:
+   flutter run --dart-define=USE_FIREBASE_EMULATOR=true --dart-define=EMULATOR_HOST=192.168.x.x
    ```
 
-Building for iOS requires a Mac — see [docs/IOS_MAC_BUILD.md](docs/IOS_MAC_BUILD.md).
+The app targets **iOS only** and building it requires a Mac — see [docs/IOS_MAC_BUILD.md](docs/IOS_MAC_BUILD.md).
 
 ---
 
@@ -36,17 +37,43 @@ Building for iOS requires a Mac — see [docs/IOS_MAC_BUILD.md](docs/IOS_MAC_BUI
 ### Appointment Scheduling
 A full-featured monthly calendar lets administrators plan, assign, and manage service appointments. Each appointment captures everything needed in the field: client details, service address, assigned employees, time window, materials required, internal notes, and status. Administrators have a complete view of all scheduled work; employees see only the appointments assigned to them.
 
+A job is not limited to a single day. An appointment can be booked across a run of up to two weeks, and its start and end times are read as a **daily working window** — 9 to 5 across a five-day run means 9 to 5 on each of those days, not one unbroken stretch through the nights. Each day of the run appears on the calendar in its own right, labelled with its position ("Day 3 of 5"), and an overnight shift is expressed simply by ending earlier in the clock than it starts.
+
+Not every entry on the calendar is a client visit. A **personal job** blocks out time for the crew itself — an appointment, a day off, a training morning — with no client and no address, and can cover a whole day rather than a time window. It still names who the time belongs to, so it shows up on their schedule and counts against their availability, and the system knows not to treat it as work in progress: it is never chased for completion and never triggers a "time to leave" alert.
+
+### Admin Dashboard
+A single overview screen gives administrators the day at a glance: today's visits broken down by status, how many are still unassigned, each employee's workload for today and the week, an eight-week trend of completed versus cancelled jobs and new clients, the busiest weekday, and an attention list flagging jobs starting soon or already running overdue.
+
+### Live Staff Map
+Administrators can see their field team on a live map — each employee who is sharing location appears as a colored pin, with a roster that orders staff by proximity and shows how recently each position was reported. Location is captured while the app is in the foreground on the employee's device (foreground-only since 2026-07-27, for App Store guideline 2.5.4) and is only ever visible to administrators, giving dispatch a picture of who is where without any manual check-ins.
+
+### Push Notifications
+Field employees are kept in the loop automatically — they receive a push when they're assigned to, rescheduled on, or removed from a visit, a reminder shortly before a job is due to start, a nudge to close out a job once it runs past its end time, and an end-of-day summary of the next day's work. On iPhone, a home-screen widget shows an employee's remaining jobs for the day and their next upcoming visit.
+
+Reminders are **travel-aware**: rather than a fixed countdown, the system estimates live, traffic-aware drive time from where the employee is (or their previous job) to the next stop and sends a "time to leave" alert at the right moment to arrive on schedule. On a recent iPhone, this surfaces as a Lock Screen Live Activity card that counts down to the job — and if drive time can't be determined, it safely falls back to a standard fixed reminder.
+
 ### Client Records
-A searchable directory of clients, listed alphabetically by name — including customer name, optional first/last name, service address, billing contacts, phone, and mobile numbers. Records update in real time across all devices. The search engine matches customer name, first name, last name, phone, and mobile, handling accent characters and partial matches to keep lookups fast even with large client bases.
+A searchable directory of clients, listed alphabetically by name — including customer name, optional first/last name, service address, billing contacts, and phone number. Records update in real time across all devices. The search engine matches customer name, first name, last name and phone, handling accent characters and partial matches to keep lookups fast even with large client bases.
+
+A client is never deleted out from under their own history. Clients that are no longer active are **archived**: they drop out of the main list and the type filter, but stay searchable and bookable, and every past appointment keeps its link to them. Archiving is reversible, and a client can still be removed outright only while they have no appointments at all — the server checks, and refuses otherwise.
 
 ### Wave Accounting Sync
-Administrators can connect the business's [Wave](https://www.waveapps.com) account and import its existing customers into the app. From then on, every client added or edited is synced to Wave automatically in the background, and each client carries a small status badge — *synced*, *sync pending*, or *sync error*. The sync runs entirely server-side, so it never slows the app down, and a Wave outage simply leaves a client "pending" rather than failing the save. If a Wave account has more than one business, connecting shows a short list to choose the right one.
+Administrators can connect the business's [Wave](https://www.waveapps.com) account and keep the two customer lists in step. Every client added or edited is synced to Wave automatically in the background, and each client carries a small status badge — *synced*, *sync pending*, or *sync error*. A single **Sync with Wave** action runs both directions on demand: it sends whatever is still waiting to reach Wave, then pulls Wave's customers back into the app. It reports what actually moved and in which direction, and says plainly when a run didn't finish or a customer was rejected, rather than reporting a clean result. Customer imports can also be scheduled to run automatically on a weekly or monthly cadence (or left off). The sync runs entirely server-side, so it never slows the app down, and a Wave outage simply leaves a client "pending" rather than failing the save. The target Wave business is selected server-side, so nothing about the account is configured in the app.
 
 ### Employee Management
-Administrators onboard employees through a controlled invite flow: an employee account is created by the admin first, and only pre-invited email addresses are permitted to self-register. Each employee is assigned a distinct display color that appears on the calendar, making workload distribution and scheduling conflicts immediately visible.
+Administrators onboard employees directly: the admin creates the account and hands over the sign-in email and a starting password, and the employee then signs in and sets their own password. There is no self-registration path. Each employee is assigned a distinct display color that appears on the calendar, making workload distribution and scheduling conflicts immediately visible.
 
 ### Photo Documentation
 Employees can attach photos directly to any appointment from their device camera or photo library. Images are compressed automatically and uploaded to secure cloud storage in the background, keeping the app responsive while files transfer.
+
+### Route Planning
+Employees get a timeline view of their day's stops in order, and can hand the whole route off to Google Maps as a single multi-stop trip for turn-by-turn navigation between jobs — or open directions to any individual address. This turns a list of appointments into an efficient driving plan for the day.
+
+### Hands-Free with Siri
+On iPhone, employees and administrators can ask Siri about their schedule without opening the app — how many appointments they have, what's on today, their next visit, or the plan for a specific day. Answers are drawn from an on-device snapshot, so they work quickly and only ever expose the schedule details the question needs.
+
+### Guided Tours
+The first time a user opens each main screen, a short, role-aware walkthrough highlights the key actions available there. Tours only run once, respect what each role can actually do, and can be replayed at any time from Settings.
 
 ### Access Control
 Two distinct roles — **Admin** and **Employee** — enforce data boundaries at every layer of the application. Admins have full read/write access across all records. Employees operate within a scoped view limited to their own assigned work.
@@ -60,12 +87,15 @@ Users can switch between light and dark display modes, adjust text scaling for r
 
 | Concern | Solution |
 |---|---|
-| Mobile framework | Flutter — Android & iOS |
+| Mobile framework | Flutter — iOS |
 | Authentication | Firebase Authentication |
 | Data store | Cloud Firestore (real-time sync) |
 | File storage | Firebase Storage |
 | Application security | Firebase App Check |
+| Push & background delivery | Firebase Cloud Messaging + APNs (iOS Live Activities) |
 | Address lookup | Google Places API |
+| Mapping, live location & routing | Google Maps SDK, Google Routes API, device GPS |
+| Voice queries | Siri App Intents (iOS) |
 | Accounting sync | Wave Accounting (server-side) |
 | Offline support | Firestore local cache |
 
@@ -73,7 +103,7 @@ Users can switch between light and dark display modes, adjust text scaling for r
 
 ## Application Architecture
 
-The codebase follows a feature-first structure. Each domain area — authentication, calendar, clients, employees, and settings — is self-contained with its own screens, data models, business logic, and UI components. Shared utilities and design primitives are promoted to common layers only when used across multiple features.
+The codebase follows a feature-first structure. Each domain area — authentication, calendar, clients, employees, dashboard, notifications, live location, and settings among them — is self-contained with its own screens, data models, business logic, and UI components. Shared utilities and design primitives are promoted to common layers only when used across multiple features.
 
 All navigation is centralized through a single route handler, ensuring consistent screen construction and argument passing throughout the application. Data access is strictly mediated through per-feature service classes; no screen ever queries the database directly.
 

@@ -3,43 +3,57 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_pill.dart';
 
-/// The appointment lifecycle: pending → in progress → done, plus a cancelled
-/// terminal state reached by the separate Cancel action. User/account states
-/// (active/invited/disabled) live in `UserStatus` — see `user_status_chip.dart`.
+/// Appointment states run pending → in_progress → done, plus cancelled.
+/// Overdue is display-only — it's never actually stored.
 enum AppointmentStatus {
   pending,
   inProgress,
+  overdue,
   done,
   cancelled;
 
-  /// Canonical mapping from a stored appointment status string; any
-  /// unrecognized value falls through to [pending].
+  /// Maps a stored status string to the enum. Unrecognized values default to pending.
   static AppointmentStatus fromRaw(String raw) => switch (raw.toLowerCase()) {
     'done' || 'completed' => done,
     'cancelled' => cancelled,
+    'overdue' => overdue,
     'in_progress' || 'inprogress' => inProgress,
     _ => pending,
   };
 
-  /// The pickable appointment statuses, in picker display order.
+  /// Pickable statuses (excludes display-only overdue).
   static const appointmentValues = [pending, inProgress, done];
 
-  /// The stored raw string for this status.
-  String get raw => this == inProgress ? 'in_progress' : name;
+  /// Normalizes a stored status to the allowlist — legacy, unknown, and
+  /// overdue values all collapse to pending.
+  static String storedRaw(String raw) {
+    final status = fromRaw(raw);
+    return status == overdue ? pending.raw : status.raw;
+  }
+
+  /// The stored raw string for this status. overdue throws here, to catch
+  /// an accidental write early.
+  String get raw => switch (this) {
+    inProgress => 'in_progress',
+    overdue => throw StateError(
+      'overdue is display-only; it has no stored raw',
+    ),
+    _ => name,
+  };
 
   bool get isDone => this == done;
   bool get isCancelled => this == cancelled;
 
-  /// Done/cancelled visits stay as records and exit the active workflow.
+  /// Terminal states exit the active workflow.
   bool get isTerminal => isDone || isCancelled;
 }
 
-/// Localized label for an appointment status — shared by [StatusChip] and the
-/// appointment status picker.
+/// Localized status label.
 String statusLabel(AppLocalizations l10n, AppointmentStatus status) =>
     switch (status) {
       AppointmentStatus.pending => l10n.status_pending,
       AppointmentStatus.inProgress => l10n.status_inProgress,
+      AppointmentStatus.overdue => l10n.status_overdue,
       AppointmentStatus.done => l10n.status_done,
       AppointmentStatus.cancelled => l10n.status_cancelled,
     };
@@ -51,7 +65,7 @@ class StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final (bg, fg) = _colorsFor(theme.colorScheme, theme.statusColors);
+    final (bg, fg) = _colorsFor(theme.statusColors);
     return StatusPill(
       label: statusLabel(context.l10n, status),
       background: bg,
@@ -59,23 +73,27 @@ class StatusChip extends StatelessWidget {
     );
   }
 
-  (Color, Color) _colorsFor(ColorScheme scheme, AppStatusColors statusColors) =>
-      switch (status) {
-        AppointmentStatus.pending => (
-          statusColors.warningContainer,
-          statusColors.onWarningContainer,
-        ),
-        AppointmentStatus.inProgress => (
-          statusColors.inProgressContainer,
-          statusColors.onInProgressContainer,
-        ),
-        AppointmentStatus.done => (
-          statusColors.successContainer,
-          statusColors.onSuccessContainer,
-        ),
-        AppointmentStatus.cancelled => (
-          scheme.errorContainer,
-          scheme.onErrorContainer,
-        ),
-      };
+  (Color, Color) _colorsFor(AppStatusColors statusColors) => switch (status) {
+    AppointmentStatus.pending => (
+      // "Scheduled"
+      statusColors.neutralContainer,
+      statusColors.onNeutralContainer,
+    ),
+    AppointmentStatus.inProgress => (
+      statusColors.inProgressContainer,
+      statusColors.onInProgressContainer,
+    ),
+    AppointmentStatus.overdue => (
+      statusColors.overdueContainer,
+      statusColors.onOverdueContainer,
+    ),
+    AppointmentStatus.done => (
+      statusColors.successContainer,
+      statusColors.onSuccessContainer,
+    ),
+    AppointmentStatus.cancelled => (
+      statusColors.neutralContainer,
+      statusColors.onNeutralContainerMuted,
+    ),
+  };
 }

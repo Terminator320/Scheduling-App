@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-// City/province and postal-code/country grid shared by the add-client and
-// edit-client forms.
+// City/province and postal-code/country grid (shared by add/edit forms).
 class AddressGridFields extends StatelessWidget {
   const AddressGridFields({
     required this.cityController,
@@ -36,7 +36,7 @@ class AddressGridFields extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.sp12),
             Expanded(
               child: SheetFocusScroll(
                 child: LabeledTextField(
@@ -49,7 +49,7 @@ class AddressGridFields extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.sp16),
         Row(
           children: [
             Expanded(
@@ -62,7 +62,7 @@ class AddressGridFields extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.sp12),
             Expanded(
               child: SheetFocusScroll(
                 child: LabeledTextField(

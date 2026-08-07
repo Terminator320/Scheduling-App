@@ -1,8 +1,11 @@
 // test/employee_card_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/job_title.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_card.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/user_status_chip.dart';
@@ -22,15 +25,19 @@ EmployeeRecord _fakeEmployee({
   color: const Color(0xFF6366F1),
 );
 
-Widget _wrap(Widget child) => MaterialApp(
-  localizationsDelegates: const [
-    AppLocalizations.delegate,
-    GlobalMaterialLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-  ],
-  supportedLocales: AppLocalizations.supportedLocales,
-  home: Scaffold(body: child),
-);
+Widget _wrap(Widget child, {Map<String, int> jobsToday = const {}}) =>
+    ProviderScope(
+      overrides: [employeeJobsTodayProvider.overrideWithValue(jobsToday)],
+      child: MaterialApp(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: child),
+      ),
+    );
 
 void main() {
   testWidgets('shows employee name', (tester) async {
@@ -94,6 +101,47 @@ void main() {
     final opacity = tester.widget<Opacity>(find.byType(Opacity));
     expect(opacity.opacity, closeTo(0.65, 0.01));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows job title and today count', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        EmployeeCard(
+          employee: const EmployeeRecord(
+            id: 'e1',
+            name: 'Theo Roy',
+            email: 'theo@x.com',
+            jobTitle: JobTitle.leadTech,
+          ),
+          onTap: () {},
+        ),
+        jobsToday: const {'e1': 3},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Lead tech · 3 jobs today'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('falls back to the email with no title and no jobs', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        EmployeeCard(
+          employee: const EmployeeRecord(
+            id: 'e1',
+            name: 'Theo Roy',
+            email: 'theo@x.com',
+          ),
+          onTap: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('theo@x.com'), findsOneWidget);
   });
 
   testWidgets('does not overflow at small screen + 2x text', (tester) async {

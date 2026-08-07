@@ -175,9 +175,8 @@ void main() {
   });
 
   group('AddressParser canonical ↔ display round-trip', () {
-    // Canonical is the source of truth in Firestore; display is what shows in
-    // the field after selection or load. A round-trip must be lossless so
-    // editing an existing record doesn't silently rewrite the stored string.
+    // Round-trip must be lossless, or editing an existing record silently
+    // rewrites the stored string.
     test('canonical → display → canonical is lossless', () {
       for (final stored in const [
         '5-1234 Main',
@@ -214,6 +213,24 @@ void main() {
       const plain = '1234 Rue Saint-Denis, Montréal, QC H2X 3J5';
       final nav = AddressParser.splitApt(plain)?.street ?? plain;
       expect(nav, plain);
+    });
+  });
+
+  group('AddressParser coordinate-fallback pass-through', () {
+    // A GPS-derived "lat,lng" string (reverse-geocoding fallback) must pass
+    // through every canonicalization helper unchanged.
+    const coordinate = '45.5017,-73.5673';
+
+    test('splitApt does not treat it as an apt-prefixed address', () {
+      expect(AddressParser.splitApt(coordinate), isNull);
+    });
+
+    test('toCanonical returns it unchanged', () {
+      expect(AddressParser.toCanonical(coordinate), coordinate);
+    });
+
+    test('canonicalToDisplay returns it unchanged', () {
+      expect(AddressParser.canonicalToDisplay(coordinate), coordinate);
     });
   });
 

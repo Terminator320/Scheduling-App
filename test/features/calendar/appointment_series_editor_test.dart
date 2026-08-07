@@ -86,7 +86,8 @@ void main() {
         final copies = (captured[2] as List).cast<AppointmentRecord>();
         expect(deleteIds, isEmpty);
         expect(copies, hasLength(5));
-        // Copies start fresh: pending, no shared pictures, same series id.
+        // Copies start fresh — they're pending, have no shared pictures, and keep
+        // the same series id.
         expect(
           copies.every((c) => c.status == 'pending' && c.pictures.isEmpty),
           isTrue,
@@ -188,11 +189,54 @@ void main() {
         expect(propagated.id, 'p2');
         expect(propagated.title, 'New Title');
         expect(propagated.notes, 'call ahead');
-        // Keeps its own calendar date, adopts the new time-of-day.
+        // It keeps its own calendar date but adopts the new time-of-day.
         expect(propagated.startTime, DateTime(2026, 3, 20, 11));
         // Status is per-visit and never propagated.
         expect(propagated.status, 'pending');
       },
     );
+
+    test('carries isAllDay and isPersonal onto every sibling', () async {
+      final anchorStart = DateTime(2026, 1, 15, 9);
+      final appointment = _appt(id: 'p1', start: anchorStart, seriesId: 'ps');
+      final sibling = _appt(
+        id: 'p2',
+        start: DateTime(2026, 3, 20, 14),
+        seriesId: 'ps',
+      );
+      when(
+        () => repo.getSeries('ps'),
+      ).thenAnswer((_) async => [appointment, sibling]);
+
+      // Turning All day on rewrites the anchor to midnight-23:59.
+      final allDayStart = DateTime(2026, 1, 15);
+      final allDayEnd = DateTime(2026, 1, 15, 23, 59);
+      final updated = appointment.copyWith(
+        isAllDay: true,
+        isPersonal: true,
+        startTime: allDayStart,
+        endTime: allDayEnd,
+      );
+
+      await editor.propagate(
+        updated: updated,
+        appointment: appointment,
+        id: 'p1',
+        start: allDayStart,
+        end: allDayEnd,
+      );
+
+      final written =
+          (verify(() => repo.updateAppointments(captureAny())).captured.single
+                  as List)
+              .cast<AppointmentRecord>();
+      final propagated = written[1];
+      // Without the flags the sibling spans midnight-23:59 while still reading
+      // isAllDay:false — the travel sweep then stops skipping it and pushes a
+      // "time to leave" for a block that has no departure time.
+      expect(propagated.isAllDay, isTrue);
+      expect(propagated.isPersonal, isTrue);
+      expect(propagated.startTime, DateTime(2026, 3, 20));
+    });
   });
 }

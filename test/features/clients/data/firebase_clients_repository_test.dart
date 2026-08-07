@@ -2,11 +2,14 @@
 // ignore_for_file: subtype_of_sealed_class
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
+import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
 
@@ -26,12 +29,20 @@ class _MockDocRef extends Mock
 
 class _FakeFieldValue extends Fake implements FieldValue {}
 
+class _MockFunctions extends Mock implements FirebaseFunctions {}
+
+class _MockCallable extends Mock implements HttpsCallable {}
+
+class _MockCallableResult extends Mock implements HttpsCallableResult<void> {}
+
 void main() {
   late _MockFirestore firestore;
   late _MockCollection collection;
   late _MockQuery query;
   late _MockQuerySnapshot snapshot;
   late _MockDocRef docRef;
+  late _MockFunctions functions;
+  late _MockCallable callable;
 
   setUpAll(() {
     registerFallbackValue(_FakeFieldValue());
@@ -55,6 +66,9 @@ void main() {
 
     when(() => firestore.collection('clients')).thenReturn(collection);
     when(
+      () => collection.where(any(), isEqualTo: any(named: 'isEqualTo')),
+    ).thenReturn(query);
+    when(
       () => collection.orderBy(any(), descending: any(named: 'descending')),
     ).thenReturn(query);
     when(
@@ -70,10 +84,17 @@ void main() {
     when(() => docRef.update(any())).thenAnswer((_) async {});
     when(() => docRef.delete()).thenAnswer((_) async {});
     when(() => collection.add(any())).thenAnswer((_) async => docRef);
+
+    functions = _MockFunctions();
+    callable = _MockCallable();
+    when(() => functions.httpsCallable(any())).thenReturn(callable);
+    when(
+      () => callable.call<void>(any<Object?>()),
+    ).thenAnswer((_) async => _MockCallableResult());
   });
 
   FirebaseClientsRepository repo({DateTime Function()? clock}) =>
-      FirebaseClientsRepository(firestore, clock: clock);
+      FirebaseClientsRepository(firestore, functions: functions, clock: clock);
 
   ClientRecord client({String id = 'c1', String name = 'Test Client'}) =>
       ClientRecord(
@@ -120,25 +141,25 @@ void main() {
     });
   });
 
-  group('deleteClient', () {
-    test('deletes the correct document', () async {
-      await repo().deleteClient('c42');
-
-      verify(() => collection.doc('c42')).called(1);
-      verify(() => docRef.delete()).called(1);
-    });
-  });
-
   group('fetchClientsPage', () {
     test('first page orders by name + doc id without a cursor', () async {
       await repo().fetchClientsPage(limit: 50);
 
-      verify(() => collection.orderBy('name')).called(1);
+      verify(() => query.orderBy('name')).called(1);
       verify(() => query.orderBy(FieldPath.documentId)).called(1);
       verify(() => query.limit(50)).called(1);
       verifyNever(() => query.startAfter(any()));
       // Field-value cursor pagination must never refetch a boundary doc.
       verifyNever(() => collection.doc(any()));
+    });
+
+    test('filters archived out on the server, before ordering', () async {
+      await repo().fetchClientsPage(limit: 50);
+
+      // Server-side, deliberately: filtering a server page in Dart would
+      // shorten a page the server actually filled, and the list's
+      // `pages.last.length < pageSize` end-of-list test would truncate.
+      verify(() => collection.where('archived', isEqualTo: false)).called(1);
     });
 
     test(
@@ -243,25 +264,6 @@ void main() {
     });
 
     test(
-      'deleting a client drops it from search without re-reading the window',
-      () async {
-        final docs = [
-          doc('c1', {'name': 'John Smith'}),
-        ];
-        when(() => snapshot.docs).thenReturn(docs);
-
-        final r = repo();
-        expect((await r.searchClients('John')).map((c) => c.id), ['c1']);
-
-        await r.deleteClient('c1');
-
-        expect(await r.searchClients('John'), isEmpty);
-        // The write patched the in-memory window — no second Firestore read.
-        verify(() => query.get()).called(1);
-      },
-    );
-
-    test(
       'updating a client is reflected in search without re-reading the window',
       () async {
         final docs = [
@@ -312,6 +314,235 @@ void main() {
       // Prefix matches (John Smith, Johnny Cash) rank above the substring
       // match (Aaron Johnson); ties break alphabetically.
       expect(results.map((c) => c.id), ['c2', 'c3', 'c1']);
+    });
+  });
+
+  group('type filtering', () {
+    test('fetchClientsByType returns only that type, name-sorted', () async {
+      final docs = [
+        doc('c1', {'name': 'Zeta', 'type': 'commercial'}),
+        doc('c2', {'name': 'Untyped'}),
+        doc('c3', {'name': 'Alpha', 'type': 'commercial'}),
+        doc('c4', {'name': 'Other', 'type': 'residential'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final typed = await repo().fetchClientsByType(ClientType.commercial);
+
+      expect(typed.map((c) => c.name), ['Alpha', 'Zeta']);
+    });
+
+    test('a doc with no type is in no type filter', () async {
+      final docs = [
+        doc('c1', {'name': 'Legacy'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      for (final type in ClientType.pickable) {
+        expect(await repo().fetchClientsByType(type), isEmpty);
+      }
+    });
+
+    test('an unknown stored type falls into no filter', () async {
+      final docs = [
+        doc('c1', {'name': 'Odd', 'type': 'industrial'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      for (final type in ClientType.pickable) {
+        expect(await repo().fetchClientsByType(type), isEmpty);
+      }
+    });
+
+    test('filtering on unset reads nothing rather than everything', () async {
+      final docs = [
+        doc('c1', {'name': 'A', 'type': 'commercial'}),
+        doc('c2', {'name': 'B'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      expect(await repo().fetchClientsByType(ClientType.unset), isEmpty);
+    });
+
+    test('property mgmt maps from its stored raw value', () async {
+      final docs = [
+        doc('c1', {'name': 'Gestion', 'type': 'property_mgmt'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final typed = await repo().fetchClientsByType(
+        ClientType.propertyManagement,
+      );
+
+      expect(typed.single.name, 'Gestion');
+    });
+
+    test('the type filter shares the search scan window (one read)', () async {
+      final docs = [
+        doc('c1', {'name': 'A', 'type': 'commercial'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final r = repo();
+      await r.fetchClientsByType(ClientType.commercial);
+      await r.fetchClientsByType(ClientType.residential);
+      await r.searchClients('A');
+
+      // The filter costs no extra Firestore read inside the cache TTL.
+      verify(() => query.get()).called(1);
+    });
+  });
+
+  group('archiving', () {
+    test('setClientArchived writes the flag with updatedAt', () async {
+      await repo().setClientArchived('c1', archived: true);
+
+      verify(() => collection.doc('c1')).called(1);
+      final captured =
+          (verify(() => docRef.update(captureAny())).captured.single as Map)
+              .cast<String, dynamic>();
+      expect(captured['archived'], isTrue);
+      expect(captured.containsKey('updatedAt'), isTrue);
+    });
+
+    test(
+      'setClientArchived merges into the window, keeping jobCount',
+      () async {
+        final docs = [
+          doc('c1', {'name': 'Acme', 'archived': false, 'jobCount': 7}),
+        ];
+        when(() => snapshot.docs).thenReturn(docs);
+
+        final r = repo();
+        expect((await r.searchClients('Acme')).single.jobCount, 7);
+
+        await r.setClientArchived('c1', archived: true);
+
+        // Merged, never substituted: a plain replace drops the function-owned
+        // jobCount and blanks the count on every search result until the TTL.
+        final after = (await r.searchClients('Acme')).single;
+        expect(after.archived, isTrue);
+        expect(after.jobCount, 7);
+        verify(() => query.get()).called(1);
+      },
+    );
+
+    test('fetchArchivedClients returns only archived, name-sorted', () async {
+      final docs = [
+        doc('c1', {'name': 'Zeta', 'archived': true}),
+        doc('c2', {'name': 'Acme', 'archived': true}),
+        doc('c3', {'name': 'Bell', 'archived': false}),
+        doc('c4', {'name': 'Legacy'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final result = await repo().fetchArchivedClients();
+
+      expect(result.map((c) => c.name), ['Acme', 'Zeta']);
+    });
+
+    test('fetchArchivedClients shares the search scan window', () async {
+      final docs = [
+        doc('c1', {'name': 'Acme', 'archived': true}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final r = repo();
+      await r.fetchArchivedClients();
+      await r.searchClients('Acme');
+
+      verify(() => query.get()).called(1);
+    });
+
+    test('fetchClientsByType excludes archived clients', () async {
+      final docs = [
+        doc('c1', {'name': 'Acme', 'type': 'commercial', 'archived': false}),
+        doc('c2', {'name': 'Bell', 'type': 'commercial', 'archived': true}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final result = await repo().fetchClientsByType(ClientType.commercial);
+
+      expect(result.map((c) => c.name), ['Acme']);
+    });
+
+    test('searchClients still returns archived clients', () async {
+      final docs = [
+        doc('c1', {'name': 'Acme', 'archived': true}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      // Archived clients stay searchable and bookable by design — only the
+      // paginated list and the type filter hide them.
+      expect((await repo().searchClients('Acme')).single.id, 'c1');
+    });
+  });
+
+  group('deleteClient', () {
+    test(
+      'calls the callable and drops the doc from the cached window',
+      () async {
+        final docs = [
+          doc('c1', {'name': 'Junk'}),
+        ];
+        when(() => snapshot.docs).thenReturn(docs);
+
+        final r = repo();
+        expect((await r.searchClients('Junk')).map((c) => c.id), ['c1']);
+
+        await r.deleteClient('c1');
+
+        verify(() => functions.httpsCallable('deleteClient')).called(1);
+        final sent = verify(
+          () => callable.call<void>(captureAny<Object?>()),
+        ).captured.single;
+        expect((sent as Map).cast<String, dynamic>()['clientId'], 'c1');
+        // `allow delete` is withdrawn on /clients — the client never deletes
+        // the doc directly.
+        verifyNever(() => docRef.delete());
+        // Evicted in memory, so search stops returning it with no second read.
+        expect(await r.searchClients('Junk'), isEmpty);
+        verify(() => query.get()).called(1);
+      },
+    );
+
+    test('maps client-has-history to ClientsFailureHasHistory', () async {
+      when(() => callable.call<void>(any<Object?>())).thenThrow(
+        FirebaseFunctionsException(
+          code: 'failed-precondition',
+          message: 'client-has-history',
+        ),
+      );
+
+      await expectLater(
+        repo().deleteClient('c1'),
+        throwsA(isA<ClientsFailureHasHistory>()),
+      );
+    });
+
+    test('maps client-not-found to ClientsFailureNotFound', () async {
+      when(() => callable.call<void>(any<Object?>())).thenThrow(
+        FirebaseFunctionsException(
+          code: 'not-found',
+          message: 'client-not-found',
+        ),
+      );
+
+      await expectLater(
+        repo().deleteClient('c1'),
+        throwsA(isA<ClientsFailureNotFound>()),
+      );
+    });
+
+    test('rethrows an unrecognized callable failure untyped', () async {
+      when(() => callable.call<void>(any<Object?>())).thenThrow(
+        FirebaseFunctionsException(code: 'internal', message: 'boom'),
+      );
+
+      await expectLater(
+        repo().deleteClient('c1'),
+        throwsA(isA<FirebaseFunctionsException>()),
+      );
     });
   });
 }

@@ -1,8 +1,28 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/utils/sheet_focus.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
+import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
+
+/// Opens the read-only client detail sheet with the settle/unfocus sequence. Shared by
+/// the list view and the master-detail layout.
+Future<void> showClientDetailSheet(
+  BuildContext context,
+  ClientRecord client,
+) async {
+  await SheetFocus.settleBeforeSheet();
+  if (!context.mounted) return;
+
+  await showAppBottomSheet<void>(
+    context,
+    builder: (_) => ClientDetailSheet(client: client),
+  );
+
+  if (!context.mounted) return;
+  await SheetFocus.unfocusAfterSheet();
+}
 
 class ClientDetailSheet extends StatelessWidget {
   const ClientDetailSheet({required this.client, super.key});
@@ -17,6 +37,7 @@ class ClientDetailSheet extends StatelessWidget {
           client: client,
           scrollController: scrollController,
           showHandle: true,
+          onDeleted: () => Navigator.pop(sheetContext),
         );
       },
     );

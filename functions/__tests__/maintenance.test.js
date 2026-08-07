@@ -1,9 +1,9 @@
 "use strict";
 
 /**
- * Unit tests for the pure magic-byte validator behind validateUploadedImage —
- * the server-side backstop that the Storage rule's trusted contentType cannot
- * provide (a direct REST/SDK caller can lie about contentType).
+ * Tests for the pure magic-byte validator behind validateUploadedImage. This
+ * is the server-side backstop we need because a direct REST/SDK caller can
+ * lie about contentType, and the Storage rule has no way to catch that.
  */
 
 const {hasValidImageMagic} = require("../image_magic");

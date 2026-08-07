@@ -23,11 +23,11 @@ void main() {
     expect(find.text('Complete'), findsOneWidget);
   });
 
-  testWidgets('StatusChip renders Pending label', (tester) async {
+  testWidgets('StatusChip renders Scheduled label', (tester) async {
     await tester.pumpWidget(
       _wrap(const StatusChip(status: AppointmentStatus.pending)),
     );
-    expect(find.text('Pending'), findsOneWidget);
+    expect(find.text('Scheduled'), findsOneWidget);
   });
 
   testWidgets('StatusChip renders Cancelled label', (tester) async {
@@ -48,9 +48,7 @@ void main() {
   testWidgets('StatusChip caps user text scaling so the pill stays compact', (
     tester,
   ) async {
-    // M6: removed the per-callsite `TextScaler.noScaling` clamp. The chip
-    // now caps user scaling at 1.3× internally so callers can't blow up
-    // the pill width by setting a large textScaler.
+    // M6: chip now caps user scaling at 1.3x internally, replacing the removed per-callsite `TextScaler.noScaling` clamp.
 
     Widget chipAt(double scale) => MaterialApp(
       localizationsDelegates: const [
@@ -75,8 +73,7 @@ void main() {
 
     // 1.3× cap + a small epsilon for sub-pixel rounding.
     expect(scaled, lessThanOrEqualTo(baseline * 1.31));
-    // Sanity: the chip should still scale a bit at 3.0× (not fully
-    // clamped to no-scale). If this fails, the cap is too aggressive.
+    // Sanity: chip should still scale a bit at 3.0× — not fully clamped to no-scale.
     expect(scaled, greaterThan(baseline * 1.05));
   });
 }

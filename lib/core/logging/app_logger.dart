@@ -23,6 +23,15 @@ class AppLogger {
       }
     }
   }
+
+  /// Breadcrumb only — no Crashlytics error record. Use for failures that are
+  /// expected and user-correctable (wrong password, bad signup code): they
+  /// still need a trail when a real crash follows, but recording them files a
+  /// non-fatal issue for what is just a user mistyping a field.
+  void breadcrumb(String message) {
+    if (kDebugMode) _logger.i(message);
+    if (kReleaseMode) _crashlytics.log(message);
+  }
 }
 
 final loggerProvider = Provider<AppLogger>((ref) => AppLogger());

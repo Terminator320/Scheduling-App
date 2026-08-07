@@ -1,5 +1,8 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:scheduling/core/utils/firestore_parsing.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
+
 part 'client_record.freezed.dart';
 
 @freezed
@@ -44,10 +47,27 @@ abstract class ClientRecord with _$ClientRecord {
     @Default('') String email,
     @Default(<ClientContact>[]) List<ClientContact> contacts,
     @Default(false) bool noFixedAddress,
-    // Wave projection (read-only): written exclusively by Cloud Functions via
-    // the Admin SDK. The app reads them for a sync indicator and MUST NOT emit
-    // them in toMap — firestore.rules rejects any client write that touches
-    // `waveCustomerId` or `wave`.
+    // Hidden from the paginated list, still searchable and still bookable. The
+    // list filters on it SERVER-side, and Firestore excludes docs missing a
+    // filtered field — so every client doc has to carry it, always.
+    @Default(false) bool archived,
+    @Default(ClientType.unset) ClientType type,
+    @Default('') String accessNotes,
+    @Default('') String onSiteManager,
+    @Default('') String billingTerms,
+    @Default(false) bool autoInvoice,
+    // Legacy pre-Wave-reshape field, READ-ONLY — never emitted in toMap, and
+    // no UI edits it. Carried only so search can still reach it: `name` falls
+    // back to it when blank, but a legacy doc holding BOTH a name and a
+    // different business name would otherwise be unfindable by the business.
+    @Default('') String businessName,
+    // Function-owned absolute recount — never emitted in toMap, and null until
+    // the trigger has written it once.
+    @Default(null) int? jobCount,
+    // Read-only server timestamp used for dashboard trends — never emitted in toMap.
+    DateTime? createdAt,
+    // Wave projection — read-only and function-owned, so it's omitted from toMap
+    // per firestore.rules.
     @Default(null) String? waveCustomerId,
     @Default('') String waveSyncState,
     @Default(null) String? waveSyncError,
@@ -57,16 +77,18 @@ abstract class ClientRecord with _$ClientRecord {
   factory ClientRecord.fromMap(String id, Map<String, dynamic> data) {
     final rawContacts = (data['contacts'] as List?) ?? const [];
     final wave = (data['wave'] as Map?)?.cast<String, dynamic>();
-    // Back-compat: pre-Wave-reshape docs stored a business-type client as
-    // `businessName` with an empty `name`. Fall back so those docs keep a
-    // display name and stay editable/searchable until a backfill runs.
+    // Back-compat for legacy `businessName` — keeps unnamed business docs
+    // visible and searchable. Two halves: `name` falls back to it when blank
+    // (which is the documented legacy shape), and it is ALSO carried through
+    // verbatim so ClientSearchPolicy can index it — a doc holding both a name
+    // and a different business name is findable by either.
+    final businessName = (data['businessName'] ?? '').toString();
     final rawName = (data['name'] ?? '').toString();
-    final name = rawName.trim().isNotEmpty
-        ? rawName
-        : (data['businessName'] ?? '').toString();
+    final name = rawName.trim().isNotEmpty ? rawName : businessName;
     return ClientRecord(
       id: id,
       name: name,
+      businessName: businessName,
       firstName: (data['firstName'] ?? '').toString(),
       lastName: (data['lastName'] ?? '').toString(),
       address: (data['address'] ?? '').toString(),
@@ -83,15 +105,22 @@ abstract class ClientRecord with _$ClientRecord {
           .map((c) => ClientContact.fromMap(Map<String, dynamic>.from(c)))
           .toList(),
       noFixedAddress: (data['noFixedAddress'] as bool?) ?? false,
+      archived: (data['archived'] as bool?) ?? false,
+      type: ClientType.fromRaw(data['type']?.toString()),
+      accessNotes: (data['accessNotes'] ?? '').toString(),
+      onSiteManager: (data['onSiteManager'] ?? '').toString(),
+      billingTerms: (data['billingTerms'] ?? '').toString(),
+      autoInvoice: (data['autoInvoice'] as bool?) ?? false,
+      jobCount: (data['jobCount'] as num?)?.toInt(),
+      createdAt: firestoreDateTime(data['createdAt']),
       waveCustomerId: data['waveCustomerId']?.toString(),
       waveSyncState: (wave?['syncState'] ?? '').toString(),
       waveSyncError: wave?['syncError']?.toString(),
     );
   }
 
-  /// Only the user-owned fields. Deliberately omits `waveCustomerId` and the
-  /// `wave` sub-map: those are function-owned, and the `clients` update rule
-  /// rejects any write that adds/changes them (`updateClient` uses `.update`).
+  /// User-owned fields only. `waveCustomerId`/`wave`/`jobCount` are function-owned
+  /// and get rejected by the update rule, so they're left out here.
   Map<String, dynamic> toMap() => {
     'name': name.trim(),
     'firstName': firstName.trim(),
@@ -107,6 +136,12 @@ abstract class ClientRecord with _$ClientRecord {
     'email': email.trim(),
     'contacts': contacts.map((c) => c.toMap()).toList(),
     'noFixedAddress': noFixedAddress,
+    'archived': archived,
+    'type': type.raw,
+    'accessNotes': accessNotes.trim(),
+    'onSiteManager': onSiteManager.trim(),
+    'billingTerms': billingTerms.trim(),
+    'autoInvoice': autoInvoice,
   };
 
   String get displayName => name;

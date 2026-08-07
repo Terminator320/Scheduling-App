@@ -22,9 +22,8 @@ final allUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
   return repo.watchAssignableUsers();
 });
 
-/// Container-scoped mutable holders for the content-equality memo below.
-/// Providers (rather than top-level variables) so each ProviderContainer —
-/// notably each test container — gets its own cache.
+/// Container-scoped mutable holders for the content-equality memo — each
+/// container gets its own cache.
 final _colorMapMemoProvider = Provider((ref) => _MapMemo<Color>());
 final _nameMapMemoProvider = Provider((ref) => _MapMemo<String>());
 
@@ -32,13 +31,9 @@ class _MapMemo<V> {
   Map<String, V>? value;
 }
 
-// Derived lookup maps, memoized two ways: build() callers don't re-allocate
-// them on every rebuild, and — because the users stream emits a fresh list on
-// ANY user-doc change (phone edits, status flips…) — the newly computed map is
-// compared by content with the previous one and the previous *instance* is
-// returned when equal. Provider.updateShouldNotify is `previous != next`, so
-// returning the identical instance skips notifying every calendar widget that
-// watches these maps.
+// Memoized lookup maps — avoids re-allocating on every rebuild, and reuses
+// the same instance when the content hasn't actually changed so watchers
+// don't get notified for nothing.
 Map<String, V> _memoizedEmployeeMap<V>(
   Ref ref,
   Provider<_MapMemo<V>> memoProvider,
@@ -72,9 +67,8 @@ typedef _EmployeeSearchEntry = ({
   String phoneDigits,
 });
 
-// Pre-normalized search index, memoized so per-keystroke filtering only has to
-// normalize the (short) query — not every employee's name/email/phone. Recomputes
-// only when the users stream emits; mirrors employeeColorMapProvider above.
+// Pre-normalized, memoized search index — per-keystroke filtering then only
+// has to normalize the query, not every employee field.
 final _employeeSearchIndexProvider = Provider<List<_EmployeeSearchEntry>>((
   ref,
 ) {
@@ -93,8 +87,7 @@ final filteredEmployeesProvider = Provider.autoDispose
     .family<List<EmployeeRecord>, String>(
       (ref, query) {
         final index = ref.watch(_employeeSearchIndexProvider);
-        // Accent-folded text + digits-only phone matching — same rule as the
-        // client search, so accented names and formatted phone numbers still match.
+        // Accent-folded + digits-only matching (mirrors client search).
         final q = ClientSearchPolicy.normalize(query);
         final qDigits = ClientSearchPolicy.digitsOnly(query);
         if (q.isEmpty && qDigits.isEmpty) {

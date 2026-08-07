@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ES Pro Accessibility</title>
+<meta name="description" content="How the ES Pro scheduling app works with VoiceOver, Voice Control, bigger text, dark appearance, and Reduce Motion on iPhone.">
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    max-width: 46rem; margin: 0 auto; padding: 2rem 1.25rem 4rem;
+    font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1a1a1a; background: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e6e6e6; background: #161616; }
+    a { color: #7db3ff; }
+  }
+  h1 { font-size: 1.9rem; margin-bottom: .25rem; }
+  h2 { font-size: 1.25rem; margin-top: 2.4rem; }
+  h3 { font-size: 1.05rem; margin-top: 1.4rem; }
+  .meta { color: #666; font-size: .9rem; margin-bottom: 1.5rem; }
+  @media (prefers-color-scheme: dark) { .meta { color: #999; } }
+  ul, ol { padding-left: 1.25rem; }
+  li { margin: .4rem 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
+  th, td { border: 1px solid #ddd; padding: .55rem .6rem; text-align: left; vertical-align: top; }
+  @media (prefers-color-scheme: dark) { th, td { border-color: #333; } }
+  th { background: #f5f5f5; }
+  @media (prefers-color-scheme: dark) { th { background: #222; } }
+  .wrap { overflow-x: auto; }
+  .card {
+    border: 1px solid #ddd; border-radius: 8px; padding: 1rem 1.25rem;
+    margin: 1.5rem 0;
+  }
+  @media (prefers-color-scheme: dark) { .card { border-color: #333; } }
+  a:focus-visible, summary:focus-visible {
+    outline: 3px solid #0b63c5; outline-offset: 2px;
+  }
+  @media (prefers-color-scheme: dark) {
+    a:focus-visible, summary:focus-visible { outline-color: #7db3ff; }
+  }
+  footer {
+    margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ddd;
+    color: #666; font-size: .85rem;
+  }
+  @media (prefers-color-scheme: dark) { footer { border-color: #333; color: #999; } }
+</style>
+</head>
+<body>
+
+<h1>ES Pro Accessibility</h1>
+<p class="meta">
+  Scheduling app for managing appointments, clients, and employees ·
+  by Plombier Eau Secours<br>
+  ES Pro for iPhone, version 1.37 · Last updated July 31, 2026
+</p>
+
+<p>
+  ES Pro is a working tool. It gets used on a phone, outdoors, in a van, in the
+  dark, with gloves on and one hand free. If it can't be read or heard, it can't
+  be used. So this isn't a box we tick; it's the app doing its job.
+</p>
+
+<p>
+  Here's what works today, what doesn't yet, and how to tell us when we've got
+  it wrong. All of it is on for everyone: there's no separate “accessible
+  mode,” and nothing here costs extra.
+</p>
+
+<h2>What works</h2>
+
+<div class="wrap">
+<table>
+  <caption class="meta" style="text-align:left; caption-side:bottom; padding-top:.5rem">
+    The accessibility features Apple lists on the App Store, and where ES Pro
+    stands on each.
+  </caption>
+  <thead>
+    <tr><th scope="col">Feature</th><th scope="col">Where it stands</th><th scope="col">What that means in the app</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th scope="row">VoiceOver</th>
+      <td>Works</td>
+      <td>
+        Every button, row, and field says what it is, in English and in French.
+        A job reads as one sentence (who it's for, when, which crew, what state
+        it's in) instead of a dozen fragments you have to piece back together.
+        A day on the calendar tells you its date and how many jobs are on it,
+        because the little coloured dots can't be read out loud. Logos and
+        decoration stay quiet.
+      </td>
+    </tr>
+    <tr>
+      <th scope="row">Voice Control</th>
+      <td>Works</td>
+      <td>
+        Say “tap Save” and it taps Save. The names Voice Control uses are the
+        same ones VoiceOver reads, and “show numbers” works throughout. Buttons
+        and rows are big enough to hit with gloves on.
+      </td>
+    </tr>
+    <tr>
+      <th scope="row">Bigger text</th>
+      <td>Works</td>
+      <td>
+        ES Pro follows your iPhone's Larger Text setting. It also has its own
+        size setting (Small, Medium, Large, XL) for when you want this app
+        bigger without making every other app bigger too. The two stack, up to
+        about twice normal size. Screens reflow to fit rather than cutting words
+        off.
+      </td>
+    </tr>
+    <tr>
+      <th scope="row">Dark appearance</th>
+      <td>Works</td>
+      <td>
+        Follows your iPhone, or you can pin it to light or dark in the app if
+        you'd rather decide yourself. Dark isn't light mode turned inside out;
+        it's drawn on purpose.
+      </td>
+    </tr>
+    <tr>
+      <th scope="row">Not colour alone</th>
+      <td>Works</td>
+      <td>
+        Colour is never the only thing telling you something. A job's state is a
+        badge that says “Scheduled” or “Complete.” Crew colours sit right next
+        to the crew's names. Losing signal says “offline” in words. The one
+        colour-only marking, the crew dots on the month calendar, gets read out
+        as a number of jobs instead.
+      </td>
+    </tr>
+    <tr>
+      <th scope="row">Contrast</th>
+      <td>Works</td>
+      <td>
+        Text and controls are dark enough on light and light enough on dark to
+        stay readable in a bright driveway or a dim basement. We hold them to
+        the usual web standard for contrast (WCAG AA). Faded grey text is only
+        ever used for extras, never for something you can't find spelled out
+        somewhere else.
+      </td>
+    </tr>
+    <tr>
+      <th scope="row">Reduce Motion</th>
+      <td>Works</td>
+      <td>
+        Turn on Reduce Motion and the app stops moving: no sliding screens, no
+        swinging calendar months, no shimmer while things load, no animated
+        charts, no drifting photos. Things just appear.
+      </td>
+    </tr>
+    <tr>
+      <th scope="row">Captions</th>
+      <td>Nothing to caption</td>
+      <td>There's no video and no sound in ES Pro. Job photos are still pictures.</td>
+    </tr>
+    <tr>
+      <th scope="row">Audio descriptions</th>
+      <td>Nothing to describe</td>
+      <td>Same story: no video anywhere in the app.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<h2>Settings inside ES Pro</h2>
+
+<p>Open <strong>Settings</strong> from the menu:</p>
+
+<ul>
+  <li>
+    <strong>Text size.</strong> Small, Medium, Large, or XL, with a preview so
+    you can see it before you commit. It changes the whole app, and it sits on
+    top of whatever your iPhone is already doing.
+  </li>
+  <li>
+    <strong>Appearance.</strong> Follow your phone, or force light or dark.
+  </li>
+  <li>
+    <strong>Language.</strong> English or French, whichever your phone is set
+    to. What VoiceOver reads, what notifications say, and what Siri tells you
+    all follow your choice.
+  </li>
+  <li>
+    <strong>Notifications.</strong> A shortcut straight to your iPhone's
+    notification settings for ES Pro, for when reminders stop arriving.
+  </li>
+  <li>
+    <strong>Replay app tour.</strong> Runs the walkthrough of each screen again,
+    as many times as you like.
+  </li>
+</ul>
+
+<h2>Settings on your iPhone</h2>
+
+<p>
+  These live on the phone, not in ES Pro. Turn one on and the app picks it up
+  straight away.
+</p>
+
+<ul>
+  <li><strong>VoiceOver:</strong> Settings → Accessibility → VoiceOver</li>
+  <li><strong>Voice Control:</strong> Settings → Accessibility → Voice Control</li>
+  <li><strong>Larger Text:</strong> Settings → Accessibility → Display &amp; Text Size → Larger Text</li>
+  <li><strong>Bold Text:</strong> Settings → Accessibility → Display &amp; Text Size → Bold Text</li>
+  <li><strong>Increase Contrast:</strong> Settings → Accessibility → Display &amp; Text Size → Increase Contrast</li>
+  <li><strong>Reduce Motion:</strong> Settings → Accessibility → Motion → Reduce Motion</li>
+  <li><strong>Dark appearance:</strong> Settings → Display &amp; Brightness → Dark</li>
+</ul>
+
+<h2>Where we fall short</h2>
+
+<p>
+  We'd rather tell you here than have you find out on a job at four in the
+  afternoon.
+</p>
+
+<ul>
+  <li>
+    <strong>The crew map.</strong> The map itself is Google's, and VoiceOver
+    can't reach the individual pins on it. Everything shown there is also in the
+    staff roster. Open that from the map and you get the same people as a plain
+    list: name, how recent their location is, how far away they are, closest
+    first.
+  </li>
+  <li>
+    <strong>The weekly chart.</strong> On the dashboard it reads as a summary
+    rather than bar by bar. The same numbers are written out beside it.
+  </li>
+  <li>
+    <strong>Status badges stop growing.</strong> Past about 1.3× they hold their
+    size so “In progress” stays on one line instead of breaking apart.
+    Everything else keeps getting bigger.
+  </li>
+  <li>
+    <strong>Job photos have no description.</strong> VoiceOver will say there's
+    an image, but not what's in it. They're snapped on site by whoever's there,
+    and nobody stops to write a caption.
+  </li>
+  <li>
+    <strong>We haven't checked every corner.</strong> We test the paths people
+    walk every day (signing in, reading the schedule, opening a job, marking it
+    done) with VoiceOver on, Reduce Motion on, and the text turned up. Past that
+    we're relying on you. If a screen doesn't work for you, that's a bug, not a
+    feature request, and we'll treat it like one.
+  </li>
+</ul>
+
+<h2>What we test with</h2>
+
+<ul>
+  <li>VoiceOver on iPhone, iOS 18</li>
+  <li>Larger Text at maximum, plus the app's own XL setting on top</li>
+  <li>Reduce Motion</li>
+  <li>Dark and light appearance</li>
+</ul>
+
+<div class="card">
+  <h2 style="margin-top:0">Tell us what's in your way</h2>
+  <p>
+    If any part of ES Pro is hard or impossible to use, write to
+    <a href="mailto:george@vogas.net">george@vogas.net</a> and put
+    <em>Accessibility</em> in the subject. We answer within
+    <strong>2 business days</strong>.
+  </p>
+  <p>
+    It helps if you can say what you were trying to do, where you were in the
+    app, what you use to get around (VoiceOver, bigger text, something else),
+    and which iPhone and which version of iOS.
+  </p>
+  <p>
+    We'll tell you straight whether we can reproduce it, whether we're fixing
+    it, and we'll come back to you when the fix ships.
+  </p>
+</div>
+
+<h2>Elsewhere</h2>
+<ul>
+  <li><a href="./support.html">Support</a></li>
+  <li><a href="./">Privacy Policy</a></li>
+</ul>
+
+<footer>
+  © 2026 Plombier Eau Secours. ES Pro Accessibility.
+</footer>
+
+</body>
+</html>

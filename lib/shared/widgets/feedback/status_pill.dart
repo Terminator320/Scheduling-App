@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-/// The rounded label pill shared by `StatusChip` and `UserStatusChip`. Owns the
-/// container shape and the user-text-scale cap so the two chips don't duplicate
-/// it — each caller just supplies the resolved label and its background /
-/// foreground colors.
+/// Rounded label pill shared by `StatusChip` and `UserStatusChip` so they don't
+/// duplicate the container shape and text-scale cap.
 class StatusPill extends StatelessWidget {
   const StatusPill({
     required this.label,
     required this.background,
     required this.foreground,
     super.key,
+    this.radius = AppRadius.rFull,
   });
 
   final String label;
   final Color background;
   final Color foreground;
+
+  /// Corner radius. Fully rounded for status chips; the client-type pill on the
+  /// list tile uses the softer [AppRadius.r8] the design draws it with.
+  final double radius;
 
   static const double _maxLabelScale = 1.3;
 
@@ -33,7 +36,7 @@ class StatusPill extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(AppRadius.rFull),
+        borderRadius: BorderRadius.circular(radius),
       ),
       child: Text(
         label,

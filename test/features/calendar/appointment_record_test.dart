@@ -51,14 +51,24 @@ void main() {
       }
     });
 
-    test('displayStatus auto-promotes to in_progress past startTime', () {
-      final past = DateTime.now().subtract(const Duration(hours: 1));
+    test('displayStatus shows in_progress while within the time window', () {
+      final now = DateTime.now();
+      final a = AppointmentRecord(
+        id: 'a1',
+        startTime: now.subtract(const Duration(minutes: 30)),
+        endTime: now.add(const Duration(minutes: 30)),
+      );
+      expect(a.displayStatus, 'in_progress');
+    });
+
+    test('displayStatus shows overdue once the end time has passed', () {
+      final past = DateTime.now().subtract(const Duration(hours: 2));
       final a = AppointmentRecord(
         id: 'a1',
         startTime: past,
         endTime: past.add(const Duration(hours: 1)),
       );
-      expect(a.displayStatus, 'in_progress');
+      expect(a.displayStatus, 'overdue');
     });
 
     test('displayStatus stays as configured before startTime', () {
@@ -123,16 +133,29 @@ void main() {
   });
 
   group('AppointmentDateRange.visibleMonth', () {
-    test('starts a week before the 1st of the month', () {
+    test('starts two weeks before the 1st of the month', () {
       final focus = DateTime(2026, 5, 9);
       final range = AppointmentDateRange.visibleMonth(focus);
-      expect(range.start, DateTime(2026, 4, 24));
+      expect(range.start, DateTime(2026, 4, 17));
     });
 
-    test('ends a week after the 1st of the next month', () {
+    test('ends two weeks after the 1st of the next month', () {
       final focus = DateTime(2026, 5, 9);
       final range = AppointmentDateRange.visibleMonth(focus);
-      expect(range.end, DateTime(2026, 6, 8));
+      expect(range.end, DateTime(2026, 6, 15));
+    });
+
+    test('covers well past the maximum trail the grid can show', () {
+      // The grid renders only the weeks the month occupies, so the real worst
+      // trail is 6 days; the ±14 window is a deliberate superset.
+      final range = AppointmentDateRange.visibleMonth(DateTime(2026, 2, 10));
+      expect(range.end.isAfter(DateTime(2026, 3, 7)), isTrue);
+    });
+
+    test('covers the maximum lead the grid can show', () {
+      // 1 Aug 2026 is a Saturday: 6 lead cells reach back to 26 July.
+      final range = AppointmentDateRange.visibleMonth(DateTime(2026, 8, 4));
+      expect(range.start.isBefore(DateTime(2026, 7, 26)), isTrue);
     });
 
     test('two ranges over the same focused month are equal', () {
@@ -140,6 +163,72 @@ void main() {
       final b = AppointmentDateRange.visibleMonth(DateTime(2026, 5, 30));
       expect(a, equals(b));
       expect(a.hashCode, equals(b.hashCode));
+    });
+  });
+
+  group('AppointmentDateRange.forCalendar', () {
+    test('matches the month window while the selection is inside it', () {
+      final range = AppointmentDateRange.forCalendar(
+        focusedDay: DateTime(2026, 5, 9),
+        selectedDay: DateTime(2026, 5, 20),
+      );
+      expect(range, AppointmentDateRange.visibleMonth(DateTime(2026, 5, 9)));
+    });
+
+    test('stretches back to a selection left behind by paging forward', () {
+      // Paged three months on from a day picked in May: a month-only window
+      // stops covering 20 May, and the agenda then reports "0 jobs" for it.
+      final range = AppointmentDateRange.forCalendar(
+        focusedDay: DateTime(2026, 8),
+        selectedDay: DateTime(2026, 5, 20),
+      );
+      expect(range.start, DateTime(2026, 5, 20));
+      expect(range.end, DateTime(2026, 9, 15));
+    });
+
+    test('stretches forward to a selection left behind by paging back', () {
+      final range = AppointmentDateRange.forCalendar(
+        focusedDay: DateTime(2026, 2),
+        selectedDay: DateTime(2026, 5, 20),
+      );
+      expect(range.start, DateTime(2026, 1, 18));
+      expect(range.end, DateTime(2026, 5, 21));
+    });
+  });
+
+  group('AppointmentDateRange.forWeekBucketOf', () {
+    test('every day of a bucket yields the SAME range', () {
+      // The whole point: the day route re-scopes in Dart, so seven ◀/▶ taps
+      // must share one listener instead of minting seven 15-day queries.
+      final first = AppointmentDateRange.forWeekBucketOf(DateTime(2026, 8, 4));
+      for (var i = 0; i < 7; i++) {
+        final day = first.start.add(Duration(days: i));
+        expect(AppointmentDateRange.forWeekBucketOf(day), first);
+      }
+    });
+
+    test('spans exactly seven days', () {
+      final range = AppointmentDateRange.forWeekBucketOf(DateTime(2026, 8, 4));
+      expect(range.end.difference(range.start).inDays, 7);
+    });
+
+    test('an adjacent bucket is a different range', () {
+      final a = AppointmentDateRange.forWeekBucketOf(DateTime(2026, 8, 4));
+      final b = AppointmentDateRange.forWeekBucketOf(
+        a.end.add(const Duration(days: 1)),
+      );
+      expect(a, isNot(b));
+      expect(b.start, a.end);
+    });
+
+    test('buckets land on midnight across a DST boundary', () {
+      // Drift here would both mis-bucket a day and fork a second listener for
+      // the same documents, since the provider is keyed by range VALUE.
+      for (final day in [DateTime(2026, 3, 8), DateTime(2026, 11)]) {
+        final range = AppointmentDateRange.forWeekBucketOf(day);
+        expect(range.start.hour, 0);
+        expect(range.end.hour, 0);
+      }
     });
   });
 

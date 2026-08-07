@@ -2,7 +2,7 @@ name: scheduling
 description: "ES Pro — appointment, client, and employee scheduling."
 publish_to: 'none'
 
-version: 1.27.0+46
+version: 1.43.0+68
 
 environment:
   sdk: ^3.10.7
@@ -15,7 +15,7 @@ dependencies:
     sdk: flutter
 
   # Firebase
-  firebase_core: ^4.7.0
+  firebase_core: 4.11.0
   firebase_auth: ^6.4.0
   cloud_firestore: ^6.3.0
   firebase_storage: ^13.3.0
@@ -24,7 +24,6 @@ dependencies:
   cloud_functions: ^6.0.0
 
   # Calendar / dates / i18n
-  table_calendar: ^3.2.0
   intl: ^0.20.2
 
   # State management (Riverpod, manual providers — no codegen)
@@ -38,6 +37,7 @@ dependencies:
 
   # Local storage
   shared_preferences: ^2.5.5
+  path_provider: ^2.1.5
 
   # Images
   image_picker: ^1.2.2
@@ -56,10 +56,10 @@ dependencies:
   flutter_dotenv: ^6.0.1
 
   # UI
-  google_fonts: ^8.1.0
   flutter_animate: ^4.5.0
   flex_color_picker: ^3.8.0
   font_awesome_flutter: ^11.0.0
+  fl_chart: ^1.2.0
 
 
   # App / device info
@@ -69,12 +69,37 @@ dependencies:
   flutter_native_splash: ^2.4.7
   flutter_secure_storage: ^10.3.1
   infinite_scroll_pagination: ^5.1.1
+  flutter_slidable: ^4.0.0
   smooth_page_indicator: ^2.0.1
   permission_handler: ^12.0.2
   local_auth: ^3.0.1
 
+  # Live background GPS presence (travel-time "leave now" reminders)
+  geolocator: ^14.0.0
+
+  # iOS Live Activity "time to leave" card (ships Package.swift — SPM-safe)
+  live_activities: ^2.5.1
+
+  # Admin live staff map (Google Maps; traffic overlay + satellite)
+  google_maps_flutter: ^2.14.0
+  # SPM-capable iOS implementation override (Maps SDK 9.x, iOS 15+) —
+  # the default google_maps_flutter_ios is CocoaPods-only and would
+  # reintroduce a Podfile. Keep this override while the project is SPM-only.
+  google_maps_flutter_ios_sdk9: ^2.18.6
+
   # Network reachability (app-wide offline banner)
   connectivity_plus: ^7.2.0
+  firebase_messaging: ^16.4.1
+  home_widget: ^0.9.3
+  share_plus: ^13.2.0
+  flutter_cache_manager: ^3.4.1
+  saver_gallery: ^5.1.0
+  showcaseview: ^5.1.0
+
+  # Inbound deep links (ships ios/app_links/Package.swift — SPM-safe).
+  # FlutterDeepLinkingEnabled stays false: Flutter's own handler would consume
+  # the URL before this plugin sees it.
+  app_links: ^7.2.1
 
 dev_dependencies:
   flutter_test:
@@ -102,49 +127,44 @@ flutter:
     - dev/.env
     - assets/images/icon.png
 
-  # Bundled Inter so google_fonts resolves locally instead of fetching from
-  # the CDN on first launch (GoogleFonts.config.allowRuntimeFetching is false
-  # in main.dart). Weights match the GoogleFonts.inter* usages in
-  # lib/core/theme/themes.dart (400/500/600/700/800).
   fonts:
-    - family: Inter
+    - family: InstrumentSans
       fonts:
-        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/InstrumentSans-Regular.ttf
           weight: 400
-        - asset: assets/fonts/Inter-Medium.ttf
+        - asset: assets/fonts/InstrumentSans-Medium.ttf
           weight: 500
-        - asset: assets/fonts/Inter-SemiBold.ttf
+        - asset: assets/fonts/InstrumentSans-SemiBold.ttf
           weight: 600
-        - asset: assets/fonts/Inter-Bold.ttf
+        - asset: assets/fonts/InstrumentSans-Bold.ttf
           weight: 700
-        - asset: assets/fonts/Inter-ExtraBold.ttf
-          weight: 800
+    - family: IBMPlexMono
+      fonts:
+        - asset: assets/fonts/IBMPlexMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/IBMPlexMono-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/IBMPlexMono-Bold.ttf
+          weight: 700
 
 # Native splash config consumed by `dart run flutter_native_splash:create`.
 # Brand color #005CC8 matches AppColors.primary (lib/core/theme/design_tokens.dart).
+# iOS only — android/ was deleted 2026-08-05 (see CLAUDE.md). Leaving
+# `android: true` here makes both generators fail on a missing platform dir.
 flutter_native_splash:
   color: "#005CC8"
   image: assets/images/icon.png
   color_dark: "#0A1633"
   image_dark: assets/images/icon.png
 
-  android_12:
-    color: "#005CC8"
-    image: assets/images/icon.png
-    color_dark: "#0A1633"
-    image_dark: assets/images/icon.png
-
-  android: true
+  android: false
   ios: true
   web: false
 
   ios_content_mode: center
 
 flutter_launcher_icons:
-  android: "ic_launcher"
+  android: false
   ios: true
   remove_alpha_ios: true
   image_path: "assets/images/icon.png"
-  min_sdk_android: 21
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "assets/images/icon_foreground.png"

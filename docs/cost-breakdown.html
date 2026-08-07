@@ -1,0 +1,861 @@
+<style>
+  :root {
+    color-scheme: light dark;
+    --paper: #F4F7F7;
+    --surface: #FFFFFF;
+    --surface-2: #F9FBFB;
+    --ink: #15242C;
+    --ink-soft: #485B64;
+    --ink-faint: #7A8B93;
+    --line: #E1E9EA;
+    --line-strong: #CBD8D9;
+    --accent: #0C6A70;
+    --accent-ink: #0A565B;
+    --accent-soft: #E2F0F0;
+    --good: #16785A;
+    --good-bg: #E3F3EB;
+    --warn: #93610F;
+    --warn-bg: #F6EBD5;
+    --shadow: 0 1px 2px rgba(21, 36, 44, .04), 0 8px 24px rgba(21, 36, 44, .05);
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0D1418;
+      --surface: #141F24;
+      --surface-2: #101A1F;
+      --ink: #E9EFF0;
+      --ink-soft: #A5B4BB;
+      --ink-faint: #6F818B;
+      --line: #223038;
+      --line-strong: #2E3F48;
+      --accent: #45B9BD;
+      --accent-ink: #63C9CC;
+      --accent-soft: #14312F;
+      --good: #52C48F;
+      --good-bg: #112C21;
+      --warn: #DBA84E;
+      --warn-bg: #2C2411;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
+    }
+  }
+
+  :root[data-theme="light"] {
+    --paper: #F4F7F7; --surface: #FFFFFF; --surface-2: #F9FBFB;
+    --ink: #15242C; --ink-soft: #485B64; --ink-faint: #7A8B93;
+    --line: #E1E9EA; --line-strong: #CBD8D9;
+    --accent: #0C6A70; --accent-ink: #0A565B; --accent-soft: #E2F0F0;
+    --good: #16785A; --good-bg: #E3F3EB; --warn: #93610F; --warn-bg: #F6EBD5;
+    --shadow: 0 1px 2px rgba(21,36,44,.04), 0 8px 24px rgba(21,36,44,.05);
+  }
+  :root[data-theme="dark"] {
+    --paper: #0D1418; --surface: #141F24; --surface-2: #101A1F;
+    --ink: #E9EFF0; --ink-soft: #A5B4BB; --ink-faint: #6F818B;
+    --line: #223038; --line-strong: #2E3F48;
+    --accent: #45B9BD; --accent-ink: #63C9CC; --accent-soft: #14312F;
+    --good: #52C48F; --good-bg: #112C21; --warn: #DBA84E; --warn-bg: #2C2411;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: clamp(1.5rem, 4vw, 3.5rem) clamp(1rem, 3.5vw, 2.5rem) 4rem;
+  }
+
+  /* ---- Header ---- */
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .72rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--accent-ink);
+    font-weight: 600;
+    margin: 0 0 .9rem;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: clamp(1.9rem, 5vw, 3rem);
+    line-height: 1.05;
+    letter-spacing: -.01em;
+    text-wrap: balance;
+    margin: 0 0 .6rem;
+  }
+  .lede {
+    font-size: clamp(1.02rem, 2.2vw, 1.2rem);
+    color: var(--ink-soft);
+    max-width: 62ch;
+    margin: 0 0 1.6rem;
+  }
+  .lede b { color: var(--ink); font-weight: 650; }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-bottom: 2.4rem;
+  }
+  .chip {
+    font-family: var(--mono);
+    font-size: .74rem;
+    color: var(--ink-soft);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: .3rem .7rem;
+    white-space: nowrap;
+  }
+  .chip b { color: var(--ink); font-weight: 600; }
+
+  /* ---- Stat tiles ---- */
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: .9rem;
+    margin-bottom: 2.8rem;
+  }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1.15rem 1.2rem 1.25rem;
+    box-shadow: var(--shadow);
+  }
+  .tile .label {
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 .55rem;
+  }
+  .tile .value {
+    font-family: var(--serif);
+    font-size: 1.95rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: -.01em;
+    font-variant-numeric: tabular-nums;
+  }
+  .tile .value.good { color: var(--good); }
+  .tile .value.warn { color: var(--warn); }
+  .tile .sub {
+    margin: .5rem 0 0;
+    font-size: .82rem;
+    color: var(--ink-soft);
+  }
+
+  /* ---- Sections ---- */
+  section { margin-bottom: 2.9rem; }
+  h2 {
+    font-family: var(--sans);
+    font-size: 1.28rem;
+    font-weight: 680;
+    letter-spacing: -.005em;
+    margin: 0 0 .3rem;
+    display: flex;
+    align-items: baseline;
+    gap: .6rem;
+  }
+  h2 .num {
+    font-family: var(--mono);
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 6px;
+    padding: .12em .5em;
+  }
+  .section-note {
+    color: var(--ink-soft);
+    font-size: .92rem;
+    margin: 0 0 1.1rem;
+    max-width: 68ch;
+  }
+
+  /* ---- Tables ---- */
+  .table-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .9rem;
+    min-width: 640px;
+  }
+  thead th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: .68rem;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    padding: .85rem 1rem;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--line-strong);
+    white-space: nowrap;
+  }
+  tbody td {
+    padding: .72rem 1rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+    color: var(--ink-soft);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--surface-2); }
+  .fn {
+    font-family: var(--mono);
+    font-size: .82rem;
+    color: var(--ink);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .idx {
+    font-family: var(--mono);
+    font-size: .78rem;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  td.num, th.num {
+    text-align: right;
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  tfoot td {
+    padding: .8rem 1rem;
+    border-top: 2px solid var(--line-strong);
+    font-weight: 650;
+    color: var(--ink);
+    background: var(--surface-2);
+  }
+  .trig {
+    font-family: var(--mono);
+    font-size: .76rem;
+    color: var(--accent-ink);
+    white-space: nowrap;
+  }
+
+  /* ---- Pills ---- */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .4em;
+    font-family: var(--mono);
+    font-size: .74rem;
+    font-weight: 600;
+    padding: .22em .6em;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .pill::before {
+    content: "";
+    width: .5em; height: .5em;
+    border-radius: 999px;
+    background: currentColor;
+  }
+  .pill--free { color: var(--good); background: var(--good-bg); }
+  .pill--watch { color: var(--warn); background: var(--warn-bg); }
+
+  .muted-tag {
+    font-family: var(--mono);
+    font-size: .68rem;
+    color: var(--warn);
+    background: var(--warn-bg);
+    border-radius: 5px;
+    padding: .1em .4em;
+    margin-left: .4em;
+    white-space: nowrap;
+  }
+
+  /* ---- Callout ---- */
+  .callout {
+    display: flex;
+    gap: 1rem;
+    background: var(--accent-soft);
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    border-radius: 14px;
+    padding: 1.15rem 1.3rem;
+    margin-bottom: 2.9rem;
+  }
+  .callout .mark {
+    font-family: var(--serif);
+    font-weight: 700;
+    font-size: 1.3rem;
+    color: var(--accent-ink);
+    line-height: 1.2;
+  }
+  .callout p { margin: 0; font-size: .95rem; color: var(--ink); }
+  .callout b { color: var(--accent-ink); }
+
+  /* ---- Footnotes ---- */
+  .foot {
+    border-top: 1px solid var(--line);
+    padding-top: 1.4rem;
+    margin-top: 3rem;
+    font-size: .82rem;
+    color: var(--ink-faint);
+  }
+  .foot h3 {
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 0 0 .7rem;
+  }
+  .foot ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .4rem; }
+  .foot code {
+    font-family: var(--mono);
+    font-size: .82em;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: .05em .35em;
+    color: var(--ink-soft);
+  }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin: 1rem 0 0;
+    font-size: .8rem;
+    color: var(--ink-soft);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: .45em; }
+
+  @media (max-width: 560px) {
+    table { font-size: .84rem; }
+    .tile .value { font-size: 1.7rem; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .tile, .callout, .table-scroll { animation: rise .5s cubic-bezier(.2,.7,.2,1) both; }
+    .tiles .tile:nth-child(2) { animation-delay: .05s; }
+    .tiles .tile:nth-child(3) { animation-delay: .1s; }
+    .tiles .tile:nth-child(4) { animation-delay: .15s; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Firebase Backend &middot; Cost Analysis</p>
+    <h1>What the 27 Cloud Functions actually cost</h1>
+    <p class="lede">
+      Across every function, trigger, and supporting service, the backend runs
+      almost entirely inside Google's free tiers &mdash; a realistic
+      <b>~$0.30/month</b> (six Cloud Scheduler jobs, only three free), with a
+      ceiling near <b>$5</b>. No function's compute is a lever. Two Google Maps
+      Platform SKUs scale cost: <b>Places autocomplete</b> (bills per keystroke)
+      and the <b>Routes API</b> the travel-time reminder sweep now calls
+      (~13&ndash;16 calls per job as it approaches, ledger-capped once fired).
+      Both sit under their 10K-free-per-SKU monthly caps at this business's
+      volume (a busy 20-jobs/day month is ~9.6K Routes calls).
+    </p>
+    <div class="meta">
+      <span class="chip">Project <b>schedulingapp-88727</b></span>
+      <span class="chip">Region <b>us-central1</b></span>
+      <span class="chip"><b>Blaze</b> plan</span>
+      <span class="chip">2025 N. America pricing</span>
+    </div>
+  </header>
+
+  <div class="tiles">
+    <div class="tile">
+      <p class="label">Est. total / month</p>
+      <div class="value good">~$0.30</div>
+      <p class="sub">Scheduler floor; ceiling ~$5 if storage &amp; reads get busy.</p>
+    </div>
+    <div class="tile">
+      <p class="label">Functions platform</p>
+      <div class="value good">$0</div>
+      <p class="sub">~27K of 2M free invocations used (1.4%).</p>
+    </div>
+    <div class="tile">
+      <p class="label">Places API</p>
+      <div class="value good">$0</div>
+      <p class="sub">Under the 10K-free-per-SKU monthly cap.</p>
+    </div>
+    <div class="tile">
+      <p class="label">First cost lever</p>
+      <div class="value warn">10K</div>
+      <p class="sub">Autocomplete requests/mo before the first billed dollar.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <span class="mark">$0</span>
+    <p>
+      <b>Why compute is free:</b> all 27 functions' invocations pool into a
+      single <b>2,000,000/month</b> free allowance, and combined compute
+      (~9,000 vCPU-seconds) sits far under the <b>180,000 vCPU-s</b> free tier.
+      You'd need roughly <b>70&times; more traffic</b> to leave the free tier on
+      invocations. The lone recurring charge is Cloud Scheduler: six timer jobs,
+      three free, so <b>~$0.30/month</b>.
+    </p>
+  </div>
+
+  <section>
+    <h2><span class="num">27</span> Cloud Functions</h2>
+    <p class="section-note">
+      Estimated monthly volume for a small active plumbing shop. Every function's
+      invocations and compute fall inside the free tier &mdash; cost is $0 regardless
+      of which one fires.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="num">#</th>
+            <th>Function</th>
+            <th>Trigger</th>
+            <th>Example that fires it</th>
+            <th class="num">Runs / mo</th>
+            <th>Cost / mo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="idx">1</td>
+            <td class="fn">waveSyncWorker</td>
+            <td><span class="trig">every 5 min</span></td>
+            <td>Timer drains the Wave outbox queue</td>
+            <td class="num">8,640</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">2</td>
+            <td class="fn">sendUpcomingJobReminders</td>
+            <td><span class="trig">every 5 min</span></td>
+            <td>Timer; travel-aware "time to leave" &mdash; calls Routes API*, and starts the iOS Live Activity card via APNs (free)</td>
+            <td class="num">8,640</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">3</td>
+            <td class="fn">sendOverdueJobPrompts</td>
+            <td><span class="trig">every 15 min</span></td>
+            <td>Timer nudges "job finished?" past end time</td>
+            <td class="num">2,880</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">4</td>
+            <td class="fn">placesAutocomplete</td>
+            <td><span class="trig">onCall</span></td>
+            <td>Admin types an address (per keystroke)</td>
+            <td class="num">2,700</td>
+            <td><span class="pill pill--free">$0 &middot; under cap*</span></td>
+          </tr>
+          <tr>
+            <td class="idx">5</td>
+            <td class="fn">notifyAppointmentChanges</td>
+            <td><span class="trig">appts write</span></td>
+            <td>Appointment assigned / rescheduled / cancelled</td>
+            <td class="num">2,000</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">6</td>
+            <td class="fn">validateUploadedImage</td>
+            <td><span class="trig">Storage</span></td>
+            <td>Employee attaches a job photo</td>
+            <td class="num">1,350</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">7</td>
+            <td class="fn">placesGetDetails</td>
+            <td><span class="trig">onCall</span></td>
+            <td>Admin picks a suggested address</td>
+            <td class="num">450</td>
+            <td><span class="pill pill--free">$0 &middot; under cap*</span></td>
+          </tr>
+          <tr>
+            <td class="idx">8</td>
+            <td class="fn">placesReverseGeocode</td>
+            <td><span class="trig">onCall</span></td>
+            <td>Live map &amp; staff roster resolve each pin's address (~110&nbsp;m geocode cell collapses a moving driver's fixes)</td>
+            <td class="num">300</td>
+            <td><span class="pill pill--free">$0 &middot; under cap*</span></td>
+          </tr>
+          <tr>
+            <td class="idx">9</td>
+            <td class="fn">waveUpsertCustomer</td>
+            <td><span class="trig">clients write</span></td>
+            <td>A client is created or edited</td>
+            <td class="num">150</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">10</td>
+            <td class="fn">propagateClientEdits</td>
+            <td><span class="trig">clients update</span></td>
+            <td>Client name / phone / address edited</td>
+            <td class="num">100</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">11</td>
+            <td class="fn">recountClientJobs</td>
+            <td><span class="trig">appts write</span></td>
+            <td>A job&rsquo;s client is set, cleared or reassigned</td>
+            <td class="num">1,000</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">12</td>
+            <td class="fn">waveGetConnection</td>
+            <td><span class="trig">onCall</span></td>
+            <td>Admin opens Settings &rarr; Wave</td>
+            <td class="num">60</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">13</td>
+            <td class="fn">syncUsersByUid</td>
+            <td><span class="trig">users write</span></td>
+            <td>Invite created / account activated / deactivated (also revokes Auth access and purges token rows)</td>
+            <td class="num">40</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">14</td>
+            <td class="fn">purgeExpiredHistory</td>
+            <td><span class="trig">quarterly</span></td>
+            <td>Timer deletes 2-year-old history</td>
+            <td class="num">~0.3</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">15</td>
+            <td class="fn">sendDailyJobDigest</td>
+            <td><span class="trig">daily 18:00</span></td>
+            <td>Timer pushes each employee's daily digest</td>
+            <td class="num">30</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">16</td>
+            <td class="fn">waveScheduledImport</td>
+            <td><span class="trig">every 24 h</span></td>
+            <td>Timer re-imports Wave customers when due</td>
+            <td class="num">30</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">17</td>
+            <td class="fn">createEmployeeAccount</td>
+            <td><span class="trig">onCall</span></td>
+            <td>Admin creates an employee&rsquo;s account (admin-only, 20/hour)</td>
+            <td class="num">&lt;10</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">18</td>
+            <td class="fn">completeEmployeeSetup</td>
+            <td><span class="trig">onCall</span></td>
+            <td>New employee activates their own account</td>
+            <td class="num">&lt;10</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">19</td>
+            <td class="fn">deleteAccount</td>
+            <td><span class="trig">onCall</span></td>
+            <td>User deletes their own account</td>
+            <td class="num">&lt;5</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">20</td>
+            <td class="fn">waveSetImportSchedule</td>
+            <td><span class="trig">onCall</span></td>
+            <td>Admin changes the Wave import cadence</td>
+            <td class="num">&lt;5</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">21</td>
+            <td class="fn">waveBootstrap</td>
+            <td><span class="trig">onCall</span></td>
+            <td>One-time Wave connection setup</td>
+            <td class="num">&lt;2</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">22</td>
+            <td class="fn">waveImportCustomers</td>
+            <td><span class="trig">onCall</span></td>
+            <td>Admin two-way sync with Wave (push outbox, then pull customers)</td>
+            <td class="num">&lt;10</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">23</td>
+            <td class="fn">deleteEmployeeAccount</td>
+            <td><span class="trig">onCall</span></td>
+            <td>Admin removes an account that never finished setup (admin-only, 20/hour)</td>
+            <td class="num">&lt;5</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">24</td>
+            <td class="fn">deleteClient</td>
+            <td><span class="trig">onCall</span></td>
+            <td>Admin removes a junk client; refused when it has any visit (admin-only, 20/hour)</td>
+            <td class="num">&lt;5</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">25</td>
+            <td class="fn">changeEmployeeEmail</td>
+            <td><span class="trig">onCall</span></td>
+            <td>Admin edits a sign-in email; moves Auth and Firestore together (admin-only)</td>
+            <td class="num">&lt;5</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">26</td>
+            <td class="fn">createEmployeeInvite</td>
+            <td><span class="trig">onCall</span></td>
+            <td>#compat-1.37.1 shim &mdash; unused by this build, kept for the App Store version</td>
+            <td class="num">0</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">27</td>
+            <td class="fn">redeemSignupCode</td>
+            <td><span class="trig">onCall</span></td>
+            <td>#compat-1.37.1 shim &mdash; unused by this build, kept for the App Store version</td>
+            <td class="num">0</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4">Total function invocations</td>
+            <td class="num">~28,000</td>
+            <td><span class="pill pill--free">$0</span></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="legend">
+      <span><span class="pill pill--free">free tier</span> within Google's free allowance</span>
+      <span><span class="pill pill--watch">watch</span> can incur cost as usage grows</span>
+      <span>* Places &amp; Routes API cost lives in the services table below</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Supporting services</h2>
+    <p class="section-note">
+      Where any real cost would first appear. Cloud Scheduler's fourth-through-sixth
+      job is the only guaranteed charge (~$0.30/mo); the usage-scaling external
+      APIs are Google Places and the Routes API (both Maps Platform, each with its
+      own 10K-free-per-SKU cap). FCM push and Wave Accounting bill nothing per call.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Service</th>
+            <th>Example driver</th>
+            <th class="num">Volume / mo</th>
+            <th>Free tier</th>
+            <th>Beyond free</th>
+            <th>Cost / mo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="fn">Functions &middot; invocations</td>
+            <td>All 20 combined</td>
+            <td class="num">27K</td>
+            <td class="num">2M</td>
+            <td class="num">$0.40 / M</td>
+            <td><span class="pill pill--free">$0</span></td>
+          </tr>
+          <tr>
+            <td class="fn">Functions &middot; compute</td>
+            <td>Runtime &times; 256 MB</td>
+            <td class="num">9K vCPU-s</td>
+            <td class="num">180K vCPU-s</td>
+            <td class="num">$24 / M s</td>
+            <td><span class="pill pill--free">$0</span></td>
+          </tr>
+          <tr>
+            <td class="fn">Places &middot; Autocomplete</td>
+            <td>Address typing (#3)</td>
+            <td class="num">2,700</td>
+            <td class="num">10,000</td>
+            <td class="num">~$2.83 / K</td>
+            <td><span class="pill pill--free">$0</span></td>
+          </tr>
+          <tr>
+            <td class="fn">Places &middot; Details</td>
+            <td>Address selected (#4)</td>
+            <td class="num">450</td>
+            <td class="num">10,000</td>
+            <td class="num">~$5 / K</td>
+            <td><span class="pill pill--free">$0</span></td>
+          </tr>
+          <tr>
+            <td class="fn">Geocoding &middot; Reverse</td>
+            <td>Staff-pin address (#8)</td>
+            <td class="num">300</td>
+            <td class="num">10,000</td>
+            <td class="num">~$5 / K</td>
+            <td><span class="pill pill--free">$0</span></td>
+          </tr>
+          <tr>
+            <td class="fn">Routes &middot; computeRoutes</td>
+            <td>Leave-now sweep (#2)</td>
+            <td class="num">~4,500</td>
+            <td class="num">10,000</td>
+            <td class="num">~$5 / K</td>
+            <td><span class="pill pill--free">$0</span></td>
+          </tr>
+          <tr>
+            <td class="fn">Firestore</td>
+            <td>Trigger + app reads/writes</td>
+            <td class="num">under free</td>
+            <td class="num">50K R &middot; 20K W / day</td>
+            <td class="num">$0.03 / 100K R</td>
+            <td><span class="pill pill--free">~$0</span></td>
+          </tr>
+          <tr>
+            <td class="fn">Cloud Storage</td>
+            <td>Job photos (#2)</td>
+            <td class="num">+270 MB</td>
+            <td class="num">5 GB</td>
+            <td class="num">$0.026 / GB</td>
+            <td><span class="pill pill--watch">~$0&ndash;1</span></td>
+          </tr>
+          <tr>
+            <td class="fn">Secret Manager</td>
+            <td>3 secrets, cold-start reads</td>
+            <td class="num">3 versions</td>
+            <td class="num">6 ver &middot; 10K access</td>
+            <td class="num">$0.06 / ver</td>
+            <td><span class="pill pill--free">~$0</span></td>
+          </tr>
+          <tr>
+            <td class="fn">FCM push</td>
+            <td>Notifications (#2, #3, #5, #14)</td>
+            <td class="num">~5K sends</td>
+            <td class="num">unlimited</td>
+            <td class="num">$0</td>
+            <td><span class="pill pill--free">$0</span></td>
+          </tr>
+          <tr>
+            <td class="fn">Cloud Scheduler</td>
+            <td>6 timer jobs (#1, 2, 3, 13&ndash;15)</td>
+            <td class="num">6 jobs</td>
+            <td class="num">3 jobs</td>
+            <td class="num">$0.10 / job</td>
+            <td><span class="pill pill--watch">~$0.30</span></td>
+          </tr>
+          <tr>
+            <td class="fn">Egress</td>
+            <td>Places / Wave payloads</td>
+            <td class="num">&lt;1 GB</td>
+            <td class="num">5 GB</td>
+            <td class="num">$0.12 / GB</td>
+            <td><span class="pill pill--free">$0</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Scenarios</h2>
+    <p class="section-note">
+      How the total moves as the shop grows. The two numbers that change are the
+      Maps Platform SKUs &mdash; Places autocomplete (per keystroke) and the Routes
+      API the leave-now sweep calls (per job as it approaches).
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Scenario</th>
+            <th>Example</th>
+            <th class="num">Total / mo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="fn">Current scale</td>
+            <td>~900 appts &middot; ~450 address lookups &middot; ~1,350 photos</td>
+            <td class="num"><span class="pill pill--free">~$0.30&ndash;5</span></td>
+          </tr>
+          <tr>
+            <td class="fn">~3&ndash;5&times; growth</td>
+            <td>Address typing tops 10K autocomplete requests/mo</td>
+            <td class="num"><span class="pill pill--watch">~$10&ndash;30</span></td>
+          </tr>
+          <tr>
+            <td class="fn">First billed dollar</td>
+            <td>placesAutocomplete or Routes computeRoutes crosses its 10K free cap (Routes ≈ 625 jobs/mo at ~16 calls each)</td>
+            <td class="num"><span class="pill pill--watch">set alert</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="callout">
+    <span class="mark">!</span>
+    <p>
+      <b>The one guardrail worth setting:</b> a GCP Maps Platform billing alert
+      covering both <b>placesAutocomplete</b> and the <b>Routes API</b>. Places'
+      in-code rate limit is per-instance, not a hard cap, and it fires once per
+      keystroke while an address is typed; both Places proxies are now
+      <b>admin-only</b> (server-side <code>assertAdmin</code>), so only a trusted
+      admin session can drive that spend. The Routes API is called server-side by
+      the leave-now sweep (never from the app) and is ledger-capped to fire once
+      per job, so its spend scales only with job volume. The sweep also memoizes
+      each drive-time estimate for ~10 minutes, so a job waiting out its 90-minute
+      window is priced a couple of times rather than on all ~18 sweeps &mdash; a
+      cached estimate can only defer a call, never trigger a send. The single
+      alert backstops both APIs.
+    </p>
+  </div>
+
+  <div class="foot">
+    <h3>Basis &amp; assumptions</h3>
+    <ul>
+      <li>Pricing: 2025 public Blaze-plan rates, <code>us-central1</code> / North America. Rates change; treat as ballpark.</li>
+      <li>Scale modeled: 3 admins / 8 employees, ~700 clients, ~900 appointments/mo, ~50% needing a new address lookup, ~1.5 photos/appointment.</li>
+      <li>Free tiers cited: Functions <b>2M invocations + 180K vCPU-s</b>; Places <b>10K calls per SKU</b>; Firestore <b>50K reads / 20K writes / 20K deletes per day</b>; Storage <b>5 GB</b>; Scheduler <b>3 jobs</b> (six now run, so three bill at $0.10/job); FCM push <b>unlimited &amp; free</b>; Secret Manager <b>6 versions + 10K access</b>.</li>
+      <li>Google Places replaced its $200 monthly credit (March 2025) with a per-SKU free monthly cap; session tokens can bill in-session autocomplete as $0.</li>
+      <li>Wave Accounting, Firebase Cloud Messaging, and Apple's APNs (which carries the iOS Live Activity card) charge nothing per call &mdash; those functions cost only their (free-tier) Firebase compute.</li>
+      <li>All 27 functions are wired in <code>functions/index.js</code> for <code>schedulingapp-88727</code>; counts reflect the source as of 2026-08-04. Still 27 &mdash; the 2026-08-04 two-way Wave sync changed what <code>waveImportCustomers</code> does, not how many functions exist; it is pressed more often now that it is labelled &ldquo;Sync with Wave&rdquo;, but it stays admin-only and rate-limited at 5/hour, and its added Firestore work is one bounded queue drain plus two small reads per press. Corrected on that date: an earlier revision said 23 and claimed P4c had <em>retired</em> the signup-code callables. It did not &mdash; <code>createEmployeeInvite</code> and <code>redeemSignupCode</code> are kept as the <code>#compat-1.37.1</code> shim for the build still on the App Store (<code>previewInvite</code> and <code>revokeInvite</code> were never deployed and do not exist in code). P4c added three account callables, client archive/delete added <code>deleteClient</code>, and <code>changeEmployeeEmail</code> landed 2026-08-04. None of them moves a cost lever &mdash; all sit in the free tier at &lt;10 calls/month.</li>
+    </ul>
+  </div>
+</div>

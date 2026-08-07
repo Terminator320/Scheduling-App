@@ -11,9 +11,7 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
-/// The appointment-form fields shared by `AddEventState` and
-/// `EventDetailsState`; [AppointmentFormConcerns] reads the two freezed
-/// states through this interface.
+/// Shared appointment-form fields read through this interface by [AppointmentFormConcerns].
 abstract interface class AppointmentFormFields {
   ClientRecord? get selectedClient;
   List<ClientRecord> get clientResults;
@@ -23,10 +21,8 @@ abstract interface class AppointmentFormFields {
   Map<String, AppointmentFormError> get errors;
 }
 
-/// One shared-form state change, applied by each controller's
-/// [AppointmentFormConcerns.applyFormUpdate] adapter (freezed `copyWith`
-/// can't be expressed over a common interface). A null field means "leave
-/// unchanged".
+/// One form state change, applied through each controller's adapter. A null
+/// field just means that part of the state is unchanged.
 @immutable
 class AppointmentFormUpdate {
   const AppointmentFormUpdate({
@@ -57,11 +53,8 @@ class AppointmentFormUpdate {
   final List<File>? pendingImages;
 }
 
-/// The form behavior shared verbatim by `AddEventController` and
-/// `EventDetailsController`: client search/select/clear, the custom-address
-/// toggle, the employee picker and the capped local photo picks. Each
-/// controller adapts writes to its own freezed state via [applyFormUpdate]
-/// and exposes its image lists via [usedImageCount]/[pendingImages].
+/// Shared form behavior for searching, selecting, toggling, picking, and
+/// clearing. Each controller adapts it to its own state.
 mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
     on Notifier<StateT> {
   static const int maxImagesPerAppointment = 10;
@@ -70,9 +63,7 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
   @protected
   StateT applyFormUpdate(StateT current, AppointmentFormUpdate update);
 
-  /// Photos already attached to this form, counted against the cap — the add
-  /// flow counts only local picks, the edit flow also counts the photos
-  /// already stored on the visit.
+  /// Photos already attached to this form, counted against the cap.
   @protected
   int get usedImageCount;
 
@@ -83,9 +74,7 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
   void _apply(AppointmentFormUpdate update) =>
       state = applyFormUpdate(state, update);
 
-  /// Monotonic token so only the latest in-flight search publishes: a slow
-  /// older read must not overwrite a newer query's results (same guard as the
-  /// address autocomplete's request id).
+  /// Request id to prevent stale reads from overwriting fresh results.
   int _searchRequestId = 0;
 
   Future<void> searchClients(String query) async {
@@ -102,8 +91,7 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
     }
     final requestId = ++_searchRequestId;
     _apply(const AppointmentFormUpdate(isSearchingClient: true));
-    // Resolved before the await: the sheet can be dismissed mid-search, and
-    // using the Ref of a disposed notifier throws in Riverpod 3.
+    // Resolve these before the await so they survive the sheet being dismissed (Riverpod 3).
     final logger = ref.read(loggerProvider);
     final clientsRepo = ref.read(clientsRepositoryProvider);
     try {
@@ -172,9 +160,7 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
     );
   }
 
-  /// Drops the pending (not-yet-uploaded) photo at [index]; the controllers
-  /// expose it under their historical names (`removeImage` /
-  /// `removeNewImage`).
+  /// Drops the pending photo at [index] (exposed as removeImage/removeNewImage).
   @protected
   void removePendingImageAt(int index) {
     final next = [...pendingImages]..removeAt(index);

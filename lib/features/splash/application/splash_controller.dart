@@ -24,6 +24,21 @@ class SplashGoToCalendar extends SplashDestination {
   final String employeeId;
 }
 
+/// The account exists and the credential is good, but the person has never
+/// finished setup — they are still on the password their admin handed them.
+///
+/// This is the ONE status that must not be signed out. Everything else
+/// non-`active` (disabled, or a doc that vanished) still gets the boot: see
+/// the invited-vs-disabled split in [splashDestinationProvider].
+class SplashGoToAccountSetup extends SplashDestination {
+  const SplashGoToAccountSetup({
+    required this.firstName,
+    required this.lastName,
+  });
+  final String firstName;
+  final String lastName;
+}
+
 final splashDestinationProvider = FutureProvider<SplashDestination>((
   ref,
 ) async {
@@ -52,6 +67,18 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
 
   final authCache = ref.read(authCacheProvider);
   final employee = EmployeeRecord.fromMap(match.id, match.data);
+  // An `invited` account is mid-setup, not unauthorized: the admin created it
+  // with the shared starting password and this person is signing in for the
+  // first time. Signing them out here would make setup unreachable — the
+  // credential is exactly the one they need. Everything else non-active is
+  // still booted, so `isDisabled` is deliberately NOT the test: a doc with an
+  // empty or unknown status keeps the old sign-out.
+  if (employee.isInvited) {
+    return SplashGoToAccountSetup(
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+    );
+  }
   if (!employee.isActive) {
     await auth.signOut();
     await authCache.clear();

@@ -1,17 +1,10 @@
 "use strict";
 
 /**
- * @fileoverview Wave Accounting secret parameter and token accessor.
- *
- * Exports the `WAVE_FULL_ACCESS_TOKEN` secret param object (so `index.js` can
- * bind it to each Wave-calling function via
- * `secrets: [WAVE_FULL_ACCESS_TOKEN]`)
- * and a `getWaveToken()` helper that reads the secret value at runtime.
- *
- * IMPORTANT: `getWaveToken()` must only be called inside a Cloud Function
- * invocation — never at module-load time. Secret param values are only
- * available after the runtime has injected them.
- *
+ * @fileoverview Exports the `WAVE_FULL_ACCESS_TOKEN` secret param (bound to
+ * each Wave-calling function via `secrets: [WAVE_FULL_ACCESS_TOKEN]`) and a
+ * `getWaveToken()` accessor. Only call `getWaveToken()` from inside a Cloud
+ * Function invocation — secret values aren't injected before that.
  * @module wave/auth
  */
 
@@ -21,8 +14,8 @@ const {defineSecret} = require("firebase-functions/params");
 const WAVE_FULL_ACCESS_TOKEN = defineSecret("WAVE_FULL_ACCESS_TOKEN");
 
 /**
- * Returns the trimmed Wave full-access token value.
- * Must only be called inside a Cloud Function invocation (not at module load).
+ * Returns the trimmed Wave full-access token value. Only call this inside a
+ * Cloud Function invocation, not at module load.
  * @return {string} The token string.
  */
 function getWaveToken() {

@@ -58,27 +58,6 @@ class ImageStorageService {
     );
   }
 
-  Future<ImageUploadBatchResult> uploadImages(
-    String appointmentId,
-    List<File> files,
-  ) async {
-    final results = await Future.wait(
-      files.map((f) async {
-        try {
-          return await uploadImage(appointmentId, f);
-        } catch (e, st) {
-          _logger.warn('IMG-UPLOAD uploadImage failed for ${f.path}', e, st);
-          return null;
-        }
-      }),
-    );
-    final uploaded = results.whereType<AppointmentImage>().toList();
-    return ImageUploadBatchResult(
-      uploaded: uploaded,
-      failedCount: results.length - uploaded.length,
-    );
-  }
-
   Future<void> deleteImage(AppointmentImage image) async {
     final path = image.storagePath.isNotEmpty
         ? image.storagePath
@@ -126,14 +105,4 @@ class ImageStorageService {
     if (lower.endsWith('.png')) return 'image/png';
     return 'image/jpeg';
   }
-}
-
-class ImageUploadBatchResult {
-  const ImageUploadBatchResult({
-    required this.uploaded,
-    required this.failedCount,
-  });
-
-  final List<AppointmentImage> uploaded;
-  final int failedCount;
 }

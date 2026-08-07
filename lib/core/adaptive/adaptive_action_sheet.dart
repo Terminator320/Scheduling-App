@@ -24,10 +24,9 @@ class AdaptiveSheetAction<T> {
   final bool isDestructive;
 }
 
-/// Platform-adaptive chooser: a `CupertinoActionSheet` (with a Cancel button)
-/// on iOS, and the app's Material `showModalBottomSheet` list on Android.
-/// Optional [title]/[message] render as the sheet header on both platforms.
-/// Returns the chosen action's value, or null if dismissed/cancelled.
+/// Platform-adaptive chooser — a `CupertinoActionSheet` on iOS, the app's
+/// Material `showModalBottomSheet` list on Android — returning the chosen
+/// action's value, or null if dismissed/cancelled.
 Future<T?> showAdaptiveActionSheet<T>(
   BuildContext context, {
   required List<AdaptiveSheetAction<T>> actions,

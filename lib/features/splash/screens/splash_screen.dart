@@ -8,22 +8,14 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
-import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/splash/application/splash_controller.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
 
-/// Auth-gate splash. Visually matches the OS native splash
-/// (`flutter_native_splash`) so the handoff is seamless: same logo, same
-/// brand-color background. A linear progress indicator at the bottom
-/// signals work while the destination resolves.
-///
-/// Returning users take an optimistic fast path: if [AuthCache] holds an
-/// identity for the signed-in uid, we route straight to the calendar as a
-/// (least-privilege) employee without waiting on a Firestore read. The live
-/// role stream then upgrades real admins (`MainCalendar`), and the account
-/// listeners in `main.dart` sign out a disabled or deleted account — so the
-/// authoritative [splashDestinationProvider] only runs on a cache miss.
+/// Auth-gate splash that matches the native splash's visual handoff. An
+/// optimistic fast path routes returning users instantly via AuthCache, a
+/// live role stream upgrades admins, and account listeners handle
+/// disabled/deleted accounts.
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
 
@@ -39,23 +31,30 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // Register once — not in build(), which would schedule a new callback on
-    // every rebuild (ref.listen + the progress animation rebuild this widget).
+    // Register once (not in build to avoid repeated callbacks on rebuilds).
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _removeNativeSplashOnce(),
     );
     _decideRoute();
   }
 
-  /// Optimistic fast path. On a cache hit we route immediately (as employee);
-  /// on a miss we fall back to the authoritative [splashDestinationProvider].
+  /// Optimistic fast path — a cache hit routes immediately as an employee; a
+  /// miss falls back to the authoritative provider.
   Future<void> _decideRoute() async {
-    // P10: Crashlytics/App Check activation completes after runApp (main.dart
-    // defers it into firebaseReadyProvider). Every Firestore-reading surface
-    // is reached through this splash, so awaiting here guarantees no request
-    // races App Check token issuance. An activation failure is already
-    // recorded by the zone handler — log and proceed rather than wedge
-    // startup on it.
+    // Read the uid, which Firebase.initializeApp restores synchronously, and
+    // fire the cache read in parallel with App Check.
+    final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
+    final cacheFuture = uid == null
+        ? null
+        : ref.read(authCacheProvider).loadIfMatch(uid).catchError((
+            Object e,
+            StackTrace st,
+          ) {
+            ref.read(loggerProvider).warn('splash.auth_cache_load', e, st);
+            return null;
+          });
+
+    // Await App Check activation before navigating to prevent request races.
     try {
       await ref.read(firebaseReadyProvider.future);
     } catch (e, st) {
@@ -63,18 +62,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     }
     if (!mounted || _navigated) return;
 
-    final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
     if (uid == null) {
       _go(const SplashGoToLogin());
       return;
     }
-    EmployeeRecord? cached;
-    try {
-      cached = await ref.read(authCacheProvider).loadIfMatch(uid);
-    } catch (e, st) {
-      ref.read(loggerProvider).warn('splash.auth_cache_load', e, st);
-      cached = null;
-    }
+    final cached = await cacheFuture;
     if (!mounted || _navigated) return;
     if (cached != null) {
       _go(SplashGoToCalendar(isAdmin: false, employeeId: cached.id));
@@ -99,6 +91,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
       switch (destination) {
         case SplashGoToLogin():
           nav.pushReplacementNamed(AppRoutes.login);
+        case SplashGoToAccountSetup(:final firstName, :final lastName):
+          nav.pushReplacementNamed(
+            AppRoutes.accountSetup,
+            arguments: AccountSetupArgs(
+              firstName: firstName,
+              lastName: lastName,
+            ),
+          );
         case SplashGoToCalendar(:final isAdmin, :final employeeId):
           nav.pushReplacementNamed(
             AppRoutes.mainCalendar,
@@ -156,12 +156,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     );
   }
 
-  /// Mascot mark + the company wordmark in white. The mark stays static and
-  /// opaque so it lines up with the OS native splash (no fade-back-in pop at
-  /// handoff); only the wordmark — rendered as text, since the navy logo image
-  /// would be illegible on brand-blue — fades/rises in. Scroll-wrapped so it
-  /// can't overflow at large text scale on a short viewport, and the reveal
-  /// collapses to instant under reduce-motion.
+  /// Mascot mark (static and opaque, to line up with the native splash) plus
+  /// a wordmark that fades in. Scroll-wrapped to handle text-scale overflow.
   Widget _buildHero(ThemeData theme) {
     Widget wordmark = Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp24),

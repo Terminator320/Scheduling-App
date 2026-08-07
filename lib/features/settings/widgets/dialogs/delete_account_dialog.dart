@@ -2,9 +2,10 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/adaptive/adaptive.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-// Body for the delete-account confirm (shown via showConfirmDialog).
+/// Body content for the delete-account confirm dialog.
 class DeleteAccountWarningContent extends StatelessWidget {
   const DeleteAccountWarningContent({required this.isAdmin, super.key});
 
@@ -18,7 +19,7 @@ class DeleteAccountWarningContent extends StatelessWidget {
       children: [
         Text(context.l10n.settings_deleteAccountConfirmBody),
         if (isAdmin) ...[
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sp12),
           Text(
             context.l10n.settings_deleteAccountAdminWarning,
             style: TextStyle(color: Theme.of(context).colorScheme.error),
@@ -49,9 +50,7 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // The re-auth prompt opens right after the adaptive delete confirm
-    // (showConfirmDialog), so it must match that dialog's platform look —
-    // a Material AlertDialog straight after a Cupertino confirm is jarring.
+    // Re-auth prompt must match the prior delete-confirm dialog's platform look.
     if (context.isCupertino) return _buildCupertino(context);
     return _buildMaterial(context);
   }
@@ -64,10 +63,14 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(context.l10n.settings_confirmYourPasswordToDelete),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sp12),
           CupertinoTextField(
             controller: _controller,
             obscureText: _obscure,
+            // The eye toggle can clear obscureText, and only obscureText
+            // implies this — so a revealed password would otherwise be fair
+            // game for a third-party keyboard to retain.
+            enableIMEPersonalizedLearning: false,
             autofocus: true,
             placeholder: context.l10n.common_password,
             onSubmitted: (value) => Navigator.of(context).pop(value),
@@ -79,11 +82,11 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
               child: GestureDetector(
                 onTap: () => setState(() => _obscure = !_obscure),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sp8,
+                  ),
                   child: Icon(
-                    _obscure
-                        ? CupertinoIcons.eye
-                        : CupertinoIcons.eye_slash,
+                    _obscure ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
                     size: 20,
                     color: CupertinoColors.secondaryLabel.resolveFrom(context),
                   ),
@@ -117,10 +120,11 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(context.l10n.settings_confirmYourPasswordToDelete),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.sp12),
           TextField(
             controller: _controller,
             obscureText: _obscure,
+            enableIMEPersonalizedLearning: false,
             autofocus: true,
             decoration: InputDecoration(
               labelText: context.l10n.common_password,

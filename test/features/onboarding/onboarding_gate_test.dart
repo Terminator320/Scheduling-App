@@ -83,10 +83,7 @@ void main() {
       await tester.pump(); // _finish: write throws, caught, _seen = true.
       expect(storage.writeAttempts, 1);
 
-      // Bounded pumps (the splash progress bar never settles): the gate must
-      // have moved past onboarding to the splash, which lands on login. The
-      // splash awaits firebaseReadyProvider (P10) then navigates post-frame,
-      // so allow a few frames.
+      // Bounded pumps (progress bar never settles): splash awaits firebaseReadyProvider (P10) then navigates post-frame to login, so allow a few frames.
       await tester.pump();
       await tester.pump();
       await tester.pump();

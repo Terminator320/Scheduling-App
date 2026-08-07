@@ -4,8 +4,7 @@ import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 
-/// Delete confirmation for appointments. A repeating visit asks whether to
-/// delete this visit only or this and the future visits; null = cancelled.
+/// Shows a delete confirmation for appointments. A repeating visit offers 'this one only' or 'this and future visits'; a null result means the user cancelled.
 Future<SeriesScopeChoice?> showDeleteAppointmentDialog(
   BuildContext context, {
   required bool isSeries,
@@ -23,9 +22,12 @@ Future<SeriesScopeChoice?> showDeleteAppointmentDialog(
   return showSeriesScopeDialog(
     context,
     title: l.calendar_deleteAppointment,
-    message: l.calendar_deleteSeriesScopeMessage,
     thisOnlyLabel: l.calendar_deleteThisVisitOnly,
     thisAndFutureLabel: l.calendar_deleteThisAndFutureVisits,
+    // The scope IS the verb here, so this site keeps its own copy rather than
+    // switching the label on the selection.
+    primaryLabelFor: (_) => l.calendar_deleteAppointment,
+    thisOnlyDetail: l.calendar_deleteSeriesScopeMessage,
     destructive: true,
   );
 }

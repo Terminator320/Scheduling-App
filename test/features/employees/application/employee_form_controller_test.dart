@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -6,12 +9,19 @@ import 'package:scheduling/features/employees/application/employee_form_controll
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/job_title.dart';
+import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 
 class _MockEmployeesRepo extends Mock implements EmployeesRepository {}
 
 void main() {
   late _MockEmployeesRepo repo;
   late ProviderContainer container;
+
+  setUpAll(() {
+    registerFallbackValue(const EmployeeRecord(id: 'fallback'));
+  });
 
   setUp(() {
     repo = _MockEmployeesRepo();
@@ -27,66 +37,224 @@ void main() {
   EmployeeFormActivity activity() =>
       container.read(employeeFormControllerProvider);
 
-  Future<EmployeeSaveOutcome> invite() => notifier().inviteEmployee(
+  Future<EmployeeSaveOutcome> create() => notifier().createAccount(
+    const EmployeeRecord(
+      id: '',
+      name: 'Alex',
+      firstName: 'Alex',
+      email: 'alex@test.com',
+      phone: '555-0001',
+      color: Color(0x0000007B),
+      role: 'admin',
+      jobTitle: JobTitle.technician,
+    ),
+  );
+
+  const edited = EmployeeRecord(
+    id: 'e1',
     name: 'Alex',
     email: 'alex@test.com',
     phone: '555-0001',
-    colorValue: '123',
+    role: 'admin',
   );
 
-  Future<EmployeeSaveOutcome> update() => notifier().updateEmployee(
-    docId: 'e1',
-    name: 'Alex',
-    email: 'alex@test.com',
-    phone: '555-0001',
-    colorValue: '123',
-    isAdmin: true,
-  );
+  Future<EmployeeSaveOutcome> update() => notifier().updateEmployee(edited);
 
-  group('inviteEmployee', () {
-    test('returns the one-time signup code on success', () async {
+  group('reentrancy', () {
+    test('a concurrent save returns Busy, not a failure', () async {
+      final gate = Completer<NewAccountCredentials>();
       when(
-        () => repo.createEmployeeInvite(
+        () => repo.createEmployeeAccount(
           name: any(named: 'name'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
           email: any(named: 'email'),
           phone: any(named: 'phone'),
           colorValue: any(named: 'colorValue'),
+          jobTitle: any(named: 'jobTitle'),
+          isAdmin: any(named: 'isAdmin'),
         ),
-      ).thenAnswer((_) async => 'CODE-42');
+      ).thenAnswer((_) => gate.future);
 
-      final outcome = await invite();
+      final first = create();
+      // Second tap lands while the first write is still in flight.
+      final second = await create();
 
-      expect(outcome, isA<EmployeeInvited>());
-      expect((outcome as EmployeeInvited).code, 'CODE-42');
+      // Busy, NOT EmployeeSaveFailed — a SocketException here is classified by
+      // TYPE as "offline" and rendered a false offline notice while online.
+      expect(second, isA<EmployeeSaveBusy>());
+
+      gate.complete(
+        const NewAccountCredentials(
+          email: 'alex@test.com',
+          password: 'Welcome123!',
+        ),
+      );
+      expect(await first, isA<EmployeeAccountCreated>());
+      // Only the one write reached the repository.
+      verify(
+        () => repo.createEmployeeAccount(
+          name: any(named: 'name'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          email: any(named: 'email'),
+          phone: any(named: 'phone'),
+          colorValue: any(named: 'colorValue'),
+          jobTitle: any(named: 'jobTitle'),
+          isAdmin: any(named: 'isAdmin'),
+        ),
+      ).called(1);
+    });
+
+    test(
+      'a save for a DIFFERENT employee is not blocked by one in flight',
+      () async {
+        const credentials = NewAccountCredentials(
+          email: 'b@test.com',
+          password: 'Welcome123!',
+        );
+        // A's call hangs on the gate; B's returns straight away, so the only
+        // thing that can stall B is the controller's own guard.
+        final gate = Completer<NewAccountCredentials>();
+        when(
+          () => repo.createEmployeeAccount(
+            name: any(named: 'name'),
+            firstName: any(named: 'firstName'),
+            lastName: any(named: 'lastName'),
+            email: 'a@test.com',
+            phone: any(named: 'phone'),
+            colorValue: any(named: 'colorValue'),
+            jobTitle: any(named: 'jobTitle'),
+            isAdmin: any(named: 'isAdmin'),
+          ),
+        ).thenAnswer((_) => gate.future);
+        when(
+          () => repo.createEmployeeAccount(
+            name: any(named: 'name'),
+            firstName: any(named: 'firstName'),
+            lastName: any(named: 'lastName'),
+            email: 'b@test.com',
+            phone: any(named: 'phone'),
+            colorValue: any(named: 'colorValue'),
+            jobTitle: any(named: 'jobTitle'),
+            isAdmin: any(named: 'isAdmin'),
+          ),
+        ).thenAnswer((_) async => credentials);
+
+        // Two expanded pending rows, each tapping Reset password.
+        final rowA = notifier().createAccount(
+          const EmployeeRecord(id: 'a', email: 'a@test.com'),
+        );
+        final rowB = await notifier()
+            .createAccount(const EmployeeRecord(id: 'b', email: 'b@test.com'))
+            .timeout(
+              const Duration(seconds: 1),
+              onTimeout: () => throw StateError('B never resolved'),
+            );
+
+        // NOT Busy: the guard is keyed per employee. A global flag dropped this
+        // tap silently — no spinner, no notice, nothing written.
+        expect(rowB, isA<EmployeeAccountCreated>());
+        expect(activity().isSavingId('a'), isTrue);
+        expect(activity().isSavingId('b'), isFalse);
+
+        gate.complete(
+          const NewAccountCredentials(
+            email: 'a@test.com',
+            password: 'Welcome123!',
+          ),
+        );
+        expect(await rowA, isA<EmployeeAccountCreated>());
+        expect(activity().isSaving, isFalse);
+      },
+    );
+
+    test(
+      'removing one pending account leaves another row actionable',
+      () async {
+        final gate = Completer<void>();
+        when(
+          () => repo.deleteEmployeeAccount('a'),
+        ).thenAnswer((_) => gate.future);
+        when(() => repo.deleteEmployeeAccount('b')).thenAnswer((_) async {});
+
+        final rowA = notifier().deleteAccount('a');
+        expect(activity().isDeletingAccountId('a'), isTrue);
+        expect(activity().isDeletingAccountId('b'), isFalse);
+
+        expect(await notifier().deleteAccount('b'), isA<AccountDeleted>());
+
+        gate.complete();
+        expect(await rowA, isA<AccountDeleted>());
+        expect(activity().isDeletingAccount, isFalse);
+      },
+    );
+  });
+
+  group('createAccount', () {
+    test('returns the sign-in credentials on success', () async {
+      when(
+        () => repo.createEmployeeAccount(
+          name: any(named: 'name'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          email: any(named: 'email'),
+          phone: any(named: 'phone'),
+          colorValue: any(named: 'colorValue'),
+          jobTitle: any(named: 'jobTitle'),
+          isAdmin: any(named: 'isAdmin'),
+        ),
+      ).thenAnswer(
+        (_) async => const NewAccountCredentials(
+          email: 'alex@test.com',
+          password: 'Welcome123!',
+        ),
+      );
+
+      final outcome = await create();
+
+      expect(outcome, isA<EmployeeAccountCreated>());
+      expect(
+        (outcome as EmployeeAccountCreated).credentials.password,
+        'Welcome123!',
+      );
       expect(activity().isSaving, isFalse);
     });
 
     test('surfaces a taken email as a field-level outcome', () async {
       when(
-        () => repo.createEmployeeInvite(
+        () => repo.createEmployeeAccount(
           name: any(named: 'name'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
           email: any(named: 'email'),
           phone: any(named: 'phone'),
           colorValue: any(named: 'colorValue'),
+          jobTitle: any(named: 'jobTitle'),
+          isAdmin: any(named: 'isAdmin'),
         ),
       ).thenThrow(const EmployeesFailureEmailAlreadyExists());
 
-      expect(await invite(), isA<EmployeeEmailInUse>());
+      expect(await create(), isA<EmployeeEmailInUse>());
       expect(activity().isSaving, isFalse);
     });
 
     test('reports other failures with the original error', () async {
       final boom = Exception('offline');
       when(
-        () => repo.createEmployeeInvite(
+        () => repo.createEmployeeAccount(
           name: any(named: 'name'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
           email: any(named: 'email'),
           phone: any(named: 'phone'),
           colorValue: any(named: 'colorValue'),
+          jobTitle: any(named: 'jobTitle'),
+          isAdmin: any(named: 'isAdmin'),
         ),
       ).thenThrow(boom);
 
-      final outcome = await invite();
+      final outcome = await create();
 
       expect(outcome, isA<EmployeeSaveFailed>());
       expect((outcome as EmployeeSaveFailed).error, boom);
@@ -99,24 +267,13 @@ void main() {
       when(
         () => repo.updateEmployee(
           docId: any(named: 'docId'),
-          name: any(named: 'name'),
-          email: any(named: 'email'),
-          phone: any(named: 'phone'),
-          colorValue: any(named: 'colorValue'),
-          isAdmin: any(named: 'isAdmin'),
+          employee: any(named: 'employee'),
         ),
       ).thenAnswer((_) async {});
 
       expect(await update(), isA<EmployeeUpdated>());
       verify(
-        () => repo.updateEmployee(
-          docId: 'e1',
-          name: 'Alex',
-          email: 'alex@test.com',
-          phone: '555-0001',
-          colorValue: '123',
-          isAdmin: true,
-        ),
+        () => repo.updateEmployee(docId: 'e1', employee: edited),
       ).called(1);
       expect(activity().isSaving, isFalse);
     });
@@ -125,11 +282,7 @@ void main() {
       when(
         () => repo.updateEmployee(
           docId: any(named: 'docId'),
-          name: any(named: 'name'),
-          email: any(named: 'email'),
-          phone: any(named: 'phone'),
-          colorValue: any(named: 'colorValue'),
-          isAdmin: any(named: 'isAdmin'),
+          employee: any(named: 'employee'),
         ),
       ).thenThrow(Exception('offline'));
 
@@ -178,24 +331,37 @@ void main() {
     });
   });
 
-  group('deleteEmployee', () {
-    test('deletes and stays busy so the host can pop the surface', () async {
-      when(() => repo.deleteEmployee(any())).thenAnswer((_) async {});
+  group('deleteAccount', () {
+    test('reports deleted and clears the busy flag', () async {
+      when(() => repo.deleteEmployeeAccount(any())).thenAnswer((_) async {});
 
-      final outcome = await notifier().deleteEmployee('e1');
+      final outcome = await notifier().deleteAccount('doc-1');
 
-      expect(outcome, isA<EmployeeDeleted>());
-      verify(() => repo.deleteEmployee('e1')).called(1);
-      expect(activity().isDeleting, isTrue);
+      expect(outcome, isA<AccountDeleted>());
+      verify(() => repo.deleteEmployeeAccount('doc-1')).called(1);
+      expect(activity().isDeletingAccount, isFalse);
     });
 
-    test('reports failures and resets the busy flag', () async {
-      when(() => repo.deleteEmployee(any())).thenThrow(Exception('boom'));
+    test('a server refusal is a failed outcome carrying the error', () async {
+      // Someone finished setup while the admin was looking at the row.
+      const refusal = EmployeesFailureAccountNoLongerPending();
+      when(() => repo.deleteEmployeeAccount(any())).thenThrow(refusal);
 
-      final outcome = await notifier().deleteEmployee('e1');
+      final outcome = await notifier().deleteAccount('doc-1');
 
-      expect(outcome, isA<EmployeeDeleteFailed>());
-      expect(activity().isDeleting, isFalse);
+      expect(outcome, isA<AccountDeleteFailed>());
+      expect((outcome as AccountDeleteFailed).error, refusal);
+      expect(activity().isDeletingAccount, isFalse);
+    });
+
+    test('reports other failures with the original error', () async {
+      final boom = Exception('offline');
+      when(() => repo.deleteEmployeeAccount(any())).thenThrow(boom);
+
+      final outcome = await notifier().deleteAccount('doc-1');
+
+      expect((outcome as AccountDeleteFailed).error, boom);
+      expect(activity().isDeletingAccount, isFalse);
     });
   });
 }

@@ -26,22 +26,54 @@ void main() {
     return msg;
   }
 
-  testWidgets('invalid signup code message', (t) async {
+  testWidgets('already-set-up message', (t) async {
     expect(
-      await messageFor(t, const AuthFailureInvalidSignupCode()),
-      contains("isn't valid"),
+      await messageFor(t, const AuthFailureSetupAlreadyComplete()),
+      contains('already set up'),
     );
   });
-  testWidgets('expired signup code message', (t) async {
+  testWidgets('missing account record message', (t) async {
     expect(
-      await messageFor(t, const AuthFailureSignupCodeExpired()),
+      await messageFor(t, const AuthFailureNoAccountRecord()),
+      contains('employee record'),
+    );
+  });
+  testWidgets('expired session message', (t) async {
+    expect(
+      await messageFor(t, const AuthFailureSessionExpired()),
       contains('expired'),
     );
   });
-  testWidgets('email-mismatch signup code message', (t) async {
-    expect(
-      await messageFor(t, const AuthFailureSignupEmailMismatch()),
-      contains('different email'),
-    );
+
+  group('isExpected', () {
+    test('user-correctable failures are expected', () {
+      for (final failure in const <AuthFailure>[
+        AuthFailureInvalidEmail(),
+        AuthFailureUserDisabled(),
+        AuthFailureUserNotFound(),
+        AuthFailureWrongCredentials(),
+        AuthFailureTooManyRequests(),
+        AuthFailureNetwork(),
+        AuthFailureEmailAlreadyInUse(),
+        AuthFailureWeakPassword(),
+        AuthFailureRequiresRecentLogin(),
+        AuthFailureNotAuthorized(),
+        AuthFailureSetupAlreadyComplete(),
+        AuthFailureSessionExpired(),
+      ]) {
+        expect(failure.isExpected, isTrue, reason: '${failure.runtimeType}');
+      }
+    });
+
+    test('defects and misconfiguration are not expected', () {
+      for (final failure in const <AuthFailure>[
+        AuthFailureOperationNotAllowed(),
+        AuthFailurePermissionDenied(),
+        AuthFailureUnknown(),
+        AuthFailureNoAccountRecord(),
+      ]) {
+        expect(failure.isExpected, isFalse, reason: '${failure.runtimeType}');
+      }
+    });
   });
 }

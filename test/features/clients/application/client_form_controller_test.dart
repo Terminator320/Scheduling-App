@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/data/contact_link_store.dart';
@@ -41,15 +44,27 @@ void main() {
       overrides: [
         clientsRepositoryProvider.overrideWithValue(repo),
         contactLinkStoreProvider.overrideWithValue(linkStore),
+        // Deterministic online by default; the offline tests build their own.
+        isOfflineProvider.overrideWithValue(false),
       ],
     );
     addTearDown(container.dispose);
   });
 
+  ClientFormController offlineNotifier() {
+    final offline = ProviderContainer(
+      overrides: [
+        clientsRepositoryProvider.overrideWithValue(repo),
+        contactLinkStoreProvider.overrideWithValue(linkStore),
+        isOfflineProvider.overrideWithValue(true),
+      ],
+    );
+    addTearDown(offline.dispose);
+    return offline.read(clientFormControllerProvider.notifier);
+  }
+
   ClientFormController notifier() =>
       container.read(clientFormControllerProvider.notifier);
-
-  ClientFormActivity activity() => container.read(clientFormControllerProvider);
 
   int refreshCount() => container.read(clientsRefreshProvider);
 
@@ -67,10 +82,9 @@ void main() {
       expect((outcome as ClientSaved).client, persisted);
       verify(() => repo.addClient(_client)).called(1);
       expect(refreshCount(), 1);
-      // Resets on success: in the split layout the detail pane keeps this
-      // shared provider alive after the sheet pops, so a lingering isSaving
-      // would disable the add/edit forms for the rest of the session.
-      expect(activity().isSaving, isFalse);
+      // Resets on success — the detail pane keeps this shared provider alive
+      // after the sheet pops, so a lingering isSaving would disable add/edit forms all session.
+      expect(container.read(clientFormControllerProvider), isFalse);
     });
 
     test('reports the failure without bumping the refresh', () async {
@@ -80,7 +94,16 @@ void main() {
 
       expect(outcome, isA<ClientSaveFailed>());
       expect(refreshCount(), 0);
-      expect(activity().isSaving, isFalse);
+      expect(container.read(clientFormControllerProvider), isFalse);
+    });
+
+    test('offline fails fast without touching the repo', () async {
+      final outcome = await offlineNotifier().addClient(_client);
+
+      expect(outcome, isA<ClientSaveFailed>());
+      expect((outcome as ClientSaveFailed).error, isA<SocketException>());
+      verifyNever(() => repo.addClient(any()));
+      expect(refreshCount(), 0);
     });
   });
 
@@ -95,7 +118,7 @@ void main() {
       verify(() => repo.updateClient(_client)).called(1);
       verify(() => linkStore.contactIdFor('c1')).called(1);
       expect(refreshCount(), 1);
-      expect(activity().isSaving, isFalse);
+      expect(container.read(clientFormControllerProvider), isFalse);
     });
 
     test('a failing contact-link lookup never fails the save', () async {
@@ -118,44 +141,56 @@ void main() {
       expect(outcome, isA<ClientSaveFailed>());
       expect(refreshCount(), 0);
       verifyNever(() => linkStore.contactIdFor(any()));
-      expect(activity().isSaving, isFalse);
+      expect(container.read(clientFormControllerProvider), isFalse);
+    });
+
+    test('offline fails fast without touching the repo', () async {
+      final outcome = await offlineNotifier().updateClient(_client);
+
+      expect(outcome, isA<ClientSaveFailed>());
+      expect((outcome as ClientSaveFailed).error, isA<SocketException>());
+      verifyNever(() => repo.updateClient(any()));
+      verifyNever(() => linkStore.contactIdFor(any()));
+      expect(refreshCount(), 0);
     });
   });
 
-  group('deleteClient', () {
-    test('deletes, unlinks the phone contact and bumps the refresh', () async {
-      when(() => repo.deleteClient(any())).thenAnswer((_) async {});
+  group('setArchived', () {
+    test('archives, bumps the refresh and reports the new state', () async {
+      when(
+        () => repo.setClientArchived(any(), archived: any(named: 'archived')),
+      ).thenAnswer((_) async {});
 
-      final outcome = await notifier().deleteClient('c1');
+      final outcome = await notifier().setArchived('c1', archived: true);
 
-      expect(outcome, isA<ClientDeleted>());
-      verify(() => repo.deleteClient('c1')).called(1);
-      verify(() => linkStore.unlink('c1')).called(1);
+      expect(outcome, isA<ClientArchived>());
+      expect((outcome as ClientArchived).archived, isTrue);
+      verify(() => repo.setClientArchived('c1', archived: true)).called(1);
       expect(refreshCount(), 1);
-      expect(activity().isDeleting, isFalse);
+      expect(container.read(clientFormControllerProvider), isFalse);
     });
 
-    test('a failing unlink never fails the delete', () async {
-      when(() => repo.deleteClient(any())).thenAnswer((_) async {});
+    test('un-archives through the same action', () async {
       when(
-        () => linkStore.unlink(any()),
-      ).thenAnswer((_) async => throw Exception('prefs flake'));
+        () => repo.setClientArchived(any(), archived: any(named: 'archived')),
+      ).thenAnswer((_) async {});
 
-      final outcome = await notifier().deleteClient('c1');
+      final outcome = await notifier().setArchived('c1', archived: false);
 
-      expect(outcome, isA<ClientDeleted>());
-      expect(refreshCount(), 1);
+      expect((outcome as ClientArchived).archived, isFalse);
+      verify(() => repo.setClientArchived('c1', archived: false)).called(1);
     });
 
     test('reports the failure without bumping the refresh', () async {
-      when(() => repo.deleteClient(any())).thenThrow(Exception('offline'));
+      when(
+        () => repo.setClientArchived(any(), archived: any(named: 'archived')),
+      ).thenThrow(Exception('boom'));
 
-      final outcome = await notifier().deleteClient('c1');
+      final outcome = await notifier().setArchived('c1', archived: true);
 
-      expect(outcome, isA<ClientDeleteFailed>());
+      expect(outcome, isA<ClientArchiveFailed>());
       expect(refreshCount(), 0);
-      verifyNever(() => linkStore.unlink(any()));
-      expect(activity().isDeleting, isFalse);
+      expect(container.read(clientFormControllerProvider), isFalse);
     });
   });
 }

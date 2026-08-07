@@ -3,8 +3,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/image_viewer.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
-/// Swipeable read-only gallery of appointment photos with a page-dot
-/// indicator. Tapping a page opens the full-screen [ImageViewer].
+/// Swipeable read-only gallery of appointment photos with page-dot indicator.
 class AppointmentImageCarousel extends StatefulWidget {
   const AppointmentImageCarousel({required this.images, super.key});
 
@@ -29,8 +28,7 @@ class _AppointmentImageCarouselState extends State<AppointmentImageCarousel> {
     final scheme = Theme.of(context).colorScheme;
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final cacheHeight = (200 * dpr).round();
-    // Also bound the decoded width to the on-screen strip width; with height
-    // alone a wide source decodes a much larger bitmap than the strip shows.
+    // Bound decoded width to on-screen strip width to avoid over-decoding wide images.
     final cacheWidth = (MediaQuery.sizeOf(context).width * dpr).round();
     return Column(
       children: [

@@ -2,10 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 
-/// Parses [rawAddress] and copies each recognized part into the matching
-/// controller, leaving manually-entered values intact. Shared by the add and
-/// edit client forms, which fill the same six address fields from a picked
-/// suggestion.
+/// Parses [rawAddress] and copies each recognized part into the matching controller, leaving manually-entered values intact.
 void fillAddressControllersFromText(
   String rawAddress, {
   required TextEditingController address,

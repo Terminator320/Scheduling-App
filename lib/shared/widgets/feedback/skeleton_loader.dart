@@ -30,8 +30,7 @@ class _SkeletonBoxState extends State<_SkeletonBox>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Honor reduce-motion (same MediaQuery signal as routes/forms): render the
-    // static base color instead of driving a repeating shimmer.
+    // Honor reduce-motion by showing a static color instead of the shimmer.
     if (MediaQuery.disableAnimationsOf(context)) {
       _ctrl.stop();
     } else if (!_ctrl.isAnimating) {
@@ -106,8 +105,8 @@ class SkeletonAppointmentRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // NOTE: 11/9 heights are shimmer line dimensions, not layout
-                // spacing — kept literal so the placeholder bars stay sized.
+                // 11 and 9 here are shimmer line heights, not spacing values
+                // — kept literal so the bars come out the right size.
                 _SkeletonBox(width: 130, height: 11),
                 SizedBox(height: AppSpacing.sp4),
                 _SkeletonBox(width: 90, height: 9),
@@ -145,8 +144,8 @@ class SkeletonListTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // NOTE: 11/9 heights are shimmer line dimensions, not layout
-                // spacing — kept literal so the placeholder bars stay sized.
+                // 11 and 9 here are shimmer line heights, not spacing values
+                // — kept literal so the bars come out the right size.
                 _SkeletonBox(width: 110, height: 11),
                 SizedBox(height: AppSpacing.sp4),
                 _SkeletonBox(width: 75, height: 9),

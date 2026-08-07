@@ -22,8 +22,21 @@
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>net.vogas.scheduling.widget</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>esproschedule</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>LSApplicationQueriesSchemes</key>
@@ -44,11 +57,19 @@
 	<key>NSCameraUsageDescription</key>
 	<string>This app uses the camera to take appointment photos and profile pictures.</string>
 	<key>NSContactsUsageDescription</key>
-	<string>This app opens a pre-filled contact card so you can save a client to your phone contacts.</string>
+	<string>This app saves a client you choose to your phone contacts, and keeps that one contact up to date when you edit the client. It does not read the rest of your contacts.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>This app uses Face ID to unlock the app lock you enabled in Settings.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Your location tells you when it is time to leave for your next appointment and shows your position on the staff map. This app only uses your location while you have it open.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>While you have the app open, your location tells you when it is time to leave for your next appointment and shows your position on the staff map.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app accesses your photo library to attach images to appointments and profiles.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>This app saves appointment photos to your photo library when you choose to save them.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -72,6 +93,10 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

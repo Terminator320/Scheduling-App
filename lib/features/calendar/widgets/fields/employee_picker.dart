@@ -20,9 +20,7 @@ class EmployeePicker extends StatelessWidget {
   final bool selectable;
   final bool hasError;
 
-  /// When non-null, an error row is rendered below the chips (and the chip
-  /// borders are highlighted). Lets the picker own its validation message
-  /// instead of every call site hand-rolling the same Padding + Text.
+  /// When this is non-null, an error row is rendered below the chips and their borders get highlighted.
   final String? errorText;
   final void Function(EmployeeRecord)? onToggle;
 
@@ -90,16 +88,20 @@ class EmployeePicker extends StatelessWidget {
                           size: AvatarSize.xs,
                         ),
                         const SizedBox(width: AppSpacing.sp8),
-                        Text(
-                          employee.name.split(' ').first,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                            color: isSelected
-                                ? scheme.primary
-                                : scheme.onSurfaceVariant,
+                        Flexible(
+                          child: Text(
+                            employee.name.split(' ').first,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                              color: isSelected
+                                  ? scheme.primary
+                                  : scheme.onSurfaceVariant,
+                            ),
                           ),
                         ),
                       ],

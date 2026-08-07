@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 
 void main() {
   group('ClientRecord', () {
@@ -163,6 +164,55 @@ void main() {
       expect(restored.noFixedAddress, isTrue);
       expect(restored, equals(original));
     });
+
+    group('archived', () {
+      test('defaults to false when the field is absent', () {
+        expect(ClientRecord.fromMap('c1', {'name': 'Acme'}).archived, isFalse);
+      });
+
+      test('round-trips through fromMap and toMap', () {
+        final record = ClientRecord.fromMap('c1', {
+          'name': 'Acme',
+          'archived': true,
+        });
+        expect(record.archived, isTrue);
+        expect(record.toMap()['archived'], isTrue);
+      });
+
+      test('toMap emits it while still omitting function-owned fields', () {
+        final map = ClientRecord.fromMap('c1', {
+          'name': 'Acme',
+          'jobCount': 7,
+          'waveCustomerId': 'w1',
+        }).toMap();
+
+        expect(map.containsKey('archived'), isTrue);
+        expect(map.containsKey('jobCount'), isFalse);
+        expect(map.containsKey('waveCustomerId'), isFalse);
+      });
+    });
+
+    group('createdAt', () {
+      test('fromMap parses a DateTime createdAt', () {
+        final record = ClientRecord.fromMap('c1', {
+          'name': 'Alice',
+          'createdAt': DateTime(2026, 7, 1, 10, 30),
+        });
+        expect(record.createdAt, DateTime(2026, 7, 1, 10, 30));
+      });
+
+      test('fromMap defaults createdAt to null when absent', () {
+        expect(ClientRecord.fromMap('c2', {'name': 'Bob'}).createdAt, isNull);
+      });
+
+      test('toMap never emits createdAt (function-owned server timestamp)', () {
+        final record = ClientRecord.fromMap('c3', {
+          'name': 'Carol',
+          'createdAt': DateTime(2026, 7),
+        });
+        expect(record.toMap().containsKey('createdAt'), isFalse);
+      });
+    });
   });
 
   group('ClientContact', () {
@@ -180,6 +230,69 @@ void main() {
       );
       final restored = ClientContact.fromMap(original.toMap());
       expect(restored, equals(original));
+    });
+  });
+
+  group('ClientRecord P3 fields', () {
+    test('fromMap reads every new field', () {
+      final record = ClientRecord.fromMap('c1', {
+        'name': 'Acme',
+        'type': 'commercial',
+        'accessNotes': 'Gate code 1234',
+        'onSiteManager': 'Dana',
+        'billingTerms': 'Net 30',
+        'autoInvoice': true,
+        'jobCount': 7,
+      });
+
+      expect(record.type, ClientType.commercial);
+      expect(record.accessNotes, 'Gate code 1234');
+      expect(record.onSiteManager, 'Dana');
+      expect(record.billingTerms, 'Net 30');
+      expect(record.autoInvoice, isTrue);
+      expect(record.jobCount, 7);
+    });
+
+    test('a legacy doc with none of the new fields defaults safely', () {
+      final record = ClientRecord.fromMap('c2', {'name': 'Old'});
+
+      expect(record.type, ClientType.unset);
+      expect(record.accessNotes, '');
+      expect(record.onSiteManager, '');
+      expect(record.billingTerms, '');
+      expect(record.autoInvoice, isFalse);
+      expect(record.jobCount, isNull);
+    });
+
+    test('toMap emits the user-owned new fields', () {
+      final map = const ClientRecord(
+        id: 'c4',
+        name: 'Acme',
+        type: ClientType.propertyManagement,
+        accessNotes: 'Side door',
+        onSiteManager: 'Dana',
+        billingTerms: 'Net 15',
+        autoInvoice: true,
+      ).toMap();
+
+      expect(map['type'], 'property_mgmt');
+      expect(map['accessNotes'], 'Side door');
+      expect(map['onSiteManager'], 'Dana');
+      expect(map['billingTerms'], 'Net 15');
+      expect(map['autoInvoice'], true);
+    });
+
+    test('toMap never emits the function-owned fields', () {
+      final map = const ClientRecord(
+        id: 'c5',
+        name: 'Acme',
+        jobCount: 9,
+        waveCustomerId: 'wave-1',
+      ).toMap();
+
+      expect(map.containsKey('jobCount'), isFalse);
+      expect(map.containsKey('waveCustomerId'), isFalse);
+      expect(map.containsKey('wave'), isFalse);
     });
   });
 }

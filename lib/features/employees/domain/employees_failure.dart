@@ -15,6 +15,19 @@ class EmployeesFailureEmailAlreadyExists extends EmployeesFailure {
       context.l10n.error_anEmployeeWithThisEmailAlreadyExists;
 }
 
+/// `deleteEmployeeAccount` refused: the person finished setting up, or their
+/// account was already removed, between the roster row rendering and the tap.
+/// Both server rejections (`account-not-pending`, `account-not-found`) collapse
+/// here — the admin needs the same thing said either way, and the live stream
+/// has already dropped or flipped the row.
+class EmployeesFailureAccountNoLongerPending extends EmployeesFailure {
+  const EmployeesFailureAccountNoLongerPending();
+
+  @override
+  String toLocalizedMessage(BuildContext context) =>
+      context.l10n.error_thatAccountIsNoLongerPending;
+}
+
 class EmployeesFailureUnknown extends EmployeesFailure {
   const EmployeesFailureUnknown();
 

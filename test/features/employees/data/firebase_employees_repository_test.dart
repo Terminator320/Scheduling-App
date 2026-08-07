@@ -9,7 +9,9 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
+import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/job_title.dart';
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
 
@@ -41,6 +43,8 @@ class _MockTransaction extends Mock implements Transaction {}
 
 class _FakeFieldValue extends Fake implements FieldValue {}
 
+class _FakeHttpsCallableOptions extends Fake implements HttpsCallableOptions {}
+
 void main() {
   late _MockFirestore firestore;
   late _MockFirebaseFunctions functions;
@@ -57,6 +61,8 @@ void main() {
     registerFallbackValue(_MockDocRef());
     registerFallbackValue((Transaction txn) async {});
     registerFallbackValue(Duration.zero);
+    registerFallbackValue(_FakeHttpsCallableOptions());
+    registerFallbackValue(SetOptions(merge: true));
   });
 
   setUp(() {
@@ -90,7 +96,6 @@ void main() {
 
     when(() => collection.doc(any())).thenReturn(docRef);
     when(() => docRef.update(any())).thenAnswer((_) async {});
-    when(() => docRef.delete()).thenAnswer((_) async {});
     when(() => docRef.get()).thenAnswer((_) async => docSnapshot);
     when(() => docRef.firestore).thenReturn(firestore);
     when(() => collection.add(any())).thenAnswer((_) async => docRef);
@@ -117,33 +122,90 @@ void main() {
   FirebaseEmployeesRepository repo() =>
       FirebaseEmployeesRepository(firestore, functions: functions);
 
-  group('createEmployeeInvite', () {
-    test('returns the code and lowercases the email', () async {
+  /// The single captured update payload, cast the way mocktail requires —
+  /// captureAny() returns Map<Object, Object?>, so a direct
+  /// `as Map<String, dynamic>` throws at runtime.
+  Map<String, dynamic> capturedUpdate() {
+    final captured = verify(
+      () => transaction.update(docRef, captureAny()),
+    ).captured.single;
+    return (captured as Map).cast<String, dynamic>();
+  }
+
+  group('createEmployeeAccount', () {
+    test('returns the credentials and lowercases the email', () async {
       final callable = _MockHttpsCallable();
       final result = _MockHttpsCallableResult();
       when(
-        () => functions.httpsCallable('createEmployeeInvite'),
+        () => functions.httpsCallable(
+          any(that: equals('createEmployeeAccount')),
+          options: any(named: 'options'),
+        ),
       ).thenReturn(callable);
-      when(() => result.data).thenReturn({'code': 'K7Q2-9MZ4-XR8T'});
+      when(() => result.data).thenReturn({
+        'email': 'a@b.com',
+        'password': 'Welcome123!',
+        'docId': 'doc-1',
+      });
       when(
         () => callable.call<dynamic>(any<Object?>()),
       ).thenAnswer((_) async => result);
 
       final repo = FirebaseEmployeesRepository(firestore, functions: functions);
-      final code = await repo.createEmployeeInvite(
+      final credentials = await repo.createEmployeeAccount(
         name: 'A',
+        firstName: 'A',
+        lastName: '',
         email: 'A@B.com',
         phone: '',
         colorValue: '1',
+        jobTitle: 'technician',
+        isAdmin: false,
       );
 
-      expect(code, 'K7Q2-9MZ4-XR8T');
-      final captured = verify(
-        () => callable.call<dynamic>(captureAny<Object?>()),
-      ).captured.single;
-      expect(
-        (captured as Map).cast<String, dynamic>()['email'],
-        'a@b.com',
+      expect(credentials.email, 'a@b.com');
+      expect(credentials.password, 'Welcome123!');
+      final captured =
+          (verify(
+                    () => callable.call<dynamic>(captureAny<Object?>()),
+                  ).captured.single
+                  as Map)
+              .cast<String, dynamic>();
+      expect(captured['email'], 'a@b.com');
+      expect(captured['jobTitle'], 'technician');
+      expect(captured['firstName'], 'A');
+      expect(captured['isAdmin'], isFalse);
+    });
+
+    test('rejects a half-blank credential payload', () async {
+      // A blank half is unusable to the admin and would render an empty
+      // credential dialog — fail loudly rather than show nothing.
+      final callable = _MockHttpsCallable();
+      final result = _MockHttpsCallableResult();
+      when(
+        () => functions.httpsCallable(
+          any(that: equals('createEmployeeAccount')),
+          options: any(named: 'options'),
+        ),
+      ).thenReturn(callable);
+      when(() => result.data).thenReturn({'email': 'a@b.com', 'password': ''});
+      when(
+        () => callable.call<dynamic>(any<Object?>()),
+      ).thenAnswer((_) async => result);
+
+      final repo = FirebaseEmployeesRepository(firestore, functions: functions);
+      await expectLater(
+        repo.createEmployeeAccount(
+          name: 'A',
+          firstName: '',
+          lastName: '',
+          email: 'a@b.com',
+          phone: '',
+          colorValue: '1',
+          jobTitle: '',
+          isAdmin: false,
+        ),
+        throwsA(isA<EmployeesFailureUnknown>()),
       );
     });
 
@@ -152,7 +214,10 @@ void main() {
       () async {
         final callable = _MockHttpsCallable();
         when(
-          () => functions.httpsCallable('createEmployeeInvite'),
+          () => functions.httpsCallable(
+            any(that: equals('createEmployeeAccount')),
+            options: any(named: 'options'),
+          ),
         ).thenReturn(callable);
         when(() => callable.call<dynamic>(any<Object?>())).thenThrow(
           FirebaseFunctionsException(
@@ -165,11 +230,15 @@ void main() {
           functions: functions,
         );
         expect(
-          () => repo.createEmployeeInvite(
+          () => repo.createEmployeeAccount(
             name: 'A',
+            firstName: '',
+            lastName: '',
             email: 'a@b.com',
             phone: '',
             colorValue: '1',
+            jobTitle: '',
+            isAdmin: false,
           ),
           throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
         );
@@ -177,27 +246,137 @@ void main() {
     );
   });
 
-  group('redeemSignupCode', () {
-    test('forwards the code to the callable', () async {
-      final callable = _MockHttpsCallable();
-      final result = _MockHttpsCallableResult();
-      when(
-        () => functions.httpsCallable('redeemSignupCode'),
-      ).thenReturn(callable);
-      when(() => result.data).thenReturn({'role': 'employee', 'name': 'A'});
-      when(
-        () => callable.call<dynamic>(any<Object?>()),
-      ).thenAnswer((_) async => result);
+  /// Stubs [name] to a callable returning [data] and hands back the mock so
+  /// the payload can be captured.
+  _MockHttpsCallable stubCallable(String name, {Object? data}) {
+    final callable = _MockHttpsCallable();
+    final result = _MockHttpsCallableResult();
+    when(
+      () => functions.httpsCallable(
+        any(that: equals(name)),
+        options: any(named: 'options'),
+      ),
+    ).thenReturn(callable);
+    when(() => result.data).thenReturn(data);
+    when(
+      () => callable.call<dynamic>(any<Object?>()),
+    ).thenAnswer((_) async => result);
+    return callable;
+  }
 
-      final repo = FirebaseEmployeesRepository(firestore, functions: functions);
-      await repo.redeemSignupCode('K7Q2-9MZ4-XR8T');
+  _MockHttpsCallable stubFailingCallable(
+    String name,
+    FirebaseFunctionsException error,
+  ) {
+    final callable = _MockHttpsCallable();
+    when(
+      () => functions.httpsCallable(
+        any(that: equals(name)),
+        options: any(named: 'options'),
+      ),
+    ).thenReturn(callable);
+    when(() => callable.call<dynamic>(any<Object?>())).thenThrow(error);
+    return callable;
+  }
 
-      final captured = verify(
-        () => callable.call<dynamic>(captureAny<Object?>()),
-      ).captured.single;
-      expect(
-        (captured as Map).cast<String, dynamic>()['code'],
-        'K7Q2-9MZ4-XR8T',
+  /// captureAny() returns Map<Object, Object?>, so the direct generic cast
+  /// throws at runtime — go through Map first.
+  Map<String, dynamic> capturedPayload(_MockHttpsCallable callable) {
+    final captured = verify(
+      () => callable.call<dynamic>(captureAny<Object?>()),
+    ).captured.single;
+    return (captured as Map).cast<String, dynamic>();
+  }
+
+  group('completeEmployeeSetup', () {
+    test('always sends all five keys', () async {
+      // The server reads the strings leniently (empty == absent) and the flags
+      // as `=== true`, so a conditional payload shape would be a second thing
+      // to test for no benefit.
+      final callable = stubCallable('completeEmployeeSetup');
+
+      await repo().completeEmployeeSetup();
+
+      final captured = capturedPayload(callable);
+      expect(captured.keys, hasLength(5));
+      expect(captured['firstName'], '');
+      expect(captured['termsAccepted'], isFalse);
+      expect(captured['locationConsent'], isFalse);
+    });
+
+    test('carries the setup profile and both consent flags', () async {
+      final callable = stubCallable('completeEmployeeSetup');
+
+      await repo().completeEmployeeSetup(
+        firstName: 'Zoé',
+        lastName: 'Roy',
+        phone: '(514) 555-1234',
+        termsAccepted: true,
+        locationConsent: true,
+      );
+
+      final captured = capturedPayload(callable);
+      expect(captured['firstName'], 'Zoé');
+      expect(captured['lastName'], 'Roy');
+      expect(captured['phone'], '(514) 555-1234');
+      expect(captured['termsAccepted'], isTrue);
+      expect(captured['locationConsent'], isTrue);
+    });
+  });
+
+  group('deleteEmployeeAccount', () {
+    test('sends the doc id', () async {
+      final callable = stubCallable(
+        'deleteEmployeeAccount',
+        data: {'ok': true},
+      );
+
+      await repo().deleteEmployeeAccount('doc-1');
+
+      expect(capturedPayload(callable), {'docId': 'doc-1'});
+    });
+
+    test('maps account-not-pending to its own failure', () async {
+      stubFailingCallable(
+        'deleteEmployeeAccount',
+        FirebaseFunctionsException(
+          code: 'failed-precondition',
+          message: 'account-not-pending',
+        ),
+      );
+
+      await expectLater(
+        repo().deleteEmployeeAccount('doc-1'),
+        throwsA(isA<EmployeesFailureAccountNoLongerPending>()),
+      );
+    });
+
+    test('maps account-not-found to the same failure', () async {
+      // The admin needs the same thing said either way, and the live stream
+      // has already dropped or flipped the row.
+      stubFailingCallable(
+        'deleteEmployeeAccount',
+        FirebaseFunctionsException(
+          code: 'not-found',
+          message: 'account-not-found',
+        ),
+      );
+
+      await expectLater(
+        repo().deleteEmployeeAccount('doc-1'),
+        throwsA(isA<EmployeesFailureAccountNoLongerPending>()),
+      );
+    });
+
+    test('lets an unrelated failure escape unmapped', () async {
+      stubFailingCallable(
+        'deleteEmployeeAccount',
+        FirebaseFunctionsException(code: 'internal', message: 'boom'),
+      );
+
+      await expectLater(
+        repo().deleteEmployeeAccount('doc-1'),
+        throwsA(isA<FirebaseFunctionsException>()),
       );
     });
   });
@@ -213,10 +392,12 @@ void main() {
         expect(
           () => repo().updateEmployee(
             docId: 'my-id',
-            name: 'Alice',
-            email: 'alice@example.com',
-            phone: '555-1234',
-            colorValue: '0xFF0000FF',
+            employee: const EmployeeRecord(
+              id: 'my-id',
+              name: 'Alice',
+              email: 'alice@example.com',
+              phone: '555-1234',
+            ),
           ),
           throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
         );
@@ -228,20 +409,230 @@ void main() {
 
       await repo().updateEmployee(
         docId: 'my-id',
-        name: 'Alice',
-        email: 'alice@example.com',
-        phone: '555-1234',
-        colorValue: '0xFF0000FF',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Alice',
+          email: 'alice@example.com',
+          phone: '555-1234',
+        ),
       );
 
-      final captured =
-          (verify(
-                () => transaction.update(docRef, captureAny()),
-              ).captured.single
-              as Map)
-              .cast<String, dynamic>();
+      final captured = capturedUpdate();
       expect(captured.containsKey('updatedAt'), isTrue);
       expect(captured['email'], 'alice@example.com');
+    });
+
+    test('writes the P4 fields and never uid or status', () async {
+      when(() => snapshot.docs).thenReturn(const []);
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Theo Roy',
+          firstName: 'Theo',
+          lastName: 'Roy',
+          email: 'theo@x.com',
+          phone: '555-0100',
+          role: 'admin',
+          status: 'active',
+          uid: 'auth-uid-must-not-be-written',
+          jobTitle: JobTitle.leadTech,
+          maxJobsPerDay: 4,
+          onCall: true,
+        ),
+      );
+
+      final data = capturedUpdate();
+      expect(data['jobTitle'], 'lead_tech');
+      expect(data['firstName'], 'Theo');
+      expect(data['maxJobsPerDay'], 4);
+      expect(data['onCall'], isTrue);
+      expect(data['role'], 'admin');
+      expect(data.containsKey('uid'), isFalse);
+      expect(data.containsKey('status'), isFalse);
+    });
+
+    /// Makes the doc read report [uid], and makes the commit transaction see
+    /// [emailAfterCallable] — what the server leaves behind once it has moved
+    /// the email in both stores.
+    void stubStoredDoc({required String uid, String? emailAfterCallable}) {
+      when(
+        docSnapshot.data,
+      ).thenReturn({'email': 'old@example.com', 'uid': uid});
+      if (emailAfterCallable == null) return;
+      final txnSnapshot = _MockDocSnapshot();
+      when(txnSnapshot.data).thenReturn({'email': emailAfterCallable});
+      when(() => transaction.get(docRef)).thenAnswer((_) async => txnSnapshot);
+    }
+
+    test(
+      'routes an email change through the callable when a uid exists',
+      () async {
+        stubStoredDoc(uid: 'auth-uid', emailAfterCallable: 'new@example.com');
+        final callable = stubCallable(
+          'changeEmployeeEmail',
+          data: {'ok': true},
+        );
+
+        await repo().updateEmployee(
+          docId: 'my-id',
+          employee: const EmployeeRecord(
+            id: 'my-id',
+            name: 'Alice',
+            email: 'New@Example.com ',
+            uid: 'auth-uid',
+          ),
+        );
+
+        // Auth is the store that owns sign-in, so it must never be the one left
+        // behind — the callable moves both.
+        expect(capturedPayload(callable), {
+          'docId': 'my-id',
+          'email': 'new@example.com',
+        });
+      },
+    );
+
+    test('leaves the callable alone when the email is unchanged', () async {
+      stubStoredDoc(uid: 'auth-uid');
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Alice',
+          email: 'old@example.com',
+          uid: 'auth-uid',
+        ),
+      );
+
+      verifyNever(
+        () => functions.httpsCallable(any(), options: any(named: 'options')),
+      );
+    });
+
+    test('writes the email directly when the doc carries no uid', () async {
+      stubStoredDoc(uid: '');
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Alice',
+          email: 'new@example.com',
+        ),
+      );
+
+      // Nothing to join: no Auth account exists behind this doc yet.
+      verifyNever(
+        () => functions.httpsCallable(any(), options: any(named: 'options')),
+      );
+      expect(capturedUpdate()['email'], 'new@example.com');
+    });
+
+    test('surfaces the callable email-exists refusal as a typed failure', () {
+      stubStoredDoc(uid: 'auth-uid');
+      stubFailingCallable(
+        'changeEmployeeEmail',
+        FirebaseFunctionsException(
+          message: 'email-exists',
+          code: 'already-exists',
+        ),
+      );
+
+      expect(
+        () => repo().updateEmployee(
+          docId: 'my-id',
+          employee: const EmployeeRecord(
+            id: 'my-id',
+            name: 'Alice',
+            email: 'taken@example.com',
+            uid: 'auth-uid',
+          ),
+        ),
+        throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
+      );
+    });
+
+    test('saveEmergencyContact writes users/{id}/private/emergency', () async {
+      final privateCollection = _MockCollection();
+      final emergencyDoc = _MockDocRef();
+      when(() => docRef.collection('private')).thenReturn(privateCollection);
+      when(() => privateCollection.doc('emergency')).thenReturn(emergencyDoc);
+      when(() => emergencyDoc.set(any(), any())).thenAnswer((_) async {});
+
+      await repo().saveEmergencyContact(
+        'my-id',
+        const EmergencyContact(contact: '  Marie Roy ', phone: ' 555-0199 '),
+      );
+
+      // The path is the whole point: on the parent users doc this pair is
+      // readable by every active peer.
+      verify(() => collection.doc('my-id')).called(1);
+      verify(() => privateCollection.doc('emergency')).called(1);
+
+      final captured = verify(
+        () => emergencyDoc.set(captureAny(), any()),
+      ).captured.single;
+      final data = (captured as Map).cast<String, dynamic>();
+      expect(data['contact'], 'Marie Roy');
+      expect(data['phone'], '555-0199');
+      expect(data.containsKey('updatedAt'), isTrue);
+      // Only the three keys the rules allow — anything else is rejected.
+      expect(data.keys.toSet(), {'contact', 'phone', 'updatedAt'});
+    });
+
+    test('scrubs the legacy emergency pair off the parent users doc', () async {
+      when(() => snapshot.docs).thenReturn(const []);
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(id: 'my-id', name: 'Theo Roy'),
+      );
+
+      final data = capturedUpdate();
+      // They moved to users/{id}/private/emergency. A value left here by a
+      // pre-move build is still readable by every active peer, so each save
+      // deletes the keys rather than merely not writing them.
+      expect(data.containsKey('emergencyContact'), isTrue);
+      expect(data.containsKey('emergencyPhone'), isTrue);
+      expect(data['emergencyContact'], isA<FieldValue>());
+      expect(data['emergencyPhone'], isA<FieldValue>());
+    });
+
+    test('recomposes name from first and last', () async {
+      when(() => snapshot.docs).thenReturn(const []);
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Stale Name',
+          firstName: 'Theo',
+          lastName: 'Roy',
+          email: 'theo@x.com',
+        ),
+      );
+
+      expect(capturedUpdate()['name'], 'Theo Roy');
+    });
+
+    test('keeps the stored name when both halves are blank', () async {
+      when(() => snapshot.docs).thenReturn(const []);
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Legacy Single Name',
+          email: 'theo@x.com',
+        ),
+      );
+
+      // Never empty: watchAllUsers orders by name and Firestore drops docs
+      // missing the orderBy field.
+      expect(capturedUpdate()['name'], 'Legacy Single Name');
     });
 
     test('aborts when the target email changed under the uniqueness check', () {
@@ -258,10 +649,12 @@ void main() {
       expect(
         () => repo().updateEmployee(
           docId: 'my-id',
-          name: 'Alice',
-          email: 'alice@example.com',
-          phone: '555-1234',
-          colorValue: '0xFF0000FF',
+          employee: const EmployeeRecord(
+            id: 'my-id',
+            name: 'Alice',
+            email: 'alice@example.com',
+            phone: '555-1234',
+          ),
         ),
         throwsA(isA<EmployeesFailureUnknown>()),
       );
@@ -274,6 +667,51 @@ void main() {
       plugin: 'cloud_firestore',
       code: 'permission-denied',
     );
+
+    test(
+      'watchEmployees constrains role + active status and bounds the stream',
+      () async {
+        when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+        repo().watchEmployees().listen((_) {});
+        // retryStream builds the query on subscribe, one microtask later.
+        await Future<void>.delayed(Duration.zero);
+
+        // These constraints are not an optimization. For a LIST query Firestore
+        // evaluates the rules against the query's constraints, not the docs, so
+        // dropping the status filter doesn't return extra rows — it rejects the
+        // whole query with permission-denied, which surfaces as an empty
+        // employee picker and silently changes who can be assigned a visit.
+        verify(
+          () => collection.where('role', whereIn: ['employee', 'admin']),
+        ).called(1);
+        verify(() => query.where('status', isEqualTo: 'active')).called(1);
+        verify(() => query.limit(500)).called(1);
+      },
+    );
+
+    test(
+      'watchAssignableUsers constrains active status and bounds the stream',
+      () async {
+        when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+        repo().watchAssignableUsers().listen((_) {});
+        // retryStream builds the query on subscribe, one microtask later.
+        await Future<void>.delayed(Duration.zero);
+
+        verify(() => collection.where('status', isEqualTo: 'active')).called(1);
+        verify(() => query.limit(500)).called(1);
+      },
+    );
+
+    test('watchAllUsers orders by name and bounds the stream', () async {
+      when(() => collection.orderBy(any())).thenReturn(query);
+      when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+      repo().watchAllUsers().listen((_) {});
+      // retryStream builds the query on subscribe, one microtask later.
+      await Future<void>.delayed(Duration.zero);
+
+      verify(() => collection.orderBy('name')).called(1);
+      verify(() => query.limit(500)).called(1);
+    });
 
     test('watchEmployees resubscribes past a permission-denied error', () {
       fakeAsync((async) {
@@ -317,10 +755,12 @@ void main() {
 
         final emissions = <Map<String, dynamic>>[];
         Object? error;
-        repo().watchUserDoc('uid-1').listen(
-          emissions.add,
-          onError: (Object e) => error = e,
-        );
+        repo()
+            .watchUserDoc('uid-1')
+            .listen(
+              emissions.add,
+              onError: (Object e) => error = e,
+            );
 
         async.elapse(const Duration(seconds: 1));
         expect(subscriptions, 2);
@@ -342,10 +782,12 @@ void main() {
         });
 
         Object? error;
-        repo().watchUserDoc('uid-1').listen(
-          (_) {},
-          onError: (Object e) => error = e,
-        );
+        repo()
+            .watchUserDoc('uid-1')
+            .listen(
+              (_) {},
+              onError: (Object e) => error = e,
+            );
 
         async.elapse(const Duration(seconds: 5));
         expect(subscriptions, 1);

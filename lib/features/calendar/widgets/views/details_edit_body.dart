@@ -1,18 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/animations/animated_loading_button.dart';
+import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/utils/adaptive_pickers.dart';
+import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
+import 'package:scheduling/features/calendar/domain/series_outlook.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
+import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
@@ -20,6 +25,7 @@ import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_ho
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/sheets/form_sheet_frame.dart';
 
 class DetailsEditBody extends ConsumerStatefulWidget {
   const DetailsEditBody({
@@ -49,8 +55,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     super.dispose();
   }
 
-  // Mirrors the add sheet: debounce so the comprehensive client search doesn't
-  // fire a Firestore read on every keystroke.
+  // Debounce so comprehensive client search doesn't fire a Firestore read on every keystroke.
   void _onClientSearchChanged(String query) {
     final notifier = ref.read(
       eventDetailsControllerProvider(
@@ -67,7 +72,6 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final appointment = widget.appointment;
     final controllers = widget.controllers;
     final provider = eventDetailsControllerProvider(
@@ -77,19 +81,19 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     final notifier = ref.read(provider.notifier);
     final allEmployees =
         ref.watch(employeesStreamProvider).asData?.value ?? const [];
+    // One length feeds both the flag and the label, so they can't disagree:
+    // the run-length string is a plain interpolation, and a multi-day flag
+    // paired with a length of 1 would render "1 days".
+    final rawSpan = calendarDaysBetween(state.selectedDate, state.endDate) + 1;
+    final spanLength = rawSpan < 1 ? 1 : rawSpan;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return FormSheetFrame(
+      title: context.l10n.calendar_editAppointment,
+      primaryLabel: context.l10n.common_saveChanges,
+      isBusy: state.isSaving,
+      onPrimary: () => _save(context, ref),
+      onCancel: widget.onClose,
       children: [
-        // --- Header ---
-        Text(
-          context.l10n.calendar_editAppointment,
-          style: theme.textTheme.headlineLarge,
-        ),
-        const SizedBox(height: AppSpacing.sp16),
-        const Divider(height: 1),
-        const SizedBox(height: AppSpacing.sp16),
-        // --- Shared form fields ---
         AppointmentFormFields(
           controllers: controllers,
           allEmployees: allEmployees,
@@ -99,6 +103,15 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           selectedEmployees: state.selectedEmployees,
           repeat: state.repeat,
           useCustomAddress: state.useCustomAddress,
+          isPersonal: state.isPersonal,
+          isAllDay: state.isAllDay,
+          onAllDayChanged: (value) => notifier.setAllDay(value: value),
+          // Offered only on a job that was already personal, so an ordinary
+          // client visit can't be converted mid-life (which would wipe its
+          // client and address).
+          onPersonalChanged: appointment.isPersonal
+              ? (value) => notifier.setPersonal(value: value)
+              : null,
           errors: state.errors,
           employeeLabel: context.l10n.calendar_assignedEmployee,
           employeeRequired: false,
@@ -111,6 +124,12 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           onRequestAddClient: requestAddClient,
           onToggleEmployee: notifier.toggleEmployee,
           onPickDate: () => _pickDate(context, state, notifier),
+          onPickEndDate: () => _pickEndDate(context, state, notifier),
+          isMultiDay: spanLength > 1,
+          isOvernight:
+              !state.isAllDay &&
+              isOvernightWindow(state.selectedStartTime, state.selectedEndTime),
+          spanLength: spanLength,
           onPickStartTime: () => _pickStartTime(context, state, notifier),
           onPickEndTime: () => _pickEndTime(context, state, notifier),
           onSelectRepeat: notifier.selectRepeat,
@@ -119,10 +138,9 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           photosSection: _EditPhotosSection(appointment: appointment),
         ),
         const SizedBox(height: AppSpacing.sp24),
-        // --- Actions ---
-        _ActionButtons(
+        // Destructive actions live in the footer, never in the bar.
+        _DeleteButton(
           isSaving: state.isSaving,
-          onSave: () => _save(context, ref),
           onDelete: () => _confirmDelete(context, ref),
         ),
       ],
@@ -140,9 +158,37 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       firstDate: AppointmentDraftDefaults.datePickerFirstDate,
       lastDate: AppointmentDraftDefaults.datePickerLastDate,
     );
-    if (picked == null) return;
+    if (picked == null || !context.mounted) return;
     widget.controllers.date.text = DateUtilsHelper.formatDate(picked);
     notifier.selectDate(picked);
+    // selectDate shifts the end date to preserve the run's length, and the end
+    // row renders the controller text — so it has to follow, or it goes stale.
+    final shifted = ref
+        .read(
+          eventDetailsControllerProvider(EventDetailsKey(widget.appointment)),
+        )
+        .endDate;
+    widget.controllers.endDate.text = DateUtilsHelper.formatDate(shifted);
+  }
+
+  Future<void> _pickEndDate(
+    BuildContext context,
+    EventDetailsState state,
+    EventDetailsController notifier,
+  ) async {
+    final picked = await showAdaptiveDatePicker(
+      context,
+      initialDate: state.endDate,
+      // Never offer a date before the start: an end date that precedes it is
+      // unbookable, so it shouldn't be reachable in the picker either. Floored
+      // to midnight — the seeded start carries the record's clock time, which
+      // would otherwise sit after the end date on the run's first day.
+      firstDate: state.selectedDate.dateOnly,
+      lastDate: AppointmentDraftDefaults.datePickerLastDate,
+    );
+    if (picked == null || !context.mounted) return;
+    widget.controllers.endDate.text = DateUtilsHelper.formatDate(picked);
+    notifier.selectEndDate(picked);
   }
 
   Future<void> _pickStartTime(
@@ -173,6 +219,24 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     notifier.selectEndTime(picked);
   }
 
+  /// The occurrences a "this and all future" save would touch. A failed count
+  /// must never block the edit, so this degrades to an empty outlook and the
+  /// dialog just renders without its consequence lines.
+  Future<({int count, DateTime? last})> _seriesOutlook(
+    WidgetRef ref,
+    AppointmentRecord appointment,
+  ) async {
+    try {
+      final series = await ref
+          .read(appointmentsRepositoryProvider)
+          .getSeries(appointment.seriesId);
+      return seriesOutlook(series, appointment.startTime);
+    } on Object catch (e, st) {
+      ref.read(loggerProvider).warn('APPT-SAVE series outlook failed', e, st);
+      return (count: 0, last: null);
+    }
+  }
+
   Future<void> _save(BuildContext context, WidgetRef ref) async {
     final appointment = widget.appointment;
     final provider = eventDetailsControllerProvider(
@@ -180,22 +244,44 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     );
     final notifier = ref.read(provider.notifier);
 
-    // Editing a repeating visit asks whether to apply the changes to this
-    // visit only or to this and the future visits — mirroring delete. Changing
-    // the repeat rule itself always rewrites the series, so it skips the prompt.
+    // Editing a repeating visit asks whether the change should apply to just
+    // this visit or to future ones too, same as delete does. But if the
+    // repeat rule itself is what changed, we skip that prompt and just
+    // rewrite the whole series.
     final state = ref.read(provider);
     if (state.isSaving) return; // a save (or its prompt) is already in flight
     var applyToSeries = false;
     if (appointment.seriesId.isNotEmpty && state.repeat == state.savedRepeat) {
       // Busy the form while the prompt is open so a second tap can't stack a
-      // duplicate dialog; reset before save() takes over the flag.
+      // duplicate dialog. We reset it below before save() takes over the flag.
       notifier.setSaving(busy: true);
+      // One extra read per series edit — an admin action — so the dialog's
+      // consequence line and button count are true rather than decorative.
+      final outlook = await _seriesOutlook(ref, appointment);
+      if (!context.mounted) {
+        notifier.setSaving(busy: false);
+        return;
+      }
       final choice = await showSeriesScopeDialog(
         context,
-        title: context.l10n.calendar_editAppointment,
-        message: context.l10n.calendar_editSeriesScopeMessage,
+        title: context.l10n.calendar_applyChangesTo,
+        contextLabel: context.l10n.calendar_repeatsEveryLabel(
+          repeatIntervalLabel(context.l10n, state.repeat).toUpperCase(),
+        ),
         thisOnlyLabel: context.l10n.calendar_editThisVisitOnly,
         thisAndFutureLabel: context.l10n.calendar_editThisAndFutureVisits,
+        thisOnlyDetail: context.l10n.calendar_thisVisitKeepsSeries(
+          DateUtilsHelper.formatDate(appointment.startTime),
+        ),
+        thisAndFutureDetail: outlook.last == null
+            ? null
+            : context.l10n.calendar_remainingVisitsThrough(
+                outlook.count,
+                DateUtilsHelper.formatDate(outlook.last!),
+              ),
+        primaryLabelFor: (choice) => choice == SeriesScopeChoice.thisOnly
+            ? context.l10n.calendar_saveThisVisit
+            : context.l10n.calendar_saveNVisits(outlook.count),
       );
       // Reset before the mounted guard — the notifier is context-free, and
       // bailing while still busy would wedge a surviving controller.
@@ -204,17 +290,42 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       applyToSeries = choice == SeriesScopeChoice.thisAndFuture;
     }
 
-    final outcome = await notifier.save(
-      appointment,
-      title: widget.controllers.title.text,
-      address: AddressParser.toCanonical(widget.controllers.address.text),
-      notes: widget.controllers.notes.text,
-      materialsNeeded: widget.controllers.materials.text,
-      applyToSeries: applyToSeries,
-    );
+    // An unnamed personal block saves as "Personal" — same rule as the add
+    // flow, since the stored title is what every read surface falls back to.
+    final title =
+        widget.controllers.title.text.trim().isEmpty && state.isPersonal
+        ? context.l10n.calendar_personal
+        : widget.controllers.title.text;
+
+    Future<EventDetailsSaveOutcome> attempt({bool forceBusy = false}) =>
+        notifier.save(
+          appointment,
+          title: title,
+          address: AddressParser.toCanonical(widget.controllers.address.text),
+          notes: widget.controllers.notes.text,
+          materialsNeeded: widget.controllers.materials.text,
+          applyToSeries: applyToSeries,
+          forceBusy: forceBusy,
+        );
+
+    var outcome = await attempt();
     if (!context.mounted) return;
+    if (outcome is EventDetailsBusyEmployees) {
+      final confirmed = await showBusyConflictDialog(
+        context,
+        busyEmployees: outcome.busyEmployees,
+        start: outcome.start,
+        end: outcome.end,
+      );
+      if (!confirmed || !context.mounted) return;
+      outcome = await attempt(forceBusy: true);
+      if (!context.mounted) return;
+    }
     switch (outcome) {
       case EventDetailsInvalid():
+        return;
+      // Already resolved above; the dialog either forced a retry or bailed.
+      case EventDetailsBusyEmployees():
         return;
       case EventDetailsSaved(
         :final appointment,
@@ -239,7 +350,6 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
               composeErrorNotice(
                 context,
                 intro: context.l10n.error_introSaveAppointment,
-                tag: 'APPT-SAVE',
                 error: error,
               ),
             );
@@ -273,7 +383,6 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
             composeErrorNotice(
               context,
               intro: context.l10n.error_introDeleteAppointment,
-              tag: 'APPT-DEL',
               error: error,
             ),
           );
@@ -281,40 +390,21 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
   }
 }
 
-class _ActionButtons extends StatelessWidget {
-  const _ActionButtons({
-    required this.isSaving,
-    required this.onSave,
-    required this.onDelete,
-  });
+class _DeleteButton extends StatelessWidget {
+  const _DeleteButton({required this.isSaving, required this.onDelete});
 
   final bool isSaving;
-  final VoidCallback onSave;
   final VoidCallback onDelete;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AnimatedLoadingButton(
-          label: context.l10n.common_saveChanges,
-          isLoading: isSaving,
-          onPressed: onSave,
-          height: 48,
-        ),
-        const SizedBox(height: AppSpacing.sp8),
-        OutlinedButton(
-          style: destructiveOutlinedButtonStyle(
-            context,
-            minimumSize: const Size(double.infinity, 48),
-          ),
-          onPressed: isSaving ? null : onDelete,
-          child: Text(context.l10n.calendar_deleteAppointment),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => OutlinedButton(
+    style: destructiveOutlinedButtonStyle(
+      context,
+      minimumSize: const Size(double.infinity, 48),
+    ),
+    onPressed: isSaving ? null : onDelete,
+    child: Text(context.l10n.calendar_deleteAppointment),
+  );
 }
 
 class _EditPhotosSection extends ConsumerWidget {

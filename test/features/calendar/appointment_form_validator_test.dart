@@ -15,6 +15,8 @@ AppointmentFormInput _input({
   TimeOfDay? endTime,
   ClientRecord? client = _aClient,
   List<EmployeeRecord> employees = const [_anEmployee],
+  bool isPersonal = false,
+  bool isAllDay = false,
 }) {
   return AppointmentFormInput(
     title: title,
@@ -23,6 +25,8 @@ AppointmentFormInput _input({
     endTime: endTime ?? const TimeOfDay(hour: 11, minute: 0),
     client: client,
     selectedEmployees: employees,
+    isPersonal: isPersonal,
+    isAllDay: isAllDay,
   );
 }
 
@@ -32,11 +36,30 @@ void main() {
       expect(AppointmentFormValidator.validate(_input()), isEmpty);
     });
 
+    test('an all-day block ignores stale times left over from before', () {
+      // Regression: times picked BEFORE all-day was switched on stay in
+      // state; the validator must not raise a time error against rows that
+      // are no longer on screen.
+      final errors = AppointmentFormValidator.validate(
+        _input(
+          isPersonal: true,
+          isAllDay: true,
+          client: null,
+          startTime: const TimeOfDay(hour: 9, minute: 0),
+          endTime: const TimeOfDay(hour: 9, minute: 0),
+        ),
+      );
+      expect(errors, isEmpty);
+    });
+
     test('reports titleRequired on empty / whitespace title', () {
       for (final t in ['', '   ', '\t']) {
         final errors = AppointmentFormValidator.validate(_input(title: t));
-        expect(errors['title'], AppointmentFormError.titleRequired,
-            reason: 'title=${t.codeUnits}');
+        expect(
+          errors['title'],
+          AppointmentFormError.titleRequired,
+          reason: 'title=${t.codeUnits}',
+        );
       }
     });
 
@@ -70,9 +93,23 @@ void main() {
     });
 
     test('clientRequired when client is null', () {
-      final errors =
-          AppointmentFormValidator.validate(_input(client: null));
+      final errors = AppointmentFormValidator.validate(_input(client: null));
       expect(errors['client'], AppointmentFormError.clientRequired);
+    });
+
+    test('a personal job needs no client', () {
+      final errors = AppointmentFormValidator.validate(
+        _input(client: null, isPersonal: true),
+      );
+      expect(errors, isEmpty);
+    });
+
+    test('a personal job still needs its assignees', () {
+      final errors = AppointmentFormValidator.validate(
+        _input(client: null, employees: const [], isPersonal: true),
+      );
+      expect(errors['employees'], AppointmentFormError.employeesRequired);
+      expect(errors.containsKey('client'), isFalse);
     });
 
     test('employeesRequired when no employees selected', () {
@@ -82,32 +119,16 @@ void main() {
       expect(errors['employees'], AppointmentFormError.employeesRequired);
     });
 
-    test('overnight appointment (end < start) is valid (auto-bumped)', () {
+    test('overnight appointment (end < start) is valid', () {
       final errors = AppointmentFormValidator.validate(
         _input(
           startTime: const TimeOfDay(hour: 23, minute: 0),
           endTime: const TimeOfDay(hour: 1, minute: 0),
         ),
       );
-      // end 1am is after start 11pm via the next-day bump in
-      // combineEndDateAndTime, so no error.
+      // The validator no longer checks end-vs-start ordering — appointmentSpan
+      // owns the overnight roll-over at save time.
       expect(errors, isEmpty);
-    });
-
-    test('end equal to start triggers endTimeMustBeAfterStart', () {
-      // Equal times must NOT get the overnight next-day bump (that would
-      // silently book a ~24h appointment) — they surface the validation
-      // error instead.
-      final errors = AppointmentFormValidator.validate(
-        _input(
-          startTime: const TimeOfDay(hour: 9, minute: 0),
-          endTime: const TimeOfDay(hour: 9, minute: 0),
-        ),
-      );
-      expect(
-        errors['endTime'],
-        AppointmentFormError.endTimeMustBeAfterStart,
-      );
     });
 
     test('reports multiple errors at once', () {
@@ -142,40 +163,193 @@ void main() {
     });
   });
 
-  group('combineEndDateAndTime', () {
-    test('returns same-day end when after start', () {
-      final r = combineEndDateAndTime(
-        DateTime(2026, 5, 10),
-        const TimeOfDay(hour: 11, minute: 0),
-        const TimeOfDay(hour: 9, minute: 0),
+  group('allDaySpan / appointmentSpan', () {
+    test('an all-day block spans midnight to 23:59 of the same date', () {
+      // Real instants, not sentinels — every range query and the overdue
+      // sweep keep treating it as an ordinary appointment.
+      final span = allDaySpan(
+        DateTime(2026, 5, 10, 14, 37),
+        DateTime(2026, 5, 10, 14, 37),
       );
-      expect(r, DateTime(2026, 5, 10, 11));
+
+      expect(span.start, DateTime(2026, 5, 10));
+      expect(span.end, DateTime(2026, 5, 10, 23, 59));
     });
 
-    test('bumps to next day only when end is strictly before start', () {
-      final r = combineEndDateAndTime(
-        DateTime(2026, 5, 10),
-        const TimeOfDay(hour: 1, minute: 0),
-        const TimeOfDay(hour: 23, minute: 0),
+    test('appointmentSpan picks the all-day pair and ignores the times', () {
+      // Times picked before the switch was flipped stay in state, so they must
+      // not leak into the stored span.
+      final span = appointmentSpan(
+        date: DateTime(2026, 5, 10),
+        endDate: DateTime(2026, 5, 10),
+        isAllDay: true,
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 11, minute: 0),
       );
-      expect(r, DateTime(2026, 5, 11, 1));
+
+      expect(span.start, DateTime(2026, 5, 10));
+      expect(span.end, DateTime(2026, 5, 10, 23, 59));
     });
 
-    test('keeps a same-day end when end equals start (no 24h bump)', () {
-      final r = combineEndDateAndTime(
-        DateTime(2026, 5, 10),
-        const TimeOfDay(hour: 9, minute: 0),
-        const TimeOfDay(hour: 9, minute: 0),
+    test('appointmentSpan uses the picked times when not all-day', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 5, 10),
+        endDate: DateTime(2026, 5, 10),
+        isAllDay: false,
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 11, minute: 30),
       );
-      expect(r, DateTime(2026, 5, 10, 9));
+
+      expect(span.start, DateTime(2026, 5, 10, 9));
+      expect(span.end, DateTime(2026, 5, 10, 11, 30));
     });
 
-    test('returns same-day end when no startTime supplied', () {
-      final r = combineEndDateAndTime(
-        DateTime(2026, 5, 10),
-        const TimeOfDay(hour: 9, minute: 0),
+    test('an end before the start rolls to the next day', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 5, 10),
+        endDate: DateTime(2026, 5, 10),
+        isAllDay: false,
+        startTime: const TimeOfDay(hour: 22, minute: 0),
+        endTime: const TimeOfDay(hour: 1, minute: 0),
       );
-      expect(r, DateTime(2026, 5, 10, 9));
+
+      expect(span.end.day, 11);
+    });
+  });
+
+  group('appointmentSpan', () {
+    test('a same-day job spans the picked times', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 8),
+        endDate: DateTime(2026, 8),
+        isAllDay: false,
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 17, minute: 0),
+      );
+      expect(span.start, DateTime(2026, 8, 1, 9));
+      expect(span.end, DateTime(2026, 8, 1, 17));
+    });
+
+    test('a multi-day job ends on the end date at the end time', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 8),
+        endDate: DateTime(2026, 8, 5),
+        isAllDay: false,
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 17, minute: 0),
+      );
+      expect(span.start, DateTime(2026, 8, 1, 9));
+      expect(span.end, DateTime(2026, 8, 5, 17));
+    });
+
+    test('a night shift ends the morning after the last night', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 8),
+        endDate: DateTime(2026, 8, 3),
+        isAllDay: false,
+        startTime: const TimeOfDay(hour: 22, minute: 0),
+        endTime: const TimeOfDay(hour: 6, minute: 0),
+      );
+      expect(span.start, DateTime(2026, 8, 1, 22));
+      expect(span.end, DateTime(2026, 8, 4, 6));
+    });
+
+    test('an all-day run spans midnight to 23:59 of the end date', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 8, 10),
+        endDate: DateTime(2026, 8, 14),
+        isAllDay: true,
+      );
+      expect(span.start, DateTime(2026, 8, 10));
+      expect(span.end, DateTime(2026, 8, 14, 23, 59));
+    });
+
+    test('equal start and end times read as a continuous 24-hour window', () {
+      final span = appointmentSpan(
+        date: DateTime(2026, 8),
+        endDate: DateTime(2026, 8, 3),
+        isAllDay: false,
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 9, minute: 0),
+      );
+      expect(span.end, DateTime(2026, 8, 4, 9));
+    });
+  });
+
+  group('span validation', () {
+    Map<String, AppointmentFormError> run({
+      required DateTime date,
+      required DateTime endDate,
+    }) => AppointmentFormValidator.validate(
+      AppointmentFormInput(
+        title: 'Repipe',
+        date: date,
+        endDate: endDate,
+        startTime: const TimeOfDay(hour: 9, minute: 0),
+        endTime: const TimeOfDay(hour: 17, minute: 0),
+        client: null,
+        selectedEmployees: const [],
+        isPersonal: true,
+      ),
+    );
+
+    test('rejects an end date before the start date', () {
+      final errors = run(
+        date: DateTime(2026, 8, 5),
+        endDate: DateTime(2026, 8),
+      );
+      expect(errors['endDate'], AppointmentFormError.endDateBeforeStart);
+    });
+
+    test('accepts a span of exactly 14 days', () {
+      final errors = run(
+        date: DateTime(2026, 8),
+        endDate: DateTime(2026, 8, 14),
+      );
+      expect(errors['endDate'], isNull);
+    });
+
+    test('rejects a span of 15 days', () {
+      final errors = run(
+        date: DateTime(2026, 8),
+        endDate: DateTime(2026, 8, 15),
+      );
+      expect(errors['endDate'], AppointmentFormError.spanTooLong);
+    });
+
+    test(
+      'accepts an end time before the start time — that is a night shift',
+      () {
+        final errors = AppointmentFormValidator.validate(
+          AppointmentFormInput(
+            title: 'Nuit',
+            date: DateTime(2026, 8),
+            endDate: DateTime(2026, 8, 3),
+            startTime: const TimeOfDay(hour: 22, minute: 0),
+            endTime: const TimeOfDay(hour: 6, minute: 0),
+            client: null,
+            selectedEmployees: const [],
+            isPersonal: true,
+          ),
+        );
+        expect(errors['endTime'], isNull);
+        expect(errors['endDate'], isNull);
+      },
+    );
+
+    test('a null end date is read as same-day and raises nothing', () {
+      final errors = AppointmentFormValidator.validate(
+        AppointmentFormInput(
+          title: 'Repipe',
+          date: DateTime(2026, 8),
+          startTime: const TimeOfDay(hour: 9, minute: 0),
+          endTime: const TimeOfDay(hour: 17, minute: 0),
+          client: null,
+          selectedEmployees: const [],
+          isPersonal: true,
+        ),
+      );
+      expect(errors['endDate'], isNull);
     });
   });
 }

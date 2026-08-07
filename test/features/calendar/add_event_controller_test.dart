@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
@@ -73,6 +75,8 @@ void main() {
         appointmentsRepositoryProvider.overrideWithValue(appointments),
         clientsRepositoryProvider.overrideWithValue(clients),
         appointmentImageUploadProvider.overrideWithValue(uploader),
+        // Online by default here — the offline test below builds its own.
+        isOfflineProvider.overrideWithValue(false),
       ],
     );
     addTearDown(container.dispose);
@@ -106,6 +110,52 @@ void main() {
         ..selectEndTime(const TimeOfDay(hour: 14, minute: 0))
         ..selectStartTime(const TimeOfDay(hour: 11, minute: 0));
       expect(readState().selectedEndTime, const TimeOfDay(hour: 14, minute: 0));
+    });
+  });
+
+  group('end date', () {
+    test('mirrors the start date until it is touched', () {
+      final c = readNotifier()..selectDate(DateTime(2026, 8));
+      expect(readState().endDate, DateTime(2026, 8));
+
+      c.selectDate(DateTime(2026, 8, 4));
+      expect(readState().endDate, DateTime(2026, 8, 4));
+    });
+
+    test(
+      'once touched, moving the start shifts the end by the same days',
+      () {
+        final c = readNotifier()
+          ..selectDate(DateTime(2026, 8))
+          ..selectEndDate(DateTime(2026, 8, 5));
+        expect(readState().endDateTouched, isTrue);
+
+        c.selectDate(DateTime(2026, 8, 3));
+        expect(readState().endDate, DateTime(2026, 8, 7));
+      },
+    );
+
+    test(
+      'a start date moved past a touched end date drags the end along',
+      () {
+        readNotifier()
+          ..selectDate(DateTime(2026, 8))
+          ..selectEndDate(DateTime(2026, 8, 2))
+          ..selectDate(DateTime(2026, 8, 10));
+        expect(readState().endDate, DateTime(2026, 8, 11));
+      },
+    );
+
+    test('selectEndDate clears any endDate error', () async {
+      final c = readNotifier()
+        ..selectDate(DateTime(2026, 8, 5))
+        // Before the start date, so validate() flags it once submit() runs.
+        ..selectEndDate(DateTime(2026, 8));
+      await c.submit(title: '', address: '', notes: '', materialsNeeded: '');
+      expect(readState().errors.containsKey('endDate'), isTrue);
+
+      c.selectEndDate(DateTime(2026, 8, 10));
+      expect(readState().errors.containsKey('endDate'), isFalse);
     });
   });
 
@@ -163,6 +213,38 @@ void main() {
       await first;
       expect(readState().clientResults, [bClient]);
       expect(readState().isSearchingClient, isFalse);
+    });
+  });
+
+  group('selectClient', () {
+    test('picking a normal client leaves the address in client mode', () {
+      readNotifier().selectClient(_aClient);
+      expect(readState().selectedClient, _aClient);
+      expect(readState().clientResults, isEmpty);
+      // _aClient has a real address, so the custom-address toggle stays off.
+      expect(readState().useCustomAddress, isFalse);
+    });
+
+    test('picking a no-fixed-address client seeds the custom address on', () {
+      const nomad = ClientRecord(
+        id: 'c9',
+        name: 'Nomad',
+        phone: '555-0009',
+        noFixedAddress: true,
+      );
+      readNotifier().selectClient(nomad);
+      expect(readState().useCustomAddress, isTrue);
+    });
+
+    test('picking a client with a blank address seeds custom address on', () {
+      const blank = ClientRecord(
+        id: 'c8',
+        name: 'Blank',
+        phone: '555-0008',
+        address: '   ',
+      );
+      readNotifier().selectClient(blank);
+      expect(readState().useCustomAddress, isTrue);
     });
   });
 
@@ -234,13 +316,92 @@ void main() {
       expect(saved.status, 'pending');
 
       verify(() => appointments.addAppointment(any())).called(1);
-      // No images selected — uploader should not run.
+      // No images were selected, so the uploader should never run.
       verifyNever(
         () => uploader.uploadInBackground(
           appointmentId: any(named: 'appointmentId'),
           newImages: any(named: 'newImages'),
         ),
       );
+    });
+
+    test('a personal job saves with no client, no address, all day', () async {
+      final c = readNotifier()
+        ..selectDate(DateTime(2026, 5, 10))
+        ..selectClient(_aClient)
+        ..setPersonal(value: true)
+        ..toggleEmployee(_employeeA);
+
+      // No times were picked, so the block runs the whole day.
+      expect(readState().isAllDay, isTrue);
+      expect(readState().selectedClient, isNull);
+
+      final outcome = await c.submit(
+        title: 'Dentist',
+        // Whatever the (now hidden) address field still holds is dropped.
+        address: '999 Maple',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(outcome, isA<AddEventSubmitted>());
+      final saved = (outcome as AddEventSubmitted).appointment;
+      expect(saved.isPersonal, isTrue);
+      expect(saved.isAllDay, isTrue);
+      expect(saved.clientId, isEmpty);
+      expect(saved.clientName, isEmpty);
+      expect(saved.address, isEmpty);
+      expect(saved.startTime, DateTime(2026, 5, 10));
+      expect(saved.endTime, DateTime(2026, 5, 10, 23, 59));
+      expect(saved.status, 'pending');
+    });
+
+    test('a personal job with times keeps them', () async {
+      final c = readNotifier()
+        ..selectDate(DateTime(2026, 5, 10))
+        ..selectStartTime(const TimeOfDay(hour: 9, minute: 0))
+        ..setPersonal(value: true)
+        ..toggleEmployee(_employeeA);
+
+      // A time was already picked, so it does not silently become all-day.
+      expect(readState().isAllDay, isFalse);
+
+      final outcome = await c.submit(
+        title: 'Dentist',
+        address: '',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      final saved = (outcome as AddEventSubmitted).appointment;
+      expect(saved.isAllDay, isFalse);
+      expect(saved.startTime, DateTime(2026, 5, 10, 9));
+    });
+
+    test(
+      'turning Personal on with no times picked still defaults to all-day',
+      () {
+        readNotifier().setPersonal(value: true);
+        expect(readState().isAllDay, isTrue);
+      },
+    );
+
+    test('turning Personal off KEEPS an explicitly set all-day', () {
+      // Retired invariant: all-day used to be personal-only, so turning
+      // Personal off cleared it. The switch is on every job now, so the flag
+      // stays — clearing it would discard a deliberate choice.
+      readNotifier()
+        ..setPersonal(value: true)
+        ..setAllDay(value: true)
+        ..setPersonal(value: false);
+      expect(readState().isAllDay, isTrue);
+    });
+
+    test('turning a draft personal clears a chosen repeat', () async {
+      readNotifier()
+        ..selectRepeat(RepeatInterval.oneYear)
+        ..setPersonal(value: true);
+      expect(readState().repeat, RepeatInterval.none);
     });
 
     test('skips busy check on forceBusy and writes the appointment', () async {
@@ -291,7 +452,8 @@ void main() {
       );
 
       expect(outcome, isA<AddEventSubmitted>());
-      // 60-month horizon / 4 = 15 future visits, booked across five years.
+      // A 60-month horizon at every 4 months works out to 15 future visits,
+      // spread across five years.
       expect((outcome as AddEventSubmitted).futureBookings, 15);
 
       final captured = verify(
@@ -334,6 +496,49 @@ void main() {
 
         expect(outcome, isA<AddEventFailed>());
         expect(readState().isSubmitting, isFalse);
+      },
+    );
+
+    test(
+      'offline fails fast without touching the repo or the busy flag',
+      () async {
+        final offline = ProviderContainer(
+          overrides: [
+            appointmentsRepositoryProvider.overrideWithValue(appointments),
+            clientsRepositoryProvider.overrideWithValue(clients),
+            appointmentImageUploadProvider.overrideWithValue(uploader),
+            isOfflineProvider.overrideWithValue(true),
+          ],
+        );
+        addTearDown(offline.dispose);
+        final c = offline.read(addEventControllerProvider(null).notifier)
+          ..selectDate(DateTime(2026, 5, 10))
+          ..selectStartTime(const TimeOfDay(hour: 9, minute: 0))
+          ..selectEndTime(const TimeOfDay(hour: 10, minute: 0))
+          ..selectClient(_aClient)
+          ..toggleEmployee(_employeeA);
+
+        final outcome = await c.submit(
+          title: 'Leak fix',
+          address: '999 Maple',
+          notes: '',
+          materialsNeeded: '',
+        );
+
+        expect(outcome, isA<AddEventFailed>());
+        expect((outcome as AddEventFailed).error, isA<SocketException>());
+        verifyNever(() => appointments.addAppointment(any()));
+        verifyNever(
+          () => appointments.findBusyEmployees(
+            candidates: any(named: 'candidates'),
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+          ),
+        );
+        expect(
+          offline.read(addEventControllerProvider(null)).isSubmitting,
+          isFalse,
+        );
       },
     );
   });

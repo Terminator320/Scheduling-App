@@ -7,6 +7,12 @@ abstract class AppointmentsRepository {
 
   Future<AppointmentRecord?> getAppointmentById(String id);
 
+  /// How many not-yet-started jobs this employee is still assigned to.
+  ///
+  /// Backs the disable-confirmation caption. An aggregate `count()` rather than
+  /// a fetch — nothing needs the documents, only the number.
+  Future<int> countFutureAssignments(String employeeId);
+
   Future<void> addAppointment(AppointmentRecord appointment);
 
   /// Creates every appointment in [appointments] atomically (all-or-nothing).
@@ -15,8 +21,8 @@ abstract class AppointmentsRepository {
   /// All appointments belonging to one repeat series.
   Future<List<AppointmentRecord>> getSeries(String seriesId);
 
-  /// Atomically rewrites a repeat series: saves [updated], deletes the docs
-  /// in [deleteIds], and creates [copies] — all-or-nothing.
+  /// Atomically rewrites a series — saves, deletes, and creates all happen
+  /// in one batch.
   Future<void> rewriteSeries({
     required AppointmentRecord updated,
     required List<String> deleteIds,
@@ -25,21 +31,19 @@ abstract class AppointmentsRepository {
 
   Future<void> updateAppointment(AppointmentRecord appointment);
 
-  /// Atomically updates every appointment in [appointments] (all-or-nothing).
-  /// Used to propagate an edit across this visit and its future series siblings.
+  /// Atomically update series to propagate edit across visit and future siblings.
   Future<void> updateAppointments(List<AppointmentRecord> appointments);
 
-  /// Appends [pictures] to the appointment's stored pictures without
-  /// rewriting the array (server-side union), so a background upload landing
-  /// after a concurrent edit can't clobber photos it never saw — and vice
-  /// versa.
+  /// Appends [pictures] to the appointment's stored pictures using a
+  /// server-side union instead of rewriting the whole array. That way a
+  /// background upload landing after a concurrent edit can't clobber photos
+  /// it never saw, and the edit can't clobber the upload either.
   Future<void> appendAppointmentPictures(
     String id,
     List<AppointmentImage> pictures,
   );
 
-  /// Removes exactly [pictures] from the appointment's stored pictures
-  /// (server-side array-remove), leaving concurrently appended photos intact.
+  /// Remove pictures via arrayRemove, leaving concurrent appends intact.
   Future<void> removeAppointmentPictures(
     String id,
     List<AppointmentImage> pictures,
@@ -57,23 +61,23 @@ abstract class AppointmentsRepository {
 
   Stream<List<AppointmentRecord>> watchInRange(AppointmentDateRange range);
 
-  /// One newest-first page of terminal (done/cancelled) appointments.
-  /// [after] is the last record of the previous page (cursor); null for the
-  /// first page.
+  /// One newest-first page of terminal appointments. Pass [after] as the
+  /// cursor to continue from, or null to start from the beginning.
   Future<List<AppointmentRecord>> fetchHistoryPage({
     required int limit,
     AppointmentRecord? after,
   });
 
-  /// Searches terminal (done/cancelled) appointments across the database — not
-  /// just the pages already loaded into the list — by client name, client
-  /// phone, or employee name. Scans the most-recent window of history and
-  /// returns the matches newest-first.
+  /// Search terminal appointments by client/employee name or phone, newest-first.
   Future<List<AppointmentRecord>> searchHistory(String query);
 
-  /// Fires after every local appointment write (add/update/delete/status/
-  /// pictures/series). Lets watched search providers invalidate committed
-  /// results instead of serving a just-deleted appointment until their TTL.
+  /// This client's appointments in any status, newest-first, capped at [limit].
+  Future<List<AppointmentRecord>> fetchClientHistory({
+    required String clientId,
+    int limit,
+  });
+
+  /// Fires after local writes so search providers invalidate stale results immediately.
   Stream<void> get onLocalWrite;
 
   Stream<List<AppointmentRecord>> watchForEmployeeInRange(
@@ -81,9 +85,13 @@ abstract class AppointmentsRepository {
     AppointmentDateRange range,
   );
 
+  /// [excludeAppointmentId] drops one doc from the overlap scan — an edit must
+  /// not collide with the very appointment being edited. It excludes by doc id,
+  /// not by series, so a genuine clash with a sibling occurrence still surfaces.
   Future<List<EmployeeRecord>> findBusyEmployees({
     required List<EmployeeRecord> candidates,
     required DateTime start,
     required DateTime end,
+    String? excludeAppointmentId,
   });
 }
