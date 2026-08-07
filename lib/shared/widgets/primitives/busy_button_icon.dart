@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 
-/// Leading slot for a `*.icon` button: shows a small spinner while [isBusy],
-/// otherwise [icon]. Consolidates the spinner-or-icon pattern repeated across
-/// the detail views and action bars. The owning button keeps its own styling
-/// and disables itself while busy — this widget only swaps the glyph.
+/// Leading slot for icon buttons. Swaps to a spinner while busy.
 class BusyButtonIcon extends StatelessWidget {
   const BusyButtonIcon({
     required this.isBusy,
@@ -19,10 +16,10 @@ class BusyButtonIcon extends StatelessWidget {
   final IconData icon;
   final double iconSize;
 
-  /// Spinner box size; defaults to [iconSize] when null.
+  /// Spinner size. Defaults to iconSize when null.
   final double? spinnerSize;
 
-  /// Applied to both the icon and the spinner; null uses the theme default.
+  /// Color for icon and spinner.
   final Color? color;
 
   @override

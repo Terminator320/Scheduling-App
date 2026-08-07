@@ -32,12 +32,13 @@ void main() {
           data: const MediaQueryData(textScaler: TextScaler.linear(2)),
           child: _wrap(
             DetailsActionBar(
-              isToday: true,
+              hasStarted: true,
               isDone: false,
               isCancelled: false,
               isSaving: false,
               onMarkDone: () {},
               onCancel: () {},
+              onEditCompleted: () {},
             ),
           ),
         ),
@@ -48,22 +49,62 @@ void main() {
     },
   );
 
-  testWidgets('done appointment hides the cancel button', (tester) async {
+  testWidgets('an admin gets an actionable edit button on a done job', (
+    tester,
+  ) async {
+    var edited = 0;
     await tester.pumpWidget(
       _wrap(
         DetailsActionBar(
-          isToday: true,
+          hasStarted: true,
           isDone: true,
           isCancelled: false,
           isSaving: false,
           onMarkDone: () {},
           onCancel: () {},
+          onEditCompleted: () => edited++,
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Complete'), findsOneWidget);
+    // Cancel is hidden once a job is done, so a dead "Complete" button here
+    // left the sheet with no action at all — and no way back off Complete,
+    // since the status picker lives in the edit form.
     expect(find.text('Cancel Appointment'), findsNothing);
+    expect(find.text('Edit completed job'), findsOneWidget);
+
+    await tester.tap(find.text('Edit completed job'));
+    await tester.pumpAndSettle();
+    expect(edited, 1);
+  });
+
+  testWidgets('an employee gets the plain done indicator, not an edit button', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        DetailsActionBar(
+          hasStarted: true,
+          isDone: true,
+          isCancelled: false,
+          isSaving: false,
+          showCancel: false,
+          onMarkDone: () {},
+          onCancel: () {},
+          onEditCompleted: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The rules let an assignee write `status:'done'` and nothing else, so an
+    // editable control would only earn them an opaque permission-denied.
+    expect(find.text('Complete'), findsOneWidget);
+    expect(find.text('Edit completed job'), findsNothing);
+    expect(
+      tester.widget<OutlinedButton>(find.byType(OutlinedButton)).onPressed,
+      isNull,
+    );
   });
 }

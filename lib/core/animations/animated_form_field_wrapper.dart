@@ -2,9 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Shakes [child] horizontally when [hasError] flips from false to true.
-/// One sine cycle of ±6px over 320ms — same motion as the previous
-/// flutter_animate shakeX(duration: 320.ms, hz: 3, amount: 6).
+/// Shakes [child] horizontally when [hasError] flips from false to true
+/// (one sine cycle of ±6px over 320ms, matching the old flutter_animate shakeX).
 class AnimatedFormFieldWrapper extends StatefulWidget {
   const AnimatedFormFieldWrapper({
     required this.child,
@@ -32,8 +31,8 @@ class _AnimatedFormFieldWrapperState extends State<AnimatedFormFieldWrapper>
   @override
   void didUpdateWidget(covariant AnimatedFormFieldWrapper oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // NOTE: reduced-motion is intentionally evaluated only at the error
-    // transition; an in-flight 320ms shake isn't worth interrupting.
+    // Reduced-motion is only checked at the error transition — a 320ms shake
+    // that's already in flight isn't worth interrupting.
     if (widget.hasError &&
         !oldWidget.hasError &&
         !MediaQuery.disableAnimationsOf(context)) {

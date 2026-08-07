@@ -37,17 +37,16 @@ AppointmentRecord _record({
   status: status,
 );
 
-// Declared (not a closure) so its runtime type is exactly
-// `Future<Null> Function(Transaction)` — the reified type of the repo's
-// no-return async transaction handler, which mocktail's `any()` must match.
+// Declared as a top-level function (not a closure) so its runtime type
+// exactly matches mocktail's `any()` for the repo's transaction handler.
 Future<Null> _fallbackHandler(Transaction _) async => null;
 
 void main() {
   setUpAll(() {
     registerFallbackValue(_FakeDoc());
     registerFallbackValue(<String, dynamic>{});
-    // The repo's transaction handler is a no-return async closure, which
-    // reifies its type argument as Null; the fallback + stub match that.
+    // The fallback and the stub both need to match the transaction handler's
+    // reified Null return type.
     registerFallbackValue(_fallbackHandler);
   });
 

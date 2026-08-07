@@ -3,14 +3,12 @@ import 'package:flutter/widgets.dart';
 class Breakpoints {
   Breakpoints._();
 
-  /// Two-pane (master-detail + nav rail) threshold. Set at the Material 3
-  /// "expanded" width so phone-portrait and tablet-portrait stay single
-  /// column; only genuinely large screens (landscape, large tablets) split.
+  /// Two-pane threshold for master-detail + nav rail on genuinely large screens.
   static const double tablet = 840;
 
-  /// Extended (labelled) nav-rail threshold — only on large screens, so the
-  /// rail doesn't expand the moment two-pane appears.
-  static const double expanded = 1200;
+  /// Tablet-class cutoff on shortest side. Landscape phones stay narrow and
+  /// use list + sheet instead of two-pane.
+  static const double tabletShortestSide = 600;
 
   /// Narrow-phone width gate: below this, dense rows stack vertically.
   static const double compactWidth = 360;
@@ -25,21 +23,23 @@ class Breakpoints {
 extension ResponsiveContext on BuildContext {
   bool get isWide => MediaQuery.sizeOf(this).width >= Breakpoints.tablet;
 
-  bool get isExpanded => MediaQuery.sizeOf(this).width >= Breakpoints.expanded;
-
   /// Any device held in landscape (wider than tall).
   bool get isLandscape =>
       MediaQuery.orientationOf(this) == Orientation.landscape;
 
-  /// Use the side nav rail + multi-pane treatment instead of the
-  /// hamburger-drawer / bottom-sheet phone layout: genuinely wide screens
-  /// (tablets, iPad) OR any device in landscape. Portrait phones stay
-  /// single-column — this never lowers the [Breakpoints.tablet] width gate,
-  /// it only adds the orientation path.
+  /// Use a side nav rail with multi-pane layout on tablets or any landscape
+  /// device. Portrait phones stay single-column.
   bool get isSplitLayout => isWide || isLandscape;
 
-  /// Dense rows (cards, headers, action bars) stack vertically: a narrow phone
-  /// OR a large text scale that would otherwise overflow a horizontal row.
+  /// Two-pane master-detail is only for tablet-class devices. Landscape
+  /// phones fall back to a single list + sheet, even though isSplitLayout is
+  /// true for them too.
+  bool get isTwoPane =>
+      MediaQuery.sizeOf(this).shortestSide >= Breakpoints.tabletShortestSide;
+
+  /// True when dense rows (cards, headers, action bars) should stack
+  /// vertically instead of horizontally — either the phone is narrow, or the
+  /// text scale is large enough that a horizontal row would overflow.
   bool get isCompact =>
       MediaQuery.sizeOf(this).width < Breakpoints.compactWidth ||
       MediaQuery.textScalerOf(this).scale(1) > Breakpoints.compactTextScale;

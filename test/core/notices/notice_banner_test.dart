@@ -4,10 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 void main() {
-  Future<void> pumpApp(WidgetTester tester) async {
+  Future<void> pumpApp(
+    WidgetTester tester, {
+    bool accessibleNavigation = false,
+  }) async {
     // Mirrors main.dart: NoticeListener sits above the Navigator and inserts
     // its banners into the navigator's overlay via the key.
     final navigatorKey = GlobalKey<NavigatorState>();
@@ -21,9 +26,15 @@ void main() {
             GlobalWidgetsLocalizations.delegate,
           ],
           supportedLocales: AppLocalizations.supportedLocales,
-          builder: (context, child) => NoticeListener(
-            navigatorKey: navigatorKey,
-            child: child ?? const SizedBox.shrink(),
+          theme: lightTheme(),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(accessibleNavigation: accessibleNavigation),
+            child: NoticeListener(
+              navigatorKey: navigatorKey,
+              child: child ?? const SizedBox.shrink(),
+            ),
           ),
           home: const Scaffold(body: Text('app-body')),
         ),
@@ -38,7 +49,7 @@ void main() {
   testWidgets('close button is a 48px IconButton with a tooltip', (
     tester,
   ) async {
-    await pumpApp(tester);
+    await pumpApp(tester, accessibleNavigation: true);
     service(tester).info('hello notice');
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
@@ -59,7 +70,22 @@ void main() {
     expect(find.text('hello notice'), findsNothing);
 
     // Flush the (now no-op) auto-dismiss timer so the test ends cleanly.
-    await tester.pump(const Duration(seconds: 4));
+    await tester.pump(const Duration(seconds: 8));
+  });
+
+  testWidgets('no close button without accessible navigation', (tester) async {
+    await pumpApp(tester);
+    service(tester).info('hello notice');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('hello notice'), findsOneWidget);
+    // The design has no close button; swipe-up still dismisses for everyone.
+    expect(find.byTooltip('Close'), findsNothing);
+
+    await tester.pump(AppMotion.noticeCycle);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
   });
 
   testWidgets('banner can be swiped up to dismiss', (tester) async {
@@ -74,7 +100,7 @@ void main() {
     expect(find.text('swipe me'), findsNothing);
 
     // Flush the (now no-op) auto-dismiss timer so the test ends cleanly.
-    await tester.pump(const Duration(seconds: 4));
+    await tester.pump(AppMotion.noticeCycle);
   });
 
   testWidgets('auto-dismiss timer is preserved', (tester) async {
@@ -84,10 +110,35 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('short lived'), findsOneWidget);
 
-    // Non-accessible-navigation duration is 3s; add the exit animation.
-    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(AppMotion.noticeCycle);
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump();
     expect(find.text('short lived'), findsNothing);
+  });
+
+  testWidgets('the notice renders on the inverse surface with a kind dot', (
+    tester,
+  ) async {
+    await pumpApp(tester);
+    service(tester).success('all good');
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    final surface = tester.widget<Material>(
+      find
+          .ancestor(of: find.text('all good'), matching: find.byType(Material))
+          .first,
+    );
+    expect(surface.color, lightTheme().colorScheme.inverseSurface);
+
+    final dot = tester.widget<Container>(
+      find.byKey(const ValueKey('notice-dot')),
+    );
+    final decoration = dot.decoration! as BoxDecoration;
+    expect(decoration.color, lightTheme().palette.noticeMint);
+
+    await tester.pump(AppMotion.noticeCycle);
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
   });
 }

@@ -53,6 +53,7 @@ Widget _wrap(
   List<AppointmentRecord> history, {
   String searchQuery = '',
   AppointmentsRepository? repository,
+  bool isAdmin = false,
 }) {
   final repo = repository ?? _MockAppointmentsRepository();
   if (repository == null) {
@@ -77,7 +78,10 @@ Widget _wrap(
         supportedLocales: AppLocalizations.supportedLocales,
         theme: lightTheme(),
         home: Scaffold(
-          body: AppointmentHistoryView(searchQuery: searchQuery),
+          body: AppointmentHistoryView(
+            searchQuery: searchQuery,
+            isAdmin: isAdmin,
+          ),
         ),
       ),
     ),
@@ -85,6 +89,38 @@ Widget _wrap(
 }
 
 void main() {
+  group("the row opens the detail sheet with the caller's role", () {
+    testWidgets("an admin reaches the completed job's edit button", (
+      tester,
+    ) async {
+      await tester.pumpWidget(_wrap([_aliceJob], isAdmin: true));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alice Job'));
+      await tester.pumpAndSettle();
+
+      // History holds only done and cancelled jobs, so this button is the one
+      // affordance an admin needs here — and the only route back off Complete,
+      // since the status picker lives in the edit form behind it.
+      expect(find.text('Edit completed job'), findsOneWidget);
+    });
+
+    testWidgets('an employee gets the read-only sheet', (tester) async {
+      await tester.pumpWidget(_wrap([_aliceJob]));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Alice Job'));
+      await tester.pumpAndSettle();
+
+      // showActions defaults CLOSED. Offering an employee the edit route here
+      // would only earn them an opaque permission-denied from the rules.
+      expect(find.text('Edit completed job'), findsNothing);
+      // "Complete" twice, not once: the header's status chip and the action
+      // bar's disabled indicator both read it on a finished job.
+      expect(find.text('Complete'), findsWidgets);
+    });
+  });
+
   testWidgets('groups appointments under a year header', (tester) async {
     await tester.pumpWidget(_wrap([_aliceJob, _bobJob]));
     await tester.pumpAndSettle();

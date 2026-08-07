@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import 'package:scheduling/core/errors/failure.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 enum AuthErrorContext {
@@ -22,6 +23,51 @@ sealed class AuthFailure extends Failure {
     BuildContext context,
     AuthErrorContext errorContext,
   );
+
+  /// True when this is a routine, user-correctable outcome (mistyped password,
+  /// a stale session, offline) rather than a defect. Catch sites log these as
+  /// a breadcrumb instead of a Crashlytics error record — otherwise every user
+  /// who fat-fingers a field files a non-fatal issue. The `false` cases are
+  /// genuine misconfiguration or bugs and must keep surfacing.
+  bool get isExpected => switch (this) {
+    AuthFailureInvalidEmail() ||
+    AuthFailureUserDisabled() ||
+    AuthFailureUserNotFound() ||
+    AuthFailureWrongCredentials() ||
+    AuthFailureTooManyRequests() ||
+    AuthFailureNetwork() ||
+    AuthFailureEmailAlreadyInUse() ||
+    AuthFailureWeakPassword() ||
+    AuthFailureRequiresRecentLogin() ||
+    AuthFailureNotAuthorized() ||
+    // Both are races rather than defects: a replayed setup call, and a
+    // credential that went stale mid-setup. Signing in again fixes either.
+    AuthFailureSetupAlreadyComplete() ||
+    AuthFailureSessionExpired() => true,
+    // Console misconfiguration, a rules rejection, an unmapped error, or a
+    // signed-in uid with no users doc — all real defects worth a non-fatal.
+    AuthFailureOperationNotAllowed() ||
+    AuthFailurePermissionDenied() ||
+    AuthFailureNoAccountRecord() ||
+    AuthFailureUnknown() => false,
+  };
+}
+
+/// Files an auth failure at the severity [AuthFailure.isExpected] implies:
+/// a breadcrumb when expected, a Crashlytics non-fatal otherwise.
+extension AuthFailureLogging on AppLogger {
+  void authFailure(
+    String label,
+    AuthFailure failure,
+    Object error,
+    StackTrace stackTrace,
+  ) {
+    if (failure.isExpected) {
+      breadcrumb('$label (${failure.runtimeType})');
+    } else {
+      warn(label, error, stackTrace);
+    }
+  }
 }
 
 class AuthFailureInvalidEmail extends AuthFailure {
@@ -113,28 +159,33 @@ class AuthFailureNotAuthorized extends AuthFailure {
       c.l10n.error_thisEmailIsNotAuthorizedToSignUp;
 }
 
-class AuthFailureInvalidSignupCode extends AuthFailure {
-  const AuthFailureInvalidSignupCode();
+// The account is already `active` — a replayed setup call, or two devices
+// finishing at once. Distinct from a real error because the password change
+// that precedes it DID land, so the person is not stuck.
+class AuthFailureSetupAlreadyComplete extends AuthFailure {
+  const AuthFailureSetupAlreadyComplete();
   @override
   String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
-      c.l10n.error_thatCodeIsntValidAskYourAdmin;
+      c.l10n.error_yourAccountIsAlreadySetUp;
 }
 
-class AuthFailureSignupCodeExpired extends AuthFailure {
-  const AuthFailureSignupCodeExpired();
+// Signed in, but no users doc resolves to this uid. An admin deleted the
+// account mid-setup, or provisioning half-failed — either way the person can
+// only be helped by their admin.
+class AuthFailureNoAccountRecord extends AuthFailure {
+  const AuthFailureNoAccountRecord();
   @override
   String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
-      c.l10n.error_thatCodeHasExpiredAskYourAdmin;
+      c.l10n.error_noAccountRecordContactAdmin;
 }
 
-// The code is valid but was issued for a different email than the one the user
-// signed up with — a common admin/employee typo. Distinct from "invalid code"
-// so the message points at the email, not the code.
-class AuthFailureSignupEmailMismatch extends AuthFailure {
-  const AuthFailureSignupEmailMismatch();
+// The credential went stale mid-setup (token expired, or the write needed a
+// recent login). Signing in again is the whole fix.
+class AuthFailureSessionExpired extends AuthFailure {
+  const AuthFailureSessionExpired();
   @override
   String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
-      c.l10n.error_thatCodeWasIssuedForADifferentEmail;
+      c.l10n.error_sessionExpiredSignInAgain;
 }
 
 class AuthFailurePermissionDenied extends AuthFailure {
@@ -149,17 +200,6 @@ class AuthFailureUnknown extends AuthFailure {
   @override
   String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
       c.l10n.error_somethingWentWrongPleaseTryAgain;
-}
-
-// Thrown when signUpWithCode created the Firebase Auth user but the rollback
-// delete failed after code redemption errored. The Auth account is now
-// orphaned: no matching Firestore users doc, blocks re-registration with the
-// same email. Tell the admin to delete the Auth user in console and re-invite.
-class AuthFailureAccountCreationIncomplete extends AuthFailure {
-  const AuthFailureAccountCreationIncomplete();
-  @override
-  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
-      c.l10n.error_accountCreationIncompleteContactAdmin;
 }
 
 extension AuthFailureForgotPassword on AuthFailure {

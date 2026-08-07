@@ -9,6 +9,7 @@ import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -71,11 +72,40 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('offers no invite route — employees just sign in', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(auth, repo));
+    await tester.pumpAndSettle();
+
+    // The acceptance-code flow is retired: an admin creates the account and
+    // hands over a password, so there is nothing to "accept" here.
+    expect(find.text('Invited by your employer?'), findsNothing);
+    expect(find.text('Accept your invite'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows the dotted error row under each invalid field', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(auth, repo));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AuthFieldError), findsNothing);
+
+    await tester.tap(find.byType(FilledButton).first);
+    await tester.pumpAndSettle();
+
+    // Email and password both trip their validator, so both render the row.
+    expect(find.byType(AuthFieldError), findsNWidgets(2));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('does not call signIn when fields are empty', (tester) async {
     await tester.pumpWidget(_wrap(auth, repo));
     await tester.pumpAndSettle();
 
-    // Submit-on-empty path: validators trip and we never hit the network.
+    // With empty fields, validators trip and we never hit the network.
     final signInButton = find.widgetWithText(FilledButton, 'Sign in');
     if (signInButton.evaluate().isEmpty) {
       // Fallback if l10n delegates aren't registered — find any FilledButton.
@@ -113,7 +143,8 @@ void main() {
       when(() => repo.findUserByUid('u1')).thenAnswer((_) async {
         reads++;
         if (reads == 1) {
-          // First read after sign-in: token not yet propagated to Firestore.
+          // The first read right after sign-in fails because the auth token
+          // hasn't propagated to Firestore yet.
           throw FirebaseException(
             plugin: 'cloud_firestore',
             code: 'permission-denied',

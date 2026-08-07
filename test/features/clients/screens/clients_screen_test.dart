@@ -9,6 +9,7 @@ import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/screens/clients_screen.dart';
+import 'package:scheduling/features/clients/widgets/sheets/edit_client_sheet.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -49,6 +50,13 @@ Widget _wrap(ClientsRepository repo) {
     ),
   );
 }
+
+/// The edit sheet's own Save verb, scoped so the detail's "Save to contacts"
+/// tile behind the sheet can't match it.
+Finder _sheetSave() => find.descendant(
+  of: find.byType(EditClientSheet),
+  matching: find.widgetWithText(TextButton, 'Save'),
+);
 
 Finder _phoneEditField() => find.descendant(
   of: find.byWidgetPredicate(
@@ -154,9 +162,8 @@ void main() {
       // with no link present the phone-contact sync is a no-op.
       SharedPreferences.setMockInitialValues({});
 
-      // The list keeps serving the pre-edit record even after the save-driven
-      // refresh — the detail pane must still show the edit, proving it doesn't
-      // re-seed from the stale selected snapshot.
+      // The list still serves the pre-edit record after the save-driven refresh —
+      // the detail pane must keep showing the edit, not re-seed from the stale snapshot.
       when(
         () => repo.fetchClientsPage(
           after: any(named: 'after'),
@@ -174,19 +181,19 @@ void main() {
       await tester.tap(find.text('Edit'));
       await tester.pumpAndSettle();
 
-      await tester.enterText(_phoneEditField().first, '555-9999');
+      await tester.enterText(_phoneEditField().first, '5145559999');
       // Let SheetFocusScroll's 280 ms focus-scroll timer fire.
       await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(find.text('Save changes'));
+      await tester.tap(_sheetSave());
       await tester.pumpAndSettle();
 
       // Back in view mode with the new phone — not the stale '555-0101'.
-      expect(find.text('Save changes'), findsNothing);
-      expect(find.text('555-9999'), findsWidgets);
+      expect(find.byType(EditClientSheet), findsNothing);
+      expect(find.text('(514) 555-9999'), findsWidgets);
       final saved =
           verify(() => repo.updateClient(captureAny())).captured.single
               as ClientRecord;
-      expect(saved.phone, '555-9999');
+      expect(saved.phone, '(514) 555-9999');
       expect(tester.takeException(), isNull);
     },
   );

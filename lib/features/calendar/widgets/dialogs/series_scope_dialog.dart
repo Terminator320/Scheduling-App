@@ -1,90 +1,234 @@
 import 'package:flutter/material.dart';
 
-import 'package:scheduling/core/adaptive/adaptive.dart';
-import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
-import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 enum SeriesScopeChoice { thisOnly, thisAndFuture }
 
-/// Shared "this visit only / this and future visits" picker for a repeating
-/// appointment — used by both the edit and delete flows. [message] states the
-/// scope/consequence of the choice (the apply-to-all option touches every
-/// future visit, so the copy must say so). Returns null when cancelled.
-/// [destructive] styles the actions as a delete (error-filled primary with a
-/// delete glyph so the intent isn't carried by colour alone, destructive
-/// outline).
+/// Shared 'this only' / 'this and future' picker for repeating appointments.
+///
+/// Deliberately has **no Cupertino action-sheet branch**, unlike every other
+/// adaptive surface in the app: the design puts a consequence line under each
+/// option ("12 remaining visits through 26 Jan"), and an action sheet cannot
+/// render one. A single design-mandated exception, not a policy change.
 Future<SeriesScopeChoice?> showSeriesScopeDialog(
   BuildContext context, {
   required String title,
-  required String message,
   required String thisOnlyLabel,
   required String thisAndFutureLabel,
+  required String Function(SeriesScopeChoice choice) primaryLabelFor,
+  String? contextLabel,
+  String? thisOnlyDetail,
+  String? thisAndFutureDetail,
   bool destructive = false,
-}) {
-  if (context.isCupertino) {
-    return showAdaptiveActionSheet<SeriesScopeChoice>(
-      context,
-      title: title,
-      message: message,
-      actions: [
-        AdaptiveSheetAction(
-          value: SeriesScopeChoice.thisOnly,
-          label: thisOnlyLabel,
-          isDestructive: destructive,
+}) => showDialog<SeriesScopeChoice>(
+  context: context,
+  builder: (ctx) => _SeriesScopeDialog(
+    title: title,
+    thisOnlyLabel: thisOnlyLabel,
+    thisAndFutureLabel: thisAndFutureLabel,
+    primaryLabelFor: primaryLabelFor,
+    contextLabel: contextLabel,
+    thisOnlyDetail: thisOnlyDetail,
+    thisAndFutureDetail: thisAndFutureDetail,
+    destructive: destructive,
+  ),
+);
+
+class _SeriesScopeDialog extends StatefulWidget {
+  const _SeriesScopeDialog({
+    required this.title,
+    required this.thisOnlyLabel,
+    required this.thisAndFutureLabel,
+    required this.primaryLabelFor,
+    required this.destructive,
+    this.contextLabel,
+    this.thisOnlyDetail,
+    this.thisAndFutureDetail,
+  });
+
+  final String title;
+  final String thisOnlyLabel;
+  final String thisAndFutureLabel;
+  final String Function(SeriesScopeChoice choice) primaryLabelFor;
+  final String? contextLabel;
+  final String? thisOnlyDetail;
+  final String? thisAndFutureDetail;
+  final bool destructive;
+
+  @override
+  State<_SeriesScopeDialog> createState() => _SeriesScopeDialogState();
+}
+
+class _SeriesScopeDialogState extends State<_SeriesScopeDialog> {
+  SeriesScopeChoice _choice = SeriesScopeChoice.thisOnly;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: 26,
+        vertical: AppSpacing.sp24,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.rDialog),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sp24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (widget.contextLabel != null) ...[
+              Text(widget.contextLabel!, style: theme.monoType.label),
+              const SizedBox(height: AppSpacing.sp8),
+            ],
+            Text(widget.title, style: theme.textTheme.headlineMedium),
+            const SizedBox(height: AppSpacing.sp16),
+            _ScopeOption(
+              label: widget.thisOnlyLabel,
+              detail: widget.thisOnlyDetail,
+              selected: _choice == SeriesScopeChoice.thisOnly,
+              onTap: () => setState(() => _choice = SeriesScopeChoice.thisOnly),
+            ),
+            const SizedBox(height: AppSpacing.sp8),
+            _ScopeOption(
+              label: widget.thisAndFutureLabel,
+              detail: widget.thisAndFutureDetail,
+              selected: _choice == SeriesScopeChoice.thisAndFuture,
+              onTap: () =>
+                  setState(() => _choice = SeriesScopeChoice.thisAndFuture),
+            ),
+            const SizedBox(height: AppSpacing.sp24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 44),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(context.l10n.common_back),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sp12),
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 44),
+                      // dangerFill, never scheme.error — that slot is the
+                      // lifted foreground red and is unreadable as a fill.
+                      backgroundColor: widget.destructive
+                          ? theme.palette.dangerFill
+                          : scheme.primary,
+                      foregroundColor: widget.destructive
+                          ? theme.palette.onDangerFill
+                          : scheme.onPrimary,
+                    ),
+                    onPressed: () => Navigator.pop(context, _choice),
+                    child: Text(widget.primaryLabelFor(_choice)),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
-        AdaptiveSheetAction(
-          value: SeriesScopeChoice.thisAndFuture,
-          label: thisAndFutureLabel,
-          isDestructive: destructive,
-        ),
-      ],
+      ),
     );
   }
-  return showDialog<SeriesScopeChoice>(
-    context: context,
-    builder: (ctx) {
-      final l = ctx.l10n;
-      final scheme = Theme.of(ctx).colorScheme;
-      void choose(SeriesScopeChoice? choice) => Navigator.pop(ctx, choice);
-      return AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+}
+
+/// One radio row: an 18px ring that fills to a 9px dot when chosen, with the
+/// option label and its consequence line.
+class _ScopeOption extends StatelessWidget {
+  const _ScopeOption({
+    required this.label,
+    required this.detail,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final String? detail;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    return Semantics(
+      inMutuallyExclusiveGroup: true,
+      selected: selected,
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            color: selected ? scheme.primaryContainer : null,
+            border: Border.all(
+              color: selected ? scheme.primary : scheme.outlineVariant,
+            ),
+            borderRadius: BorderRadius.circular(AppRadius.r12),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              OutlinedButton(
-                style: destructive ? destructiveOutlinedButtonStyle(ctx) : null,
-                onPressed: () => choose(SeriesScopeChoice.thisOnly),
-                child: Text(thisOnlyLabel),
-              ),
-              const SizedBox(height: AppSpacing.sp8),
-              if (destructive)
-                FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: scheme.error,
-                    foregroundColor: scheme.onError,
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: selected
+                          ? scheme.primary
+                          : theme.palette.textMuted,
+                      width: 1.5,
+                    ),
                   ),
-                  onPressed: () => choose(SeriesScopeChoice.thisAndFuture),
-                  icon: const Icon(Icons.delete_outline),
-                  label: Text(thisAndFutureLabel),
-                )
-              else
-                FilledButton(
-                  onPressed: () => choose(SeriesScopeChoice.thisAndFuture),
-                  child: Text(thisAndFutureLabel),
+                  child: selected
+                      ? Container(
+                          width: 9,
+                          height: 9,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: scheme.primary,
+                          ),
+                        )
+                      : null,
                 ),
-              const SizedBox(height: AppSpacing.sp4),
-              TextButton(
-                onPressed: () => choose(null),
-                child: Text(l.common_cancel),
+              ),
+              const SizedBox(width: AppSpacing.sp12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: theme.textTheme.titleMedium),
+                    if (detail != null) ...[
+                      const SizedBox(height: AppSpacing.sp4),
+                      Text(
+                        detail!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.palette.textTertiary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ],
           ),
-        ],
-      );
-    },
-  );
+        ),
+      ),
+    );
+  }
 }

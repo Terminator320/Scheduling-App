@@ -1,16 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:scheduling/core/layout/adaptive_shell.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/core/utils/sheet_focus.dart';
+import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
+import 'package:scheduling/features/clients/widgets/sections/client_type_filter_bar.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
-import 'package:scheduling/features/settings/widgets/views/settings_drawer.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
+import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
+import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
+import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
@@ -32,6 +41,15 @@ class ListInformation extends StatefulWidget {
 class _ListInformationState extends State<ListInformation> {
   final TextEditingController _searchController = TextEditingController();
   ClientRecord? _selectedClient;
+  ClientsFilter _filter = const ClientsFilterAll();
+
+  /// Whether the list's first page has settled — gates the feature tour.
+  bool _listSettled = false;
+
+  late final _tour = TourSteps(
+    const DestinationTour(HubTab.clients),
+    isAdmin: widget.isAdmin,
+  );
 
   @override
   void dispose() {
@@ -39,34 +57,31 @@ class _ListInformationState extends State<ListInformation> {
     super.dispose();
   }
 
+  void _onListSettled() {
+    if (_listSettled) return;
+    setState(() => _listSettled = true);
+  }
+
   Future<void> _onAddClient() async {
-    await showAddClientSheet(context);
+    final result = await showAddClientSheet(context);
+    if (result == null || result.next != AddClientNext.bookJob) return;
+    if (!mounted) return;
+    // Sequential, never stacked — the add-client sheet has already popped.
+    await showAddEventPopup(context, initialClient: result.client);
   }
 
   Future<void> _onClientTap(ClientRecord client) async {
-    if (context.isSplitLayout) {
+    if (context.isTwoPane) {
       setState(() => _selectedClient = client);
       return;
     }
 
-    await SheetFocus.settleBeforeSheet();
-    if (!mounted) return;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      sheetAnimationStyle: AppMotion.sheetStyle,
-      builder: (_) => ClientDetailSheet(client: client),
-    );
-
-    if (!mounted) return;
-    await SheetFocus.unfocusAfterSheet();
+    await showClientDetailSheet(context, client);
   }
 
   void _backToCalendar() => navigateToDestination(
     context,
-    AdaptiveDestination.calendar,
+    HubTab.calendar,
     isAdmin: widget.isAdmin,
     employeeId: widget.employeeId,
   );
@@ -78,50 +93,83 @@ class _ListInformationState extends State<ListInformation> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppTopBar(
-        title: context.l10n.common_clients,
-        compact: context.isLandscape,
-        onBack: _backToCalendar,
-        bottom: AppSearchBar(
-          textScaler: MediaQuery.textScalerOf(context),
-          controller: _searchController,
-          hintText: context.l10n.clients_searchByNameOrPhone,
+    final searchBar = AppSearchBar(
+      textScaler: MediaQuery.textScalerOf(context),
+      controller: _searchController,
+      hintText: context.l10n.clients_searchByNameOrPhone,
+    );
+    return FeatureTourHost(
+      scope: _tour.scope,
+      isAdmin: widget.isAdmin,
+      stepKeys: _tour.keys,
+      // The client-row step has no target while the list is still its
+      // skeleton, and a tour started then drops it and marks the WHOLE scope
+      // seen — the row step would never be shown again.
+      ready: _listSettled,
+      child: Scaffold(
+        appBar: AppTopBar(
+          title: context.l10n.common_clients,
+          compact: context.isLandscape,
+          onBack: _backToCalendar,
+          actions: const [AppHeaderPair()],
+          bottom: _tour.has(TourStepId.clientsSearch)
+              ? TourShowcaseBar(
+                  showcaseKey: _tour.keys[TourStepId.clientsSearch]!,
+                  scope: _tour.scope,
+                  id: TourStepId.clientsSearch,
+                  index: _tour.ids.indexOf(TourStepId.clientsSearch),
+                  count: _tour.ids.length,
+                  bar: searchBar,
+                )
+              : searchBar,
         ),
-      ),
-      endDrawer: SettingsDrawer.endDrawerFor(
-        context,
-        isAdmin: widget.isAdmin,
-        employeeId: widget.employeeId,
-      ),
-      floatingActionButton: widget.isAdmin
-          ? FloatingActionButton(
-              // Unique across the hub: the IndexedStack keeps every tab's
-              // Scaffold (and FAB) mounted at once, so a default/shared hero
-              // tag collides with another tab's FAB ("multiple heroes share
-              // the same tag").
-              heroTag: 'clientsAddFab',
-              onPressed: _onAddClient,
-              tooltip: context.l10n.clients_addClient,
-              child: const Icon(Icons.add),
-            )
-          : null,
-      // The nav shell is built once. Only the master list listens to the search
-      // controller, so typing rebuilds just the list — not the chrome, and not
-      // the (search-independent) detail pane in the split layout.
-      body: AdaptiveShell(
-        currentDestination: AdaptiveDestination.clients,
-        isAdmin: widget.isAdmin,
-        employeeId: widget.employeeId,
-        child: MasterDetailScaffold(
-          master: ListenableBuilder(
-            listenable: _searchController,
-            builder: (context, _) => ClientsListView(
-              searchQuery: _searchController.text,
-              isAdmin: widget.isAdmin,
-              selectedClientId: _selectedClient?.id,
-              onClientTap: _onClientTap,
-            ),
+        endDrawer: AppNavDrawer(
+          isAdmin: widget.isAdmin,
+          employeeId: widget.employeeId,
+        ),
+        floatingActionButton: widget.isAdmin
+            ? _tour.step(
+                TourStepId.clientsAdd,
+                targetBorderRadius: BorderRadius.circular(AppRadius.r16),
+                child: FloatingActionButton(
+                  // Needs to be unique across tabs, since IndexedStack keeps every tab's FAB mounted at the same time.
+                  heroTag: 'clientsAddFab',
+                  onPressed: _onAddClient,
+                  tooltip: context.l10n.clients_addClient,
+                  child: const Icon(Icons.add),
+                ),
+              )
+            : null,
+        // Only the master list listens to the search controller, so typing rebuilds just the list.
+        body: MasterDetailScaffold(
+          master: Column(
+            children: [
+              _tour.stepIf(
+                TourStepId.clientsFilter,
+                ClientTypeFilterBar(
+                  selected: _filter,
+                  onChanged: (next) => setState(() => _filter = next),
+                ),
+              ),
+              Expanded(
+                child: ListenableBuilder(
+                  listenable: _searchController,
+                  builder: (context, _) => ClientsListView(
+                    searchQuery: _searchController.text,
+                    isAdmin: widget.isAdmin,
+                    filter: _filter,
+                    // Only highlight the selected row when the detail pane is shown (two-pane).
+                    selectedClientId: context.isTwoPane
+                        ? _selectedClient?.id
+                        : null,
+                    onClientTap: _onClientTap,
+                    firstRowTourWrap: (child) =>
+                        _tour.stepIf(TourStepId.clientsRow, child),
+                    onFirstPageSettled: _onListSettled,
+                  ),
+                ),
+              ),
+            ],
           ),
           detail: _selectedClient != null
               ? ClientDetailView(

@@ -4,7 +4,16 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
+import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
+import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
+
+/// Shared bound on every `users` stream to prevent unbounded snapshots.
+const _userStreamLimit = 500;
+
+const _callableTimeout = Duration(seconds: 20);
 
 class FirebaseEmployeesRepository implements EmployeesRepository {
   FirebaseEmployeesRepository(
@@ -21,7 +30,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     return retryStream(
       () => _users
           .orderBy('name')
-          .limit(500)
+          .limit(_userStreamLimit)
           .snapshots()
           .map(
             (snapshot) => snapshot.docs
@@ -38,6 +47,8 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       () => _users
           .where('role', whereIn: ['employee', 'admin'])
           .where('status', isEqualTo: 'active')
+          // NOTE: no orderBy (watchAllUsers' orderBy excludes docs without name, dropping unnamed active employees).
+          .limit(_userStreamLimit)
           .snapshots()
           .map(
             (snapshot) => snapshot.docs
@@ -53,9 +64,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     return retryStream(
       () => _users
           .where('status', isEqualTo: 'active')
-          // Bounded like watchAllUsers so a runaway users collection can't
-          // stream an unbounded snapshot to every client.
-          .limit(500)
+          .limit(_userStreamLimit)
           .snapshots()
           .map(
             (snapshot) => snapshot.docs
@@ -67,27 +76,39 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<String> createEmployeeInvite({
+  Future<NewAccountCredentials> createEmployeeAccount({
     required String name,
+    required String firstName,
+    required String lastName,
     required String email,
     required String phone,
     required String colorValue,
+    required String jobTitle,
+    required bool isAdmin,
   }) async {
     try {
       final res = await _functions
-          .httpsCallable('createEmployeeInvite')
+          .httpsCallable(
+            'createEmployeeAccount',
+            options: HttpsCallableOptions(timeout: _callableTimeout),
+          )
           .call<dynamic>({
             'name': name.trim(),
+            'firstName': firstName.trim(),
+            'lastName': lastName.trim(),
             'email': email.trim().toLowerCase(),
             'phone': phone.trim(),
             'colorValue': colorValue,
+            'jobTitle': jobTitle,
+            'isAdmin': isAdmin,
           });
       final data = (res.data as Map?)?.cast<String, dynamic>();
-      final code = data?['code'] as String?;
-      if (code == null || code.isEmpty) {
-        throw const EmployeesFailureUnknown();
-      }
-      return code;
+      if (data == null) throw const EmployeesFailureUnknown();
+      final credentials = NewAccountCredentials.fromMap(data);
+      // A blank half is unusable to the admin and would render an empty
+      // credential dialog — fail loudly instead of showing nothing.
+      if (!credentials.isComplete) throw const EmployeesFailureUnknown();
+      return credentials;
     } on FirebaseFunctionsException catch (e) {
       if (e.message == 'email-exists') {
         throw const EmployeesFailureEmailAlreadyExists();
@@ -97,66 +118,126 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<void> redeemSignupCode(String code) async {
-    await _functions.httpsCallable('redeemSignupCode').call<dynamic>({
-      'code': code,
-    });
+  Future<void> deleteEmployeeAccount(String docId) async {
+    try {
+      await _functions
+          .httpsCallable(
+            'deleteEmployeeAccount',
+            options: HttpsCallableOptions(timeout: _callableTimeout),
+          )
+          .call<dynamic>({'docId': docId});
+    } on FirebaseFunctionsException catch (e) {
+      if (e.message == 'account-not-pending' ||
+          e.message == 'account-not-found') {
+        throw const EmployeesFailureAccountNoLongerPending();
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> completeEmployeeSetup({
+    String firstName = '',
+    String lastName = '',
+    String phone = '',
+    bool termsAccepted = false,
+    bool locationConsent = false,
+  }) async {
+    await _functions
+        .httpsCallable(
+          'completeEmployeeSetup',
+          options: HttpsCallableOptions(timeout: _callableTimeout),
+        )
+        // All five keys, always: the server reads the strings leniently
+        // (empty == absent) and the flags as `=== true`, so a conditional
+        // payload shape would be a second thing to test for no benefit.
+        .call<dynamic>({
+          'firstName': firstName,
+          'lastName': lastName,
+          'phone': phone,
+          'termsAccepted': termsAccepted,
+          'locationConsent': locationConsent,
+        });
   }
 
   @override
   Future<void> updateEmployee({
     required String docId,
-    required String name,
-    required String email,
-    required String phone,
-    required String colorValue,
-    bool? isAdmin,
+    required EmployeeRecord employee,
   }) async {
-    final normalizedEmail = email.trim().toLowerCase();
+    final normalizedEmail = employee.email.trim().toLowerCase();
+    final ref = _users.doc(docId);
+    final stored = (await ref.get()).data();
+    final storedEmail = stored?['email'] as String? ?? '';
+    final storedUid = stored?['uid'] as String? ?? '';
 
-    // Uniqueness pre-check. The Firestore client SDK cannot run queries inside
-    // a transaction, so this read-then-write is not atomic: another doc could
-    // claim [normalizedEmail] between this query and the commit below. That
-    // residual race is accepted client-side — the server-side invite flow
-    // (functions/createEmployeeInvite) is the authoritative uniqueness guard.
-    final existing = await _users
-        .where('email', isEqualTo: normalizedEmail)
-        .get();
+    // What we believe the doc holds going into the commit below.
+    var emailAtCheck = storedEmail;
 
-    final emailUsedByAnotherEmployee = existing.docs.any(
-      (doc) => doc.id != docId,
-    );
-
-    if (emailUsedByAnotherEmployee) {
-      throw const EmployeesFailureEmailAlreadyExists();
+    if (normalizedEmail != storedEmail) {
+      if (storedUid.isEmpty) {
+        // No Auth account behind this doc, so the email is ours to write.
+        // Uniqueness isn't atomic here; the transaction below re-checks.
+        final existing = await _users
+            .where('email', isEqualTo: normalizedEmail)
+            .get();
+        if (existing.docs.any((doc) => doc.id != docId)) {
+          throw const EmployeesFailureEmailAlreadyExists();
+        }
+      } else {
+        // The sign-in identity moves through the callable, which owns BOTH
+        // stores. It runs FIRST and the write below merely re-states what it
+        // committed — the reverse order is the bug this closes: a
+        // Firestore-only change leaves the person signing in at the old
+        // address while every admin surface shows the new one.
+        await _changeAuthEmail(docId: docId, email: normalizedEmail);
+        emailAtCheck = normalizedEmail;
+      }
     }
 
-    final targetInQuery = existing.docs.where((doc) => doc.id == docId);
-    final emailAtCheck = targetInQuery.isNotEmpty
-        ? normalizedEmail
-        : (await _users.doc(docId).get()).data()?['email'] as String?;
-
+    // Field-scoped allowlist. `uid` is rejected by firestore.rules and `status`
+    // belongs to deactivate/reactivate — neither may appear here regardless of
+    // what the record carries.
     final updateData = <String, dynamic>{
-      'name': name.trim(),
+      'name': composeEmployeeName(
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        fallback: employee.name,
+      ),
+      'firstName': employee.firstName.trim(),
+      'lastName': employee.lastName.trim(),
       'email': normalizedEmail,
-      'phone': phone.trim(),
-      'colorValue': colorValue,
+      'phone': employee.phone.trim(),
+      'colorValue': employee.color.toARGB32().toString(),
+      'role': employee.role,
+      'jobTitle': employee.jobTitle.raw,
+      'workingDays': normalizeWorkingDays(employee.workingDays),
+      'workStartMinutes': employee.workStartMinutes,
+      'workEndMinutes': employee.workEndMinutes,
+      'maxJobsPerDay': employee.maxJobsPerDay,
+      'onCall': employee.onCall,
+      // Scrub, not write: the emergency pair moved to
+      // users/{docId}/private/emergency, and any value left on the parent doc
+      // by a pre-move build is still readable by every active peer. Deleting
+      // the keys on each save heals the fleet the way the client `mobile`
+      // promotion does. Safe to send when they're already absent, and
+      // `isValidUserData` passes a removed key. Drop this once no doc can
+      // still carry them.
+      'emergencyContact': FieldValue.delete(),
+      'emergencyPhone': FieldValue.delete(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    if (isAdmin != null) {
-      updateData['role'] = isAdmin ? 'admin' : 'employee';
-    }
-
-    // Best-available client-side hardening: commit inside a transaction that
-    // re-reads the target doc and aborts when its email moved underneath the
-    // uniqueness check (e.g. another admin edited the same employee
-    // concurrently), so this write can't silently overwrite it with a value
-    // that was never re-validated.
-    final ref = _users.doc(docId);
+    // This is the best client-side hardening we can do: commit inside a
+    // transaction that re-reads the doc and aborts if the email changed
+    // since the uniqueness check — say, a concurrent admin edit.
     await ref.firestore.runTransaction<void>((txn) async {
       final snapshot = await txn.get(ref);
-      final currentEmail = snapshot.data()?['email'] as String?;
+      // Same `?? ''` normalization the pre-flight read uses: a doc with no
+      // `email` field reads as null here and would never equal the `''` the
+      // check above settled on, so the guard would abort EVERY save on such a
+      // doc rather than only a concurrent one.
+      final currentEmail = (snapshot.data()?['email'] as String?) ?? '';
       if (currentEmail != emailAtCheck) {
         // Concurrent edit — surface a retryable "try again" instead of
         // committing on top of state the uniqueness check never saw.
@@ -166,9 +247,61 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     });
   }
 
+  /// Moves the sign-in email in Firebase Auth AND on the users doc.
+  ///
+  /// Private on purpose: `updateEmployee` is the only caller, so "an email edit
+  /// always moves both stores" is a property of the save path rather than a
+  /// second method a call site could forget to pair with it.
+  Future<void> _changeAuthEmail({
+    required String docId,
+    required String email,
+  }) async {
+    try {
+      await _functions
+          .httpsCallable(
+            'changeEmployeeEmail',
+            options: HttpsCallableOptions(timeout: _callableTimeout),
+          )
+          .call<dynamic>({'docId': docId, 'email': email});
+    } on FirebaseFunctionsException catch (e) {
+      if (e.message == 'email-exists') {
+        throw const EmployeesFailureEmailAlreadyExists();
+      }
+      // A concurrent admin edit landed between our read and the commit. Same
+      // "try again" the local transaction guard raises for the same race.
+      if (e.message == 'email-changed') {
+        throw const EmployeesFailureUnknown();
+      }
+      rethrow;
+    }
+  }
+
+  /// `users/{docId}/private/emergency` — one doc, fixed id.
+  DocumentReference<Map<String, dynamic>> _emergencyDoc(String docId) =>
+      _users.doc(docId).collection('private').doc('emergency');
+
   @override
-  Future<void> deleteEmployee(String docId) async {
-    await _users.doc(docId).delete();
+  Stream<EmergencyContact> watchEmergencyContact(String docId) {
+    if (docId.isEmpty) return Stream.value(EmergencyContact.empty);
+    return retryStream(
+      () => _emergencyDoc(
+        docId,
+      ).snapshots().map((snap) => EmergencyContact.fromMap(snap.data())),
+      retryWhen: _isAuthPropagationDenied,
+    );
+  }
+
+  @override
+  Future<void> saveEmergencyContact(
+    String docId,
+    EmergencyContact contact,
+  ) async {
+    // set(merge) rather than update(): the doc doesn't exist until the first
+    // save, and update() on a missing doc throws not-found.
+    await _emergencyDoc(docId).set({
+      ...contact.toMap(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
   }
 
   @override
@@ -204,11 +337,10 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
           .limit(1)
           .snapshots()
           .where((snapshot) {
-            // Skip the transient empty from-cache snapshot that precedes the
-            // server result on a cold cache. Reporting it as an empty (deleted)
-            // doc would falsely sign the user out and stop the role from
-            // upgrading past the cached employee guess. An authoritative empty
-            // (from the server) still passes through to flag a real deletion.
+            // Skip the transient empty snapshot you get from a cold cache —
+            // reporting it as deleted would falsely sign the user out. An
+            // authoritative empty snapshot from the server still gets
+            // through, so a real deletion still gets flagged.
             return snapshot.docs.isNotEmpty || !snapshot.metadata.isFromCache;
           })
           .map((snapshot) {
@@ -221,12 +353,9 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
 }
 
 // Twin of `_isAuthPropagationDenied` in
-// `lib/features/calendar/data/firebase_appointments_repository.dart` — keep in
-// sync. A freshly signed-in user's ID token and `usersByUid` role bridge can
-// lag the auth state, so the first users listen comes back permission-denied
-// even though the read is authorized. Without the retry, one such error
-// permanently breaks role upgrades and disable/delete detection for the
-// session. Re-subscribing after a short delay succeeds; a genuine denial
-// survives every retry and surfaces as before.
+// `lib/features/calendar/data/firebase_appointments_repository.dart` — keep
+// them in sync. Retries a permission-denied on the first users listen, since
+// a freshly signed-in token can lag behind auth state; a genuine denial
+// still comes through once retries are exhausted.
 bool _isAuthPropagationDenied(Object error) =>
     error is FirebaseException && error.code == 'permission-denied';

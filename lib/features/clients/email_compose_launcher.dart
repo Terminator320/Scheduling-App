@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
-import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/launchers/external_uri_launcher.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-/// Bottom-sheet chooser for composing an email — system default mail app,
-/// Gmail, or Outlook — mirroring `AddressMapLauncher`'s map-app picker.
+/// Bottom-sheet chooser for composing email (system mail app, Gmail, or Outlook).
 class EmailComposeLauncher {
   const EmailComposeLauncher._();
 
@@ -45,9 +43,8 @@ class EmailComposeLauncher {
 
     final errorMessage = context.l10n.error_couldNotOpenEmail;
 
-    // iOS: native CupertinoActionSheet. Android: the existing Material sheet
-    // (drag handle + address header). Both resolve to the chosen URI, launched
-    // once below.
+    // On iOS we show a native CupertinoActionSheet; on Android a Material sheet with a
+    // drag handle. Either way, the chosen URI gets launched below.
     final Uri? chosen;
     if (context.isCupertino) {
       chosen = await showAdaptiveActionSheet<Uri>(
@@ -114,19 +111,13 @@ class EmailComposeLauncher {
     }
 
     if (chosen == null || !context.mounted) return;
-    try {
-      final opened = await launchUrl(
-        chosen,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!opened && context.mounted) {
-        ref.read(noticeServiceProvider).error(errorMessage);
-      }
-    } catch (_) {
-      if (context.mounted) {
-        ref.read(noticeServiceProvider).error(errorMessage);
-      }
-    }
+    await launchExternalUri(
+      context,
+      ref,
+      chosen,
+      tag: 'LAUNCH-EMAIL',
+      errorMessage: errorMessage,
+    );
   }
 }
 

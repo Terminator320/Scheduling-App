@@ -6,8 +6,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 class MonthYearPicker {
-  // Year wheel spans a sliding window relative to today so the range never
-  // needs a manual code bump: a few years back through several years ahead.
+  // The year wheel spans a window relative to today, so it never needs manual bumping as time passes.
   static const int _pastYears = 5;
   static const int _futureYears = 15;
 
@@ -44,6 +43,8 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
   late int selectedYear;
   late final int _startYear;
   late final int _yearCount;
+  late final FixedExtentScrollController _monthController;
+  late final FixedExtentScrollController _yearController;
 
   @override
   void initState() {
@@ -52,6 +53,19 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
     _yearCount = MonthYearPicker._pastYears + MonthYearPicker._futureYears + 1;
     selectedMonth = widget.focusedDay.month;
     selectedYear = widget.focusedDay.year;
+    _monthController = FixedExtentScrollController(
+      initialItem: selectedMonth - 1,
+    );
+    _yearController = FixedExtentScrollController(
+      initialItem: (selectedYear - _startYear).clamp(0, _yearCount - 1),
+    );
+  }
+
+  @override
+  void dispose() {
+    _monthController.dispose();
+    _yearController.dispose();
+    super.dispose();
   }
 
   @override
@@ -62,8 +76,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
     final bodyLarge = theme.textTheme.bodyLarge;
     final monthFormat = DateFormat.MMMM(locale);
 
-    // Sized past the bottom view padding + SafeArea so the wheels don't sit
-    // under the home indicator.
+    // Size past the bottom view padding so the wheels don't sit under the home indicator.
     return SizedBox(
       height: 300 + MediaQuery.viewPaddingOf(context).bottom,
       child: SafeArea(
@@ -71,7 +84,10 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sp16,
+                vertical: AppSpacing.sp8,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -106,9 +122,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                 children: [
                   Expanded(
                     child: CupertinoPicker(
-                      scrollController: FixedExtentScrollController(
-                        initialItem: selectedMonth - 1,
-                      ),
+                      scrollController: _monthController,
                       itemExtent: 40,
                       useMagnifier: true,
                       magnification: 1.2,
@@ -127,12 +141,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
                   ),
                   Expanded(
                     child: CupertinoPicker(
-                      scrollController: FixedExtentScrollController(
-                        initialItem: (selectedYear - _startYear).clamp(
-                          0,
-                          _yearCount - 1,
-                        ),
-                      ),
+                      scrollController: _yearController,
                       itemExtent: 40,
                       useMagnifier: true,
                       magnification: 1.2,

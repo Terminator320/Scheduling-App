@@ -12,14 +12,10 @@ final appointmentsRepositoryProvider = Provider<AppointmentsRepository>((ref) {
   return FirebaseAppointmentsRepository(firestore);
 });
 
-/// How long an unwatched month keeps its Firestore listener warm, so paging
-/// back within this window reuses the stream instead of re-opening (and
-/// re-reading) the same range query on every month swipe.
+/// How long an unwatched month keeps its listener warm for reuse on page-back.
 const _monthRangeKeepAlive = Duration(minutes: 3);
 
-/// Holds an autoDispose provider's keep-alive link open for
-/// [_monthRangeKeepAlive] after its last watcher leaves, so a quick page-back
-/// reuses the warm listener instead of re-subscribing (and re-reading).
+/// Keeps a listener alive after watchers leave, enabling reuse on page-back.
 void _keepWarmWithGrace(Ref ref) {
   final link = ref.keepAlive();
   Timer? evictTimer;
@@ -36,15 +32,14 @@ final appointmentsInRangeProvider = StreamProvider.family
       return ref.watch(appointmentsRepositoryProvider).watchInRange(range);
     });
 
-/// Family key for [myAppointmentsProvider]. Callers pass the record literal;
-/// records are structural, so the alias stays library-private.
+/// Family key for [myAppointmentsProvider]. Kept as a private typedef since
+/// records are structurally typed anyway.
 typedef _MyAppointmentsKey = ({String employeeId, AppointmentDateRange range});
 
 final myAppointmentsProvider = StreamProvider.family
     .autoDispose<List<AppointmentRecord>, _MyAppointmentsKey>((ref, key) {
       if (ref.authUid == null) return Stream.value(const []);
-      // Same keep-alive grace as the admin range provider: an employee paging
-      // back within the window reuses the warm listener instead of re-reading.
+      // Same keep-alive grace as admin provider.
       _keepWarmWithGrace(ref);
       return ref
           .watch(appointmentsRepositoryProvider)

@@ -1,7 +1,5 @@
-// Mocktail-style stubs of sealed Firestore types — the canonical workaround
-// for testing repos without pulling in fake_cloud_firestore. The status
-// allowlist check throws before any Firestore call would happen so the
-// stubs only need to satisfy the constructor.
+// Mocktail stubs of sealed Firestore types; the allowlist check throws before
+// any Firestore call, so stubs only need to satisfy the constructor.
 // ignore_for_file: subtype_of_sealed_class
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,11 +9,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:scheduling/features/calendar/data/firebase_appointments_repository.dart';
 
 /// S6: `updateAppointmentStatus` must reject non-allowlisted status values
-/// before the write reaches Firestore. The rules also enforce this, but
-/// failing fast on the client gives a clearer error than `permission-denied`.
-///
-/// We mock `FirebaseFirestore` just enough for the constructor — the
-/// allowlist check throws before any Firestore call would happen.
+/// before reaching Firestore, giving a clearer error than the rules' `permission-denied`.
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
 
@@ -71,5 +65,29 @@ void main() {
       throwsArgumentError,
     );
     verifyNever(() => doc.update(any()));
+  });
+
+  test('cancel stamps a fresh seriesOpId', () async {
+    final repo = FirebaseAppointmentsRepository(firestore);
+    await repo.updateAppointmentStatus(id: 'a1', status: 'cancelled');
+    final payload = (verify(() => doc.update(captureAny())).captured.single
+            as Map)
+        .cast<String, dynamic>();
+    expect(payload['status'], 'cancelled');
+    expect(payload['seriesOpId'], isA<String>());
+    expect(payload['seriesOpId'] as String, isNotEmpty);
+  });
+
+  test('mark-done writes only status + updatedAt (employee hasOnly rule)',
+      () async {
+    // The employee mark-done rule is affectedKeys().hasOnly(['status',
+    // 'updatedAt']); a seriesOpId here would be rejected with permission-denied.
+    final repo = FirebaseAppointmentsRepository(firestore);
+    await repo.updateAppointmentStatus(id: 'a1', status: 'done');
+    final payload = (verify(() => doc.update(captureAny())).captured.single
+            as Map)
+        .cast<String, dynamic>();
+    expect(payload.keys, unorderedEquals(['status', 'updatedAt']));
+    expect(payload.containsKey('seriesOpId'), isFalse);
   });
 }

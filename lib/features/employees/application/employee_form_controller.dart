@@ -5,10 +5,12 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 
-/// Outcome of an employee save (invite or edit). The form only maps these to
-/// notices, field errors and navigation; the persistence flow lives in
-/// [EmployeeFormController].
+/// Outcome of an employee save, whether an invite or an edit — the form maps
+/// this to a notice, an error, or a navigation action.
 sealed class EmployeeSaveOutcome {
   const EmployeeSaveOutcome();
 }
@@ -18,13 +20,15 @@ class EmployeeUpdated extends EmployeeSaveOutcome {
   const EmployeeUpdated();
 }
 
-/// Invite created; [code] is the one-time signup code to show the admin once.
-class EmployeeInvited extends EmployeeSaveOutcome {
-  const EmployeeInvited(this.code);
-  final String code;
+/// The account was created (or re-provisioned). [credentials] are what the
+/// admin reads out — the email and the starting password the server set.
+class EmployeeAccountCreated extends EmployeeSaveOutcome {
+  const EmployeeAccountCreated(this.credentials);
+  final NewAccountCredentials credentials;
 }
 
-/// The invite email is already taken — a field error, not a notice.
+/// The email already belongs to an account that has finished setup — a field
+/// error, not a notice.
 class EmployeeEmailInUse extends EmployeeSaveOutcome {
   const EmployeeEmailInUse(this.failure);
   final EmployeesFailureEmailAlreadyExists failure;
@@ -33,6 +37,16 @@ class EmployeeEmailInUse extends EmployeeSaveOutcome {
 class EmployeeSaveFailed extends EmployeeSaveOutcome {
   const EmployeeSaveFailed(this.error);
   final Object error;
+}
+
+/// A write the reentrancy guard skipped because one is already in flight.
+/// Nothing committed and nothing failed, so this surfaces NOTHING — no notice
+/// either way. It used to be reported as `EmployeeSaveFailed(SocketException)`,
+/// which `composeErrorNotice` classifies by TYPE and rendered as "you appear to
+/// be offline" on a double-tap while perfectly online. Same shape as
+/// EventDetailsActionBusy.
+class EmployeeSaveBusy extends EmployeeSaveOutcome {
+  const EmployeeSaveBusy();
 }
 
 /// Outcome of a disable/enable toggle.
@@ -49,115 +63,162 @@ class EmployeeStatusChangeFailed extends EmployeeStatusOutcome {
   final Object error;
 }
 
-/// Outcome of an employee delete.
-sealed class EmployeeDeleteOutcome {
-  const EmployeeDeleteOutcome();
+/// Outcome of revoking a pending invite.
+sealed class AccountDeleteOutcome {
+  const AccountDeleteOutcome();
 }
 
-class EmployeeDeleted extends EmployeeDeleteOutcome {
-  const EmployeeDeleted();
+class AccountDeleted extends AccountDeleteOutcome {
+  const AccountDeleted();
 }
 
-class EmployeeDeleteFailed extends EmployeeDeleteOutcome {
-  const EmployeeDeleteFailed(this.error);
+class AccountDeleteFailed extends AccountDeleteOutcome {
+  const AccountDeleteFailed(this.error);
   final Object error;
 }
 
-/// Busy flags for the employee form/detail surfaces — drive the Save spinner
-/// and the status/delete button spinners while a mutation is in flight.
+/// Busy state for the employee form/detail surfaces — these drive the Save
+/// button and the status button spinners.
+///
+/// Saving and account-deletion are tracked as **sets of doc ids, not booleans**,
+/// because this notifier is app-wide while its surfaces are not: the roster can
+/// show several expanded `PendingInviteTile`s at once, each with its own Reset
+/// and Remove. A single flag made every row claim to be busy when any one of
+/// them was, and — worse — made the reentrancy guard refuse a *different* row's
+/// action, which `EmployeeSaveBusy` then dropped silently.
+///
+/// A brand-new person has no doc id yet, so they key on `''`. That is correct
+/// rather than a gap: the invite sheet is modal, so there is only ever one
+/// unsaved person, and a double-tap on it collides with itself exactly as it
+/// should.
 @immutable
 class EmployeeFormActivity {
   const EmployeeFormActivity({
-    this.isSaving = false,
+    this.savingIds = const {},
+    this.deletingAccountIds = const {},
     this.isTogglingStatus = false,
-    this.isDeleting = false,
   });
 
-  final bool isSaving;
+  final Set<String> savingIds;
+  final Set<String> deletingAccountIds;
   final bool isTogglingStatus;
-  final bool isDeleting;
+
+  /// Is *anything* saving. The two person sheets are modal and own the only
+  /// operation in flight when they are open, so they read this rather than
+  /// keying by id.
+  bool get isSaving => savingIds.isNotEmpty;
+  bool get isDeletingAccount => deletingAccountIds.isNotEmpty;
+
+  /// Is THIS employee saving / being removed — what a roster row must ask.
+  bool isSavingId(String docId) => savingIds.contains(docId);
+  bool isDeletingAccountId(String docId) => deletingAccountIds.contains(docId);
 
   EmployeeFormActivity copyWith({
-    bool? isSaving,
+    Set<String>? savingIds,
+    Set<String>? deletingAccountIds,
     bool? isTogglingStatus,
-    bool? isDeleting,
   }) {
     return EmployeeFormActivity(
-      isSaving: isSaving ?? this.isSaving,
+      savingIds: savingIds ?? this.savingIds,
+      deletingAccountIds: deletingAccountIds ?? this.deletingAccountIds,
       isTogglingStatus: isTogglingStatus ?? this.isTogglingStatus,
-      isDeleting: isDeleting ?? this.isDeleting,
     );
   }
 
   @override
   bool operator ==(Object other) =>
       other is EmployeeFormActivity &&
-      other.isSaving == isSaving &&
-      other.isTogglingStatus == isTogglingStatus &&
-      other.isDeleting == isDeleting;
+      setEquals(other.savingIds, savingIds) &&
+      setEquals(other.deletingAccountIds, deletingAccountIds) &&
+      other.isTogglingStatus == isTogglingStatus;
 
   @override
-  int get hashCode => Object.hash(isSaving, isTogglingStatus, isDeleting);
+  int get hashCode => Object.hash(
+    Object.hashAllUnordered(savingIds),
+    Object.hashAllUnordered(deletingAccountIds),
+    isTogglingStatus,
+  );
 }
 
-/// Employee create/update/status/delete orchestration shared by the form
-/// sheet and the details view, with a typed outcome per operation. The
-/// employees list streams from Firestore, so no refresh bump is needed here
-/// (unlike the paginated clients list). Validation stays in the widgets via
-/// `EmployeeFormValidator`.
+/// Handles employee create/update/status, shared by the form sheet and the
+/// details view. The employees list streams straight from Firestore, so
+/// there's no need for a refresh bump here like the paginated clients list
+/// needs.
 class EmployeeFormController extends Notifier<EmployeeFormActivity> {
   @override
   EmployeeFormActivity build() => const EmployeeFormActivity();
 
-  /// Creates an invite; the one-time signup code rides back on the outcome.
-  Future<EmployeeSaveOutcome> inviteEmployee({
-    required String name,
-    required String email,
-    required String phone,
-    required String colorValue,
-  }) {
+  /// Creates the employee's account. The credentials ride back on the outcome
+  /// so the caller can show them to the admin.
+  ///
+  /// Takes the whole record on purpose. The server's re-provision branch
+  /// UPDATES the pending doc's editable fields with whatever it is handed, so
+  /// a call site that omits one silently wipes it — passing a record closes
+  /// that trap at the CALL SITES, which is where it kept being sprung.
+  ///
+  /// It does not close it here: the destructuring below is still by hand, so a
+  /// new pending-user field added to the server's update set has to be added
+  /// to this one place too, with no compile error if it isn't. One place, not
+  /// four — but not zero.
+  Future<EmployeeSaveOutcome> createAccount(EmployeeRecord employee) {
     return _save(
-      (repo) async => EmployeeInvited(
-        await repo.createEmployeeInvite(
-          name: name,
-          email: email,
-          phone: phone,
-          colorValue: colorValue,
+      employee.id,
+      (repo) async => EmployeeAccountCreated(
+        await repo.createEmployeeAccount(
+          name: employee.name,
+          firstName: employee.firstName,
+          lastName: employee.lastName,
+          email: employee.email,
+          phone: employee.phone,
+          colorValue: employee.color.toARGB32().toString(),
+          jobTitle: employee.jobTitle.raw,
+          isAdmin: employee.isAdmin,
         ),
       ),
     );
   }
 
   /// Persists an edit to an existing employee.
-  Future<EmployeeSaveOutcome> updateEmployee({
-    required String docId,
-    required String name,
-    required String email,
-    required String phone,
-    required String colorValue,
-    required bool isAdmin,
+  ///
+  /// [emergency] rides along because it is a second write to a different path
+  /// (`users/{id}/private/emergency`) that the one Save button owns — routing
+  /// it through the same `_save` keeps one in-flight flag and one error path,
+  /// so a failure on either write surfaces once. Pass null to leave it alone.
+  Future<EmployeeSaveOutcome> updateEmployee(
+    EmployeeRecord employee, {
+    EmergencyContact? emergency,
   }) {
-    return _save((repo) async {
-      await repo.updateEmployee(
-        docId: docId,
-        name: name,
-        email: email,
-        phone: phone,
-        colorValue: colorValue,
-        isAdmin: isAdmin,
-      );
+    return _save(employee.id, (repo) async {
+      await repo.updateEmployee(docId: employee.id, employee: employee);
+      if (emergency != null) {
+        await repo.saveEmergencyContact(employee.id, emergency);
+      }
       return const EmployeeUpdated();
     });
   }
 
+  /// Runs [write] for [docId], guarding reentrancy **per employee**.
+  ///
+  /// Keyed, not global: a second action on the SAME person is a double-tap and
+  /// must be refused (the save already running owns that outcome), while one on
+  /// a different person is a real action that has to proceed — refusing it
+  /// returned `EmployeeSaveBusy`, which by design surfaces nothing, so the tap
+  /// vanished with no spinner and no error.
   Future<EmployeeSaveOutcome> _save(
+    String docId,
     Future<EmployeeSaveOutcome> Function(EmployeesRepository repo) write,
   ) async {
-    // Resolve dependencies before the first await: the sheet can be dismissed
-    // mid-save, and using the Ref of a disposed notifier throws in Riverpod 3.
+    // Synchronously first: the sheet's primary button only disables on the next
+    // frame, so a double-tap otherwise starts a second concurrent write.
+    if (state.isSavingId(docId)) {
+      return const EmployeeSaveBusy();
+    }
+    // Resolve dependencies before the first await. The sheet can be
+    // dismissed mid-save, and using the Ref of a disposed notifier throws in
+    // Riverpod 3.
     final repo = ref.read(employeesRepositoryProvider);
     final logger = ref.read(loggerProvider);
-    state = state.copyWith(isSaving: true);
+    state = state.copyWith(savingIds: {...state.savingIds, docId});
     try {
       return await write(repo);
     } catch (e, st) {
@@ -167,7 +228,11 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
       logger.warn('EMP-CREATE saveEmployee failed', e, st);
       return EmployeeSaveFailed(e);
     } finally {
-      if (ref.mounted) state = state.copyWith(isSaving: false);
+      // Remove only THIS key — a concurrent save for another employee is still
+      // in flight and must keep its own.
+      if (ref.mounted) {
+        state = state.copyWith(savingIds: {...state.savingIds}..remove(docId));
+      }
     }
   }
 
@@ -195,20 +260,33 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
     }
   }
 
-  /// Deletes the employee's users doc. On success [state] stays deleting so
-  /// the details surface keeps its spinner while its host pops/clears it.
-  Future<EmployeeDeleteOutcome> deleteEmployee(String docId) async {
+  /// Deletes an account that has never been set up — the users doc and the
+  /// Firebase Auth account both.
+  ///
+  /// A server refusal (the person finished setup while the admin was looking
+  /// at the row) is a *failed* outcome, not a silent success — the live stream
+  /// will have flipped the row to Active by the time the notice lands.
+  Future<AccountDeleteOutcome> deleteAccount(String docId) async {
     // Resolved before the first await — see _save.
     final repo = ref.read(employeesRepositoryProvider);
     final logger = ref.read(loggerProvider);
-    state = state.copyWith(isDeleting: true);
+    // Keyed like _save: two expanded pending rows can each be removed, and one
+    // row's removal must not disable the other's button.
+    state = state.copyWith(
+      deletingAccountIds: {...state.deletingAccountIds, docId},
+    );
     try {
-      await repo.deleteEmployee(docId);
-      return const EmployeeDeleted();
+      await repo.deleteEmployeeAccount(docId);
+      return const AccountDeleted();
     } catch (e, st) {
-      logger.warn('EMP-DEL deleteEmployee failed', e, st);
-      if (ref.mounted) state = state.copyWith(isDeleting: false);
-      return EmployeeDeleteFailed(e);
+      logger.warn('EMP-DELETE deleteEmployeeAccount failed', e, st);
+      return AccountDeleteFailed(e);
+    } finally {
+      if (ref.mounted) {
+        state = state.copyWith(
+          deletingAccountIds: {...state.deletingAccountIds}..remove(docId),
+        );
+      }
     }
   }
 }

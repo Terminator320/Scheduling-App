@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/errors/failure.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
@@ -10,6 +11,7 @@ import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
 import 'package:scheduling/features/maps/domain/places_repository.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:uuid/uuid.dart';
 
@@ -51,10 +53,7 @@ class _AddressAutocompleteFieldState
   String _lastTypedApt = '';
   String _lastFetched = '';
 
-  /// Monotonically increasing id of the newest autocomplete request. A slow
-  /// response whose id no longer matches is stale — the user has typed a newer
-  /// query (or picked a suggestion) since — and is discarded instead of
-  /// overwriting the newer suggestions.
+  /// Request id used to discard stale responses that come back late.
   int _requestId = 0;
 
   static const _minQueryLength = 3;
@@ -100,10 +99,9 @@ class _AddressAutocompleteFieldState
   }
 
   Future<void> _fetch(String query) async {
-    // Skip a re-fetch of the exact query we last *successfully* fetched (e.g.
-    // trailing edits that trim back to the same text) — it would bill an
-    // identical call. Set on success only, so a failed query is retried when
-    // the user re-triggers the same text.
+    // Skip re-fetching the exact query we already fetched successfully, so we
+    // don't bill for an identical call. This is only set on success, so a
+    // failed fetch will still retry.
     if (query == _lastFetched) return;
     final requestId = ++_requestId;
     setState(() {
@@ -122,7 +120,9 @@ class _AddressAutocompleteFieldState
         _suggestions = results;
         _isLoading = false;
       });
-    } catch (e) {
+    } catch (e, st) {
+      // Logged before the mounted guard so it reaches Crashlytics even if the field is gone by then.
+      ref.read(loggerProvider).warn('ADDR-AUTO autocomplete failed', e, st);
       if (!mounted || requestId != _requestId) return;
       setState(() {
         _suggestions = [];
@@ -136,9 +136,26 @@ class _AddressAutocompleteFieldState
     }
   }
 
+  /// The clear button empties the controller itself; this tears down the
+  /// lookup that was running for the text it wiped. `onChanged` has to be
+  /// called by hand — a programmatic `controller.clear()` never fires the
+  /// field's own, so the host would keep the address it can no longer see.
+  void _onCleared() {
+    _debounce.cancel();
+    // Discards a response already in flight for the old query.
+    _requestId++;
+    _lastFetched = '';
+    _lastTypedApt = '';
+    widget.onChanged?.call('');
+    setState(() {
+      _suggestions = [];
+      _isLoading = false;
+      _serviceError = null;
+    });
+  }
+
   Future<void> _selectSuggestion(AddressSuggestion s) async {
-    // Invalidate any pending debounce/in-flight autocomplete so a late
-    // response can't resurface the suggestion list after this pick.
+    // Invalidate any pending debounce/in-flight request so a late response can't resurface suggestions.
     _debounce.cancel();
     _requestId++;
     _suppressFetch = true;
@@ -164,7 +181,10 @@ class _AddressAutocompleteFieldState
       );
       setState(() => _isLoading = false);
       widget.onAddressSelected?.call(widget.controller.text);
-    } catch (e) {
+    } catch (e, st) {
+      ref
+          .read(loggerProvider)
+          .warn('ADDR-DETAILS getPlaceDetails failed', e, st);
       if (!mounted) return;
       setState(() {
         _isLoading = false;
@@ -198,15 +218,23 @@ class _AddressAutocompleteFieldState
           maxLength: TextLimits.appointmentAddress,
           errorText: widget.errorText,
           onChanged: _onTextChanged,
+          // The custom suffix used to cost this field the clear "x" every
+          // other text field gets. ClearTextButton's placeholder slot is
+          // exactly this case: the pin while empty, the x once there is an
+          // address to wipe.
           suffixIcon: _isLoading
               ? const Padding(
                   padding: EdgeInsets.all(AppSpacing.sp12),
                   child: AdaptiveProgressIndicator(size: 16),
                 )
-              : Icon(
-                  Icons.location_on_outlined,
-                  size: 18,
-                  color: scheme.onSurfaceVariant,
+              : ClearTextButton(
+                  controller: widget.controller,
+                  onCleared: _onCleared,
+                  placeholder: Icon(
+                    Icons.location_on_outlined,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
         ),
         if (_suggestions.isNotEmpty)

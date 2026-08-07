@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
@@ -73,12 +74,22 @@ void main() {
       employees.watchEmployees,
     ).thenAnswer((_) => Stream.value(const [_employeeA]));
     when(() => appointments.updateAppointment(any())).thenAnswer((_) async {});
+    // The edit flow now runs a conflict check before writing; no clash here.
+    when(
+      () => appointments.findBusyEmployees(
+        candidates: any(named: 'candidates'),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        excludeAppointmentId: any(named: 'excludeAppointmentId'),
+      ),
+    ).thenAnswer((_) async => const <EmployeeRecord>[]);
   });
 
   // Tall viewport so the whole lazily-built edit form lays out without scrolling.
   Future<void> pumpDetails(
     WidgetTester tester, {
     void Function(Object? result)? onClose,
+    AppointmentRecord? appointment,
   }) async {
     tester.view.physicalSize = const Size(800, 2600);
     tester.view.devicePixelRatio = 1;
@@ -99,7 +110,13 @@ void main() {
           ],
           supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
-            body: EventDetailsView(appointment: _appointment, onClose: onClose),
+            // Explicit: showActions defaults CLOSED, and these cases exercise
+            // the admin-only Edit affordance.
+            body: EventDetailsView(
+              appointment: appointment ?? _appointment,
+              showActions: true,
+              onClose: onClose,
+            ),
           ),
         ),
       ),
@@ -163,6 +180,113 @@ void main() {
     expect(saved.title, 'Updated title');
     expect(closed, isTrue);
     expect(closeResult, isA<AppointmentRecord>());
+    expect(tester.takeException(), isNull);
+  });
+
+  AppointmentRecord spanning(DateTime start, DateTime end) => AppointmentRecord(
+    id: 'appt-span',
+    title: 'Repipe',
+    startTime: start,
+    endTime: end,
+    clientId: 'c1',
+    clientName: 'Existing Client',
+    clientPhone: '555-1111',
+    address: '1 First St',
+    employeeIds: const ['e1'],
+    employeeNames: const ['Alex'],
+  );
+
+  Future<void> openEditForm(
+    WidgetTester tester, {
+    AppointmentRecord? appointment,
+  }) async {
+    await pumpDetails(tester, appointment: appointment);
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('a multi-day record shows its end date and daily-window time '
+      'labels', (tester) async {
+    await openEditForm(
+      tester,
+      appointment: spanning(DateTime(2026, 8, 1, 9), DateTime(2026, 8, 3, 17)),
+    );
+
+    expect(
+      find.text(DateUtilsHelper.formatDate(DateTime(2026, 8, 3))),
+      findsOneWidget,
+    );
+    expect(find.text('3 days'), findsOneWidget);
+    expect(find.text('Start time · each day'), findsOneWidget);
+    expect(find.text('End time · each day'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an overnight record ends on the last night the crew starts, '
+      'not the morning it finishes', (tester) async {
+    await openEditForm(
+      tester,
+      appointment: spanning(DateTime(2026, 8, 1, 22), DateTime(2026, 8, 4, 6)),
+    );
+
+    expect(
+      find.text(DateUtilsHelper.formatDate(DateTime(2026, 8, 3))),
+      findsOneWidget,
+    );
+    expect(
+      find.text(DateUtilsHelper.formatDate(DateTime(2026, 8, 4))),
+      findsNothing,
+    );
+    expect(find.text('3 nights'), findsOneWidget);
+    expect(find.text('Start time · each night'), findsOneWidget);
+    expect(find.text('End time · next morning'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('moving the start date shifts the displayed end date and keeps '
+      'the run length', (tester) async {
+    await openEditForm(
+      tester,
+      appointment: spanning(DateTime(2026, 8, 1, 9), DateTime(2026, 8, 3, 17)),
+    );
+
+    await tester.tap(find.text('Start date'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(DatePickerDialog),
+        matching: find.text('5'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(DateUtilsHelper.formatDate(DateTime(2026, 8, 5))),
+      findsOneWidget,
+    );
+    expect(
+      find.text(DateUtilsHelper.formatDate(DateTime(2026, 8, 7))),
+      findsOneWidget,
+    );
+    expect(find.text('3 days'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a single-day record shows plain time labels and no run length', (
+    tester,
+  ) async {
+    await openEditForm(tester);
+
+    // Both date rows land on the same day, so nothing describes a run.
+    expect(
+      find.text(DateUtilsHelper.formatDate(DateTime(2026, 5, 10))),
+      findsNWidgets(2),
+    );
+    expect(find.textContaining(RegExp(r'\d+ (days|nights)')), findsNothing);
+    expect(find.text('Start Time'), findsOneWidget);
+    expect(find.text('End Time'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

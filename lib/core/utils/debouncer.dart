@@ -1,11 +1,7 @@
 import 'dart:async';
 
-/// Coalesces rapid calls into one. Each [run] restarts the timer, so only the
-/// last action scheduled within [duration] fires. Used to keep per-keystroke
-/// search from firing a request on every character.
-///
-/// Own one per widget state and [dispose] it in `dispose()` to drop a pending
-/// tick after the widget is gone.
+/// Coalesces rapid calls into one, firing only the last action within
+/// [duration] (e.g. per-keystroke search). Own one instance per widget state.
 class Debouncer {
   Debouncer(this.duration);
 

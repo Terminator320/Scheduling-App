@@ -2,14 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/shared/widgets/primitives/app_back_button.dart';
 
-/// The app's standard top bar: a primary-coloured [AppBar] with a bold
-/// on-primary title, an optional back button ([onBack]) and optional
-/// [actions] / [bottom].
-///
-/// Pass [compact] (typically `context.isLandscape`) to slim the toolbar and
-/// shrink the title so the short landscape viewport keeps more room for
-/// content. Use this on every screen instead of hand-building an [AppBar] so
-/// the chrome stays consistent in one place.
+/// Standard top bar with a bold title and optional back button, [actions],
+/// and [bottom] row — pass [compact] for landscape. Use this instead of
+/// hand-building an [AppBar].
 class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   const AppTopBar({
     required this.title,
@@ -26,8 +21,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onBack;
   final List<Widget>? actions;
 
-  /// A search bar, sub-header row, etc. — anything that implements
-  /// [PreferredSizeWidget], rendered beneath the toolbar.
+  /// A search bar, sub-header row, etc. — anything implementing [PreferredSizeWidget], rendered beneath the toolbar.
   final PreferredSizeWidget? bottom;
 
   /// Slims the toolbar + title for short (landscape) viewports.

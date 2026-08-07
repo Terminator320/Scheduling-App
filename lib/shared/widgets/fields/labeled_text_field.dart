@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
@@ -19,6 +20,7 @@ class LabeledTextField extends StatelessWidget {
     this.autofillHints,
     this.maxLines = 1,
     this.maxLength,
+    this.inputFormatters,
     this.showCounter = false,
     this.readOnly = false,
     this.onTap,
@@ -42,6 +44,10 @@ class LabeledTextField extends StatelessWidget {
   final int maxLines;
 
   final int? maxLength;
+
+  /// Extra formatters (e.g. a phone mask), applied before the length cap so
+  /// the cap measures the formatted text the field will actually hold.
+  final List<TextInputFormatter>? inputFormatters;
   final bool showCounter;
   final bool readOnly;
   final VoidCallback? onTap;
@@ -71,19 +77,26 @@ class LabeledTextField extends StatelessWidget {
             maxLines: maxLines,
             onSubmitted: onSubmitted,
             // With showCounter, TextField.maxLength enforces the cap and
-            // renders the live "x/y" counter; otherwise enforce silently.
+            // renders the live "x/y" counter. Otherwise it just enforces the
+            // cap silently.
             maxLength: showCounter ? maxLength : null,
-            inputFormatters: maxLength == null || showCounter
-                ? null
-                : [LengthLimitingTextInputFormatter(maxLength)],
+            inputFormatters: [
+              ...?inputFormatters,
+              // showCounter routes the cap through TextField.maxLength, which
+              // installs its own limiter — adding a second one here would
+              // enforce it twice.
+              if (maxLength != null && !showCounter)
+                LengthLimitingTextInputFormatter(maxLength),
+            ],
             readOnly: readOnly,
             onTap: onTap,
             onChanged: onChanged,
             decoration: formInputDecoration(context, hint ?? label).copyWith(
               errorText: errorText != null ? '' : null,
               errorStyle: const TextStyle(fontSize: 0, height: 0),
-              // Every editable field gets a clear "x" while it holds text;
-              // a custom suffix or a readOnly (picker) field keeps its own.
+              // Every editable field gets a clear "x" while it holds text. A
+              // custom suffix, or a readOnly (picker) field, keeps whatever
+              // it already has instead.
               suffixIcon:
                   suffixIcon ??
                   (readOnly
@@ -123,8 +136,8 @@ class _MaxLengthWarning extends StatelessWidget {
   }
 }
 
-// Fade + 4px slide entrance/exit for the error row (style A from the spec);
-// AnimatedSize lets fields below glide instead of jumping.
+// Fades and slides the error row in/out by 4px. AnimatedSize lets the fields
+// below glide into place instead of jumping.
 class _AnimatedFieldError extends StatelessWidget {
   const _AnimatedFieldError({required this.message});
 
@@ -170,12 +183,12 @@ class _FieldError extends StatelessWidget {
     final theme = Theme.of(context);
     final error = theme.colorScheme.error;
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.only(top: AppSpacing.sp4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Icon(Icons.info_outline_rounded, size: 11, color: error),
-          const SizedBox(width: 4),
+          const SizedBox(width: AppSpacing.sp4),
           Expanded(
             child: Text(
               message,

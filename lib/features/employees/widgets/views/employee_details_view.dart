@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/errors/error_cause.dart';
-import 'package:scheduling/core/layout/breakpoints.dart';
-import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/employees/application/employee_form_controller.dart';
+import 'package:scheduling/features/calendar/domain/month_grid.dart';
+import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_month_grid.dart';
+import 'package:scheduling/features/clients/email_compose_launcher.dart';
+import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
+import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
+import 'package:scheduling/features/employees/widgets/cards/employee_profile_card.dart';
+import 'package:scheduling/features/employees/widgets/sections/employee_today_section.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
-import 'package:scheduling/shared/widgets/feedback/user_status_chip.dart';
-import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
+import 'package:scheduling/shared/widgets/cards/key_value_panel.dart';
+import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
+import 'package:scheduling/shared/widgets/primitives/quick_action_button.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-class EmployeeDetailsView extends ConsumerStatefulWidget {
+class EmployeeDetailsView extends ConsumerWidget {
   const EmployeeDetailsView({
     required this.employee,
     required this.isCurrentUserAdmin,
-    required this.onAction,
+    required this.onEdit,
     super.key,
     this.scrollController,
     this.showHandle = false,
@@ -26,333 +32,188 @@ class EmployeeDetailsView extends ConsumerStatefulWidget {
   final EmployeeRecord employee;
   final bool isCurrentUserAdmin;
 
-  /// Receives the action name (`'edit'`, `'deleted'`, `'enabled'`,
-  /// `'disabled'`) so the host sheet/pane can react.
-  final ValueChanged<String> onAction;
+  /// Disable/enable moved into the edit sheet and delete was withdrawn, so
+  /// Edit is the only action this surface can raise.
+  final VoidCallback onEdit;
   final ScrollController? scrollController;
   final bool showHandle;
   final double bottomPadding;
 
   @override
-  ConsumerState<EmployeeDetailsView> createState() =>
-      _EmployeeDetailsViewState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final materialL10n = MaterialLocalizations.of(context);
+    final locale = Localizations.localeOf(context).toString();
+    final weekStart = CalendarMonthGrid.weekStartOf(context);
 
-class _EmployeeDetailsViewState extends ConsumerState<EmployeeDetailsView> {
-  Future<void> _confirmDelete() async {
-    final confirmed = await showConfirmDialog(
-      context,
-      title: context.l10n.employees_deleteEmployee,
-      message: context.l10n.employees_areYouSureYouWantToDeleteThisEmployee,
-      confirmLabel: context.l10n.common_delete,
-    );
-    if (!mounted || !confirmed) return;
-    final outcome = await ref
-        .read(employeeFormControllerProvider.notifier)
-        .deleteEmployee(widget.employee.id);
-    if (!mounted) return;
-    switch (outcome) {
-      case EmployeeDeleted():
-        widget.onAction('deleted');
-      case EmployeeDeleteFailed(:final error):
-        ref
-            .read(noticeServiceProvider)
-            .error(
-              composeErrorNotice(
-                context,
-                intro: context.l10n.error_introDeleteEmployee,
-                tag: 'EMP-DEL',
-                error: error,
-              ),
-            );
-    }
-  }
+    // Handlers built here (where `ref` lives) so the widgets stay
+    // presentational. Both delegate to launchExternalUri.
+    final onCall = employee.phone.isEmpty
+        ? null
+        : () => launchPhoneCall(context, ref, employee.phone);
+    // Its own document (users/{id}/private/emergency), gated by rules to an
+    // admin and the person themselves. Team is admin-only, so a viewer here
+    // always passes that rule and a failed read means the read failed — NOT
+    // that there is none on file. If this view is ever reused on a non-admin
+    // surface it must distinguish the two, the way MyDetailsScreen does.
+    final emergency =
+        ref.watch(emergencyContactProvider(employee.id)).value ??
+        EmergencyContact.empty;
+    final onCallEmergency = emergency.phone.isEmpty
+        ? null
+        : () => launchPhoneCall(context, ref, emergency.phone);
+    final onEmail = employee.email.isEmpty
+        ? null
+        : () => EmailComposeLauncher.showEmailChoices(
+            context,
+            ref,
+            email: employee.email,
+          );
 
-  Future<void> _confirmDisable() async {
-    final isDisabled = widget.employee.isDisabled;
-    final actionLabel = isDisabled
-        ? context.l10n.employees_enableEmployee
-        : context.l10n.employees_disableEmployee;
-    final confirmed = await showConfirmDialog(
-      context,
-      title: actionLabel,
-      message: isDisabled
-          ? context.l10n.employees_enableEmployeeConfirmBody
-          : context.l10n.employees_disableEmployeeConfirmBody,
-      confirmLabel: actionLabel,
-      destructive: !isDisabled,
-    );
-    if (!mounted || !confirmed) return;
-    final outcome = await ref
-        .read(employeeFormControllerProvider.notifier)
-        .setEmployeeStatus(docId: widget.employee.id, disable: !isDisabled);
-    if (!mounted) return;
-    switch (outcome) {
-      case EmployeeStatusChanged():
-        widget.onAction(isDisabled ? 'enabled' : 'disabled');
-      case EmployeeStatusChangeFailed(:final error):
-        ref
-            .read(noticeServiceProvider)
-            .error(
-              composeErrorNotice(
-                context,
-                intro: context.l10n.error_introChangeEmployeeStatus,
-                tag: 'EMP-STATUS',
-                error: error,
-              ),
-            );
-    }
-  }
+    final hoursValue = employee.workingDays.contains(true)
+        ? '${materialL10n.formatTimeOfDay(minutesToTimeOfDay(employee.workStartMinutes))}'
+              ' – '
+              '${materialL10n.formatTimeOfDay(minutesToTimeOfDay(employee.workEndMinutes))}'
+        : l10n.employees_noWorkingDays;
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDisabled = widget.employee.isDisabled;
-    final activity = ref.watch(employeeFormControllerProvider);
-    final stackedHeader = context.isCompact;
+    final infoRows = <KeyValueRow>[
+      if (employee.phone.isNotEmpty)
+        KeyValueRow(
+          label: l10n.employees_phoneKey,
+          value: employee.phone,
+          onTap: onCall,
+          emphasize: true,
+        ),
+      if (employee.email.isNotEmpty)
+        KeyValueRow(
+          label: l10n.employees_emailKey,
+          value: employee.email,
+          onTap: onEmail,
+          emphasize: true,
+        ),
+      KeyValueRow(label: l10n.employees_hoursKey, value: hoursValue),
+      // Approved design: days are a phrase here, not a seven-cell strip. The
+      // grid lives only in the edit sheet, where tapping a day is the point.
+      KeyValueRow(
+        label: l10n.employees_daysKey,
+        value: formatWorkingDays(
+          l10n,
+          employee.workingDays,
+          weekStart: weekStart,
+          labels: weekdayAbbreviationsForLocale(locale),
+        ),
+      ),
+      if (employee.maxJobsPerDay > 0)
+        KeyValueRow(
+          label: l10n.employees_maxPerDayKey,
+          value: l10n.employees_jobsPerDay(employee.maxJobsPerDay),
+        ),
+      // NO `ON CALL` row — the profile card carries it as a chip, and a row
+      // here would state the same boolean twice on one screen.
+      KeyValueRow(
+        label: l10n.employees_accessKey,
+        value: employee.isAdmin
+            ? l10n.common_admin
+            : l10n.common_employeeRoleValue,
+      ),
+    ];
 
-    final headerTitle = Text(
-      context.l10n.employees_employeeDetails,
-      style: theme.textTheme.headlineLarge,
-    );
-    final statusChip = UserStatusChip(
-      status: UserStatus.fromRaw(widget.employee.status),
-    );
+    // Its own panel, not two more rows in the block above: who to call if
+    // something goes wrong on site is a different question from someone's
+    // hours and access level, and it is the one you scan for in a hurry.
+    final emergencyRows = <KeyValueRow>[
+      if (emergency.contact.isNotEmpty)
+        KeyValueRow(
+          label: l10n.employees_emergencyKey,
+          value: emergency.contact,
+        ),
+      if (emergency.phone.isNotEmpty)
+        KeyValueRow(
+          label: l10n.employees_emergencyPhoneKey,
+          value: emergency.phone,
+          onTap: onCallEmergency,
+          emphasize: true,
+        ),
+    ];
 
     return DetailSheetListView(
-      scrollController: widget.scrollController,
-      showHandle: widget.showHandle,
-      bottomPadding: widget.bottomPadding,
+      scrollController: scrollController,
+      showHandle: showHandle,
+      bottomPadding: bottomPadding,
       children: [
-        if (stackedHeader)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              headerTitle,
-              const SizedBox(height: AppSpacing.sp8),
-              statusChip,
-            ],
-          )
-        else
-          Row(
-            children: [
-              Expanded(child: headerTitle),
-              const SizedBox(width: 8),
-              statusChip,
-            ],
-          ),
-        const SizedBox(height: 16),
-        const Divider(height: 1),
-        const SizedBox(height: AppSpacing.sp24),
-        _DetailField(
-          icon: Icons.person_outline,
-          label: context.l10n.employees_name,
-          value: widget.employee.name,
+        EmployeeProfileCard(
+          employee: employee,
+          onEdit: isCurrentUserAdmin ? onEdit : null,
         ),
-        const SizedBox(height: 12),
-        _DetailField(
-          icon: Icons.email_outlined,
-          label: context.l10n.common_email,
-          value: widget.employee.email,
-        ),
-        const SizedBox(height: 12),
-        _DetailField(
-          icon: Icons.phone_outlined,
-          label: context.l10n.employees_phoneNumber,
-          value: widget.employee.phone.isEmpty ? '-' : widget.employee.phone,
-        ),
-        const SizedBox(height: 12),
-        _DetailField(
-          icon: Icons.shield_outlined,
-          label: context.l10n.employees_role,
-          value: widget.employee.isAdmin
-              ? context.l10n.common_admin
-              : context.l10n.common_employeeRoleValue,
-        ),
-        const SizedBox(height: 12),
-        _ColorRow(color: widget.employee.color),
-        const SizedBox(height: 24),
-        const Divider(height: 1),
-        const SizedBox(height: 16),
-        _ActionButtons(
-          isCurrentUserAdmin: widget.isCurrentUserAdmin,
-          isDisabled: isDisabled,
-          isDeleting: activity.isDeleting,
-          isDisabling: activity.isTogglingStatus,
-          onEdit: () => widget.onAction('edit'),
-          onToggleStatus: _confirmDisable,
-          onDelete: _confirmDelete,
+        ..._quickActions(l10n, onCall: onCall, onEmail: onEmail),
+        ..._panels(l10n, emergencyRows, infoRows),
+        EmployeeTodaySection(
+          employeeId: employee.id,
+          onJobTap: (appointmentId) =>
+              _openJob(context, ref, appointmentId, employee.id),
         ),
       ],
     );
   }
-}
 
-/// The employee colour swatch row (icon + label + colour dot).
-class _ColorRow extends StatelessWidget {
-  const _ColorRow({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: Icon(
-            Icons.palette_outlined,
-            size: 16,
-            color: theme.colorScheme.primary,
-          ),
-        ),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              context.l10n.employees_employeeColor,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Container(
-              width: 20,
-              height: 20,
-              decoration: BoxDecoration(
-                color: color,
-                shape: BoxShape.circle,
-                border: Border.all(color: theme.colorScheme.outlineVariant),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
+  /// Opens the appointment sheet for the tapped card. `showActions` carries
+  /// the caller's resolved role — never `true`.
+  void _openJob(
+    BuildContext context,
+    WidgetRef ref,
+    String appointmentId,
+    String employeeId,
+  ) {
+    final jobs = ref.read(employeeTodayJobsProvider(employeeId));
+    for (final job in jobs) {
+      if (job.id == appointmentId) {
+        showEventDetails(context, job, showActions: isCurrentUserAdmin);
+        return;
+      }
+    }
   }
-}
 
-/// Edit / (admin) Disable-or-Enable / Delete action stack for the detail view.
-class _ActionButtons extends StatelessWidget {
-  const _ActionButtons({
-    required this.isCurrentUserAdmin,
-    required this.isDisabled,
-    required this.isDeleting,
-    required this.isDisabling,
-    required this.onEdit,
-    required this.onToggleStatus,
-    required this.onDelete,
-  });
-
-  final bool isCurrentUserAdmin;
-  final bool isDisabled;
-  final bool isDeleting;
-  final bool isDisabling;
-  final VoidCallback onEdit;
-  final VoidCallback onToggleStatus;
-  final VoidCallback onDelete;
-
-  static const _fullWidthButton = Size(double.infinity, 48);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        FilledButton.icon(
-          onPressed: onEdit,
-          icon: const Icon(Icons.edit_outlined, size: 18),
-          label: Text(context.l10n.common_edit),
-          style: FilledButton.styleFrom(minimumSize: _fullWidthButton),
-        ),
-        if (isCurrentUserAdmin) ...[
-          const SizedBox(height: AppSpacing.sp8),
-          FilledButton.icon(
-            onPressed: isDisabling ? null : onToggleStatus,
-            icon: BusyButtonIcon(
-              isBusy: isDisabling,
-              icon: isDisabled
-                  ? Icons.lock_open_outlined
-                  : Icons.block_outlined,
-              spinnerSize: 16,
-              color: isDisabled
-                  ? theme.colorScheme.onPrimary
-                  : theme.colorScheme.onError,
+  /// Only the buttons whose data exists — a tile with nothing behind it is
+  /// worse than no tile.
+  List<Widget> _quickActions(
+    AppLocalizations l10n, {
+    VoidCallback? onCall,
+    VoidCallback? onEmail,
+  }) => [
+    if (onCall != null || onEmail != null) ...[
+      const SizedBox(height: AppSpacing.sp16),
+      QuickActionsRow(
+        buttons: [
+          if (onCall != null)
+            QuickActionButton(
+              icon: Icons.phone_outlined,
+              label: l10n.clients_call,
+              onTap: onCall,
             ),
-            label: Text(
-              isDisabled
-                  ? context.l10n.employees_enableEmployee
-                  : context.l10n.employees_disableEmployee,
+          if (onEmail != null)
+            QuickActionButton(
+              icon: Icons.mail_outline,
+              label: l10n.common_email,
+              onTap: onEmail,
             ),
-            style: FilledButton.styleFrom(
-              minimumSize: _fullWidthButton,
-              backgroundColor: isDisabled ? null : theme.colorScheme.error,
-              foregroundColor: isDisabled ? null : theme.colorScheme.onError,
-            ),
-          ),
         ],
-        const SizedBox(height: 8),
-        OutlinedButton.icon(
-          onPressed: isDeleting ? null : onDelete,
-          icon: BusyButtonIcon(
-            isBusy: isDeleting,
-            icon: Icons.delete_outline,
-            spinnerSize: 16,
-            color: theme.colorScheme.error,
-          ),
-          label: Text(context.l10n.employees_deleteEmployee),
-          style: OutlinedButton.styleFrom(
-            minimumSize: _fullWidthButton,
-            foregroundColor: theme.colorScheme.error,
-            side: BorderSide(color: theme.colorScheme.error),
-          ),
-        ),
-      ],
-    );
-  }
-}
+      ),
+    ],
+    const SizedBox(height: AppSpacing.sp24),
+  ];
 
-class _DetailField extends StatelessWidget {
-  const _DetailField({required this.label, required this.value, this.icon});
-
-  final String label;
-  final String value;
-  final IconData? icon;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (icon != null)
-          Padding(
-            padding: const EdgeInsets.only(top: 2, right: 12),
-            child: Icon(icon, size: 16, color: theme.colorScheme.primary),
-          ),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                value.isEmpty ? '-' : value,
-                softWrap: true,
-                style: theme.textTheme.bodyMedium,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+  List<Widget> _panels(
+    AppLocalizations l10n,
+    List<KeyValueRow> emergencyRows,
+    List<KeyValueRow> infoRows,
+  ) => [
+    KeyValuePanel(rows: infoRows),
+    if (emergencyRows.isNotEmpty) ...[
+      const SizedBox(height: AppSpacing.sp24),
+      MonoSectionLabel(l10n.employees_sectionEmergency),
+      const SizedBox(height: AppSpacing.sp8),
+      KeyValuePanel(rows: emergencyRows),
+    ],
+    const SizedBox(height: AppSpacing.sp24),
+  ];
 }

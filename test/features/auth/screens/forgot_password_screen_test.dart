@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -11,6 +12,12 @@ import 'package:scheduling/l10n/l10n.dart';
 class _MockAuthService extends Mock implements AuthService {}
 
 Widget _wrap(AuthService authService, {String? initialEmail}) {
+  return ProviderScope(
+    child: _wrapInner(authService, initialEmail: initialEmail),
+  );
+}
+
+Widget _wrapInner(AuthService authService, {String? initialEmail}) {
   return ThemeNotifier(
     themeMode: ThemeMode.light,
     toggleTheme: () {},
@@ -49,8 +56,8 @@ void main() {
     await tester.pumpWidget(_wrap(auth, initialEmail: 'not-an-email'));
     await tester.pumpAndSettle();
 
-    // Tap the Send button. textContaining('Send') will hit both the heading
-    // and the button — tap the last one (the FilledButton).
+    // textContaining('Send') matches both the heading and the button, so tap
+    // the last one (the FilledButton).
     await tester.tap(find.textContaining('Send').last);
     await tester.pumpAndSettle();
 
@@ -70,6 +77,44 @@ void main() {
     await tester.pumpAndSettle();
 
     verify(() => auth.sendPasswordResetEmail('user@example.com')).called(1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sent state lists the reset facts inside the SENT panel', (
+    tester,
+  ) async {
+    when(() => auth.sendPasswordResetEmail(any())).thenAnswer((_) async {});
+
+    await tester.pumpWidget(_wrap(auth, initialEmail: 'user@example.com'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Send').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('SENT'), findsOneWidget);
+    expect(find.text('The reset link expires in 1 hour.'), findsOneWidget);
+    expect(
+      find.text('Using it signs you out on every device.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Send it again resends once, then relabels and greys', (
+    tester,
+  ) async {
+    when(() => auth.sendPasswordResetEmail(any())).thenAnswer((_) async {});
+
+    await tester.pumpWidget(_wrap(auth, initialEmail: 'user@example.com'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Send').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Send it again'));
+    await tester.pumpAndSettle();
+
+    verify(() => auth.sendPasswordResetEmail('user@example.com')).called(2);
+    expect(find.text('Send it again'), findsNothing);
+    expect(find.text('Sent again just now'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

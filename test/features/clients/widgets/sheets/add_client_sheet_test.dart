@@ -4,12 +4,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/l10n/l10n.dart';
+
+import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
+
+import '../../../../support/tour_test_support.dart';
 
 class _FakeClientsRepository implements ClientsRepository {
   ClientRecord? added;
@@ -25,7 +31,11 @@ class _FakeClientsRepository implements ClientsRepository {
 }
 
 void main() {
-  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  setUp(() {
+    FlutterSecureStorage.setMockInitialValues({});
+    markFormToursSeen();
+    _lastResult = null;
+  });
 
   // A viewport tall enough that the whole sheet (a DraggableScrollableSheet at
   // 95% of height) lays out its fields without scrolling, so finders are stable.
@@ -91,7 +101,7 @@ void main() {
     await tester.tap(find.byType(SwitchListTile));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Save Client'));
+    await tester.tap(find.text('Add'));
     await tester.pumpAndSettle();
 
     expect(repo.added, isNotNull);
@@ -99,7 +109,128 @@ void main() {
     expect(repo.added!.address, isEmpty);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a picked type is stored on the record', (tester) async {
+    final repo = await pumpSheet(tester);
+
+    await tester.enterText(find.byType(TextField).first, 'Acme');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Phone'),
+      '5145550000',
+    );
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Commercial'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added!.type, ClientType.commercial);
+  });
+
+  testWidgets('tapping the selected type chip clears it back to unset', (
+    tester,
+  ) async {
+    final repo = await pumpSheet(tester);
+
+    await tester.enterText(find.byType(TextField).first, 'Acme');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Phone'),
+      '5145550000',
+    );
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Commercial'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Commercial'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added!.type, ClientType.unset);
+  });
+
+  testWidgets('access notes are saved', (tester) async {
+    final repo = await pumpSheet(tester);
+
+    await tester.enterText(find.byType(TextField).first, 'Acme');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Phone'),
+      '5145550000',
+    );
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.enterText(_fieldLabelled('Access notes'), 'Gate code 1234');
+
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added!.accessNotes, 'Gate code 1234');
+  });
+
+  testWidgets('an empty name shows the error and does not write', (
+    tester,
+  ) async {
+    final repo = await pumpSheet(tester);
+
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Add and book a job reports the follow-up action', (
+    tester,
+  ) async {
+    final repo = await pumpSheet(tester);
+
+    await tester.enterText(find.byType(TextField).first, 'Acme');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Phone'),
+      '5145550000',
+    );
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add and book a job'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added, isNotNull);
+    expect(_lastResult?.next, AddClientNext.bookJob);
+  });
+
+  testWidgets('the plain Add verb reports no follow-up action', (tester) async {
+    await pumpSheet(tester);
+
+    await tester.enterText(find.byType(TextField).first, 'Acme');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Phone'),
+      '5145550000',
+    );
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(_lastResult?.next, AddClientNext.none);
+  });
 }
+
+/// Captured from the sheet's pop so the follow-up action can be asserted.
+AddClientResult? _lastResult;
+
+/// LabeledTextField renders its label outside the TextField, so match on the
+/// wrapper and descend — the same shape clients_screen_test uses.
+Finder _fieldLabelled(String label) => find.descendant(
+  of: find.byWidgetPredicate(
+    (w) => w is LabeledTextField && w.label == label,
+  ),
+  matching: find.byType(TextField),
+);
 
 // Hosts the sheet behind a button so opening it creates a poppable modal route
 // with the Material ancestor showModalBottomSheet provides.
@@ -111,11 +242,13 @@ class _SheetHost extends StatelessWidget {
     return Scaffold(
       body: Center(
         child: ElevatedButton(
-          onPressed: () => showModalBottomSheet<void>(
-            context: context,
-            isScrollControlled: true,
-            builder: (_) => const AddClientSheet(),
-          ),
+          onPressed: () async {
+            _lastResult = await showModalBottomSheet<AddClientResult>(
+              context: context,
+              isScrollControlled: true,
+              builder: (_) => const AddClientSheet(),
+            );
+          },
           child: const Text('open'),
         ),
       ),

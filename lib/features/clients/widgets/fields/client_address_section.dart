@@ -8,12 +8,8 @@ import 'package:scheduling/shared/widgets/fields/address_autocomplete_field.dart
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// The street-address block shared by the add- and edit-client forms: an
-/// autocomplete street field, an apt/unit field, and the city / province /
-/// postal-code / country grid. The individual controllers are owned by the
-/// parent form. On autocomplete selection it splits the chosen address across
-/// those controllers and asks the parent to clear any address error via
-/// [onAddressErrorCleared].
+/// Street-address block shared by the add/edit forms. When the user picks an
+/// autocomplete suggestion, this splits the address out across the controllers.
 class ClientAddressSection extends StatefulWidget {
   const ClientAddressSection({
     required this.addressController,
@@ -59,8 +55,8 @@ class _ClientAddressSectionState extends State<ClientAddressSection> {
     widget.onAddressErrorCleared();
   }
 
-  // Microtask: let the autocomplete finish writing the controller first, then
-  // split the chosen address across the individual fields.
+  // Deferred to a microtask so the autocomplete field finishes writing its controller
+  // before we split the address out across the other fields.
   void _handleAddressSelected() {
     Future<void>.microtask(() {
       if (!mounted) return;
@@ -107,7 +103,7 @@ class _ClientAddressSectionState extends State<ClientAddressSection> {
           postalCodeController: widget.postalCodeController,
           countryController: widget.countryController,
         ),
-        // One-tap wipe of the whole block (street, apt, and the grid);
+        // One-tap wipe of the whole block (street, apt, and the grid). It stays
         // hidden while every address field is already empty.
         ListenableBuilder(
           listenable: Listenable.merge(_allControllers),

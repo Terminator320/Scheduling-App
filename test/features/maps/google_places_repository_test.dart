@@ -21,16 +21,32 @@ void main() {
   late _MockFunctions functions;
   late _MockCallable autocomplete;
   late _MockCallable details;
+  late _MockCallable reverseGeocode;
   late GooglePlacesRepository repo;
 
   setUp(() {
     functions = _MockFunctions();
     autocomplete = _MockCallable();
     details = _MockCallable();
+    reverseGeocode = _MockCallable();
     when(
-      () => functions.httpsCallable('placesAutocomplete'),
+      () => functions.httpsCallable(
+        any(that: equals('placesAutocomplete')),
+        options: any(named: 'options'),
+      ),
     ).thenReturn(autocomplete);
-    when(() => functions.httpsCallable('placesGetDetails')).thenReturn(details);
+    when(
+      () => functions.httpsCallable(
+        any(that: equals('placesGetDetails')),
+        options: any(named: 'options'),
+      ),
+    ).thenReturn(details);
+    when(
+      () => functions.httpsCallable(
+        any(that: equals('placesReverseGeocode')),
+        options: any(named: 'options'),
+      ),
+    ).thenReturn(reverseGeocode);
     repo = GooglePlacesRepository(functions: functions);
   });
 
@@ -341,5 +357,121 @@ void main() {
         throwsA(isA<MapsFailureParse>()),
       );
     });
+  });
+
+  group('reverseGeocode', () {
+    test('sends lat/lng/locale in the call payload', () async {
+      final result = _MockResult();
+      when(
+        () => result.data,
+      ).thenReturn(<String, dynamic>{'address': '1234 Main St'});
+      when(
+        () => reverseGeocode.call<dynamic>(any<Object?>()),
+      ).thenAnswer((_) async => result);
+
+      await repo.reverseGeocode(lat: 45.5017, lng: -73.5673, locale: 'fr');
+
+      final captured =
+          verify(
+                () => reverseGeocode.call<dynamic>(captureAny<Object?>()),
+              ).captured.single
+              as Map<String, dynamic>;
+      expect(captured['lat'], 45.5017);
+      expect(captured['lng'], -73.5673);
+      expect(captured['locale'], 'fr');
+    });
+
+    test('returns the resolved address string on success', () async {
+      final result = _MockResult();
+      when(
+        () => result.data,
+      ).thenReturn(<String, dynamic>{'address': '1234 Rue Saint-Denis'});
+      when(
+        () => reverseGeocode.call<dynamic>(any<Object?>()),
+      ).thenAnswer((_) async => result);
+
+      final address = await repo.reverseGeocode(
+        lat: 45.5017,
+        lng: -73.5673,
+        locale: 'en',
+      );
+
+      expect(address, '1234 Rue Saint-Denis');
+    });
+
+    test('returns null when the server found no address', () async {
+      final result = _MockResult();
+      when(
+        () => result.data,
+      ).thenReturn(<String, dynamic>{'address': null});
+      when(
+        () => reverseGeocode.call<dynamic>(any<Object?>()),
+      ).thenAnswer((_) async => result);
+
+      final address = await repo.reverseGeocode(
+        lat: 45.5017,
+        lng: -73.5673,
+        locale: 'en',
+      );
+
+      expect(address, isNull);
+    });
+
+    test(
+      'casts a Map<dynamic, dynamic> result.data (Android convention)',
+      () async {
+        final result = _MockResult();
+        // Android callables return Map<dynamic, dynamic>; the repository must
+        // loosely cast rather than `as Map<String, dynamic>?`.
+        when(
+          () => result.data,
+        ).thenReturn(<dynamic, dynamic>{'address': '1234 Main St'});
+        when(
+          () => reverseGeocode.call<dynamic>(any<Object?>()),
+        ).thenAnswer((_) async => result);
+
+        final address = await repo.reverseGeocode(
+          lat: 45.5017,
+          lng: -73.5673,
+          locale: 'en',
+        );
+
+        expect(address, '1234 Main St');
+      },
+    );
+
+    test('malformed response body → MapsFailureParse', () async {
+      final result = _MockResult();
+      when(() => result.data).thenReturn(42);
+      when(
+        () => reverseGeocode.call<dynamic>(any<Object?>()),
+      ).thenAnswer((_) async => result);
+
+      expect(
+        () => repo.reverseGeocode(lat: 45.5017, lng: -73.5673, locale: 'en'),
+        throwsA(isA<MapsFailureParse>()),
+      );
+    });
+
+    test(
+      'FirebaseFunctionsException(resource-exhausted) → RateLimit',
+      () async {
+        when(() => reverseGeocode.call<dynamic>(any<Object?>())).thenThrow(
+          FirebaseFunctionsException(
+            code: 'resource-exhausted',
+            message: 'too-many-attempts',
+          ),
+        );
+
+        expect(
+          () => repo.reverseGeocode(
+            lat: 45.5017,
+            lng: -73.5673,
+            locale: 'en',
+          ),
+          throwsA(isA<MapsFailureRateLimit>()),
+        );
+      },
+    );
   });
 }

@@ -2,17 +2,18 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 
-/// App-wide [AccountDeletionService], wired through the shared providers so
-/// tests can override collaborators (or this provider itself).
+/// App-wide [AccountDeletionService], wired through providers for testability.
 final accountDeletionServiceProvider = Provider<AccountDeletionService>(
   (ref) => AccountDeletionService(
     firebaseAuth: ref.watch(firebaseAuthProvider),
     authCache: ref.watch(authCacheProvider),
+    logger: ref.watch(loggerProvider),
   ),
 );
 
@@ -21,13 +22,16 @@ class AccountDeletionService {
     FirebaseAuth? firebaseAuth,
     FirebaseFunctions? functions,
     AuthCache? authCache,
+    AppLogger? logger,
   }) : _auth = firebaseAuth ?? FirebaseAuth.instance,
        _functions = functions ?? FirebaseFunctions.instance,
-       _authCache = authCache ?? AuthCache();
+       _authCache = authCache ?? AuthCache(),
+       _logger = logger ?? AppLogger();
 
   final FirebaseAuth _auth;
   final FirebaseFunctions _functions;
   final AuthCache _authCache;
+  final AppLogger _logger;
 
   Future<void> reauthenticateWithPassword(String password) async {
     final user = _auth.currentUser;
@@ -48,13 +52,20 @@ class AccountDeletionService {
 
   Future<void> deleteAccount() async {
     try {
-      await _functions.httpsCallable('deleteAccount').call<dynamic>();
+      await _functions
+          .httpsCallable(
+            'deleteAccount',
+            options: HttpsCallableOptions(timeout: const Duration(seconds: 30)),
+          )
+          .call<dynamic>();
     } on FirebaseFunctionsException catch (e) {
       if (e.code == 'unauthenticated') {
         throw const AuthFailureRequiresRecentLogin();
       }
+      _logger.warn('ACCT-DEL deleteAccount callable failed', e, e.stackTrace);
       throw const AuthFailureUnknown();
-    } catch (_) {
+    } catch (e, st) {
+      _logger.warn('ACCT-DEL deleteAccount failed', e, st);
       throw const AuthFailureUnknown();
     }
     await _auth.signOut();

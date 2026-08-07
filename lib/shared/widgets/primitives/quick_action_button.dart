@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-/// Evenly-spaced row of [QuickActionButton]s (e.g. Call / Email / Directions).
-/// Collapses to nothing when [buttons] is empty, so callers can build the list
-/// conditionally. Shared by the client and appointment detail views.
+/// Evenly-spaced quick action buttons (Call/Email/Directions). Renders empty
+/// when there are no buttons.
 class QuickActionsRow extends StatelessWidget {
   const QuickActionsRow({required this.buttons, super.key});
 
@@ -24,7 +23,7 @@ class QuickActionsRow extends StatelessWidget {
   }
 }
 
-/// A tinted, tappable quick-action tile: an icon over a short label.
+/// Tinted quick-action tile: icon over label.
 class QuickActionButton extends StatelessWidget {
   const QuickActionButton({
     required this.icon,
@@ -50,7 +49,7 @@ class QuickActionButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.r12),
         child: Container(
           padding: const EdgeInsets.symmetric(
-            vertical: 12,
+            vertical: AppSpacing.sp12,
             horizontal: AppSpacing.sp8,
           ),
           decoration: BoxDecoration(

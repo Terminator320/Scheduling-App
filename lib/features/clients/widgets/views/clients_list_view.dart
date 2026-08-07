@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
-import 'package:scheduling/core/utils/sheet_focus.dart';
+import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
+import 'package:scheduling/features/clients/domain/policies/client_delete_policy.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
+import 'package:scheduling/features/clients/widgets/views/client_actions_host.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
@@ -22,24 +27,43 @@ class ClientsListView extends ConsumerStatefulWidget {
     required this.searchQuery,
     required this.isAdmin,
     super.key,
+    this.filter = const ClientsFilterAll(),
     this.onClientTap,
     this.selectedClientId,
+    this.firstRowTourWrap,
+    this.onFirstPageSettled,
   });
 
   final String searchQuery;
   final bool isAdmin;
+
+  /// Which slice of the roster to show. Anything but [ClientsFilterAll] is
+  /// read as one bounded query rather than filtered out of the paginated list.
+  final ClientsFilter filter;
   final void Function(ClientRecord client)? onClientTap;
   final String? selectedClientId;
+
+  /// Wraps the FIRST row only, as that row's feature-tour step. One row, not
+  /// every row — the step's GlobalKey has to stay unique. Null when the host
+  /// has no tour (the booking flow's client picker).
+  final Widget Function(Widget child)? firstRowTourWrap;
+
+  /// Fires after the first page has settled and been laid out — success or
+  /// failure, since either way the skeleton is gone and no further row will
+  /// appear on its own. A tour host gates `FeatureTourHost.ready` on this:
+  /// [firstRowTourWrap]'s target doesn't exist while the skeleton is up, and
+  /// a tour started then drops that step and marks the WHOLE scope seen.
+  final VoidCallback? onFirstPageSettled;
 
   @override
   ConsumerState<ClientsListView> createState() => _ClientsListViewState();
 }
 
-class _ClientsListViewState extends ConsumerState<ClientsListView> {
+class _ClientsListViewState extends ConsumerState<ClientsListView>
+    with ClientActionsHost<ClientsListView> {
   static const int _pageSize = 50;
-  // Debounce before firing the comprehensive (up-to-1000-doc) server search so
-  // a per-keystroke read storm doesn't happen; the instant local-page filter
-  // covers the gap so typing still feels immediate.
+  // Debounce before the server search, so we don't fire a read on every keystroke —
+  // the local filter covers the gap in the meantime so it still feels immediate.
   final _searchDebounce = Debouncer(const Duration(milliseconds: 250));
   String _committedQuery = '';
 
@@ -67,7 +91,19 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     } catch (e, st) {
       ref.read(loggerProvider).warn('CLI-LIST clients page fetch error', e, st);
       rethrow;
+    } finally {
+      if (pageKey == 1) _notifyFirstPageSettled();
     }
+  }
+
+  /// Post-frame, so the row the tour targets has actually been laid out by the
+  /// time the host asks showcase whether it is rendered.
+  void _notifyFirstPageSettled() {
+    final notify = widget.onFirstPageSettled;
+    if (notify == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) notify();
+    });
   }
 
   @override
@@ -77,8 +113,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     _scheduleSearch();
   }
 
-  // Restart the debounce on every query change. Clearing commits instantly so
-  // returning to the paged list has no lag.
+  // The debounce restarts on every query change, but clearing the query commits
+  // instantly, so returning to the paged list has zero lag.
   void _scheduleSearch() {
     final next = widget.searchQuery.trim();
     if (next.isEmpty) {
@@ -101,7 +137,11 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   }
 
   Future<void> _onAddClient() async {
-    await showAddClientSheet(context);
+    final result = await showAddClientSheet(context);
+    if (result == null || result.next != AddClientNext.bookJob) return;
+    if (!mounted) return;
+    // Sequential, never stacked — the add-client sheet has already popped.
+    await showAddEventPopup(context, initialClient: result.client);
   }
 
   Future<void> _openClient(ClientRecord client) async {
@@ -110,28 +150,66 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
       return;
     }
 
-    await SheetFocus.settleBeforeSheet();
-    if (!mounted) return;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      sheetAnimationStyle: AppMotion.sheetStyle,
-      builder: (_) => ClientDetailSheet(client: client),
-    );
-
-    if (!mounted) return;
-    await SheetFocus.unfocusAfterSheet();
+    await showClientDetailSheet(context, client);
   }
 
-  Widget _clientTile(ClientRecord client, int index) => FadeInItem(
+  // An archived client leaves this list and a deleted one is gone, so both
+  // are the same refresh here.
+  @override
+  void onClientArchived(ClientRecord client, {required bool archived}) =>
+      _pagingController.refresh();
+
+  @override
+  void onClientDeleted(ClientRecord client) => _pagingController.refresh();
+
+  // The Slidable wraps the tile HERE, not inside ClientTile — the booking
+  // flow's client picker reuses that tile and must not gain archive/delete.
+  Widget _clientTile(ClientRecord client, int index) {
+    final tile = _slidableTile(client, index);
+    final wrap = widget.firstRowTourWrap;
+    return index == 0 && wrap != null ? wrap(tile) : tile;
+  }
+
+  Widget _slidableTile(ClientRecord client, int index) => FadeInItem(
     key: ValueKey(client.id),
     index: index,
-    child: ClientTile(
-      client: client,
-      selected: widget.selectedClientId == client.id,
-      onOpen: () => _openClient(client),
+    child: Slidable(
+      key: ValueKey('slide-${client.id}'),
+      endActionPane: ActionPane(
+        motion: const DrawerMotion(),
+        extentRatio: canDeleteClient(client) ? 0.5 : 0.28,
+        // Full swipe commits Archive ONLY. Delete is never gesture-committed
+        // — it needs a deliberate tap plus a confirm.
+        dismissible: DismissiblePane(onDismissed: () => archiveClient(client)),
+        children: [
+          // Advisory: the callable re-checks with a live count(), so this only
+          // keeps the swipe from offering what the server would refuse.
+          if (canDeleteClient(client))
+            SlidableAction(
+              onPressed: (_) => confirmDeleteClient(client),
+              backgroundColor: Theme.of(context).palette.dangerFill,
+              foregroundColor: Theme.of(context).palette.onDangerFill,
+              icon: Icons.delete_outline,
+              label: context.l10n.common_delete,
+            ),
+          SlidableAction(
+            onPressed: (_) => archiveClient(client),
+            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+            foregroundColor: Theme.of(context).colorScheme.onSecondaryContainer,
+            icon: client.archived
+                ? Icons.unarchive_outlined
+                : Icons.archive_outlined,
+            label: client.archived
+                ? context.l10n.clients_unarchive
+                : context.l10n.clients_archive,
+          ),
+        ],
+      ),
+      child: ClientTile(
+        client: client,
+        selected: widget.selectedClientId == client.id,
+        onOpen: () => _openClient(client),
+      ),
     ),
   );
 
@@ -151,31 +229,51 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     );
   }
 
-  // Non-scrolling: the first-page indicator lands inside ISP's
-  // SliverFillRemaining, where a nested scrollable (ListView) would throw
-  // an intrinsic-dimension error.
-  Widget _skeleton() => const Padding(
-    padding: EdgeInsets.all(AppSpacing.sp16),
+  // A skeleton row is fixed-height whatever the text scale — SkeletonListTile is
+  // all fixed boxes — so how many fit is arithmetic: a 56px tile plus its own 8px
+  // bottom margin, with another sp8 between rows.
+  static const double _skeletonRowExtent = 64;
+  static const int _skeletonMaxRows = 4;
+
+  Widget _skeletonRows(int rows) => Padding(
+    padding: const EdgeInsets.all(AppSpacing.sp16),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        SkeletonListTile(),
-        SizedBox(height: 8),
-        SkeletonListTile(),
-        SizedBox(height: 8),
-        SkeletonListTile(),
-        SizedBox(height: 8),
-        SkeletonListTile(),
+        for (var i = 0; i < rows; i++) ...[
+          if (i > 0) const SizedBox(height: AppSpacing.sp8),
+          const SkeletonListTile(),
+        ],
       ],
     ),
   );
 
+  // The first-page indicator lands inside ISP's SliverFillRemaining, which asks
+  // its child for intrinsic dimensions — so this one can neither scroll (a nested
+  // ListView throws) nor measure (LayoutBuilder can't report intrinsics either).
+  // It is laid out against the sliver's own extent, so a fixed count can't clip.
+  Widget _skeleton() => _skeletonRows(_skeletonMaxRows);
+
+  // The search and type paths instead hand the skeleton the whole body of a tight
+  // Expanded, which the keyboard shortens well below four rows' worth — no sliver
+  // above it here, so the row count can follow the height.
+  Widget _fittedSkeleton() => LayoutBuilder(
+    builder: (context, constraints) => ClipRect(
+      child: _skeletonRows(
+        constraints.maxHeight.isFinite
+            ? ((constraints.maxHeight - AppSpacing.sp16 * 2 + AppSpacing.sp8) /
+                      (_skeletonRowExtent + AppSpacing.sp8))
+                  .floor()
+                  .clamp(1, _skeletonMaxRows)
+            : _skeletonMaxRows,
+      ),
+    ),
+  );
+
   // Pre-normalized search index over the loaded pages, memoized on the pages
-  // identity (PagingState.items rebuilds a fresh list each access, but the
-  // underlying pages list only changes when a page loads). Normalizing ~13
-  // fields per client runs once per data change; each keystroke then only
-  // normalizes the query. Mirrors _employeeSearchIndexProvider and the
-  // history view's _filterOptionsPages memo.
+  // identity so normalization reruns only when a page loads, not on every
+  // keystroke (mirrors _employeeSearchIndexProvider and the history view's
+  // _filterOptionsPages memo).
   List<List<ClientRecord>>? _searchIndexPages;
   List<ClientSearchEntry> _searchIndex = const [];
 
@@ -192,8 +290,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   }
 
   // Instant fallback over the already-loaded pages while the comprehensive
-  // server search resolves. Matches the full field set via the shared policy
-  // (ClientSearchPolicy is the single source of matching truth).
+  // server search resolves, matching the full field set via the shared policy.
   List<ClientRecord> _localFilter(String query) {
     final q = ClientSearchPolicy.normalize(query);
     final qDigits = ClientSearchPolicy.digitsOnly(query);
@@ -209,16 +306,14 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
     ];
   }
 
-  // Comprehensive search runs on the debounced (committed) query and finds
-  // clients across all fields and all pages. The instant local filter fills the
-  // gap until the debounce settles and the server result arrives, so results
-  // appear immediately and then expand to the full set.
+  // The full search runs on the debounced, committed query across all fields and
+  // pages. The instant local filter fills the gap until that settles.
   Widget _buildSearchResults(String query) {
     final local = _localFilter(query);
 
     if (_committedQuery != query) {
       // Still typing — show instant local results (skeleton if none yet).
-      return local.isEmpty ? _skeleton() : _resultsList(local);
+      return local.isEmpty ? _fittedSkeleton() : _resultsList(local);
     }
 
     return ref
@@ -227,14 +322,86 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
           data: (results) => results.isEmpty
               ? _emptyState(query: query)
               : _resultsList(results),
-          loading: () => local.isEmpty ? _skeleton() : _resultsList(local),
-          // A failed search must not look like "no such client": when the
-          // instant local fallback is also empty, show an error, not the
-          // empty state. Composes without logging (this is a builder).
+          loading: () =>
+              local.isEmpty ? _fittedSkeleton() : _resultsList(local),
+          // A failed search must not look like "no such client" — show an
+          // error when the instant local fallback is also empty, not the empty state.
           error: (e, _) =>
               local.isEmpty ? _searchError(e, query) : _resultsList(local),
         );
   }
+
+  // Pre-normalized index over the filtered list, memoized on the list identity
+  // for the same reason _loadedSearchIndex is — this view rebuilds on every
+  // keystroke, and re-indexing the whole filtered slice each time is the
+  // expensive half of matching.
+  List<ClientRecord>? _filterIndexSource;
+  List<ClientSearchEntry> _filterIndex = const [];
+
+  List<ClientSearchEntry> _filterSearchIndex(List<ClientRecord> all) {
+    if (!identical(all, _filterIndexSource)) {
+      _filterIndexSource = all;
+      _filterIndex = [
+        for (final client in all) ClientSearchPolicy.index(client),
+      ];
+    }
+    return _filterIndex;
+  }
+
+  // Every non-All filter is a bounded, already-in-memory list, so searching
+  // within it is the shared local matcher rather than a second server query.
+  // Both filter branches render through here so they can't drift on the
+  // loading / error / empty handling.
+  Widget _buildFromAsync(
+    AsyncValue<List<ClientRecord>> async, {
+    required VoidCallback onRetry,
+    required Widget Function(String query) emptyState,
+  }) {
+    final query = widget.searchQuery.trim();
+    return async.when(
+      data: (all) {
+        final q = ClientSearchPolicy.normalize(query);
+        final qDigits = ClientSearchPolicy.digitsOnly(query);
+        final items = query.isEmpty
+            ? all
+            : [
+                for (final entry in _filterSearchIndex(all))
+                  if (ClientSearchPolicy.entryMatches(
+                    entry,
+                    queryText: q,
+                    queryDigits: qDigits,
+                  ))
+                    entry.client,
+              ];
+        return items.isEmpty ? emptyState(query) : _resultsList(items);
+      },
+      loading: _fittedSkeleton,
+      error: (e, _) => _errorState(e, onRetry: onRetry),
+    );
+  }
+
+  Widget _typeEmptyState({required ClientType type, required String query}) =>
+      AppEmptyState(
+        icon: Icons.filter_list_off_outlined,
+        title: query.isEmpty
+            ? context.l10n.clients_noClientsOfType(
+                clientTypeLabel(context.l10n, type),
+              )
+            : '${context.l10n.clients_noClientsMatch} "$query"',
+        body: query.isEmpty
+            ? context.l10n.clients_typeFilterHint
+            : context.l10n.common_tryADifferentSearchTerm,
+      );
+
+  Widget _archivedEmptyState(String query) => AppEmptyState(
+    icon: Icons.inventory_2_outlined,
+    title: query.isEmpty
+        ? context.l10n.clients_noArchivedClients
+        : '${context.l10n.clients_noClientsMatch} "$query"',
+    body: query.isEmpty
+        ? context.l10n.clients_archivedFilterHint
+        : context.l10n.common_tryADifferentSearchTerm,
+  );
 
   // Retry re-runs the failed search by invalidating its provider instance;
   // this rebuild is already watching it, so it refetches immediately.
@@ -250,7 +417,6 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
         body: composeErrorNotice(
           context,
           intro: context.l10n.error_introLoadClients,
-          tag: 'CLI-LIST',
           error: error,
         ),
         actionLabel: context.l10n.common_retry,
@@ -267,6 +433,23 @@ class _ClientsListViewState extends ConsumerState<ClientsListView> {
   @override
   Widget build(BuildContext context) {
     ref.listen(clientsRefreshProvider, (_, _) => _pagingController.refresh());
+
+    switch (widget.filter) {
+      case ClientsFilterArchived():
+        return _buildFromAsync(
+          ref.watch(archivedClientsProvider),
+          onRetry: () => ref.invalidate(archivedClientsProvider),
+          emptyState: _archivedEmptyState,
+        );
+      case ClientsFilterType(:final type):
+        return _buildFromAsync(
+          ref.watch(clientsByTypeProvider(type)),
+          onRetry: () => ref.invalidate(clientsByTypeProvider(type)),
+          emptyState: (query) => _typeEmptyState(type: type, query: query),
+        );
+      case ClientsFilterAll():
+        break; // falls through to the search / paginated list below
+    }
 
     final query = widget.searchQuery.trim();
     if (query.isNotEmpty) return _buildSearchResults(query);

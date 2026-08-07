@@ -23,7 +23,7 @@ class EmployeeDetailsSheet extends StatelessWidget {
           isCurrentUserAdmin: isCurrentUserAdmin,
           scrollController: scrollController,
           showHandle: true,
-          onAction: (action) => Navigator.pop(sheetContext, action),
+          onEdit: () => Navigator.pop(sheetContext, 'edit'),
         );
       },
     );

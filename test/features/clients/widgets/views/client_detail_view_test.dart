@@ -5,9 +5,13 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/clients/application/appointment_history_providers.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/widgets/sheets/edit_client_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
@@ -32,7 +36,14 @@ const _clientWithContacts = ClientRecord(
 
 Widget _wrap(ClientsRepository repo, ClientRecord client) {
   return ProviderScope(
-    overrides: [clientsRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      clientsRepositoryProvider.overrideWithValue(repo),
+      // The Job History section reads the real appointments repo; serve an
+      // empty history so this contacts-only test doesn't hit Firebase.
+      clientJobHistoryProvider.overrideWith(
+        (ref, clientId) async => <AppointmentRecord>[],
+      ),
+    ],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
@@ -49,6 +60,13 @@ Widget _wrap(ClientsRepository repo, ClientRecord client) {
   );
 }
 
+/// The edit sheet's own Save verb. Scoped, because the read-only detail behind
+/// the sheet carries a "Save to contacts" tile whose label also renders "Save".
+Finder _sheetSave() => find.descendant(
+  of: find.byType(EditClientSheet),
+  matching: find.widgetWithText(TextButton, 'Save'),
+);
+
 Finder _textFieldFor(String label) => find.descendant(
   of: find.byWidgetPredicate(
     (w) => w is LabeledTextField && w.label == label,
@@ -57,7 +75,7 @@ Finder _textFieldFor(String label) => find.descendant(
 );
 
 /// Pumps the detail view at a tall viewport (so every edit field is built)
-/// and enters edit mode.
+/// and opens the edit sheet above it.
 Future<void> _pumpInEditMode(
   WidgetTester tester,
   ClientsRepository repo,
@@ -80,8 +98,7 @@ void main() {
   });
 
   setUp(() {
-    // The edit-save flow consults the contact-link store (SharedPreferences);
-    // with no link present the phone-contact sync is a no-op.
+    // With no contact-link present, the edit-save phone-contact sync is a no-op.
     SharedPreferences.setMockInitialValues({});
     repo = _MockClientsRepo();
   });
@@ -110,17 +127,17 @@ void main() {
 
     // The customer's own phone is the first Phone field; the contact card's
     // phone is the second.
-    await tester.enterText(_textFieldFor('Phone').first, '555-9999');
+    await tester.enterText(_textFieldFor('Phone').first, '5145559999');
     // Let SheetFocusScroll's 280 ms focus-scroll timer fire.
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('Save changes'));
+    await tester.tap(_sheetSave());
     await tester.pumpAndSettle();
 
     final saved =
         verify(() => repo.updateClient(captureAny())).captured.single
             as ClientRecord;
     // The customer's own phone changed; the extra contact is unchanged.
-    expect(saved.phone, '555-9999');
+    expect(saved.phone, '(514) 555-9999');
     expect(saved.contacts, const [
       ClientContact(name: 'Bob Builder', phone: '555-0202'),
     ]);
@@ -157,7 +174,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.widgetWithText(InkWell, 'Save'), findsOneWidget);
+      // It is a labelled row below the info panel now, not a tile.
+      expect(find.text('Save to contacts'), findsOneWidget);
       expect(find.widgetWithText(InkWell, 'Call'), findsNothing);
       expect(find.widgetWithText(InkWell, 'Directions'), findsNothing);
       expect(tester.takeException(), isNull);
@@ -184,15 +202,15 @@ void main() {
     when(() => repo.updateClient(any())).thenAnswer((_) async {});
     await _pumpInEditMode(tester, repo, _clientWithContacts);
 
-    await tester.enterText(_textFieldFor('Phone').first, '555-9999');
+    await tester.enterText(_textFieldFor('Phone').first, '5145559999');
     // Let SheetFocusScroll's 280 ms focus-scroll timer fire.
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.text('Save changes'));
+    await tester.tap(_sheetSave());
     await tester.pumpAndSettle();
 
     // Back in view mode (no edit fields) with the new phone rendered.
     expect(find.byType(TextField), findsNothing);
-    expect(find.text('555-9999'), findsWidgets);
+    expect(find.text('(514) 555-9999'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
@@ -203,7 +221,7 @@ void main() {
     // Remove the extra "Bob Builder" contact card.
     await tester.tap(find.byTooltip('Remove contact'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Save changes'));
+    await tester.tap(_sheetSave());
     await tester.pumpAndSettle();
 
     final saved =
@@ -213,27 +231,224 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('deleting a client drops its phone-contact link', (tester) async {
-    SharedPreferences.setMockInitialValues({'contact_link_c1': 'native-7'});
-    when(() => repo.deleteClient('c1')).thenAnswer((_) async {});
+  testWidgets('renders the three action tiles', (tester) async {
     tester.view.physicalSize = const Size(800, 2600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(_wrap(repo, _personClient));
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        const ClientRecord(
+          id: 'c1',
+          name: 'Acme',
+          phone: '5145551234',
+          address: '12 Main St',
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.widgetWithText(OutlinedButton, 'Delete'));
-    await tester.pumpAndSettle();
-    // The confirm dialog's destructive action is also labelled "Delete".
-    await tester.tap(find.text('Delete').last);
-    // Bounded pumps: the post-delete busy spinner animates forever, so
-    // pumpAndSettle would time out.
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Call'), findsOneWidget);
+    expect(find.text('Directions'), findsOneWidget);
+    expect(find.text('Book job'), findsOneWidget);
+  });
 
-    verify(() => repo.deleteClient('c1')).called(1);
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('contact_link_c1'), isNull);
+  testWidgets('omits empty info rows instead of showing placeholders', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        const ClientRecord(id: 'c1', name: 'Acme', phone: '5145551234'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('PHONE'), findsOneWidget);
+    // No address, manager or billing on this record — those keys must not render.
+    expect(find.text('ADDRESS'), findsNothing);
+    expect(find.text('MANAGER'), findsNothing);
+    expect(find.text('BILLING'), findsNothing);
+    expect(find.textContaining('None'), findsNothing);
+  });
+
+  testWidgets('renders the manager and billing rows when present', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        const ClientRecord(
+          id: 'c1',
+          name: 'Acme',
+          onSiteManager: 'Dana',
+          billingTerms: 'Net 30',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('MANAGER'), findsOneWidget);
+    expect(find.text('Dana'), findsOneWidget);
+    expect(find.text('BILLING'), findsOneWidget);
+    expect(find.text('Net 30'), findsOneWidget);
+  });
+
+  testWidgets('auto-invoice joins the billing line', (tester) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        const ClientRecord(
+          id: 'c1',
+          name: 'Acme',
+          billingTerms: 'Net 30',
+          autoInvoice: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Net 30 · Invoice automatically'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the footer offers Archive, and withholds Delete for a client '
+      'with history', (tester) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(repo, const ClientRecord(id: 'c1', name: 'Acme', jobCount: 4)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(OutlinedButton, 'Archive'), findsOneWidget);
+    // The callable would refuse this delete, so the footer must not offer it.
+    expect(find.widgetWithText(OutlinedButton, 'Delete'), findsNothing);
+  });
+
+  testWidgets('the footer offers Delete for a client with no jobs', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(repo, const ClientRecord(id: 'c1', name: 'Acme', jobCount: 0)),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(OutlinedButton, 'Delete'), findsOneWidget);
+  });
+
+  testWidgets('an archived client is offered Unarchive instead', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        ClientRecord.fromMap('c1', {'name': 'Acme', 'archived': true}),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(OutlinedButton, 'Unarchive'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, 'Archive'), findsNothing);
+  });
+
+  testWidgets('archiving keeps the view open and flips the button', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    when(
+      () => repo.setClientArchived(any(), archived: any(named: 'archived')),
+    ).thenAnswer((_) async {});
+
+    await tester.pumpWidget(
+      _wrap(repo, const ClientRecord(id: 'c1', name: 'Acme', jobCount: 4)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Archive'));
+    await tester.pumpAndSettle();
+
+    // Archiving is reversible from where it was taken — the record still
+    // exists, so this surface must not dismiss itself.
+    verify(() => repo.setClientArchived('c1', archived: true)).called(1);
+    expect(find.widgetWithText(OutlinedButton, 'Unarchive'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the profile card states the type and the month joined', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        ClientRecord(
+          id: 'c1',
+          name: 'Gestion Beauchemin',
+          type: ClientType.propertyManagement,
+          createdAt: DateTime(2023, 4, 2),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Gestion Beauchemin'), findsOneWidget);
+    expect(find.text('Property mgmt · since Apr 2023'), findsOneWidget);
+    expect(find.text('Edit'), findsOneWidget);
+  });
+
+  testWidgets('the profile card drops the half it has no data for', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        ClientRecord(id: 'c1', name: 'Acme', createdAt: DateTime(2023, 4, 2)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // No type on this record, so the line is the join fragment alone.
+    expect(find.text('since Apr 2023'), findsOneWidget);
+  });
+
+  testWidgets('a typeless client with no createdAt renders no subtitle line', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(repo, const ClientRecord(id: 'c1', name: 'Acme')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('since'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

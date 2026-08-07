@@ -1,0 +1,123 @@
+# Feature Tour (showcaseview) — Design
+
+**Date:** 2026-07-22
+**Status:** Approved design, pre-implementation
+**Package:** [showcaseview](https://pub.dev/packages/showcaseview) (pure Dart — no native code, so no SPM/CocoaPods concern; pin latest stable at implementation time)
+
+## Goal
+
+Short, role-aware, per-tab guided tours that show new users how the app works:
+each hub tab highlights its key widgets one at a time with localized
+title + description overlays. Auto-runs once per tab per device; replayable
+from Settings.
+
+## Decisions (from brainstorm)
+
+| Question | Decision |
+|---|---|
+| Scope | Per-tab tours (Calendar, Clients, Employees, History, Live Map, Settings) |
+| Roles | Role-aware — admin gets full script, employee gets a shorter one limited to what they can actually do |
+| Trigger | Auto-start on first *visible* visit of each tab + a Settings "Replay app tour" row that resets all seen-flags |
+| Persistence | SharedPreferences, one key per tab (`tour_seen_<tab>`), device-local; sign-out does NOT reset |
+| Skip semantics | Finishing or skipping both mark the tab seen ("leave me alone") |
+
+## UX behavior
+
+- 3–6 steps per tab. Tap advances; Skip/dismiss ends the tour and marks seen.
+- A tour only auto-starts when: the tab is the hub's **current** destination,
+  its seen-flag is unset, and the tab's first data frame has settled (never
+  showcase over a `SkeletonLoader`).
+- Settings → "Replay app tour": resets all flags, pushes a success notice via
+  `noticeServiceProvider`; each tab's tour then plays again on its next visit.
+
+## Architecture
+
+New feature folder `lib/features/feature_tour/`:
+
+- **`domain/tour_definitions.dart`** — pure step catalogs:
+  `tourStepsFor(tab, isAdmin)` returns an ordered list of step ids, each
+  mapping to a target key id and ARB string keys. Plain-`test()`-testable, no
+  Flutter/Firebase deps.
+- **`application/tour_controller.dart`** — Riverpod layer owning:
+  - seen-flags in SharedPreferences (await the prefs `ready` future before
+    acting — mirror `liveActivityEnabledProvider`; an optimistic default must
+    never auto-start a tour that was already seen);
+  - the auto-start decision (visible + unseen + data settled);
+  - `resetAll()` for the Settings replay row.
+- **Per-tab wiring** — each tab screen wraps its body in `ShowCaseWidget` and
+  attaches `Showcase(key:)` wrappers to its highlighted widgets. `GlobalKey`s
+  live in the screen's State. Auto-start fires post-frame when the tab
+  *becomes visible* (via `HubShellScope` current destination), not when built
+  — hidden `IndexedStack` tabs must never start a tour.
+- **Layout resilience** — before starting, drop any step whose target key has
+  no mounted context (drawer hamburger vs. nav rail in split layout, FABs
+  absent for employees). Never crash on a missing target; a tour with zero
+  surviving steps just marks itself seen.
+
+Rejected alternatives: one global `ShowCaseWidget` above `HubShell` (all tabs
+stay mounted in the `IndexedStack`, so hidden tabs' targets pollute the scope
+and offstage auto-start is a real failure mode); hand-rolled overlay (needless
+rebuild of what the package does).
+
+## Step catalogs (as implemented)
+
+**Role correction (found at implementation):** Clients, Employees, History,
+and Live Map are admin-only tabs — both the nav rail (`_destinationsFor` in
+`adaptive_shell.dart`) and the settings drawer gate them on `isAdmin`.
+Employees get tours only on Calendar and Settings; the employee catalogs for
+the other four tabs are empty (`tourStepsFor`).
+
+- **Calendar** — admin: month grid, day list, add-appointment FAB, day-route
+  icon (4 steps). Employee: same minus the FAB (3 steps).
+- **Clients** — admin only: search bar, add-client FAB.
+- **Employees** — admin only: search bar, invite FAB.
+- **History** — admin only: search bar.
+- **Live Map** — admin only: roster FAB, recenter FAB.
+- **Settings** — both roles: appearance card, notifications card, and the
+  "Replay app tour" row itself.
+
+Steps only ever anchor to real widgets; no free-floating "did you know" steps.
+
+## Visual design (chosen 2026-07-22)
+
+Mockups: https://claude.ai/code/artifact/db844a3f-4c21-42b3-90fb-0de536293638
+
+**Option A — anchored tooltip** was chosen as-is (no grafts from B/C):
+
+- Coach-mark bubble anchored to the highlighted widget with an arrow pointing
+  at it; scrim is a ~62 % navy overlay; the target widget stays fully lit with
+  a light outline.
+- Bubble: `surface` background, `AppRadius.r16`, title in `ink`
+  (bold, ~16 px), description in `subtle` (~13.5 px), footer row with
+  "n of N" counter (muted), a text "Skip" button, and a filled primary
+  pill "Next" button.
+- Implemented via showcaseview's custom-tooltip API so colors/radii come from
+  the theme (`ColorScheme` + `AppRadius`), not the package defaults.
+- Rejected: Option B (fixed bottom instruction card + progress dots) and
+  Option C (pulsing ring + one-line pill, tap-anywhere).
+
+## Localization & accessibility
+
+- All step text via `gen_l10n`: new `tour_` key bucket, EN + FR in lockstep,
+  `@key` metadata required (the ARB edit hook regenerates — don't run
+  `flutter gen-l10n` manually).
+- Animations collapse to instant when `MediaQuery.disableAnimationsOf(context)`
+  is true (package duration knobs set to zero).
+- Overlay text respects user text scale; no scale clamping.
+
+## Testing
+
+- Pure `test()`: step catalogs per (tab, role) — admin-only steps absent for
+  employees; every step id maps to real ARB keys.
+- Controller tests: fresh flag → auto-start eligible exactly once; skip marks
+  seen; `resetAll()` re-enables; prefs `ready` awaited before any decision.
+- Widget tests: replay row resets flags and pushes the notice
+  (`SettingsScreen` harness: mock SharedPreferences + secure storage +
+  `PackageInfo` + l10n delegates per testing rules).
+- Overlay rendering + step targeting: device verification via `flutter run`.
+
+## Out of scope
+
+- No server/Firestore state — tours are purely device-local.
+- No cross-tab "cinematic" tour, no analytics on tour completion.
+- No changes to the existing pre-login `OnboardingGate` flow.

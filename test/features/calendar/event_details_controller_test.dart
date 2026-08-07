@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
@@ -104,6 +107,15 @@ void main() {
     ).thenAnswer((_) async {});
     when(() => appointments.deleteAppointment(any())).thenAnswer((_) async {});
     when(() => storage.deleteImages(any())).thenAnswer((_) async {});
+    // No clash by default; the conflict tests override this.
+    when(
+      () => appointments.findBusyEmployees(
+        candidates: any(named: 'candidates'),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        excludeAppointmentId: any(named: 'excludeAppointmentId'),
+      ),
+    ).thenAnswer((_) async => const <EmployeeRecord>[]);
 
     container =
         ProviderContainer(
@@ -113,6 +125,8 @@ void main() {
               employeesRepositoryProvider.overrideWithValue(employees),
               appointmentImageUploadProvider.overrideWithValue(uploader),
               imageStorageProvider.overrideWithValue(storage),
+              // Deterministic online by default; the offline test builds its own.
+              isOfflineProvider.overrideWithValue(false),
             ],
           )
           // Keep the provider alive across reads so autoDispose doesn't tear
@@ -144,9 +158,8 @@ void main() {
       expect(state.selectedDate, _appointment.startTime);
       expect(state.selectedStartTime, const TimeOfDay(hour: 9, minute: 0));
       expect(state.selectedEndTime, const TimeOfDay(hour: 10, minute: 0));
-      // The fixture's unknown 'booked' status normalizes to 'pending' on seed
-      // (via AppointmentStatus.fromRaw) so an unchanged status is always
-      // re-written as an allowlisted value.
+      // The fixture's unknown 'booked' status normalizes to 'pending' via
+      // AppointmentStatus.fromRaw so it's always re-written as an allowlisted value.
       expect(state.editingStatus, 'pending');
       expect(state.isEditing, isFalse);
     });
@@ -160,8 +173,7 @@ void main() {
 
     test('skips the client load for a known non-admin session (the clients '
         'read rule is admin-only)', () async {
-      // Own mock: the setUp container already builds an (admin-path)
-      // controller against the shared one, which would pollute verifyNever.
+      // Own mock: the shared setUp container's admin-path controller would pollute verifyNever.
       final scopedClients = _MockClientsRepo();
       when(
         () => scopedClients.getClientById(any()),
@@ -221,6 +233,89 @@ void main() {
         ..exitEditing();
       expect(readState().isEditing, isFalse);
     });
+
+    test(
+      'turning Personal off KEEPS all-day (retired invariant: all-day now '
+      'applies to client jobs too, so the flag is reachable and repairable '
+      'rather than an unrepairable dead end)',
+      () {
+        final c = readNotifier()
+          ..setPersonal(value: true)
+          ..setAllDay(value: true);
+        expect(readState().isAllDay, isTrue);
+
+        c.setPersonal(value: false);
+        expect(readState().isAllDay, isTrue);
+      },
+    );
+
+    test('turning Personal on again does not resurrect all-day', () {
+      final c = readNotifier()..setPersonal(value: true);
+      expect(readState().isAllDay, isFalse);
+
+      c.setAllDay(value: true);
+      expect(readState().isAllDay, isTrue);
+    });
+  });
+
+  group('end date (multi-day)', () {
+    final multiDay = _appointment.copyWith(
+      id: 'multi-1',
+      startTime: DateTime(2026, 8, 1, 9),
+      endTime: DateTime(2026, 8, 5, 17),
+    );
+
+    final overnight = _appointment.copyWith(
+      id: 'overnight-1',
+      startTime: DateTime(2026, 8, 1, 22),
+      endTime: DateTime(2026, 8, 4, 6),
+    );
+
+    test('seeds the end date from the stored last work day', () {
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(multiDay)),
+        (_, _) {},
+      );
+      final state = container.read(
+        eventDetailsControllerProvider(EventDetailsKey(multiDay)),
+      );
+      expect(state.endDate, DateTime(2026, 8, 5));
+      expect(state.endDateTouched, isTrue);
+    });
+
+    test('a night shift seeds the last NIGHT, not the morning', () {
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(overnight)),
+        (_, _) {},
+      );
+      final state = container.read(
+        eventDetailsControllerProvider(EventDetailsKey(overnight)),
+      );
+      expect(state.endDate, DateTime(2026, 8, 3));
+    });
+
+    test('moving the start date preserves the run length', () {
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(multiDay)),
+        (_, _) {},
+      );
+      container
+          .read(
+            eventDetailsControllerProvider(EventDetailsKey(multiDay)).notifier,
+          )
+          .selectDate(DateTime(2026, 8, 3));
+
+      final state = container.read(
+        eventDetailsControllerProvider(EventDetailsKey(multiDay)),
+      );
+      expect(state.endDate, DateTime(2026, 8, 7));
+    });
+
+    test('selectEndDate sets the date and marks it touched', () {
+      readNotifier().selectEndDate(DateTime(2026, 5, 12));
+      expect(readState().endDate, DateTime(2026, 5, 12));
+      expect(readState().endDateTouched, isTrue);
+    });
   });
 
   group('toggleEmployee', () {
@@ -235,9 +330,9 @@ void main() {
   });
 
   group('markAsDone / cancelAppointment', () {
-    test('markAsDone writes status="done" and returns null', () async {
-      final error = await readNotifier().markAsDone(_appointment);
-      expect(error, isNull);
+    test('markAsDone writes status="done" and reports Ok', () async {
+      final outcome = await readNotifier().markAsDone(_appointment);
+      expect(outcome, isA<EventDetailsActionOk>());
       verify(
         () => appointments.updateAppointmentStatus(
           id: _appointment.id!,
@@ -247,10 +342,10 @@ void main() {
     });
 
     test(
-      'cancelAppointment writes status="cancelled" and returns null',
+      'cancelAppointment writes status="cancelled" and reports Ok',
       () async {
-        final error = await readNotifier().cancelAppointment(_appointment);
-        expect(error, isNull);
+        final outcome = await readNotifier().cancelAppointment(_appointment);
+        expect(outcome, isA<EventDetailsActionOk>());
         verify(
           () => appointments.updateAppointmentStatus(
             id: _appointment.id!,
@@ -261,7 +356,8 @@ void main() {
     );
 
     test(
-      'markAsDone returns the error and resets isSaving when repo throws',
+      'markAsDone reports Failed with the error and resets isSaving '
+      'when repo throws',
       () async {
         final failure = Exception('boom');
         when(
@@ -270,11 +366,24 @@ void main() {
             status: any(named: 'status'),
           ),
         ).thenThrow(failure);
-        final error = await readNotifier().markAsDone(_appointment);
-        expect(error, same(failure));
+        final outcome = await readNotifier().markAsDone(_appointment);
+        expect(outcome, isA<EventDetailsActionFailed>());
+        expect((outcome as EventDetailsActionFailed).error, same(failure));
         expect(readState().isSaving, isFalse);
       },
     );
+
+    test('a status write skipped by the busy guard reports Busy', () async {
+      final notifier = readNotifier()..setSaving(busy: true);
+      final outcome = await notifier.markAsDone(_appointment);
+      expect(outcome, isA<EventDetailsActionBusy>());
+      verifyNever(
+        () => appointments.updateAppointmentStatus(
+          id: any(named: 'id'),
+          status: any(named: 'status'),
+        ),
+      );
+    });
   });
 
   group('save', () {
@@ -291,6 +400,40 @@ void main() {
       expect(outcome, isA<EventDetailsInvalid>());
       verifyNever(() => appointments.updateAppointment(any()));
     });
+
+    test(
+      'an all-day edit saves midnight to 23:59, not the picked times',
+      () async {
+        // The EDIT half of the appointmentSpan invariant. The add path was
+        // covered end-to-end but this one only ever asserted the isAllDay STATE
+        // flag, so a regression in the saved instants here would have shipped
+        // silently — which is exactly what routing both paths through one helper
+        // is meant to prevent.
+        readNotifier();
+        await waitForSeed();
+        final c = readNotifier()
+          // Times picked BEFORE the switch was flipped stay in state; the span
+          // helper must ignore them.
+          ..selectStartTime(const TimeOfDay(hour: 14, minute: 0))
+          ..selectEndTime(const TimeOfDay(hour: 16, minute: 0))
+          ..setPersonal(value: true)
+          ..setAllDay(value: true);
+
+        final outcome = await c.save(
+          _appointment,
+          title: 'Dentist',
+          address: '',
+          notes: '',
+          materialsNeeded: '',
+        );
+
+        expect(outcome, isA<EventDetailsSaved>());
+        final saved = (outcome as EventDetailsSaved).appointment;
+        expect(saved.isAllDay, isTrue);
+        expect(saved.startTime, DateTime(2026, 5, 10));
+        expect(saved.endTime, DateTime(2026, 5, 10, 23, 59));
+      },
+    );
 
     test('writes updated appointment with edited values on success', () async {
       readNotifier();
@@ -357,6 +500,37 @@ void main() {
       expect(saved.employeeNames, ['Alex', 'Zoe']);
     });
 
+    test('a genuinely-empty active list retains every original assignee', () {
+      // The counterpart to the retain rule above. When NOBODY is active,
+      // nobody is deselectable, so keeping all of them is correct — the
+      // failure mode the invariant guards against is reading a COLD stream
+      // value and mistaking it for this, which is why
+      // `_resolveActiveEmployees` awaits a real emission (pinned by the
+      // seed-race test below). Recorded so a future change doesn't "fix" this
+      // into dropping assignees.
+      when(employees.watchEmployees).thenAnswer((_) => Stream.value(const []));
+
+      final withTwo = _appointment.copyWith(
+        id: 'appt-empty-active',
+        employeeIds: const ['e1', 'e2'],
+        employeeNames: const ['Alex', 'Bea'],
+      );
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(withTwo)),
+        (_, _) {},
+      );
+
+      // Seeded from the record itself, so the picker still names them even
+      // though none resolves against the (empty) active set.
+      expect(
+        container
+            .read(eventDetailsControllerProvider(EventDetailsKey(withTwo)))
+            .selectedEmployees
+            .map((e) => e.id),
+        ['e1', 'e2'],
+      );
+    });
+
     test(
       'awaits the employee seed before validating (B1 race): a save fired '
       'before seeding settles keeps active assignees, not "employees required"',
@@ -370,9 +544,8 @@ void main() {
           eventDetailsControllerProvider(EventDetailsKey(fresh)).notifier,
         );
 
-        // Intentionally NO waitForSeed: save() must settle the seed itself.
-        // Without the guard, validation sees an empty selection and returns
-        // EventDetailsInvalid (employeesRequired) before any save happens.
+        // Intentionally omits waitForSeed — save() must settle the seed itself,
+        // or validation would see an empty selection and return employeesRequired.
         final outcome = await c.save(
           fresh,
           title: 'x',
@@ -654,9 +827,8 @@ void main() {
         expect(batch.every((a) => a.title == 'New title'), isTrue);
         expect(batch.every((a) => a.address == 'New address'), isTrue);
         expect(batch.every((a) => a.seriesId == 'series-1'), isTrue);
-        // Status stays per-visit — never propagated across the series — but is
-        // canonicalized: the retired 'confirmed' sibling normalizes to
-        // 'pending', while a valid 'in_progress' sibling round-trips unchanged.
+        // Status stays per-visit (never propagated) but is canonicalized:
+        // 'confirmed' normalizes to 'pending', 'in_progress' round-trips unchanged.
         expect(batch[1].status, 'pending');
         expect(batch[2].status, 'in_progress');
         // Each sibling keeps its own date but takes the new time of day.
@@ -705,9 +877,8 @@ void main() {
     });
 
     test('seeds the stored repeat and does not re-book it unchanged', () async {
-      // Distinct id: the controller family is keyed by appointment id, so
-      // reusing _appointment's id would return the instance the setUp
-      // pre-listened (seeded with repeat: none).
+      // Distinct id — the family is keyed by appointment id, so reusing
+      // _appointment's id would return setUp's already-seeded (repeat: none) instance.
       final repeating = _appointment.copyWith(
         id: 'repeat-seed-1',
         repeat: RepeatInterval.sixMonths,
@@ -785,6 +956,42 @@ void main() {
         expect(readState().isSaving, isFalse);
       },
     );
+
+    test(
+      'offline fails fast without touching the repo or the busy flag',
+      () async {
+        final key = EventDetailsKey(_appointment);
+        final offline = ProviderContainer(
+          overrides: [
+            appointmentsRepositoryProvider.overrideWithValue(appointments),
+            clientsRepositoryProvider.overrideWithValue(clients),
+            employeesRepositoryProvider.overrideWithValue(employees),
+            appointmentImageUploadProvider.overrideWithValue(uploader),
+            imageStorageProvider.overrideWithValue(storage),
+            isOfflineProvider.overrideWithValue(true),
+          ],
+        )..listen(eventDetailsControllerProvider(key), (_, _) {});
+        addTearDown(offline.dispose);
+
+        final outcome = await offline
+            .read(eventDetailsControllerProvider(key).notifier)
+            .save(
+              _appointment,
+              title: 'x',
+              address: 'y',
+              notes: '',
+              materialsNeeded: '',
+            );
+
+        expect(outcome, isA<EventDetailsFailed>());
+        expect((outcome as EventDetailsFailed).error, isA<SocketException>());
+        verifyNever(() => appointments.updateAppointment(any()));
+        expect(
+          offline.read(eventDetailsControllerProvider(key)).isSaving,
+          isFalse,
+        );
+      },
+    );
   });
 
   group('deleteAppointment', () {
@@ -852,6 +1059,81 @@ void main() {
       );
       expect(error, isNull);
       verify(() => appointments.deleteAppointment('appt-1')).called(1);
+    });
+  });
+
+  group('busy-employee conflict', () {
+    test('save returns the busy outcome and clears the saving flag', () async {
+      await waitForSeed();
+      when(
+        () => appointments.findBusyEmployees(
+          candidates: any(named: 'candidates'),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          excludeAppointmentId: any(named: 'excludeAppointmentId'),
+        ),
+      ).thenAnswer((_) async => const [_employeeA]);
+
+      final outcome = await readNotifier().save(
+        _appointment,
+        title: 'Job',
+        address: '',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(outcome, isA<EventDetailsBusyEmployees>());
+      // The flag must clear or Save stays stuck once the dialog is dismissed.
+      expect(readState().isSaving, isFalse);
+      verifyNever(() => appointments.updateAppointment(any()));
+    });
+
+    test(
+      'excludes the appointment being edited from its own conflicts',
+      () async {
+        await waitForSeed();
+
+        await readNotifier().save(
+          _appointment,
+          title: 'Job',
+          address: '',
+          notes: '',
+          materialsNeeded: '',
+        );
+
+        final captured = verify(
+          () => appointments.findBusyEmployees(
+            candidates: any(named: 'candidates'),
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+            excludeAppointmentId: captureAny(named: 'excludeAppointmentId'),
+          ),
+        ).captured.single;
+        expect(captured, 'appt-1');
+      },
+    );
+
+    test('forceBusy skips the conflict check and writes', () async {
+      await waitForSeed();
+
+      final outcome = await readNotifier().save(
+        _appointment,
+        title: 'Job',
+        address: '',
+        notes: '',
+        materialsNeeded: '',
+        forceBusy: true,
+      );
+
+      expect(outcome, isA<EventDetailsSaved>());
+      verifyNever(
+        () => appointments.findBusyEmployees(
+          candidates: any(named: 'candidates'),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          excludeAppointmentId: any(named: 'excludeAppointmentId'),
+        ),
+      );
     });
   });
 }

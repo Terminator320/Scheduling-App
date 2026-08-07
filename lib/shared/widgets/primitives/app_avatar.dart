@@ -1,7 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/shared/widgets/primitives/name_initials.dart';
 
-enum AvatarSize { xs, sm, md, lg }
+enum AvatarSize {
+  xs,
+  sm,
+  md,
+  lg;
+
+  /// Painted diameter. Exposed because a caller that has to lay an avatar out
+  /// by hand — the appointment card's overlapped crew stack, which can't use
+  /// `LayoutBuilder` under `IntrinsicHeight` — must not keep its own copy.
+  double get diameter => switch (this) {
+    AvatarSize.xs => 20.0,
+    AvatarSize.sm => 28.0,
+    AvatarSize.md => 36.0,
+    AvatarSize.lg => 48.0,
+  };
+}
 
 class AppAvatar extends StatelessWidget {
   const AppAvatar({
@@ -17,21 +33,18 @@ class AppAvatar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final diameter = switch (size) {
-      AvatarSize.xs => 20.0,
-      AvatarSize.sm => 28.0,
-      AvatarSize.md => 36.0,
-      AvatarSize.lg => 48.0,
-    };
+    final diameter = size.diameter;
     final fontSize = switch (size) {
       AvatarSize.xs => 8.0,
       AvatarSize.sm => 10.0,
       AvatarSize.md => 13.0,
       AvatarSize.lg => 17.0,
     };
-    final initials = _initials(name);
-    final background = color ?? _colorFromName(name);
-    final foreground = contrastingForegroundFor(background);
+    final theme = Theme.of(context);
+    final initials = nameInitials(name);
+    final stored = color ?? _colorFromName(name);
+    final background = crewColorOf(theme, stored.toARGB32());
+    final foreground = avatarForegroundFor(theme, background);
     return Container(
       constraints: BoxConstraints.tight(Size(diameter, diameter)),
       decoration: BoxDecoration(
@@ -52,15 +65,8 @@ class AppAvatar extends StatelessWidget {
     );
   }
 
-  static String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts.first.isEmpty) return '?';
-    if (parts.length == 1) return parts[0][0].toUpperCase();
-    return '${parts.first[0]}${parts.last[0]}'.toUpperCase();
-  }
-
   static Color _colorFromName(String name) {
-    return AppColors.employeePalette[name.hashCode.abs() %
-        AppColors.employeePalette.length];
+    return AppColors.crewPalette[name.hashCode.abs() %
+        AppColors.crewPalette.length];
   }
 }

@@ -12,6 +12,30 @@
   "@auth_confirmPassword": {
     "description": "Confirm Password"
   },
+  "auth_setUpYourAccountTitle": "Set up your account",
+  "@auth_setUpYourAccountTitle": {
+    "description": "Title of the first-run account setup screen"
+  },
+  "auth_setUpYourAccountBody": "Your admin created this account with a temporary password. Choose your own password below — the temporary one stops working once you finish.",
+  "@auth_setUpYourAccountBody": {
+    "description": "Explains why setup is required: the admin set a temporary password"
+  },
+  "auth_newPassword": "New password",
+  "@auth_newPassword": {
+    "description": "Label of the password field on the account setup screen"
+  },
+  "auth_finishSetup": "Finish setup",
+  "@auth_finishSetup": {
+    "description": "Primary button on the account setup screen"
+  },
+  "auth_signedInAs": "SIGNED IN",
+  "@auth_signedInAs": {
+    "description": "Mono chip beside the locked email on the setup screen"
+  },
+  "auth_accountReadySignInAgain": "Your account is ready. Sign in with your new password.",
+  "@auth_accountReadySignInAgain": {
+    "description": "Success banner when the profile is not readable yet after setup"
+  },
   "auth_signIn": "Sign In",
   "@auth_signIn": {
     "description": "Sign In"
@@ -20,17 +44,9 @@
   "@auth_forgotPassword": {
     "description": "Forgot password?"
   },
-  "auth_createAccount": "Create account",
-  "@auth_createAccount": {
-    "description": "Create account"
-  },
   "common_admin": "Admin",
   "@common_admin": {
     "description": "Admin"
-  },
-  "employees_role": "Role",
-  "@employees_role": {
-    "description": "Role"
   },
   "status_active": "Active",
   "@status_active": {
@@ -40,9 +56,9 @@
   "@status_invited": {
     "description": "Invited"
   },
-  "status_pending": "Pending",
+  "status_pending": "Scheduled",
   "@status_pending": {
-    "description": "Pending"
+    "description": "Label for the 'pending' appointment status (stored value stays 'pending')"
   },
   "status_cancelled": "Cancelled",
   "@status_cancelled": {
@@ -55,6 +71,10 @@
   "status_inProgress": "In Progress",
   "@status_inProgress": {
     "description": "In Progress"
+  },
+  "status_overdue": "Overdue",
+  "@status_overdue": {
+    "description": "Appointment whose end time has passed without being marked done"
   },
   "settings_textScaleSmall": "Small",
   "@settings_textScaleSmall": {
@@ -145,13 +165,198 @@
       }
     }
   },
-  "calendar_openMenuTooltip": "Open menu",
-  "@calendar_openMenuTooltip": {
-    "description": "Tooltip for the calendar app-bar button that opens the settings drawer."
+  "calendar_sectionTemplates": "TEMPLATES",
+  "@calendar_sectionTemplates": {
+    "description": "Mono all-caps section label above the job-template chips in the job form. Already uppercase in source."
+  },
+  "calendar_sectionWho": "WHO",
+  "@calendar_sectionWho": {
+    "description": "Mono all-caps section label above the service, client and assignee fields in the job form. Already uppercase in source."
+  },
+  "calendar_personalJob": "Personal job",
+  "@calendar_personalJob": {
+    "description": "Switch in the job form that marks the job as personal time for the crew rather than a client visit."
+  },
+  "calendar_hideCalendar": "Hide calendar",
+  "@calendar_hideCalendar": {
+    "description": "Handle between the month grid and the day's jobs — drag or tap it up to fold the grid away."
+  },
+  "calendar_showCalendar": "Show calendar",
+  "@calendar_showCalendar": {
+    "description": "Same handle once the grid is folded away — drag or tap it to bring the grid back."
+  },
+  "calendar_allDay": "All day",
+  "@calendar_allDay": {
+    "description": "Switch in the job form, and the label shown in place of a time range on a job that runs the whole day."
+  },
+  "calendar_dayOfCount": "Day {index} of {count}",
+  "@calendar_dayOfCount": {
+    "description": "The position of one day within a multi-day job, shown on the appointment card after the time range.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_nightOfCount": "Night {index} of {count}",
+  "@calendar_nightOfCount": {
+    "description": "The position of one night within a multi-night job whose daily window crosses midnight, shown on the appointment card after the time range.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_personal": "Personal",
+  "@calendar_personal": {
+    "description": "Short label shown on a job card and in the job detail view in place of a client name, when the job is personal."
+  },
+  "calendar_sectionSchedule": "SCHEDULE",
+  "@calendar_sectionSchedule": {
+    "description": "Mono all-caps section label above the date, time and repeat fields in the job form. Already uppercase in source."
+  },
+  "calendar_sectionDetails": "DETAILS",
+  "@calendar_sectionDetails": {
+    "description": "Mono all-caps section label above the address, notes and materials fields in the job form. Already uppercase in source."
+  },
+  "calendar_repeatsEveryLabel": "REPEATS {interval}",
+  "@calendar_repeatsEveryLabel": {
+    "description": "Mono all-caps context label at the top of the repeat-scope dialog, e.g. REPEATS EVERY 2 WEEKS.",
+    "placeholders": {
+      "interval": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_applyChangesTo": "Apply your changes to…",
+  "@calendar_applyChangesTo": {
+    "description": "Title of the repeat-scope dialog shown when saving a repeating appointment."
+  },
+  "calendar_thisVisitKeepsSeries": "{date} · the rest of the series keeps its old details",
+  "@calendar_thisVisitKeepsSeries": {
+    "description": "Consequence line under the this-visit-only option in the repeat-scope dialog.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_remainingVisitsThrough": "{count, plural, =1{1 remaining visit through {date}} other{{count} remaining visits through {date}}}",
+  "@calendar_remainingVisitsThrough": {
+    "description": "Consequence line under the this-and-future option in the repeat-scope dialog.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_saveThisVisit": "Save this visit",
+  "@calendar_saveThisVisit": {
+    "description": "Primary button label in the repeat-scope dialog when only this occurrence is selected."
+  },
+  "calendar_saveNVisits": "{count, plural, =1{Save 1 visit} other{Save {count} visits}}",
+  "@calendar_saveNVisits": {
+    "description": "Primary button label in the repeat-scope dialog when this and all future occurrences are selected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "common_back": "Back",
+  "@common_back": {
+    "description": "Secondary button that closes a dialog without acting."
+  },
+  "calendar_assignedLabel": "ASSIGNED",
+  "@calendar_assignedLabel": {
+    "description": "Mono all-caps label above the assignee panel in the appointment detail sheet. Already uppercase in source."
+  },
+  "calendar_photosLabel": "PHOTOS",
+  "@calendar_photosLabel": {
+    "description": "Mono all-caps label above the photo row in the appointment detail sheet. Already uppercase in source."
+  },
+  "calendar_crewPlusOthers": "{name} +{others}",
+  "@calendar_crewPlusOthers": {
+    "description": "Crew line on an appointment card when more than one person is assigned, e.g. Theo +1.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "others": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_scheduleLabel": "SCHEDULE",
+  "@calendar_scheduleLabel": {
+    "description": "Mono all-caps eyebrow label above the month name on the calendar header. Already uppercase in source."
+  },
+  "calendar_jobsCount": "{count, plural, =1{1 JOB} other{{count} JOBS}}",
+  "@calendar_jobsCount": {
+    "description": "Mono all-caps count of the selected day's jobs, shown right-aligned in the agenda header. Already uppercase in source.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_dayRouteTitle": "Day route",
+  "@calendar_dayRouteTitle": {
+    "description": "App bar title of the day-route screen"
+  },
+  "calendar_dayRouteOpenInMaps": "Open route in Google Maps ({count})",
+  "@calendar_dayRouteOpenInMaps": {
+    "description": "Label of the pinned bottom button opening the remaining stops as a multi-stop route; count is the number of launched stops",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_dayRouteNavigate": "Navigate",
+  "@calendar_dayRouteNavigate": {
+    "description": "Label of the per-stop navigate pill on the day-route timeline"
+  },
+  "calendar_dayRouteEmptyTitle": "No jobs this day",
+  "@calendar_dayRouteEmptyTitle": {
+    "description": "Empty-state title when the selected day has no visits"
+  },
+  "calendar_dayRouteEmptyBody": "Jobs scheduled for this day will appear here in driving order.",
+  "@calendar_dayRouteEmptyBody": {
+    "description": "Empty-state body of the day-route screen"
+  },
+  "calendar_dayRouteTruncated": "Route limited to the first 10 stops",
+  "@calendar_dayRouteTruncated": {
+    "description": "Info notice when the day has more stops than Google Maps supports"
+  },
+  "calendar_dayRouteEmployeeLabel": "Employee",
+  "@calendar_dayRouteEmployeeLabel": {
+    "description": "Label of the admin-only employee picker on the day-route screen"
+  },
+  "calendar_dayRoutePreviousDay": "Previous day",
+  "@calendar_dayRoutePreviousDay": {
+    "description": "Tooltip of the day switcher's back chevron"
+  },
+  "calendar_dayRouteNextDay": "Next day",
+  "@calendar_dayRouteNextDay": {
+    "description": "Tooltip of the day switcher's forward chevron"
   },
   "calendar_noAppointmentsForDay": "No appointments for this day.",
   "@calendar_noAppointmentsForDay": {
     "description": "Empty-state body shown to employees (who cannot create appointments) when the selected day has none."
+  },
+  "calendar_appointmentUnavailable": "This appointment is no longer available.",
+  "@calendar_appointmentUnavailable": {
+    "description": "Info notice shown when a tapped notification's appointment can't be opened because it was deleted or is no longer accessible."
   },
   "common_language": "Language",
   "@common_language": {
@@ -164,6 +369,18 @@
   "settings_previewText": "Preview text",
   "@settings_previewText": {
     "description": "Preview text"
+  },
+  "settings_previewApptTitle": "Appointment Title",
+  "@settings_previewApptTitle": {
+    "description": "Sample appointment title shown in the text-size preview card"
+  },
+  "settings_previewApptWhen": "Tuesday, May 12 - 9:00 - 9:45 AM",
+  "@settings_previewApptWhen": {
+    "description": "Sample appointment date/time shown in the text-size preview card"
+  },
+  "settings_previewApptContact": "Sarah Johnson - 514-555-0101",
+  "@settings_previewApptContact": {
+    "description": "Sample client name and phone shown in the text-size preview card"
   },
   "settings_darkMode": "Dark Mode",
   "@settings_darkMode": {
@@ -185,10 +402,6 @@
   "@employees_phoneNumber": {
     "description": "Phone number"
   },
-  "employees_employeeColor": "Employee Color",
-  "@employees_employeeColor": {
-    "description": "Employee Color"
-  },
   "employees_customColor": "Custom color",
   "@employees_customColor": {
     "description": "Tooltip on the rainbow swatch and title of the custom color picker dialog"
@@ -202,14 +415,6 @@
       }
     }
   },
-  "employees_editEmployee": "Edit Employee",
-  "@employees_editEmployee": {
-    "description": "Edit Employee"
-  },
-  "employees_employeeDetails": "Employee details",
-  "@employees_employeeDetails": {
-    "description": "Employee details"
-  },
   "clients_addClient": "Add Client",
   "@clients_addClient": {
     "description": "Add Client"
@@ -218,10 +423,6 @@
   "@common_address": {
     "description": "Address"
   },
-  "clients_customerName": "Customer name",
-  "@clients_customerName": {
-    "description": "The customer/display name field on the client form (required)"
-  },
   "clients_firstName": "First name",
   "@clients_firstName": {
     "description": "First name field on the client form"
@@ -229,10 +430,6 @@
   "clients_lastName": "Last name",
   "@clients_lastName": {
     "description": "Last name field on the client form"
-  },
-  "clients_mobile": "Mobile",
-  "@clients_mobile": {
-    "description": "Mobile phone field on the client form"
   },
   "clients_contactName": "Contact name",
   "@clients_contactName": {
@@ -291,41 +488,25 @@
   "@clients_newClient": {
     "description": "New client"
   },
+  "clients_typeResidential": "Residential",
+  "@clients_typeResidential": {
+    "description": "Client type chip for a private home"
+  },
+  "clients_typeCommercial": "Commercial",
+  "@clients_typeCommercial": {
+    "description": "Client type chip for a business customer"
+  },
+  "clients_typePropertyManagement": "Property mgmt",
+  "@clients_typePropertyManagement": {
+    "description": "Client type chip for a property-management company"
+  },
+  "common_save": "Save",
+  "@common_save": {
+    "description": "Primary verb in a form sheet's top bar, where the full 'Save Appointment' would not fit."
+  },
   "common_saveChanges": "Save changes",
   "@common_saveChanges": {
     "description": "Save changes"
-  },
-  "clients_deleting": "Deleting...",
-  "@clients_deleting": {
-    "description": "Deleting..."
-  },
-  "clients_deleteClient": "Delete client?",
-  "@clients_deleteClient": {
-    "description": "Delete client?"
-  },
-  "clients_areYouSureYouWantToDelete": "Are you sure you want to delete",
-  "@clients_areYouSureYouWantToDelete": {
-    "description": "Are you sure you want to delete"
-  },
-  "clients_thisCannotBeUndone": "This cannot be undone.",
-  "@clients_thisCannotBeUndone": {
-    "description": "This cannot be undone."
-  },
-  "clients_clientDeletedSuccessfully": "Client deleted successfully.",
-  "@clients_clientDeletedSuccessfully": {
-    "description": "Client deleted successfully."
-  },
-  "error_couldNotSaveChangesTryAgain": "Could not save changes. Try again.",
-  "@error_couldNotSaveChangesTryAgain": {
-    "description": "Could not save changes. Try again."
-  },
-  "error_couldNotAddClientTryAgain": "Could not add client. Try again.",
-  "@error_couldNotAddClientTryAgain": {
-    "description": "Could not add client. Try again."
-  },
-  "clients_thisClient": "this client",
-  "@clients_thisClient": {
-    "description": "this client"
   },
   "clients_additionalBusinessContacts": "Additional contacts",
   "@clients_additionalBusinessContacts": {
@@ -367,10 +548,6 @@
   "@validation_addressIsRequired": {
     "description": "Address is required"
   },
-  "employees_name": "Name",
-  "@employees_name": {
-    "description": "Name"
-  },
   "validation_titleIsRequired": "Title is required",
   "@validation_titleIsRequired": {
     "description": "Title is required"
@@ -383,6 +560,14 @@
   "@calendar_selectDate": {
     "description": "Select date"
   },
+  "calendar_startDate": "Start date",
+  "@calendar_startDate": {
+    "description": "Label of the first day of a job's run, in the appointment form's schedule panel."
+  },
+  "calendar_endDate": "End date",
+  "@calendar_endDate": {
+    "description": "Label of the last day of a job's run, in the appointment form's schedule panel."
+  },
   "calendar_startTime": "Start Time",
   "@calendar_startTime": {
     "description": "Start Time"
@@ -390,6 +575,40 @@
   "calendar_endTime": "End Time",
   "@calendar_endTime": {
     "description": "End Time"
+  },
+  "calendar_startTimeEachDay": "Start time · each day",
+  "@calendar_startTimeEachDay": {
+    "description": "Start-time label on a job running more than one day: the time is a daily window, repeated on each day of the run."
+  },
+  "calendar_endTimeEachDay": "End time · each day",
+  "@calendar_endTimeEachDay": {
+    "description": "End-time label on a job running more than one day: the time is a daily window, repeated on each day of the run."
+  },
+  "calendar_startTimeEachNight": "Start time · each night",
+  "@calendar_startTimeEachNight": {
+    "description": "Start-time label on a multi-day job whose daily window crosses midnight, so the run counts nights."
+  },
+  "calendar_endTimeNextMorning": "End time · next morning",
+  "@calendar_endTimeNextMorning": {
+    "description": "End-time label on a multi-day job whose daily window crosses midnight: the window ends the following morning."
+  },
+  "calendar_spanDays": "{count} days",
+  "@calendar_spanDays": {
+    "description": "Run length shown beside the end date of a job that spans several days.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_spanNights": "{count} nights",
+  "@calendar_spanNights": {
+    "description": "Run length shown beside the end date of a job whose daily window crosses midnight, so the run counts nights.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "calendar_client": "Client",
   "@calendar_client": {
@@ -462,10 +681,6 @@
       }
     }
   },
-  "calendar_editSeriesScopeMessage": "Apply your changes to this visit only, or to this and all future visits in the series?",
-  "@calendar_editSeriesScopeMessage": {
-    "description": "Body of the edit dialog for a repeating appointment, stating that the apply-to-all option changes every future visit in the series"
-  },
   "calendar_deleteSeriesScopeMessage": "Delete this visit only, or this and all future visits in the series?",
   "@calendar_deleteSeriesScopeMessage": {
     "description": "Body of the delete dialog for a repeating appointment, stating that the delete-all option removes every future visit in the series"
@@ -514,6 +729,15 @@
   "validation_pleaseSelectAnEndTime": "Please select an end time",
   "@validation_pleaseSelectAnEndTime": {
     "description": "Please select an end time"
+  },
+  "validation_endDateBeforeStart": "The end date can't be before the start date.",
+  "@validation_endDateBeforeStart": {
+    "description": "Shown on the appointment form when the picked end date falls before the start date."
+  },
+  "validation_spanTooLong": "A job can run at most {days} days. Shorten the end date or book a second job.",
+  "@validation_spanTooLong": {
+    "description": "Shown on the appointment form when the booked span exceeds the maximum.",
+    "placeholders": { "days": { "type": "int" } }
   },
   "calendar_mustBeAfterStartTime": "Must be after start time",
   "@calendar_mustBeAfterStartTime": {
@@ -603,17 +827,21 @@
   "@clients_call": {
     "description": "Quick-action button that dials the client's phone number"
   },
-  "clients_contactInfo": "Contact info",
-  "@clients_contactInfo": {
-    "description": "Section header above the client's phone, email and address"
+  "clients_jobHistory": "Job history",
+  "@clients_jobHistory": {
+    "description": "Section header on the client detail view above the client's past appointments"
+  },
+  "clients_noPastJobs": "No jobs yet",
+  "@clients_noPastJobs": {
+    "description": "Shown in the client detail Job history section when the client has no appointments"
   },
   "clients_directions": "Directions",
   "@clients_directions": {
     "description": "Quick-action button that opens the client's address in a map app"
   },
-  "clients_saveToContacts": "Save",
+  "clients_saveToContacts": "Save to contacts",
   "@clients_saveToContacts": {
-    "description": "Quick-action button that saves the client to the phone's contacts"
+    "description": "Button below the client info panel that exports the client to the phone address book. Names the destination because it is a standalone row now, not a tile beside Call/Directions where \"Save\" was clear."
   },
   "clients_savedToContacts": "Saved to contacts",
   "@clients_savedToContacts": {
@@ -646,6 +874,66 @@
   "employees_selectAnEmployeeToViewDetails": "Select an employee to view details",
   "@employees_selectAnEmployeeToViewDetails": {
     "description": "Select an employee to view details"
+  },
+  "clients_archive": "Archive",
+  "@clients_archive": {
+    "description": "Swipe action and detail-footer button that archives a client."
+  },
+  "clients_unarchive": "Unarchive",
+  "@clients_unarchive": {
+    "description": "Detail-footer button that restores an archived client to the list."
+  },
+  "clients_archivedNotice": "Archived {name}",
+  "@clients_archivedNotice": {
+    "description": "Success notice after archiving a client.",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "clients_unarchivedNotice": "Restored {name}",
+  "@clients_unarchivedNotice": {
+    "description": "Success notice after un-archiving a client.",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "clients_deletedNotice": "Deleted {name}",
+  "@clients_deletedNotice": {
+    "description": "Success notice after deleting a client.",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "clients_deleteTitle": "Delete client?",
+  "@clients_deleteTitle": {
+    "description": "Title of the confirm dialog before deleting a client."
+  },
+  "clients_deleteMessage": "{name} will be removed permanently. This can't be undone.",
+  "@clients_deleteMessage": {
+    "description": "Body of the confirm dialog before deleting a client.",
+    "placeholders": { "name": { "type": "String" } }
+  },
+  "error_introArchiveClient": "Couldn't archive the client",
+  "@error_introArchiveClient": {
+    "description": "Notice intro when archiving or un-archiving a client fails."
+  },
+  "error_introDeleteClient": "Couldn't delete the client",
+  "@error_introDeleteClient": {
+    "description": "Notice intro when deleting a client fails."
+  },
+  "clients_noArchivedClients": "No archived clients",
+  "@clients_noArchivedClients": {
+    "description": "Empty state when the Archived filter chip is on and no client is archived."
+  },
+  "clients_archivedFilterHint": "Archived clients stay searchable and can still be booked.",
+  "@clients_archivedFilterHint": {
+    "description": "Body text under the empty state for the Archived clients filter."
+  },
+  "clients_filterArchived": "Archived",
+  "@clients_filterArchived": {
+    "description": "Filter chip above the clients list showing only archived clients; also the badge on an archived client's row."
+  },
+  "clients_deleteBlockedHasHistory": "This client has job history, so it can't be deleted. Archive it instead.",
+  "@clients_deleteBlockedHasHistory": {
+    "description": "Shown when an admin tries to delete a client that still has appointments."
+  },
+  "clients_deleteFailedNotFound": "That client no longer exists.",
+  "@clients_deleteFailedNotFound": {
+    "description": "Shown when a delete targets a client doc that is already gone."
   },
   "clients_noClientsYet": "No clients yet",
   "@clients_noClientsYet": {
@@ -695,10 +983,6 @@
   "@error_nameAndEmailAreRequired": {
     "description": "Name and email are required"
   },
-  "employees_employeeDeleted": "Employee deleted",
-  "@employees_employeeDeleted": {
-    "description": "Employee deleted"
-  },
   "employees_employeeDisabledSuccessfully": "Employee disabled",
   "@employees_employeeDisabledSuccessfully": {
     "description": "Employee disabled"
@@ -711,21 +995,9 @@
   "@employees_employeeAddedSuccessfully": {
     "description": "Employee added successfully"
   },
-  "employees_employeeUpdatedSuccessfully": "Employee updated successfully",
-  "@employees_employeeUpdatedSuccessfully": {
-    "description": "Employee updated successfully"
-  },
   "error_anEmployeeWithThisEmailAlreadyExists": "An employee with this email already exists",
   "@error_anEmployeeWithThisEmailAlreadyExists": {
     "description": "An employee with this email already exists"
-  },
-  "employees_deleteEmployee": "Delete employee",
-  "@employees_deleteEmployee": {
-    "description": "Delete employee"
-  },
-  "employees_areYouSureYouWantToDeleteThisEmployee": "Are you sure you want to delete this employee?",
-  "@employees_areYouSureYouWantToDeleteThisEmployee": {
-    "description": "Are you sure you want to delete this employee?"
   },
   "auth_forgotYourPassword": "Forgot your password?",
   "@auth_forgotYourPassword": {
@@ -747,10 +1019,6 @@
   "@auth_youExampleCom": {
     "description": "you@example.com"
   },
-  "auth_didnTReceiveTheEmailTryAgain": "Didn't receive the email? Try again",
-  "@auth_didnTReceiveTheEmailTryAgain": {
-    "description": "Didn't receive the email? Try again"
-  },
   "error_tooManyAttemptsPleaseTryAgainLater": "Too many attempts. Please try again later.",
   "@error_tooManyAttemptsPleaseTryAgainLater": {
     "description": "Too many attempts. Please try again later."
@@ -770,10 +1038,6 @@
   "auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent": "If an account exists for this email, a password reset link has been sent.",
   "@auth_ifAnAccountExistsForThisEmailAPasswordResetLinkHasBeenSent": {
     "description": "If an account exists for this email, a password reset link has been sent."
-  },
-  "auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder": "The email may take a few minutes to arrive. Remember to check your spam folder.",
-  "@auth_theEmailMayTakeAFewMinutesToArriveRememberToCheckYourSpamFolder": {
-    "description": "The email may take a few minutes to arrive. Remember to check your spam folder."
   },
   "error_somethingWentWrong": "Something went wrong",
   "@error_somethingWentWrong": {
@@ -808,6 +1072,22 @@
     "description": "No account found with this email"
   },
   "error_somethingWentWrongPleaseTryAgain": "Something went wrong, please try again",
+  "error_thatAccountIsNoLongerPending": "That account is no longer pending — the person may have already set it up.",
+  "@error_thatAccountIsNoLongerPending": {
+    "description": "Shown when deleteEmployeeAccount refuses because the person completed setup first"
+  },
+  "error_yourAccountIsAlreadySetUp": "Your account is already set up. Sign in with your new password.",
+  "@error_yourAccountIsAlreadySetUp": {
+    "description": "Shown when completeEmployeeSetup refuses because the account is already active"
+  },
+  "error_noAccountRecordContactAdmin": "We couldn't find your employee record. Ask your admin to check your account.",
+  "@error_noAccountRecordContactAdmin": {
+    "description": "Shown when the signed-in uid resolves to no users doc during setup"
+  },
+  "error_sessionExpiredSignInAgain": "Your session expired. Sign in again to finish setting up.",
+  "@error_sessionExpiredSignInAgain": {
+    "description": "Shown when the credential goes stale mid-setup and the person must sign in again"
+  },
   "@error_somethingWentWrongPleaseTryAgain": {
     "description": "Something went wrong, please try again"
   },
@@ -827,10 +1107,6 @@
   "@error_anAccountWithThisEmailAlreadyExistsSignInOrContactAdmin": {
     "description": "Register-screen variant of the email-already-in-use error: includes guidance to sign in or contact admin for a reset."
   },
-  "error_accountCreationIncompleteContactAdmin": "Account creation didn't finish cleanly. An incomplete sign-in entry may exist for this email — please ask your admin to clear it and re-send your invitation, then try again.",
-  "@error_accountCreationIncompleteContactAdmin": {
-    "description": "Shown when the Auth account was created but the post-register rollback failed, leaving an orphan Auth user with no Firestore invite."
-  },
   "validation_passwordIsTooWeakUseAtLeast6Characters": "Password is too weak. Use at least 6 characters",
   "@validation_passwordIsTooWeakUseAtLeast6Characters": {
     "description": "Password is too weak. Use at least 6 characters"
@@ -842,6 +1118,10 @@
   "validation_passwordDoesNotMeetAllRequirements": "Password doesn't meet all the requirements below",
   "@validation_passwordDoesNotMeetAllRequirements": {
     "description": "Field error on the create-account password when one or more checklist requirements are unmet."
+  },
+  "validation_passwordMustDifferFromStarting": "Choose a different password from the one you were given",
+  "@validation_passwordMustDifferFromStarting": {
+    "description": "Field error on the account-setup password when the employee re-enters the shared starting password instead of choosing their own."
   },
   "validation_passwordReqMinLength": "At least 8 characters",
   "@validation_passwordReqMinLength": {
@@ -898,14 +1178,6 @@
   "error_thisEmailIsNotAuthorizedToSignUp": "This email is not authorized to sign up",
   "@error_thisEmailIsNotAuthorizedToSignUp": {
     "description": "This email is not authorized to sign up"
-  },
-  "auth_accountCreatedYouCanNowSignIn": "Account created. You can now sign in.",
-  "@auth_accountCreatedYouCanNowSignIn": {
-    "description": "Account created. You can now sign in."
-  },
-  "auth_useTheEmailYourAdminAddedToTheEmployeeList": "Use the email your admin added to the employee list.",
-  "@auth_useTheEmailYourAdminAddedToTheEmployeeList": {
-    "description": "Use the email your admin added to the employee list."
   },
   "error_noUserProfileFoundForThisAccount": "No user profile found for this account",
   "@error_noUserProfileFoundForThisAccount": {
@@ -985,10 +1257,6 @@
   "@auth_signInToYourAccount": {
     "description": "Sign in to your account"
   },
-  "auth_dontHaveAnAccount": "Don't have an account?",
-  "@auth_dontHaveAnAccount": {
-    "description": "Prompt before the Create account link on the sign-in screen"
-  },
   "common_tapToScheduleAnAppointment": "Tap + to schedule an appointment.",
   "@common_tapToScheduleAnAppointment": {
     "description": "Tap + to schedule an appointment."
@@ -1028,6 +1296,22 @@
   "settings_security": "Security",
   "@settings_security": {
     "description": "Security settings section header"
+  },
+  "settings_notifications": "Notifications",
+  "@settings_notifications": {
+    "description": "Notifications settings section header and row label"
+  },
+  "settings_notificationsOn": "On",
+  "@settings_notificationsOn": {
+    "description": "Status pill on the notifications row when notifications are authorized"
+  },
+  "settings_notificationsOff": "Off",
+  "@settings_notificationsOff": {
+    "description": "Status pill on the notifications row when notifications are not authorized"
+  },
+  "settings_liveActivity": "Live job card",
+  "@settings_liveActivity": {
+    "description": "Settings switch label for the iOS Live Activity Lock Screen card shown when it is time to leave for a job."
   },
   "settings_appLock": "App Lock",
   "@settings_appLock": {
@@ -1121,9 +1405,29 @@
   "@calendar_newAppointment": {
     "description": "New Appointment"
   },
-  "calendar_saveAppointment": "Save Appointment",
-  "@calendar_saveAppointment": {
-    "description": "Save Appointment"
+  "calendar_jobTemplateLeakDiagnostic": "Leak diagnostic",
+  "@calendar_jobTemplateLeakDiagnostic": {
+    "description": "Job template name: a leak diagnostic visit"
+  },
+  "calendar_jobTemplateDrainCleaning": "Drain cleaning",
+  "@calendar_jobTemplateDrainCleaning": {
+    "description": "Job template name: a drain cleaning visit"
+  },
+  "calendar_jobTemplateFaucetOrValve": "Faucet / valve",
+  "@calendar_jobTemplateFaucetOrValve": {
+    "description": "Job template name: a faucet or valve repair"
+  },
+  "calendar_jobTemplateToiletRepair": "Toilet repair",
+  "@calendar_jobTemplateToiletRepair": {
+    "description": "Job template name: a toilet repair"
+  },
+  "calendar_jobTemplateEmergencyCall": "Emergency call",
+  "@calendar_jobTemplateEmergencyCall": {
+    "description": "Job template name: an emergency call-out"
+  },
+  "calendar_jobTemplateWaterHeater": "Water heater",
+  "@calendar_jobTemplateWaterHeater": {
+    "description": "Job template name: a water heater install or repair"
   },
   "calendar_assignEmployee": "Assign Employee",
   "@calendar_assignEmployee": {
@@ -1165,13 +1469,13 @@
   "@calendar_appointmentStatus": {
     "description": "Appointment Status"
   },
+  "calendar_editCompletedJob": "Edit completed job",
+  "@calendar_editCompletedJob": {
+    "description": "Admin-only button in place of the completed indicator on a finished job. Opens the edit form, where the status picker can move it back off Complete — the only way to undo a mis-tapped Mark as complete."
+  },
   "calendar_assignedEmployee": "Assigned Employee",
   "@calendar_assignedEmployee": {
     "description": "Assigned Employee"
-  },
-  "clients_saveClient": "Save Client",
-  "@clients_saveClient": {
-    "description": "Save Client"
   },
   "employees_inviteEmployee": "Invite Employee",
   "@employees_inviteEmployee": {
@@ -1181,10 +1485,6 @@
   "@employees_sendInvite": {
     "description": "Send Invite"
   },
-  "employees_permissions": "Permissions",
-  "@employees_permissions": {
-    "description": "Permissions"
-  },
   "employees_adminAccess": "Admin access",
   "@employees_adminAccess": {
     "description": "Admin access"
@@ -1192,30 +1492,6 @@
   "employees_adminAccessDescription": "Can manage all appointments, clients & employees",
   "@employees_adminAccessDescription": {
     "description": "Can manage all appointments, clients & employees"
-  },
-  "employees_accountStatus": "Account Status",
-  "@employees_accountStatus": {
-    "description": "Account Status"
-  },
-  "employees_accountStatusDescription": "Controls access & job assignment",
-  "@employees_accountStatusDescription": {
-    "description": "Controls access & job assignment"
-  },
-  "employees_disableAccount": "Disable Account",
-  "@employees_disableAccount": {
-    "description": "Disable Account"
-  },
-  "employees_reEnableAccount": "Re-enable Account",
-  "@employees_reEnableAccount": {
-    "description": "Re-enable Account"
-  },
-  "employees_disableAccountNote": "Disabling removes them from new job assignments. Their past appointments and data are kept.",
-  "@employees_disableAccountNote": {
-    "description": "Disabling removes them from new job assignments. Their past appointments and data are kept."
-  },
-  "employees_reEnableAccountNote": "Re-enabling restores their access and allows them to be assigned to jobs again.",
-  "@employees_reEnableAccountNote": {
-    "description": "Re-enabling restores their access and allows them to be assigned to jobs again."
   },
   "error_colorAlreadyUsed": "This color is already used by another employee.",
   "@error_colorAlreadyUsed": {
@@ -1307,57 +1583,114 @@
   "@settings_deletingAccount": {
     "description": "Progress label shown while the account is being deleted."
   },
-  "error_noticeWithCause": "{intro} — {cause}. ({tag})",
+  "error_noticeWithCause": "{intro}. {cause}",
   "@error_noticeWithCause": {
-    "description": "Error-notice template: operation intro, sanitized cause, short tag matching the Crashlytics log label",
+    "description": "Error-notice template: what failed, then why and what the user can do about it",
     "placeholders": {
-      "intro": {"type": "String"},
-      "cause": {"type": "String"},
-      "tag": {"type": "String"}
+      "intro": {
+        "type": "String"
+      },
+      "cause": {
+        "type": "String"
+      }
     }
   },
-  "error_causeOffline": "you appear to be offline",
-  "@error_causeOffline": {"description": "Sanitized error cause: network/offline"},
-  "error_causePermissionDenied": "you don't have permission to do this",
-  "@error_causePermissionDenied": {"description": "Sanitized error cause: permission denied"},
-  "error_causeNotFound": "it no longer exists",
-  "@error_causeNotFound": {"description": "Sanitized error cause: document not found"},
-  "error_causeUnknown": "something went wrong",
-  "@error_causeUnknown": {"description": "Sanitized error cause: fallback"},
-  "error_introDeleteEmployee": "Couldn't delete the employee",
-  "@error_introDeleteEmployee": {"description": "Error intro for EMP-DEL"},
+  "error_causeOffline": "You appear to be offline — check your connection and try again.",
+  "@error_causeOffline": {
+    "description": "Sanitized error cause: network/offline"
+  },
+  "error_causePermissionDenied": "Your account doesn't have permission for this — ask an admin if you need access.",
+  "@error_causePermissionDenied": {
+    "description": "Sanitized error cause: permission denied"
+  },
+  "error_causeNotFound": "It may have been removed by someone else — refresh and try again.",
+  "@error_causeNotFound": {
+    "description": "Sanitized error cause: document not found"
+  },
+  "error_causeSignedOut": "Your session has expired — sign in again to continue.",
+  "@error_causeSignedOut": {
+    "description": "Sanitized error cause: the request was rejected as unauthenticated"
+  },
+  "error_causeTooManyAttempts": "Too many attempts in a short time — wait a minute and try again.",
+  "@error_causeTooManyAttempts": {
+    "description": "Sanitized error cause: rate limited"
+  },
+  "error_causeInvalidData": "Some of the details weren't accepted — check the fields and try again.",
+  "@error_causeInvalidData": {
+    "description": "Sanitized error cause: the server rejected the submitted values"
+  },
+  "error_causeUnknown": "Please try again in a moment.",
+  "@error_causeUnknown": {
+    "description": "Sanitized error cause: fallback — the intro already says what failed, so this only offers the next step"
+  },
   "error_introChangeEmployeeStatus": "Couldn't update the employee's account status",
-  "@error_introChangeEmployeeStatus": {"description": "Error intro for EMP-STATUS"},
+  "@error_introChangeEmployeeStatus": {
+    "description": "Error intro for EMP-STATUS"
+  },
+  "employees_emergencyLoadFailed": "Couldn't load the emergency contact. Close and reopen to try again — saving now would leave it unchanged.",
+  "@employees_emergencyLoadFailed": {
+    "description": "Shown in the edit-person sheet when the emergency-contact read fails, so a failed read is never mistaken for none on file"
+  },
+  "settings_myDetails": "My details",
+  "@settings_myDetails": {
+    "description": "Settings row and screen title for the signed-in user's own editable details"
+  },
+  "settings_myDetailsEmergencyBlurb": "Only you and an admin can see this.",
+  "@settings_myDetailsEmergencyBlurb": {
+    "description": "Caption under the emergency-contact section on My details, stating who can read it"
+  },
+  "error_introSaveMyDetails": "Couldn't save your details",
+  "@error_introSaveMyDetails": {
+    "description": "Error intro for ME-SAVE (the user's own emergency contact)"
+  },
   "error_introSaveEmployee": "Couldn't save the employee",
-  "@error_introSaveEmployee": {"description": "Error intro for EMP-CREATE (covers create and edit)"},
+  "@error_introSaveEmployee": {
+    "description": "Error intro for EMP-CREATE (covers create and edit)"
+  },
   "error_introCreateAppointment": "Couldn't create the appointment",
-  "@error_introCreateAppointment": {"description": "Error intro for APPT-CREATE"},
+  "@error_introCreateAppointment": {
+    "description": "Error intro for APPT-CREATE"
+  },
   "error_introSaveAppointment": "Couldn't save the appointment changes",
-  "@error_introSaveAppointment": {"description": "Error intro for APPT-SAVE"},
+  "@error_introSaveAppointment": {
+    "description": "Error intro for APPT-SAVE"
+  },
   "error_introUpdateAppointmentStatus": "Couldn't update the appointment status",
-  "@error_introUpdateAppointmentStatus": {"description": "Error intro for APPT-STATUS (mark done / cancel)"},
+  "@error_introUpdateAppointmentStatus": {
+    "description": "Error intro for APPT-STATUS (mark done / cancel)"
+  },
   "error_introDeleteAppointment": "Couldn't delete the appointment",
-  "@error_introDeleteAppointment": {"description": "Error intro for APPT-DEL"},
+  "@error_introDeleteAppointment": {
+    "description": "Error intro for APPT-DEL"
+  },
   "error_introLoadAppointments": "Couldn't load appointments",
-  "@error_introLoadAppointments": {"description": "Error intro for APPT-LOAD"},
+  "@error_introLoadAppointments": {
+    "description": "Error intro for APPT-LOAD"
+  },
   "error_introDeleteAccount": "Couldn't delete your account",
-  "@error_introDeleteAccount": {"description": "Error intro for ACCT-DEL"},
+  "@error_introDeleteAccount": {
+    "description": "Error intro for ACCT-DEL"
+  },
   "error_introAddClient": "Couldn't add the client",
-  "@error_introAddClient": {"description": "Error intro for CLI-ADD"},
+  "@error_introAddClient": {
+    "description": "Error intro for CLI-ADD"
+  },
   "error_introSaveClient": "Couldn't save the client changes",
-  "@error_introSaveClient": {"description": "Error intro for CLI-SAVE"},
-  "error_introDeleteClient": "Couldn't delete the client",
-  "@error_introDeleteClient": {"description": "Error intro for CLI-DEL"},
+  "@error_introSaveClient": {
+    "description": "Error intro for CLI-SAVE"
+  },
   "error_introLoadHistory": "Couldn't load the appointment history",
-  "@error_introLoadHistory": {"description": "Error intro for HIST-LOAD"},
+  "@error_introLoadHistory": {
+    "description": "Error intro for HIST-LOAD"
+  },
   "error_introLoadClients": "Couldn't load clients",
-  "@error_introLoadClients": {"description": "Error intro for CLI-LIST"},
-  "error_thatCodeIsntValidAskYourAdmin": "That code isn't valid. Ask your admin for a new one.",
-  "@error_thatCodeIsntValidAskYourAdmin": { "description": "Shown when a signup code is wrong or already used." },
-  "error_thatCodeHasExpiredAskYourAdmin": "That code has expired. Ask your admin for a new one.",
-  "@error_thatCodeHasExpiredAskYourAdmin": { "description": "Shown when a signup code is past its expiry." },
-  "error_thatCodeWasIssuedForADifferentEmail": "That code was issued for a different email. Sign up using the exact email your admin invited.",
-  "@error_thatCodeWasIssuedForADifferentEmail": { "description": "Shown when a valid signup code is redeemed with an email that doesn't match the invite." },
+  "@error_introLoadClients": {
+    "description": "Error intro for CLI-LIST"
+  },
+  "error_introRemoveAccount": "Couldn't remove the account",
+  "@error_introRemoveAccount": {
+    "description": "Error intro when deleting a never-used employee account fails"
+  },
   "wave_errorAuthInvalid": "Wave connection token is missing or has been revoked. Please reconnect.",
   "@wave_errorAuthInvalid": {
     "description": "WaveAuthInvalid failure: the Wave access token is missing or revoked"
@@ -1386,6 +1719,10 @@
   "@settings_privacyPolicy": {
     "description": "Settings tile label that opens the hosted privacy policy in the browser"
   },
+  "settings_termsOfService": "Terms of Service",
+  "@settings_termsOfService": {
+    "description": "Settings tile label that opens the hosted terms of service in the browser. This row is the durable route to the terms — the setup-screen consent link is shown once, and only to a new employee."
+  },
   "error_couldNotOpenLink": "Couldn't open the link.",
   "@error_couldNotOpenLink": {
     "description": "Error notice shown when an external web link fails to open"
@@ -1394,9 +1731,29 @@
   "@wave_connectToWave": {
     "description": "Button label: initiates the Wave connection bootstrap"
   },
-  "wave_importCustomers": "Import customers from Wave",
-  "@wave_importCustomers": {
-    "description": "Button label: triggers Wave customer import"
+  "wave_syncButton": "Sync with Wave",
+  "@wave_syncButton": {
+    "description": "Button label: runs a two-way Wave sync — pending app edits are pushed to Wave, then Wave customers are pulled into the app"
+  },
+  "wave_autoImportLabel": "Automatic import",
+  "@wave_autoImportLabel": {
+    "description": "Settings label for the Wave automatic-import cadence picker."
+  },
+  "wave_autoImportOff": "Off",
+  "@wave_autoImportOff": {
+    "description": "Wave automatic-import cadence: disabled."
+  },
+  "wave_autoImportWeekly": "Weekly",
+  "@wave_autoImportWeekly": {
+    "description": "Wave automatic-import cadence: once a week."
+  },
+  "wave_autoImportMonthly": "Monthly",
+  "@wave_autoImportMonthly": {
+    "description": "Wave automatic-import cadence: once a month."
+  },
+  "wave_autoImportUpdated": "Automatic import updated.",
+  "@wave_autoImportUpdated": {
+    "description": "Success notice after changing the Wave automatic-import cadence."
   },
   "wave_connectedSuccess": "Connected to {businessName}",
   "@wave_connectedSuccess": {
@@ -1408,23 +1765,77 @@
       }
     }
   },
-  "wave_importSuccess": "Wave import complete — {imported} added, {updated} updated, {skipped} skipped.",
-  "@wave_importSuccess": {
-    "description": "Success notice summarising a Wave customer import run",
+  "wave_syncResult": "Synced with Wave — {details}.",
+  "@wave_syncResult": {
+    "description": "Success notice after a two-way Wave sync. {details} is the joined list of what moved, each part naming its destination.",
     "placeholders": {
-      "imported": {
-        "type": "int",
-        "description": "Number of newly created client records"
-      },
-      "updated": {
-        "type": "int",
-        "description": "Number of existing client records updated"
-      },
-      "skipped": {
-        "type": "int",
-        "description": "Number of archived Wave customers skipped"
+      "details": {
+        "type": "String",
+        "description": "Comma-joined list of wave_syncAddedToWave / wave_syncUpdatedInWave / wave_syncAddedToApp / wave_syncUpdatedInApp / wave_syncStillQueued parts"
       }
     }
+  },
+  "wave_syncUpToDate": "Synced with Wave — everything was already up to date.",
+  "@wave_syncUpToDate": {
+    "description": "Success notice after a Wave sync that moved nothing in either direction."
+  },
+  "wave_syncAddedToWave": "{count, plural, =1{1 client added to Wave} other{{count} clients added to Wave}}",
+  "@wave_syncAddedToWave": {
+    "description": "Sync-result part: clients created in Wave from this app.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_syncUpdatedInWave": "{count, plural, =1{1 client updated in Wave} other{{count} clients updated in Wave}}",
+  "@wave_syncUpdatedInWave": {
+    "description": "Sync-result part: existing Wave customers patched from this app.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_syncAddedToApp": "{count, plural, =1{1 client added to the app} other{{count} clients added to the app}}",
+  "@wave_syncAddedToApp": {
+    "description": "Sync-result part: clients created in this app from Wave.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_syncUpdatedInApp": "{count, plural, =1{1 client updated in the app} other{{count} clients updated in the app}}",
+  "@wave_syncUpdatedInApp": {
+    "description": "Sync-result part: existing app clients refreshed from Wave.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_syncStillQueued": "{count, plural, =1{1 more still syncing to Wave} other{{count} more still syncing to Wave}}",
+  "@wave_syncStillQueued": {
+    "description": "Sync-result part: outbox jobs the interactive sync did not get through, which the scheduled worker finishes.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_syncFailedToWave": "{count, plural, =1{1 client couldn't be sent to Wave} other{{count} clients couldn't be sent to Wave}}",
+  "@wave_syncFailedToWave": {
+    "description": "Sync-result part: dead-lettered outbox jobs. These will NOT retry on their own, so the admin has to open the client and fix what Wave rejected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_syncPushIncomplete": "your pending changes couldn't be sent to Wave this time",
+  "@wave_syncPushIncomplete": {
+    "description": "Sync-result part: the push half of the sync errored, so its counts are unknown rather than zero. Lowercase — it slots into the comma-joined list after the dash."
   },
   "wave_syncedWithWave": "Synced with Wave",
   "@wave_syncedWithWave": {
@@ -1438,33 +1849,1087 @@
   "@wave_syncError": {
     "description": "Badge label shown on a client whose Wave sync has failed"
   },
-  "auth_signupCode": "Signup code",
-  "@auth_signupCode": {
-    "description": "Label for the signup code field on the create-account screen."
+  "common_copied": "Copied",
+  "@common_copied": {
+    "description": "Inline confirmation shown after copying text to the clipboard"
   },
-  "validation_pleaseEnterYourSignupCode": "Please enter your signup code.",
-  "@validation_pleaseEnterYourSignupCode": {
-    "description": "Validation error shown when the signup code field is empty."
+  "dashboard_title": "Dashboard",
+  "@dashboard_title": {
+    "description": "Admin dashboard screen title, drawer nav item, and settings tile label"
   },
-  "employees_signupCodeTitle": "Signup code",
-  "@employees_signupCodeTitle": {
-    "description": "Title of the dialog showing the admin the employee's signup code"
-  },
-  "employees_shareThisCodeWith": "Share this code with {name}. They'll need it and their email to sign in.",
-  "@employees_shareThisCodeWith": {
-    "description": "Body of the signup-code dialog telling the admin to share the code with the new employee",
+  "dashboard_visitsToday": "{count, plural, =1{visit today} other{visits today}}",
+  "@dashboard_visitsToday": {
+    "description": "Label rendered beside the hero's big count of today's visits; the number itself is a separate Text",
     "placeholders": {
-      "name": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_employeeWorkload": "Employee workload",
+  "@dashboard_employeeWorkload": {
+    "description": "Dashboard section header: jobs per active employee today / this week"
+  },
+  "dashboard_workloadCounts": "{today} today · {week} this week",
+  "@dashboard_workloadCounts": {
+    "description": "Trailing counts on a workload row: jobs today and jobs this week",
+    "placeholders": {
+      "today": {
+        "type": "int"
+      },
+      "week": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_businessTrends": "Business trends",
+  "@dashboard_businessTrends": {
+    "description": "Dashboard section header: 8-week completed/cancelled chart and new-client sparkline"
+  },
+  "dashboard_attentionFlags": "Needs attention",
+  "@dashboard_attentionFlags": {
+    "description": "Dashboard section header: pending-soon and never-closed visit flags"
+  },
+  "dashboard_unassignedCount": "{count, plural, =1{1 unassigned job today} other{{count} unassigned jobs today}}",
+  "@dashboard_unassignedCount": {
+    "description": "Warning pill in the hero counting today's visits with no assignee",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_upcomingToday": "Next up today",
+  "@dashboard_upcomingToday": {
+    "description": "Section header above the timeline of today's upcoming visits"
+  },
+  "dashboard_noVisitsToday": "No upcoming visits today",
+  "@dashboard_noVisitsToday": {
+    "description": "Empty state under the next-up header when today has no future visits"
+  },
+  "dashboard_noActiveEmployees": "No active employees",
+  "@dashboard_noActiveEmployees": {
+    "description": "Empty state for the workload section when there are no active employees"
+  },
+  "dashboard_completedVsCancelled": "Completed vs cancelled — last 8 weeks",
+  "@dashboard_completedVsCancelled": {
+    "description": "Title of the grouped weekly bar chart of done vs cancelled visits"
+  },
+  "dashboard_newClients": "New clients",
+  "@dashboard_newClients": {
+    "description": "Caption of the new-clients sparkline inside the trends card"
+  },
+  "dashboard_newClientsTotal": "{count, plural, =1{1 in the last 8 weeks} other{{count} in the last 8 weeks}}",
+  "@dashboard_newClientsTotal": {
+    "description": "Total line under the new-clients caption, summing the 8 weekly buckets",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_busiestWeekday": "Busiest day: {day}",
+  "@dashboard_busiestWeekday": {
+    "description": "Text row naming the weekday with the most visits over the 8-week window",
+    "placeholders": {
+      "day": {
         "type": "String"
       }
     }
   },
-  "employees_copyCode": "Copy code",
-  "@employees_copyCode": {
-    "description": "Button in the signup-code dialog that copies the code to the clipboard"
+  "dashboard_allClear": "All clear — nothing needs attention",
+  "@dashboard_allClear": {
+    "description": "Shown in the attention section when there are no flags"
   },
-  "common_copied": "Copied",
-  "@common_copied": {
-    "description": "Inline confirmation shown after copying text to the clipboard"
+  "dashboard_pendingSoonHeader": "{count, plural, =1{1 pending visit starts within 48 hours} other{{count} pending visits start within 48 hours}}",
+  "@dashboard_pendingSoonHeader": {
+    "description": "Attention flag group header for pending visits starting within 48 hours",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_overdueOpenHeader": "{count, plural, =1{1 past visit was never closed} other{{count} past visits were never closed}}",
+  "@dashboard_overdueOpenHeader": {
+    "description": "Attention flag group header for ended visits never marked done or cancelled",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "error_introLoadDashboard": "Couldn't load the dashboard",
+  "@error_introLoadDashboard": {
+    "description": "Error intro for DASH-LOAD"
+  },
+  "common_share": "Share",
+  "@common_share": {
+    "description": "Tooltip/label for the share action in the full-screen photo viewer"
+  },
+  "calendar_savePhoto": "Save to Photos",
+  "@calendar_savePhoto": {
+    "description": "Tooltip/label for saving the current appointment photo to the device photo library"
+  },
+  "calendar_photoSavedToPhotos": "Saved to Photos",
+  "@calendar_photoSavedToPhotos": {
+    "description": "Success notice after saving an appointment photo to the device photo library"
+  },
+  "calendar_couldNotSavePhoto": "Couldn't save the photo. Please try again.",
+  "@calendar_couldNotSavePhoto": {
+    "description": "Error notice when saving an appointment photo to the photo library fails"
+  },
+  "calendar_photoLibraryAccessNeeded": "Photo access is off. Enable it in Settings to save photos.",
+  "@calendar_photoLibraryAccessNeeded": {
+    "description": "Error notice when the OS denies photo-library add access while saving a photo"
+  },
+  "common_liveMap": "Live map",
+  "@common_liveMap": {
+    "description": "Label for the button/nav entry that opens the admin live staff location map"
+  },
+  "liveMap_title": "Staff map",
+  "@liveMap_title": {
+    "description": "App bar title for the admin live staff location map screen"
+  },
+  "liveMap_emptyState": "No one is sharing their location right now",
+  "@liveMap_emptyState": {
+    "description": "Empty state message when no active employees have a live location to show"
+  },
+  "liveMap_lastUpdatedJustNow": "Just now",
+  "@liveMap_lastUpdatedJustNow": {
+    "description": "Relative timestamp label for a staff location update that just happened"
+  },
+  "liveMap_lastUpdatedMinutesAgo": "{minutes, plural, =1{1 min ago} other{{minutes} min ago}}",
+  "@liveMap_lastUpdatedMinutesAgo": {
+    "description": "Relative timestamp label for a staff location update, in minutes",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "liveMap_lastUpdatedHoursAgo": "{hours, plural, =1{1 hr ago} other{{hours} hrs ago}}",
+  "@liveMap_lastUpdatedHoursAgo": {
+    "description": "Relative timestamp label for a staff location update, in hours",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
+  },
+  "liveMap_offlineLastSeen": "Offline — last seen {ago}",
+  "@liveMap_offlineLastSeen": {
+    "description": "Status label for an employee whose location is stale/offline, with a relative last-seen time",
+    "placeholders": {
+      "ago": {
+        "type": "String"
+      }
+    }
+  },
+  "liveMap_resolvingAddress": "Finding address…",
+  "@liveMap_resolvingAddress": {
+    "description": "Placeholder shown while reverse-geocoding a staff pin's coordinates into an address"
+  },
+  "liveMap_openInMaps": "Open in Maps",
+  "@liveMap_openInMaps": {
+    "description": "Button label to open a selected staff pin's location in the device map app"
+  },
+  "liveMap_trafficToggle": "Traffic",
+  "@liveMap_trafficToggle": {
+    "description": "Toggle label for showing live traffic overlay on the staff map"
+  },
+  "liveMap_satelliteToggle": "Satellite",
+  "@liveMap_satelliteToggle": {
+    "description": "Toggle label for switching the staff map to satellite view"
+  },
+  "liveMap_recenter": "Recenter map",
+  "@liveMap_recenter": {
+    "description": "Accessibility label / tooltip for the button that recenters the staff map on all staff pins"
+  },
+  "liveMap_rosterButton": "Show staff list",
+  "@liveMap_rosterButton": {
+    "description": "Tooltip / accessibility label for the button that opens the bottom sheet listing every staff member on the map"
+  },
+  "liveMap_rosterTitle": "Staff",
+  "@liveMap_rosterTitle": {
+    "description": "Title of the bottom sheet that lists every staff member currently sharing their location"
+  },
+  "liveMap_rosterCount": "{count, plural, =1{1 sharing} other{{count} sharing}}",
+  "@liveMap_rosterCount": {
+    "description": "Subtitle showing how many staff are currently sharing their location",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "liveMap_you": "You",
+  "@liveMap_you": {
+    "description": "Badge marking the admin's own row in the staff roster list"
+  },
+  "liveMap_locatingCity": "Locating…",
+  "@liveMap_locatingCity": {
+    "description": "Placeholder shown in a roster row while the staff member's city is being resolved"
+  },
+  "liveMap_noLocation": "No location",
+  "@liveMap_noLocation": {
+    "description": "Shown in a roster row when the staff member's position can't be resolved to a place (reverse-geocode returned nothing usable)"
+  },
+  "liveMap_distanceKm": "{value} km",
+  "@liveMap_distanceKm": {
+    "description": "Distance from the viewing admin to a staff member, in kilometres (value already locale-formatted, e.g. 2.4)",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "liveMap_distanceMeters": "{value} m",
+  "@liveMap_distanceMeters": {
+    "description": "Distance from the viewing admin to a staff member, in metres (value already locale-formatted, e.g. 450)",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "error_introLoadLiveMap": "Couldn't load the staff map",
+  "@error_introLoadLiveMap": {
+    "description": "Error intro for LIVEMAP-LOAD"
+  },
+  "tour_next": "Next",
+  "@tour_next": {
+    "description": "Advance button on a feature-tour tooltip"
+  },
+  "tour_skip": "Skip",
+  "@tour_skip": {
+    "description": "Dismiss button ending a feature tour early"
+  },
+  "tour_stepCounter": "{current} of {total}",
+  "@tour_stepCounter": {
+    "description": "Position indicator on a feature-tour tooltip",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "tour_calendarGridTitle": "Your month at a glance",
+  "@tour_calendarGridTitle": {
+    "description": "Tour step title: calendar month grid"
+  },
+  "tour_calendarGridDesc": "Days with a dot have booked jobs. Tap a day to see its schedule below.",
+  "@tour_calendarGridDesc": {
+    "description": "Tour step description: calendar month grid"
+  },
+  "tour_calendarDayListTitle": "The day's schedule",
+  "@tour_calendarDayListTitle": {
+    "description": "Tour step title: selected day's job list"
+  },
+  "tour_calendarDayListDesc": "Jobs for the selected day. Tap one to open its details and photos.",
+  "@tour_calendarDayListDesc": {
+    "description": "Tour step description: selected day's job list"
+  },
+  "tour_calendarAddTitle": "Book a job",
+  "@tour_calendarAddTitle": {
+    "description": "Tour step title: add-appointment FAB (admin)"
+  },
+  "tour_calendarAddDesc": "Tap + to create an appointment, pick the client, and assign your team.",
+  "@tour_calendarAddDesc": {
+    "description": "Tour step description: add-appointment FAB (admin)"
+  },
+  "tour_calendarDayRouteTitle": "Day route",
+  "@tour_calendarDayRouteTitle": {
+    "description": "Tour step title: day-route app bar action"
+  },
+  "tour_calendarDayRouteDesc": "Open the day's jobs as one driving route in Google Maps.",
+  "@tour_calendarDayRouteDesc": {
+    "description": "Tour step description: day-route app bar action"
+  },
+  "tour_clientsSearchTitle": "Find a client",
+  "@tour_clientsSearchTitle": {
+    "description": "Tour step title: clients search bar"
+  },
+  "tour_clientsSearchDesc": "Search by name, phone, or address — results update as you type.",
+  "@tour_clientsSearchDesc": {
+    "description": "Tour step description: clients search bar"
+  },
+  "tour_clientsAddTitle": "Add a client",
+  "@tour_clientsAddTitle": {
+    "description": "Tour step title: add-client FAB"
+  },
+  "tour_clientsAddDesc": "Create a new client file. You can also add one while booking an appointment.",
+  "@tour_clientsAddDesc": {
+    "description": "Tour step description: add-client FAB"
+  },
+  "tour_employeesSearchTitle": "Find a team member",
+  "@tour_employeesSearchTitle": {
+    "description": "Tour step title: employees search bar"
+  },
+  "tour_employeesSearchDesc": "Search your staff by name or email.",
+  "@tour_employeesSearchDesc": {
+    "description": "Tour step description: employees search bar"
+  },
+  "tour_employeesAddTitle": "Invite an employee",
+  "@tour_employeesAddTitle": {
+    "description": "Tour step title: invite-employee FAB"
+  },
+  "tour_employeesAddDesc": "Create an account for a new team member, then give them the email and starting password shown here.",
+  "@tour_employeesAddDesc": {
+    "description": "Tour step description: invite-employee FAB"
+  },
+  "tour_historySearchTitle": "Search past jobs",
+  "@tour_historySearchTitle": {
+    "description": "Tour step title: history search bar"
+  },
+  "tour_historySearchDesc": "Completed and cancelled visits live here — search by client or employee, and filter by year.",
+  "@tour_historySearchDesc": {
+    "description": "Tour step description: history search bar"
+  },
+  "tour_liveMapRosterTitle": "Staff roster",
+  "@tour_liveMapRosterTitle": {
+    "description": "Tour step title: live-map roster FAB"
+  },
+  "tour_liveMapRosterDesc": "See everyone sharing their location, sorted by distance from you.",
+  "@tour_liveMapRosterDesc": {
+    "description": "Tour step description: live-map roster FAB"
+  },
+  "tour_liveMapRecenterTitle": "Recenter",
+  "@tour_liveMapRecenterTitle": {
+    "description": "Tour step title: live-map recenter FAB"
+  },
+  "tour_liveMapRecenterDesc": "Bring the map back to your team after panning around.",
+  "@tour_liveMapRecenterDesc": {
+    "description": "Tour step description: live-map recenter FAB"
+  },
+  "tour_settingsAppearanceTitle": "Make it yours",
+  "@tour_settingsAppearanceTitle": {
+    "description": "Tour step title: settings appearance card"
+  },
+  "tour_settingsAppearanceDesc": "Switch dark mode, text size, and language here.",
+  "@tour_settingsAppearanceDesc": {
+    "description": "Tour step description: settings appearance card"
+  },
+  "tour_settingsNotificationsTitle": "Notifications",
+  "@tour_settingsNotificationsTitle": {
+    "description": "Tour step title: settings notifications card"
+  },
+  "tour_settingsNotificationsDesc": "Check push permission and the on-the-road Live Activity card here.",
+  "@tour_settingsNotificationsDesc": {
+    "description": "Tour step description: settings notifications card"
+  },
+  "tour_settingsReplayTitle": "Replay this tour",
+  "@tour_settingsReplayTitle": {
+    "description": "Tour step title: replay-tour settings row"
+  },
+  "tour_settingsReplayDesc": "Tap here any time to see these tips again on every screen.",
+  "@tour_settingsReplayDesc": {
+    "description": "Tour step description: replay-tour settings row"
+  },
+  "tour_calendarCollapseTitle": "Make room for the day",
+  "@tour_calendarCollapseTitle": {
+    "description": "Tour step title: calendar collapse handle"
+  },
+  "tour_calendarCollapseDesc": "Drag or tap this handle to hide the calendar and give the day's jobs the whole screen.",
+  "@tour_calendarCollapseDesc": {
+    "description": "Tour step description: calendar collapse handle"
+  },
+  "tour_clientsFilterTitle": "Filter by type",
+  "@tour_clientsFilterTitle": {
+    "description": "Tour step title: clients type filter chips"
+  },
+  "tour_clientsFilterDesc": "Show only residential, commercial or archived clients. Search still looks everywhere.",
+  "@tour_clientsFilterDesc": {
+    "description": "Tour step description: clients type filter chips"
+  },
+  "tour_clientsRowTitle": "Open or archive a client",
+  "@tour_clientsRowTitle": {
+    "description": "Tour step title: a client row in the list"
+  },
+  "tour_clientsRowDesc": "Tap a client for their details and job history, or swipe the row to archive them.",
+  "@tour_clientsRowDesc": {
+    "description": "Tour step description: a client row in the list"
+  },
+  "tour_employeesRowTitle": "Who is working today",
+  "@tour_employeesRowTitle": {
+    "description": "Tour step title: a team member row in the roster"
+  },
+  "tour_employeesRowDesc": "Each row shows how many jobs that person has today. Tap for their profile and schedule.",
+  "@tour_employeesRowDesc": {
+    "description": "Tour step description: a team member row in the roster"
+  },
+  "tour_historyFilterTitle": "Narrow the results",
+  "@tour_historyFilterTitle": {
+    "description": "Tour step title: history filter bar"
+  },
+  "tour_historyFilterDesc": "Filter past jobs by team member, status or date range.",
+  "@tour_historyFilterDesc": {
+    "description": "Tour step description: history filter bar"
+  },
+  "tour_historyRowTitle": "Revisit a job",
+  "@tour_historyRowTitle": {
+    "description": "Tour step title: a past job row in history"
+  },
+  "tour_historyRowDesc": "Tap any past job to reopen its details, notes and photos.",
+  "@tour_historyRowDesc": {
+    "description": "Tour step description: a past job row in history"
+  },
+  "tour_dashboardHeroTitle": "Today at a glance",
+  "@tour_dashboardHeroTitle": {
+    "description": "Tour step title: dashboard hero summary"
+  },
+  "tour_dashboardHeroDesc": "How many jobs are booked, under way and finished right now.",
+  "@tour_dashboardHeroDesc": {
+    "description": "Tour step description: dashboard hero summary"
+  },
+  "tour_dashboardUpcomingTitle": "What is next",
+  "@tour_dashboardUpcomingTitle": {
+    "description": "Tour step title: dashboard upcoming-today section"
+  },
+  "tour_dashboardUpcomingDesc": "The jobs still to come today, in the order they start.",
+  "@tour_dashboardUpcomingDesc": {
+    "description": "Tour step description: dashboard upcoming-today section"
+  },
+  "tour_dashboardWorkloadTitle": "How the work is spread",
+  "@tour_dashboardWorkloadTitle": {
+    "description": "Tour step title: dashboard employee workload section"
+  },
+  "tour_dashboardWorkloadDesc": "Jobs per team member this week, so you can see who is overloaded.",
+  "@tour_dashboardWorkloadDesc": {
+    "description": "Tour step description: dashboard employee workload section"
+  },
+  "tour_dashboardAttentionTitle": "Needs a decision",
+  "@tour_dashboardAttentionTitle": {
+    "description": "Tour step title: dashboard attention flags section"
+  },
+  "tour_dashboardAttentionDesc": "Jobs that are overdue or unassigned. Tap one to open it and sort it out.",
+  "@tour_dashboardAttentionDesc": {
+    "description": "Tour step description: dashboard attention flags section"
+  },
+  "tour_dayRouteDaySwitcherTitle": "Pick the day",
+  "@tour_dayRouteDaySwitcherTitle": {
+    "description": "Tour step title: day route day switcher"
+  },
+  "tour_dayRouteDaySwitcherDesc": "Step through days with the arrows, or tap the date to jump to any day.",
+  "@tour_dayRouteDaySwitcherDesc": {
+    "description": "Tour step description: day route day switcher"
+  },
+  "tour_dayRouteEmployeeTitle": "Whose route",
+  "@tour_dayRouteEmployeeTitle": {
+    "description": "Tour step title: day route employee picker"
+  },
+  "tour_dayRouteEmployeeDesc": "Switch between team members to see each person's stops for the day.",
+  "@tour_dayRouteEmployeeDesc": {
+    "description": "Tour step description: day route employee picker"
+  },
+  "tour_dayRouteStopsTitle": "The day's stops",
+  "@tour_dayRouteStopsTitle": {
+    "description": "Tour step title: day route stop timeline"
+  },
+  "tour_dayRouteStopsDesc": "Every job with an address, in driving order. Tap one to open it.",
+  "@tour_dayRouteStopsDesc": {
+    "description": "Tour step description: day route stop timeline"
+  },
+  "tour_dayRouteNavigateTitle": "Drive the whole route",
+  "@tour_dayRouteNavigateTitle": {
+    "description": "Tour step title: day route navigate button"
+  },
+  "tour_dayRouteNavigateDesc": "Opens all the day's stops in Google Maps as one trip, in order.",
+  "@tour_dayRouteNavigateDesc": {
+    "description": "Tour step description: day route navigate button"
+  },
+  "tour_apptTemplatesTitle": "Start from a job type",
+  "@tour_apptTemplatesTitle": {
+    "description": "Tour step title: appointment form job template chips"
+  },
+  "tour_apptTemplatesDesc": "One tap fills in the title and a typical duration. You can change both after.",
+  "@tour_apptTemplatesDesc": {
+    "description": "Tour step description: appointment form job template chips"
+  },
+  "tour_apptClientTitle": "Who the job is for",
+  "@tour_apptClientTitle": {
+    "description": "Tour step title: appointment form client picker"
+  },
+  "tour_apptClientDesc": "Search your clients by name, phone or address, or add a new one without leaving this form.",
+  "@tour_apptClientDesc": {
+    "description": "Tour step description: appointment form client picker"
+  },
+  "tour_apptCrewTitle": "Who is doing it",
+  "@tour_apptCrewTitle": {
+    "description": "Tour step title: appointment form employee picker"
+  },
+  "tour_apptCrewDesc": "Assign your team. Only the people you pick here can see this job in their calendar.",
+  "@tour_apptCrewDesc": {
+    "description": "Tour step description: appointment form employee picker, which is also the visibility rule"
+  },
+  "tour_apptScheduleTitle": "When it happens",
+  "@tour_apptScheduleTitle": {
+    "description": "Tour step title: appointment form schedule panel"
+  },
+  "tour_apptScheduleDesc": "Set the date and times, or switch on All day. On a job spanning several days, these times are the hours worked on each of those days.",
+  "@tour_apptScheduleDesc": {
+    "description": "Tour step description: appointment form schedule panel, which must state that a multi-day job's times are a daily window"
+  },
+  "tour_apptDetailsTitle": "Everything else",
+  "@tour_apptDetailsTitle": {
+    "description": "Tour step title: appointment form details section"
+  },
+  "tour_apptDetailsDesc": "Address, notes, materials and photos. All optional, and you can add them later.",
+  "@tour_apptDetailsDesc": {
+    "description": "Tour step description: appointment form details section"
+  },
+  "tour_apptSaveTitle": "Book it",
+  "@tour_apptSaveTitle": {
+    "description": "Tour step title: appointment form save button"
+  },
+  "tour_apptSaveDesc": "Saves the job and puts it on the calendar of everyone you assigned.",
+  "@tour_apptSaveDesc": {
+    "description": "Tour step description: appointment form save button"
+  },
+  "tour_clientWhoTitle": "Name the client",
+  "@tour_clientWhoTitle": {
+    "description": "Tour step title: client form who section"
+  },
+  "tour_clientWhoDesc": "A person's name, a business name, or both. This is what you will search for later.",
+  "@tour_clientWhoDesc": {
+    "description": "Tour step description: client form who section"
+  },
+  "tour_clientReachTitle": "How to reach them",
+  "@tour_clientReachTitle": {
+    "description": "Tour step title: client form contact section"
+  },
+  "tour_clientReachDesc": "Phone and email. Tapping these on the client's page calls or writes to them directly.",
+  "@tour_clientReachDesc": {
+    "description": "Tour step description: client form contact section"
+  },
+  "tour_clientSiteTitle": "Where the work happens",
+  "@tour_clientSiteTitle": {
+    "description": "Tour step title: client form site address section"
+  },
+  "tour_clientSiteDesc": "The site address, used for directions and the day route. Leave it off if there is no fixed address.",
+  "@tour_clientSiteDesc": {
+    "description": "Tour step description: client form site address section"
+  },
+  "tour_clientSaveTitle": "Save the client",
+  "@tour_clientSaveTitle": {
+    "description": "Tour step title: client form save button"
+  },
+  "tour_clientSaveDesc": "They are bookable right away, and you can fill in the rest any time.",
+  "@tour_clientSaveDesc": {
+    "description": "Tour step description: client form save button"
+  },
+  "tour_personDetailsTitle": "Who they are",
+  "@tour_personDetailsTitle": {
+    "description": "Tour step title: invite form details section"
+  },
+  "tour_personDetailsDesc": "Their name and phone, plus the email address they will sign in with.",
+  "@tour_personDetailsDesc": {
+    "description": "Tour step description: invite form details section"
+  },
+  "tour_personJobTitleTitle": "What they do",
+  "@tour_personJobTitleTitle": {
+    "description": "Tour step title: invite form job title chips"
+  },
+  "tour_personJobTitleDesc": "Their role on site. This is a label only, and it does not change what they can see or do in the app.",
+  "@tour_personJobTitleDesc": {
+    "description": "Tour step description: invite form job title chips, which must state that a job title grants no access"
+  },
+  "tour_personColourTitle": "Their colour",
+  "@tour_personColourTitle": {
+    "description": "Tour step title: invite form colour picker"
+  },
+  "tour_personColourDesc": "Identifies them on job cards and calendar dots. Colours already taken are not offered.",
+  "@tour_personColourDesc": {
+    "description": "Tour step description: invite form colour picker"
+  },
+  "tour_personAccessTitle": "What they can do",
+  "@tour_personAccessTitle": {
+    "description": "Tour step title: invite form access role toggle"
+  },
+  "tour_personAccessDesc": "This is the real permission switch. An admin manages everything; an employee sees only the jobs they are assigned.",
+  "@tour_personAccessDesc": {
+    "description": "Tour step description: invite form access role toggle, the real permission switch as opposed to the job title"
+  },
+  "tour_personCreateTitle": "Create the account",
+  "@tour_personCreateTitle": {
+    "description": "Tour step title: invite form create button"
+  },
+  "tour_personCreateDesc": "You get their email and a starting password to hand over yourself, since the app does not send it. They choose their own password the first time they sign in.",
+  "@tour_personCreateDesc": {
+    "description": "Tour step description: invite form create button, which must state that the admin delivers the credentials themselves"
+  },
+  "settings_help": "Help",
+  "@settings_help": {
+    "description": "Settings section header for help/tour actions"
+  },
+  "settings_replayTour": "Replay app tour",
+  "@settings_replayTour": {
+    "description": "Settings row that resets all feature-tour seen flags"
+  },
+  "settings_replayTourDone": "Tour tips will show again.",
+  "@settings_replayTourDone": {
+    "description": "Success notice after resetting the feature tours"
+  },
+  "nav_goToCalendar": "Calendar",
+  "@nav_goToCalendar": {
+    "description": "Header pill that returns to the calendar tab and collapses any pushed screens"
+  },
+  "nav_openMenu": "Open menu",
+  "@nav_openMenu": {
+    "description": "Header button that opens the right-anchored navigation drawer"
+  },
+  "nav_team": "Team",
+  "@nav_team": {
+    "description": "Navigation label for the employees destination"
+  },
+  "nav_dayRoute": "Day route",
+  "@nav_dayRoute": {
+    "description": "Navigation label for the day-route map destination"
+  },
+  "nav_dashboard": "Dashboard",
+  "@nav_dashboard": {
+    "description": "Navigation label for the admin dashboard destination"
+  },
+  "nav_myDetails": "My details",
+  "@nav_myDetails": {
+    "description": "Navigation label for the signed-in user's own profile destination"
+  },
+  "nav_groupToday": "TODAY",
+  "@nav_groupToday": {
+    "description": "Drawer group heading for destinations used during today's work; stored uppercase"
+  },
+  "nav_groupPeople": "PEOPLE",
+  "@nav_groupPeople": {
+    "description": "Drawer group heading for staff and client destinations; stored uppercase"
+  },
+  "nav_groupBusiness": "THE BUSINESS",
+  "@nav_groupBusiness": {
+    "description": "Drawer group heading for business-wide reporting destinations; stored uppercase"
+  },
+  "nav_groupAccount": "ACCOUNT",
+  "@nav_groupAccount": {
+    "description": "Drawer group heading for the signed-in user's own account destinations; stored uppercase"
+  },
+  "clients_sectionWho": "WHO",
+  "@clients_sectionWho": {
+    "description": "Mono section header above the client name and type"
+  },
+  "clients_sectionReachThem": "REACH THEM",
+  "@clients_sectionReachThem": {
+    "description": "Mono section header above the client phone and email"
+  },
+  "clients_sectionSite": "SITE",
+  "@clients_sectionSite": {
+    "description": "Mono section header above the client address and access notes"
+  },
+  "clients_nameOrBusiness": "Name or business",
+  "@clients_nameOrBusiness": {
+    "description": "Label for the single client name field on the new-client sheet"
+  },
+  "clients_accessNotes": "Access notes",
+  "@clients_accessNotes": {
+    "description": "Label for the site access notes field"
+  },
+  "clients_accessNotesHint": "Gate code, parking, which door",
+  "@clients_accessNotesHint": {
+    "description": "Placeholder for the site access notes field"
+  },
+  "clients_newClientCaption": "Billing terms and access notes can wait — you can add them any time.",
+  "@clients_newClientCaption": {
+    "description": "Caption at the foot of the fast new-client sheet"
+  },
+  "clients_addAndBookAJob": "Add and book a job",
+  "@clients_addAndBookAJob": {
+    "description": "Secondary button that saves the client then opens the new-appointment sheet"
+  },
+  "common_add": "Add",
+  "@common_add": {
+    "description": "Primary verb on the new-client sheet bar"
+  },
+  "clients_sectionClient": "CLIENT",
+  "@clients_sectionClient": {
+    "description": "Mono section header above the client identity fields"
+  },
+  "clients_sectionContact": "CONTACT",
+  "@clients_sectionContact": {
+    "description": "Mono section header above the client contact fields"
+  },
+  "clients_sectionBilling": "BILLING",
+  "@clients_sectionBilling": {
+    "description": "Mono section header above the client billing fields"
+  },
+  "clients_since": "SINCE",
+  "@clients_since": {
+    "description": "Read-only key for the date the client was first added"
+  },
+  "clients_jobsCountLabel": "JOBS",
+  "@clients_jobsCountLabel": {
+    "description": "Mono micro-label under the job count on a client row"
+  },
+  "clients_onSiteManager": "On-site manager",
+  "@clients_onSiteManager": {
+    "description": "Label for the client's on-site contact person"
+  },
+  "clients_billingTerms": "Billing terms",
+  "@clients_billingTerms": {
+    "description": "Label for the client's billing terms field"
+  },
+  "clients_billingTermsHint": "Net 30, deposit on booking…",
+  "@clients_billingTermsHint": {
+    "description": "Placeholder for the billing terms field"
+  },
+  "clients_autoInvoice": "Invoice automatically",
+  "@clients_autoInvoice": {
+    "description": "Toggle that enables automatic invoicing for this client"
+  },
+  "clients_manager": "MANAGER",
+  "@clients_manager": {
+    "description": "Info-panel key for the client's on-site manager"
+  },
+  "clients_phoneKey": "PHONE",
+  "@clients_phoneKey": {
+    "description": "Info-panel key for the client phone number"
+  },
+  "clients_addressKey": "ADDRESS",
+  "@clients_addressKey": {
+    "description": "Info-panel key for the client address"
+  },
+  "clients_billingKey": "BILLING",
+  "@clients_billingKey": {
+    "description": "Info-panel key for the client billing summary"
+  },
+  "clients_emailKey": "EMAIL",
+  "@clients_emailKey": {
+    "description": "Info-panel key for the client email address"
+  },
+  "clients_bookJob": "Book job",
+  "@clients_bookJob": {
+    "description": "Action tile that opens the new-appointment sheet for this client"
+  },
+  "clients_sinceDate": "since {date}",
+  "@clients_sinceDate": {
+    "description": "Client profile-card line fragment: the month and year the client was added",
+    "placeholders": {
+      "date": {
+        "type": "String",
+        "example": "Apr 2023"
+      }
+    }
+  },
+  "clients_filterByType": "Filter clients by type",
+  "@clients_filterByType": {
+    "description": "Accessibility label for the type filter chip row above the clients list"
+  },
+  "clients_noClientsOfType": "No {type} clients",
+  "@clients_noClientsOfType": {
+    "description": "Empty state title when a client-type filter matches nobody",
+    "placeholders": {
+      "type": {
+        "type": "String",
+        "example": "Commercial"
+      }
+    }
+  },
+  "clients_typeFilterHint": "A client’s type is set on their edit sheet.",
+  "@clients_typeFilterHint": {
+    "description": "Empty state body pointing at where the client type is set"
+  },
+  "employees_jobTitleLeadTech": "Lead tech",
+  "@employees_jobTitleLeadTech": {
+    "description": "Job title chip: senior technician who leads a crew"
+  },
+  "employees_jobTitleTechnician": "Technician",
+  "@employees_jobTitleTechnician": {
+    "description": "Job title chip: standard field technician"
+  },
+  "employees_jobTitleApprentice": "Apprentice",
+  "@employees_jobTitleApprentice": {
+    "description": "Job title chip: technician in training"
+  },
+  "employees_jobTitleDispatcher": "Dispatcher",
+  "@employees_jobTitleDispatcher": {
+    "description": "Job title chip: office staff who assigns jobs"
+  },
+  "employees_jobsToday": "{count, plural, =1{1 job today} other{{count} jobs today}}",
+  "@employees_jobsToday": {
+    "description": "How many jobs this person is booked for today, on the team roster row",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "employees_today": "Today",
+  "@employees_today": {
+    "description": "Section label above the employee's jobs booked for today"
+  },
+  "employees_noJobsToday": "No jobs today",
+  "@employees_noJobsToday": {
+    "description": "Empty state inside the TODAY panel on the employee detail"
+  },
+  "employees_hoursKey": "HOURS",
+  "@employees_hoursKey": {
+    "description": "Info panel key: the employee's daily working hours"
+  },
+  "employees_daysKey": "DAYS",
+  "@employees_daysKey": {
+    "description": "Info panel key: which days of the week the employee works"
+  },
+  "employees_accessKey": "ACCESS",
+  "@employees_accessKey": {
+    "description": "Info panel key: whether the account is admin or employee"
+  },
+  "employees_phoneKey": "PHONE",
+  "@employees_phoneKey": {
+    "description": "Info panel key: the employee's phone number"
+  },
+  "employees_emailKey": "EMAIL",
+  "@employees_emailKey": {
+    "description": "Info panel key: the employee's email address"
+  },
+  "employees_maxPerDayKey": "MAX/DAY",
+  "@employees_maxPerDayKey": {
+    "description": "Info panel key: the most jobs this person takes in a day"
+  },
+  "employees_emergencyKey": "EMERGENCY",
+  "@employees_emergencyKey": {
+    "description": "Info panel key: the employee's emergency contact"
+  },
+  "employees_emergencyPhoneKey": "EMERGENCY PHONE",
+  "@employees_emergencyPhoneKey": {
+    "description": "Info panel key: the phone number of the employee's emergency contact"
+  },
+  "employees_onCall": "On call",
+  "@employees_onCall": {
+    "description": "Chip and switch label: this person takes emergency calls"
+  },
+  "employees_jobsPerDay": "{count, plural, =1{1 job} other{{count} jobs}}",
+  "@employees_jobsPerDay": {
+    "description": "A cap on how many jobs this person takes per day",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "employees_invitePerson": "Invite person",
+  "@employees_invitePerson": {
+    "description": "Title of the invite-person form sheet"
+  },
+  "employees_invitedNote": "They'll appear as Invited until they sign in with the starting password and set up their account.",
+  "@employees_invitedNote": {
+    "description": "Advisory note at the bottom of the invite sheet"
+  },
+  "employees_editPerson": "Edit person",
+  "@employees_editPerson": {
+    "description": "Title of the edit-person form sheet"
+  },
+  "employees_sectionDetails": "DETAILS",
+  "@employees_sectionDetails": {
+    "description": "Edit-person section label: name, email, phone"
+  },
+  "employees_sectionRole": "ROLE",
+  "@employees_sectionRole": {
+    "description": "Edit-person section label: the job title chips"
+  },
+  "employees_sectionColour": "COLOUR",
+  "@employees_sectionColour": {
+    "description": "Edit-person section label: the crew colour grid"
+  },
+  "employees_sectionAvailability": "AVAILABILITY",
+  "@employees_sectionAvailability": {
+    "description": "Edit-person section label: working days, hours, cap, on call"
+  },
+  "employees_sectionEmergency": "EMERGENCY",
+  "@employees_sectionEmergency": {
+    "description": "Edit-person section heading above the emergency contact fields"
+  },
+  "employees_sectionAccess": "ACCESS",
+  "@employees_sectionAccess": {
+    "description": "Edit-person section label: the admin-access toggle"
+  },
+  "employees_firstName": "First name",
+  "@employees_firstName": {
+    "description": "Edit-person field label for the given name"
+  },
+  "employees_lastName": "Last name",
+  "@employees_lastName": {
+    "description": "Edit-person field label for the family name"
+  },
+  "employees_workEmail": "Work email",
+  "@employees_workEmail": {
+    "description": "Edit-person field label for the account email"
+  },
+  "employees_workingDays": "Working days",
+  "@employees_workingDays": {
+    "description": "Label above the seven working-day toggle cells"
+  },
+  "employees_startsAt": "Starts at",
+  "@employees_startsAt": {
+    "description": "Panel row label for the start of the working day"
+  },
+  "employees_endsAt": "Ends at",
+  "@employees_endsAt": {
+    "description": "Panel row label for the end of the working day"
+  },
+  "employees_maxJobsPerDay": "Max jobs per day",
+  "@employees_maxJobsPerDay": {
+    "description": "Panel row label for the daily job cap picker"
+  },
+  "employees_noCap": "No cap",
+  "@employees_noCap": {
+    "description": "Daily job cap option meaning no limit is set"
+  },
+  "employees_emergencyContact": "Emergency contact",
+  "@employees_emergencyContact": {
+    "description": "Edit-person field label for who to call in an emergency"
+  },
+  "employees_emergencyPhone": "Emergency contact phone",
+  "@employees_emergencyPhone": {
+    "description": "Edit-person field label for the emergency contact's phone number"
+  },
+  "employees_coloursLeft": "{count, plural, =0{No colours left} =1{1 colour left} other{{count} colours left}}",
+  "@employees_coloursLeft": {
+    "description": "How many of the ten crew palette colours are still unassigned",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "employees_disableReassignCaption": "{count, plural, =0{No upcoming jobs are assigned to them.} =1{1 upcoming job stays assigned to them — reassign it after disabling.} other{{count} upcoming jobs stay assigned to them — reassign them after disabling.}}",
+  "@employees_disableReassignCaption": {
+    "description": "Caption under Disable account: how many future jobs a human still has to move",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "employees_everyDay": "Every day",
+  "@employees_everyDay": {
+    "description": "Working-days summary when all seven days are worked"
+  },
+  "employees_noWorkingDays": "No working days set",
+  "@employees_noWorkingDays": {
+    "description": "Working-days summary when no day is marked as worked"
+  },
+  "auth_show": "Show",
+  "@auth_show": {
+    "description": "Text link inside a password field that reveals the password"
+  },
+  "auth_hide": "Hide",
+  "@auth_hide": {
+    "description": "Text link inside a password field that masks the password again"
+  },
+  "auth_noEmailOnAccountNote": "No email on your account? Ask your admin to add one before you reset.",
+  "@auth_noEmailOnAccountNote": {
+    "description": "Attention note on the reset-password form for accounts with no email"
+  },
+  "auth_resetSentPanelTitle": "SENT",
+  "@auth_resetSentPanelTitle": {
+    "description": "Mono uppercase label on the resend panel of the reset-password sent state"
+  },
+  "auth_resetExpiryFact": "The reset link expires in 1 hour.",
+  "@auth_resetExpiryFact": {
+    "description": "First fact listed after a password reset link is sent"
+  },
+  "auth_resetSignsOutFact": "Using it signs you out on every device.",
+  "@auth_resetSignsOutFact": {
+    "description": "Second fact listed after a password reset link is sent"
+  },
+  "auth_sendItAgain": "Send it again",
+  "@auth_sendItAgain": {
+    "description": "Action in the SENT panel that resends the password reset email once"
+  },
+  "auth_sentAgainJustNow": "Sent again just now",
+  "@auth_sentAgainJustNow": {
+    "description": "Label replacing the resend action once the reset email has been resent"
+  },
+  "auth_termsAndLocationConsent": "I accept the terms of service and agree to share my location while I'm on the clock.",
+  "@auth_termsAndLocationConsent": {
+    "description": "Combined terms and location consent checkbox gating the Create account button. Must contain auth_termsOfServiceLink verbatim — the screen finds that substring and turns it into the tappable link to the hosted terms page."
+  },
+  "auth_termsOfServiceLink": "terms of service",
+  "@auth_termsOfServiceLink": {
+    "description": "The tappable portion of the consent checkbox, opening the hosted terms page. MUST appear verbatim inside auth_termsAndLocationConsent in the same locale, or the sentence renders as plain text with no link."
+  },
+  "auth_passwordStrengthSemantics": "Password strength: {label}",
+  "@auth_passwordStrengthSemantics": {
+    "description": "Screen-reader label for the four-segment password strength meter",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "auth_passwordStrengthWeak": "Weak",
+  "@auth_passwordStrengthWeak": {
+    "description": "Lowest band of the password strength meter"
+  },
+  "auth_passwordStrengthFair": "Fair",
+  "@auth_passwordStrengthFair": {
+    "description": "Second band of the password strength meter"
+  },
+  "auth_passwordStrengthGood": "Good",
+  "@auth_passwordStrengthGood": {
+    "description": "Third band of the password strength meter"
+  },
+  "auth_passwordStrengthStrong": "Strong",
+  "@auth_passwordStrengthStrong": {
+    "description": "Highest band of the password strength meter"
+  },
+  "employees_accountCreatedTitle": "Account created",
+  "@employees_accountCreatedTitle": {
+    "description": "Title of the dialog shown after an admin creates an employee account"
+  },
+  "employees_shareTheseWith": "Give {name} these to sign in with.",
+  "@employees_shareTheseWith": {
+    "description": "Body of the new-account dialog, naming the person",
+    "placeholders": {
+      "name": {
+        "type": "String",
+        "example": "Zoé"
+      }
+    }
+  },
+  "employees_temporaryPassword": "TEMPORARY PASSWORD",
+  "@employees_temporaryPassword": {
+    "description": "Mono label above the starting password"
+  },
+  "employees_theyWillChooseTheirOwnPassword": "They'll choose their own password the first time they sign in.",
+  "@employees_theyWillChooseTheirOwnPassword": {
+    "description": "Caption explaining the password is replaced at first sign-in"
+  },
+  "employees_copyBoth": "Copy both",
+  "@employees_copyBoth": {
+    "description": "Copies the email and password together"
+  },
+  "employees_signInDetails": "SIGN-IN DETAILS",
+  "@employees_signInDetails": {
+    "description": "Mono section label on the expanded pending-account row"
+  },
+  "employees_resetPassword": "Reset password",
+  "@employees_resetPassword": {
+    "description": "Action that re-issues the temporary password"
+  },
+  "employees_passwordReset": "Password reset",
+  "@employees_passwordReset": {
+    "description": "Relabel of the reset action once it has run"
+  },
+  "employees_removeAccount": "Remove account",
+  "@employees_removeAccount": {
+    "description": "Destructive action that deletes a never-used account"
+  },
+  "employees_removeAccountConfirmBody": "This deletes the account entirely. It only works because they have never signed in.",
+  "@employees_removeAccountConfirmBody": {
+    "description": "Confirm body for removing a never-used account"
+  },
+  "employees_newPasswordIssued": "New temporary password — the previous one no longer works",
+  "@employees_newPasswordIssued": {
+    "description": "Caption under the credentials stating the password was just re-issued"
   }
 }

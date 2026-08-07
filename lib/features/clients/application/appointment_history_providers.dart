@@ -1,13 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
-/// Thin clients-feature facade over the calendar-owned appointment history:
-/// the history view pages and searches through these providers instead of
-/// reaching into the calendar feature's data layer directly (it keeps only
-/// the calendar *domain* import for the record type).
+/// A thin facade over calendar-owned appointment history, so this file only needs
+/// the calendar domain import for the record type.
 final historyPagerProvider = Provider<HistoryPager>(
   (ref) => HistoryPager(ref.watch(appointmentsRepositoryProvider)),
 );
@@ -26,18 +25,35 @@ class HistoryPager {
   }
 }
 
-/// Database-backed history search: finds terminal appointments across the
-/// whole history window, not just the pages loaded into the list. AutoDispose
-/// so each distinct query instance is freed once no longer watched.
+/// Database-backed history search across the whole window. It's autoDispose, so each
+/// query instance gets freed once nothing's watching it anymore.
 final historySearchProvider = FutureProvider.autoDispose
     .family<List<AppointmentRecord>, String>((
       ref,
       query,
     ) async {
       final repo = ref.watch(appointmentsRepositoryProvider);
-      // Committed results must not outlive a local write: a deleted visit
-      // would stay listed (and tappable) until this provider was disposed.
-      final sub = repo.onLocalWrite.listen((_) => ref.invalidateSelf());
+      // Invalidate on local write so deleted visits don't linger in cached results.
+      final sub = repo.onLocalWrite.listen(
+        (_) => ref.invalidateSelf(),
+        onError: (Object e, StackTrace st) => ref
+            .read(loggerProvider)
+            .warn('HIST-SEARCH invalidate error', e, st),
+      );
       ref.onDispose(sub.cancel);
       return repo.searchHistory(query);
+    });
+
+/// Client appointments for the Job history section. AutoDispose, keyed by clientId,
+/// and re-fetches whenever there's a local write.
+final clientJobHistoryProvider = FutureProvider.autoDispose
+    .family<List<AppointmentRecord>, String>((ref, clientId) async {
+      final repo = ref.watch(appointmentsRepositoryProvider);
+      final sub = repo.onLocalWrite.listen(
+        (_) => ref.invalidateSelf(),
+        onError: (Object e, StackTrace st) =>
+            ref.read(loggerProvider).warn('HIST-LOAD invalidate error', e, st),
+      );
+      ref.onDispose(sub.cancel);
+      return repo.fetchClientHistory(clientId: clientId);
     });

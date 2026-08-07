@@ -95,10 +95,12 @@ void main() {
       verifyNever(() => mockAuth.signOut());
     });
 
-    test('returns SplashGoToLogin and signs out for an invited user', () async {
-      // C1: the gate must require status == 'active', not just block
-      // 'disabled'. Invited users have a Firestore doc but no completed
-      // sign-up flow — they must not enter the app.
+    test('routes an invited user to setup and KEEPS the session', () async {
+      // Deliberate change from the code-flow era, which signed invited users
+      // out here. An admin-created account is mid-setup, not unauthorized:
+      // the credential they just signed in with is exactly the one the setup
+      // screen needs, so signing them out makes setup unreachable. The
+      // account stays `invited`, so firestore.rules still grants it nothing.
       when(() => mockRepo.findUserByUid('uid1')).thenAnswer(
         (_) async => const UserUidMatch(
           id: 'doc1',
@@ -106,7 +108,9 @@ void main() {
             'uid': 'uid1',
             'role': 'employee',
             'status': 'invited',
-            'name': 'Jane',
+            'name': 'Jane Doe',
+            'firstName': 'Jane',
+            'lastName': 'Doe',
             'email': 'jane@example.com',
             'phone': '',
             'colorValue': '4280391411',
@@ -124,14 +128,16 @@ void main() {
 
       final result = await container.read(splashDestinationProvider.future);
 
-      expect(result, isA<SplashGoToLogin>());
-      verify(() => mockAuth.signOut()).called(1);
+      expect(result, isA<SplashGoToAccountSetup>());
+      expect((result as SplashGoToAccountSetup).firstName, 'Jane');
+      verifyNever(() => mockAuth.signOut());
     });
 
     test('returns SplashGoToLogin for a doc with empty status', () async {
-      // C1 edge case: malformed user doc (status defaulted to '') must also
-      // fail the gate. Without this, any future status value would slip
-      // through if it didn't exactly equal 'disabled'.
+      // C1 edge case: empty status must also fail the gate, not just
+      // exact-match 'disabled'. This is why the setup branch above tests
+      // `isInvited` (an exact match) rather than `!isActive` — widening it
+      // would route an empty or unknown status into setup instead of out.
       when(() => mockRepo.findUserByUid('uid1')).thenAnswer(
         (_) async => const UserUidMatch(
           id: 'doc1',
@@ -162,9 +168,7 @@ void main() {
     });
 
     test('rethrows when findUserByUid throws (transient errors)', () async {
-      // M8: transient Firestore failures (network, unavailable) must not
-      // silently sign the user out. The provider rethrows so the splash UI
-      // can surface an error and the user can retry.
+      // M8: transient Firestore failures must rethrow, not sign out, so the splash UI can surface an error and retry.
       when(
         () => mockRepo.findUserByUid('uid1'),
       ).thenThrow(Exception('network down'));

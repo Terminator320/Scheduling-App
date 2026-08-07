@@ -42,10 +42,9 @@ function validateRedemption({codeData, inviteData, tokenEmail, nowMs}) {
   const inviteEmail = String(inviteData.email || "").trim().toLowerCase();
   const claimEmail = String(tokenEmail || "").trim().toLowerCase();
   if (!claimEmail) return {ok: false, reason: "invalid"};
-  // The code + invite are valid and unredeemed, but the signed-up email is not
-  // the invited one. Surfaced distinctly so the UI can tell the user to use the
-  // exact invited email rather than the misleading "invalid code". Only reached
-  // once the caller already holds a real, unredeemed code (minimal disclosure).
+  // We surface this distinctly (not as "invalid code") so the UI can tell
+  // the user to use the exact invited email. It's only reached once we
+  // already have an otherwise-valid code.
   if (inviteEmail !== claimEmail) {
     return {ok: false, reason: "email-mismatch"};
   }

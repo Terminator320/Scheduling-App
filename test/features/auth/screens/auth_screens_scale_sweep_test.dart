@@ -1,7 +1,6 @@
-// Sweeps every auth screen at every supported text scale on a small-phone
-// viewport (375×667 — Pixel 4a / iPhone SE class) and asserts no
-// RenderFlex overflow exceptions fire. Catches "render problem at Extra
-// Large" regressions on the auth flow before they reach a device.
+// Sweeps every auth screen at every text scale on a 375×667 small-phone
+// viewport, catching RenderFlex overflow ("render problem at Extra Large")
+// before it reaches a device.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +10,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
-import 'package:scheduling/features/auth/screens/create_account_screen.dart';
+import 'package:scheduling/features/auth/screens/account_setup_screen.dart';
 import 'package:scheduling/features/auth/screens/forgot_password_screen.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
@@ -27,9 +26,8 @@ class _MockRepo extends Mock implements EmployeesRepository {}
 // XL) plus Android system-level 2.0× to catch the worst case.
 const _scales = <double>[0.8, 1, 1.2, 1.4, 2];
 
-// Small-phone viewport. The smallest physical phone in common use is
-// ~375 logical width. Picking the smaller dimension exposes overflow
-// most reliably without being unrealistic.
+// Smallest physical phone in common use is ~375 logical width, so picking
+// that dimension exposes overflow most reliably.
 const _viewport = Size(375, 667);
 
 Widget _scaled({
@@ -99,18 +97,38 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('CreateAccount renders at scale ${scale}x without overflow', (
-      tester,
-    ) async {
-      await _pumpAtViewport(
-        tester,
-        _scaled(
-          scale: scale,
-          home: CreateAccountScreen(authService: auth),
-        ),
-      );
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'AccountSetup renders at scale ${scale}x without overflow',
+      (tester) async {
+        await _pumpAtViewport(
+          tester,
+          _scaled(
+            scale: scale,
+            home: AccountSetupScreen(authService: auth),
+          ),
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    testWidgets(
+      'AccountSetup with a typed password renders at scale ${scale}x '
+      'without overflow',
+      (tester) async {
+        await _pumpAtViewport(
+          tester,
+          _scaled(
+            scale: scale,
+            home: AccountSetupScreen(authService: auth),
+          ),
+        );
+        // The strength meter and the requirements checklist only render once
+        // something is typed, so the empty screen never sweeps them.
+        await tester.enterText(find.byType(TextField).at(3), 'Aa1!aaaa');
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('ForgotPassword renders at scale ${scale}x without overflow', (
       tester,
@@ -124,5 +142,25 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets(
+      'ForgotPassword sent state renders at scale ${scale}x without overflow',
+      (tester) async {
+        when(() => auth.sendPasswordResetEmail(any())).thenAnswer((_) async {});
+        await _pumpAtViewport(
+          tester,
+          _scaled(
+            scale: scale,
+            home: ForgotPasswordScreen(
+              authService: auth,
+              initialEmail: 'user@example.com',
+            ),
+          ),
+        );
+        await tester.tap(find.byType(FilledButton).first);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 }

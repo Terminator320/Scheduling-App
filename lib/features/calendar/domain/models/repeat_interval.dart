@@ -1,6 +1,4 @@
-/// How often an appointment repeats. When a repeat is selected, the future
-/// occurrences are pre-booked at creation time up to [horizonMonths] ahead
-/// (five years), spanning multiple years rather than the current one.
+/// Repeat frequency for an appointment series. Occurrences are pre-booked up to [horizonMonths] ahead.
 enum RepeatInterval {
   none(0),
   fourMonths(4),
@@ -12,14 +10,10 @@ enum RepeatInterval {
   /// Months between occurrences; 0 means no repeat.
   final int months;
 
-  /// Pre-booking horizon: occurrences are created up to five years out.
+  /// Pre-booking horizon (five years).
   static const int horizonMonths = 60;
 
-  /// Upper bound on pre-booked occurrences. A rule rewrite books copies +
-  /// deletes old futures + updates the anchor in one atomic WriteBatch (hard
-  /// limit 500 ops), so 120 copies + 120 deletes + 1 stays well clear. Today's
-  /// shortest interval (4 months) yields 15, but this guards a future shorter
-  /// interval or longer [horizonMonths] from silently breaching the limit.
+  /// Upper bound on how many occurrences we generate, so a series stays safely under Firestore's WriteBatch 500-op limit.
   static const int maxOccurrences = 120;
 
   /// Firestore string value. [fromRaw] is the only string→interval mapper.
@@ -53,8 +47,7 @@ enum RepeatInterval {
     return starts;
   }
 
-  /// Adds [months] keeping the time of day; the day-of-month is clamped to
-  /// the target month's length (Jan 31 + 1 month → Feb 28).
+  /// Adds months while keeping the same time-of-day. If the resulting day doesn't exist in that month, it clamps to the last valid day.
   static DateTime _addMonthsClamped(DateTime date, int months) {
     final zeroBased = date.month - 1 + months;
     final year = date.year + zeroBased ~/ 12;
@@ -65,17 +58,13 @@ enum RepeatInterval {
   }
 }
 
-/// End time for a repeated occurrence starting at [copyStart], preserving the
-/// original visit's wall-clock day-span and end time-of-day. Use this instead
-/// of `copyStart.add(originalEnd - originalStart)`: adding the raw elapsed
-/// Duration shifts the stored end ±1h when a copy (or the original) straddles a
-/// DST transition.
+/// Computes the end time for a repeated occurrence, keeping the original day-span and time-of-day. Uses UTC dates so DST doesn't throw off the math.
 DateTime occurrenceEnd({
   required DateTime originalStart,
   required DateTime originalEnd,
   required DateTime copyStart,
 }) {
-  // UTC midnights carry no DST offset, so this is an exact calendar-day count.
+  // Use UTC midnights here so DST shifts don't throw off the day-span calculation.
   final daySpan =
       DateTime.utc(
             originalEnd.year,

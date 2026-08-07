@@ -5,15 +5,9 @@ import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Persistent app-level offline indicator (U13): a slim strip that appears
-/// on every screen while the device has no network connection and reassures
-/// that changes sync on reconnect (Firestore's local queue).
-///
-/// Mounted by `main.dart` below the app's `Navigator`, docked at the
-/// *bottom* edge of the window — deliberately opposite `NoticeListener`,
-/// whose transient banners slide in at the top, so the two can never cover
-/// each other. Wraps its own bottom [SafeArea] (the navigator above keeps
-/// its regular insets).
+/// Persistent app-level offline indicator, docked at the bottom (opposite
+/// NoticeListener) so the two banners don't cover each other. Reassures the
+/// user that changes will sync once they're back online.
 class OfflineBanner extends ConsumerWidget {
   const OfflineBanner({super.key});
 

@@ -4,26 +4,23 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// Outcome of a series rewrite: the series-stamped record plus how many future
-/// occurrences were booked and how many old ones were removed.
+/// Result of a series rewrite: the updated record, plus how many future
+/// bookings were created and how many old ones were removed.
 typedef SeriesRewriteResult = ({
   AppointmentRecord updated,
   int futureBookings,
   int removedBookings,
 });
 
-/// Repo-driven series mechanics for the appointment editor — the rewrite and
-/// apply-to-all-future operations, extracted from `EventDetailsController` so
-/// the controller keeps orchestration and these stay focused and testable.
+/// Handles series-level appointment mechanics backed by the repo: rewriting
+/// a series, and applying an edit to all future occurrences.
 class AppointmentSeriesEditor {
   const AppointmentSeriesEditor(this._repo);
 
   final AppointmentsRepository _repo;
 
-  /// The repeat rule changed — rewrite the series like a real calendar: drop
-  /// the old future visits and book the new cadence in one atomic batch.
-  /// Done/cancelled visits are kept as records; copies start 'pending' without
-  /// sharing pictures. Returns the series-stamped record plus the counts.
+  /// Called when the repeat interval changes. Rewrites the series by dropping
+  /// the old future occurrences and booking the new cadence, all atomically.
   Future<SeriesRewriteResult> rewrite({
     required AppointmentRecord updated,
     required AppointmentRecord appointment,
@@ -64,11 +61,8 @@ class AppointmentSeriesEditor {
     );
   }
 
-  /// Apply-to-all: propagate the edited details and time-of-day to this visit
-  /// and every future non-terminal sibling, keeping each sibling's own calendar
-  /// date so the schedule isn't disturbed. Status stays per-visit (never
-  /// propagated) and each visit keeps its own pictures. Past and done/cancelled
-  /// visits are left untouched. Returns the number of siblings updated.
+  /// The "apply to all" option: propagates the edited details to this visit
+  /// and to its future non-terminal siblings in the series.
   Future<int> propagate({
     required AppointmentRecord updated,
     required AppointmentRecord appointment,
@@ -95,16 +89,22 @@ class AppointmentSeriesEditor {
         notes: updated.notes,
         materialsNeeded: updated.materialsNeeded,
         repeat: updated.repeat,
+        // Both flags MUST travel with the instants derived from them. Omitting
+        // isAllDay wrote a sibling spanning midnight-23:59 while still reading
+        // isAllDay:false, which every off-screen mirror keys on — the travel
+        // sweep stopped skipping it and fired a "time to leave" push at ~23:30
+        // for a block with no departure time. Any new AppointmentRecord field
+        // that the edit form can change belongs in this list too.
+        isAllDay: updated.isAllDay,
+        isPersonal: updated.isPersonal,
         startTime: copyStart,
         endTime: occurrenceEnd(
           originalStart: start,
           originalEnd: end,
           copyStart: copyStart,
         ),
-        // Canonicalize each sibling's own status (never propagate the edited
-        // visit's) so a legacy value like the retired 'confirmed' isn't
-        // re-written verbatim and rejected by the status allowlist rule.
-        status: AppointmentStatus.fromRaw(v.status).raw,
+        // Normalize each sibling's status so a legacy or unknown value doesn't get rejected.
+        status: AppointmentStatus.storedRaw(v.status),
       );
     }).toList();
     await _repo.updateAppointments([updated, ...propagated]);

@@ -42,9 +42,7 @@ class PhotoPickerSection extends StatelessWidget {
     ImageViewer.open(context, images: providers, initialIndex: tappedIndex);
   }
 
-  // Read-only display: a swipeable carousel with page dots. Returns an empty
-  // box when there are no real images (e.g. only upload failures), so the
-  // failure banner below stands alone.
+  // A read-only swipeable carousel. Returns an empty box when there are no real images, so the failure banner can stand alone.
   Widget _readOnlyGallery() {
     final providers = buildImageProviders(
       urls: existingImages.map((i) => i.url).toList(),
@@ -126,71 +124,12 @@ class _EditablePhotoStrip extends StatelessWidget {
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          ...existingImages.asMap().entries.map((entry) {
-            return Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: AppSpacing.sp8),
-                  child: GestureDetector(
-                    onTap: () => onOpenViewer(context, entry.key),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(AppRadius.r8),
-                      child: CachedNetworkImage(
-                        imageUrl: entry.value.url,
-                        width: 90,
-                        height: 90,
-                        memCacheWidth: thumbCache,
-                        memCacheHeight: thumbCache,
-                        fit: BoxFit.cover,
-                        placeholder: (ctx, _) => _photoPlaceholder(ctx),
-                        errorWidget: (ctx, _, _) => _photoErrorTile(ctx),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 4,
-                  right: 12,
-                  child: formRemoveButton(
-                    context,
-                    onTap: () => onRemoveExisting(entry.key),
-                  ),
-                ),
-              ],
-            );
-          }),
-          ...newImages.asMap().entries.map((entry) {
-            final viewerIndex = existingImages.length + entry.key;
-            return Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: AppSpacing.sp8),
-                  child: GestureDetector(
-                    onTap: () => onOpenViewer(context, viewerIndex),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(AppRadius.r8),
-                      child: Image.file(
-                        entry.value,
-                        width: 90,
-                        height: 90,
-                        cacheWidth: thumbCache,
-                        cacheHeight: thumbCache,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  top: 4,
-                  right: 12,
-                  child: formRemoveButton(
-                    context,
-                    onTap: () => onRemoveNew(entry.key),
-                  ),
-                ),
-              ],
-            );
-          }),
+          ...existingImages.asMap().entries.map(
+            (entry) => _existingThumb(context, entry, thumbCache),
+          ),
+          ...newImages.asMap().entries.map(
+            (entry) => _newThumb(context, entry, thumbCache),
+          ),
           ...List.generate(
             failedCount,
             (_) => const Padding(
@@ -227,6 +166,81 @@ class _EditablePhotoStrip extends StatelessWidget {
       ),
     );
   }
+
+  Widget _existingThumb(
+    BuildContext context,
+    MapEntry<int, AppointmentImage> entry,
+    int thumbCache,
+  ) {
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: AppSpacing.sp8),
+          child: GestureDetector(
+            onTap: () => onOpenViewer(context, entry.key),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.r8),
+              child: CachedNetworkImage(
+                imageUrl: entry.value.url,
+                width: 90,
+                height: 90,
+                memCacheWidth: thumbCache,
+                memCacheHeight: thumbCache,
+                fit: BoxFit.cover,
+                placeholder: (ctx, _) => _photoPlaceholder(ctx),
+                errorWidget: (ctx, _, _) => _photoErrorTile(ctx),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: 12,
+          child: formRemoveButton(
+            context,
+            onTap: () => onRemoveExisting(entry.key),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _newThumb(
+    BuildContext context,
+    MapEntry<int, File> entry,
+    int thumbCache,
+  ) {
+    final viewerIndex = existingImages.length + entry.key;
+    return Stack(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(right: AppSpacing.sp8),
+          child: GestureDetector(
+            onTap: () => onOpenViewer(context, viewerIndex),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.r8),
+              child: Image.file(
+                entry.value,
+                width: 90,
+                height: 90,
+                cacheWidth: thumbCache,
+                cacheHeight: thumbCache,
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 4,
+          right: 12,
+          child: formRemoveButton(
+            context,
+            onTap: () => onRemoveNew(entry.key),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _EditableEmptyPhotoState extends StatelessWidget {
@@ -251,7 +265,7 @@ class _EditableEmptyPhotoState extends StatelessWidget {
           child: Column(
             children: [
               Icon(Icons.image_outlined, color: scheme.onSurfaceVariant),
-              const SizedBox(height: 4),
+              const SizedBox(height: AppSpacing.sp4),
               Text(
                 context.l10n.calendar_tapToAddPhotos,
                 style: textTheme.bodySmall?.copyWith(
@@ -289,7 +303,7 @@ class _ReadOnlyEmptyPhotoState extends StatelessWidget {
               color: scheme.onSurfaceVariant,
               size: 24,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: AppSpacing.sp4),
             Text(
               context.l10n.calendar_noPhotos,
               style: textTheme.bodySmall?.copyWith(
@@ -325,7 +339,7 @@ class _FailedPhotoThumb extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.info_outline_rounded, size: 22, color: scheme.error),
-          const SizedBox(height: 4),
+          const SizedBox(height: AppSpacing.sp4),
           Text(context.l10n.calendar_photoFailedBadge, style: style),
         ],
       ),
@@ -444,7 +458,7 @@ class _TooLargeBanner extends StatelessWidget {
             size: 14,
             color: scheme.onTertiaryContainer,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: AppSpacing.sp8),
           Expanded(
             child: Text(
               context.l10n.calendar_fileTooLargeWarning(fileName),

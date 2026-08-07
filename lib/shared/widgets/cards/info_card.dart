@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 
-/// Bordered card that stacks [rows] with a hairline divider between each pair.
-/// Shared by the client and appointment detail views.
+/// Bordered card stacking rows with hairline dividers.
 class InfoCard extends StatelessWidget {
   const InfoCard({required this.rows, super.key});
 
@@ -34,8 +33,8 @@ class InfoCard extends StatelessWidget {
   }
 }
 
-/// One row inside an [InfoCard]: a tinted icon chip, the value, and an
-/// optional trailing affordance. Tappable when [onTap] is non-null.
+/// One row in an InfoCard — an icon chip, a value, and an optional trailing
+/// affordance.
 class InfoCardRow extends StatelessWidget {
   const InfoCardRow({
     required this.icon,
@@ -54,7 +53,7 @@ class InfoCardRow extends StatelessWidget {
   final VoidCallback? onTap;
   final IconData? trailingIcon;
 
-  /// Renders the value as a bold title (used for a contact's name row).
+  /// Render value as bold title.
   final bool emphasize;
   final String? semanticLabel;
 

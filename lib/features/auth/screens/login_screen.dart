@@ -8,7 +8,6 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/application/sign_in_controller.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
-import 'package:scheduling/features/auth/screens/create_account_screen.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -109,9 +108,7 @@ class _LoginState extends ConsumerState<Login> {
 
     switch (outcome) {
       case SignInSuccess(:final employee):
-        // Commit the autofill context so the OS password manager offers to
-        // save the credentials that just worked.
-        TextInput.finishAutofillContext();
+        TextInput.finishAutofillContext(); // Offer to save these credentials in the OS password manager.
         await _routeToCalendar(employee);
       case SignInInvalidCredentials():
         setState(() {
@@ -132,35 +129,27 @@ class _LoginState extends ConsumerState<Login> {
             AuthErrorContext.login,
           );
         });
-      // resumeAfterSignUp-only outcomes; signIn() never produces them.
+      // First sign-in on an admin-created account. The session is deliberately
+      // still live — the setup screen needs exactly that credential.
+      case SignInNeedsAccountSetup(:final firstName, :final lastName):
+        await _routeToAccountSetup(firstName: firstName, lastName: lastName);
+      // These only come from resumeAfterSignUp() — signIn() never produces them.
       case SignInNoSession() || SignInProfilePending():
         break;
     }
   }
 
-  Future<void> _openCreateAccount() async {
-    final prefill = _emailController.text.trim();
-    final result = await Navigator.of(context).push<CreateAccountResult>(
-      MaterialPageRoute(
-        builder: (_) =>
-            CreateAccountScreen(initialEmail: prefill.isEmpty ? null : prefill),
-      ),
+  Future<void> _routeToAccountSetup({
+    required String firstName,
+    required String lastName,
+  }) async {
+    // pushReplacement, not push: there is nothing useful behind this. Setup
+    // owns its own way out (finish, or sign out back to here).
+    await Navigator.pushReplacementNamed(
+      context,
+      AppRoutes.accountSetup,
+      arguments: AccountSetupArgs(firstName: firstName, lastName: lastName),
     );
-
-    if (!mounted) return;
-
-    if (result?.created == true) {
-      await _routeAfterSignUp();
-      return;
-    }
-
-    setState(() {
-      _submitted = false;
-      _emailError = null;
-      _passwordError = null;
-      _bannerError = null;
-      _bannerSuccess = null;
-    });
   }
 
   Future<void> _routeToCalendar(EmployeeRecord employee) async {
@@ -172,33 +161,6 @@ class _LoginState extends ConsumerState<Login> {
         employeeId: employee.id,
       ),
     );
-  }
-
-  // The create-account flow pops `created:true` once the account is live; the
-  // controller resolves the already-authenticated session so we can route
-  // straight into the app instead of asking the user to sign in again.
-  Future<void> _routeAfterSignUp() async {
-    final outcome = await ref
-        .read(signInControllerProvider.notifier)
-        .resumeAfterSignUp();
-    if (!mounted) return;
-    switch (outcome) {
-      case SignInNoSession():
-        return;
-      case SignInProfilePending():
-        setState(() {
-          _bannerSuccess = context.l10n.auth_accountCreatedYouCanNowSignIn;
-        });
-      case SignInSuccess(:final employee):
-        TextInput.finishAutofillContext();
-        await _routeToCalendar(employee);
-      // signIn()-only outcomes; resumeAfterSignUp() never produces them.
-      case SignInInvalidCredentials() ||
-          SignInNoProfile() ||
-          SignInAccountDisabled() ||
-          SignInError():
-        break;
-    }
   }
 
   Future<void> _openForgotPassword() async {
@@ -224,14 +186,13 @@ class _LoginState extends ConsumerState<Login> {
   Widget build(BuildContext context) {
     final isLoading = ref.watch(signInControllerProvider).inProgress;
     return AuthScaffold(
+      hero: AuthHero(
+        title: context.l10n.auth_welcomeBack,
+        subtitle: context.l10n.auth_signInToYourAccount,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AuthBrandHeader(
-            title: context.l10n.auth_welcomeBack,
-            subtitle: context.l10n.auth_signInToYourAccount,
-          ),
-          const SizedBox(height: AppSpacing.sp24),
           AuthBanner(
             message: _bannerError ?? _bannerSuccess,
             kind: _bannerError != null
@@ -240,6 +201,7 @@ class _LoginState extends ConsumerState<Login> {
           ),
           const SizedBox(height: AppSpacing.sp16),
           AuthEmailField(
+            label: context.l10n.common_email,
             controller: _emailController,
             focusNode: _emailFocus,
             enabled: !isLoading,
@@ -251,6 +213,7 @@ class _LoginState extends ConsumerState<Login> {
           const SizedBox(height: AppSpacing.sp16),
           AuthPasswordField(
             label: context.l10n.common_password,
+            showLabel: true,
             controller: _passwordController,
             focusNode: _passwordFocus,
             enabled: !isLoading,
@@ -275,55 +238,8 @@ class _LoginState extends ConsumerState<Login> {
             isLoading: isLoading,
             onPressed: _signIn,
           ),
-          const SizedBox(height: AppSpacing.sp24),
-          _CreateAccountPrompt(
-            enabled: !isLoading,
-            onCreateAccount: _openCreateAccount,
-          ),
         ],
       ),
-    );
-  }
-}
-
-/// Bottom call-to-action on the sign-in screen: a muted prompt next to a
-/// primary "Create account" link. A [Wrap] so the two pieces flow to a second
-/// line at large text scale instead of overflowing the row.
-class _CreateAccountPrompt extends StatelessWidget {
-  const _CreateAccountPrompt({
-    required this.enabled,
-    required this.onCreateAccount,
-  });
-
-  final bool enabled;
-  final VoidCallback onCreateAccount;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final textTheme = theme.textTheme;
-    return Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Text(
-          context.l10n.auth_dontHaveAnAccount,
-          style: textTheme.bodyMedium?.copyWith(
-            color: scheme.onSurfaceVariant,
-          ),
-        ),
-        TextButton(
-          onPressed: enabled ? onCreateAccount : null,
-          child: Text(
-            context.l10n.auth_createAccount,
-            style: textTheme.bodyMedium?.copyWith(
-              color: scheme.primary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

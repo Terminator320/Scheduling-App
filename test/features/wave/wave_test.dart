@@ -6,6 +6,7 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/features/wave/data/wave_service.dart';
 import 'package:scheduling/features/wave/domain/models/wave_connection.dart';
+import 'package:scheduling/features/wave/domain/models/wave_import_schedule.dart';
 import 'package:scheduling/features/wave/domain/wave_error_mapper.dart';
 import 'package:scheduling/features/wave/domain/wave_failure.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -196,12 +197,12 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // WaveImportSummary.fromMap
+  // WaveSyncSummary.fromMap
   // -------------------------------------------------------------------------
 
-  group('WaveImportSummary.fromMap', () {
+  group('WaveSyncSummary.fromMap', () {
     test('parses all numeric fields', () {
-      final summary = WaveImportSummary.fromMap(const {
+      final summary = WaveSyncSummary.fromMap(const {
         'totalCount': 100,
         'imported': 80,
         'updated': 15,
@@ -216,7 +217,7 @@ void main() {
     });
 
     test('defaults missing fields to zero', () {
-      final summary = WaveImportSummary.fromMap(const {});
+      final summary = WaveSyncSummary.fromMap(const {});
       expect(summary.totalCount, 0);
       expect(summary.imported, 0);
       expect(summary.updated, 0);
@@ -242,13 +243,22 @@ void main() {
       importCallable = _MockCallable();
       getConnectionCallable = _MockCallable();
       when(
-        () => functions.httpsCallable('waveBootstrap'),
+        () => functions.httpsCallable(
+          any(that: equals('waveBootstrap')),
+          options: any(named: 'options'),
+        ),
       ).thenReturn(bootstrapCallable);
       when(
-        () => functions.httpsCallable('waveImportCustomers'),
+        () => functions.httpsCallable(
+          any(that: equals('waveImportCustomers')),
+          options: any(named: 'options'),
+        ),
       ).thenReturn(importCallable);
       when(
-        () => functions.httpsCallable('waveGetConnection'),
+        () => functions.httpsCallable(
+          any(that: equals('waveGetConnection')),
+          options: any(named: 'options'),
+        ),
       ).thenReturn(getConnectionCallable);
       service = WaveService(functions: functions);
     });
@@ -365,8 +375,8 @@ void main() {
       );
     });
 
-    group('importCustomers', () {
-      test('parses WaveImportSummary from callable result', () async {
+    group('syncCustomers', () {
+      test('parses WaveSyncSummary from callable result', () async {
         final result = _MockResult();
         when(() => result.data).thenReturn(<String, dynamic>{
           'totalCount': 50,
@@ -379,7 +389,7 @@ void main() {
           () => importCallable.call<dynamic>(any<Object?>()),
         ).thenAnswer((_) async => result);
 
-        final summary = await service.importCustomers();
+        final summary = await service.syncCustomers();
         expect(summary.totalCount, 50);
         expect(summary.imported, 30);
         expect(summary.updated, 10);
@@ -395,7 +405,7 @@ void main() {
           );
 
           await expectLater(
-            () => service.importCustomers(),
+            () => service.syncCustomers(),
             throwsA(isA<WaveNetwork>()),
           );
         },
@@ -407,7 +417,7 @@ void main() {
         );
 
         await expectLater(
-          () => service.importCustomers(),
+          () => service.syncCustomers(),
           throwsA(isA<WaveUnknown>()),
         );
       });
@@ -484,6 +494,31 @@ void main() {
         const WaveUnknown().toLocalizedMessage(ctx),
         isNotEmpty,
       );
+    });
+  });
+
+  group('WaveConnection.fromMap importSchedule', () {
+    test('parses a known schedule', () {
+      final conn = WaveConnection.fromMap(const {
+        'businessId': 'b1',
+        'businessName': 'Biz',
+        'importSchedule': 'weekly',
+      });
+      expect(conn.importSchedule, WaveImportSchedule.weekly);
+    });
+
+    test('defaults to off when absent or unknown', () {
+      final absent = WaveConnection.fromMap(const {
+        'businessId': 'b1',
+        'businessName': 'Biz',
+      });
+      final unknown = WaveConnection.fromMap(const {
+        'businessId': 'b1',
+        'businessName': 'Biz',
+        'importSchedule': 'yearly',
+      });
+      expect(absent.importSchedule, WaveImportSchedule.off);
+      expect(unknown.importSchedule, WaveImportSchedule.off);
     });
   });
 }

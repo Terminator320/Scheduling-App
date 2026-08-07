@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -47,9 +48,8 @@ class AddressMapLauncher {
 
     if (!context.mounted) return;
 
-    // iOS: native CupertinoActionSheet. Android: the existing Material sheet
-    // (drag handle + address header). Both resolve to the chosen URI, launched
-    // once below.
+    // iOS uses a native CupertinoActionSheet, Android uses the Material sheet
+    // — both just resolve to one launched URI.
     final Uri? chosen;
     if (context.isCupertino) {
       chosen = await showAdaptiveActionSheet<Uri>(
@@ -116,10 +116,14 @@ class AddressMapLauncher {
     }
 
     if (chosen == null || !context.mounted) return;
-    final opened = await launchUrl(
-      chosen,
-      mode: LaunchMode.externalApplication,
-    );
+    // launchUrl can throw and an unguarded throw here would be fatal, so log
+    // it before we even check mounted.
+    var opened = false;
+    try {
+      opened = await launchUrl(chosen, mode: LaunchMode.externalApplication);
+    } catch (e, st) {
+      AppLogger().warn('LAUNCH-MAPS showMapChoices launchUrl failed', e, st);
+    }
     if (!opened && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         errorSnackBar(context, context.l10n.error_couldNotOpenMapApp),

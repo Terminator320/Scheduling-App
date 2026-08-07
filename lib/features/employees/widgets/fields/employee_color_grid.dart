@@ -6,10 +6,8 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Tap-friendly grid of the employee palette. Colors already used by another
-/// employee are hidden entirely, so everything shown is pickable: 48px-target
-/// swatches with ripple feedback, plus a trailing rainbow swatch that opens
-/// the custom picker (a tappable palette first; the wheel one tab away).
+/// A tap-friendly grid of employee colors. Hides colors already in use and
+/// shows a swatch for the custom picker.
 class EmployeeColorGrid extends ConsumerWidget {
   const EmployeeColorGrid({
     required this.selectedColor,
@@ -29,10 +27,10 @@ class EmployeeColorGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Only offer colors no other employee has — the selected color always
-    // stays visible so the current choice can't vanish from its own form.
+    final theme = Theme.of(context);
+    // Offer only unused colors (selected always stays visible).
     final available = [
-      for (final color in AppColors.employeePalette)
+      for (final color in AppColors.crewPalette)
         if (!usedColors.contains(color.toARGB32()) ||
             color.toARGB32() == selectedColor)
           color,
@@ -47,14 +45,19 @@ class EmployeeColorGrid extends ConsumerWidget {
       children: [
         for (var i = 0; i < available.length; i++)
           _SwatchButton(
-            color: available[i],
+            // Keyed by the STORED argb so a test can assert a specific swatch
+            // is offered (or hidden as taken).
+            key: ValueKey(available[i].toARGB32()),
+            // Display resolves through the theme; the STORED value stays the
+            // canonical light int.
+            color: crewColorOf(theme, available[i].toARGB32()),
             isSelected: available[i].toARGB32() == selectedColor,
             semanticLabel: context.l10n.employees_colorOption(i + 1),
             onTap: () => _pick(available[i].toARGB32()),
           ),
         if (isCustomColor)
           _SwatchButton(
-            color: Color(selectedColor),
+            color: crewColorOf(theme, selectedColor),
             isSelected: true,
             semanticLabel: context.l10n.employees_customColor,
             onTap: null,
@@ -73,8 +76,8 @@ class EmployeeColorGrid extends ConsumerWidget {
         l10n.employees_customColor,
         style: Theme.of(context).textTheme.titleMedium,
       ),
-      // Tap-a-swatch palette with shade rows — every interaction is a tap.
-      // No wheel (finger-dragging precision) and no hex-code field.
+      // Just a tap-to-pick palette with shade rows — no color wheel, since
+      // that needs precise finger-dragging, and no hex field either.
       pickersEnabled: const <ColorPickerType, bool>{
         ColorPickerType.primary: true,
         ColorPickerType.accent: false,
@@ -107,6 +110,7 @@ class _SwatchButton extends StatelessWidget {
     required this.isSelected,
     required this.semanticLabel,
     required this.onTap,
+    super.key,
   });
 
   static const double _targetSize = 48;
@@ -119,7 +123,8 @@ class _SwatchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
 
     return Semantics(
       button: true,
@@ -148,7 +153,7 @@ class _SwatchButton extends StatelessWidget {
               child: isSelected
                   ? Icon(
                       Icons.check,
-                      color: contrastingForegroundFor(color),
+                      color: avatarForegroundFor(theme, color),
                       size: 18,
                     )
                   : null,
@@ -160,8 +165,8 @@ class _SwatchButton extends StatelessWidget {
   }
 }
 
-/// The "more colors" affordance: a rainbow-ringed swatch that reads as
-/// "any color", sized and rippled like the palette swatches.
+/// The "more colors" affordance — a rainbow-ringed swatch that reads as
+/// "any color". It's sized and rippled the same way as the palette swatches.
 class _CustomColorButton extends StatelessWidget {
   const _CustomColorButton({required this.onTap});
 
@@ -190,6 +195,7 @@ class _CustomColorButton extends StatelessWidget {
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: SweepGradient(
+                    // This spectrum is purely decorative, so it deliberately ignores the theme.
                     colors: [
                       Color(0xFFEF4444), // red
                       Color(0xFFF59E0B), // amber

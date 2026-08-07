@@ -1,15 +1,16 @@
-// The empty state must not tell employees to "Tap +" — only admins have the
-// add FAB. Admins keep the actionable copy; employees get a neutral message.
+// The empty state must not tell employees to "Tap +" (only admins have the
+// add FAB) — admins keep the actionable copy, employees get a neutral message.
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 Widget _wrap({
-  required ValueNotifier<List<AppointmentRecord>> events,
+  required List<AppointmentRecord> events,
   required bool isAdmin,
   Map<String, String> nameMap = const {},
 }) => MaterialApp(
@@ -23,7 +24,11 @@ Widget _wrap({
     body: Column(
       children: [
         EventList(
-          events: events,
+          // The agenda takes day slices; these single-day jobs each slice on
+          // the day they start.
+          events: [
+            for (final e in events) sliceFor(e, e.startTime)!,
+          ],
           nameMap: nameMap,
           colorMap: const {},
           isAdmin: isAdmin,
@@ -34,15 +39,14 @@ Widget _wrap({
 );
 
 void main() {
-  late ValueNotifier<List<AppointmentRecord>> events;
+  late List<AppointmentRecord> events;
 
   setUpAll(() async {
     await initializeDateFormatting('en_CA');
   });
 
   setUp(() {
-    events = ValueNotifier(const <AppointmentRecord>[]);
-    addTearDown(events.dispose);
+    events = const <AppointmentRecord>[];
   });
 
   testWidgets('admin empty state suggests tapping the add FAB', (tester) async {
@@ -64,8 +68,24 @@ void main() {
     expect(find.text('Tap + to schedule an appointment.'), findsNothing);
   });
 
-  testWidgets('appointment card lists every assigned employee', (tester) async {
-    events.value = [
+  testWidgets('admin empty state shows no booking button (use the FAB)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(events: events, isAdmin: true));
+    await tester.pumpAndSettle();
+    // The empty state no longer carries a "New Appointment" button; admins
+    // schedule via the calendar's FAB instead.
+    expect(find.widgetWithText(FilledButton, 'New Appointment'), findsNothing);
+  });
+
+  testWidgets('employee empty state shows no booking button', (tester) async {
+    await tester.pumpWidget(_wrap(events: events, isAdmin: false));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(FilledButton, 'New Appointment'), findsNothing);
+  });
+
+  testWidgets('appointment card collapses a multi-person crew', (tester) async {
+    events = [
       AppointmentRecord(
         id: '1',
         title: 'Kitchen sink',
@@ -84,7 +104,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Alice, Bob'), findsOneWidget);
+    // The card leads with the first assignee and counts the rest, rather than
+    // listing every name — the design's `Theo +1` line.
+    expect(find.textContaining('Alice +1'), findsOneWidget);
+    expect(find.text('Alice, Bob'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

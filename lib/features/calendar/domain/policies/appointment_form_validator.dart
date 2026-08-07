@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 
+import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
@@ -8,7 +10,8 @@ enum AppointmentFormError {
   dateRequired,
   startTimeRequired,
   endTimeRequired,
-  endTimeMustBeAfterStart,
+  endDateBeforeStart,
+  spanTooLong,
   clientRequired,
   employeesRequired,
 }
@@ -21,6 +24,9 @@ class AppointmentFormInput {
     required this.endTime,
     required this.client,
     required this.selectedEmployees,
+    this.endDate,
+    this.isPersonal = false,
+    this.isAllDay = false,
   });
 
   final String title;
@@ -29,6 +35,18 @@ class AppointmentFormInput {
   final TimeOfDay? endTime;
   final ClientRecord? client;
   final List<EmployeeRecord> selectedEmployees;
+
+  /// The last day the crew STARTS work. Null is read as same-day.
+  final DateTime? endDate;
+
+  /// A personal job blocks time out for the crew instead of visiting a client,
+  /// so it carries no client, no address, and needn't be named. The assignees
+  /// are still required — they are who the block is for, and who can see it.
+  final bool isPersonal;
+
+  /// No time was put in, so the block owns the whole day and neither time is
+  /// required. Only reachable on a personal job.
+  final bool isAllDay;
 }
 
 class AppointmentFormValidator {
@@ -39,31 +57,37 @@ class AppointmentFormValidator {
   ) {
     final errors = <String, AppointmentFormError>{};
 
-    if (input.title.trim().isEmpty) {
+    // A personal block may go unnamed — it saves under a "Personal" title.
+    if (!input.isPersonal && input.title.trim().isEmpty) {
       errors['title'] = AppointmentFormError.titleRequired;
     }
     if (input.date == null) {
       errors['date'] = AppointmentFormError.dateRequired;
     }
-    if (input.startTime == null) {
+    // An all-day block has no times to validate — it runs midnight to 23:59.
+    if (!input.isAllDay && input.startTime == null) {
       errors['startTime'] = AppointmentFormError.startTimeRequired;
     }
 
-    if (input.endTime == null) {
+    if (!input.isAllDay && input.endTime == null) {
       errors['endTime'] = AppointmentFormError.endTimeRequired;
-    } else if (input.date != null && input.startTime != null) {
-      final start = combineDateAndTime(input.date!, input.startTime!);
-      final end = combineEndDateAndTime(
-        input.date!,
-        input.endTime!,
-        input.startTime,
-      );
-      if (!end.isAfter(start)) {
-        errors['endTime'] = AppointmentFormError.endTimeMustBeAfterStart;
+    }
+
+    // NOTE: there is deliberately no end-time-after-start-time rule. The two
+    // times are a DAILY window, so an end time at or before the start time is
+    // the definition of a night shift, which is supported.
+    final date = input.date;
+    final endDate = input.endDate;
+    if (date != null && endDate != null) {
+      final span = calendarDaysBetween(date, endDate) + 1;
+      if (span < 1) {
+        errors['endDate'] = AppointmentFormError.endDateBeforeStart;
+      } else if (span > maxAppointmentSpanDays) {
+        errors['endDate'] = AppointmentFormError.spanTooLong;
       }
     }
 
-    if (input.client == null) {
+    if (!input.isPersonal && input.client == null) {
       errors['client'] = AppointmentFormError.clientRequired;
     }
     if (input.selectedEmployees.isEmpty) {
@@ -74,36 +98,54 @@ class AppointmentFormValidator {
   }
 }
 
+/// The instants an all-day run spans. Real instants, not sentinels: every
+/// range query, `orderBy('startTime')` and overdue sweep in the app and on the
+/// server keeps treating it as an ordinary appointment.
+({DateTime start, DateTime end}) allDaySpan(DateTime start, DateTime end) => (
+  start: start.dateOnly,
+  end: DateTime(end.year, end.month, end.day, 23, 59),
+);
+
+/// The instants a form's schedule fields resolve to. The one place the all-day
+/// convention and the overnight roll-over are chosen — both save paths route
+/// through it, so the two can't drift on what gets stored.
+///
+/// [startTime] and [endTime] are required unless [isAllDay]; the validator has
+/// already rejected an empty pair by the time a save gets here.
+///
+/// The times are a DAILY WINDOW. When [endTime] is at or before [startTime]
+/// the window crosses midnight, so the last one finishes the morning after
+/// [endDate] — which is why [endDate] always names the last day the crew
+/// STARTS work, never the morning an overnight run ends.
+({DateTime start, DateTime end}) appointmentSpan({
+  required DateTime date,
+  required DateTime endDate,
+  required bool isAllDay,
+  TimeOfDay? startTime,
+  TimeOfDay? endTime,
+}) {
+  if (isAllDay) return allDaySpan(date, endDate);
+  final lastDay = isOvernightWindow(startTime!, endTime!)
+      ? addCalendarDays(endDate, 1)
+      : endDate;
+  return (
+    start: combineDateAndTime(date, startTime),
+    end: combineDateAndTime(lastDay, endTime),
+  );
+}
+
+/// True when a daily window runs past midnight.
+///
+/// Equal times count as overnight: a booking at the same clock time on
+/// consecutive days is a run of continuous 24-hour windows, and a strict `<`
+/// would collapse each of them to zero length.
+bool isOvernightWindow(TimeOfDay start, TimeOfDay end) =>
+    end.hour * 60 + end.minute <= start.hour * 60 + start.minute;
+
 DateTime combineDateAndTime(DateTime date, TimeOfDay time) =>
     DateTime(date.year, date.month, date.day, time.hour, time.minute);
 
-DateTime combineEndDateAndTime(
-  DateTime date,
-  TimeOfDay endTime, [
-  TimeOfDay? startTime,
-]) {
-  final end = combineDateAndTime(date, endTime);
-  if (startTime == null) return end;
-  final start = combineDateAndTime(date, startTime);
-  // Bump to the next day only when the end is STRICTLY before the start
-  // (overnight). An end equal to the start stays same-day so the validator
-  // rejects it with endTimeMustBeAfterStart — bumping it would silently book
-  // a ~24h appointment. Wall-clock next-day construction (not
-  // end.add(Duration(days: 1))) so an overnight end landing on a DST
-  // transition day keeps its time-of-day.
-  return end.isBefore(start)
-      ? DateTime(
-          date.year,
-          date.month,
-          date.day + 1,
-          endTime.hour,
-          endTime.minute,
-        )
-      : end;
-}
-
-/// Returns [errors] without [key], or the same map untouched when absent —
-/// used by the form controllers to clear a field's error as the user fixes it.
+/// Returns [errors] with [key] removed, or the same map if [key] wasn't present — used to clear a field's error once the user fixes it.
 Map<String, AppointmentFormError> withoutKey(
   Map<String, AppointmentFormError> errors,
   String key,

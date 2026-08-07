@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
-
-import 'package:scheduling/core/layout/adaptive_shell.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/features/auth/screens/account_setup_screen.dart';
 import 'package:scheduling/features/auth/screens/forgot_password_screen.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
+import 'package:scheduling/features/calendar/screens/day_route_screen.dart';
+import 'package:scheduling/features/clients/screens/history_screen.dart';
+import 'package:scheduling/features/dashboard/screens/dashboard_screen.dart';
+import 'package:scheduling/features/settings/screens/my_details_screen.dart';
+import 'package:scheduling/features/settings/screens/settings_screen.dart';
 import 'package:scheduling/routes/hub_shell.dart';
 
 class AppRoutes {
@@ -10,11 +15,16 @@ class AppRoutes {
 
   static const String login = '/login';
   static const String forgotPassword = '/forgot-password';
+  static const String accountSetup = '/account-setup';
   static const String mainCalendar = '/calendar';
   static const String employees = '/employees';
   static const String clients = '/clients';
   static const String history = '/history';
+  static const String liveMap = '/live-map';
   static const String settings = '/settings';
+  static const String myDetails = '/settings/my-details';
+  static const String dashboard = '/dashboard';
+  static const String dayRoute = '/day-route';
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -32,11 +42,45 @@ class AppRoutes {
               ForgotPasswordScreen(initialEmail: args?.initialEmail),
         );
 
+      case accountSetup:
+        // Args are optional: sign-in and splash both route here for an
+        // `invited` account, seeding whatever name halves the admin typed.
+        final args = settings.arguments as AccountSetupArgs?;
+        return AppPageRoute(
+          settings: settings,
+          builder: (_) => AccountSetupScreen(
+            firstName: args?.firstName ?? '',
+            lastName: args?.lastName ?? '',
+          ),
+        );
+
+      case dashboard:
+        final args = settings.arguments as DashboardArgs?;
+        return AppPageRoute(
+          settings: settings,
+          // This is an admin-only screen, so default isAdmin to true if it's
+          // pushed without args.
+          builder: (_) => DashboardScreen(
+            isAdmin: args?.isAdmin ?? true,
+            employeeId: args?.employeeId ?? '',
+            userName: args?.userName,
+            email: args?.email,
+          ),
+        );
+
+      case dayRoute:
+        final args = settings.arguments! as DayRouteArgs;
+        return AppPageRoute(
+          settings: settings,
+          builder: (_) => DayRouteScreen(
+            isAdmin: args.isAdmin,
+            employeeId: args.employeeId,
+          ),
+        );
+
       case mainCalendar:
-        // The post-login entry: hosts the persistent hub shell (U1/P4).
-        // Always builds a fresh shell — this route is only ever the target
-        // of a pushReplacement (login, splash, drawer), so by the time it
-        // builds there is no live shell left to redirect into.
+        // This is the post-login entry point — always builds a fresh shell
+        // via pushReplacement.
         final args = settings.arguments! as MainCalendarArgs;
         return AppPageRoute(
           settings: settings,
@@ -50,7 +94,7 @@ class AppRoutes {
         final args = settings.arguments! as MainCalendarArgs;
         return _hubRoute(
           settings,
-          AdaptiveDestination.employees,
+          HubTab.employees,
           isAdmin: args.isAdmin,
           employeeId: args.employeeId,
         );
@@ -59,30 +103,47 @@ class AppRoutes {
         final args = settings.arguments! as ClientsListArgs;
         return _hubRoute(
           settings,
-          AdaptiveDestination.clients,
+          HubTab.clients,
           isAdmin: args.isAdmin,
           employeeId: args.employeeId,
         );
 
       case history:
         final args = settings.arguments! as HistoryArgs;
+        return AppPageRoute(
+          settings: settings,
+          builder: (_) => HistoryScreen(
+            isAdmin: args.isAdmin,
+            employeeId: args.employeeId,
+          ),
+        );
+
+      case liveMap:
+        final args = settings.arguments! as MainCalendarArgs;
         return _hubRoute(
           settings,
-          AdaptiveDestination.history,
+          HubTab.liveMap,
           isAdmin: args.isAdmin,
           employeeId: args.employeeId,
+        );
+
+      case AppRoutes.myDetails:
+        return AppPageRoute(
+          settings: settings,
+          builder: (_) => const MyDetailsScreen(),
         );
 
       case AppRoutes.settings:
         // Settings is only reachable post-login, so args are always present.
         final args = settings.arguments! as SettingsArgs;
-        return _hubRoute(
-          settings,
-          AdaptiveDestination.settings,
-          isAdmin: args.role == 'admin',
-          employeeId: args.employeeId,
-          userName: args.name,
-          userEmail: args.email,
+        return AppPageRoute(
+          settings: settings,
+          builder: (_) => SettingsScreen(
+            name: args.name,
+            email: args.email,
+            role: args.role,
+            employeeId: args.employeeId,
+          ),
         );
 
       default:
@@ -90,14 +151,11 @@ class AppRoutes {
     }
   }
 
-  /// Route for a non-calendar hub destination. The settings drawer still
-  /// pushes these as named routes; when a [HubShell] is live that push is
-  /// redirected into a tab switch on it ([HubTabRedirectRoute]) so the shell
-  /// and its kept-alive screens stay the single navigation root. With no
-  /// live shell (deep entry), a fresh shell opens on the requested tab.
+  /// Route for any non-calendar hub tab — redirects into a tab switch if a
+  /// shell is already live, otherwise opens a fresh one.
   static Route<dynamic> _hubRoute(
     RouteSettings routeSettings,
-    AdaptiveDestination destination, {
+    HubTab destination, {
     required bool isAdmin,
     required String employeeId,
     String userName = '',
@@ -116,7 +174,7 @@ class AppRoutes {
     return AppPageRoute(
       settings: routeSettings,
       builder: (_) => HubShell(
-        initialDestination: destination,
+        initialTab: destination,
         isAdmin: isAdmin,
         employeeId: employeeId,
         userName: userName,
@@ -126,12 +184,7 @@ class AppRoutes {
   }
 }
 
-/// The app's standard page route: platform-default transitions (Cupertino
-/// slide with swipe-back on iOS, zoom/predictive-back on Android) that
-/// collapse to an instant cut when the platform requests reduced motion.
-///
-/// Replaces the old bare fade `PageRouteBuilder`, whose custom transition
-/// broke the iOS back-swipe gesture on pushed routes (U1).
+/// Standard page route with platform-default transitions and reduced-motion support.
 class AppPageRoute<T> extends MaterialPageRoute<T> {
   AppPageRoute({required super.builder, super.settings});
 
@@ -157,6 +210,15 @@ class ForgotPasswordArgs {
   final String? initialEmail;
 }
 
+class AccountSetupArgs {
+  const AccountSetupArgs({this.firstName = '', this.lastName = ''});
+
+  /// Whatever the admin already typed, so the person confirms rather than
+  /// retypes. Both are optional — the fields are still required on the screen.
+  final String firstName;
+  final String lastName;
+}
+
 class MainCalendarArgs {
   const MainCalendarArgs({required this.isAdmin, required this.employeeId});
   final bool isAdmin;
@@ -173,6 +235,25 @@ class HistoryArgs {
   const HistoryArgs({required this.isAdmin, required this.employeeId});
   final bool isAdmin;
   final String employeeId;
+}
+
+class DayRouteArgs {
+  const DayRouteArgs({required this.isAdmin, required this.employeeId});
+  final bool isAdmin;
+  final String employeeId;
+}
+
+class DashboardArgs {
+  const DashboardArgs({
+    required this.isAdmin,
+    required this.employeeId,
+    this.userName,
+    this.email,
+  });
+  final bool isAdmin;
+  final String employeeId;
+  final String? userName;
+  final String? email;
 }
 
 class SettingsArgs {

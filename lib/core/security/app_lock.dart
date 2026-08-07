@@ -1,16 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/security/biometric_auth_service.dart';
-import 'package:scheduling/core/storage/secure_storage_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// App-wide biometric gate. When the lock is enabled it covers the whole app
-/// with an opaque overlay on cold start and whenever the app returns from the
-/// background, requiring biometric/device-credential auth to dismiss.
+/// App-wide biometric gate. Covers the app on cold start, and again whenever
+/// it returns from the background.
 class AppLock extends ConsumerStatefulWidget {
   const AppLock({required this.child, super.key});
 
@@ -23,6 +22,12 @@ class AppLock extends ConsumerStatefulWidget {
 class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
   bool _locked = false;
   bool _authenticating = false;
+
+  /// True when [_locked] was taken because the flag was UNRESOLVED rather than
+  /// because it is on. Resume clears such a lock once the retry settles, so a
+  /// user who never opted in can't be trapped behind a biometric prompt they
+  /// may have no way to satisfy.
+  bool _lockedUnresolved = false;
 
   @override
   void initState() {
@@ -37,37 +42,81 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
     super.dispose();
   }
 
+  /// Resolves the flag through the controller — the ONE reader of the stored
+  /// value, so the widget and the Settings switch can't disagree about it.
   Future<void> _lockOnStartIfEnabled() async {
-    bool enabled;
-    try {
-      enabled = await ref
-          .read(secureStorageServiceProvider)
-          .readFlag(SecureStorageKeys.biometricEnabled);
-    } catch (e, st) {
-      // Encrypted-storage reads can throw on Android (keystore/cipher failure).
-      // Record it rather than failing silently, and don't engage the lock —
-      // locking on an unreadable flag risks bricking a user who never enabled
-      // biometrics behind a prompt they can't satisfy.
-      ref.read(loggerProvider).warn('APPLOCK read flag failed', e, st);
-      return;
-    }
-    if (!enabled || !mounted) return;
+    await ref.read(appLockEnabledProvider.notifier).ensureLoaded();
+    if (!mounted) return;
+    _lockIfEnabled();
+  }
+
+  void _lockIfEnabled() {
+    if (_locked || !ref.read(appLockEnabledProvider)) return;
     setState(() => _locked = true);
-    await _authenticate();
+    unawaited(_authenticate());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (!ref.read(appLockEnabledProvider)) return;
-    // Lock on `inactive` too, not just paused/hidden: the OS app-switcher
-    // snapshot is captured during the `inactive` transition, so covering only
-    // paused/hidden would leak the unprotected screen into the recents preview.
+    final controller = ref.read(appLockEnabledProvider.notifier);
+    if (state == AppLifecycleState.resumed) {
+      // A read that threw at launch leaves the flag unresolved, and a
+      // resolved-looking `false` used to disable the lock for the WHOLE
+      // session — one transient keychain error (the pre-first-unlock window
+      // -25308 lives in) and the app opened straight into a signed-in session
+      // with no prompt and no sign anything was wrong. Retry BEFORE deciding,
+      // so an unresolved flag can still settle on `true`; fail-open applies
+      // only to a resolved `false`.
+      if (!controller.isResolved) {
+        unawaited(controller.retryIfUnresolved().then((_) => _afterRetry()));
+        return;
+      }
+      if (_locked) unawaited(_authenticate());
+      return;
+    }
+    // Backgrounding: an UNRESOLVED flag locks too. This is the gate the OS
+    // grabs its app-switcher snapshot behind, so "we don't know yet" must not
+    // read as "no lock" — that was the same fail-open the resume path above
+    // closes, just at the other end. Resume releases it if it settles `false`.
+    if (controller.isResolved && !ref.read(appLockEnabledProvider)) return;
+    // Lock on `inactive` too, since that's the state the OS grabs its
+    // app-switcher snapshot during.
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
-      if (!_locked) setState(() => _locked = true);
-    } else if (state == AppLifecycleState.resumed && _locked) {
-      _authenticate();
+      if (!_locked) {
+        setState(() {
+          _locked = true;
+          _lockedUnresolved = !controller.isResolved;
+        });
+      }
+    }
+  }
+
+  /// Settles the lock after a resume-time retry of an unresolved flag.
+  ///
+  /// A retry that still can't read the flag RELEASES a defensive lock rather
+  /// than holding it: the snapshot window it existed for has passed, and a
+  /// persistent storage fault must never leave the app unusable for someone
+  /// who never enabled biometrics. So a durable read failure still degrades to
+  /// "unlocked" — the win here is that it no longer does so while the app sits
+  /// in the switcher.
+  void _afterRetry() {
+    if (!mounted) return;
+    if (!ref.read(appLockEnabledProvider)) {
+      if (_lockedUnresolved) {
+        setState(() {
+          _locked = false;
+          _lockedUnresolved = false;
+        });
+      }
+      return;
+    }
+    _lockedUnresolved = false;
+    if (_locked) {
+      unawaited(_authenticate());
+    } else {
+      _lockIfEnabled();
     }
   }
 
@@ -79,14 +128,26 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
         .read(biometricAuthServiceProvider)
         .authenticate(reason);
     _authenticating = false;
-    if (ok && mounted) setState(() => _locked = false);
+    if (ok && mounted) {
+      setState(() {
+        _locked = false;
+        _lockedUnresolved = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        widget.child,
+        // The overlay only PAINTS over the child, which stays mounted — so
+        // without these a screen reader could still traverse and read the
+        // client names, addresses and phone numbers underneath a locked app,
+        // and focus could still land in them.
+        ExcludeSemantics(
+          excluding: _locked,
+          child: ExcludeFocus(excluding: _locked, child: widget.child),
+        ),
         if (_locked)
           Positioned.fill(child: _LockOverlay(onUnlock: _authenticate)),
       ],

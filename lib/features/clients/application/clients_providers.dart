@@ -4,6 +4,7 @@ import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 
 final clientsRepositoryProvider = Provider<ClientsRepository>((ref) {
@@ -11,9 +12,7 @@ final clientsRepositoryProvider = Provider<ClientsRepository>((ref) {
   return FirebaseClientsRepository(firestore);
 });
 
-/// Bumped after any client add/update/delete so the paginated clients list
-/// (which no longer streams) can refresh itself. Replaces the previous live
-/// `watchClients` stream's auto-update behavior.
+/// Bumped after any client write so paginated list refreshes.
 final clientsRefreshProvider = NotifierProvider<ClientsRefresh, int>(
   ClientsRefresh.new,
 );
@@ -25,22 +24,33 @@ class ClientsRefresh extends Notifier<int> {
   void bump() => state++;
 }
 
-/// Comprehensive client search: reads up to [ClientSearchPolicy.serverReadLimit]
-/// docs and matches across all fields (name, business name, email, address,
-/// contacts, phone) with relevance scoring — unlike the loaded-page filter, it
-/// finds clients regardless of which page they're on. AutoDispose so each
-/// distinct query instance is freed once no longer watched.
+/// Full client search with relevance scoring. AutoDispose frees the results once each
+/// query instance is no longer watched.
 final clientSearchProvider = FutureProvider.autoDispose
     .family<List<ClientRecord>, String>((
       ref,
       query,
     ) async {
       if (!ClientSearchPolicy.shouldSearch(query)) return const [];
-      // A bump (any client add/update/delete) must invalidate committed search
-      // results too, not just the paged list — otherwise a deleted client
-      // stays listed and tappable in the rendered search results until the
-      // query changes.
+      // Watching bump invalidates results so deleted clients don't linger.
       ref.watch(clientsRefreshProvider);
       final repo = ref.watch(clientsRepositoryProvider);
       return repo.searchClients(query);
     });
+
+/// Clients of one type, for the list's filter row. AutoDispose frees it as soon
+/// as the filter is cleared.
+final clientsByTypeProvider = FutureProvider.autoDispose
+    .family<List<ClientRecord>, ClientType>((ref, type) async {
+      ref.watch(clientsRefreshProvider);
+      return ref.watch(clientsRepositoryProvider).fetchClientsByType(type);
+    });
+
+/// Archived clients, read from the same bounded cached window as search and
+/// the type filter — so the Archived chip costs no extra read inside the TTL.
+final archivedClientsProvider = FutureProvider.autoDispose<List<ClientRecord>>((
+  ref,
+) async {
+  ref.watch(clientsRefreshProvider);
+  return ref.watch(clientsRepositoryProvider).fetchArchivedClients();
+});

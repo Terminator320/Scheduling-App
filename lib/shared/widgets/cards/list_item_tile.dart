@@ -4,16 +4,14 @@ import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
-/// Shared row layout for list entries (clients, employees): a leading
-/// [AppAvatar], a title + optional subtitle column, an optional trailing
-/// widget (e.g. a `StatusChip`), and a trailing chevron, all wrapped in an
-/// [InkWell] ripple.
+/// Shared list row: avatar, title/subtitle, trailing widget, chevron.
 class ListItemTile extends StatelessWidget {
   const ListItemTile({
     required this.avatarName,
     required this.title,
     super.key,
     this.subtitle,
+    this.subtitleExtra,
     this.avatarColor,
     this.trailing,
     this.onTap,
@@ -24,6 +22,10 @@ class ListItemTile extends StatelessWidget {
   final String avatarName;
   final String title;
   final String? subtitle;
+
+  /// An extra line below [subtitle] — a chip row, a badge strip. The [subtitle]
+  /// slot itself is single-line by contract, so anything taller goes here.
+  final Widget? subtitleExtra;
   final Color? avatarColor;
   final Widget? trailing;
   final VoidCallback? onTap;
@@ -73,6 +75,10 @@ class ListItemTile extends StatelessWidget {
                           color: scheme.onSurfaceVariant,
                         ),
                       ),
+                    ],
+                    if (subtitleExtra != null) ...[
+                      const SizedBox(height: AppSpacing.sp8),
+                      subtitleExtra!,
                     ],
                     if (compact && trailing != null) ...[
                       const SizedBox(height: AppSpacing.sp8),

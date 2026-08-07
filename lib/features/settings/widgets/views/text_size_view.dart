@@ -39,56 +39,16 @@ class _TextSizeViewState extends State<TextSizeView> {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.sp16),
       children: [
-        _Card(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                context.l10n.settings_previewText.toUpperCase(),
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  letterSpacing: 1,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sp12),
-              MediaQuery(
-                data: MediaQuery.of(
-                  context,
-                ).copyWith(textScaler: TextScaler.linear(_selected)),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Appointment Title',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Tuesday, May 12 - 9:00 - 9:45 AM',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Sarah Johnson - 514-555-0101',
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+        _PreviewCard(selected: _selected),
         const SizedBox(height: AppSpacing.sp12),
         Builder(
           builder: (context) {
             final options = _buildOptions(context.l10n);
             return _Card(
-              padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+              padding: const EdgeInsets.symmetric(
+                vertical: AppSpacing.sp4,
+                horizontal: AppSpacing.sp8,
+              ),
               child: Column(
                 children: [
                   for (int i = 0; i < options.length; i++) ...[
@@ -135,6 +95,62 @@ class _TextSizeViewState extends State<TextSizeView> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PreviewCard extends StatelessWidget {
+  const _PreviewCard({required this.selected});
+
+  final double selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return _Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.l10n.settings_previewText.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+              letterSpacing: 1,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sp12),
+          MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(selected)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  context.l10n.settings_previewApptTitle,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  context.l10n.settings_previewApptWhen,
+                  style: theme.textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  context.l10n.settings_previewApptContact,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -235,7 +251,7 @@ class _SizeRow extends StatelessWidget {
                       primary: scheme.primary,
                       muted: scheme.onSurfaceVariant,
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: AppSpacing.sp8),
                     Expanded(
                       child: Text(
                         label,

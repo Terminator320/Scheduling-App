@@ -1,9 +1,9 @@
 rules_version = '2';
 
-// Role resolution depends on the `usersByUid/{uid}` bridge collection, which is
-// maintained by the `syncUsersByUid` Cloud Function in `functions/index.js`.
-// Rules can only `get` documents by full path, and `users` docs use Firestore-
-// generated IDs — the bridge translates auth uid → users-doc-id + role + status.
+// Role resolution goes through the `usersByUid/{uid}` bridge, kept up to date by
+// syncUsersByUid in functions/index.js. Rules can only `get` a doc by its full path,
+// and `users` docs have Firestore-generated IDs, so this bridge is how we look up a
+// user from just their auth uid.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -29,94 +29,161 @@ service cloud.firestore {
         && userByUid().data.status == 'active';
     }
 
-    // True when the CALLER is an active user (any role) per the bridge doc.
-    // Conditions here are on the caller, not the resource, so list queries
-    // remain provable by the rules engine.
+    // True when the person making the request — not the resource being read — is an
+    // active user. Checking the caller instead of the resource is what keeps list
+    // queries provable.
     function isActiveUser() {
       return userByUidExists()
         && userByUid().data.status == 'active';
     }
 
-    // Returns the Firestore doc ID for the current user (via the bridge doc).
-    // Used to check whether a UID is in appointment.employeeIds.
+    // Returns the current user's Firestore doc ID — we use this to check whether
+    // they're in an appointment's employeeIds.
     function myDocId() {
       return userByUid().data.docId;
     }
 
+    // We also check active status here, because deactivating someone doesn't revoke
+    // their Auth credential — without this, a disabled employee could keep reading
+    // their assigned jobs.
     function isAssignedEmployee(appointmentData) {
-      return userByUidExists()
+      return isActiveUser()
         && myDocId() in appointmentData.employeeIds;
     }
 
-    // Firestore's default is deny-everything-not-explicitly-allowed, so no
-    // catch-all deny-rule is needed. Adding one at this level OR's with the
-    // specific matches and has been observed to interact oddly with list
-    // queries; relying on the default is simpler and equally restrictive.
+    // Shared by isValidUserData / isValidAppointmentData. Declared at the top
+    // level so all the collection validators can reach it — it used to live
+    // inside the /users match block, which is why isValidClientData still
+    // spells the same check out inline.
+    function isBoundedString(v, maxLen) {
+      return v is string && v.size() <= maxLen;
+    }
+
+    // We don't add a catch-all deny rule here — Firestore already denies by default,
+    // and we've seen an explicit one interact oddly with list queries.
 
     // ── usersByUid (bridge collection) ───────────────────────────────────────
-    // Written only by the syncUsersByUid Cloud Function via Admin SDK. Clients
-    // can read their own doc; no client writes allowed.
+    // Only the syncUsersByUid Cloud Function writes here, via the Admin SDK. Clients
+    // can read their own doc, but none of them can write.
     match /usersByUid/{uid} {
       allow read: if isSignedIn() && request.auth.uid == uid;
       allow write: if false;
     }
 
     // ── rateLimits (abuse counters) ──────────────────────────────────────────
-    // Written only by the enforceDurableRateLimit helper in the Cloud Functions
-    // via Admin SDK. No client may read or write: a client that could reset or
-    // read its own counter would defeat the auth-route brute-force cap. The
-    // default-deny would already block this; the explicit rule documents intent
-    // for a security-sensitive collection.
+    // Admin SDK only, via enforceDurableRateLimit — if a client could read or reset
+    // its own counter, it would defeat the brute-force cap on auth routes.
     match /rateLimits/{id} {
       allow read, write: if false;
     }
 
-    // signupCodes hold the sha256 hash of one-time invite codes. Only Cloud
-    // Functions (Admin SDK) touch them — a client able to read a hash could
-    // brute-force the code offline; one able to write could mint codes.
+    // Admin SDK only — a client that could read a code hash could brute-force it
+    // offline, and one that could write could just mint its own codes.
+    // BACKWARD-COMPAT SHIM (#compat-1.37.1): retained for the 1.37.1+64 build's
+    // createEmployeeInvite/redeemSignupCode flow. Delete with the shim.
     match /signupCodes/{codeHash} {
       allow read, write: if false;
     }
 
+    // Admin-SDK-only idempotency ledger for the 30-minute reminder sweep. If a client
+    // could delete an entry, it could force a duplicate reminder.
+    match /appointmentReminders/{id} {
+      allow read, write: if false;
+    }
+
+    // Admin-SDK-only idempotency ledger for the overdue "job finished?" sweep — same
+    // posture as appointmentReminders above.
+    match /appointmentOverduePrompts/{id} {
+      allow read, write: if false;
+    }
+
+    // Admin-SDK-only claim ledger that collapses a repeat-series batch into one push
+    // per employee per kind — same posture as the ledgers above.
+    match /appointmentSeriesNotices/{id} {
+      allow read, write: if false;
+    }
+
+    // Admin-SDK-only mapping of each tech to their live-activity appointment, owned
+    // entirely by the server — a client write here could redirect another tech's card
+    // and leak a client's address.
+    match /liveActivityCards/{employeeDocId} {
+      allow read, write: if false;
+    }
+
     // ── users ─────────────────────────────────────────────────────────────────
-    // Read: admins see all; active employees see active peers (picker/display);
-    // a registering user can find their own invited doc by email match.
-    // Write: admin only. Invite activation is server-side (the redeemSignupCode
-    // callable via the Admin SDK), so there is no client self-activation path.
+    // Admins can read everything; active employees can see active peers (for pickers
+    // and display); and anyone can read their own doc by uid — which is how an
+    // `invited` person reaches the setup screen. Only an admin can write: account
+    // activation happens server-side via completeEmployeeSetup, so there's no way
+    // for a client to self-activate.
     match /users/{userId} {
-      // The invited-doc lookup is intentionally NOT exposed as a client-side
-      // list query — Firestore's rules engine cannot prove
-      // `resource.data.email == request.auth.token.email` from a query's
-      // `where('email', '==', X)` constraint, so any client query would be
-      // rejected with permission-denied. Invite resolution and activation run
-      // server-side via the signup-code callables (Admin SDK), so this clause
-      // can stay tight without breaking the app.
-      // The active-peers clause requires the CALLER to be an active user via
-      // the usersByUid bridge — a merely-signed-in stranger (self-registered
-      // account with no bridge doc) can no longer dump the staff directory.
-      // The caller-side condition keeps the client's
-      // `.where('status', isEqualTo: 'active')` list queries provable (the
-      // resource-side condition matches the query filter; the caller-side
-      // conditions don't depend on resource data at all).
+      // The active-peers clause checks the caller (via the usersByUid bridge) rather
+      // than the resource, which keeps list queries provable and stops a signed-in
+      // stranger with no bridge doc from dumping the whole staff directory.
+      //
+      // The own-doc clause is what an `invited` person reads on the setup screen:
+      // since createEmployeeAccount mints the Auth account up front, their doc has
+      // carried `uid` since creation.
+      //
+      // The fourth clause is a BACKWARD-COMPAT SHIM (#compat-1.37.1). The
+      // retired code flow leaves `uid` empty until redemption, so the 1.37.1+64
+      // build still on the App Store reaches its own invited doc by email match
+      // and nothing else. It only works for a direct get, not a client list
+      // query, since Firestore can't prove the email-equality check from a
+      // query constraint. Delete it with the rest of the shim.
       allow read: if isAdmin()
         || (isActiveUser() && resource.data.status == 'active')
         || (isSignedIn() && resource.data.uid == request.auth.uid)
         || (isSignedIn()
+            && request.auth.token.email_verified == true
             && resource.data.status == 'invited'
             && resource.data.email == request.auth.token.email);
 
-      allow create, delete: if isAdmin();
+      // Delete was withdrawn 2026-08-02 (P4): removing a users doc orphans every
+      // past appointment's employeeIds link — the visit keeps the denormalized
+      // employeeNames and loses the crew colour and the person. Disable is the
+      // shipping action and does strictly more (syncUsersByUid disables the Auth
+      // account, revokes tokens, and purges presence/FCM/LiveActivity rows).
+      // The Admin SDK bypasses rules, so console cleanup is unaffected.
+      //
+      // It is granted here only as a BACKWARD-COMPAT SHIM (#compat-1.37.1): the
+      // 1.37.1+64 build still on the App Store renders a "Delete employee"
+      // button (employee_details_view.dart:45) that calls users.doc(id).delete(),
+      // and withdrawing the rule under it turns that tap into an opaque
+      // permission-denied. No current-build path deletes a users doc. Delete
+      // this grant with the rest of the shim.
+      // TODO(george): delete with the 1.37.1 shim (#compat-1.37.1)
+      allow delete: if isAdmin();
 
-      // `colorValue` is stored as a stringified int in the user doc. Reject
-      // writes that don't parse as an integer so a malformed write can't
-      // make the client fall back to the default blue.
+      // Same shape guard AND the same function-owned denylist as `allow update`
+      // below — otherwise the identical admin session that cannot EDIT `uid` or
+      // a consent stamp could simply CREATE a doc carrying forged ones, and a
+      // second doc claiming an existing employee's uid repoints the
+      // `usersByUid` bridge that every rules gate resolves through.
+      // No shipped client path creates a users doc: employee accounts go
+      // through the Admin-SDK-only `createEmployeeAccount`.
+      // `emergencyContact`/`emergencyPhone` are banned OUTRIGHT here. They
+      // moved to private/emergency, and nothing should ever mint a new users
+      // doc carrying them — a create has no existing doc to protect, so the
+      // flat denylist is safe. The UPDATE side cannot use this form (it would
+      // reject the FieldValue.delete() scrub and brick any doc that still
+      // carried the pair); it goes through `emergencyFieldNotSet` instead,
+      // which permits a removal and refuses a value. See that function.
+      allow create: if isAdmin()
+            && !request.resource.data.keys()
+                 .hasAny(['uid', 'termsAcceptedAt', 'locationConsentAt',
+                          'emergencyContact', 'emergencyPhone'])
+            && isValidUserData(request.resource.data);
+
+      // Rejects a colorValue write that isn't a valid integer string — otherwise a bad
+      // value could sneak through and the client would silently fall back to the
+      // default blue.
       function isValidColorValue(s) {
         return s is string && s.matches('^-?[0-9]+$');
       }
 
-      // Constrain the privilege/state fields an admin write can land on, so a
-      // compromised admin session can't mint a bogus role (e.g. 'superuser')
-      // or an out-of-allowlist status that would desync the usersByUid bridge.
+      // Keeps role and status limited to the allowlist, so a compromised admin
+      // session can't mint a bogus role or throw the usersByUid bridge out of sync.
       function isValidRole(r) {
         return r in ['admin', 'employee'];
       }
@@ -124,48 +191,305 @@ service cloud.firestore {
         return s in ['active', 'disabled', 'invited'];
       }
 
-      // Only an admin can update a user doc. Invite activation (writing the
-      // auth uid + flipping status to 'active') is done server-side by the
-      // redeemSignupCode callable via the Admin SDK — there is no client
-      // self-activation path, so an unverified registrant can't claim a doc.
-      // `uid` links the doc to a Firebase Auth account; rewriting it from the
-      // client could hijack the bridge doc of another account. Only the
-      // server-side callables (Admin SDK) may ever set/rotate it.
+      // P4 field guards. NOTE the deliberate asymmetry: `name`, `email` and
+      // `phone` are capped at the widest value a shipped write path can already
+      // have produced (createEmployeeAccount allows phone up to 40 while
+      // TextLimits.phone is 24), NOT at the client-side limit. A cap tighter
+      // than an existing stored value would make that doc permanently
+      // un-updatable — including by deactivateEmployee.
+      function isValidJobTitle(t) {
+        return t is string
+          && t in ['', 'lead_tech', 'technician', 'apprentice', 'dispatcher'];
+      }
+      function isMinuteOfDay(v) {
+        return v is int && v >= 0 && v <= 1440;
+      }
+
+      // Rules cannot iterate a list, so the element type is not provable here —
+      // the length and list-ness are the enforceable half, and every write path
+      // builds the list from seven bools.
+      function isValidWorkingDays(v) {
+        return v is list && v.size() == 7;
+      }
+
+      function isValidUserData(d) {
+        // `name` is the JOIN of the two 100-char halves, so it legitimately
+        // reaches 201 — the cap mirrors the widest value a write path can
+        // produce, never the per-half client cap.
+        return (!('name' in d.keys()) || isBoundedString(d.name, 250))
+          && (!('firstName' in d.keys()) || isBoundedString(d.firstName, 200))
+          && (!('lastName' in d.keys()) || isBoundedString(d.lastName, 200))
+          && (!('email' in d.keys()) || isBoundedString(d.email, 320))
+          && (!('phone' in d.keys()) || isBoundedString(d.phone, 40))
+          // emergencyContact/emergencyPhone moved to
+          // users/{userId}/private/emergency — this doc is readable by every
+          // active peer, and rules cannot hide a field from a document reader.
+          // No write path can put a VALUE here any more: `allow create` denies
+          // the keys outright and `allow update` goes through
+          // emergencyFieldNotSet above. These caps therefore only ever see a
+          // legacy value passing through untouched on an unrelated update, and
+          // they are what keeps that doc updatable instead of bricked. Cheap,
+          // and the one thing standing between a straggler and a hard failure —
+          // don't remove them as unreachable.
+          && (!('emergencyContact' in d.keys())
+              || isBoundedString(d.emergencyContact, 200))
+          && (!('emergencyPhone' in d.keys())
+              || isBoundedString(d.emergencyPhone, 40))
+          && (!('jobTitle' in d.keys()) || isValidJobTitle(d.jobTitle))
+          && (!('workingDays' in d.keys()) || isValidWorkingDays(d.workingDays))
+          && (!('workStartMinutes' in d.keys())
+              || isMinuteOfDay(d.workStartMinutes))
+          && (!('workEndMinutes' in d.keys())
+              || isMinuteOfDay(d.workEndMinutes))
+          && (!('maxJobsPerDay' in d.keys())
+              || (d.maxJobsPerDay is int
+                  && d.maxJobsPerDay >= 0
+                  && d.maxJobsPerDay <= 50))
+          && (!('onCall' in d.keys()) || d.onCall is bool)
+          && (!('colorValue' in d.keys()) || isValidColorValue(d.colorValue))
+          && (!('role' in d.keys()) || isValidRole(d.role))
+          && (!('status' in d.keys()) || isValidUserStatus(d.status))
+          // Server-owned consent stamps. The denylist on `allow update` below is
+          // what actually keeps clients out of them; these caps exist because
+          // `allow create` has no field validation yet, so when P5 wires
+          // isValidUserData into create they are already correct instead of
+          // being a forgotten field family. `is timestamp` is exactly what
+          // the callables write, so the cap can't be tighter than a write
+          // path's widest value.
+          && (!('termsAcceptedAt' in d.keys())
+              || d.termsAcceptedAt is timestamp)
+          && (!('locationConsentAt' in d.keys())
+              || d.locationConsentAt is timestamp);
+      }
+
+      // The emergency pair may be REMOVED but never WRITTEN on this doc. They
+      // live in users/{userId}/private/emergency, because this doc is readable
+      // by every active peer and the pair names a third party who is not an app
+      // user and never consented.
+      //
+      // Deliberately NOT a plain denylist entry beside `uid`. That form rejects
+      // any write that touches the key at all — including the
+      // `FieldValue.delete()` scrub `updateEmployee` sends on every save — so a
+      // doc that still carried the pair would become permanently un-updatable,
+      // including by deactivateEmployee (a partial update presents every
+      // untouched field in request.resource.data). This form instead says:
+      // leaving it alone is fine, and touching it is fine only when the field
+      // ends up ABSENT. A value can never land here, no doc can ever be
+      // bricked, and the client scrub still heals any straggler — so this
+      // needs no backfill and no migration.
+      function emergencyFieldNotSet(f) {
+        return !request.resource.data.diff(resource.data)
+                  .affectedKeys().hasAny([f])
+            || !(f in request.resource.data);
+      }
+
+      // Built for P5's own-doc self-service clause, which is the only thing that
+      // will ever call it. P4 keeps `allow update` admin-only: there is no
+      // self-service UI yet, so opening the write early would widen the surface
+      // for nothing. P5 adds `|| (isSelf() && isAvailabilityOnlyChange())`.
+      function isAvailabilityOnlyChange() {
+        return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['workingDays', 'workStartMinutes', 'workEndMinutes',
+                    'onCall', 'phone', 'updatedAt']);
+      }
+
+      // Only an admin can update. Account activation happens server-side via
+      // completeEmployeeSetup, so there's no client self-activation path. `uid` links this
+      // doc to an Auth account and clients can never change it — rewriting it could
+      // hijack another account's bridge doc. The three P4b stamps are function-owned
+      // for the same reason `jobCount`/`wave` are on clients: a compromised admin
+      // session must not be able to forge a consent record.
+      // Diff-based, so it only fires when a write actually CHANGES one — every
+      // shipped path (updateEmployee's field-scoped map, deactivate/reactivate)
+      // leaves them untouched. The callables write via the Admin SDK, which
+      // bypasses rules entirely.
       allow update: if isAdmin()
             && !request.resource.data.diff(resource.data)
                  .affectedKeys()
-                 .hasAny(['uid'])
-            && (!('colorValue' in request.resource.data.keys())
-                || isValidColorValue(request.resource.data.colorValue))
-            && (!('role' in request.resource.data.keys())
-                || isValidRole(request.resource.data.role))
-            && (!('status' in request.resource.data.keys())
-                || isValidUserStatus(request.resource.data.status));
+                 .hasAny(['uid', 'termsAcceptedAt', 'locationConsentAt'])
+            && emergencyFieldNotSet('emergencyContact')
+            && emergencyFieldNotSet('emergencyPhone')
+            && isValidUserData(request.resource.data);
+
+      // Emergency contact — the ONLY users data gated to the admin and the
+      // person themselves. It sits in a subcollection precisely because rules
+      // are document-level: the `/users` read rule above deliberately lets any
+      // active employee read any active peer (crew pickers, names, colours),
+      // so a field on that doc is a field every employee's device receives.
+      // This pair names a THIRD PARTY who is not an app user and never
+      // consented, so peer-readable was the wrong default. Never move it back.
+      // Shape-locked like every other self-writable subcollection here: the doc
+      // id is pinned to `emergency` (so this can't become an unbounded
+      // write-anything store under the caller's own uid) and the key set,
+      // types and lengths are capped. The caps mirror isValidUserData's, which
+      // is what the pair used before the move.
+      match /private/emergency {
+        allow read: if isAdmin() || (isActiveUser() && myDocId() == userId);
+        allow write: if (isAdmin() || (isActiveUser() && myDocId() == userId))
+          && request.resource.data.keys()
+               .hasOnly(['contact', 'phone', 'updatedAt'])
+          && (!('contact' in request.resource.data.keys())
+              || isBoundedString(request.resource.data.contact, 200))
+          && (!('phone' in request.resource.data.keys())
+              || isBoundedString(request.resource.data.phone, 40))
+          && (!('updatedAt' in request.resource.data.keys())
+              || request.resource.data.updatedAt is timestamp);
+      }
+
+      // FCM device tokens — a user can only read or write their own, and writes are
+      // shape-constrained so nobody can plant a token under a spoofed identity.
+      match /fcmTokens/{token} {
+        allow read, delete: if isActiveUser() && myDocId() == userId;
+        allow create, update: if isActiveUser()
+          && myDocId() == userId
+          && request.resource.data.keys().hasOnly(
+              ['platform', 'locale', 'uid', 'createdAt', 'updatedAt'])
+          && request.resource.data.locale in ['en', 'fr']
+          && request.resource.data.platform in ['ios', 'android']
+          && request.resource.data.uid == request.auth.uid
+          && (!('createdAt' in request.resource.data.keys())
+              || request.resource.data.createdAt is timestamp)
+          && (!('updatedAt' in request.resource.data.keys())
+              || request.resource.data.updatedAt is timestamp);
+      }
+
+      // Live Activity tokens — same self-only rule as fcmTokens, iOS-only, keyed by
+      // the ActivityKit activity id or the literal `pushToStart`.
+      match /liveActivityTokens/{activityId} {
+        allow read, delete: if isActiveUser() && myDocId() == userId;
+        allow create, update: if isActiveUser()
+          && myDocId() == userId
+          // No `appointmentId` here — that association lives server-side in
+          // liveActivityCards, since the device can't read back ActivityKit attributes.
+          && request.resource.data.keys().hasOnly(
+              ['token', 'kind', 'employeeDocId', 'platform',
+               'locale', 'uid', 'createdAt', 'updatedAt', 'expiresAt'])
+          && request.resource.data.token is string
+          && request.resource.data.token.size() > 0
+          && request.resource.data.token.size() <= 500
+          && request.resource.data.kind in ['pushToStart', 'update']
+          && request.resource.data.locale in ['en', 'fr']
+          && request.resource.data.platform in ['ios']
+          && request.resource.data.uid == request.auth.uid
+          && (!('employeeDocId' in request.resource.data.keys())
+              || request.resource.data.employeeDocId == userId)
+          && (!('createdAt' in request.resource.data.keys())
+              || request.resource.data.createdAt is timestamp)
+          && (!('updatedAt' in request.resource.data.keys())
+              || request.resource.data.updatedAt is timestamp)
+          // This has to be required: the TTL policy and pruneExpiredActivityTokens both
+          // key on it, and Firestore skips docs that are missing the field — so an
+          // optional value would let a client mint rows nothing could ever clean up.
+          // We cap it just above liveActivityPushToStartTtl (30d) so a client can't write
+          // an expiry that outlives the sweep — raise both together if that changes.
+          && request.resource.data.expiresAt is timestamp
+          && request.resource.data.expiresAt
+             < request.time + duration.value(31, 'd');
+      }
+
+      // Live-location presence for travel-time reminders. Owners can only touch their
+      // own doc here — admins read everything via the collectionGroup rule below.
+      // `updatedAt == request.time` forces serverTimestamp(), so a client can't fake
+      // freshness by writing a future timestamp.
+      match /presence/{presenceId} {
+        allow read, delete: if isActiveUser() && myDocId() == userId;
+        allow create, update: if isActiveUser()
+          && myDocId() == userId
+          && presenceId == 'location'
+          && request.resource.data.keys().hasOnly(
+              ['lat', 'lng', 'updatedAt', 'uid'])
+          && request.resource.data.lat is number
+          && request.resource.data.lat >= -90
+          && request.resource.data.lat <= 90
+          && request.resource.data.lng is number
+          && request.resource.data.lng >= -180
+          && request.resource.data.lng <= 180
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.uid == request.auth.uid;
+      }
+    }
+
+    // ── presence (admin live-map read) ───────────────────────────────────
+    // Gives admins read access (get + list, including collectionGroup) over every
+    // presence subcollection — the nested rule above still governs what an owner can
+    // do. isAdmin() only checks the caller, which is what keeps this unfiltered
+    // collection-group query provable. Note that {path=**} reserves the `presence`
+    // subcollection name for any future collection too.
+    match /{path=**}/presence/{presenceId} {
+      allow read: if isAdmin();
     }
 
     // ── appointments ──────────────────────────────────────────────────────────
-    // Allowed status values (admin writes are validated; employee writes are
-    // additionally restricted to 'done' only, see below). Lifecycle is
-    // pending -> in_progress -> done, plus 'cancelled'.
+    // The lifecycle goes pending -> in_progress -> done, plus cancelled. Employees
+    // can only ever write 'done' (see below).
     function isValidAppointmentStatus(s) {
       return s in ['pending', 'in_progress', 'done', 'cancelled'];
+    }
+
+    // Shape guard, mirroring isValidClientData/isValidUserData. Caps are the
+    // widest value a shipped write path can produce (TextLimits), never the
+    // typical one — a cap under a stored value makes that doc permanently
+    // un-updatable.
+    //
+    // The no-slash checks on the id fields are the load-bearing part: a doc id
+    // containing "/" makes `db.collection(...).doc(id)` throw SYNCHRONOUSLY in
+    // the Admin SDK, and several triggers/sweeps build refs from these values
+    // (sendToEmployee, writeCardMarker, recountClientJobs). One poisoned
+    // appointment would otherwise break those paths for good, outliving the
+    // session that wrote it.
+    function isValidDocIdField(v) {
+      return v is string && v.size() <= 128 && !v.matches('.*/.*');
+    }
+
+    function isValidAppointmentData(d) {
+      return (!('title' in d.keys()) || isBoundedString(d.title, 200))
+        && (!('address' in d.keys()) || isBoundedString(d.address, 500))
+        && (!('notes' in d.keys()) || isBoundedString(d.notes, 4000))
+        && (!('materialsNeeded' in d.keys())
+            || isBoundedString(d.materialsNeeded, 2000))
+        && (!('clientName' in d.keys()) || isBoundedString(d.clientName, 200))
+        && (!('clientPhone' in d.keys()) || isBoundedString(d.clientPhone, 40))
+        && (!('clientId' in d.keys()) || isValidDocIdField(d.clientId))
+        && (!('seriesId' in d.keys()) || isValidDocIdField(d.seriesId))
+        // Same reasoning as the ids above: `seriesOpId` is interpolated into
+        // the `appointmentSeriesNotices/op_<opId>_<kind>_<emp>` doc id.
+        && (!('seriesOpId' in d.keys()) || isValidDocIdField(d.seriesOpId))
+        // Photos are appended by arrayUnion from the offline upload queue, so
+        // nothing client-side bounds the array. A doc has a hard 1 MB ceiling
+        // and hitting it makes the job permanently un-updatable — cap well
+        // clear of any real job's photo count.
+        && (!('pictures' in d.keys())
+            || (d.pictures is list && d.pictures.size() <= 100))
+        // 500 = `_userStreamLimit`, the ceiling on how many employees the
+        // picker can even surface. NOT 30: that is the whereArrayContainsAny
+        // chunk size, which `findBusyEmployees` already batches around, so it
+        // bounds a QUERY, not how many people can be on a job. A cap at 30
+        // would reject a real assignment on a 31-person roster and, worse,
+        // make any existing such job permanently un-updatable.
+        && (!('employeeIds' in d.keys())
+            || (d.employeeIds is list && d.employeeIds.size() <= 500))
+        && (!('employeeNames' in d.keys())
+            || (d.employeeNames is list && d.employeeNames.size() <= 500));
     }
 
     match /appointments/{appointmentId} {
       // Read: admin sees all; assigned employee sees their appointments.
       allow read: if isAdmin() || isAssignedEmployee(resource.data);
 
-      // Create: admin only (employees don't create appointments). Reject
-      // unknown status values from the client.
+      // Admin only, and rejects any status value the client sends that isn't on
+      // the allowlist.
       allow create: if isAdmin()
-        && isValidAppointmentStatus(request.resource.data.status);
+        && isValidAppointmentStatus(request.resource.data.status)
+        && isValidAppointmentData(request.resource.data);
 
-      // Update: admin full access (status allowlist enforced); employees can
-      // ONLY mark an assigned appointment as 'done'. They cannot cancel,
-      // edit metadata, or replace pictures — the UI gates these to admins,
-      // these rules are the defence-in-depth.
+      // Admins have full access (with the status allowlist still enforced); an
+      // assigned employee can only flip the status to 'done' — nothing else.
+      // The shape guard rides the ADMIN branch only: an assigned employee's
+      // status flip must keep working on a legacy doc that predates these caps,
+      // and that branch already restricts the diff to status + updatedAt.
       allow update: if (isAdmin()
-            && isValidAppointmentStatus(request.resource.data.status))
+            && isValidAppointmentStatus(request.resource.data.status)
+            && isValidAppointmentData(request.resource.data))
         || (isAssignedEmployee(resource.data)
             && request.resource.data.diff(resource.data)
                .affectedKeys()
@@ -177,7 +501,8 @@ service cloud.firestore {
     }
 
     // ── clients ───────────────────────────────────────────────────────────────
-    // Client PII — admin-only. Employees never need direct access.
+    // This is all client PII, so it's admin-only — employees never need direct
+    // access to it.
     function isValidClientData(data) {
       return (!('name' in data) || (data.name is string && data.name.size() <= 200))
         && (!('businessName' in data) || (data.businessName is string && data.businessName.size() <= 200))
@@ -186,44 +511,82 @@ service cloud.firestore {
         && (!('phone' in data) || (data.phone is string && data.phone.size() <= 32))
         && (!('mobile' in data) || (data.mobile is string && data.mobile.size() <= 32))
         && (!('email' in data) || (data.email is string && data.email.size() <= 320))
-        && (!('noFixedAddress' in data) || data.noFixedAddress is bool);
+        && (!('address' in data) || (data.address is string && data.address.size() <= 500))
+        && (!('apt' in data) || (data.apt is string && data.apt.size() <= 64))
+        && (!('city' in data) || (data.city is string && data.city.size() <= 128))
+        && (!('province' in data) || (data.province is string && data.province.size() <= 128))
+        && (!('country' in data) || (data.country is string && data.country.size() <= 128))
+        && (!('postalCode' in data) || (data.postalCode is string && data.postalCode.size() <= 32))
+        // Known gap: rules can't cap the length of each contact's fields, only how
+        // many contacts there are. So an admin write can still reach Firestore's 1 MB
+        // ceiling and fan out via propagateClientEdits — we've accepted that since
+        // it's admin-only. The real fix is a per-field TextLimits cap in the contacts
+        // editor, not tightening this array-length number.
+        && (!('contacts' in data) || (data.contacts is list && data.contacts.size() <= 50))
+        && (!('type' in data) || (data.type is string && data.type.size() <= 32))
+        && (!('accessNotes' in data) || (data.accessNotes is string && data.accessNotes.size() <= 500))
+        && (!('onSiteManager' in data) || (data.onSiteManager is string && data.onSiteManager.size() <= 200))
+        && (!('billingTerms' in data) || (data.billingTerms is string && data.billingTerms.size() <= 200))
+        && (!('autoInvoice' in data) || data.autoInvoice is bool)
+        && (!('noFixedAddress' in data) || data.noFixedAddress is bool)
+        && (!('archived' in data) || data.archived is bool);
     }
 
     match /clients/{clientId} {
       allow read: if isAdmin();
-      // `waveCustomerId` and `wave` are written exclusively by Cloud Functions
-      // via Admin SDK (which bypasses these rules). The client app must never
-      // set or modify these fields; reject any create that includes them.
+      // `waveCustomerId` and `wave` are written only by Cloud Functions via the
+      // Admin SDK, which bypasses these rules entirely. The client app should never
+      // touch these fields, so we reject any create that includes them.
+      // `jobCount` is likewise function-owned — recountClientJobs writes it as an
+      // absolute count() aggregate, so a client write must never touch it.
       allow create: if isAdmin()
         && isValidClientData(request.resource.data)
         && !('waveCustomerId' in request.resource.data.keys())
-        && !('wave' in request.resource.data.keys());
-      // For updates, reject only if the client is changing/adding the Wave
-      // fields — an update that leaves them untouched has no affected keys.
+        && !('wave' in request.resource.data.keys())
+        && !('jobCount' in request.resource.data.keys());
+      // On updates we only reject if the client is trying to change or add the Wave
+      // fields — an update that leaves them alone has no affected keys, so it's fine.
       allow update: if isAdmin()
         && isValidClientData(request.resource.data)
         && !request.resource.data.diff(resource.data)
              .affectedKeys()
-             .hasAny(['waveCustomerId', 'wave']);
+             .hasAny(['waveCustomerId', 'wave', 'jobCount']);
+      // Delete belongs to the `deleteClient` callable, which refuses a client
+      // that still has appointments. Rules cannot express "only when this
+      // client has no appointments" — there is no cheap way to count a foreign
+      // collection here — so the callable is the only place that guarantee can
+      // live, and NOTHING in this build deletes a client directly.
+      //
+      // BACKWARD-COMPAT SHIM. This grant is retained ONLY for the 1.37.1+64
+      // build on the App Store, which predates the 2026-08-01 no-delete
+      // decision and still ships an ungated "Delete client" button doing a
+      // direct doc.delete() (client_detail_view.dart:72 at `2b1ace5`).
+      // Removing it now would fail that button with an opaque
+      // permission-denied.
+      //
+      // It is a REAL HOLE while it is here: a 1.37.1 admin can still delete a
+      // client with job history and orphan those appointments, which is exactly
+      // what the callable's live count() gate exists to prevent. Retire it with
+      // the rest of the shim once no 1.37.1 build remains in the field — grep
+      // `#compat-1.37.1` — and do NOT wire anything new to it.
+      // TODO(george): delete with the 1.37.1 shim (#compat-1.37.1)
       allow delete: if isAdmin();
     }
 
     // ── wave (Wave Accounting connection metadata) ────────────────────────────
-    // Written exclusively by Cloud Functions via Admin SDK (connection status,
-    // businessId, last-sync timestamps; the access token lives only in Secret
-    // Manager, never here). No client may read connection state — treat this
-    // collection like rateLimits. The default
-    // deny-everything would already block access; the explicit rule documents
-    // intent for a security-sensitive collection.
+    // Only Cloud Functions write here, via the Admin SDK — connection status,
+    // businessId, last-sync timestamps. The access token itself lives only in Secret
+    // Manager, never here. No client can read connection state; treat this like
+    // rateLimits.
     match /wave/{docId} {
       allow read, write: if false;
     }
 
     // ── waveSyncQueue (outbox for Wave API sync jobs) ─────────────────────────
-    // Jobs are enqueued and processed exclusively by Cloud Functions via Admin
-    // SDK. No client may read pending jobs, inspect retry state, or reset the
-    // queue — doing so could expose Wave API credentials embedded in job
-    // payloads or allow a client to cancel/replay sync operations.
+    // Cloud Functions enqueue and process these jobs via the Admin SDK. No client
+    // can read pending jobs, inspect retry state, or reset the queue — that could
+    // expose Wave API credentials sitting in job payloads, or let a client cancel
+    // or replay a sync.
     match /waveSyncQueue/{jobId} {
       allow read, write: if false;
     }

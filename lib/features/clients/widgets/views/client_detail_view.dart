@@ -1,23 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:intl/intl.dart';
+
 import 'package:scheduling/core/layout/breakpoints.dart';
-import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/widgets/views/client_edit_form.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/policies/client_delete_policy.dart';
+import 'package:scheduling/features/clients/widgets/sheets/edit_client_sheet.dart';
+import 'package:scheduling/features/clients/widgets/views/client_actions_host.dart';
 import 'package:scheduling/features/clients/widgets/views/client_view_body.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
-import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// Coordinator for the client detail screen: toggles between the read-only
-/// [ClientDetailViewBody] and the editable [ClientEditForm], and owns the
-/// delete flow (shared by both modes).
+/// Read-only client detail. Editing happens in a sheet above this view, so the
+/// view never swaps into a form.
 class ClientDetailView extends ConsumerStatefulWidget {
   const ClientDetailView({
     required this.client,
@@ -33,17 +34,17 @@ class ClientDetailView extends ConsumerStatefulWidget {
   final bool showHandle;
   final double bottomPadding;
 
-  /// Called after a successful delete so a host that keeps this view mounted
-  /// (the split-layout detail pane) can clear the now-deleted selection.
-  /// In sheet mode the sheet pops itself instead.
+  /// How the host dismisses this view once its record is gone — the sheet pops
+  /// itself, the two-pane detail clears its selection. The host decides, since
+  /// only it knows how it is presented.
   final VoidCallback? onDeleted;
 
   @override
   ConsumerState<ClientDetailView> createState() => _ClientDetailViewState();
 }
 
-class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
-  bool _isEditing = false;
+class _ClientDetailViewState extends ConsumerState<ClientDetailView>
+    with ClientActionsHost<ClientDetailView> {
   late ClientRecord _client;
 
   @override
@@ -52,86 +53,72 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
     _client = widget.client;
   }
 
-  Future<void> _confirmDelete() async {
-    final clientName = _client.displayName.isNotEmpty
-        ? _client.displayName
-        : context.l10n.clients_thisClient;
+  Future<void> _openEdit() async {
+    final updated = await showEditClientSheet(context, _client);
+    // Null means cancelled. Editing never removes the record, so this view
+    // always has one to keep showing.
+    if (!mounted || updated == null) return;
+    setState(() => _client = updated);
+  }
 
-    final shouldDelete = await showConfirmDialog(
-      context,
-      title: context.l10n.clients_deleteClient,
-      message:
-          '${context.l10n.clients_areYouSureYouWantToDelete} $clientName? ${context.l10n.clients_thisCannotBeUndone}',
-      confirmLabel: context.l10n.common_delete,
-    );
-
-    if (!shouldDelete || !mounted) return;
-
-    final notices = ref.read(noticeServiceProvider);
-    final outcome = await ref
-        .read(clientFormControllerProvider.notifier)
-        .deleteClient(_client.id);
+  // Archiving keeps this view open: the record still exists, and the footer
+  // button flips to Unarchive so the action is reversible from where it was
+  // taken.
+  @override
+  void onClientArchived(ClientRecord client, {required bool archived}) {
     if (!mounted) return;
-    switch (outcome) {
-      case ClientDeleted():
-        notices.success(context.l10n.clients_clientDeletedSuccessfully);
-        // A scrollController means we're inside a bottom sheet; close it.
-        // Otherwise (split-layout detail pane) ask the host to clear the pane,
-        // which still renders the just-deleted client until told to.
-        if (widget.scrollController != null) {
-          Navigator.pop(context);
-        } else {
-          widget.onDeleted?.call();
-        }
-      case ClientDeleteFailed(:final error):
-        notices.error(
-          composeErrorNotice(
-            context,
-            intro: context.l10n.error_introDeleteClient,
-            tag: 'CLI-DEL',
-            error: error,
-          ),
-        );
-    }
+    setState(() => _client = _client.copyWith(archived: archived));
+  }
+
+  @override
+  void onClientDeleted(ClientRecord client) => widget.onDeleted?.call();
+
+  Future<void> _bookJob() async {
+    await showAddEventPopup(context, initialClient: _client);
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDeleting = ref.watch(clientFormControllerProvider).isDeleting;
-
+    final busy = ref.watch(clientFormControllerProvider);
     return DetailSheetListView(
       scrollController: widget.scrollController,
       showHandle: widget.showHandle,
       bottomPadding: widget.bottomPadding,
       children: [
-        if (_isEditing)
-          Text(
-            context.l10n.clients_editClient,
-            style: theme.textTheme.headlineLarge,
-          )
-        else
-          _ViewHeader(client: _client),
+        _ProfileCard(client: _client, onEdit: _openEdit),
+        const SizedBox(height: AppSpacing.sp16),
+        ClientDetailViewBody(client: _client, onBookJob: _bookJob),
         const SizedBox(height: AppSpacing.sp24),
-        const Divider(height: 1),
-        const SizedBox(height: AppSpacing.sp24),
-        if (_isEditing)
-          ClientEditForm(
-            client: _client,
-            isDeleting: isDeleting,
-            onDelete: isDeleting ? null : _confirmDelete,
-            onSaved: (updated) => setState(() {
-              _client = updated;
-              _isEditing = false;
-            }),
-          )
-        else ...[
-          ClientDetailViewBody(client: _client),
-          const SizedBox(height: 24),
-          _ViewActions(
-            isDeleting: isDeleting,
-            onEdit: isDeleting ? null : () => setState(() => _isEditing = true),
-            onDelete: isDeleting ? null : _confirmDelete,
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 48),
+          ),
+          onPressed: busy ? null : () => archiveClient(_client),
+          icon: Icon(
+            _client.archived
+                ? Icons.unarchive_outlined
+                : Icons.archive_outlined,
+            size: 18,
+          ),
+          label: Text(
+            _client.archived
+                ? context.l10n.clients_unarchive
+                : context.l10n.clients_archive,
+          ),
+        ),
+        // Advisory only — the callable re-checks with a live count(). Withheld
+        // rather than shown-and-refused, so the footer never offers an action
+        // the server will reject.
+        if (canDeleteClient(_client)) ...[
+          const SizedBox(height: AppSpacing.sp8),
+          OutlinedButton.icon(
+            style: destructiveOutlinedButtonStyle(
+              context,
+              minimumSize: const Size(double.infinity, 48),
+            ),
+            onPressed: busy ? null : () => confirmDeleteClient(_client),
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: Text(context.l10n.common_delete),
           ),
         ],
       ],
@@ -139,95 +126,132 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView> {
   }
 }
 
-class _ViewHeader extends StatelessWidget {
-  const _ViewHeader({required this.client});
+/// Avatar, name, a `<type> · since <Mon YYYY>` line, and the Edit pill — one
+/// card, as the approved design draws it. The pill lives inside the card rather
+/// than floating above it.
+class _ProfileCard extends StatelessWidget {
+  const _ProfileCard({required this.client, required this.onEdit});
 
   final ClientRecord client;
+  final VoidCallback onEdit;
+
+  /// "Property mgmt · since Apr 2023" — either half is dropped when absent,
+  /// so a typeless client with no createdAt renders no line at all.
+  String _subtitle(BuildContext context) {
+    final l10n = context.l10n;
+    final parts = <String>[
+      if (client.type != ClientType.unset) clientTypeLabel(l10n, client.type),
+      if (client.createdAt != null)
+        l10n.clients_sinceDate(
+          // Locale-aware month+year: "Apr 2023" / "avr. 2023".
+          DateFormat.yMMM(
+            Localizations.localeOf(context).toString(),
+          ).format(client.createdAt!),
+        ),
+    ];
+    return parts.join(' · ');
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final subtitle = _subtitle(context);
+    // Shown only when it says something the name doesn't already — a business
+    // with a named individual on file.
     final fullName = [
       client.firstName,
       client.lastName,
     ].where((part) => part.trim().isNotEmpty).join(' ').trim();
     final showPersonName = fullName.isNotEmpty && fullName != client.name;
-    return Column(
+
+    final identity = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        AppAvatar(name: client.displayName, size: AvatarSize.lg),
-        const SizedBox(height: 12),
         Text(
           client.displayName,
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.w700,
           ),
-          textAlign: TextAlign.center,
         ),
+        if (subtitle.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.palette.textTertiary,
+            ),
+          ),
+        ],
         if (showPersonName) ...[
           const SizedBox(height: 3),
           Text(
             fullName,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onSurfaceVariant,
+              color: theme.palette.textTertiary,
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ],
     );
+
+    final pill = _EditPill(onEdit: onEdit);
+
+    return DecoratedBox(
+      decoration: appCardDecoration(
+        theme,
+        radius: AppRadius.r16,
+        color: theme.colorScheme.surfaceContainerLowest,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sp16),
+        // The row holds an avatar, two-to-three text lines and a pill, so it
+        // folds rather than overflow once text is scaled up.
+        child: context.isCompact
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      AppAvatar(name: client.displayName, size: AvatarSize.lg),
+                      const SizedBox(width: AppSpacing.sp12),
+                      Expanded(child: identity),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.sp12),
+                  Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: pill,
+                  ),
+                ],
+              )
+            : Row(
+                children: [
+                  AppAvatar(name: client.displayName, size: AvatarSize.lg),
+                  const SizedBox(width: AppSpacing.sp12),
+                  Expanded(child: identity),
+                  const SizedBox(width: AppSpacing.sp8),
+                  pill,
+                ],
+              ),
+      ),
+    );
   }
 }
 
-class _ViewActions extends StatelessWidget {
-  const _ViewActions({
-    required this.isDeleting,
-    required this.onEdit,
-    required this.onDelete,
-  });
+/// Tinted Edit pill. Archive and delete live in the scroll footer instead, per
+/// the form-sheet convention that destructive actions never sit in the header.
+class _EditPill extends StatelessWidget {
+  const _EditPill({required this.onEdit});
 
-  final bool isDeleting;
-  final VoidCallback? onEdit;
-  final VoidCallback? onDelete;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
-    final compact = context.isCompact;
-
-    final editButton = FilledButton.icon(
+    return TextButton(
+      style: accentPillButtonStyle(context),
       onPressed: onEdit,
-      icon: const Icon(Icons.edit_outlined, size: 18),
-      label: Text(context.l10n.common_edit),
-    );
-    final deleteButton = OutlinedButton.icon(
-      style: destructiveOutlinedButtonStyle(context),
-      onPressed: onDelete,
-      icon: BusyButtonIcon(
-        isBusy: isDeleting,
-        icon: Icons.delete_outline,
-      ),
-      label: Text(
-        isDeleting ? context.l10n.clients_deleting : context.l10n.common_delete,
-      ),
-    );
-
-    if (compact) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          editButton,
-          const SizedBox(height: AppSpacing.sp12),
-          deleteButton,
-        ],
-      );
-    }
-
-    return Row(
-      children: [
-        Expanded(child: editButton),
-        const SizedBox(width: 12),
-        Expanded(child: deleteButton),
-      ],
+      child: Text(context.l10n.common_edit),
     );
   }
 }

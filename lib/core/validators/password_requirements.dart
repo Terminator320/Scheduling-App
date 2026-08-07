@@ -1,6 +1,5 @@
-/// The individual rules a *new* password must satisfy (create-account flow).
-/// `values` drives the live requirements checklist; sign-in keeps the looser
-/// `AuthValidators.password` so existing credentials aren't blocked.
+/// Individual password requirements for new passwords. Sign-in uses looser
+/// rules, for backward compatibility with existing accounts.
 enum PasswordRequirement {
   minLength,
   uppercase,

@@ -4,19 +4,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_edit_body.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_body.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
 class EventDetailsView extends ConsumerStatefulWidget {
   const EventDetailsView({
     required this.appointment,
     super.key,
-    this.showActions = true,
+    // Defaults CLOSED — a default of true once exposed admin-only Edit/Cancel/
+    // Delete affordances to employees. Never re-add a `true` default.
+    this.showActions = false,
     this.initialEditing = false,
     this.scrollController,
     this.showHandle = false,
@@ -35,8 +37,8 @@ class EventDetailsView extends ConsumerStatefulWidget {
 }
 
 class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
-  // Created lazily the first time the edit form is shown — a view-only open
-  // (the common case) never allocates these controllers.
+  // Created lazily on first edit — view-only opens never need to allocate
+  // these.
   AppointmentFormControllers? _editControllers;
 
   @override
@@ -62,6 +64,9 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
       title: TextEditingController(text: a.title),
       date: TextEditingController(
         text: DateUtilsHelper.formatDate(a.startTime),
+      ),
+      endDate: TextEditingController(
+        text: DateUtilsHelper.formatDate(lastWorkDayOf(a)),
       ),
       startTime: TextEditingController(
         text: DateUtilsHelper.formatTime(a.startTime),
@@ -94,28 +99,29 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
     final state = ref.watch(
       eventDetailsControllerProvider(EventDetailsKey(widget.appointment)),
     );
-    final isCancelled = AppointmentStatus.fromRaw(
-      widget.appointment.status,
-    ).isCancelled;
-    final showEdit = state.isEditing && !isCancelled && widget.showActions;
+    // Cancelled visits stay editable — `showActions` is the only thing that
+    // gates the edit form.
+    final showEdit = state.isEditing && widget.showActions;
+    // The edit form owns its own sheet chrome (FormSheetFrame), so it replaces
+    // the read view's scroll shell rather than nesting inside it.
+    if (showEdit) {
+      return DetailsEditBody(
+        appointment: widget.appointment,
+        controllers: _ensureControllers(),
+        onSaved: _handleClose,
+        onClose: _handleClose,
+      );
+    }
     return DetailSheetListView(
       scrollController: widget.scrollController,
       showHandle: widget.showHandle,
       handleGap: AppSpacing.sp8,
       children: [
-        if (showEdit)
-          DetailsEditBody(
-            appointment: widget.appointment,
-            controllers: _ensureControllers(),
-            onSaved: _handleClose,
-            onClose: _handleClose,
-          )
-        else
-          DetailsViewBody(
-            appointment: widget.appointment,
-            showActions: widget.showActions,
-            onClose: _handleClose,
-          ),
+        DetailsViewBody(
+          appointment: widget.appointment,
+          showActions: widget.showActions,
+          onClose: _handleClose,
+        ),
       ],
     );
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
@@ -16,9 +17,14 @@ Future<bool> showBusyConflictDialog(
     builder: (dialogCtx) {
       final theme = Theme.of(dialogCtx);
       final scheme = theme.colorScheme;
+      final statusColors = theme.statusColors;
       return Dialog(
+        insetPadding: const EdgeInsets.symmetric(
+          horizontal: 26,
+          vertical: AppSpacing.sp24,
+        ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.r16),
+          borderRadius: BorderRadius.circular(AppRadius.rDialog),
         ),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.sp24),
@@ -30,12 +36,12 @@ Future<bool> showBusyConflictDialog(
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: scheme.tertiaryContainer,
+                  color: statusColors.warningContainer,
                   borderRadius: BorderRadius.circular(AppRadius.r12),
                 ),
                 child: Icon(
                   Icons.warning_amber_rounded,
-                  color: scheme.onTertiaryContainer,
+                  color: statusColors.onWarningContainer,
                   size: 22,
                 ),
               ),
@@ -48,12 +54,16 @@ Future<bool> showBusyConflictDialog(
               ),
               const SizedBox(height: AppSpacing.sp4),
               Text(
-                '${DateUtilsHelper.formatDate(start)} · '
-                '${DateUtilsHelper.formatTime(start)} – '
-                '${DateUtilsHelper.formatTime(end)}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
+                // The clash is a DAILY-window overlap, so the run being
+                // booked must name both its ends — otherwise a Mon–Fri job
+                // reports a Thursday conflict under a headline reading
+                // "MON 3 AUG".
+                DateUtilsHelper.formatWhenLine(
+                  start,
+                  end,
+                  lastDay: lastWorkDayOfWindow(start, end),
                 ),
+                style: theme.monoType.data,
               ),
               const SizedBox(height: AppSpacing.sp16),
               Text(
@@ -74,7 +84,7 @@ Future<bool> showBusyConflictDialog(
                     child: Icon(
                       Icons.info_outline_rounded,
                       size: 14,
-                      color: scheme.onTertiaryContainer,
+                      color: statusColors.onWarningContainer,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sp8),
@@ -82,7 +92,7 @@ Future<bool> showBusyConflictDialog(
                     child: Text(
                       context.l10n.calendar_doubleBookingWarning,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onTertiaryContainer,
+                        color: statusColors.onWarningContainer,
                       ),
                     ),
                   ),
@@ -105,8 +115,6 @@ Future<bool> showBusyConflictDialog(
                     child: FilledButton(
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(double.infinity, 44),
-                        backgroundColor: scheme.tertiary,
-                        foregroundColor: scheme.onTertiary,
                       ),
                       onPressed: () => Navigator.pop(dialogCtx, true),
                       child: Text(context.l10n.calendar_scheduleAnyway),

@@ -1,4 +1,3 @@
-
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -22,11 +21,14 @@ class _MockUserCredential extends Mock implements UserCredential {}
 
 class _FakeAuthCredential extends Fake implements AuthCredential {}
 
+class _FakeHttpsCallableOptions extends Fake implements HttpsCallableOptions {}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() {
     registerFallbackValue(_FakeAuthCredential());
+    registerFallbackValue(_FakeHttpsCallableOptions());
   });
 
   late _MockFirebaseAuth auth;
@@ -44,7 +46,12 @@ void main() {
     service = AccountDeletionService(firebaseAuth: auth, functions: functions);
     when(() => auth.currentUser).thenReturn(user);
     when(() => user.email).thenReturn('owner@example.com');
-    when(() => functions.httpsCallable('deleteAccount')).thenReturn(callable);
+    when(
+      () => functions.httpsCallable(
+        any(that: equals('deleteAccount')),
+        options: any(named: 'options'),
+      ),
+    ).thenReturn(callable);
   });
 
   group('reauthenticateWithPassword', () {

@@ -10,6 +10,738 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.43.0+68] - 2026-08-04
+
+### Added
+- **Wave syncs both ways from one button now.** Settings › "Import customers
+  from Wave" is now **"Sync with Wave"**: it sends the client edits waiting to
+  go to Wave first, then pulls Wave's customers back into the app.
+
+### Changed
+- **The sync result says which side each number belongs to.** "Synced with
+  Wave — 2 clients added to Wave, 8 clients added to the app, 1 client updated
+  in the app", instead of the old "3 added, 5 updated, 2 skipped" that never
+  said added *where*. Parts that moved nothing are left out, and a run that
+  moved nothing at all says so.
+- **It tells you when the sync didn't finish, rather than looking clean.** If
+  more clients are queued for Wave than one press can get through, it says how
+  many are left. If a client was rejected by Wave and won't be retried, it says
+  so — those need you to open the client and fix what Wave objected to. And if
+  the sending half failed outright, it says that too, instead of reporting
+  "everything was already up to date".
+- **A completed job now offers "Edit completed job" instead of a dead button.**
+  Finishing a job left a greyed-out "Complete" button sitting where the action
+  goes, and since Cancel disappears once a job is done, that sheet gave an
+  admin nothing to do — including no way to undo a "Mark as complete" tapped on
+  the wrong job. The button now opens the job for editing, where the status can
+  be set back, and it's the only edit control on a finished job — the Edit chip
+  at the top is hidden there rather than offering the same thing twice. It
+  works from the History page too, which is where finished jobs actually live.
+  Employees still just see that the job is complete.
+- **You can now read the terms you're asked to accept.** The setup screen has
+  always made a new employee tick "I accept the terms of service", with nothing
+  to tap and no copy published anywhere. The terms are now online, "terms of
+  service" in that sentence opens them, and Settings has a Terms of Service row
+  beside Privacy Policy so they stay reachable afterwards.
+- **The Contacts permission prompt now describes what actually happens.** It
+  said the app "opens a pre-filled contact card"; it in fact saves the client
+  you choose into your contacts and keeps that one contact up to date when you
+  edit the client afterwards. The prompt says so, and adds that the rest of
+  your contacts are never read.
+- **The privacy policy and terms were brought up to date** (last updated
+  August 5, 2026) — they now cover how an administrator creates an employee
+  account and hands over a starting password, the optional emergency contact
+  and who can see it, saving a photo to your own library and sharing one out,
+  and the fact that the Wave integration moves customers in both directions.
+  The terms also stop describing background location: the app asks for "While
+  Using the App" only and stops receiving your location once it's closed, which
+  is what the privacy policy already said and what the app actually does.
+- **The personal-job switch dropped its explanatory line.** "Time blocked off —
+  no client or address needed" sat under every job form; turning the switch on
+  visibly removes the client and address fields, which says it better than a
+  line of text on an already-busy screen.
+
+### Fixed
+- **Uploading a build no longer draws two App Store warnings.** The location
+  purpose string Apple's scanner looks for was missing (ITMS-90683 on every
+  upload, because the location plugin compiles the "Always" API into the binary
+  even though the app only ever asks for "While Using the App"), and the Siri
+  extension shipped without its own privacy manifest (ITMS-91053). Both are
+  declared now. Neither changes what the app asks you for.
+- **Syncing no longer claims it updated every client.** A sync over an
+  unchanged roster reported "650 clients updated in the app" — it was counting
+  every client it rewrote, and it rewrote all of them whether or not anything
+  had changed. It now touches only the clients Wave actually changed, so the
+  count means what it says and a quiet sync finishes in a fraction of the time.
+- **Importing from Wave no longer wipes a client edit that hasn't reached Wave
+  yet.** An edit sitting in the queue — including one waiting to retry after a
+  Wave hiccup — was overwritten by the next import and marked as synced, so the
+  pending send then decided there was nothing to do. The change was gone, the
+  client looked fine, and nothing reported it. Both the Sync button and the
+  daily automatic import now leave those clients alone until their change has
+  been delivered.
+
+## [1.42.0+67] - 2026-08-04
+
+### Added
+- **The app tour now walks you through actually creating things.** Opening
+  "New appointment", "New client" or "Invite someone" for the first time
+  explains that form section by section — what the template chips do, why the
+  crew is required on a personal block, and that a job title is not the same
+  as an access level. Until now the tour stopped at the screen and left you
+  alone the moment a form opened.
+- **Every screen has a tour, not just some.** The dashboard and the day route
+  gained theirs, and the calendar, clients, team and history walkthroughs were
+  filled in — 43 steps in all, in English and French. Employees get their own
+  shorter version of each, covering only what they can actually reach.
+- **The menu has icons again.** Each row in the side menu carries a tinted icon
+  chip, so a destination is never identified by colour alone.
+
+### Changed
+- **A multi-day job names both its ends wherever it is described.** The detail
+  sheet and the booking-conflict warning now read "MON 3 AUG – FRI 7 AUG"
+  instead of naming only the first day, so a clash reported on the Thursday
+  makes sense.
+- **A day you have selected keeps its crew dots on the week strip**, matching
+  the month grid — the day you were looking at used to be the one day whose
+  crew was invisible.
+- **The team member's TODAY panel lists jobs in the order they are worked that
+  day**, rather than by when the job originally started.
+- **Error messages tell you what to do about it, and no longer end in a support
+  code.** "Couldn't save the client — you appear to be offline. (CLI-SAVE)" now
+  reads "Couldn't save the client. You appear to be offline — check your
+  connection and try again." The code in brackets was there for the test
+  builds; it still goes to the crash log, just not to the screen. Being signed
+  out, hitting a rate limit and having a value rejected are also called out by
+  name instead of all landing on "something went wrong".
+
+### Fixed
+- **Editing "this and all future" no longer strips All-day and Personal from
+  the other visits.** Those siblings were being rewritten as ordinary jobs
+  running midnight to 11:59 PM, which also brought back the bogus "time to
+  leave" push at 11:30 the night before.
+- **A client's corrected phone or suite number now reaches a crew already on
+  site.** Edits only propagated to jobs that hadn't started yet, so a crew
+  midway through a multi-day visit kept the old details.
+- **Disabling a team member now counts their jobs correctly.** Someone on day 3
+  of a 10-day run was reported as having 0 upcoming jobs, and a visit finished
+  or cancelled earlier the same day was counted as still needing reassignment.
+- **The app lock can no longer switch itself off for a whole session.** A
+  single failed read of the setting used to be treated as "lock is off"; it now
+  retries, and the app is covered while it sits in the app switcher rather than
+  showing your signed-in session there unprotected.
+- **A locked screen is properly hidden.** Its contents were still reachable by
+  a screen reader and by keyboard focus underneath the lock overlay.
+- **An emergency contact is no longer visible to the whole team.** That name
+  and number — a third party who never consented — was readable by every
+  employee, and is now restricted to the person themselves and admins.
+- **A tour no longer marks itself finished before the screen has loaded.** On
+  History, Clients and Team the walkthrough could run against an empty list,
+  silently skip the steps pointing at a row or the filter bar, and never offer
+  them again.
+- **The tour and invite text no longer describe the retired signup-code flow.**
+
+## [1.41.0+66] - 2026-08-04
+
+### Added
+- **A job can now run across several days.** Pick an end date as well as a
+  start and the visit books up to two weeks, showing up on the calendar,
+  the day route and the crew's schedule on **every** day it runs — each day
+  labelled "Day 3 of 5" so nobody has to count. The two times are the daily
+  window, not one long stretch: 9:00 AM–5:00 PM means 9 to 5 on each of those
+  days. An end time at or before the start time books a night shift, and the
+  end date is the last day the crew *starts* work, never the morning an
+  overnight run finishes.
+- **All-day is offered on every job, not just personal ones.** A client visit
+  can genuinely run whole days, so the switch stays on the schedule panel for
+  both. Turning "Personal" off no longer silently clears it.
+- **Clients are archived rather than deleted.** Archiving takes a client out of
+  the list and the type filter but keeps them searchable and bookable, and
+  leaves every past visit still linked to them — deleting used to detach that
+  history silently. Swipe a row to archive it, or use the new **Archived**
+  filter chip to find one again. Archived clients are badged wherever they
+  still turn up in search.
+- **Delete survives only for junk data.** It is refused outright for any client
+  that has ever had a visit, with a notice telling you to archive instead.
+- **An employee's work email can be edited again.** Changing it now moves their
+  actual sign-in as well as the roster, so the address you see is the one that
+  works — and the app pushes them a notice naming the new address. That notice
+  is a courtesy, not a guarantee, so still tell them yourself.
+
+### Changed
+- **The calendar's day dots now count jobs, not people.** Two jobs for the same
+  person are two dots, so the dots answer "how busy is this day". A job whose
+  crew has no colour still gets a neutral dot instead of vanishing.
+
+### Fixed
+- **The day route listed the last two weeks of jobs as though they were
+  today's** — and built the "Open in Maps" route out of them. It now shows only
+  the jobs actually running on the day you're looking at.
+- **Job counts across the app were inflated the same way.** The Team roster's
+  "jobs today", the employee detail's Today panel and the menu's calendar badge
+  each counted up to a fortnight of past work; the badge also counted cancelled
+  visits.
+- **The dashboard had the opposite problem** and missed days 2+ of a multi-day
+  run entirely, so a crew on site all week showed as free.
+- **Cancelling or deleting a job mid-run told nobody.** A visit that had already
+  started sent no notification to the assigned crew, who could turn up the next
+  morning to a job that no longer existed.
+- **Multi-day jobs never got the "job finished?" nudge** and so stayed open
+  indefinitely.
+- **The evening digest told crews they had "no jobs tomorrow"** while they were
+  in the middle of a run that continued the next day — and once that was fixed,
+  it named the continuing job's time as the day's first, hours off the real one.
+- **Booking someone for an evening job during a multi-day run reported a clash
+  that wasn't real** — their window that day had already ended.
+- Double-tapping Delete on a client no longer reports a failure over a delete
+  that actually worked.
+- An employee record missing an email address could not be saved at all, with
+  no explanation.
+- **Dates in French read in English word order** — "mercredi, août 5" rather
+  than "mercredi 5 août" — on the calendar agenda, the day route, history day
+  headings and the dashboard.
+
+## [1.40.0+65] - 2026-08-02
+
+### Added
+- **An admin now creates an employee's account outright, instead of sending them
+  a code to redeem.** Fill in the person's details and the app makes their
+  sign-in there and then, showing you their email and a starting password to
+  hand over however you like — read it out, text it, whatever suits. One **Copy
+  both** button puts the pair on your clipboard together, so you can't send a
+  password without saying which account it opens.
+- **The employee finishes their own setup on first sign-in.** They sign in with
+  what you gave them and the app takes them straight to a setup screen: choose
+  your own password, confirm your name and phone, and accept the terms. Until
+  they've done that they can't see clients, jobs or anyone else on the team.
+- **A pending person's row opens in place on the Team list** to show their
+  sign-in details, with **Reset password** if they never signed in or lost what
+  you gave them, and **Remove account** to undo a mistaken invite. Once they've
+  set themselves up, both stop being offered — the account is theirs from that
+  point, and disabling is the only way to remove someone.
+
+### Changed
+- **Invite codes are gone.** The twelve-character code, the two-step accept
+  screens, the resend and revoke buttons, the expiry countdown and the invite
+  links have all been replaced by the flow above. There is no longer anything to
+  "accept" — so the sign-in screen's invite prompt has gone with it. An old
+  invite link sitting in someone's messages now does nothing rather than opening
+  a screen that no longer exists.
+- **A person's work email can no longer be edited once their account exists.**
+  It is the address they sign in with, and changing it here only ever renamed
+  the label — it never moved the actual sign-in. Showing it as fixed is the
+  honest version until changing a sign-in address is a thing the app can really
+  do.
+
+### Fixed
+- **Setup would accept the starting password as your "new" one.** The shared
+  password happens to satisfy every strength requirement, so someone could
+  "choose" the very value their admin had just read out to them and stay on it
+  permanently, with nothing anywhere flagging it. It is now rejected by name.
+- **Editing one person's email could reset a different person's password and
+  lock them out of the app entirely.** Creating an account matched people up by
+  email address, which an admin can edit freely, so the app could act on the
+  wrong account. It now matches on the account itself.
+- **Personal blocks stopped being nagged as overdue.** A personal entry whose
+  end time had passed showed up under the dashboard's Attention list as an
+  unfinished job, which there was no way to clear — personal blocks have no
+  "mark as done".
+- **Double-tapping Save no longer reports a false "you appear to be offline".**
+  The second tap was reported as a network error while perfectly online, with
+  the real save quietly succeeding behind the message.
+- **Revealed passwords are no longer offered to your keyboard's learning.**
+  Tapping **Show** on a password field turned it into ordinary text, which a
+  third-party keyboard was then free to remember and sync.
+- **Two pending rows opened at once no longer interfere with each other.**
+  Resetting one person's password used to blank out the other's details while it
+  ran, and a reset started on the second row while the first was still going was
+  silently dropped — no spinner, no message, nothing saved.
+- **Older clients are findable by their business name again**, including the
+  ones that carry both a contact name and a separate business name.
+
+## [1.39.0+64] - 2026-08-02
+
+> The invite-code entries below were superseded by 1.40.0 the same day and never
+> reached anyone — employees are now given an account directly instead of a code
+> to redeem. Kept for the record; read 1.40.0 for how onboarding actually works.
+
+### Added
+- **Accepting an invite is now its own two-step flow.** Enter the twelve-character
+  code your employer sent you, and the app checks it *before* asking for anything
+  else — so an expired code says it's expired and a wrong one says it's wrong,
+  instead of both failing after you've already invented a password. The second
+  screen then asks only for what the invite can't supply: your name, your phone
+  and a password. Your work email is filled in from the invite and shown locked,
+  because it's the address the code was issued against. Tapping an invite link
+  opens the flow directly with the code already filled in.
+- **A password strength meter and a live requirements checklist** while you
+  choose your password, so you can see what's still missing instead of guessing
+  at an error message after the fact.
+- **Pending invites are managed from the Team list.** Tap an invited person's row
+  and it expands in place to show their signup code with a copy button, when the
+  code expires, and buttons to resend or revoke it. Codes are good for 14 days.
+- **Clients have a type** — residential, commercial, property manager and so on —
+  shown on the row and usable as a filter. Tap a chip above the list to see just
+  that kind of client, and search within it.
+- **A client's row now shows their address and how many jobs they've had**, and a
+  full **Job history** section on their detail page lists those visits newest
+  first.
+- **Staff have a job title** — Lead tech, Technician, Apprentice or Dispatcher —
+  which is what someone does on site, kept separate from whether they're an admin.
+  Changing one never changes the other.
+- **Working hours and availability for each person**: which days they work, their
+  start and end times, a cap on jobs per day, and an on-call flag. The team roster
+  now shows each person's title and how many jobs they're booked for today.
+- **An emergency contact and phone number** for each person, kept in their own
+  section — who to call when something goes wrong on site is a different question
+  from when someone works. **Only an admin and the person themselves can see or
+  change it**, unlike the rest of the roster, which every employee can see: the
+  name and number belong to someone who isn't an app user and never agreed to
+  share them with your crew.
+- **A "My details" screen** under Settings, where anyone can view and update
+  their own emergency contact without going through an admin.
+
+### Changed
+- **Clients and Team both got the detail and edit treatment the calendar got.**
+  Each opens on a profile card with the person's or business's details in a clean
+  key-value panel and Call / Email / Directions tiles across the top; editing
+  happens in a full sheet rather than inline. Empty sections are simply left out
+  instead of showing "None".
+- **Adding a client while booking now carries straight on.** Create the client
+  from the appointment form and the booking picks up where you left off with them
+  already selected — or choose to go straight into booking them a job.
+- **Phone numbers format themselves as you type** — `(514) 555-1234`. International
+  numbers starting with `+` are left exactly as entered, and anything past the
+  tenth digit (an extension, say) is kept rather than dropped.
+- **Signing in and resetting your password** have been restyled to match the rest
+  of the redesign.
+- **A client is never removed.** The delete action is gone: deleting a client
+  orphaned their past appointments, which kept the name but silently lost the
+  link back. Archiving was considered and dropped for the same reason.
+- **An employee is never deleted either — disabling is the only removal.** It
+  already did strictly more: it disables their sign-in, signs them out
+  everywhere, and clears their location and devices, while keeping their name and
+  colour on every job they worked.
+- **A disabled or invited person's colour stays taken**, so two people can't end
+  up the same colour on the calendar.
+- **The second phone field on clients is gone.** Any number stored there moves
+  into the main phone field the next time that client is saved.
+
+### Fixed
+- **Phone fields no longer silently drop digits.** Typing a number with a leading
+  1, or an international number, could quietly lose the last digit with nothing on
+  screen to explain it.
+- **The terms and location consent you agree to when accepting an invite is now
+  actually what gets recorded**, rather than assumed — and pressing Done on the
+  keyboard can no longer submit the form past the unticked checkbox.
+- **A client's job count and "since" date no longer vanish from search results**
+  after you edit that client.
+- **Leaving the last name blank on an invite is now flagged**, instead of silently
+  creating a roster row with only a first name on it.
+- **A long or malformed invite link** no longer fills the code boxes with a code
+  the Continue button won't accept.
+
+## [1.38.0+63] - 2026-07-31
+### Added
+- **Personal jobs — time blocked off that isn't a client visit.** Flip
+  **Personal** at the top of the booking form and the client and address fields
+  step aside; a doctor's appointment, a day off or a training morning no longer
+  has to be dressed up as a fake client. You still pick who it's for — they're
+  who the time belongs to, and the only people who can see it. The title is
+  optional, and an unnamed block simply reads "Personal". Templates, repeats,
+  materials and photos are left out, since none of them apply.
+  A job has to be personal from the start: the switch isn't offered when editing
+  an ordinary visit, so a real client job can't have its client wiped by accident.
+- **All-day blocks.** Leave the times off a personal job and it covers the whole
+  day. The card reads **"All day"** instead of "12:00 AM – 11:59 PM", and it
+  stays that way everywhere the schedule turns up — the home-screen widget, Siri
+  and the notifications you get. A personal block also stays **"Scheduled"**
+  rather than turning itself into "In Progress" or "Overdue", and you won't be
+  nudged to mark it finished. Nobody needs to close out a dentist appointment.
+
+### Changed
+- **A new look, and a new way to get around.** The app has been redesigned from
+  the ground up: new colours, new typography, and a full dark theme that was
+  built alongside the light one rather than bolted on. Every screen now carries
+  the same two controls in its header — a **Calendar** button that takes you
+  straight home from wherever you are, and a menu button that opens the new
+  navigation drawer. (The calendar's own header carries just the menu; a
+  go-home button on the screen it goes home to would be dead weight.)
+- **The navigation drawer replaces the old side rail.** It slides in from the
+  right on every device and screen size, and groups destinations by when you'd
+  actually reach for them — Today, People, The Business, and Account — instead
+  of by what they are. Today's job count and the number of staff currently on
+  the clock show right on their rows. Employees see only the sections that
+  apply to them.
+- **Calendar, Clients, Team and Live map stay instant.** They remain the four
+  always-loaded tabs. History, Dashboard, Day route and Settings now open as
+  regular screens you can back out of, which also means the back arrow finally
+  behaves like a back arrow everywhere.
+- **The calendar and the day's jobs scroll separately.** Reading down a long day
+  no longer drags the month around with it. To make more room, **drag the line
+  between the two** — or just tap it — and the month folds into a compact week
+  strip; drag it back down for the full month. Swiping left or right moves
+  between months, and swiping the week strip moves a week at a time; either way
+  the day list below follows what you landed on. In landscape and on tablets the
+  month and the day sit side by side as before.
+- **The month shows only the weeks it actually contains** — four, five or six —
+  instead of always padding out to six. Short months no longer trail a blank
+  week, and long ones no longer lose their last days off the bottom.
+- **Every job now looks the same everywhere.** One card design is used on the
+  calendar, the day route, a client's job history, the dashboard and the
+  history list. Each card shows **an initials badge for every person on the
+  job**, in their own colour, followed by the client's name — replacing the old
+  "Theo +1". Its colour bar is **striped with each of their colours** rather
+  than showing only the first person's, so a two-crew job reads as two crews at
+  a glance.
+- **The job details sheet has been rebuilt.** The date and time are one clear
+  line, and the client, phone, address and notes sit in a single panel where
+  the phone and address are tappable. Empty sections are simply left out.
+  "Mark as complete" is now a green button.
+- **Booking forms have a proper header bar.** Cancel, the title and Save now sit
+  in a fixed bar at the top, so Save is always reachable — you no longer have to
+  scroll to the bottom of a long form to find it. Fields are grouped under
+  Templates, Who, Schedule and Details, and **Schedule now holds all of "when"**
+  in one place: all-day, the date, the start and end times, and how often the
+  job repeats.
+- **The address field has a clear button.** Tap the × to empty it in one go
+  instead of holding backspace.
+- **Editing a job now warns you about double-booking**, the same way creating
+  one already did — and it no longer mistakes the job you're editing for a
+  clash with itself.
+- **Saving a repeating job tells you what it will actually change.** The
+  prompt now says how many visits are affected and through what date, and the
+  button reads "Save 12 visits" instead of a generic confirm.
+- **"Scheduled" and "Cancelled" job chips are now neutral grey.** Amber is
+  reserved for things genuinely awaiting action, so a normally-scheduled job no
+  longer looks like a warning.
+- **Pop-up messages are now a compact dark pill** at the top of the screen with
+  a coloured status dot, and they clear themselves after a moment. Swipe up to
+  dismiss one early.
+
+### Fixed
+- Opening a job from a notification, or tapping Calendar from a screen you'd
+  drilled into, could leave you stranded on the wrong screen. Both now return
+  you cleanly to the calendar.
+- The Settings and History guided tours never appeared. They do now.
+- The employee detail screen could clip its content at the largest text sizes on
+  a narrow phone.
+- After swiping a few months away, a day with jobs on it could report **"0 jobs"**.
+- The **Today** button now appears as soon as you swipe to a different month,
+  not only after picking a different day.
+- The navigation drawer had a grey haze washed across it in light mode, which
+  made it hard to read.
+- The month name in the calendar header didn't shorten to "Sep" at the largest
+  text sizes, so it ran into the year beside it.
+- An all-day block sent a **"time to leave" notification at around 11:30 the
+  night before**. There's nowhere to leave for, so it no longer does.
+- An all-day block was missing from **today** on the home-screen widget — it
+  showed up only under tomorrow, then disappeared. It's now listed all day, and
+  the next job shown is the next *timed* one rather than the all-day block.
+- Siri called a personal job "an unnamed client". It now reads out the title you
+  gave it, and says "all day" instead of a midnight start time.
+- The Lock Screen "time to leave" card called a personal job **"Client"** while
+  the notification beside it correctly named the job — the same trip, described
+  two different ways. The card now uses the same name.
+- Turning **Personal off** on an existing personal job left it stuck as an
+  all-day client visit: the All-day switch was gone, the start and end times
+  stayed hidden, and there was no way left to give the visit a time. It now
+  goes back to a normal timed visit.
+- Saving an all-day block could silently do nothing if you had picked times
+  before switching All-day on. Those leftover times are no longer checked.
+- Siri skipped today's all-day block whenever a timed visit existed later in
+  the week, and answered with that instead. It now reads out the block.
+
+## [1.37.0+62] - 2026-07-27
+### Changed
+- **Your location is now shared only while the app is open.** The app no longer
+  tracks your position in the background, and it asks for location permission
+  just once instead of following up with a second request. Your "time to leave"
+  alerts and your pin on the staff map still work whenever you have the app
+  open; when it's closed, the reminder falls back to timing the trip from your
+  previous job's address, or to a standard 30-minute heads-up.
+
+### Fixed
+- **The live job card no longer shows the appointment's own start time as your
+  departure time.** When the card couldn't work out when to leave, it labelled
+  the job's start time "Leave at" — which would have sent you off a whole
+  drive-time late. It now says "Starts at" instead, and a rescheduled job
+  rebuilds a correct departure time from the drive it already measured.
+
+## [1.36.1+61] - 2026-07-27
+### Fixed
+- **Photos attached to a job no longer go missing when the connection drops
+  during upload.** If a photo finished uploading but the app briefly lost the
+  network before linking it to the appointment, the picture could end up stored
+  but never shown on the job. Those photos are now retried and attached once
+  you're back online, without uploading them a second time.
+- **A section's walkthrough no longer gets skipped if you switch tabs while it's
+  starting.** Quickly moving away from a screen as its guided tour was about to
+  begin could stop that tour from ever appearing again for the session; it now
+  shows the next time you open the screen.
+
+## [1.36.0+60] - 2026-07-22
+### Added
+- **A guided tour now introduces each part of the app.** The first time you open
+  the calendar — and each other section — a short walkthrough points out the key
+  buttons and what they do, then gets out of your way. Admins and employees each
+  see a tour tailored to the sections they can use, and it only runs once per
+  section on this device.
+- **You can replay the app tour any time.** A new "Replay app tour" row in
+  Settings resets every walkthrough so you can see them again from the start.
+
+## [1.35.1+59] - 2026-07-21
+### Fixed
+- **Notifications for jobs with accented names or addresses are no longer
+  dropped.** A push for a job whose client name or address used French accents
+  (é, à, ç…) could be silently skipped because the extra bytes those letters
+  take were miscounted, pushing the notification over its size limit. Those
+  pushes now go through.
+- **The live job card updates to the new time when a job is rescheduled.**
+  After moving a job you were already driving to, its Lock Screen card could
+  keep showing the old time — flipping to "On site" too early or too late. The
+  card now follows the rescheduled time, including for a repeating job's
+  individual visits.
+
+## [1.35.0+58] - 2026-07-21
+### Added
+- **The live job card counts down to the end of your visit.** Once the job's
+  start time arrives, the Lock Screen card switches to "On site" and shows a
+  live timer counting down to the scheduled end. If the visit runs long the
+  timer counts up instead, so an overrun is visible at a glance.
+### Changed
+- **You can mark a job complete after its day has passed.** "Mark as complete"
+  used to appear only on the day of the visit, so a job you forgot to close
+  before midnight — or the second day of a long visit — could not be completed
+  at all, even though the app kept sending "job finished?" reminders about it.
+  The button now appears on any visit that has started.
+- **One notification per change to a repeating job, not one per visit.**
+  Cancelling, rescheduling, or deleting "this and all future" occurrences of a
+  repeating job used to send a separate push for every occurrence — up to about
+  fifteen at once.
+### Fixed
+- **The live job card clears when a job is deleted, cancelled, or reassigned.**
+  It previously cleared only when the job was marked complete, so deleting or
+  cancelling a visit you had already started left its card stuck on the Lock
+  Screen with no way to dismiss it.
+- **Tomorrow's in-progress jobs appear in the 6 p.m. summary again.** A job
+  already marked in progress was silently left out of the daily digest.
+- **Technicians are no longer shown actions they can't use.** Opening a job
+  from the dashboard, the day route, or a notification could show Edit, Cancel,
+  and Delete to someone without permission; tapping them then failed.
+- **Tapping a phone number, address, email, or link can no longer crash the
+  app.** If no app was available to handle it, the failure now surfaces as a
+  message instead.
+- **Photos taken offline no longer upload twice or go missing.** A photo saved
+  while the upload queue was already running could be uploaded twice, and a
+  batch added at exactly the wrong moment could be dropped from the queue
+  entirely without any warning.
+- **Fewer silent failures when the phone is locked.** Notifications arriving on
+  a locked device could leave the app unable to read its saved settings, which
+  quietly skipped the biometric app lock for that session.
+
+## [1.34.1+55] - 2026-07-19
+### Changed
+- **Removing a team member now cuts off access immediately.** Setting someone
+  to disabled signs them out of every device, blocks them from signing back in,
+  and stops all notifications and live cards for them. Previously a removed
+  technician could still see the jobs they had been assigned — including client
+  names, phone numbers, addresses, notes, and job photos. Re-enabling them
+  restores access as before.
+### Fixed
+- **The live job card now actually appears.** A missing database index meant
+  every Lock Screen card silently failed to start, update, or clear, falling
+  back to the plain "time to leave" notification.
+- **The live card switches to "On site" and clears itself reliably.** On a quiet
+  day with nobody else scheduled, the card used to sit on "On the way" for the
+  whole visit and linger after the job was done.
+- **Turning the live job card off always works.** Switching it off in Settings
+  now removes this device from live cards even if no card had appeared yet in
+  that session — before, the server could keep starting cards on a phone that
+  had opted out.
+- **Completing one job no longer clears another job's live card.** Marking a
+  visit complete used to dismiss the card for whatever job you were actually
+  driving to.
+- **Siri and the home-screen widget roll over at midnight.** Leaving the app
+  open overnight made Siri answer "no appointments today" and the widget show
+  the previous day's jobs until the app was reopened.
+- **Re-enabling Live Activities in iOS Settings takes effect right away.** The
+  "Live job card" row no longer stays hidden until you relaunch the app.
+- **A busy schedule no longer swallows a notification.** An oversized widget
+  refresh attached to a push could make the whole notification fail to send.
+
+## [1.34.0+54] - 2026-07-19
+### Added
+- **Ask Siri about your day.** On iPhone you can now ask Siri "what's my next
+  appointment", "what's on my schedule today", or how many jobs you have left,
+  and hear the answer without opening the app. Admins hear the whole business,
+  technicians hear only their own assigned visits.
+- **A live job card when it's time to leave.** When the app tells you to head
+  to a job, a card now appears on the Lock Screen and in the Dynamic Island
+  showing the client, the address, the drive time, and when to leave — with a
+  Directions button that opens your maps app. It switches to "On site" once the
+  job's start time arrives and clears itself when the job is complete.
+- **Turn the live job card off.** Settings has a new "Live job card" switch for
+  anyone who would rather not have jobs on their Lock Screen. It's on by
+  default, and switching it off clears any card already showing. The row only
+  appears on iPhones that support the card.
+### Changed
+- **The dashboard has the menu button again.** Opening the dashboard on a phone
+  now shows the same menu as every other screen, so you can reach settings
+  without going back first.
+- **Staff pins stay readable on the live map.** A team member whose location
+  hasn't updated recently no longer has their map pin greyed out — how long ago
+  they updated is still spelled out in the info card and the staff list.
+- **Booking an empty day goes through the + button.** The "New appointment"
+  button inside an empty day's schedule was removed; use the + button, which is
+  always in the same place.
+### Fixed
+- **The "today" button disappears when you're already on this month.** Swiping
+  back to the current month used to leave the jump-to-today button on screen.
+
+## [1.33.0+52] - 2026-07-19
+### Added
+- **Book common jobs in a couple of taps.** The add-appointment form now has a
+  row of quick-fill chips for the usual job types — leak diagnostic, drain
+  cleaning, faucet or valve, toilet repair, emergency call, water heater.
+  Tapping one fills in the service title and a typical duration; everything
+  stays editable afterwards.
+- **See a client's whole job history.** Opening a client now shows a "Job
+  history" section listing that client's appointments newest-first — tap any one
+  to open its details.
+- **Book straight from an empty day.** An empty day's schedule now shows a "New
+  appointment" button, so you can start a booking without hunting for the plus
+  button.
+- **See everyone on the live map as a sortable list.** The staff map now has a
+  "show staff list" button that opens a roster of every team member sharing
+  their location, ordered nearest-to-farthest from you — each row showing the
+  distance, their nearest town, and how long ago they updated, with your own row
+  marked "You". Tap a name to jump straight to that person on the map.
+### Changed
+- **Jump to any day on the day route.** The day-route screen's date is now
+  tappable to pick any day from a calendar, with a one-tap "today" button to
+  return, and the employee switcher opens as a tidy picker sheet.
+- **Overdue jobs stand out at a glance.** A job that has run past its end time
+  now shows a warning icon on its card, so it's easy to spot in a busy day.
+### Fixed
+- **The staff list says "No location" when a spot can't be pinned.** A roster
+  row whose position can't be resolved to a place now reads "No location"
+  instead of showing "Locating…" indefinitely.
+- **Location sharing stays fresher for on-time "leave now" alerts.** A dropped
+  location update no longer briefly pauses the next one, so your position — and
+  the drive-time reminders that depend on it — stay current.
+
+## [1.32.0+51] - 2026-07-18
+### Added
+- **See where your staff are on a live map.** Admins get a new Staff map that
+  plots every team member sharing their location, each pin coloured to the
+  employee and stamped with how long ago it updated ("Just now", "5 min ago").
+  Tap a pin to see who it is, their nearest street address, and a one-tap
+  handoff to open that spot in Maps. Anyone whose location has gone stale is
+  shown as offline with a last-seen time. Toggle live traffic or a satellite
+  view, and recenter the map on the whole team with one button.
+- **"Time to leave" reminders that account for real drive time.** Instead of a
+  fixed 30-minute heads-up, you now get a departure alert timed to when you
+  actually need to leave for your next job — calculated from live traffic
+  between where you are and the job's address, plus a 10-minute buffer. A short
+  hop across town nudges you later; a cross-city drive nudges you sooner. The
+  alert names the client, the start time, and the estimated drive, and (on
+  iPhone) is marked time-sensitive so it breaks through Focus modes. If your
+  location or a route can't be determined, it quietly falls back to the usual
+  30-minute reminder.
+- **The app can share your location in the background to time those alerts.**
+  Field staff (and admins assigned to jobs) are asked once for location
+  permission; with it granted, the app keeps your last position current even
+  while it's in the background so the leave-now timing stays accurate. Your
+  location is visible only to the reminder system and to admins on the staff
+  map — never to coworkers — and is dropped the moment you sign out. Granting
+  only "while using the app," or denying location entirely, still works:
+  reminders just fall back to timing from your previous job's address or the
+  fixed 30-minute heads-up.
+- **Drive a whole day's jobs as one route.** Open a day's schedule to see every
+  stop numbered in start-time order, then hand the full run off to Google Maps
+  as a multi-stop driving route with one tap. Admins can switch between the
+  employees who have jobs that day; each person sees their own route.
+- **Save a job photo to your camera roll or share it.** The full-screen photo
+  viewer now has Save and Share buttons, working for both photos you just took
+  and ones already stored on the job.
+
+### Changed
+- **Cancelled visits can be edited again.** A cancelled appointment is no longer
+  locked read-only — an admin can fix its details or re-activate it from the
+  status picker, instead of having to recreate it.
+- **The app now handles going offline gracefully.** Photos you attach to a
+  visit no longer vanish if you lose signal mid-upload — they're kept and
+  uploaded automatically the moment you reconnect or next sign in. Saving an
+  appointment or client while offline now tells you right away instead of
+  leaving the Save button spinning.
+
+### Fixed
+- **Notices no longer hide under the notch.** In landscape, the banner that
+  slides in from the top now shifts toward the open side of the screen so it
+  stays clear of the camera notch.
+- **Text no longer overflows at large text sizes.** The calendar's month bar
+  and the employee and status chips stay tidy when you crank up the system
+  font size.
+- **The text-size preview reads in French.** The sample text on the text-size
+  screen now follows your app language instead of always showing English.
+- **The home-screen widget no longer flickers empty after sign-in.** A brief
+  hiccup right after signing in can no longer momentarily blank the iPhone
+  widget.
+
+## [1.30.0+49] - 2026-07-13
+### Added
+- **Manage notifications from Settings.** Settings now has a Notifications row
+  that shows whether notifications are On or Off. If they're off — or you
+  dismissed the first-time prompt — tapping it either asks again or opens your
+  system settings so you can turn them back on and start receiving job alerts.
+
+### Changed
+- **The iPhone home-screen widget now shows today and tomorrow.** It lists your
+  remaining jobs for today and, once the day's work is done, rolls over to
+  tomorrow's schedule on its own — no app launch needed.
+- **Dashboard job lists are now full appointment cards.** The "starting soon /
+  overdue" and "today" lists on the Dashboard show the same tappable,
+  colour-coded cards as the calendar, so you can open a visit straight from
+  there.
+
+### Fixed
+- **The home-screen widget stays current even when the app is closed.** Being
+  assigned to, rescheduled on, or removed from a job now refreshes the widget in
+  the background, so it no longer shows a stale schedule until you next open the
+  app.
+
+## [1.29.0+48] - 2026-07-11
+### Added
+- **An admin Dashboard gives you the day at a glance.** A new Dashboard screen
+  (from the menu and Settings) shows today's visits by status, who's unassigned,
+  each employee's workload for today and this week, an eight-week trend of
+  completed vs. cancelled jobs and new clients, your busiest weekday, and an
+  attention list of jobs starting soon or already overdue.
+- **Push notifications keep your team on top of every job.** Employees now get
+  alerts when they're assigned to, rescheduled on, or removed from a visit,
+  a reminder 30 minutes before a job starts, a "job finished?" nudge once a
+  visit runs past its end time, and a 6 PM summary of the next day's work.
+- **See your schedule on your iPhone home screen.** A new home-screen widget
+  shows an employee's remaining jobs for today and their next upcoming visit;
+  tapping it opens that appointment.
+- **Wave can import your customers automatically.** Settings → Wave now has an
+  automatic-import cadence you can set to Off, Weekly, or Monthly, so new Wave
+  customers flow into the app without a manual import.
+
+## [1.28.0+47] - 2026-07-10
+### Added
+- **Jobs that run past their end time now show "Overdue".** An appointment
+  reads **In progress** while it's underway and flips to **Overdue** once its
+  end time passes without being marked Complete or Cancelled — so it's obvious
+  at a glance which visits still need closing out.
+
+### Fixed
+- **An appointment's status now matches everywhere you look.** A visit whose
+  time had passed could show "In progress" on the calendar card while its edit
+  screen still read "Pending"; the card, the details view, and the editor now
+  agree.
+
 ## [1.27.0+46] - 2026-07-09
 ### Changed
 - **Appointment statuses are simpler: Pending → In progress → Complete.** The
