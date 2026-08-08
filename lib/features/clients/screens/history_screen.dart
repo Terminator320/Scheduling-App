@@ -100,7 +100,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
             listenable: _searchController,
             builder: (context, _) => AppointmentHistoryView(
               searchQuery: _searchController.text,
-              isAdmin: widget.isAdmin,
               filterTourWrap: (child) =>
                   _tour.stepIf(TourStepId.historyFilter, child),
               firstRowTourWrap: (child) =>
