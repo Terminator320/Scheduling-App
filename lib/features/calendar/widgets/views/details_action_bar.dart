@@ -16,6 +16,7 @@ class DetailsActionBar extends StatelessWidget {
     required this.onCancel,
     super.key,
     this.showCancel = true,
+    this.onEdit,
   });
 
   final bool hasStarted;
@@ -25,6 +26,10 @@ class DetailsActionBar extends StatelessWidget {
   final bool showCancel;
   final VoidCallback onMarkDone;
   final VoidCallback onCancel;
+
+  /// Edit action for a job that is already done. Null on a read-only surface,
+  /// which falls back to the inert "Complete" indicator.
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -61,25 +66,42 @@ class DetailsActionBar extends StatelessWidget {
               label: context.l10n.calendar_markAsDone,
             ),
           ),
+        // A done job has no mark-done or cancel action left, so this slot is
+        // where its Edit lives — the read view's top chip is hidden for it.
+        // Without an edit callback (a read-only surface) it stays the inert
+        // "Complete" indicator it has always been.
         if (isDone) ...[
           const SizedBox(height: AppSpacing.sp8),
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
-              foregroundColor: scheme.secondary,
-              side: BorderSide(color: scheme.secondary),
-            ),
-            onPressed: null,
-            child: _ActionButtonContent(
-              compact: compact,
-              icon: Icon(
-                Icons.check_circle_outline,
-                size: 18,
-                color: scheme.secondary,
+          if (onEdit != null)
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
               ),
-              label: context.l10n.calendar_completed,
+              onPressed: onEdit,
+              child: _ActionButtonContent(
+                compact: compact,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: context.l10n.common_edit,
+              ),
+            )
+          else
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 48),
+                foregroundColor: scheme.secondary,
+                side: BorderSide(color: scheme.secondary),
+              ),
+              onPressed: null,
+              child: _ActionButtonContent(
+                compact: compact,
+                icon: Icon(
+                  Icons.check_circle_outline,
+                  size: 18,
+                  color: scheme.secondary,
+                ),
+                label: context.l10n.calendar_completed,
+              ),
             ),
-          ),
         ],
         if (showCancel && !isCancelled && !isDone) ...[
           if (hasStarted) const SizedBox(height: AppSpacing.sp8),
