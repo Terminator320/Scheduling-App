@@ -177,8 +177,42 @@ directly. Jest tests live in **`functions/__tests__/` only** — the parallel
   changed nothing. **The `hasCreatedAt` half of the condition is
   load-bearing** — the update branch is the only thing that backfills a missing
   `createdAt`, and the clients list orders by it, so skipping a doc without one
-  hides it from the list forever. What remains O(all customers) is the Wave
-  page fetch; see the delta-import note in `docs/CLOUD_FUNCTIONS.md`.
+  hides it from the list forever.
+  **The import is also a DELTA when `since` is supplied** (2026-08-04): Wave
+  filters `modifiedAtAfter` server-side, so it returns only changed customers.
+  `LIST_CUSTOMERS_SINCE` is a **separate document** from `LIST_CUSTOMERS`, not
+  one query with a nullable variable — a server reading an omitted variable as
+  `modifiedAtAfter: null` would give a full import that imports nothing and
+  reports success. **`importCustomers` stays stateless about the watermark; the
+  whole read → decide → import → advance sequence has ONE owner,
+  `importWithWatermark` (`wave/callables.js`)**, called by both the interactive
+  sync and the unattended daily import. It was hand-copied in both before, and
+  each omission fails silently in its own direction; the unattended copy — the
+  one where a mistake is invisible — was the untested one. The decisions
+  themselves are the pure `resolveImportWindow` / `watermarkPatch`, in
+  `wave/import_schedule.js` beside `isImportDue` because the two cadences
+  interact.
+  **THE WATERMARK ADVANCES ONLY OVER A WINDOW THAT WAS FULLY COVERED.** Three
+  things break it, all silent, all handled: a throw (leaves both stamps, next
+  run redoes the window), a run with `skippedPending > 0` (those clients were
+  deliberately protected from the clobber, so their Wave-side change would be
+  invisible to every later delta — the watermark is HELD), and an unknown
+  `skippedPending` (treated as not-covered, since holding is free and advancing
+  wrongly loses data). It is the run's START minus an overlap, never its end.
+  **A delta-only failure retries once as a FULL import** — without that, a bad
+  `modifiedAtAfter` makes every interactive sync fail identically until the
+  7-day resync ages the window out, and only the admin-facing path breaks. **A
+  failed watermark WRITE is logged, not thrown**: the import already committed,
+  and failing there would report a successful sync as an error and discard the
+  push counts with it.
+  A periodic full pass runs every 7 days: not for deletes
+  (the import never deletes a local client) but as the backstop for `modifiedAt`
+  itself, which we trust Wave to bump and cannot verify. That interval is
+  shorter than both cadences, so the SCHEDULED import normally goes full every
+  time and the delta mostly benefits the interactive sync — accepted, since a
+  weekly job paying 7 Wave pages costs nothing. `buildWaveIdIndex` is
+  built lazily so a no-op delta costs zero Firestore reads. Full detail:
+  `docs/CLOUD_FUNCTIONS.md`.
   **Wave rejects INLINE STRING ARGUMENTS — every string must travel as a
   GraphQL variable** (`GRAPHQL_VALIDATION_FAILED: Inline argument of type
   String is not allowed`). Confirmed against the live API 2026-08-04. Inline

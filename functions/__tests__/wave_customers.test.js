@@ -715,6 +715,7 @@ describe("importCustomers", () => {
           skippedPending: 0,
           skippedUnchanged: 0,
           pages: 2,
+          delta: false,
         });
         // Two new auto-id docs created; one final commit.
         expect(newRefs).toHaveLength(2);
@@ -762,6 +763,65 @@ describe("importCustomers", () => {
         expect(batchLog.sets).toHaveLength(1);
         expect(batchLog.sets[0].ref).toBe(openRef);
       });
+
+  test("a delta run asks Wave to filter, and says it was a delta", async () => {
+    const {db} = importDb([]);
+    const graphql = graphqlSeq(listPage(1, 1, 0, []));
+
+    const summary = await importCustomers({
+      db, graphql, businessId: "biz-1", now,
+      since: "2026-08-01T00:00:00.000Z",
+    });
+
+    const [query, vars] = graphql.mock.calls[0];
+    expect(query).toContain("modifiedAtAfter: $since");
+    expect(vars.since).toBe("2026-08-01T00:00:00.000Z");
+    expect(summary.delta).toBe(true);
+  });
+
+  test("a full run sends no modifiedAtAfter at all", async () => {
+    // Deliberately a SEPARATE document rather than a nullable variable: a
+    // server reading an omitted variable as `modifiedAtAfter: null` would
+    // return nothing, i.e. a full import that imports zero and reports
+    // success.
+    const {db} = importDb([]);
+    const graphql = graphqlSeq(listPage(1, 1, 0, []));
+
+    const summary = await importCustomers({
+      db, graphql, businessId: "biz-1", now,
+    });
+
+    const [query, vars] = graphql.mock.calls[0];
+    expect(query).not.toContain("modifiedAtAfter");
+    expect(vars).not.toHaveProperty("since");
+    expect(summary.delta).toBe(false);
+  });
+
+  test("a delta run that changes nothing reads no client docs", async () => {
+    // The index is built lazily precisely for this case — the steady-state
+    // sync should cost one Wave call and zero Firestore reads.
+    let indexReads = 0;
+    const {db} = importDb([]);
+    const originalCollection = db.collection.bind(db);
+    db.collection = (name) => {
+      const coll = originalCollection(name);
+      if (name === "clients") {
+        const origGet = coll.get.bind(coll);
+        coll.get = () => {
+          indexReads += 1;
+          return origGet();
+        };
+      }
+      return coll;
+    };
+    const graphql = graphqlSeq(listPage(1, 1, 0, []));
+
+    await importCustomers({
+      db, graphql, businessId: "biz-1", now, since: "2026-08-01T00:00:00Z",
+    });
+
+    expect(indexReads).toBe(0);
+  });
 
   test("skips a customer whose mapped fields already match", async () => {
     // The equality is exact, not a heuristic: `lastSyncedHash` is taken over

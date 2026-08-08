@@ -649,34 +649,69 @@ Writes `createdAt`/`updatedAt` on every client doc it does write (the
 list/search order by `createdAt`, and Firestore excludes docs missing the
 orderBy field). Rate-limited 5/hr; 300s timeout.
 
-**Still O(all customers) on the Wave side — but it needn't be.** The hash gate
-removes the writes and the trigger fan-out, not the ~7 `LIST_CUSTOMERS` pages
-or the `buildWaveIdIndex` scan.
+**Delta import (2026-08-04).** Introspection against the live API
+(`functions/scripts/wave-introspect-customer-sort.js`) established that
+`business.customers` accepts `modifiedAtAfter: DateTime` /
+`modifiedAtBefore`, and that `CustomerSort` offers `MODIFIED_AT_ASC/DESC`
+alongside `CREATED_AT_*` and `NAME_*`. The filter is the better lever than the
+sort — it runs server-side, so Wave returns only what changed instead of us
+paging everything and stopping early.
 
-Introspection against the live API on 2026-08-04
-(`functions/scripts/wave-introspect-customer-sort.js`) settled what is
-available, so this is no longer a guess:
+`importCustomers` therefore takes an optional `since` (ISO-8601). Present → the
+`LIST_CUSTOMERS_SINCE` document; absent → the full `LIST_CUSTOMERS`. These are
+**two separate documents on purpose**: omitting a variable to make an argument
+"not present" is valid GraphQL, but relying on that against a third-party
+server risks it being read as `modifiedAtAfter: null` — a full import that
+imports nothing and reports success. Both must keep passing strings as
+variables; Wave refuses inline `String` arguments (see `functions/CLAUDE.md`).
 
-- `CustomerSort` = `CREATED_AT_ASC/DESC`, `MODIFIED_AT_ASC/DESC`,
-  `NAME_ASC/DESC`.
-- `business.customers` accepts `page`, `pageSize`, `sort`, `email`,
-  **`modifiedAtAfter: DateTime`** and `modifiedAtBefore: DateTime`.
+The watermark lives on `wave/connection` (`customerDeltaSince`,
+`lastFullImportAt`) and `importCustomers` stays stateless about it. The whole
+read → decide → import → advance sequence has **one owner**,
+`importWithWatermark` in `wave/callables.js`, used by both the interactive sync
+and `waveScheduledImport`; the decisions are the pure `resolveImportWindow` /
+`watermarkPatch` in `wave/import_schedule.js`, placed beside `isImportDue`
+because the two cadences interact.
 
-`modifiedAtAfter` is the better lever than the sort: it filters server-side, so
-Wave returns only what changed instead of us paging everything and stopping
-early. A delta import is therefore `customers(modifiedAtAfter: $since, sort:
-[MODIFIED_AT_ASC], …)` with a watermark on `wave/connection`.
+- **The watermark is the run's START minus `DELTA_OVERLAP_MS` (5 min).** From
+  the end, it would drop anything edited mid-run; without the overlap, anything
+  edited in the same second the query went out, and no slack for clock skew
+  against Wave.
+- **It advances only over a window that was fully covered.** A throw leaves
+  both stamps (the next run redoes an idempotent window). So does a run that
+  reported `skippedPending > 0`: those clients were deliberately protected from
+  the clobber and therefore not imported, so advancing would hide any Wave-side
+  change to them until the next full pass. An *unknown* `skippedPending` is
+  treated as not-covered for the same reason — holding is free, advancing
+  wrongly loses data.
+- **A delta-only failure retries once as a full import.** Otherwise a bad
+  `modifiedAtAfter` is sticky: the watermark stays put, every interactive sync
+  rebuilds the same failing query, and nothing self-heals until the 7-day
+  resync ages the window out — while the scheduled path keeps working, so the
+  breakage is admin-facing only.
+- **A failed watermark WRITE is logged, not thrown.** The import already
+  committed; failing there would report a successful sync as an error and throw
+  away the push counts the notice exists to surface.
+- **A full pass is forced every `FULL_RESYNC_INTERVAL_MS` (7 days).** Not for
+  deletes — the import has never deleted a local client and still doesn't, so a
+  customer removed in Wave keeps its doc either way. It is a backstop for
+  `modifiedAt` itself: we are trusting Wave to bump it for every field we map
+  and cannot verify that. Note this interval is shorter than both import
+  cadences, so a scheduled run whose last full pass was a cadence ago goes full
+  — in practice the delta mostly benefits the interactive sync, which is
+  accepted.
+- **A watermark ahead of now is refused**, not honoured — otherwise a clock or
+  data fault makes every subsequent run import nothing, forever.
 
-Two constraints on that design, neither optional:
-- **Take the watermark from the run's START time (minus a small overlap), and
-  advance it only on a fully successful run.** A half-failed run must redo its
-  window; the overlap absorbs clock skew and edits landing mid-run.
-- **A periodic full resync is still required.** An archive flips `isArchived`
-  and so counts as a modification, but a customer *deleted* in Wave returns no
-  node at all and can never appear in a delta window.
+`buildWaveIdIndex` is now built **lazily**, so a delta run that finds nothing
+changed costs one Wave call and zero Firestore reads instead of ~650 document
+reads to resolve nothing. When a delta does have work, it still reads the whole
+`clients` collection — a targeted `whereIn` lookup over just the changed wave
+ids would avoid that, and is the remaining optimisation here.
 
-Not built. `LIST_CUSTOMERS` must keep passing its strings as variables when it
-gains `$since` — Wave refuses inline `String` arguments (see `functions/CLAUDE.md`).
+**`totalCount` on a delta summary is the size of the queried set** — the number
+of changed customers, not the roster size. Don't render it as "you have N
+clients".
 
 ### `waveUpsertCustomer` — `wave/callables.js`
 `clients/{id}` write trigger. When a client's Wave-mapped fields change, marks

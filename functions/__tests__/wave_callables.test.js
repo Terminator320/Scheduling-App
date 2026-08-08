@@ -147,8 +147,12 @@ beforeEach(() => {
   FieldValue.serverTimestamp = jest.fn(() => "SERVER_TS");
   waveClient.whoami.mockResolvedValue({});
   waveClient.listBusinesses.mockResolvedValue([{id: "biz-1", name: "Acme"}]);
+  // Mirrors the real summary shape. `skippedPending` matters: a run that
+  // protected clients did not cover its window, so the watermark is held —
+  // an absent count is treated as unknown and therefore also held.
   waveCustomers.importCustomers.mockResolvedValue({
-    totalCount: 0, imported: 0, updated: 0, skippedArchived: 0, pages: 1,
+    totalCount: 0, imported: 0, updated: 0, skippedArchived: 0,
+    skippedPending: 0, skippedUnchanged: 0, pages: 1, delta: false,
   });
   getFirestore.mockReturnValue(fakeFirestore(null).db);
 });
@@ -378,6 +382,110 @@ describe("waveImportCustomers", () => {
       expectCalledBefore(
           waveWorker.drainQueue, waveWorker.listOutstandingClientIds);
     })());
+
+  test("a delta run advances the watermark but not the resync clock",
+      async () => {
+        // The stamps have to make a real delta window — `wasFull` is derived
+        // from the window this callable resolves, not from anything the
+        // import stub says, so a fixture with no watermark is a FULL run and
+        // would legitimately stamp lastFullImportAt.
+        const fake = fakeFirestore({
+          businessId: "biz-1",
+          customerDeltaSince: new Date(Date.now() - 60_000),
+          lastFullImportAt: new Date(Date.now() - 60_000),
+        });
+        getFirestore.mockReturnValue(fake.db);
+
+        await waveImportCustomers.run(req(ADMIN_UID, {}));
+
+        const advanced = fake.updates.find((u) => u.customerDeltaSince);
+        expect(advanced).toBeDefined();
+        expect(advanced).not.toHaveProperty("lastFullImportAt");
+        expect(waveCustomers.importCustomers).toHaveBeenCalledWith(
+            expect.objectContaining({since: expect.any(String)}));
+      });
+
+  test("a full run restarts the resync clock", async () => {
+    const fake = fakeFirestore({businessId: "biz-1"});
+    getFirestore.mockReturnValue(fake.db);
+
+    await waveImportCustomers.run(req(ADMIN_UID, {}));
+
+    const advanced = fake.updates.find((u) => u.customerDeltaSince);
+    expect(advanced.lastFullImportAt).toBeDefined();
+    expect(waveCustomers.importCustomers).toHaveBeenCalledWith(
+        expect.objectContaining({since: ""}));
+  });
+
+  test("holds the watermark when the run protected pending clients",
+      async () => {
+        // Those clients were deliberately NOT imported, so the window is
+        // incomplete. Advancing past it would hide any Wave-side change to
+        // them until the next full pass — bounded staleness, but silent.
+        const fake = fakeFirestore({
+          businessId: "biz-1",
+          customerDeltaSince: new Date(Date.now() - 60_000),
+          lastFullImportAt: new Date(Date.now() - 60_000),
+        });
+        getFirestore.mockReturnValue(fake.db);
+        waveCustomers.importCustomers.mockResolvedValue({skippedPending: 2});
+
+        await waveImportCustomers.run(req(ADMIN_UID, {}));
+
+        expect(fake.updates.find((u) => u.customerDeltaSince)).toBeUndefined();
+      });
+
+  test("a delta failure retries as a full import", async () => {
+    // Without this, a delta-only query fault is sticky: the watermark stays
+    // put, so every retry rebuilds the same failing query until the 7-day
+    // resync ages it out — and only the admin-facing sync is broken.
+    const fake = fakeFirestore({
+      businessId: "biz-1",
+      customerDeltaSince: new Date(Date.now() - 60_000),
+      lastFullImportAt: new Date(Date.now() - 60_000),
+    });
+    getFirestore.mockReturnValue(fake.db);
+    waveCustomers.importCustomers
+        .mockRejectedValueOnce(new Error("unknown argument modifiedAtAfter"))
+        .mockResolvedValueOnce({skippedPending: 0});
+
+    await waveImportCustomers.run(req(ADMIN_UID, {}));
+
+    expect(waveCustomers.importCustomers).toHaveBeenCalledTimes(2);
+    expect(waveCustomers.importCustomers).toHaveBeenLastCalledWith(
+        expect.objectContaining({since: ""}));
+    // The retry was a full pass, so the resync clock restarts.
+    expect(fake.updates.find((u) => u.lastFullImportAt)).toBeDefined();
+  });
+
+  test("a successful import survives a failed watermark write", async () => {
+    // The import already committed; failing the callable here would tell the
+    // admin the sync failed and throw away the push counts with it.
+    const fake = fakeFirestore({businessId: "biz-1"});
+    fake.ref.update.mockRejectedValue(new Error("firestore unavailable"));
+    getFirestore.mockReturnValue(fake.db);
+    waveCustomers.importCustomers.mockResolvedValue({
+      imported: 3, skippedPending: 0,
+    });
+
+    const result = await waveImportCustomers.run(req(ADMIN_UID, {}));
+
+    expect(result.imported).toBe(3);
+  });
+
+  test("leaves the watermark alone when the import throws", async () => {
+    // The single most destructive way to get this wrong: advancing past a
+    // window that was never actually imported skips every customer changed
+    // inside it, permanently and silently. Redoing it is free — the import
+    // is idempotent.
+    const fake = fakeFirestore({businessId: "biz-1"});
+    getFirestore.mockReturnValue(fake.db);
+    waveCustomers.importCustomers.mockRejectedValue(new Error("wave down"));
+
+    await expectThrows(waveImportCustomers, req(ADMIN_UID, {}));
+
+    expect(fake.updates.find((u) => u.customerDeltaSince)).toBeUndefined();
+  });
 
   test("a dead-lettered push is reported, not counted as nothing", async () => {
     // Dead jobs are not `queued`, so countQueuedJobs returns 0 for them —

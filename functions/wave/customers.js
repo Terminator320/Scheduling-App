@@ -83,10 +83,9 @@ mutation PatchCustomer($input: CustomerPatchInput!) {
   }
 }`;
 
-const LIST_CUSTOMERS = `
-query ListCustomers($id: ID!, $page: Int!, $pageSize: Int!) {
-  business(id: $id) {
-    customers(page: $page, pageSize: $pageSize, sort: [NAME_ASC]) {
+// One owner for the listing's page + node selection, so the full and delta
+// documents below can't drift on what they read back.
+const LIST_CUSTOMERS_BODY = `
       pageInfo { currentPage totalPages totalCount }
       edges {
         node {
@@ -107,7 +106,41 @@ query ListCustomers($id: ID!, $page: Int!, $pageSize: Int!) {
             postalCode
           }
         }
-      }
+      }`;
+
+const LIST_CUSTOMERS = `
+query ListCustomers($id: ID!, $page: Int!, $pageSize: Int!) {
+  business(id: $id) {
+    customers(page: $page, pageSize: $pageSize, sort: [NAME_ASC]) {${
+  LIST_CUSTOMERS_BODY}
+    }
+  }
+}`;
+
+// Delta listing. `modifiedAtAfter` filters SERVER-SIDE, so Wave returns only
+// what changed — strictly better than paging everything and stopping early.
+// Confirmed against the live schema 2026-08-04 (see
+// scripts/wave-introspect-customer-sort.js).
+//
+// This is a SEPARATE document rather than one query with a nullable `$since`:
+// omitting a variable to make an argument "not present" is real GraphQL, but
+// it is subtle third-party behaviour, and a server that instead read it as
+// `modifiedAtAfter: null` would silently return nothing — a full import that
+// imports zero customers and reports success. Two documents make that
+// unrepresentable.
+//
+// Sort stays NAME_ASC: we page the entire filtered set either way, so
+// MODIFIED_AT_ASC would buy nothing and gives the two documents a second
+// difference to keep in step.
+const LIST_CUSTOMERS_SINCE = `
+query ListCustomersSince(
+  $id: ID!, $page: Int!, $pageSize: Int!, $since: DateTime!
+) {
+  business(id: $id) {
+    customers(
+      page: $page, pageSize: $pageSize, sort: [NAME_ASC]
+      modifiedAtAfter: $since
+    ) {${LIST_CUSTOMERS_BODY}
     }
   }
 }`;
@@ -518,9 +551,18 @@ const BATCH_LIMIT = 500;
  *   back for `listOutstandingClientIds` would close a require cycle. Every
  *   caller must supply it — omitting it silently re-opens the clobber
  *   described on that helper.
+ *
+ *   `since` (an ISO-8601 string, optional) switches the run to a DELTA
+ *   import: Wave filters by `modifiedAtAfter` server-side and returns only
+ *   customers changed after that instant. Absent → full import. The caller
+ *   owns the watermark, because it owns `wave/connection`; this function is
+ *   deliberately stateless about it.
  * @return {!Promise<!Object>} Summary `{totalCount, imported, updated,
- *   skippedArchived, skippedPending, skippedUnchanged, pages}`. `updated`
- *   counts only customers whose Wave-mapped fields actually differed.
+ *   skippedArchived, skippedPending, skippedUnchanged, pages, delta}`.
+ *   `updated` counts only customers whose Wave-mapped fields actually
+ *   differed. **`totalCount` is the size of the QUERIED set, so on a delta
+ *   run it is the number of changed customers, not the roster size** — don't
+ *   render it as "you have N clients".
  */
 async function importCustomers(deps = {}) {
   const db = deps.db || adminFirestore().getFirestore();
@@ -530,9 +572,15 @@ async function importCustomers(deps = {}) {
     deps.pageSize : 100;
   const businessId = deps.businessId || await readBusinessId(db);
   const skipClientIds = deps.skipClientIds || new Set();
+  const since = typeof deps.since === "string" && deps.since ? deps.since : "";
+  const isDelta = since !== "";
 
-  // Single pass over existing clients → Map<waveCustomerId, docRef>.
-  const existingByWaveId = await buildWaveIdIndex(db);
+  // Single pass over existing clients → Map<waveCustomerId, docRef>, built
+  // LAZILY (see the page loop): a delta run that finds nothing changed would
+  // otherwise pay ~650 document reads to resolve zero customers. Note the
+  // saving is inside THIS function — the sync around it still does its own
+  // reads (connection doc, rate limiter, queue queries).
+  let existingByWaveId = null;
 
   let batch = db.batch();
   let opsInBatch = 0;
@@ -542,7 +590,7 @@ async function importCustomers(deps = {}) {
   // updated in the app" on every single press.
   const summary = {
     totalCount: 0, imported: 0, updated: 0, skippedArchived: 0,
-    skippedPending: 0, skippedUnchanged: 0, pages: 0,
+    skippedPending: 0, skippedUnchanged: 0, pages: 0, delta: isDelta,
   };
 
   const flushIfFull = async () => {
@@ -553,17 +601,24 @@ async function importCustomers(deps = {}) {
     }
   };
 
+  // Hoisted: the document and its extra variable are decided once, not
+  // re-paired on every page.
+  const listQuery = isDelta ? LIST_CUSTOMERS_SINCE : LIST_CUSTOMERS;
+  const listArgs = isDelta ? {id: businessId, since} : {id: businessId};
+
   let page = 1;
   for (;;) {
-    const data = await graphql(
-        LIST_CUSTOMERS, {id: businessId, page, pageSize},
-    );
+    const data = await graphql(listQuery, {...listArgs, page, pageSize});
     const customers =
       data && data.business ? data.business.customers : null;
     const pageInfo = (customers && customers.pageInfo) || {};
     const edges = (customers && Array.isArray(customers.edges)) ?
       customers.edges : [];
     summary.pages += 1;
+    // Built here rather than up front, so an empty delta page reads nothing.
+    if (edges.length && !existingByWaveId) {
+      existingByWaveId = await buildWaveIdIndex(db);
+    }
     if (typeof pageInfo.totalCount === "number") {
       summary.totalCount = pageInfo.totalCount;
     }
