@@ -928,14 +928,15 @@ rateLimits/{route__uid}  True sliding window written by enforceDurableRateLimit.
                        dropped each call, and a call is rejected when >= max remain
   expiresAt: timestamp optional Firestore TTL target
 
-(signupCodes was retired from the APP by P4c, 2026-08-02, but it is NOT gone:
- the collection, its `/signupCodes` rules block (firestore.rules), its TTL
- fieldOverride (firestore.indexes.json) and the `createEmployeeInvite` /
- `redeemSignupCode` callables that read and write it all survive as the
- `#compat-1.37.1` shim for the build still on the App Store. Nothing in THIS
- build touches it. Do not "clean up" the rules block or the TTL entry ahead of
- the shim sweep — removing a fieldOverride and deploying `firestore:indexes`
- drops the live TTL policy. Retire the lot together; see docs/DEPLOYMENT.md.)
+(signupCodes is GONE. P4c retired it from the app 2026-08-02; the backend half
+ — the `/signupCodes` rules block, its TTL fieldOverride in
+ firestore.indexes.json, and the `createEmployeeInvite` / `redeemSignupCode`
+ callables that read and wrote it — survived as the `#compat-1.37.1` shim until
+ 2026-08-08, when every device was confirmed on 1.40+ and the lot was deleted.
+ The collection was verified empty in prod first, which is what made dropping
+ the fieldOverride safe: deploying `firestore:indexes` without it drops the live
+ TTL policy, and that policy is the only reaper those docs have. Apply the same
+ check before removing any other TTL entry. See docs/DEPLOYMENT.md.)
 
 appointmentReminders/{apptId_startMs_employeeDocId}   Per-recipient idempotency
                        ledger for the 30-min reminder sweep: create() fails if

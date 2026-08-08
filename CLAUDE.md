@@ -14,7 +14,11 @@ ever genuinely needed. Two Android remnants survive **deliberately** and are
 not dead code to clean up: `DefaultFirebaseOptions.android` (the Android
 Firebase app still exists in the console, and the shared `dev/.env` keys feed
 it) and the `platform: 'ios' | 'android'` field on `fcmTokens` docs, which the
-1.37.1 build on the App Store still writes.
+CURRENT build still writes — `push_registration_controller.dart` stamps
+`Platform.isIOS ? 'ios' : 'android'`, so on an iOS-only fleet the value is
+always `'ios'` but the write is live code, not a legacy row. (An earlier note
+here credited the 1.37.1 App Store build for it; that was wrong even then, and
+retiring the shim on 2026-08-08 changed nothing about this field.)
 **`web/`, `windows/`, `linux/` and `macos/` STAY** (owner call, 2026-08-05,
 asked and answered when `android/` went). They are untouched `flutter create`
 boilerplate for platforms nothing targets or builds — leave them alone; their
@@ -72,7 +76,7 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   previously-populated one — so pass `previous` (the prior emission) from the
   `ref.listen` in `main.dart`. A first-seen empty doc is a bootstrap window
   (fresh-sign-in `uid == null` branch, or an invited account signed in before
-  `redeemSignupCode` activates its doc), NOT a deletion. Never simplify back to
+  `completeEmployeeSetup` activates its doc), NOT a deletion. Never simplify back to
   `doc.isEmpty` alone, or invited employees get wrongly kicked out mid-activation
   (cold-start already-deleted accounts are caught earlier by `SplashScreen`).
 - **Employee visibility:** Employees see only appointments where their doc id is
@@ -439,13 +443,12 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
 - **Users collection read rule** has three clauses (see `firestore.rules`):
   admin, `status == 'active'`, or `uid == request.auth.uid` (own doc). New
   queries on `users` must satisfy one clause via their WHERE constraints or
-  they'll be rejected. A fourth
-  `email_verified && status == 'invited' && email == token.email` clause exists
-  only because the retired code flow left `uid` empty until redemption; P4c
-  mints the Auth account up front, so an invited person now reads their own doc
-  through clause 3 and **no current-build path calls clause 4** — it is retained
-  purely as the `#compat-1.37.1` shim for the build still on the App Store, and
-  goes when that does. An ordinary
+  they'll be rejected. **Three, not four** — a fourth
+  `email_verified && status == 'invited' && email == token.email` clause existed
+  only because the retired code flow left `uid` empty until redemption, and it
+  was deleted 2026-08-08 with the rest of the `#compat-1.37.1` shim. P4c mints
+  the Auth account up front, so an invited person reads their own doc through
+  clause 3; don't re-add an email-matched clause. An ordinary
   employee still cannot see a pending account: clause 2 requires `active`.
 - **Employee accounts: the admin invites, the employee sets up** (P4c,
   2026-08-02 — this REPLACED the one-time signup-code flow entirely). The
@@ -526,12 +529,12 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `CodeEntryBoxes`, `signup_code_dialog`, `InvitePreview` and the
   `revokeInvite`/`previewInvite` callables are all **deleted** — there is
   nothing left to "accept" in THIS build, which is why sign-in's bottom prompt
-  went with them. **The Dart side is gone; the backend side is not.** The
-  `signupCodes` collection and the `createEmployeeInvite`/`redeemSignupCode`
-  callables are still deployed as the `#compat-1.37.1` shim, because the build
-  on the App Store still calls them — see `docs/DEPLOYMENT.md`. Nothing in this
-  build does; don't wire anything new to them, and drop the whole shim
-  (`grep -rn "#compat-1.37.1"`) once 1.37.1 is off the field. Design:
+  went with them. **The backend half is gone too, as of 2026-08-08**: once every
+  device was on 1.40+, the whole `#compat-1.37.1` shim was retired —
+  `invites.js`, `signup_code_utils.js`, the `createEmployeeInvite`/
+  `redeemSignupCode` callables, the `signupCodes` collection's rules block and
+  TTL entry, and the two `allow delete` grants. There is no code-based invite
+  anywhere in the stack and none should be reintroduced. Design:
   `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.
 - **An employee's email is their SIGN-IN identity, so an edit to it moves BOTH
   stores or neither** (2026-08-04, which re-enabled a field that had been
@@ -733,15 +736,13 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   lazily backfilled and can be stale, missing or wrong. Rules cannot express
   "only when this client has no appointments" (no cheap foreign-collection
   count), so the callable is the only place that guarantee can live and
-  **nothing in this build deletes a client directly**.
-  **`allow delete` on `/clients` nonetheless survives as a second
-  `#compat-1.37.1` shim entry** (owner call 2026-08-03): 1.37.1+64 predates the
-  no-delete decision and still ships an *ungated* Delete button doing a direct
-  `doc.delete()`, which withdrawing the grant would break with an opaque
-  `permission-denied`. Be precise about the cost — while that grant is there the
-  hole is REAL: a 1.37.1 admin can still orphan a client's job history, which is
-  the very thing the callable's count() gate prevents. It goes with the rest of
-  the shim (grep `#compat-1.37.1`); never wire anything new to it.
+  **nothing deletes a client directly**.
+  **`allow delete` on `/clients` is now WITHDRAWN** (2026-08-08). It had
+  survived as a `#compat-1.37.1` shim entry for that build's ungated Delete
+  button, and while it did the hole was real — an admin on the old build could
+  orphan a client's job history, the very thing the callable's `count()` gate
+  prevents. That is closed: the callable is the only delete path, in rules as
+  well as in code. Never re-add the grant.
   `canDeleteClient`
   (`domain/policies/client_delete_policy.dart`) is **advisory UI only** — it
   keeps the swipe and the detail footer from offering what the server would
@@ -885,18 +886,21 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   because it indexes them by `storedIndex`; passing a display-ordered list
   silently mislabels every day.
 - **A user-doc rules cap must not be tighter than the widest value a shipped
-  write path can produce.** `createEmployeeInvite` accepts `phone` up to 40
-  chars while `TextLimits.phone` is 15, so `isValidUserData` caps phone at
-  **40** — a cap of 15 would make every invite-created doc with a longer phone
+  write path can produce.** `createEmployeeAccount` accepts `phone` up to 40
+  chars while `TextLimits.phone` is 24, so `isValidUserData` caps phone at
+  **40** — a tighter cap would make every server-created doc with a longer phone
   permanently un-updatable, including by `deactivateEmployee`. Rules caps mirror
-  the *server* limit; the client caps with `TextLimits`. Same reasoning for the
+  the *server* limit; the client caps with `TextLimits`. **Retiring a callable
+  does NOT license tightening a cap it set**: the docs it created outlive it, so
+  the 40 survives `createEmployeeInvite` (deleted 2026-08-08) on the strength of
+  the rows still in the collection. Same reasoning for the
   P4b `emergencyPhone`: rules cap **40**, client caps `TextLimits.phone`.
   **The converse also holds: a client cap must not be LOOSER than the callable's,
   or the field silently accepts a value the callable rejects as
   `invalid-argument`** — which reaches the user as an unexplained "Something went
   wrong" they cannot fix by editing. That is why the `users` name halves use
-  `TextLimits.employeeNameHalf` (**100**), matching `createEmployeeInvite` and
-  `redeemSignupCode` exactly, rather than the 200-char `TextLimits.firstName`
+  `TextLimits.employeeNameHalf` (**100**), matching `createEmployeeAccount` and
+  `completeEmployeeSetup` exactly, rather than the 200-char `TextLimits.firstName`
   used for clients. `name` is the JOIN of those halves, so it legitimately
   reaches 201 — its server and rules caps are **250**, sized to the composed
   value and never to a half. Same reason for **`TextLimits.authEmail` (254)**:

@@ -77,14 +77,6 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Admin SDK only — a client that could read a code hash could brute-force it
-    // offline, and one that could write could just mint its own codes.
-    // BACKWARD-COMPAT SHIM (#compat-1.37.1): retained for the 1.37.1+64 build's
-    // createEmployeeInvite/redeemSignupCode flow. Delete with the shim.
-    match /signupCodes/{codeHash} {
-      allow read, write: if false;
-    }
-
     // Admin-SDK-only idempotency ledger for the 30-minute reminder sweep. If a client
     // could delete an entry, it could force a duplicate reminder.
     match /appointmentReminders/{id} {
@@ -124,36 +116,18 @@ service cloud.firestore {
       // The own-doc clause is what an `invited` person reads on the setup screen:
       // since createEmployeeAccount mints the Auth account up front, their doc has
       // carried `uid` since creation.
-      //
-      // The fourth clause is a BACKWARD-COMPAT SHIM (#compat-1.37.1). The
-      // retired code flow leaves `uid` empty until redemption, so the 1.37.1+64
-      // build still on the App Store reaches its own invited doc by email match
-      // and nothing else. It only works for a direct get, not a client list
-      // query, since Firestore can't prove the email-equality check from a
-      // query constraint. Delete it with the rest of the shim.
       allow read: if isAdmin()
         || (isActiveUser() && resource.data.status == 'active')
-        || (isSignedIn() && resource.data.uid == request.auth.uid)
-        || (isSignedIn()
-            && request.auth.token.email_verified == true
-            && resource.data.status == 'invited'
-            && resource.data.email == request.auth.token.email);
+        || (isSignedIn() && resource.data.uid == request.auth.uid);
 
-      // Delete was withdrawn 2026-08-02 (P4): removing a users doc orphans every
-      // past appointment's employeeIds link — the visit keeps the denormalized
-      // employeeNames and loses the crew colour and the person. Disable is the
-      // shipping action and does strictly more (syncUsersByUid disables the Auth
-      // account, revokes tokens, and purges presence/FCM/LiveActivity rows).
-      // The Admin SDK bypasses rules, so console cleanup is unaffected.
-      //
-      // It is granted here only as a BACKWARD-COMPAT SHIM (#compat-1.37.1): the
-      // 1.37.1+64 build still on the App Store renders a "Delete employee"
-      // button (employee_details_view.dart:45) that calls users.doc(id).delete(),
-      // and withdrawing the rule under it turns that tap into an opaque
-      // permission-denied. No current-build path deletes a users doc. Delete
-      // this grant with the rest of the shim.
-      // TODO(george): delete with the 1.37.1 shim (#compat-1.37.1)
-      allow delete: if isAdmin();
+      // No delete grant, deliberately (withdrawn 2026-08-02 by P4, and the
+      // 1.37.1 compat grant that outlived it retired 2026-08-08): removing a
+      // users doc orphans every past appointment's employeeIds link — the visit
+      // keeps the denormalized employeeNames and loses the crew colour and the
+      // person. Disable is the shipping action and does strictly more
+      // (syncUsersByUid disables the Auth account, revokes tokens, and purges
+      // presence/FCM/LiveActivity rows). The Admin SDK bypasses rules, so
+      // console cleanup is unaffected.
 
       // Same shape guard AND the same function-owned denylist as `allow update`
       // below — otherwise the identical admin session that cannot EDIT `uid` or
@@ -551,26 +525,13 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data)
              .affectedKeys()
              .hasAny(['waveCustomerId', 'wave', 'jobCount']);
-      // Delete belongs to the `deleteClient` callable, which refuses a client
-      // that still has appointments. Rules cannot express "only when this
-      // client has no appointments" — there is no cheap way to count a foreign
-      // collection here — so the callable is the only place that guarantee can
-      // live, and NOTHING in this build deletes a client directly.
-      //
-      // BACKWARD-COMPAT SHIM. This grant is retained ONLY for the 1.37.1+64
-      // build on the App Store, which predates the 2026-08-01 no-delete
-      // decision and still ships an ungated "Delete client" button doing a
-      // direct doc.delete() (client_detail_view.dart:72 at `2b1ace5`).
-      // Removing it now would fail that button with an opaque
-      // permission-denied.
-      //
-      // It is a REAL HOLE while it is here: a 1.37.1 admin can still delete a
-      // client with job history and orphan those appointments, which is exactly
-      // what the callable's live count() gate exists to prevent. Retire it with
-      // the rest of the shim once no 1.37.1 build remains in the field — grep
-      // `#compat-1.37.1` — and do NOT wire anything new to it.
-      // TODO(george): delete with the 1.37.1 shim (#compat-1.37.1)
-      allow delete: if isAdmin();
+      // No delete grant, deliberately. Delete belongs to the `deleteClient`
+      // callable, which refuses a client that still has appointments. Rules
+      // cannot express "only when this client has no appointments" — there is
+      // no cheap way to count a foreign collection here — so the callable is
+      // the only place that guarantee can live, and nothing may delete a client
+      // directly. The 1.37.1 compat grant that kept this open (for that build's
+      // ungated Delete button) retired 2026-08-08; don't restore it.
     }
 
     // ── wave (Wave Accounting connection metadata) ────────────────────────────

@@ -3,7 +3,7 @@
 Loaded when working under `functions/`. Root context: `../CLAUDE.md`.
 
 Functions live in `functions/` (project `schedulingapp-88727`, region
-`us-central1`). `index.js` is now a thin wiring surface that re-exports all 27
+`us-central1`). `index.js` is now a thin wiring surface that re-exports all 25
 functions under their original names — the implementations are split into
 domain modules: `security.js` (shared callable guards — `assertPayloadShape`,
 `requireString`, `optionalString` (same trim/length/control-char checks but
@@ -75,17 +75,17 @@ Pure helpers `performCreateAccount`, `performDeleteAccount`,
 `performChangeEmail` and
 `buildActivationPatch` are exported for unit tests; the last one owns the
 never-empty-`name` contract that keeps a person inside `watchAllUsers`'
-`orderBy('name')`. `revokeInvite` and `previewInvite` are **deleted**.
-**`invites.js`, `signup_code_utils.js`, `createEmployeeInvite` and
-`redeemSignupCode` survive ONLY as a backward-compat shim** (`#compat-1.37.1`)
-for the 1.37.1+64 build still on the App Store, which calls the latter two from
-`firebase_employees_repository.dart` — deleting them while that build is live
-breaks every invite in flight and the admin's "Invite employee" button. No
-current-build path calls them. Retire them together with the `/signupCodes`
-rules block, its `firestore.indexes.json` TTL entry, the fourth `/users` read
-clause and the `/users` `allow delete` grant once no 1.37.1 build remains in
-the field — grep `#compat-1.37.1`. Until then the codebase still has one
-unauthenticated callable (`redeemSignupCode`)),
+`orderBy('name')`. **The whole one-time signup-code flow is GONE** — P4c
+replaced it in the app 2026-08-02, and the backend half it left behind as the
+`#compat-1.37.1` shim was deleted 2026-08-08 once every device was on 1.40+:
+`revokeInvite` and `previewInvite` (never deployed), then `invites.js`,
+`signup_code_utils.js`, `createEmployeeInvite` and `redeemSignupCode`, together
+with the `/signupCodes` rules block and its `firestore.indexes.json` TTL entry,
+the fourth `/users` read clause and the `allow delete` grants on `/users` and
+`/clients`. **There is no longer any unauthenticated callable** — that was
+`redeemSignupCode`, and it was the last one. Don't reintroduce a code-based
+invite; the shipping flow is admin-creates-account →
+employee-completes-setup),
 `maintenance.js`
 (image validation + history purge; the pure JPEG/PNG magic-byte check lives in
 `image_magic.js`), `notifications.js` (FCM push triggers, backed by
@@ -146,9 +146,11 @@ directly. Jest tests live in **`functions/__tests__/` only** — the parallel
   `waveImportCustomers` — App Check + `assertAdmin` + `enforceDurableRateLimit`).
   **`waveImportCustomers` is a TWO-WAY sync despite its name** (2026-08-04): it
   drains the outbox to Wave via `drainForSync` and only then imports. The name
-  stays because 1.37.1 calls it (`#compat-1.37.1`) — renaming a deployed
-  callable deletes the one that build depends on, so that tag marks a
-  **RENAME** site here, unlike every other hit, which is a deletion site.
+  is historical and **stays** — renaming a deployed callable deletes the one
+  every shipped build calls, so the cost of the accurate name is a broken
+  "Sync with Wave" button on every phone until it updates. This outlived the
+  `#compat-1.37.1` shim it was first tagged with: the constraint was never
+  specific to 1.37.1.
   **AN IMPORT MUST NEVER TOUCH A CLIENT WITH AN UN-PUSHED OUTBOX JOB.** This is
   the invariant, and push-before-pull is only half of it. `importCustomers`
   overwrites every mapped field of a linked client with Wave's values AND

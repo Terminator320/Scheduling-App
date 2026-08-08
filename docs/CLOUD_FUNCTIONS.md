@@ -34,13 +34,15 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 > wrong before — verify against the live list rather than trusting it.
 
 
-- **27 functions defined** in code and **27 deployed** as of 2026-08-04
-  (corrected — an earlier revision said 23/22 and claimed P4c *deleted* the
-  invite callables). P4c added `createEmployeeAccount`,
-  `completeEmployeeSetup` and `deleteEmployeeAccount` but **kept**
-  `createEmployeeInvite` and `redeemSignupCode` as the `#compat-1.37.1` shim;
-  `revokeInvite` and `previewInvite` were never deployed and do not exist in
-  code. `changeEmployeeEmail` landed 2026-08-04 (26 → 27). (v2, Node.js 24, 256 MB; `us-central1`
+- **25 functions defined** in code as of 2026-08-08; **27 were deployed** as of
+  2026-08-04 and the retirement deploy has NOT yet run, so prod is still at 27
+  until it does. P4c added `createEmployeeAccount`,
+  `completeEmployeeSetup` and `deleteEmployeeAccount` and kept
+  `createEmployeeInvite` / `redeemSignupCode` as the `#compat-1.37.1` shim;
+  `changeEmployeeEmail` landed 2026-08-04 (26 → 27); **the shim was retired
+  2026-08-08 (27 → 25)** once every device was on 1.40+, deleting those two
+  callables. `revokeInvite` and `previewInvite` were never deployed and never
+  existed in code. (v2, Node.js 24, 256 MB; `us-central1`
   except `validateUploadedImage` in `us-east1`). The 2026-07-18 deploy shipped
   `placesReverseGeocode`, the travel-aware `sendUpcomingJobReminders` rebuild,
   and the codebase-audit fixes (overdue-sweep ordering, bounded travel-context
@@ -54,11 +56,13 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   **enabled in the console 2026-07-11** — this list previously said it was still
   outstanding, which was wrong. Still outstanding: on-device push verification.
   TTL was extended to `liveActivityTokens`, `rateLimits`, and `signupCodes` on
-  2026-07-20 (the `signupCodes` policy is **still live and its `fieldOverride`
-  is still in `firestore.indexes.json`** — corrected 2026-08-04; an earlier
-  revision claimed it had been removed, which would have dropped a live TTL
-  policy on the next `firestore:indexes` deploy. It retires with the rest of
-  the `#compat-1.37.1` shim), and a `fieldOverride` for the new `appointmentSeriesNotices` claim
+  2026-07-20. **The `signupCodes` `fieldOverride` was removed from
+  `firestore.indexes.json` on 2026-08-08** with the rest of the
+  `#compat-1.37.1` shim, so the next `firestore:indexes` deploy DROPS that live
+  TTL policy — which is intended here, and only safe because the collection was
+  verified **empty in prod** first (a TTL policy is the only reaper for those
+  docs; dropping it over a non-empty collection strands them forever). A
+  `fieldOverride` for the `appointmentSeriesNotices` claim
   ledger was added to `firestore.indexes.json` on 2026-07-21 (that ledger has no
   in-code reaper, so the TTL is its only cleanup). Every policy's **expiration
   offset normalized to `0`** — the
@@ -150,11 +154,12 @@ slot if the Auth delete fails server-side. Auth user is deleted **first**
 ## Employee accounts (admin invites, employee sets up)
 
 Rebuilt by **P4c, 2026-08-02**, replacing the one-time signup-code flow in the
-APP. `revokeInvite` and `previewInvite` were never deployed and do not exist in
-code, but `invites.js`, `signup_code_utils.js`, `createEmployeeInvite` and
-`redeemSignupCode` all SURVIVE as the `#compat-1.37.1` shim (corrected
-2026-08-04 — an earlier revision said they were deleted). Nothing in this build
-calls them. All four callables
+APP — and as of **2026-08-08 the signup-code flow is gone from the backend too**:
+`invites.js`, `signup_code_utils.js`, `createEmployeeInvite` and
+`redeemSignupCode` were deleted with the rest of the `#compat-1.37.1` shim.
+`revokeInvite` and `previewInvite` were never deployed and never existed in
+code. **`redeemSignupCode` was the last unauthenticated callable in the
+codebase**; every remaining one requires auth. All four callables
 below share `APP_CHECK = {enforceAppCheck: true}`. Full design:
 `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.
 
@@ -244,11 +249,11 @@ order is the standard one (auth → `assertAdmin` → payload →
 `enforceDurableRateLimit` 20/hr per admin uid → work), and an id containing `/`
 is rejected up front because `.doc()` throws synchronously on it and would
 surface as an opaque `internal`. No rules change: the deletes are Admin SDK.
-Note `allow delete` on `/users` is withdrawn from THIS build's code path but is
-still granted in `firestore.rules` as a `#compat-1.37.1` shim, so a 1.37.1
-client can still delete a users doc and orphan its crew links — see
-docs/DEPLOYMENT.md. Transactional core exported as `performDeleteAccount` for
-jest.
+Note `allow delete` on `/users` is withdrawn from this build's code path AND
+from `firestore.rules` — the `#compat-1.37.1` grant that kept a 1.37.1 client
+able to delete a users doc (orphaning its crew links) was retired 2026-08-08;
+see docs/DEPLOYMENT.md. Transactional core exported as `performDeleteAccount`
+for jest.
 
 ### `changeEmployeeEmail` — `employee_accounts.js`
 Admin-only. Moves an employee's **sign-in identity** in Firebase Auth and on
@@ -537,10 +542,10 @@ the automatic single-field index on `clientId` — no composite index needed.
 
 ### `deleteClient` — `clients.js`
 Admin-only callable, the **only** delete path for a client in this build.
-`allow delete` on `/clients` is withdrawn from this build's code path but is
-STILL GRANTED in `firestore.rules` as a `#compat-1.37.1` shim (1.37.1 ships an
-ungated Delete button), so the orphaning hole is real until that shim goes —
-see docs/DEPLOYMENT.md. The callable exists because rules cannot express
+`allow delete` on `/clients` is withdrawn from this build's code path AND from
+`firestore.rules` — the `#compat-1.37.1` grant (kept for 1.37.1's ungated
+Delete button) was retired 2026-08-08, closing the orphaning hole; see
+docs/DEPLOYMENT.md. The callable exists because rules cannot express
 "only when this client has
 no appointments" — there is no cheap way to count a foreign collection there.
 Refuses with `failed-precondition / client-has-history` when a **live `count()`
@@ -594,9 +599,12 @@ the lone exception. The limiter sits AFTER the payload validation so a burst of
 malformed submissions can't exhaust a legitimate caller's window.
 
 ### `waveImportCustomers` — `wave/callables.js`
-Admin **two-way** sync behind Settings › "Sync with Wave" (2026-08-04; the
-callable keeps its original name because the 1.37.1 App Store build still calls
-it — `#compat-1.37.1`).
+Admin **two-way** sync behind Settings › "Sync with Wave" (2026-08-04). The
+callable keeps its original, now-inaccurate name because renaming a deployed
+callable deletes the one **every** shipped build calls — a constraint that
+outlived the `#compat-1.37.1` shim it was first tagged with, and that any
+future rename still has to solve (deploy both names, then drop the old one
+once no build calls it).
 
 **Push, then pull, in that order.** `drainForSync` first drains pending
 `waveSyncQueue` jobs to Wave, then `importCustomers` pulls Wave customers back

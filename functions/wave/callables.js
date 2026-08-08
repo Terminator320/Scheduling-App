@@ -446,11 +446,13 @@ async function drainForSync({businessId, uid}) {
 // waveImportCustomers — admin-only two-way sync: push the outbox to Wave,
 // then pull Wave customers back into `clients`.
 //
-// #compat-1.37.1 — RENAME, NOT DELETE. Every other hit of that tag is a
-// deletion site; this one is the opposite instruction. The 1.37.1+64 App Store
-// build calls this name, and renaming a deployed callable deletes the function
-// that build depends on. When the shim is swept, rename to waveSyncCustomers
-// rather than removing anything (same for wave_service.dart's caller).
+// The name is inaccurate and stays anyway. It was first tagged #compat-1.37.1,
+// but that tag was wrong about WHY: renaming a deployed callable deletes the
+// old name, and EVERY shipped build calls this one — not just the 1.37.1 the
+// shim was about. So retiring that shim (2026-08-08) did not unblock a rename,
+// and a future one still needs the two-step: deploy the new name alongside,
+// ship a build that calls it, then drop the old name once no build calls it.
+// Same for wave_service.dart's caller.
 const waveImportCustomers = onCall(
     {
       secrets: [WAVE_FULL_ACCESS_TOKEN],
