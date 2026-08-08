@@ -68,7 +68,7 @@
   "calendar_assignedLabel": "ASSIGNÉ",
   "calendar_photosLabel": "PHOTOS",
   "calendar_crewPlusOthers": "{name} +{others}",
-  "calendar_closedCount": "Clôturés · {count}",
+  "calendar_closedCount": "Terminés · {count}",
   "calendar_dayOfCount": "Jour {index} sur {count}",
   "calendar_nightOfCount": "Nuit {index} sur {count}",
   "calendar_scheduleLabel": "HORAIRE",

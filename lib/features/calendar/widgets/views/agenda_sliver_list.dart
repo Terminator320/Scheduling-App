@@ -117,8 +117,8 @@ class AgendaSliverList extends StatelessWidget {
 }
 
 /// The rule between the day's remaining work and the jobs that are finished or
-/// cancelled. It says "Closed", not "Complete", because cancelled visits sink
-/// into the same block.
+/// cancelled. It reads "Done" (owner call) even though cancelled visits sink
+/// into the same block — the count covers both.
 class _ClosedRule extends StatelessWidget {
   const _ClosedRule({required this.count});
 

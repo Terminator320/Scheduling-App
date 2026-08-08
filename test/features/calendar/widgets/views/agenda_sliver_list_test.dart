@@ -1,4 +1,4 @@
-// The "Closed" rule is the only thing in the agenda that depends on the day
+// The "Done" rule is the only thing in the agenda that depends on the day
 // being sorted open-then-closed, so it is pinned here rather than in the card.
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -61,7 +61,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('CLOSED · 2'), findsOneWidget);
+    expect(find.text('DONE · 2'), findsOneWidget);
     expect(find.byType(Divider), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -76,7 +76,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(Divider), findsNothing);
-    expect(find.textContaining('CLOSED'), findsNothing);
+    expect(find.textContaining('DONE ·'), findsNothing);
   });
 
   testWidgets('a day that is entirely closed still gets one rule, at the top', (
@@ -90,9 +90,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('CLOSED · 2'), findsOneWidget);
+    expect(find.text('DONE · 2'), findsOneWidget);
     expect(
-      tester.getTopLeft(find.text('CLOSED · 2')).dy,
+      tester.getTopLeft(find.text('DONE · 2')).dy,
       lessThan(tester.getTopLeft(find.text('done')).dy),
     );
   });
