@@ -370,4 +370,73 @@ void main() {
       expect(DashboardAggregator.displayStatusAt(job, _now), 'overdue');
     });
   });
+
+  group('the live / history range split', () {
+    test('the two halves tile the full window with no gap', () {
+      final full = DashboardAggregator.rangeAround(_now);
+      final live = DashboardAggregator.liveRangeAround(_now);
+      final history = DashboardAggregator.historyRangeAround(_now);
+
+      // History ends exactly where live begins — a gap here would drop a
+      // whole week out of the trend charts with nothing on screen saying so.
+      expect(history.end, live.start);
+      expect(history.start, full.start);
+      expect(live.end, full.end);
+    });
+
+    test('only the current week onwards is watched live', () {
+      final live = DashboardAggregator.liveRangeAround(_now);
+
+      // Seven of the eight week buckets are closed history; watching them
+      // bought nothing and is what pushed the one stream at its 1000-doc cap.
+      expect(live.start, DashboardAggregator.mondayOf(_now));
+    });
+
+    test('the live end still covers the 48h pending horizon', () {
+      final live = DashboardAggregator.liveRangeAround(_now);
+      // Attention's pendingSoon window must be inside the range that feeds it.
+      expect(
+        live.end.isAfter(_now.add(DashboardAggregator.pendingSoonWindow)),
+        isTrue,
+      );
+    });
+  });
+
+  group('mergeById', () {
+    test('a job in both halves is counted once', () {
+      final shared = _appt(id: 'a', start: DateTime(2026, 7, 7, 9));
+      final onlyHistory = _appt(id: 'b', start: DateTime(2026, 6, 20, 9));
+
+      final merged = DashboardAggregator.mergeById(
+        [shared],
+        [shared, onlyHistory],
+      );
+
+      // The two queries overlap by a fortnight (each reaches back to its own
+      // fetchStart), so concatenating double-counted that window everywhere.
+      expect(merged.map((a) => a.id), ['a', 'b']);
+    });
+
+    test('the live copy wins a collision', () {
+      final live = _appt(id: 'a', start: DateTime(2026, 7, 7, 9), status: 'done');
+      final stale = _appt(id: 'a', start: DateTime(2026, 7, 7, 9));
+
+      final merged = DashboardAggregator.mergeById([live], [stale]);
+
+      // Live is the half backed by a listener, so it is the half that can be
+      // newer.
+      expect(merged.single.status, 'done');
+    });
+
+    test('a record with no doc id is kept rather than collapsed', () {
+      final a = _appt(id: 'x', start: DateTime(2026, 7, 7, 9))
+          .copyWith(id: null);
+      final b = _appt(id: 'y', start: DateTime(2026, 7, 7, 10))
+          .copyWith(id: null);
+
+      // Dropping real work out of the Attention list is worse than a possible
+      // double-count.
+      expect(DashboardAggregator.mergeById([a, b], const []).length, 2);
+    });
+  });
 }

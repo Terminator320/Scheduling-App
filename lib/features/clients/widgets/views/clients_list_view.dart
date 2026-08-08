@@ -235,32 +235,19 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
   static const double _skeletonRowExtent = 64;
   static const int _skeletonMaxRows = 4;
 
-  Widget _skeletonRows(int rows) => Padding(
-    padding: const EdgeInsets.all(AppSpacing.sp16),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < rows; i++) ...[
-          if (i > 0) const SizedBox(height: AppSpacing.sp8),
-          const SkeletonListTile(),
-        ],
-      ],
-    ),
-  );
-
   // The first-page indicator lands inside ISP's SliverFillRemaining, which asks
   // its child for intrinsic dimensions — so this one can neither scroll (a nested
   // ListView throws) nor measure (LayoutBuilder can't report intrinsics either).
   // It is laid out against the sliver's own extent, so a fixed count can't clip.
-  Widget _skeleton() => _skeletonRows(_skeletonMaxRows);
+  Widget _skeleton() => const SkeletonList(rows: _skeletonMaxRows);
 
   // The search and type paths instead hand the skeleton the whole body of a tight
   // Expanded, which the keyboard shortens well below four rows' worth — no sliver
   // above it here, so the row count can follow the height.
   Widget _fittedSkeleton() => LayoutBuilder(
     builder: (context, constraints) => ClipRect(
-      child: _skeletonRows(
-        constraints.maxHeight.isFinite
+      child: SkeletonList(
+        rows: constraints.maxHeight.isFinite
             ? ((constraints.maxHeight - AppSpacing.sp16 * 2 + AppSpacing.sp8) /
                       (_skeletonRowExtent + AppSpacing.sp8))
                   .floor()

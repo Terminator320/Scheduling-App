@@ -136,7 +136,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         return;
       }
     }
-    await ref.read(appLockEnabledProvider.notifier).setEnabled(value: value);
+    try {
+      await ref.read(appLockEnabledProvider.notifier).setEnabled(value: value);
+    } catch (e, st) {
+      // flutter_secure_storage throws on an iOS keychain fault, including the
+      // pre-first-unlock -25308 window AppLockController._load() documents by
+      // name. Uncaught, that reached the zone handler as a FATAL and the
+      // switch reverted silently. Same shape as OnboardingGate._finish.
+      ref.read(loggerProvider).warn('APPLOCK setEnabled failed', e, st);
+      if (!mounted) return;
+      ref
+          .read(noticeServiceProvider)
+          .error(
+            composeErrorNotice(
+              context,
+              intro: context.l10n.error_introSaveAppLock,
+              error: e,
+            ),
+          );
+    }
   }
 
   Future<void> _onTextSizeTap() async {

@@ -7,7 +7,6 @@ import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
-import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
@@ -78,16 +77,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
           compact: context.isLandscape,
           onBack: _back,
           actions: const [AppHeaderPair()],
-          bottom: _tour.has(TourStepId.historySearch)
-              ? TourShowcaseBar(
-                  showcaseKey: _tour.keys[TourStepId.historySearch]!,
-                  scope: _tour.scope,
-                  id: TourStepId.historySearch,
-                  index: _tour.ids.indexOf(TourStepId.historySearch),
-                  count: _tour.ids.length,
-                  bar: searchBar,
-                )
-              : searchBar,
+          bottom: _tour.stepBarIf(TourStepId.historySearch, searchBar),
         ),
         endDrawer: AppNavDrawer(
           isAdmin: widget.isAdmin,

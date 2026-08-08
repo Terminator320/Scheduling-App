@@ -20,7 +20,6 @@ import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
-import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
@@ -162,16 +161,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         employeeId: widget.employeeId,
       ),
       actions: const [AppHeaderPair()],
-      bottom: _tour.has(TourStepId.employeesSearch)
-          ? TourShowcaseBar(
-              showcaseKey: _tour.keys[TourStepId.employeesSearch]!,
-              scope: _tour.scope,
-              id: TourStepId.employeesSearch,
-              index: _tour.ids.indexOf(TourStepId.employeesSearch),
-              count: _tour.ids.length,
-              bar: searchBar,
-            )
-          : searchBar,
+      bottom: _tour.stepBarIf(TourStepId.employeesSearch, searchBar),
     );
   }
 
@@ -184,16 +174,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     // so it excludes the invited and disabled rows this roster renders).
     final employeesAsync = ref.watch(allUsersStreamProvider);
     return employeesAsync.when(
-      loading: () => ListView(
-        padding: const EdgeInsets.all(AppSpacing.sp16),
-        children: const [
-          SkeletonListTile(),
-          SizedBox(height: AppSpacing.sp12),
-          SkeletonListTile(),
-          SizedBox(height: AppSpacing.sp12),
-          SkeletonListTile(),
-        ],
-      ),
+      loading: () => const SkeletonList(),
       error: (_, _) {
         return Center(
           child: Column(

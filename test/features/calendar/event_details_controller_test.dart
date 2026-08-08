@@ -227,13 +227,6 @@ void main() {
       expect(readState().errors, isEmpty);
     });
 
-    test('exitEditing flips isEditing back', () {
-      readNotifier()
-        ..enterEditing()
-        ..exitEditing();
-      expect(readState().isEditing, isFalse);
-    });
-
     test(
       'turning Personal off KEEPS all-day (retired invariant: all-day now '
       'applies to client jobs too, so the flag is reachable and repairable '

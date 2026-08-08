@@ -48,6 +48,12 @@ class ImageStorageService {
     );
 
     final snapshot = await ref.putFile(file, metadata);
+    // NOTE: nothing in the current build renders from this URL any more —
+    // AppointmentImageUrlResolver resolves storagePath at render time so every
+    // read re-evaluates storage.rules. It is still persisted purely so builds
+    // that predate the resolver keep showing photos uploaded from this one;
+    // drop the write (and the field) once the fleet has moved, the same way
+    // the 1.37.1 shim was retired.
     final url = await snapshot.ref.getDownloadURL();
 
     return AppointmentImage(

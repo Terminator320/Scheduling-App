@@ -15,6 +15,12 @@
 //
 // The script never writes to `users` — it only reads from it and writes
 // to `usersByUid`.
+//
+// PROD RUN: not recorded. `usersByUid` is long-deployed and foundational —
+// every rules gate resolves a role through it, and sign-in works — so it
+// either ran or the trigger has since covered every doc. Kept rather than
+// deleted because it is idempotent and re-runnable if a bridge doc is ever
+// found missing; unlike the two client backfills, nothing tracks this one.
 
 const { initializeApp, applicationDefault } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");

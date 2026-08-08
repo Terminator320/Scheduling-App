@@ -79,6 +79,8 @@ class AppointmentFormValidator {
     final date = input.date;
     final endDate = input.endDate;
     if (date != null && endDate != null) {
+      // Raw, not clamped: this is the one caller that has to SEE an
+      // out-of-range value in order to refuse it.
       final span = calendarDaysBetween(date, endDate) + 1;
       if (span < 1) {
         errors['endDate'] = AppointmentFormError.endDateBeforeStart;
@@ -132,6 +134,22 @@ class AppointmentFormValidator {
     start: combineDateAndTime(date, startTime),
     end: combineDateAndTime(lastDay, endTime),
   );
+}
+
+/// How many days a form's [start]–[end] date pair runs for, floored at 1.
+///
+/// The `+ 1` is the "end date names the last day the crew STARTS work" rule,
+/// and it was hand-copied into both form bodies — the two of them even sharing
+/// the same five-line comment, which is the tell. Lives here beside
+/// [appointmentSpan], which already owns how a form's dates become instants.
+///
+/// A null date means the form is only half filled in, and both rows read as a
+/// single-day job until it is complete; the floor covers a reversed pair,
+/// which [AppointmentFormValidator] refuses separately.
+int runLengthDays(DateTime? start, DateTime? end) {
+  if (start == null || end == null) return 1;
+  final span = calendarDaysBetween(start, end) + 1;
+  return span < 1 ? 1 : span;
 }
 
 /// True when a daily window runs past midnight.

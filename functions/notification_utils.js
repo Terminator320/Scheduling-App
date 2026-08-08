@@ -373,8 +373,12 @@ async function _deliverRecipientOnce(deps, opts) {
   const {db, logger} = deps;
   const {collection, ledgerId, appointmentId, employeeDocId, kind, buildMsg,
     nowDate, label, roles, cache} = opts;
-  const ledgerRef = db.collection(collection).doc(ledgerId);
+  let ledgerRef;
   try {
+    // Built INSIDE the try: .doc() throws synchronously on an id containing
+    // "/", and rules only length-check employeeIds (they can't iterate a
+    // list), so one poisoned element would otherwise kill the whole sweep.
+    ledgerRef = db.collection(collection).doc(ledgerId);
     // create() fails if the doc exists -> fires at most once per recipient.
     await ledgerRef.create(ledgerBody(nowDate));
   } catch (err) {
@@ -607,24 +611,34 @@ async function runDailyDigest(deps) {
       .filter((id) => grouped[id] && grouped[id].length > 0)
       .map(async (employeeDocId) => {
         const jobs = grouped[employeeDocId];
-        // The 18:00 digest also carries a fresh widget payload (+ content-
-        // available) so the home-screen widget rolls forward to tomorrow with
-        // the app closed, matching the digest text.
-        const records = await fetchEmployeeWidgetWindow(
-            db, employeeDocId, nowDate, deps.logger,
-        );
-        return sendToEmployee(
-            deps,
-            employeeDocId,
-            {kind: "digest"},
-            (locale) => buildDigestMessage(jobs, locale),
-            TIMED_RECIPIENT_ROLES,
-            cache,
-            (locale) => ({
-              widgetPayload: JSON.stringify(
-                  buildWidgetPayload(records, nowDate, locale)),
-            }),
-        );
+        try {
+          // The 18:00 digest also carries a fresh widget payload (+ content-
+          // available) so the home-screen widget rolls forward to tomorrow
+          // with the app closed, matching the digest text.
+          const records = await fetchEmployeeWidgetWindow(
+              db, employeeDocId, nowDate, deps.logger,
+          );
+          return await sendToEmployee(
+              deps,
+              employeeDocId,
+              {kind: "digest"},
+              (locale) => buildDigestMessage(jobs, locale),
+              TIMED_RECIPIENT_ROLES,
+              cache,
+              (locale) => ({
+                widgetPayload: JSON.stringify(
+                    buildWidgetPayload(records, nowDate, locale)),
+              }),
+          );
+        } catch (err) {
+          // A transient read/send failure must not abort the digest for the
+          // remaining employees. There is no ledger and this runs once a day,
+          // so a dropped batch means those people lose tomorrow entirely.
+          if (deps.logger) {
+            deps.logger.warn("digest: send failed", {id: employeeDocId, err});
+          }
+          return 0;
+        }
       });
   const sentCounts = await Promise.all(sends);
   const digests = sentCounts.filter((sent) => sent > 0).length;

@@ -24,12 +24,15 @@ const {buildEmailChangedMessage} = require("./notification_messages");
  *
  * It is deliberately NOT a secret: the admin reads it off the roster and says
  * it out loud. What makes the account safe is that it stays `status:"invited"`
- * until `completeEmployeeSetup` runs, and the rules grant an invited user
- * nothing — so the window a known password opens is "can reach the setup
- * screen as this person", not "can read the business".
+ * until `completeEmployeeSetup` runs, the rules grant an invited user nothing,
+ * AND that callable refuses without a verified email — so a stranger who knows
+ * the address can reach the setup screen but cannot get past it, because
+ * finishing setup requires control of the mailbox. The setup screen sends the
+ * standard Firebase verification email and waits for it.
  *
- * That window is still real. Create the account when you are handing the
- * credentials over, not weeks ahead.
+ * That window is still real: whoever holds the mailbox and the shared password
+ * can activate the account. Create it when you are handing the credentials
+ * over, not weeks ahead.
  *
  * **Hand-mirrored by `kDefaultStartingPassword` in
  * `lib/features/employees/domain/policies/starting_password_policy.dart`.**
@@ -504,6 +507,20 @@ function buildActivationPatch(fields, opts) {
 const completeEmployeeSetup = onCall(APP_CHECK, async (req) => {
   if (!req.auth || !req.auth.uid) {
     throw new HttpsError("unauthenticated", "auth-required");
+  }
+  // The account is created on a SHARED starting password, so signing in proves
+  // nothing about who you are. This is the guard that makes the invite window
+  // survivable: activation requires control of the mailbox, so a stranger who
+  // knows the address can reach the setup screen but cannot leave the `invited`
+  // state — where the rules grant nothing. An identity guard, so it sits above
+  // the rate limiter (a caller who can't pass it must not burn slots).
+  //
+  // Fails CLOSED on a missing token: `req.auth.token && ...` would have let a
+  // caller through by NOT presenting one, which is the wrong direction for the
+  // guard the paragraph above describes. v2 always populates it for an
+  // authenticated call, so this is posture, not a live hole.
+  if (!req.auth.token || req.auth.token.email_verified !== true) {
+    throw new HttpsError("failed-precondition", "email-not-verified");
   }
   assertPayloadShape(req.data, new Set([
     "firstName", "lastName", "phone", "termsAccepted", "locationConsent",

@@ -20,19 +20,71 @@ class DashboardAggregator {
 
   /// The query range spans 8 ISO weeks back through next Monday, extended
   /// by 3 days to cover the pending window.
-  static AppointmentDateRange rangeAround(DateTime now) {
+  static AppointmentDateRange rangeAround(DateTime now) => AppointmentDateRange(
+    start: _windowStart(now),
+    end: liveRangeAround(now).end,
+  );
+
+  /// The part of [rangeAround] that can still change while the screen is up:
+  /// the current ISO week through next Monday (or the 3-day pending horizon,
+  /// whichever is later).
+  ///
+  /// **This is the half that gets a live listener.** The other seven weeks are
+  /// closed history — [historyRangeAround] reads them once. Splitting drops the
+  /// live document set by roughly 85% and takes the 1000-doc stream cap off the
+  /// trend charts, which above ~14 jobs/day were being computed over a prefix
+  /// of the window with nothing on screen saying so.
+  static AppointmentDateRange liveRangeAround(DateTime now) {
     final monday = mondayOf(now);
-    final start = DateTime(
+    final nextMonday = DateTime(monday.year, monday.month, monday.day + 7);
+    final pendingHorizon = DateTime(now.year, now.month, now.day + 3);
+    return AppointmentDateRange(
+      start: monday,
+      end: nextMonday.isAfter(pendingHorizon) ? nextMonday : pendingHorizon,
+    );
+  }
+
+  /// The settled weeks behind [liveRangeAround] — read once, never watched.
+  ///
+  /// Ends exactly where the live range starts. The two results overlap anyway,
+  /// because each query reaches back to its own `fetchStart` to catch a run
+  /// already under way, so the caller must merge by doc id rather than
+  /// concatenate.
+  static AppointmentDateRange historyRangeAround(DateTime now) =>
+      AppointmentDateRange(start: _windowStart(now), end: mondayOf(now));
+
+  static DateTime _windowStart(DateTime now) {
+    final monday = mondayOf(now);
+    return DateTime(
       monday.year,
       monday.month,
       monday.day - 7 * (weekCount - 1),
     );
-    final nextMonday = DateTime(monday.year, monday.month, monday.day + 7);
-    final pendingHorizon = DateTime(now.year, now.month, now.day + 3);
-    return AppointmentDateRange(
-      start: start,
-      end: nextMonday.isAfter(pendingHorizon) ? nextMonday : pendingHorizon,
-    );
+  }
+
+  /// Merges the live half with the one-shot history half, de-duplicating by
+  /// doc id.
+  ///
+  /// The two queries deliberately overlap — each reaches back to its own
+  /// `fetchStart` so a run already under way is still fetched — so a plain
+  /// concatenation would double-count roughly a fortnight of jobs in every
+  /// chart. [live] wins any collision: it is the half backed by a listener, so
+  /// it is the half that can be newer.
+  static List<AppointmentRecord> mergeById(
+    List<AppointmentRecord> live,
+    List<AppointmentRecord> history,
+  ) {
+    final merged = <AppointmentRecord>[];
+    final seen = <String>{};
+    // Live first, so it wins any collision.
+    for (final a in [...live, ...history]) {
+      final id = a.id;
+      // Nothing read from Firestore lacks a doc id, but a record that somehow
+      // does cannot be de-duplicated — and keeping a possible double-count
+      // beats dropping real work out of the Attention list.
+      if (id == null || id.isEmpty || seen.add(id)) merged.add(a);
+    }
+    return merged;
   }
 
   /// Delegates to [AppointmentRecord.displayStatusAt], which owns the ladder —
