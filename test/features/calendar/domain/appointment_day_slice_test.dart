@@ -8,12 +8,14 @@ AppointmentRecord _record({
   required DateTime end,
   bool isAllDay = false,
   String id = 'a1',
+  String status = 'pending',
 }) => AppointmentRecord(
   id: id,
   title: 'Repipe',
   startTime: start,
   endTime: end,
   isAllDay: isAllDay,
+  status: status,
 );
 
 void main() {
@@ -150,6 +152,128 @@ void main() {
         index[DateTime(2026, 8, 3)]!.map((s) => s.appointment.id).toList(),
         ['allday', 'early', 'late'],
       );
+    });
+
+    test("sinks closed jobs below the day's open work", () {
+      final day = DateTime(2026, 8, 3);
+      final range = AppointmentDateRange(start: day, end: DateTime(2026, 8, 4));
+
+      final doneEarly = _record(
+        start: DateTime(2026, 8, 3, 7),
+        end: DateTime(2026, 8, 3, 8),
+        id: 'done',
+        status: 'done',
+      );
+      final cancelledMidday = _record(
+        start: DateTime(2026, 8, 3, 11),
+        end: DateTime(2026, 8, 3, 12),
+        id: 'cancelled',
+        status: 'cancelled',
+      );
+      final openLate = _record(
+        start: DateTime(2026, 8, 3, 15),
+        end: DateTime(2026, 8, 3, 16),
+        id: 'open',
+      );
+
+      final index = expandToDays([
+        doneEarly,
+        cancelledMidday,
+        openLate,
+      ], range);
+
+      expect(index[day]!.map((s) => s.appointment.id).toList(), [
+        'open',
+        'done',
+        'cancelled',
+      ]);
+    });
+
+    test('the all-day and clock tiers still apply inside the closed block', () {
+      final day = DateTime(2026, 8, 3);
+      final range = AppointmentDateRange(start: day, end: DateTime(2026, 8, 4));
+
+      final closedTimedEarly = _record(
+        start: DateTime(2026, 8, 3, 8),
+        end: DateTime(2026, 8, 3, 9),
+        id: 'closedEarly',
+        status: 'done',
+      );
+      final closedTimedLate = _record(
+        start: DateTime(2026, 8, 3, 14),
+        end: DateTime(2026, 8, 3, 15),
+        id: 'closedLate',
+        status: 'cancelled',
+      );
+      final closedAllDay = _record(
+        start: day,
+        end: DateTime(2026, 8, 3, 23, 59),
+        isAllDay: true,
+        id: 'closedAllDay',
+        status: 'done',
+      );
+
+      final index = expandToDays([
+        closedTimedLate,
+        closedTimedEarly,
+        closedAllDay,
+      ], range);
+
+      expect(index[day]!.map((s) => s.appointment.id).toList(), [
+        'closedAllDay',
+        'closedEarly',
+        'closedLate',
+      ]);
+    });
+
+    test('the legacy `completed` spelling sinks too', () {
+      final day = DateTime(2026, 8, 3);
+      final legacy = _record(
+        start: DateTime(2026, 8, 3, 7),
+        end: DateTime(2026, 8, 3, 8),
+        id: 'legacy',
+        status: 'completed',
+      );
+      final open = _record(
+        start: DateTime(2026, 8, 3, 15),
+        end: DateTime(2026, 8, 3, 16),
+        id: 'open',
+      );
+
+      final index = expandToDays([
+        legacy,
+        open,
+      ], AppointmentDateRange(start: day, end: DateTime(2026, 8, 4)));
+
+      expect(index[day]!.map((s) => s.appointment.id).toList(), [
+        'open',
+        'legacy',
+      ]);
+    });
+
+    test('an in-progress job is open, so it keeps its clock slot', () {
+      final day = DateTime(2026, 8, 3);
+      final inProgress = _record(
+        start: DateTime(2026, 8, 3, 9),
+        end: DateTime(2026, 8, 3, 10),
+        id: 'inProgress',
+        status: 'in_progress',
+      );
+      final pendingLater = _record(
+        start: DateTime(2026, 8, 3, 15),
+        end: DateTime(2026, 8, 3, 16),
+        id: 'pending',
+      );
+
+      final index = expandToDays([
+        pendingLater,
+        inProgress,
+      ], AppointmentDateRange(start: day, end: DateTime(2026, 8, 4)));
+
+      expect(index[day]!.map((s) => s.appointment.id).toList(), [
+        'inProgress',
+        'pending',
+      ]);
     });
 
     test(

@@ -193,6 +193,15 @@
   "@calendar_allDay": {
     "description": "Switch in the job form, and the label shown in place of a time range on a job that runs the whole day."
   },
+  "calendar_closedCount": "Closed · {count}",
+  "@calendar_closedCount": {
+    "description": "Label on the rule that separates the day's remaining work from the jobs that are finished or cancelled, in the calendar agenda. Covers both, which is why it says Closed rather than Complete.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendar_dayOfCount": "Day {index} of {count}",
   "@calendar_dayOfCount": {
     "description": "The position of one day within a multi-day job, shown on the appointment card after the time range.",

@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/animations/tap_scale.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
@@ -438,6 +439,160 @@ void main() {
 
     expect(find.bySemanticsLabel(RegExp('Day 3 of 5')), findsOneWidget);
     handle.dispose();
+  });
+
+  group("collapseWhenClosed — the agenda's sunk-block treatment", () {
+    Color fillOf(WidgetTester t) {
+      final box = t.widget<DecoratedBox>(
+        find
+            .descendant(
+              of: find.byType(TapScale),
+              matching: find.byType(DecoratedBox),
+            )
+            .first,
+      );
+      return (box.decoration as BoxDecoration).color!;
+    }
+
+    testWidgets('a done job takes the success tint and drops its avatars', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          AppointmentCard(
+            appointment: _appt(status: 'done'),
+            crew: _theo,
+            collapseWhenClosed: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fillOf(tester), AppColors.greenFill);
+      // The colour bar still carries the crew, so only the faces go.
+      expect(find.byType(AppAvatar), findsNothing);
+      expect(find.text('Marchetti Residence'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the same job stays plain white without the flag', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          AppointmentCard(
+            appointment: _appt(status: 'done'),
+            crew: _theo,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fillOf(tester), isNot(AppColors.greenFill));
+      expect(find.byType(AppAvatar), findsOneWidget);
+    });
+
+    testWidgets('an OPEN job is untouched by the flag', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          AppointmentCard(
+            appointment: _appt(),
+            crew: _theo,
+            collapseWhenClosed: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fillOf(tester), isNot(AppColors.greenFill));
+      expect(find.byType(AppAvatar), findsOneWidget);
+    });
+
+    testWidgets('a cancelled job collapses but never turns green', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          AppointmentCard(
+            appointment: _appt(status: 'cancelled'),
+            crew: _theo,
+            collapseWhenClosed: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(fillOf(tester), isNot(AppColors.greenFill));
+      expect(find.byType(AppAvatar), findsNothing);
+    });
+
+    testWidgets('the collapsed row clears the 48px tap-target minimum', (
+      tester,
+    ) async {
+      // A short title and no client is the smallest the row can get.
+      await tester.pumpWidget(
+        _wrap(
+          AppointmentCard(
+            appointment: _appt(status: 'done', title: 'Fix', clientName: ''),
+            crew: const [],
+            collapseWhenClosed: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.getSize(find.byType(AppointmentCard)).height,
+        greaterThanOrEqualTo(48),
+      );
+    });
+
+    testWidgets('a collapsed multi-day run keeps its day counter', (
+      tester,
+    ) async {
+      final record = _multiDay(
+        start: DateTime(2026, 8, 1, 9),
+        end: DateTime(2026, 8, 5, 17),
+      ).copyWith(status: 'done');
+
+      await tester.pumpWidget(
+        _wrap(
+          AppointmentCard(
+            appointment: record,
+            crew: _theo,
+            slice: sliceFor(record, DateTime(2026, 8, 3)),
+            collapseWhenClosed: true,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Without it, every day of a closed run renders an identical row.
+      expect(find.textContaining('Day 3 of 5'), findsOneWidget);
+    });
+
+    testWidgets('collapsed survives 260x640 at a 2.0 text scale', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(260, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        _wrap(
+          MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: AppointmentCard(
+              appointment: _appt(status: 'done'),
+              crew: _theo,
+              collapseWhenClosed: true,
+            ),
+          ),
+          width: 260,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
   });
 
   testWidgets('survives 260x640 at a 2.0 text scale', (tester) async {

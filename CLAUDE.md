@@ -1100,6 +1100,33 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   semantics label always speaks the full month. Note the widget test asserts
   against **viewport width**, not a scale: the test font is far wider per glyph
   than the shipped one.
+- **The calendar agenda sinks CLOSED jobs to the bottom of the day, and only
+  the calendar does** (2026-08-08). `_agendaOrder` in `appointment_day_slice.dart`
+  gained a first tier — open before closed — above the existing all-day and
+  window-start tiers, which still apply *within* the closed block. It reads the
+  STORED status through **`AppointmentRecord.isClosed`**, never `displayStatus`,
+  so the comparator stays clock-free like the rest of that module; `isClosed` is
+  the model-layer mirror of `AppointmentStatus.isTerminal` and exists precisely
+  so a pure module can ask without pulling Material in through `status_chip.dart`
+  (it is also the one owner of the `done`/`completed`/`cancelled` triple —
+  `displayStatusAt` calls it rather than re-spelling it). Both terminal states
+  sink: a cancelled visit is as done with as a completed one.
+  A closed job then renders in the **collapsed** treatment —
+  `AppointmentCard(collapseWhenClosed: true)`, opt-in and passed ONLY by
+  `AgendaSliverList`: the success tint for `done`, a one-line body putting the
+  time beside the client, and no avatar stack (the crew bar still carries
+  colour, so *who* survives the collapse). **`_kClosedMinHeight` (48) is
+  load-bearing, not belt-and-braces** — the collapsed row lands near 56px, close
+  enough that a small text scale drops it under Material's minimum, and the row
+  is still a full `InkWell` opening the same sheet. The **multi-day counter
+  stays** on a collapsed row (deviating from the approved mockup, deliberately):
+  a closed job renders on every day of its run, so without "Day 3 of 5" those
+  rows are indistinguishable. `AgendaSliverList` emits one `_ClosedRule`
+  (`calendar_closedCount`, "Closed" because it covers cancelled too) at
+  `_firstClosedIndex`, and its `length - index` count is only valid because the
+  sort guarantees the closed jobs are one contiguous tail — don't reorder them
+  at the call site. Everywhere else (day route, dashboard, employee TODAY panel,
+  client job history) keeps its own sort and the plain full-height card.
 - **`AppointmentCard` is the ONE appointment card** — calendar agenda, day
   route, client job history, both dashboard sections and the paginated history
   list (`AppointmentTile` is deleted, along with `colorFromMap` and

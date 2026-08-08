@@ -236,15 +236,30 @@ Map<DateTime, List<AppointmentDaySlice>> expandToDays(
     }
   }
   for (final slices in slicesByDay.values) {
-    slices.sort(_byAllDayThenWindowStart);
+    slices.sort(_agendaOrder);
   }
   return slicesByDay;
 }
 
-/// An all-day block owns the whole day, so it reads above the clock; the rest
-/// run in clock order. A continuing TIMED job has a real start time today and
-/// deliberately takes its place in that order rather than being pinned.
-int _byAllDayThenWindowStart(AppointmentDaySlice a, AppointmentDaySlice b) {
+/// Three tiers, outermost first.
+///
+/// **Open before closed.** A day's agenda answers "what is left to do", so a
+/// job finished at 7 AM must not hold its slot above the 8 AM job that hasn't
+/// started. Both terminal states sink — a cancelled visit is as done with as a
+/// completed one. It reads the STORED status via [AppointmentRecord.isClosed],
+/// never `displayStatus`, so this comparator stays clock-free like the rest of
+/// the module.
+///
+/// **All-day before timed.** An all-day block owns the whole day, so it reads
+/// above the clock. A continuing TIMED job has a real start time today and
+/// deliberately takes its place in clock order rather than being pinned.
+///
+/// **Then window start.** Both tiers above apply within the closed block too,
+/// so the finished work still reads in the order it happened.
+int _agendaOrder(AppointmentDaySlice a, AppointmentDaySlice b) {
+  final aClosed = a.appointment.isClosed;
+  final bClosed = b.appointment.isClosed;
+  if (aClosed != bClosed) return aClosed ? 1 : -1;
   final aAllDay = a.appointment.isAllDay;
   final bAllDay = b.appointment.isAllDay;
   if (aAllDay != bAllDay) return aAllDay ? -1 : 1;
