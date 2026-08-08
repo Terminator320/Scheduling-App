@@ -1,8 +1,8 @@
+/// External URLs. privacyPolicy is required for App Store submission, so
+/// update it to the hosted URL before release.
 class AppUrls {
   const AppUrls._();
 
+  /// Public privacy-policy page. Update this to the hosted URL before release.
   static const String privacyPolicy = 'https://gvogas.github.io/es-pro-legal/';
-
-  static const String termsOfService =
-      'https://gvogas.github.io/es-pro-legal/terms-of-service.html';
 }
