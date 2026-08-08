@@ -54,20 +54,6 @@ code; it increments by one on every store upload regardless of the semver part.
   so — those need you to open the client and fix what Wave objected to. And if
   the sending half failed outright, it says that too, instead of reporting
   "everything was already up to date".
-- **A completed job now offers "Edit completed job" instead of a dead button.**
-  Finishing a job left a greyed-out "Complete" button sitting where the action
-  goes, and since Cancel disappears once a job is done, that sheet gave an
-  admin nothing to do — including no way to undo a "Mark as complete" tapped on
-  the wrong job. The button now opens the job for editing, where the status can
-  be set back, and it's the only edit control on a finished job — the Edit chip
-  at the top is hidden there rather than offering the same thing twice. It
-  works from the History page too, which is where finished jobs actually live.
-  Employees still just see that the job is complete.
-- **You can now read the terms you're asked to accept.** The setup screen has
-  always made a new employee tick "I accept the terms of service", with nothing
-  to tap and no copy published anywhere. The terms are now online, "terms of
-  service" in that sentence opens them, and Settings has a Terms of Service row
-  beside Privacy Policy so they stay reachable afterwards.
 - **The Contacts permission prompt now describes what actually happens.** It
   said the app "opens a pre-filled contact card"; it in fact saves the client
   you choose into your contacts and keeps that one contact up to date when you
@@ -78,13 +64,6 @@ code; it increments by one on every store upload regardless of the semver part.
   account and hands over a starting password, the optional emergency contact
   and who can see it, saving a photo to your own library and sharing one out,
   and the fact that the Wave integration moves customers in both directions.
-  The terms also stop describing background location: the app asks for "While
-  Using the App" only and stops receiving your location once it's closed, which
-  is what the privacy policy already said and what the app actually does.
-- **The personal-job switch dropped its explanatory line.** "Time blocked off —
-  no client or address needed" sat under every job form; turning the switch on
-  visibly removes the client and address fields, which says it better than a
-  line of text on an already-busy screen.
 
 ### Fixed
 - **Uploading a build no longer draws two App Store warnings.** The location

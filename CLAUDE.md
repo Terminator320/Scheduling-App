@@ -195,32 +195,11 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   rules allow an assignee to write `status:'done'` with no date restriction.
 - **Admin-only appointment actions are gated by an explicit `showActions`.**
   `showEventDetails(..., showActions:)` is a REQUIRED param, and
-  `AppointmentCard` / `EventDetailsSheet` / `EventDetailsView` all default it
+  `AppointmentTile` / `EventDetailsSheet` / `EventDetailsView` all default it
   **CLOSED** (`false`). A default of `true` silently showed employees the
   Edit/Cancel/Delete affordances, which the rules then reject with an opaque
   `permission-denied`. Pass the caller's resolved role; never re-add a `true`
   default. (Rules remain the real gate — this is defense-in-depth plus UX.)
-  **`AppointmentHistoryView` takes an `isAdmin` and passes it straight through**
-  (2026-08-05) — it used to hardcode `false` on the grounds that history is a
-  read-only surface, but history is where `done` and `cancelled` jobs actually
-  live, so that made the completed-job edit route below unreachable from the one
-  screen an admin would look for it on. It still DEFAULTS closed like everything
-  else; `HistoryScreen` passes `widget.isAdmin`.
-- **A finished job offers exactly ONE edit affordance, and for an admin it is
-  the action-bar button** (2026-08-05). `DetailsActionBar` renders the `isDone`
-  slot off `showCancel` (the admin gate): a **disabled** "Complete" button used
-  to sit there, and since Cancel hides itself once a job is done, that sheet
-  gave an admin nothing to do at all — including no way back from a "Mark as
-  complete" tapped on the wrong job, because the status picker lives in the edit
-  form. The button is now "Edit completed job" and calls `enterEditing`. An
-  employee keeps the inert indicator on purpose: the rules let an assignee write
-  `status:'done'` and nothing else, so an editable control would only earn them a
-  `permission-denied`. **`DetailsViewBody` therefore hides the header edit chip
-  when `data.isDone`** — same action, and one screen must not offer it twice.
-  The two move together: don't restore the chip on a completed job without
-  removing the button, and don't drop the button without bringing the chip back,
-  or a finished job becomes uneditable again. (A CANCELLED job is unchanged —
-  it keeps the chip, since its action bar has no button.)
 - **Personal jobs (`isPersonal`, added 2026-07-31) carry no client and no
   address.** The switch at the top of the form's WHO section is on BOTH the add
   and edit flows (unlike the template chips), because the flag is stored and
@@ -667,29 +646,6 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `completeEmployeeSetup` writes the consent stamps **only when the payload
   flags are actually `true`** — stamping unconditionally would mint a
   legally-flavoured consent record for someone who never saw the checkbox.
-- **The consent sentence LINKS to the terms, and the link is what makes the
-  stamp mean anything** (2026-08-05). Ticking the box stamps `termsAcceptedAt`,
-  so the person must be able to read what they are accepting; the setup screen
-  used to demand acceptance of terms that were published nowhere and tappable
-  nowhere. `_ConsentRow` (`account_setup_screen.dart`) builds the sentence by
-  locating `auth_termsOfServiceLink` **verbatim inside**
-  `auth_termsAndLocationConsent` and turning that run into the link, so the two
-  keys must stay consistent **in every locale** — a translation that rewords the
-  phrase silently renders a plain sentence with no link (`indexOf < 0` falls
-  back to one plain span on purpose: a missing link beats half a sentence or a
-  `-1` substring crash). It is a `StatefulWidget` solely to own and dispose the
-  `TapGestureRecognizer`; one built in `build` leaks on every rebuild. A tap on
-  that run is claimed by the recognizer, so it opens the terms instead of
-  toggling the checkbox; the rest of the tile still toggles.
-  **Settings › Legal is the DURABLE route** — setup is shown once, only to a new
-  employee, and never again, so `LegalSettingsCard` carries a Terms of Service
-  row beside Privacy Policy. Both point at `AppUrls`
-  (`privacyPolicy`, `termsOfService`); the sources are
-  `docs/legal/privacy-policy.html` / `terms-of-service.html`, published to the
-  `es-pro-legal` GitHub Pages repo, where **the privacy policy is the index** —
-  which is why the terms page links to it by absolute URL rather than a relative
-  `privacy-policy.html` that would 404. Neither page is bundled: if the Pages
-  repo drifts from `docs/legal/`, the consent record points at the wrong text.
 - **Account re-provisioning REFRESHES the pending doc's editable fields, so
   `createAccount` takes the whole `EmployeeRecord` — never loose scalars.**
   `performCreateAccount`'s existing-doc branch *updates*
