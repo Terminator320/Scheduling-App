@@ -822,6 +822,45 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   fields only, so a plain substitution drops the function-owned `jobCount` and
   `createdAt` and blanks the count on every search and type-filter result until
   the TTL expires. Any new field `toMap()` doesn't emit inherits this.
+- **The Wave sync badge needs a LIVE doc read, and `ClientDetailView` is the one
+  surface that has one** (2026-08-07). Every other client surface is a one-shot
+  read — a paginated page, or the repository's cached scan window — and
+  `wave.syncState` is function-owned: the `waveUpsertCustomer` trigger stamps
+  `pending` *after* the save has already returned, and the outbox worker flips
+  it to `synced` up to five minutes later. So the record a screen holds always
+  predates the state the badge is trying to show, and the edit sheet pops back
+  a `copyWith` of that same record, which carries the PRE-EDIT sync state
+  through by design (it must — `waveSyncState` is not the form's to write).
+  The badge therefore could never move in response to an edit: it sat on
+  "Synced with Wave" while the push was still queued, and Settings ›
+  "Sync with Wave" — correctly — reported nothing left to send, because the
+  5-minute worker had already sent it. `clientStreamProvider`
+  (`clients_providers.dart`, an `autoDispose.family` over
+  `ClientsRepository.watchClient`) is the fix; the view keeps the handed-in
+  record as a **fallback**, so an offline or refused read leaves the detail on
+  screen instead of blanking it. Don't "simplify" the badge back onto a
+  passed-in record, and don't try to fix it by writing an optimistic `pending`
+  client-side — that would fork `mappedFieldsHash`'s projection into Dart, and
+  only the server knows whether an edit touched a Wave-mapped field.
+  This listener deliberately does **not** patch the search/scan cache:
+  `_patchWindow` merges `toMap()`, which omits `wave`, so the cached copy keeps
+  a stale sync state on purpose.
+- **A no-op push must HEAL the client's sync state, or the badge sticks
+  forever.** `upsertCustomer`'s already-synced short-circuit
+  (`functions/wave/customers.js`) returns `noop` without touching Wave — and it
+  now clears a stale `pending`/`error` via `healSyncState` before it does. That
+  state is reachable from an ordinary pair of edits: the first marks the doc
+  `pending` and enqueues, the second puts the mapped fields BACK, and
+  `shouldEnqueueClientWrite`'s rule 2 skips that write entirely — so the job the
+  first edit left behind arrives with nothing to push, and nothing else ever
+  clears the flag. `healSyncState` re-reads and re-hashes **inside the
+  transaction** rather than trusting the caller's hash: an edit landing in that
+  window must not be marked synced, or the badge claims Wave has data still
+  sitting in the outbox — the exact lie it exists to remove. It writes
+  `syncState`/`syncError` only, never `lastSyncedAt` (nothing reached Wave just
+  now), and the write re-fires the trigger harmlessly — unchanged mapped fields
+  return at rule 1. `tallyUpsert` still counts `noop` as nothing: no Wave
+  mutation was made, and the admin must not be told a client was pushed.
 - **`jobCount` is recomputed absolutely, never incremented.** `recountClientJobs`
   (`functions/client_job_count.js`) runs `retry: true`, so a retried event would
   double-count a `FieldValue.increment`; it runs a `count()` aggregate and SETS
