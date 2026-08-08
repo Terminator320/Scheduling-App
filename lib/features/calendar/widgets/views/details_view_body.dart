@@ -57,8 +57,10 @@ class DetailsViewBody extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Cancelled visits still show the edit affordance — `showActions` is
-        // the only thing that gates it.
-        if (showActions)
+        // the only thing that gates it. A DONE job is the exception: its edit
+        // moves down to the action bar, which has no mark-done or cancel
+        // action left to offer there.
+        if (showActions && !data.isDone)
           Align(
             alignment: compactHeader
                 ? Alignment.centerLeft
@@ -99,6 +101,7 @@ class DetailsViewBody extends ConsumerWidget {
           isCancelled: data.isCancelled,
           isSaving: isSaving,
           showCancel: showActions,
+          onEdit: showActions ? notifier.enterEditing : null,
           onMarkDone: () => _onMarkDone(context, ref, notifier),
           onCancel: () => _onCancel(context, ref, notifier),
         ),

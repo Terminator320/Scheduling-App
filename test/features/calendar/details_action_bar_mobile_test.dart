@@ -66,4 +66,29 @@ void main() {
     expect(find.text('Complete'), findsOneWidget);
     expect(find.text('Cancel Appointment'), findsNothing);
   });
+
+  testWidgets('done appointment offers Edit in place of the indicator', (
+    tester,
+  ) async {
+    var edits = 0;
+    await tester.pumpWidget(
+      _wrap(
+        DetailsActionBar(
+          hasStarted: true,
+          isDone: true,
+          isCancelled: false,
+          isSaving: false,
+          onMarkDone: () {},
+          onCancel: () {},
+          onEdit: () => edits++,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The inert "Complete" indicator gives way to the edit action.
+    expect(find.text('Complete'), findsNothing);
+    await tester.tap(find.text('Edit'));
+    expect(edits, 1);
+  });
 }
