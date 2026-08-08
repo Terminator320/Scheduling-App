@@ -29,6 +29,17 @@ import '../../support/tour_test_support.dart';
 
 class _MockClientsRepo extends Mock implements ClientsRepository {}
 
+/// The client detail view holds a live listener on its doc. These sweeps only
+/// care about layout, so it yields nothing and the view renders the record it
+/// was handed.
+_MockClientsRepo _quietRepo() {
+  final repo = _MockClientsRepo();
+  when(
+    () => repo.watchClient(any()),
+  ).thenAnswer((_) => const Stream<ClientRecord?>.empty());
+  return repo;
+}
+
 // In-app text scales from text_size_screen.dart (Small / Medium / Large / XL)
 // plus Android system-level 2.0x to catch the worst case.
 const _scales = <double>[0.8, 1, 1.2, 1.4, 2];
@@ -63,7 +74,7 @@ Widget _scaled({
   ClientsRepository? repo,
 }) => ProviderScope(
   overrides: [
-    clientsRepositoryProvider.overrideWithValue(repo ?? _MockClientsRepo()),
+    clientsRepositoryProvider.overrideWithValue(repo ?? _quietRepo()),
     // The Job History section reads the real appointments repo; serve an empty
     // history so the sweep never reaches Firebase.
     clientJobHistoryProvider.overrideWith(

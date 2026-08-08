@@ -52,9 +52,12 @@ import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/routes/hub_shell.dart';
 
 const bool _useFirebaseEmulator = bool.fromEnvironment('USE_FIREBASE_EMULATOR');
+// The iOS Simulator shares the host's network, so localhost is the right
+// default. (It was 10.0.2.2, the Android emulator's loopback alias, until
+// android/ was deleted on 2026-08-05.)
 const String _emulatorHost = String.fromEnvironment(
   'EMULATOR_HOST',
-  defaultValue: '10.0.2.2',
+  defaultValue: '127.0.0.1',
 );
 
 Future<void> _wireFirebaseEmulator() async {

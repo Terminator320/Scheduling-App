@@ -298,6 +298,14 @@ async function upsertCustomer(clientId, deps = {}) {
 
   // Step 3 — already synced with identical mapped fields → no-op.
   if (waveCustomerId && hash === wave.lastSyncedHash) {
+    // The doc can still be flagged `pending` here, and nothing else would ever
+    // clear it. The trigger marks pending + enqueues on every mapped-field
+    // change, but a later write that puts those fields BACK is skipped by
+    // shouldEnqueueClientWrite's rule 2 — so the job the first edit left behind
+    // arrives to find nothing to push. The admin-facing badge reads this field,
+    // so without the heal that client shows "Sync pending" forever while every
+    // later sync correctly reports nothing to do.
+    await healSyncState(db, ref);
     return {status: "noop"};
   }
 
@@ -506,6 +514,38 @@ async function writeSyncSuccess(db, ref, now, result) {
       if (!existing) update.waveCustomerId = result.waveCustomerId;
     }
     tx.update(ref, update);
+  });
+}
+
+/**
+ * Clears a stale `pending`/`error` flag on a doc whose mapped fields already
+ * match its own `wave.lastSyncedHash` — i.e. Wave demonstrably holds this data
+ * and there is nothing left to push.
+ *
+ * The check is re-run against a FRESH read inside the transaction, not against
+ * the hash the caller computed. An edit landing between `upsertCustomer`'s read
+ * and this write must not be marked synced: that would put "Synced with Wave"
+ * on a client whose change is still sitting in the outbox, which is the exact
+ * lie this heal exists to remove.
+ *
+ * Writes only `wave.syncState`/`wave.syncError`, never `lastSyncedAt` — nothing
+ * reached Wave just now, and that stamp must keep naming the last real push.
+ * The write re-fires the `waveUpsertCustomer` trigger, which sees unchanged
+ * mapped fields and returns at rule 1, so there is no loop.
+ * @param {!Object} db Firestore instance.
+ * @param {!Object} ref Client document reference.
+ * @return {!Promise<void>}
+ */
+async function healSyncState(db, ref) {
+  await db.runTransaction(async (tx) => {
+    const fresh = await tx.get(ref);
+    if (!fresh || !fresh.exists) return;
+    const cur = fresh.data() || {};
+    const wave = (cur.wave && typeof cur.wave === "object") ? cur.wave : {};
+    if (wave.syncState === "synced") return;
+    if (!wave.lastSyncedHash) return;
+    if (mappedFieldsHash(cur) !== wave.lastSyncedHash) return;
+    tx.update(ref, {"wave.syncState": "synced", "wave.syncError": null});
   });
 }
 

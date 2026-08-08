@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -101,6 +103,73 @@ void main() {
     // With no contact-link present, the edit-save phone-contact sync is a no-op.
     SharedPreferences.setMockInitialValues({});
     repo = _MockClientsRepo();
+    // Default: the live doc read yields nothing, so every test below exercises
+    // the fallback — the record the view was handed, plus its own optimistic
+    // updates. The live path has its own test.
+    when(
+      () => repo.watchClient(any()),
+    ).thenAnswer((_) => const Stream<ClientRecord?>.empty());
+  });
+
+  testWidgets('the Wave sync badge follows the live doc, not the record the '
+      'view was handed', (tester) async {
+    final live = StreamController<ClientRecord?>();
+    addTearDown(live.close);
+    when(() => repo.watchClient('c1')).thenAnswer((_) => live.stream);
+
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    // "synced" is exactly what an edit leaves behind in the record the sheet
+    // pops back: the waveUpsertCustomer trigger stamps `pending` only after the
+    // save has already returned, so the app-side copy still holds the old
+    // value and the badge could never move off it.
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        const ClientRecord(id: 'c1', name: 'Acme', waveSyncState: 'synced'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Synced with Wave'), findsOneWidget);
+
+    live.add(
+      const ClientRecord(id: 'c1', name: 'Acme', waveSyncState: 'pending'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sync pending'), findsOneWidget);
+    expect(find.text('Synced with Wave'), findsNothing);
+
+    // ...and back again once the outbox reaches Wave, with no user action.
+    live.add(
+      const ClientRecord(id: 'c1', name: 'Acme', waveSyncState: 'synced'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Synced with Wave'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a failed live read keeps the handed-in record on screen', (
+    tester,
+  ) async {
+    when(
+      () => repo.watchClient('c1'),
+    ).thenAnswer((_) => Stream<ClientRecord?>.error(Exception('denied')));
+
+    tester.view.physicalSize = const Size(800, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _wrap(repo, const ClientRecord(id: 'c1', name: 'Acme', phone: '555-1')),
+    );
+    await tester.pumpAndSettle();
+
+    // Offline or refused must never blank the detail.
+    expect(find.text('Acme'), findsOneWidget);
+    expect(find.text('555-1'), findsOneWidget);
   });
 
   testWidgets('the additional contacts section is always available in edit', (

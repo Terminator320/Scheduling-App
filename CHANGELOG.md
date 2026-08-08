@@ -10,7 +10,7 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
-## [1.43.1+69] - 2026-08-04
+## [1.43.1+69] - 2026-08-08
 
 ### Changed
 - **Syncing with Wave is much faster.** It now asks Wave only for the customers
@@ -18,6 +18,29 @@ code; it increments by one on every store upload regardless of the semver part.
   list every time. A sync with nothing to do finishes almost immediately. A
   full pass still runs at least weekly, so nothing can quietly drift out of
   step.
+
+### Fixed
+- **The Wave badge on a client now reflects what's actually happening.** After
+  editing a client it stayed on "Synced with Wave" no matter what, because the
+  screen was still showing the copy of the client it had before you hit Save —
+  and the sync state isn't set by the app, it's set on the server a moment
+  later. So the one client you'd just changed was the one client whose badge
+  could never tell you anything. The detail screen now watches the client
+  itself: the badge turns to "Sync pending" as soon as the edit is queued and
+  back to "Synced with Wave" once it reaches Wave, with no reload and no
+  tapping anything. If the client can't be read (offline), the screen keeps
+  showing what it already had rather than going blank.
+  - Worth knowing, since it explains the other half of the confusion:
+    **Settings › "Sync with Wave" saying "everything was already up to date"
+    was usually telling the truth.** Client edits are sent to Wave
+    automatically every five minutes, so by the time you got to Settings there
+    was genuinely nothing left to send — the badge just gave you no way to see
+    that it had already happened.
+- **A client could get stuck on "Sync pending" permanently.** If you changed a
+  client and then changed those same fields back, the queued send arrived with
+  nothing to do and quietly left the client flagged as pending forever, while
+  every later sync correctly reported nothing outstanding. That flag is now
+  cleared when the send finds the client already up to date in Wave.
 
 ## [1.43.0+68] - 2026-08-04
 
@@ -38,8 +61,24 @@ code; it increments by one on every store upload regardless of the semver part.
   so — those need you to open the client and fix what Wave objected to. And if
   the sending half failed outright, it says that too, instead of reporting
   "everything was already up to date".
+- **The Contacts permission prompt now describes what actually happens.** It
+  said the app "opens a pre-filled contact card"; it in fact saves the client
+  you choose into your contacts and keeps that one contact up to date when you
+  edit the client afterwards. The prompt says so, and adds that the rest of
+  your contacts are never read.
+- **The privacy policy and terms were brought up to date** (last updated
+  August 5, 2026) — they now cover how an administrator creates an employee
+  account and hands over a starting password, the optional emergency contact
+  and who can see it, saving a photo to your own library and sharing one out,
+  and the fact that the Wave integration moves customers in both directions.
 
 ### Fixed
+- **Uploading a build no longer draws two App Store warnings.** The location
+  purpose string Apple's scanner looks for was missing (ITMS-90683 on every
+  upload, because the location plugin compiles the "Always" API into the binary
+  even though the app only ever asks for "While Using the App"), and the Siri
+  extension shipped without its own privacy manifest (ITMS-91053). Both are
+  declared now. Neither changes what the app asks you for.
 - **Syncing no longer claims it updated every client.** A sync over an
   unchanged roster reported "650 clients updated in the app" — it was counting
   every client it rewrote, and it rewrote all of them whether or not anything
