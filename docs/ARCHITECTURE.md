@@ -862,6 +862,16 @@ wave/{docId}           Wave Accounting connection metadata (e.g. wave/connection
                        for the daily waveScheduledImport). Token lives only in
                        Secret Manager. Read only via the waveGetConnection
                        callable — never client-side (read+write denied).
+  customerDeltaSince   Delta-import watermark: imports ask Wave for customers
+                       modified after this instant. Set to the run's START minus
+                       a 5-min overlap, and ONLY over a window fully covered —
+                       a throw, or a run that protected pending clients, HOLDS
+                       it. Advancing past a window that was never imported
+                       hides those customers from every later delta.
+  lastFullImportAt     When the last unfiltered pass ran. A full pass is forced
+                       every 7 days as the backstop for Wave's `modifiedAt`,
+                       which we trust to move on every mapped change and cannot
+                       verify. Both fields are Admin-SDK-only, like the doc.
 
 waveSyncQueue/{jobId}  Outbox for Wave sync jobs — enqueued by the waveUpsertCustomer
                        clients trigger, drained by the scheduled waveSyncWorker
@@ -898,7 +908,7 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. Use `_scaledHarness` (Size 260×640, textScaler 2.0) for overflow tests.
 
-Run: `flutter test` (1603 test cases as of 2026-08-04; `functions` adds 798 jest
+Run: `flutter test` (1603 test cases as of 2026-08-04; `functions` adds 815 jest
 tests in `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0 info
 lints** — see Analysis & Linting below; see

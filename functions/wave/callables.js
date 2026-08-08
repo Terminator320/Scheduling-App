@@ -17,7 +17,13 @@ const {
 } = require("./worker");
 const {mappedFieldsHash} = require("./mappers");
 const {classifyWaveError} = require("./errors");
-const {isImportDue, SCHEDULE_VALUES} = require("./import_schedule");
+const {
+  isImportDue,
+  SCHEDULE_VALUES,
+  resolveImportWindow,
+  watermarkPatch,
+} = require("./import_schedule");
+const {toMillis} = require("../time_utils");
 
 const {
   assertPayloadShape,
@@ -268,6 +274,102 @@ const waveSetImportSchedule = onCall(
     },
 );
 
+/**
+ * Runs an import against the delta watermark and advances it on success.
+ *
+ * ONE owner for the whole four-step dance — read the stamps, resolve the
+ * window, import, advance — because both callers previously hand-copied it and
+ * each omission fails silently in its own direction: forget `since` and every
+ * run is a full import; forget the patch and the watermark never moves;
+ * advance on the failure path and every customer changed inside that window is
+ * skipped for good. The unattended `waveScheduledImport` carried the untested
+ * copy, which is the one where a mistake is invisible.
+ *
+ * Does NOT catch — the caller owns error classification and logging, and each
+ * has its own (an HttpsError vs. a logged skip). Throwing leaves both stamps
+ * untouched, which is the correct failure behaviour.
+ *
+ * @param {{connectionRef: !Object, connection: !Object, businessId: string,
+ *   skipClientIds: !Set<string>, nowMs: number,
+ *   extraPatch: (Object|undefined)}}
+ *   params `connection` is the already-read doc data; `extraPatch` merges into
+ *   the same post-run write so a caller needing its own stamp costs no
+ *   second round trip.
+ * @return {!Promise<{summary: !Object, window: !Object}>}
+ */
+async function importWithWatermark({
+  connectionRef, connection, businessId, skipClientIds, nowMs, extraPatch,
+}) {
+  let window = resolveImportWindow({
+    deltaSinceMs: toMillis(connection.customerDeltaSince),
+    lastFullMs: toMillis(connection.lastFullImportAt),
+    nowMs,
+  });
+
+  let summary;
+  try {
+    summary = await importCustomers({
+      businessId, graphql, skipClientIds, since: window.since,
+    });
+  } catch (e) {
+    // A delta-only failure is STICKY without this: the watermark stays put,
+    // so every retry rebuilds the same delta query and fails the same way
+    // until the 7-day resync ages it out — and only the admin-facing sync
+    // breaks, since the scheduled run is normally full anyway. One retry as
+    // a full import both self-heals that and covers `modifiedAtAfter` itself
+    // being wrong, which is not a hypothetical: the query shape was already
+    // wrong once against this API.
+    if (!window.since) throw e;
+    logger.warn("WAVE-CUST delta import failed — retrying as full", {
+      error: String(e),
+    });
+    window = {since: "", reason: "delta-failed-fell-back-to-full"};
+    summary = await importCustomers({
+      businessId, graphql, skipClientIds, since: "",
+    });
+  }
+
+  // A run that PROTECTED clients (skipClientIds) did not import them, so the
+  // window it just covered is incomplete — advancing past it would hide any
+  // Wave-side change to those customers until the next full pass. Holding the
+  // watermark makes the next run re-query the same span; that is idempotent
+  // and free, and it self-heals as soon as the outbox drains (a dead-lettered
+  // job leaves `queued`/`inflight`, so it stops being protected).
+  // Unknown counts as NOT covered on purpose: holding the watermark is free
+  // (the next run redoes an idempotent window), advancing it wrongly loses
+  // changes.
+  const covered = summary.skippedPending === 0;
+
+  // `wasFull` comes from the window we just built, not from the summary —
+  // routing our own input back out through importCustomers would give the
+  // decision two sources and the further-travelled one would win.
+  const patch = {
+    ...(extraPatch || {}),
+    ...(covered ?
+      watermarkPatch({startedAtMs: nowMs, wasFull: !window.since}) : {}),
+  };
+  if (!covered) {
+    logger.info("WAVE-CUST watermark held — run protected pending clients", {
+      skippedPending: summary.skippedPending,
+    });
+  }
+
+  // The import already committed. A failure to record the watermark means the
+  // next run redoes this window — wasteful, not wrong — so it must not turn a
+  // successful sync into an error the admin sees, discarding the push counts
+  // with it.
+  if (Object.keys(patch).length > 0) {
+    try {
+      await connectionRef.update(patch);
+    } catch (e) {
+      logger.error("WAVE-CUST watermark write failed — next run will redo " +
+        "this window", {error: String(e)});
+    }
+  }
+
+  return {summary, window};
+}
+
 // The interactive sync drains the outbox itself so it can report what reached
 // Wave. Unlike waveSyncWorker, the bound here is the ADMIN'S PATIENCE, not the
 // function timeout: the client gives up at `kWaveSyncTimeoutSeconds` (120,
@@ -368,15 +470,22 @@ const waveImportCustomers = onCall(
           WAVE_IMPORT_RATE_WINDOW_MS,
       );
 
-      const businessId = await readWaveBusinessId();
+      const connectionRef =
+        getFirestore().collection("wave").doc("connection");
+      const connectionSnap = await connectionRef.get();
+      const connection =
+        (connectionSnap.exists && connectionSnap.data()) || {};
+      const businessId = typeof connection.businessId === "string" ?
+        connection.businessId : "";
       if (!businessId) {
         throw new HttpsError("failed-precondition", "wave/not-bootstrapped");
       }
 
-      logger.info("WAVE-CUST sync starting", {
-        uid: req.auth.uid,
-        businessId,
-      });
+      // Captured BEFORE any work: the watermark must cover everything edited
+      // while this run was in flight, so it has to come from the start.
+      const startedAtMs = Date.now();
+
+      logger.info("WAVE-CUST sync starting", {uid: req.auth.uid, businessId});
 
       // Push BEFORE pulling. Local edits are the newer truth here — the
       // outbox holds writes the app already accepted — so importing first
@@ -400,8 +509,15 @@ const waveImportCustomers = onCall(
       }
 
       let summary;
+      let window;
       try {
-        summary = await importCustomers({businessId, graphql, skipClientIds});
+        // Throwing leaves the watermark untouched, so the next run redoes
+        // this window. Redoing is free (the import is idempotent); skipping
+        // would drop every customer changed inside it, permanently.
+        ({summary, window} = await importWithWatermark({
+          connectionRef, connection, businessId, skipClientIds,
+          nowMs: startedAtMs,
+        }));
       } catch (e) {
         const {code, message} = classifyWaveError(e);
         logger.warn("WAVE-CUST import failed", {
@@ -413,6 +529,7 @@ const waveImportCustomers = onCall(
       }
 
       logger.info("WAVE-CUST sync done", {
+        window: window.reason,
         uid: req.auth.uid,
         totalCount: summary.totalCount,
         imported: summary.imported,
@@ -421,6 +538,7 @@ const waveImportCustomers = onCall(
         skippedPending: summary.skippedPending,
         skippedUnchanged: summary.skippedUnchanged,
         pages: summary.pages,
+        delta: summary.delta,
         pushedCreated: pushed.created,
         pushedUpdated: pushed.updated,
         pushedPending: pushed.pending,
@@ -562,33 +680,43 @@ const waveScheduledImport = onSchedule(
       }
       const schedule = data && typeof data.importSchedule === "string" ?
         data.importSchedule : "off";
-      const lastAt = data && data.lastAutoImportAt &&
-        typeof data.lastAutoImportAt.toMillis === "function" ?
-        data.lastAutoImportAt.toMillis() : null;
-      if (!isImportDue(schedule, lastAt, Date.now())) {
+      // One clock instant for the due check AND the watermark — two Date.now()
+      // calls would let them disagree about when this run started.
+      const startedAtMs = Date.now();
+      if (!isImportDue(schedule, toMillis(data.lastAutoImportAt),
+          startedAtMs)) {
         logger.debug("waveScheduledImport: not due", {schedule});
         return;
       }
 
       logger.info("WAVE-SCHED import starting", {businessId, schedule});
       let summary;
+      let window;
       try {
         // Same protect-list as the interactive sync, and it matters more
         // here: this runs unattended, so a client edit clobbered by it is
         // lost with nobody watching. There is no push first — waveSyncWorker
         // owns that — so the set is simply whatever is still outstanding.
         const skipClientIds = await listOutstandingClientIds();
-        summary = await importCustomers({businessId, graphql, skipClientIds});
+        // Neither stamp advances on a throw — the cadence retries tomorrow
+        // AND the delta window is redone, so nothing edited inside it is
+        // skipped. `lastAutoImportAt` rides the same write as the watermark.
+        ({summary, window} = await importWithWatermark({
+          connectionRef: ref,
+          connection: data,
+          businessId,
+          skipClientIds,
+          nowMs: startedAtMs,
+          extraPatch: {lastAutoImportAt: FieldValue.serverTimestamp()},
+        }));
       } catch (e) {
         const {code, message} = classifyWaveError(e);
         logger.warn("WAVE-SCHED import failed", {code, message});
-        return; // leave lastAutoImportAt unchanged → retried next run
+        return;
       }
 
-      await ref.update({
-        lastAutoImportAt: FieldValue.serverTimestamp(),
-      });
       logger.info("WAVE-SCHED import done", {
+        window: window.reason,
         imported: summary.imported,
         updated: summary.updated,
         skippedArchived: summary.skippedArchived,

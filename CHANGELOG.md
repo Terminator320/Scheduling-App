@@ -10,6 +10,15 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.43.1+69] - 2026-08-04
+
+### Changed
+- **Syncing with Wave is much faster.** It now asks Wave only for the customers
+  that changed since the last sync, instead of re-reading the whole customer
+  list every time. A sync with nothing to do finishes almost immediately. A
+  full pass still runs at least weekly, so nothing can quietly drift out of
+  step.
+
 ## [1.43.0+68] - 2026-08-04
 
 ### Added
