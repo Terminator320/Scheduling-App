@@ -283,15 +283,6 @@
         { "order": "ASCENDING", "queryScope": "COLLECTION" },
         { "order": "DESCENDING", "queryScope": "COLLECTION" }
       ]
-    },
-    {
-      "collectionGroup": "signupCodes",
-      "fieldPath": "expiresAt",
-      "ttl": true,
-      "indexes": [
-        { "order": "ASCENDING", "queryScope": "COLLECTION" },
-        { "order": "DESCENDING", "queryScope": "COLLECTION" }
-      ]
     }
   ]
 }
