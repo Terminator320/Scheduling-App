@@ -109,7 +109,7 @@ const sendUpcomingJobReminders = onSchedule(
       timeZone: "America/Toronto",
       maxInstances: 1,
       secrets: [GOOGLE_MAP_API_KEY, ...APNS_SECRETS],
-      // Serial pairs, each with up to one Routes round-trip.
+      // Pairs run concurrently, each with up to one Routes round-trip.
       timeoutSeconds: 120,
     },
     async () => {
@@ -176,7 +176,14 @@ const sendOverdueJobPrompts = onSchedule(
       timeoutSeconds: 300,
     },
     async () => {
-      await runOverduePromptSweep(liveDeps());
+      try {
+        await runOverduePromptSweep(liveDeps());
+      } catch (err) {
+        // Log rather than rethrow, matching the two sibling schedulers: the
+        // next 15-min run self-heals, and a throw here would surface as a
+        // failed invocation for something already retried by the clock.
+        logger.error("sendOverdueJobPrompts failed", {err});
+      }
     },
 );
 

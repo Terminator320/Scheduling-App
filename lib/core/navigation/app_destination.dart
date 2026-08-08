@@ -20,20 +20,11 @@ enum PushedDestination implements AppDestination {
   settings,
 }
 
-/// Every destination. The seen store and [destinationByName] iterate this.
+/// Every destination, in tab-then-pushed order.
 const List<AppDestination> allDestinations = [
   ...HubTab.values,
   ...PushedDestination.values,
 ];
-
-/// Resolves a persisted `.name` back to its destination, or null for a name
-/// that no longer exists.
-AppDestination? destinationByName(String name) {
-  for (final destination in allDestinations) {
-    if (destination.name == name) return destination;
-  }
-  return null;
-}
 
 /// Route + typed args for a destination — the one mapping every nav surface
 /// uses, so the drawer and outside-shell navigation cannot drift.

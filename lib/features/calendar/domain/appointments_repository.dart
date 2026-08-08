@@ -61,6 +61,13 @@ abstract class AppointmentsRepository {
 
   Stream<List<AppointmentRecord>> watchInRange(AppointmentDateRange range);
 
+  /// The same query as [watchInRange], read ONCE.
+  ///
+  /// For a window of settled history — closed weeks that cannot change while
+  /// the screen is up, so paying for a live listener over them buys nothing.
+  /// The dashboard's trend charts are the caller.
+  Future<List<AppointmentRecord>> fetchInRange(AppointmentDateRange range);
+
   /// One newest-first page of terminal appointments. Pass [after] as the
   /// cursor to continue from, or null to start from the beginning.
   Future<List<AppointmentRecord>> fetchHistoryPage({

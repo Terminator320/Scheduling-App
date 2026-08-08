@@ -37,7 +37,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
                 .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
                 .toList(),
           ),
-      retryWhen: _isAuthPropagationDenied,
+      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -55,7 +55,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
                 .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
                 .toList(),
           ),
-      retryWhen: _isAuthPropagationDenied,
+      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -71,7 +71,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
                 .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
                 .toList(),
           ),
-      retryWhen: _isAuthPropagationDenied,
+      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -287,7 +287,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       () => _emergencyDoc(
         docId,
       ).snapshots().map((snap) => EmergencyContact.fromMap(snap.data())),
-      retryWhen: _isAuthPropagationDenied,
+      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -328,6 +328,15 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     });
   }
 
+  /// Memo of the doc id [watchUserDoc] resolved, keyed by the uid it was for.
+  /// See [cachedUserDocId].
+  String? _cachedUserDocId;
+  String? _cachedUserDocUid;
+
+  @override
+  String? cachedUserDocId(String uid) =>
+      _cachedUserDocUid == uid ? _cachedUserDocId : null;
+
   @override
   Stream<Map<String, dynamic>> watchUserDoc(String uid) {
     if (uid.isEmpty) return Stream.value(const {});
@@ -345,17 +354,14 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
           })
           .map((snapshot) {
             if (snapshot.docs.isEmpty) return const <String, dynamic>{};
+            // Remember the id this snapshot already carries. Without it,
+            // activeUserIdentityProvider re-queried the same doc by uid on
+            // every emission purely to learn something this stream had.
+            _cachedUserDocUid = uid;
+            _cachedUserDocId = snapshot.docs.first.id;
             return snapshot.docs.first.data();
           }),
-      retryWhen: _isAuthPropagationDenied,
+      retryWhen: isAuthPropagationDenied,
     );
   }
 }
-
-// Twin of `_isAuthPropagationDenied` in
-// `lib/features/calendar/data/firebase_appointments_repository.dart` — keep
-// them in sync. Retries a permission-denied on the first users listen, since
-// a freshly signed-in token can lag behind auth state; a genuine denial
-// still comes through once retries are exhausted.
-bool _isAuthPropagationDenied(Object error) =>
-    error is FirebaseException && error.code == 'permission-denied';

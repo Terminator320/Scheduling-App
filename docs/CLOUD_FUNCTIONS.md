@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-04 by auditing the source against the app's call sites and
+refreshed 2026-08-08 by auditing the source against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -34,9 +34,9 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 > wrong before — verify against the live list rather than trusting it.
 
 
-- **25 functions defined** in code as of 2026-08-08; **27 were deployed** as of
-  2026-08-04 and the retirement deploy has NOT yet run, so prod is still at 27
-  until it does. P4c added `createEmployeeAccount`,
+- **25 functions defined** in code and **25 deployed**, verified against
+  `functions_list_functions` on 2026-08-08 — an exact match, no orphans and no
+  extras. The retirement deploy has now RUN. P4c added `createEmployeeAccount`,
   `completeEmployeeSetup` and `deleteEmployeeAccount` and kept
   `createEmployeeInvite` / `redeemSignupCode` as the `#compat-1.37.1` shim;
   `changeEmployeeEmail` landed 2026-08-04 (26 → 27); **the shim was retired
@@ -115,7 +115,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `placesReverseGeocode` | callable | `onCall` | `places.js` | live staff-location map (admin) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · durable 120/hr |
 | `deleteAccount` | callable | `onCall` | `account.js` | `account_deletion_service.dart` | — | App Check ✓ · reauth ≤5min · durable 5/15min |
 | `createEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (invite sheet, roster row Reset password) | — | App Check ✓ · admin · durable 20/hr·uid |
-| `completeEmployeeSetup` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` → `auth_service.dart` (account setup screen) | — | App Check ✓ · authed (own doc) · durable 5/15min·uid |
+| `completeEmployeeSetup` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` → `auth_service.dart` (account setup screen) | — | App Check ✓ · authed (own doc) · `email_verified` ✓ · durable 5/15min·uid |
 | `deleteEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (pending-account row) | — | App Check ✓ · admin · durable 20/hr·uid |
 | `changeEmployeeEmail` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (inside `updateEmployee`, when the email changed on a doc with a `uid`) | — | App Check ✓ · admin · durable 20/hr·uid |
 | `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
@@ -214,6 +214,17 @@ one. Flips `status` to `active` and stamps the setup profile. Refuses
 `failed-precondition / setup-not-pending` when the doc isn't `invited`, so a
 replayed call (or two devices finishing at once) can't rewrite a consent record;
 `not-found / account-not-found` when there's no doc for the uid.
+
+**It refuses an unverified address** — `failed-precondition / email-not-verified`
+unless `req.auth.token.email_verified` is true. That is what prices the shared
+`Welcome123!` window: anyone who knows an employee's email can sign in as them
+and reach the setup screen, but leaving `invited` now needs control of the
+MAILBOX, and `firestore.rules` grants an `invited` user nothing. It is an
+IDENTITY guard, so it sits **above** the rate limiter — an unverified caller
+must not be able to burn the real employee's five slots. The client half is
+`AuthService.refreshEmailVerified()`, which forces `getIdToken(true)`: the claim
+is read off the token minted at sign-in, so a bare `reload()` leaves the server
+refusing an address the person has already verified.
 
 **The caller must have already changed the password.** The server cannot see a
 password, so "you must replace the shared default" is true only because
@@ -476,7 +487,10 @@ daily; a rare crash-retry duplicate is accepted). Queries `status in
 OPEN_STATUSES` (`pending`/`in_progress`/legacy `confirmed`, single-sourced from
 `OPEN_LIKE`) — it previously hardcoded `["pending", "confirmed"]`, silently
 dropping every `in_progress` job from the digest even though the pure grouping
-filter excludes only `cancelled`; the query and filter now agree.
+filter excludes only `cancelled`; the query and filter now agree. **Each
+employee's send is wrapped individually** — the sends run through one
+`Promise.all`, so before that a single transient token read rejected the whole
+map and cost every *other* employee tomorrow's schedule.
 
 ### `sendOverdueJobPrompts` — `notifications.js`
 Every 15 min (Toronto). The "job finished?" nudge: pushes assignees of a job
@@ -491,7 +505,13 @@ oldest, then filters `endTime ∈ (now-24h, now]` in code. At-most-once
 `appointmentOverduePrompts/{id}_{endMs}_{employeeDocId}` ledger; a claim that
 delivered **zero** pushes is released (doc deleted) so a later sweep retries
 that recipient, and each recipient's send is isolated so one transient failure
-can't abort the sweep. Candidates are processed serially, so it carries a **300s
+can't abort the sweep. **That isolation now covers building the ledger ref
+itself**, which is composed from the employee doc id: a `/` in an `employeeIds`
+element makes an invalid document path, and constructing it outside the `try`
+threw before any per-recipient handler could catch — one malformed id
+permanently killed every overdue prompt for the whole fleet. The scheduler body
+is also wrapped and logged like its two siblings, so a sweep that dies is
+visible instead of silent. Candidates are processed serially, so it carries a **300s
 timeout** (well over the 60s default) to keep a backlog from leaving the newest
 overdue jobs unprompted.
 

@@ -50,6 +50,26 @@ class TourSteps {
       ? step(id, child: child, targetBorderRadius: targetBorderRadius)
       : child;
 
+  /// [stepIf] for the app bar's `bottom:` slot, which needs a
+  /// [PreferredSizeWidget] rather than a plain [Widget].
+  ///
+  /// Without it that one slot escaped this class's ownership and the
+  /// `has(id) ? TourShowcaseBar(...) : bar` block was re-spelled verbatim on
+  /// Clients, History and Team — six lines each, all threading `keys[id]!`,
+  /// `ids.indexOf(id)` and `ids.length` by hand, which is exactly what [step]
+  /// exists to stop.
+  PreferredSizeWidget stepBarIf(TourStepId id, PreferredSizeWidget bar) =>
+      has(id)
+      ? TourShowcaseBar(
+          showcaseKey: keys[id]!,
+          scope: scope,
+          id: id,
+          index: ids.indexOf(id),
+          count: ids.length,
+          bar: bar,
+        )
+      : bar;
+
   /// Wraps [child] as the tour step for [id]. Throws if [id] isn't in this
   /// catalog — use [stepIf] where that's possible.
   Widget step(

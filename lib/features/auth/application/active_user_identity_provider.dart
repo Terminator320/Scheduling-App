@@ -21,9 +21,16 @@ final activeUserIdentityProvider =
       }
       final uid = ref.watch(authUidProvider).value;
       if (uid == null) return null;
+      final repo = ref.watch(employeesRepositoryProvider);
+      // We only got here because currentUserDocProvider emitted a populated
+      // doc, so the stream behind it has already resolved this uid's doc id —
+      // re-querying for it was a document read per emission plus one per cold
+      // start, for something already in hand.
+      final cachedId = repo.cachedUserDocId(uid);
+      if (cachedId != null) return (role: role, docId: cachedId);
+
       // Retry this read right after sign-in — if we don't, ID-token/role
       // bridge lag can wipe the mirrors.
-      final repo = ref.watch(employeesRepositoryProvider);
       final match = await retryAsync(
         () => repo.findUserByUid(uid),
         delays: const [

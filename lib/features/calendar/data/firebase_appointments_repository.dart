@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show compute;
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -323,8 +324,30 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
           .limit(_rangeStreamLimit)
           .snapshots()
           .map((snapshot) => _mapRangeSnapshot(snapshot, 'APPT-RANGE')),
-      retryWhen: _isAuthPropagationDenied,
+      retryWhen: isAuthPropagationDenied,
     );
+  }
+
+  @override
+  Future<List<AppointmentRecord>> fetchInRange(
+    AppointmentDateRange range,
+  ) async {
+    final snapshot = await retryAsync(
+      () => _appointments
+          .where(
+            'startTime',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(range.fetchStart),
+          )
+          .where('startTime', isLessThan: Timestamp.fromDate(range.end))
+          .orderBy('startTime')
+          .limit(_rangeStreamLimit)
+          .get(),
+      // Same post-sign-in token-propagation window watchInRange retries for —
+      // this one is fired from the dashboard, which can be the first screen a
+      // freshly signed-in admin lands on.
+      delays: const [Duration(milliseconds: 500), Duration(milliseconds: 1500)],
+    );
+    return _mapRangeSnapshot(snapshot, 'APPT-RANGE-ONCE');
   }
 
   @override
@@ -335,7 +358,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     // Sorted newest-first and cursor-paged, with a doc-id tiebreaker so
     // pagination stays stable when multiple appointments share a startTime.
     var query = _appointments
-        .where('status', whereIn: _historyStatuses)
+        .where('status', whereIn: terminalStatusQueryValues)
         .orderBy('startTime', descending: true)
         .orderBy(FieldPath.documentId, descending: true);
     final afterId = after?.id;
@@ -365,8 +388,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         .toList()
       ..sort((a, b) => b.startTime.compareTo(a.startTime));
   }
-
-  static const List<String> _historyStatuses = ['done', 'cancelled'];
 
   // A bounded scan window for history search, same approach as clients search.
   static const int _historySearchScanLimit = 1000;
@@ -410,13 +431,18 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   Future<_CachedHistoryScanWindow?> _historyScanWindow() async {
     final cached = _scanWindow;
     if (cached != null && _isFresh(cached.fetchedAt)) return cached;
+    // Drop the expired window rather than merely declining to use it. This
+    // repository is a non-autoDispose singleton, so up to 1000 raw doc maps
+    // otherwise stayed pinned for the whole session after one search. The next
+    // search re-reads either way.
+    _scanWindow = null;
 
     final QuerySnapshot<Map<String, dynamic>> snapshot;
     try {
       // Same query shape as fetchHistoryPage, so it reuses the same
       // composite index instead of needing its own.
       snapshot = await _appointments
-          .where('status', whereIn: _historyStatuses)
+          .where('status', whereIn: terminalStatusQueryValues)
           .orderBy('startTime', descending: true)
           .limit(_historySearchScanLimit)
           .get();
@@ -452,7 +478,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
           .limit(_rangeStreamLimit)
           .snapshots()
           .map((snapshot) => _mapRangeSnapshot(snapshot, 'APPT-MYRANGE')),
-      retryWhen: _isAuthPropagationDenied,
+      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -490,7 +516,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         // We filter out terminal visits here in Dart instead of in the query,
         // since Firestore won't let us combine another filter with arrayContainsAny.
         final status = (data['status'] ?? '').toString().toLowerCase();
-        if (_terminalStatuses.contains(status)) continue;
+        if (isTerminalStatusRaw(status)) continue;
         // The query above is only a coarse prefilter: it overlaps the raw
         // stored instants, but the pair is a DAILY window. Without this a
         // multi-day 9-5 run reports its crew busy at 7 pm on every one of its
@@ -514,13 +540,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
     return candidates.where((e) => busyIds.contains(e.id)).toList();
   }
-
-  // Terminal statuses. 'completed' is a legacy alias for 'done'.
-  static const Set<String> _terminalStatuses = {
-    'done',
-    'completed',
-    'cancelled',
-  };
 
   Map<String, dynamic> _toFirestoreMap(
     AppointmentRecord appointment, {
@@ -600,8 +619,3 @@ class _CachedHistoryScanWindow {
   final List<RawHistoryDoc> docs;
   final DateTime fetchedAt;
 }
-
-// Auth can take a moment to propagate after sign-in, so we retry on
-// permission-denied here too — same guard used at login.
-bool _isAuthPropagationDenied(Object error) =>
-    error is FirebaseException && error.code == 'permission-denied';

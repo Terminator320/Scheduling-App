@@ -112,7 +112,7 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
   }
 
   Widget _buildMaterial(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     return AlertDialog(
       title: Text(context.l10n.settings_confirmYourPassword),
       content: Column(
@@ -152,8 +152,11 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
         ),
         FilledButton(
           style: FilledButton.styleFrom(
-            backgroundColor: scheme.error,
-            foregroundColor: scheme.onError,
+            // dangerFill, never scheme.error — that slot is the LIFTED
+            // foreground red, so in dark this rendered pale pink on near-black
+            // and the app's most destructive action read as a light button.
+            backgroundColor: theme.palette.dangerFill,
+            foregroundColor: theme.palette.onDangerFill,
           ),
           onPressed: () => Navigator.of(context).pop(_controller.text),
           child: Text(context.l10n.settings_deletePermanently),

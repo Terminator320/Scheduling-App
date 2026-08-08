@@ -10,7 +10,11 @@ import 'package:scheduling/l10n/l10n.dart';
 class SecuritySettingsCard extends ConsumerWidget {
   const SecuritySettingsCard({required this.onToggleAppLock, super.key});
 
-  final void Function({required bool value}) onToggleAppLock;
+  /// `Future`-returning on purpose. Typed `void Function` this silently
+  /// DROPPED the host's future, so a keychain fault while writing the flag
+  /// escaped to the zone handler as a FATAL Crashlytics record and the switch
+  /// snapped back with no message at all.
+  final Future<void> Function({required bool value}) onToggleAppLock;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

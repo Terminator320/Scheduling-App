@@ -109,7 +109,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     for (var i = 0; i < a.employeeIds.length; i++)
       EmployeeRecord(
         id: a.employeeIds[i],
-        name: i < a.employeeNames.length ? a.employeeNames[i] : '',
+        name: assigneeNameAt(a.employeeNames, i) ?? '',
       ),
   ];
 
@@ -172,8 +172,6 @@ class EventDetailsController extends Notifier<EventDetailsState>
 
   void enterEditing() =>
       state = state.copyWith(isEditing: true, errors: const {});
-
-  void exitEditing() => state = state.copyWith(isEditing: false);
 
   void selectDate(DateTime date) {
     final length = calendarDaysBetween(state.selectedDate, state.endDate);

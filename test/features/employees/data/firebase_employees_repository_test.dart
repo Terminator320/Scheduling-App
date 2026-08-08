@@ -742,6 +742,9 @@ void main() {
       fakeAsync((async) {
         final userDoc = _MockQueryDocSnapshot();
         when(userDoc.data).thenReturn(const {'role': 'admin'});
+        // watchUserDoc memoizes this id so activeUserIdentityProvider doesn't
+        // re-query for it.
+        when(() => userDoc.id).thenReturn('doc-1');
         when(() => snapshot.docs).thenReturn([userDoc]);
 
         var subscriptions = 0;
@@ -755,7 +758,8 @@ void main() {
 
         final emissions = <Map<String, dynamic>>[];
         Object? error;
-        repo()
+        final repository = repo();
+        repository
             .watchUserDoc('uid-1')
             .listen(
               emissions.add,
@@ -768,6 +772,26 @@ void main() {
         expect(emissions, [
           {'role': 'admin'},
         ]);
+        // The id the snapshot carried is now available without a second read.
+        expect(repository.cachedUserDocId('uid-1'), 'doc-1');
+      });
+    });
+
+    test('cachedUserDocId is scoped to the uid it resolved', () {
+      fakeAsync((async) {
+        final userDoc = _MockQueryDocSnapshot();
+        when(userDoc.data).thenReturn(const {'role': 'admin'});
+        when(() => userDoc.id).thenReturn('doc-1');
+        when(() => snapshot.docs).thenReturn([userDoc]);
+        when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+
+        final repository = repo();
+        repository.watchUserDoc('uid-1').listen((_) {});
+        async.elapse(const Duration(seconds: 1));
+
+        // Handing back another account's doc id would resolve the wrong
+        // person's schedule into both off-screen mirrors.
+        expect(repository.cachedUserDocId('uid-2'), isNull);
       });
     });
 

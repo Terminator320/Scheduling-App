@@ -37,16 +37,17 @@ class AgendaSliverList extends StatelessWidget {
   final void Function(AppointmentRecord appointment)? onAppointmentTap;
   final String? selectedAppointmentId;
 
-  /// Where the day's remaining work ends, or -1 when nothing is closed.
-  ///
-  /// `expandToDays` already sorts open before closed, so the closed jobs are
-  /// one contiguous run at the tail — which is what lets the rule be a single
-  /// marker at this index and its count a plain `length - index`.
-  int get _firstClosedIndex =>
-      events.indexWhere((slice) => slice.appointment.isClosed);
-
   @override
   Widget build(BuildContext context) {
+    // Where the day's remaining work ends, or -1 when nothing is closed.
+    // `expandToDays` already sorts open before closed, so the closed jobs are
+    // one contiguous run at the tail — which is what lets the rule be a single
+    // marker at this index and its count a plain `length - index`. Resolved
+    // once here, never inside the item builder, which runs per row per rebuild.
+    final firstClosedIndex = events.indexWhere(
+      (slice) => slice.appointment.isClosed,
+    );
+
     return SliverMainAxisGroup(
       slivers: [
         if (isLoading)
@@ -98,7 +99,7 @@ class AgendaSliverList extends StatelessWidget {
                 return FadeInItem(
                   key: ValueKey(e.id),
                   index: index,
-                  child: index == _firstClosedIndex
+                  child: index == firstClosedIndex
                       ? Column(
                           children: [
                             _ClosedRule(count: events.length - index),

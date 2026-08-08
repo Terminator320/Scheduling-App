@@ -32,6 +32,38 @@
   "@auth_signedInAs": {
     "description": "Mono chip beside the locked email on the setup screen"
   },
+  "auth_verifyEmailTitle": "Verify your email",
+  "@auth_verifyEmailTitle": {
+    "description": "Heading of the email-verification step on the setup screen"
+  },
+  "auth_verifyEmailBody": "Open the link we email you, then tap Check again. Setup can't finish until your address is verified.",
+  "@auth_verifyEmailBody": {
+    "description": "Explains the email-verification step on the setup screen"
+  },
+  "auth_sendVerificationEmail": "Send verification email",
+  "@auth_sendVerificationEmail": {
+    "description": "Button that sends the verification email for the first time"
+  },
+  "auth_resendVerificationEmail": "Resend email",
+  "@auth_resendVerificationEmail": {
+    "description": "Button that sends the verification email again"
+  },
+  "auth_verificationEmailSent": "Email sent. Check your inbox and your spam folder.",
+  "@auth_verificationEmailSent": {
+    "description": "Confirmation shown after the verification email is sent"
+  },
+  "auth_checkVerification": "Check again",
+  "@auth_checkVerification": {
+    "description": "Button that re-reads the account to pick up a just-clicked verification link"
+  },
+  "auth_emailNotVerifiedYet": "Not verified yet. Open the link in the email, then tap Check again.",
+  "@auth_emailNotVerifiedYet": {
+    "description": "Shown when the verification check ran and the address is still unverified"
+  },
+  "auth_emailVerified": "VERIFIED",
+  "@auth_emailVerified": {
+    "description": "Mono chip beside the locked email once the address is verified"
+  },
   "auth_accountReadySignInAgain": "Your account is ready. Sign in with your new password.",
   "@auth_accountReadySignInAgain": {
     "description": "Success banner when the profile is not readable yet after setup"
@@ -565,10 +597,6 @@
   "@validation_titleIsRequired": {
     "description": "Title is required"
   },
-  "calendar_date": "Date",
-  "@calendar_date": {
-    "description": "Date"
-  },
   "calendar_selectDate": "Select date",
   "@calendar_selectDate": {
     "description": "Select date"
@@ -1096,6 +1124,10 @@
   "error_noAccountRecordContactAdmin": "We couldn't find your employee record. Ask your admin to check your account.",
   "@error_noAccountRecordContactAdmin": {
     "description": "Shown when the signed-in uid resolves to no users doc during setup"
+  },
+  "error_verifyYourEmailBeforeFinishing": "Verify your email address before finishing setup.",
+  "@error_verifyYourEmailBeforeFinishing": {
+    "description": "Setup was attempted before the signed-in address was verified"
   },
   "error_sessionExpiredSignInAgain": "Your session expired. Sign in again to finish setting up.",
   "@error_sessionExpiredSignInAgain": {
@@ -1648,6 +1680,10 @@
   "@settings_myDetailsEmergencyBlurb": {
     "description": "Caption under the emergency-contact section on My details, stating who can read it"
   },
+  "error_introSaveAppLock": "Couldn't change the app lock setting",
+  "@error_introSaveAppLock": {
+    "description": "Intro for a failed App Lock toggle (keychain write failed)"
+  },
   "error_introSaveMyDetails": "Couldn't save your details",
   "@error_introSaveMyDetails": {
     "description": "Error intro for ME-SAVE (the user's own emergency contact)"
@@ -1983,6 +2019,10 @@
   "calendar_couldNotSavePhoto": "Couldn't save the photo. Please try again.",
   "@calendar_couldNotSavePhoto": {
     "description": "Error notice when saving an appointment photo to the photo library fails"
+  },
+  "calendar_couldNotSharePhoto": "Couldn't share the photo. Please try again.",
+  "@calendar_couldNotSharePhoto": {
+    "description": "Error notice when sharing an appointment photo fails"
   },
   "calendar_photoLibraryAccessNeeded": "Photo access is off. Enable it in Settings to save photos.",
   "@calendar_photoLibraryAccessNeeded": {

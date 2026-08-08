@@ -120,6 +120,40 @@ class SkeletonAppointmentRow extends StatelessWidget {
   }
 }
 
+/// [rows] stacked [SkeletonListTile]s — the standard loading state for a list.
+///
+/// Deliberately NOT scrollable: two of its three callers sit inside
+/// `infinite_scroll_pagination`'s `SliverFillRemaining`, which asks its child
+/// for intrinsic dimensions, and a nested `ListView` there throws.
+///
+/// This was hand-built at each call site and had already drifted — the Team
+/// roster used a `sp12` gap where the other two used `sp8`, so the same
+/// loading state rendered at two different rhythms.
+class SkeletonList extends StatelessWidget {
+  const SkeletonList({
+    this.rows = 3,
+    this.padding = const EdgeInsets.all(AppSpacing.sp16),
+    super.key,
+  });
+
+  final int rows;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: padding,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < rows; i++) ...[
+          if (i > 0) const SizedBox(height: AppSpacing.sp8),
+          const SkeletonListTile(),
+        ],
+      ],
+    ),
+  );
+}
+
 class SkeletonListTile extends StatelessWidget {
   const SkeletonListTile({super.key});
 

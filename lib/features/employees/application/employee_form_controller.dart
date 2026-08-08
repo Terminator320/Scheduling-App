@@ -107,6 +107,13 @@ class EmployeeFormActivity {
   /// operation in flight when they are open, so they read this rather than
   /// keying by id.
   bool get isSaving => savingIds.isNotEmpty;
+
+  /// The delete-account sibling of [isSaving] — but note the asymmetry:
+  /// [isSaving] has real callers, this one has none in `lib/`. The only
+  /// delete-account affordance lives on `PendingInviteTile`, which correctly
+  /// asks the id-keyed [isDeletingAccountId]; this survives as the aggregate
+  /// the tests assert against. **Don't wire a surface to it** without first
+  /// checking that surface really is modal.
   bool get isDeletingAccount => deletingAccountIds.isNotEmpty;
 
   /// Is THIS employee saving / being removed — what a roster row must ask.

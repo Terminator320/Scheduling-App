@@ -57,7 +57,12 @@ describe("patchFor", () => {
     ).toEqual({phone: "(514) 555-1234", name: "Marc Tremblay"});
   });
 
-  it("finds a number hiding in the legacy businessName", () => {
+  // The number is lifted from either field — an unreachable client is the
+  // whole problem — but the RENAME is gated on `name`, and this doc's name is
+  // empty, so ClientRecord.fromMap displays it from businessName. Writing a
+  // name here would shadow that fallback and replace the business with a
+  // person, which is the same loss as the case below.
+  it("lifts a number from the legacy businessName, without renaming", () => {
     expect(
         patchFor({
           name: "",
@@ -66,7 +71,36 @@ describe("patchFor", () => {
           lastName: "Gagnon",
           phone: "",
         }),
-    ).toEqual({phone: "(514) 555-1234", name: "Luc Gagnon"});
+    ).toEqual({phone: "(514) 555-1234"});
+  });
+
+  // The dangerous shape: a CLEAN business name beside a polluted legacy
+  // businessName. Searching the two joined found a number and renamed `name`
+  // to the contact person, destroying "Plomberie ABC" irreversibly.
+  it("never renames a clean name when only businessName has the number", () => {
+    expect(
+        patchFor({
+          name: "Plomberie ABC",
+          businessName: "Plomberie ABC 514-555-1234",
+          firstName: "Luc",
+          lastName: "Gagnon",
+          phone: "",
+        }),
+    ).toEqual({phone: "(514) 555-1234"});
+  });
+
+  // A space-join let digits ending `name` meet digits starting `businessName`
+  // and match a 10-digit run that exists in neither field.
+  it("does not synthesise a number across the field boundary", () => {
+    expect(
+        patchFor({
+          name: "Atelier 514",
+          businessName: "5551234 Quebec Inc",
+          firstName: "Luc",
+          lastName: "Gagnon",
+          phone: "",
+        }),
+    ).toBeNull();
   });
 
   // businessName is read-only legacy — the app never emits it, and fromMap's

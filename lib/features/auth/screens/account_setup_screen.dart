@@ -21,6 +21,7 @@ import 'package:scheduling/features/employees/domain/policies/starting_password_
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
+import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 
 /// First-run setup for an employee whose account an admin created.
 ///
@@ -71,6 +72,16 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   bool _isLoading = false;
   bool _submitted = false;
 
+  /// The second gate beside consent. The account was minted on a password
+  /// every admin knows, so verification is the only thing that proves the
+  /// person on this screen owns the mailbox — and the server refuses to
+  /// activate without it.
+  late bool _emailVerified;
+  bool _isSendingVerification = false;
+  bool _isCheckingVerification = false;
+  bool _verificationSent = false;
+  String? _verificationNotice;
+
   String? _firstNameError;
   String? _lastNameError;
   String? _passwordError;
@@ -83,6 +94,7 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
     super.initState();
     _firstNameController = TextEditingController(text: widget.firstName);
     _lastNameController = TextEditingController(text: widget.lastName);
+    _emailVerified = _authService.isEmailVerified;
   }
 
   @override
@@ -121,9 +133,14 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
     // `active` on a constant that is in the source, on every pending roster row
     // and known to every admin. Replacing it is the whole reason this screen
     // is reachable, and the only thing that closes the onboarding window.
+    //
+    // Validated TRIMMED, because `completeAccountSetup` stores the trimmed
+    // value: checking `"Aa1!bcd "` (8) and then setting `"Aa1!bcd"` (7) let a
+    // password through that does not meet the policy it was checked against.
+    final password = _passwordController.text.trim();
     final passwordErr =
-        AuthValidators.newPassword(context, _passwordController.text) ??
-        (_passwordController.text.trim() == kDefaultStartingPassword
+        AuthValidators.newPassword(context, password) ??
+        (password == kDefaultStartingPassword
             ? l10n.validation_passwordMustDifferFromStarting
             : null);
 
@@ -167,6 +184,89 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   /// submit button.
   void _onPasswordChanged() => _onFieldChanged();
 
+  /// Sends Firebase's own verification email to the address they signed in
+  /// with. Deliberately user-triggered rather than automatic: an auto-send on
+  /// every visit spends the provider's rate limit on people who already have
+  /// the message open.
+  Future<void> _sendVerificationEmail() async {
+    if (_isSendingVerification) return;
+    setState(() {
+      _isSendingVerification = true;
+      _verificationNotice = null;
+      _bannerError = null;
+    });
+    try {
+      await _authService.sendVerificationEmail();
+      if (!mounted) return;
+      setState(() {
+        _isSendingVerification = false;
+        _verificationSent = true;
+        _verificationNotice = context.l10n.auth_verificationEmailSent;
+      });
+    } catch (error, stackTrace) {
+      final failure = AuthErrorMapper.map(error);
+      ref
+          .read(loggerProvider)
+          .authFailure(
+            'AUTH-SETUP sendVerificationEmail failed',
+            failure,
+            error,
+            stackTrace,
+          );
+      if (!mounted) return;
+      setState(() {
+        _isSendingVerification = false;
+        _bannerError = failure.toLocalizedMessageInContext(
+          context,
+          AuthErrorContext.register,
+        );
+      });
+    }
+  }
+
+  /// Re-reads the account after they have opened the link.
+  ///
+  /// [AuthService.refreshEmailVerified] also forces a token refresh — the
+  /// callable reads `email_verified` off the token, so without that the server
+  /// would keep refusing an address the person has already verified.
+  Future<void> _checkVerification() async {
+    if (_isCheckingVerification) return;
+    setState(() {
+      _isCheckingVerification = true;
+      _verificationNotice = null;
+      _bannerError = null;
+    });
+    try {
+      final verified = await _authService.refreshEmailVerified();
+      if (!mounted) return;
+      setState(() {
+        _isCheckingVerification = false;
+        _emailVerified = verified;
+        _verificationNotice = verified
+            ? null
+            : context.l10n.auth_emailNotVerifiedYet;
+      });
+    } catch (error, stackTrace) {
+      final failure = AuthErrorMapper.map(error);
+      ref
+          .read(loggerProvider)
+          .authFailure(
+            'AUTH-SETUP refreshEmailVerified failed',
+            failure,
+            error,
+            stackTrace,
+          );
+      if (!mounted) return;
+      setState(() {
+        _isCheckingVerification = false;
+        _bannerError = failure.toLocalizedMessageInContext(
+          context,
+          AuthErrorContext.register,
+        );
+      });
+    }
+  }
+
   Future<void> _finishSetup() async {
     // Reentrancy guard, synchronously first: AnimatedLoadingButton only nulls
     // onPressed after the setState rebuild, so a same-frame double-tap would
@@ -174,10 +274,12 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
     // invocations — burning 2 of 5 rate-limit slots and pushing the hub twice.
     if (_isLoading) return;
     FocusScope.of(context).unfocus();
-    // The consent checkbox is the gate, and this is where it is enforced: the
-    // confirm-password field's keyboard-submit reaches here without consulting
-    // the disabled button, so gating only at the CTA would let Done through.
-    if (!_consented) return;
+    // Consent and email verification are the two gates, and this is where they
+    // are enforced: the confirm-password field's keyboard-submit reaches here
+    // without consulting the disabled button, so gating only at the CTA would
+    // let Done through. Verification is also the SERVER's gate, so submitting
+    // without it can only produce a failure notice.
+    if (!_consented || !_emailVerified) return;
 
     setState(() {
       _submitted = true;
@@ -233,6 +335,9 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       }
       setState(() {
         _isLoading = false;
+        // The local flag said verified but the token did not carry the claim,
+        // so put the step back rather than leaving a CTA that can only fail.
+        if (failure is AuthFailureEmailNotVerified) _emailVerified = false;
         _bannerError = failure.toLocalizedMessageInContext(
           context,
           AuthErrorContext.register,
@@ -316,7 +421,18 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
           const _SetupBanner(),
           if (email.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sp16),
-            _LockedEmailPanel(email: email),
+            _LockedEmailPanel(email: email, isVerified: _emailVerified),
+          ],
+          if (!_emailVerified) ...[
+            const SizedBox(height: AppSpacing.sp16),
+            _VerifyEmailPanel(
+              hasSent: _verificationSent,
+              isSending: _isSendingVerification,
+              isChecking: _isCheckingVerification,
+              notice: _verificationNotice,
+              onSend: _sendVerificationEmail,
+              onCheck: _checkVerification,
+            ),
           ],
           const SizedBox(height: AppSpacing.sp16),
           LabeledTextField(
@@ -409,8 +525,10 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
           AnimatedLoadingButton(
             label: l10n.auth_finishSetup,
             isLoading: _isLoading,
-            // The checkbox IS the gate — a disabled button needs no error copy.
-            onPressed: _consented ? _finishSetup : null,
+            // The checkbox and the verification panel ARE the gates — both are
+            // on screen and self-explanatory, so a disabled button needs no
+            // error copy of its own.
+            onPressed: _consented && _emailVerified ? _finishSetup : null,
           ),
           const SizedBox(height: AppSpacing.sp8),
           Center(
@@ -438,9 +556,11 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: AppSpacing.sp8),
-        PasswordStrengthMeter(password: value.text),
+        // Trimmed, so the meter and the checklist judge the same string
+        // `_validate` gates on and `completeAccountSetup` stores.
+        PasswordStrengthMeter(password: value.text.trim()),
         const SizedBox(height: AppSpacing.sp8),
-        PasswordRequirementsChecklist(password: value.text),
+        PasswordRequirementsChecklist(password: value.text.trim()),
       ],
     ),
   );
@@ -478,9 +598,10 @@ class _SetupBanner extends StatelessWidget {
 /// disabled field truncates at large text scale where a wrapping [Text] does
 /// not.
 class _LockedEmailPanel extends StatelessWidget {
-  const _LockedEmailPanel({required this.email});
+  const _LockedEmailPanel({required this.email, required this.isVerified});
 
   final String email;
+  final bool isVerified;
 
   @override
   Widget build(BuildContext context) {
@@ -510,7 +631,7 @@ class _LockedEmailPanel extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(l10n.common_email, style: theme.textTheme.labelLarge),
-                const _SignedInChip(),
+                _SignedInChip(isVerified: isVerified),
               ],
             ),
             const SizedBox(height: AppSpacing.sp8),
@@ -527,32 +648,159 @@ class _LockedEmailPanel extends StatelessWidget {
   }
 }
 
+/// Reads SIGNED IN until the address is verified, then VERIFIED. The icon
+/// changes with the label, so the state is never signalled by colour alone.
 class _SignedInChip extends StatelessWidget {
-  const _SignedInChip();
+  const _SignedInChip({required this.isVerified});
+
+  final bool isVerified;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final status = theme.statusColors;
+    final background = isVerified
+        ? status.successContainer
+        : scheme.primaryContainer;
+    final foreground = isVerified
+        ? status.onSuccessContainer
+        : scheme.onPrimaryContainer;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sp8,
         vertical: 2,
       ),
       decoration: BoxDecoration(
-        color: scheme.primaryContainer,
+        color: background,
         borderRadius: BorderRadius.circular(AppRadius.rFull),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.lock_outline, size: 12, color: scheme.onPrimaryContainer),
+          Icon(
+            isVerified ? Icons.verified_outlined : Icons.lock_outline,
+            size: 12,
+            color: foreground,
+          ),
           const SizedBox(width: AppSpacing.sp4),
           Text(
-            context.l10n.auth_signedInAs,
-            style: theme.monoType.micro.copyWith(
-              color: scheme.onPrimaryContainer,
+            isVerified
+                ? context.l10n.auth_emailVerified
+                : context.l10n.auth_signedInAs,
+            style: theme.monoType.micro.copyWith(color: foreground),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The email-verification step: send the link, then confirm it was opened.
+///
+/// This is a real gate, not a nudge — `completeEmployeeSetup` refuses without
+/// `email_verified`, because the account was created on a password every admin
+/// knows and control of the mailbox is the only thing that identifies the
+/// person on this screen.
+class _VerifyEmailPanel extends StatelessWidget {
+  const _VerifyEmailPanel({
+    required this.hasSent,
+    required this.isSending,
+    required this.isChecking,
+    required this.notice,
+    required this.onSend,
+    required this.onCheck,
+  });
+
+  final bool hasSent;
+  final bool isSending;
+  final bool isChecking;
+  final String? notice;
+  final VoidCallback onSend;
+  final VoidCallback onCheck;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final l10n = context.l10n;
+    final message = notice;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.sp16),
+      decoration: BoxDecoration(
+        color: scheme.tertiaryContainer,
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.mark_email_unread_outlined,
+                size: 18,
+                color: scheme.onTertiaryContainer,
+              ),
+              const SizedBox(width: AppSpacing.sp8),
+              Expanded(
+                child: Text(
+                  l10n.auth_verifyEmailTitle,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: scheme.onTertiaryContainer,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sp8),
+          Text(
+            l10n.auth_verifyEmailBody,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: scheme.onTertiaryContainer,
             ),
+          ),
+          if (message != null) ...[
+            const SizedBox(height: AppSpacing.sp8),
+            Text(
+              message,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onTertiaryContainer,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.sp12),
+          // Wrap, not Row: at large text scales the two labels are long enough
+          // to overflow side by side.
+          Wrap(
+            spacing: AppSpacing.sp8,
+            runSpacing: AppSpacing.sp8,
+            children: [
+              FilledButton.tonalIcon(
+                key: const Key('sendVerificationEmail'),
+                onPressed: isSending ? null : onSend,
+                icon: BusyButtonIcon(
+                  isBusy: isSending,
+                  icon: Icons.send_outlined,
+                ),
+                label: Text(
+                  hasSent
+                      ? l10n.auth_resendVerificationEmail
+                      : l10n.auth_sendVerificationEmail,
+                ),
+              ),
+              OutlinedButton.icon(
+                key: const Key('checkVerification'),
+                onPressed: isChecking ? null : onCheck,
+                icon: BusyButtonIcon(
+                  isBusy: isChecking,
+                  icon: Icons.refresh,
+                ),
+                label: Text(l10n.auth_checkVerification),
+              ),
+            ],
           ),
         ],
       ),

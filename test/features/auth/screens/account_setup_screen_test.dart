@@ -79,6 +79,11 @@ void main() {
   setUp(() {
     auth = _MockAuthService();
     when(() => auth.currentUser).thenReturn(null);
+    // Verified by default so the existing gates are exercised in isolation;
+    // the verification gate has its own group below.
+    when(() => auth.isEmailVerified).thenReturn(true);
+    when(() => auth.sendVerificationEmail()).thenAnswer((_) async {});
+    when(() => auth.refreshEmailVerified()).thenAnswer((_) async => false);
     when(
       () => auth.completeAccountSetup(
         newPassword: any(named: 'newPassword'),
@@ -168,6 +173,75 @@ void main() {
         ),
       );
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('the email-verification gate', () {
+    setUp(() => when(() => auth.isEmailVerified).thenReturn(false));
+
+    testWidgets('a keyboard submit while unverified does not activate', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_harness(auth: auth));
+      await tester.pumpAndSettle();
+      await _fillForm(tester);
+      await _consent(tester);
+
+      // The server refuses without email_verified, so letting this through
+      // could only produce a failure the person cannot act on from here.
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      verifyNever(
+        () => auth.completeAccountSetup(
+          newPassword: any(named: 'newPassword'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          phone: any(named: 'phone'),
+          termsAccepted: any(named: 'termsAccepted'),
+          locationConsent: any(named: 'locationConsent'),
+        ),
+      );
+    });
+
+    testWidgets('a successful check clears the gate and activates', (
+      tester,
+    ) async {
+      when(() => auth.refreshEmailVerified()).thenAnswer((_) async => true);
+      await tester.pumpWidget(_harness(auth: auth));
+      await tester.pumpAndSettle();
+      await _fillForm(tester);
+      await _consent(tester);
+
+      final check = find.byKey(const Key('checkVerification'));
+      await tester.ensureVisible(check);
+      await tester.pumpAndSettle();
+      await tester.tap(check);
+      await tester.pumpAndSettle();
+
+      await _submit(tester);
+
+      verify(
+        () => auth.completeAccountSetup(
+          newPassword: any(named: 'newPassword'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          phone: any(named: 'phone'),
+          termsAccepted: any(named: 'termsAccepted'),
+          locationConsent: any(named: 'locationConsent'),
+        ),
+      ).called(1);
+    });
+
+    testWidgets('the panel is gone once the address is verified', (
+      tester,
+    ) async {
+      when(() => auth.isEmailVerified).thenReturn(true);
+      await tester.pumpWidget(_harness(auth: auth));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('checkVerification')), findsNothing);
+      expect(find.byKey(const Key('sendVerificationEmail')), findsNothing);
     });
   });
 

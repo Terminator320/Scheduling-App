@@ -429,4 +429,53 @@ void main() {
       );
     });
   });
+
+  group('the maxAppointmentSpanDays clamp', () {
+    // The cap is client-side only — firestore.rules constrains neither
+    // instant — so a doc written by the console, the Admin SDK or another
+    // build can exceed it. When these owners disagree the drawer badge reads
+    // "1 job today" every day for a year and a card reads "Day 400 of 900".
+    final corrupt = _record(
+      start: DateTime(2026, 8, 2, 9),
+      end: DateTime(2028, 8, 2, 17),
+    );
+
+    test('sliceFor reports the clamped length, like expandToDays', () {
+      final slice = sliceFor(corrupt, DateTime(2026, 8, 2));
+      expect(slice, isNotNull);
+      expect(slice!.dayCount, maxAppointmentSpanDays);
+    });
+
+    test('sliceFor stops at the clamped last day', () {
+      // Day 14 is the last one it runs.
+      expect(sliceFor(corrupt, DateTime(2026, 8, 15)), isNotNull);
+      expect(sliceFor(corrupt, DateTime(2026, 8, 16)), isNull);
+    });
+
+    test('runsOn agrees with the calendar about the last day', () {
+      expect(runsOn(corrupt, DateTime(2026, 8, 15)), isTrue);
+      expect(runsOn(corrupt, DateTime(2026, 8, 16)), isFalse);
+      // A year later would have been "still running" before the clamp.
+      expect(runsOn(corrupt, DateTime(2027, 8, 3)), isFalse);
+    });
+
+    test('runsInRange stops at the clamped end too', () {
+      expect(
+        runsInRange(corrupt, DateTime(2026, 8, 10), DateTime(2026, 8, 18)),
+        isTrue,
+      );
+      expect(
+        runsInRange(corrupt, DateTime(2027, 1, 4), DateTime(2027, 1, 11)),
+        isFalse,
+      );
+    });
+
+    test('an ordinary run is untouched by the clamp', () {
+      final normal = _record(
+        start: DateTime(2026, 8, 2, 9),
+        end: DateTime(2026, 8, 6, 17),
+      );
+      expect(sliceFor(normal, DateTime(2026, 8, 2))!.dayCount, 5);
+    });
+  });
 }

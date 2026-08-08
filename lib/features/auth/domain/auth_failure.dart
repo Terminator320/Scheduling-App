@@ -43,7 +43,10 @@ sealed class AuthFailure extends Failure {
     // Both are races rather than defects: a replayed setup call, and a
     // credential that went stale mid-setup. Signing in again fixes either.
     AuthFailureSetupAlreadyComplete() ||
-    AuthFailureSessionExpired() => true,
+    AuthFailureSessionExpired() ||
+    // Ordinary onboarding state, not a defect: they have not opened the link
+    // yet, or the token predates their doing so.
+    AuthFailureEmailNotVerified() => true,
     // Console misconfiguration, a rules rejection, an unmapped error, or a
     // signed-in uid with no users doc — all real defects worth a non-fatal.
     AuthFailureOperationNotAllowed() ||
@@ -179,6 +182,16 @@ class AuthFailureNoAccountRecord extends AuthFailure {
       c.l10n.error_noAccountRecordContactAdmin;
 }
 
+// Setup was attempted before the address was verified. The account is minted
+// on a shared starting password, so verification is what proves the person
+// signing in owns the mailbox — see AuthService.isEmailVerified.
+class AuthFailureEmailNotVerified extends AuthFailure {
+  const AuthFailureEmailNotVerified();
+  @override
+  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
+      c.l10n.error_verifyYourEmailBeforeFinishing;
+}
+
 // The credential went stale mid-setup (token expired, or the write needed a
 // recent login). Signing in again is the whole fix.
 class AuthFailureSessionExpired extends AuthFailure {
@@ -203,19 +216,44 @@ class AuthFailureUnknown extends AuthFailure {
 }
 
 extension AuthFailureForgotPassword on AuthFailure {
+  /// The message to show on the forgot-password screen, or `null` to show the
+  /// "check your inbox" panel instead.
+  ///
+  /// **`null` means "report success", so every member has to be listed.** The
+  /// call site treats a null as a sent email, and this switch previously ended
+  /// in `_ => null` — which quietly told anyone hitting
+  /// `operation-not-allowed` or `permission-denied` that mail was on the way
+  /// that would never arrive, and would have swallowed every future member of
+  /// the family the same way. Being exhaustive is the point: the compiler now
+  /// forces a decision when a member is added.
   String? toForgotPasswordMessage(BuildContext context) {
     return switch (this) {
-      AuthFailureTooManyRequests() => toLocalizedMessageInContext(
+      // Deliberate silence: naming an address we have no account for turns
+      // this screen into an account-existence oracle.
+      AuthFailureUserNotFound() => null,
+      // Real, actionable outcomes — the reset mail is genuinely not coming.
+      AuthFailureInvalidEmail() ||
+      AuthFailureUserDisabled() ||
+      AuthFailureTooManyRequests() ||
+      AuthFailureNetwork() ||
+      AuthFailureOperationNotAllowed() ||
+      AuthFailureNotAuthorized() ||
+      AuthFailurePermissionDenied() => toLocalizedMessageInContext(
         context,
         AuthErrorContext.forgotPassword,
       ),
-      AuthFailureNetwork() => toLocalizedMessageInContext(
-        context,
-        AuthErrorContext.forgotPassword,
-      ),
+      // Not reachable from a password-reset request — but "not reachable"
+      // must still fail loudly rather than render as a sent email.
+      AuthFailureWrongCredentials() ||
+      AuthFailureEmailAlreadyInUse() ||
+      AuthFailureWeakPassword() ||
+      AuthFailureRequiresRecentLogin() ||
+      AuthFailureSetupAlreadyComplete() ||
+      AuthFailureNoAccountRecord() ||
+      AuthFailureEmailNotVerified() ||
+      AuthFailureSessionExpired() ||
       AuthFailureUnknown() =>
         context.l10n.error_somethingWentWrongPleaseTryAgain,
-      _ => null,
     };
   }
 }

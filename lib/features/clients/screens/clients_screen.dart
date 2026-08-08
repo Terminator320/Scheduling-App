@@ -16,7 +16,6 @@ import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
-import 'package:scheduling/features/feature_tour/widgets/tour_showcase.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
@@ -112,16 +111,7 @@ class _ListInformationState extends State<ListInformation> {
           compact: context.isLandscape,
           onBack: _backToCalendar,
           actions: const [AppHeaderPair()],
-          bottom: _tour.has(TourStepId.clientsSearch)
-              ? TourShowcaseBar(
-                  showcaseKey: _tour.keys[TourStepId.clientsSearch]!,
-                  scope: _tour.scope,
-                  id: TourStepId.clientsSearch,
-                  index: _tour.ids.indexOf(TourStepId.clientsSearch),
-                  count: _tour.ids.length,
-                  bar: searchBar,
-                )
-              : searchBar,
+          bottom: _tour.stepBarIf(TourStepId.clientsSearch, searchBar),
         ),
         endDrawer: AppNavDrawer(
           isAdmin: widget.isAdmin,

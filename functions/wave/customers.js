@@ -305,7 +305,14 @@ async function upsertCustomer(clientId, deps = {}) {
     // arrives to find nothing to push. The admin-facing badge reads this field,
     // so without the heal that client shows "Sync pending" forever while every
     // later sync correctly reports nothing to do.
-    await healSyncState(db, ref);
+    //
+    // Gated on the state we already read: a no-op is the steady-state outcome
+    // for most clients, and healSyncState opens a transaction (a second read)
+    // that would return immediately on an already-synced doc. A doc that turned
+    // pending since this read has its own queued job and needs no heal.
+    if (wave.syncState !== "synced") {
+      await healSyncState(db, ref);
+    }
     return {status: "noop"};
   }
 
@@ -577,6 +584,98 @@ async function writeSyncError(db, ref, now, inputErrors) {
 const BATCH_LIMIT = 500;
 
 /**
+ * Decides what one Wave customer means locally and stages that write.
+ *
+ * Extracted from [importCustomers]' page loop because every one of the five
+ * counters it touches feeds the watermark logic afterwards, and a single
+ * miscounted `skippedPending` silently loses Wave-side data — that decision
+ * deserves to be readable on its own rather than buried three levels into a
+ * paging loop.
+ *
+ * Mutates `ctx.summary` and stages onto `ctx.batch`.
+ *
+ * @param {?Object} node One Wave customer node, or null.
+ * @param {{db: !Object, batch: !Object, now: !Function, summary: !Object,
+ *   skipClientIds: !Set<string>, existingByWaveId: !Map<string, !Object>}} ctx
+ * @return {boolean} whether an operation was staged on the batch.
+ */
+function importOneCustomer(node, ctx) {
+  const {db, batch, now, summary, skipClientIds, existingByWaveId} = ctx;
+  if (!node) return false;
+  if (node.isArchived === true) {
+    summary.skippedArchived += 1;
+    return false;
+  }
+  const fields = fromWaveCustomer(node);
+  const hash = mappedFieldsHash(fields);
+  const docFields = {
+    ...fields,
+    wave: {
+      syncState: "synced",
+      syncError: null,
+      lastSyncedHash: hash,
+      lastSyncedAt: now(),
+    },
+  };
+
+  const waveId = fields.waveCustomerId;
+  const existing = waveId ? existingByWaveId.get(waveId) : undefined;
+  if (existing) {
+    // The local edit wins while it is still queued for Wave. Overwriting
+    // here would also stamp lastSyncedHash from Wave's values, which
+    // turns the pending push into a no-op and destroys the edit
+    // permanently — see listOutstandingClientIds in worker.js.
+    if (skipClientIds.has(existing.ref.id)) {
+      summary.skippedPending += 1;
+      return false;
+    }
+    // Nothing to write: `hash` is taken over the SAME `toWaveCustomerInput`
+    // projection that produced the stored `lastSyncedHash`, and the update
+    // below sets the doc's mapped fields to exactly `fields` — so a match
+    // means this write would be byte-identical. (That equality is already
+    // load-bearing: it is what `shouldEnqueueClientWrite`'s Rule 2 uses to
+    // stop an import feeding every client straight back into the outbox.)
+    //
+    // `hasCreatedAt` is NOT optional here. The branch below backfills a
+    // missing `createdAt`, and the clients list orders by it — Firestore
+    // excludes docs missing an orderBy field, so skipping one would leave
+    // a legacy doc permanently invisible in the list.
+    if (existing.hasCreatedAt && existing.lastSyncedHash === hash) {
+      summary.skippedUnchanged += 1;
+      return false;
+    }
+    // Preserve the original createdAt. Only backfill it when the
+    // existing doc lacks one (e.g. a doc from an earlier import that
+    // omitted it).
+    const update = {...docFields, updatedAt: now()};
+    if (!existing.hasCreatedAt) update.createdAt = now();
+    batch.set(existing.ref, update, {merge: true});
+    summary.updated += 1;
+    return true;
+  }
+
+  const newRef = db.collection("clients").doc();
+  // createdAt/updatedAt are required: the clients list orders by
+  // createdAt, and Firestore excludes docs missing that field. `archived`
+  // is required for the same reason — the list FILTERS on it, so a doc
+  // without it is invisible there while still turning up in search.
+  // Deliberately create-only: setting it on the update branch above
+  // would un-archive every archived client on every scheduled import.
+  batch.set(newRef, {
+    ...docFields,
+    archived: false,
+    createdAt: now(),
+    updatedAt: now(),
+  });
+  summary.imported += 1;
+  // Cache so duplicate Wave ids within the same import collapse to one.
+  if (waveId) {
+    existingByWaveId.set(waveId, {ref: newRef, hasCreatedAt: true});
+  }
+  return true;
+}
+
+/**
  * One-time Wave → App seed. Paginates customers, skips archived ones, and
  * writes active ones to `clients`. Idempotent on `waveCustomerId` — we don't
  * use it as the doc id directly, since Wave Node ids are base64 and can
@@ -664,77 +763,10 @@ async function importCustomers(deps = {}) {
     }
 
     for (const edge of edges) {
-      const node = edge && edge.node;
-      if (!node) continue;
-      if (node.isArchived === true) {
-        summary.skippedArchived += 1;
-        continue;
-      }
-      const fields = fromWaveCustomer(node);
-      const hash = mappedFieldsHash(fields);
-      const docFields = {
-        ...fields,
-        wave: {
-          syncState: "synced",
-          syncError: null,
-          lastSyncedHash: hash,
-          lastSyncedAt: now(),
-        },
-      };
-
-      const waveId = fields.waveCustomerId;
-      const existing = waveId ? existingByWaveId.get(waveId) : undefined;
-      if (existing) {
-        // The local edit wins while it is still queued for Wave. Overwriting
-        // here would also stamp lastSyncedHash from Wave's values, which
-        // turns the pending push into a no-op and destroys the edit
-        // permanently — see listOutstandingClientIds in worker.js.
-        if (skipClientIds.has(existing.ref.id)) {
-          summary.skippedPending += 1;
-          continue;
-        }
-        // Nothing to write: `hash` is taken over the SAME `toWaveCustomerInput`
-        // projection that produced the stored `lastSyncedHash`, and the update
-        // below sets the doc's mapped fields to exactly `fields` — so a match
-        // means this write would be byte-identical. (That equality is already
-        // load-bearing: it is what `shouldEnqueueClientWrite`'s Rule 2 uses to
-        // stop an import feeding every client straight back into the outbox.)
-        //
-        // `hasCreatedAt` is NOT optional here. The branch below backfills a
-        // missing `createdAt`, and the clients list orders by it — Firestore
-        // excludes docs missing an orderBy field, so skipping one would leave
-        // a legacy doc permanently invisible in the list.
-        if (existing.hasCreatedAt && existing.lastSyncedHash === hash) {
-          summary.skippedUnchanged += 1;
-          continue;
-        }
-        // Preserve the original createdAt. Only backfill it when the
-        // existing doc lacks one (e.g. a doc from an earlier import that
-        // omitted it).
-        const update = {...docFields, updatedAt: now()};
-        if (!existing.hasCreatedAt) update.createdAt = now();
-        batch.set(existing.ref, update, {merge: true});
-        summary.updated += 1;
-      } else {
-        const newRef = db.collection("clients").doc();
-        // createdAt/updatedAt are required: the clients list orders by
-        // createdAt, and Firestore excludes docs missing that field. `archived`
-        // is required for the same reason — the list FILTERS on it, so a doc
-        // without it is invisible there while still turning up in search.
-        // Deliberately create-only: setting it on the update branch above
-        // would un-archive every archived client on every scheduled import.
-        batch.set(newRef, {
-          ...docFields,
-          archived: false,
-          createdAt: now(),
-          updatedAt: now(),
-        });
-        summary.imported += 1;
-        // Cache so duplicate Wave ids within the same import collapse to one.
-        if (waveId) {
-          existingByWaveId.set(waveId, {ref: newRef, hasCreatedAt: true});
-        }
-      }
+      const wrote = importOneCustomer(edge && edge.node, {
+        db, batch, now, summary, skipClientIds, existingByWaveId,
+      });
+      if (!wrote) continue;
       opsInBatch += 1;
       await flushIfFull();
     }

@@ -8,12 +8,16 @@
 // each appointment, not the Wave payload. There are too many to fix by hand.
 //
 // THE RULE, per doc:
-//   1. Look for a phone number in `name` AND `businessName`.
-//   2. No number found -> skip the doc entirely. Nothing else changes.
+//   1. Look for a phone number in `name` and in `businessName` — SEPARATELY,
+//      never in the two concatenated. Which field it came from decides step 3.
+//   2. No number in either -> skip the doc entirely. Nothing else changes.
 //   3. Number found:
-//        - set `phone` if it is empty (a typed phone always wins),
-//        - set `name` to whichever of the first/last halves exist, which is
-//          what cleans the number out of the display name,
+//        - set `phone` if it is empty (a typed phone always wins). Either
+//          field may supply it — an unreachable client is the whole problem.
+//        - set `name` to whichever of the first/last halves exist — but ONLY
+//          when the number was in `name`. That is what cleans the number out
+//          of the display name, and it is also the only case where the name
+//          is known to be junk.
 //        - never touch `businessName`. It is a read-only legacy field the app
 //          never emits, and `ClientRecord.fromMap`'s name-falls-back-to-
 //          businessName half depends on it staying put.
@@ -56,6 +60,20 @@
 // Pass --dry-run to report what it would do, with a sample of the before/after
 // names, without writing. ALWAYS dry-run against prod first and read the
 // sample — a rename is not reversible from here.
+//
+// !! THIS ALREADY RAN AGAINST PROD ON 2026-08-08, ON THE BUGGY VERSION. !!
+// Step 1 was split per field later the same day (code review). The version
+// that ran searched `name` and `businessName` JOINED and then renamed `name`
+// whichever field the number came from — so a clean business name beside a
+// polluted legacy `businessName` was renamed to its CONTACT PERSON, in place,
+// unrecoverably from the doc itself.
+//   -> AUDITED 2026-08-08 with `audit-client-phone-backfill-damage.js`
+//      (read-only): NO client matched the damaged shape, so that run cost
+//      nothing. Every polluted client had its number in `name`, the case this
+//      script handles correctly. Re-run that audit after any future live run.
+// The earlier prod dry-run counts (347 docs / 39 renamable) describe the buggy
+// rule and are stale. Re-run --dry-run and re-read the sample before ever
+// invoking this again.
 
 const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
@@ -112,17 +130,30 @@ function patchFor(data) {
   const name = String(data.name || "").trim();
   const businessName = String(data.businessName || "").trim();
 
-  const found = extractPhone(`${name} ${businessName}`);
+  // Extracted per FIELD, never from the two joined. Two reasons, both real:
+  // the rename below is only safe when the number was in `name` itself, and a
+  // space-join can synthesise a match across the boundary (digits ending
+  // `name` + digits starting `businessName`) that exists in neither field.
+  const inName = extractPhone(name);
+  const found = inName || extractPhone(businessName);
   if (!found) return null;
 
   const patch = {};
   if (!String(data.phone || "").trim()) patch.phone = found;
 
-  const composed = [
-    String(data.firstName || "").trim(),
-    String(data.lastName || "").trim(),
-  ].filter(Boolean).join(" ");
-  if (composed && composed !== name) patch.name = composed;
+  // Rename ONLY when the number was in `name`. A Wave-imported business client
+  // can hold a clean business in `name` and a number in the legacy
+  // `businessName` — renaming that one to its contact person replaces the
+  // business with a person, which is the exact loss step 2 exists to prevent,
+  // and it is not reversible from here. Lifting its number into an empty
+  // `phone` above is still right; touching its display name is not.
+  if (inName) {
+    const composed = [
+      String(data.firstName || "").trim(),
+      String(data.lastName || "").trim(),
+    ].filter(Boolean).join(" ");
+    if (composed && composed !== name) patch.name = composed;
+  }
 
   return Object.keys(patch).length ? patch : null;
 }

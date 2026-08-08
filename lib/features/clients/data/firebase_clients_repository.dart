@@ -275,6 +275,11 @@ class FirebaseClientsRepository implements ClientsRepository {
   Future<_CachedClientScanWindow?> _clientScanWindow() async {
     final cached = _scanWindow;
     if (cached != null && _isFresh(cached.fetchedAt)) return cached;
+    // Drop the expired window rather than merely declining to use it. This
+    // repository is a non-autoDispose singleton, so up to 1000 raw doc maps
+    // otherwise stayed pinned for the whole session after one search. The next
+    // search re-reads either way.
+    _scanWindow = null;
 
     final QuerySnapshot<Map<String, dynamic>> snapshot;
     try {

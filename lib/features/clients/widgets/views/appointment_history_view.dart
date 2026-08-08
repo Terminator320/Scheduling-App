@@ -7,6 +7,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
+import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
@@ -180,7 +181,7 @@ class _AppointmentHistoryViewState
       for (var i = 0; i < a.employeeIds.length; i++) {
         final id = a.employeeIds[i];
         if (id.isEmpty) continue;
-        final name = i < a.employeeNames.length ? a.employeeNames[i] : '';
+        final name = assigneeNameAt(a.employeeNames, i) ?? '';
         final existing = names[id];
         if (existing == null || (existing.isEmpty && name.isNotEmpty)) {
           names[id] = name;
@@ -474,19 +475,8 @@ class _AppointmentHistoryViewState
 
   // This can't scroll itself — it lands inside ISP's SliverFillRemaining, and a nested
   // ListView there would throw an intrinsic-dimension error.
-  Widget _skeleton() => const Padding(
-    padding: EdgeInsets.all(AppSpacing.sp12),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SkeletonListTile(),
-        SizedBox(height: AppSpacing.sp8),
-        SkeletonListTile(),
-        SizedBox(height: AppSpacing.sp8),
-        SkeletonListTile(),
-      ],
-    ),
-  );
+  Widget _skeleton() =>
+      const SkeletonList(padding: EdgeInsets.all(AppSpacing.sp12));
 
   Widget _buildEmptyState(BuildContext context) {
     final l10n = context.l10n;

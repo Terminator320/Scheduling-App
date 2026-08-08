@@ -174,15 +174,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     }
   }
 
-  /// Run length in days. 1 until both dates are known — the row shows no
-  /// length on a single-day job, so a partially-filled form reads as one day.
-  int _spanLength(AddEventState state) {
-    final start = state.selectedDate;
-    final end = state.endDate;
-    if (start == null || end == null) return 1;
-    final span = calendarDaysBetween(start, end) + 1;
-    return span < 1 ? 1 : span;
-  }
+  int _spanLength(AddEventState state) =>
+      runLengthDays(state.selectedDate, state.endDate);
 
   bool _isOvernight(AddEventState state) {
     final start = state.selectedStartTime;
@@ -193,6 +186,11 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
 
   Future<void> _pickImages() async {
     final picked = await pickAppointmentImages(context, ref);
+    // The longest await in the app — an OS action sheet and then the
+    // camera/Photos picker. The notifier is autoDispose.family, so calling it
+    // after the sheet was torn down under the picker throws a StateError out
+    // of an unawaited callback, which is filed as FATAL.
+    if (!mounted) return;
     if (picked.isNotEmpty) _notifier.addImages(picked);
   }
 

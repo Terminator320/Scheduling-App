@@ -47,6 +47,7 @@ const {getMessaging} = require("firebase-admin/messaging");
 const logger = require("firebase-functions/logger");
 const {
   createEmployeeAccount,
+  completeEmployeeSetup,
   changeEmployeeEmail,
 } = require("../employee_accounts");
 
@@ -271,6 +272,61 @@ describe("createEmployeeAccount ordering", () => {
         expect.stringContaining("orphaned auth account"),
         expect.objectContaining({uid: "new-uid"}),
     );
+  });
+});
+
+describe("completeEmployeeSetup email verification", () => {
+  const SETUP = {
+    firstName: "Ada",
+    lastName: "Lovelace",
+    phone: "(514) 555-1234",
+    termsAccepted: true,
+    locationConsent: true,
+  };
+  const invitedDocs = () => ({
+    d1: {email: "ada@example.com", uid: "emp-uid", status: "invited"},
+  });
+
+  test("refuses an unverified caller", async () => {
+    const trace = [];
+    const docs = invitedDocs();
+    getFirestore.mockReturnValue(makeDb(docs, trace));
+
+    await expect(completeEmployeeSetup.run({
+      data: SETUP,
+      auth: {uid: "emp-uid", token: {email_verified: false}},
+    })).rejects.toThrow(/email-not-verified/);
+
+    // The doc must be untouched — activation is what the guard protects.
+    expect(docs.d1.status).toBe("invited");
+  });
+
+  test("refuses before consuming a rate-limit slot", async () => {
+    const {enforceDurableRateLimit} = require("../security");
+    getFirestore.mockReturnValue(makeDb(invitedDocs(), []));
+
+    await expect(completeEmployeeSetup.run({
+      data: SETUP,
+      auth: {uid: "emp-uid", token: {}},
+    })).rejects.toThrow(/email-not-verified/);
+
+    // An identity guard sits above the limiter, so a caller who cannot pass it
+    // never burns the real employee's five attempts.
+    expect(enforceDurableRateLimit).not.toHaveBeenCalled();
+  });
+
+  test("activates a verified caller", async () => {
+    const trace = [];
+    const docs = invitedDocs();
+    getFirestore.mockReturnValue(makeDb(docs, trace));
+
+    const out = await completeEmployeeSetup.run({
+      data: SETUP,
+      auth: {uid: "emp-uid", token: {email_verified: true}},
+    });
+
+    expect(out).toEqual({ok: true});
+    expect(docs.d1.status).toBe("active");
   });
 });
 

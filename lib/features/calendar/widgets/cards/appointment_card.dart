@@ -107,22 +107,12 @@ class AppointmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final compact = context.isCompact;
     final status = AppointmentStatus.fromRaw(appointment.displayStatus);
     final isCancelled = dimWhenCancelled && status.isCancelled;
     final collapsed = collapseWhenClosed && appointment.isClosed;
 
     final timeLabel = _timeLabel(context);
-
-    // One band per crew member rather than the first assignee's colour alone:
-    // a two-person job now reads as two-person at a glance, and nobody's colour
-    // is thrown away. An assignee with no colour is skipped, not greyed.
-    final barColors = [
-      for (final member in crew.take(_kMaxCrewShown))
-        if (member.color case final stored?)
-          crewColorOf(theme, stored.toARGB32()),
-    ];
 
     // A personal job has no client, so it names itself in that slot rather
     // than leaving the meta line as the crew alone.
@@ -147,14 +137,7 @@ class AppointmentCard extends StatelessWidget {
         decoration: appCardDecoration(
           theme,
           radius: AppRadius.rCard,
-          // The done tint is the same token the "Complete" chip already fills
-          // with, so the card and its chip can't disagree. Selection still
-          // wins — in light the two are the same green anyway.
-          color: selected
-              ? scheme.secondaryContainer
-              : (collapsed && status.isDone
-                    ? theme.statusColors.successContainer
-                    : scheme.surface),
+          color: _cardColor(theme, status: status, collapsed: collapsed),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(AppRadius.rCard),
@@ -174,7 +157,10 @@ class AppointmentCard extends StatelessWidget {
                     children: [
                       Container(
                         width: emphasizeToday ? 3 : 4,
-                        decoration: _crewBarDecoration(theme, barColors),
+                        decoration: _crewBarDecoration(
+                          theme,
+                          _barColors(theme),
+                        ),
                       ),
                       Expanded(
                         child: _body(
@@ -198,6 +184,34 @@ class AppointmentCard extends StatelessWidget {
     );
 
     return isCancelled ? Opacity(opacity: 0.6, child: card) : card;
+  }
+
+  /// One band per crew member rather than the first assignee's colour alone: a
+  /// two-person job reads as two-person at a glance, and nobody's colour is
+  /// thrown away. An assignee with no colour is skipped, not greyed.
+  ///
+  /// Capped at [_kMaxCrewShown] — the SAME cap the avatar stack uses, so the
+  /// bands and the faces can never disagree about how much of the crew the
+  /// card is showing.
+  List<Color> _barColors(ThemeData theme) => [
+    for (final member in crew.take(_kMaxCrewShown))
+      if (member.color case final stored?)
+        crewColorOf(theme, stored.toARGB32()),
+  ];
+
+  /// The card's fill.
+  ///
+  /// Selection wins outright; a collapsed *done* job otherwise takes the same
+  /// success token the "Complete" chip fills with, so the card and its own
+  /// chip can't disagree. (In light the two are the same green anyway.)
+  Color _cardColor(
+    ThemeData theme, {
+    required AppointmentStatus status,
+    required bool collapsed,
+  }) {
+    if (selected) return theme.colorScheme.secondaryContainer;
+    if (collapsed && status.isDone) return theme.statusColors.successContainer;
+    return theme.colorScheme.surface;
   }
 
   /// The card's text column — full height, or the agenda's collapsed row for a

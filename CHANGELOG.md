@@ -10,6 +10,76 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.44.0+70] - 2026-08-08
+
+### Added
+- **A new employee now has to verify their email address before setup can
+  finish.** The setup screen emails them a link and keeps "Finish" refused
+  until it has been opened. This matters because the account is created on a
+  starting password everyone knows: until now, anyone who knew an employee's
+  email address could sign in as them first and complete setup themselves —
+  ending up with a working account, and an admin one if the person had been
+  set up as an admin. Reaching the setup screen is now all that gets you;
+  finishing it needs the mailbox. Nothing changes for the admin: create the
+  account and hand over the same two lines as before.
+- **Finished and cancelled jobs move to the bottom of the day.** In the
+  calendar's day list they now sit below a "Closed · N" divider in a shorter
+  green row that puts the time next to the client, so what's left to do is what
+  you read first. They're still tappable and still open the same job. On a
+  multi-day job the "Day 3 of 5" counter stays on the collapsed row, since a
+  closed job still appears on every day it runs.
+
+### Changed
+- **Job photos are loaded fresh each time they're shown.** Every photo used to
+  carry a permanent public link, which meant a link captured while someone
+  worked here kept opening that photo after their access was removed. Photos
+  are now fetched against whoever is actually looking at them. Photos on jobs
+  saved by older versions still open exactly as before.
+
+### Fixed
+- **A job could show as Complete on its card and be missing from History
+  entirely.** Jobs saved by much older versions of the app store their finished
+  state under an older name; the History list and history search didn't know
+  about it, so those jobs were invisible in both — with no error and nothing to
+  suggest anything was wrong. They're back.
+- **The dashboard's 8-week trends could be built from only part of your
+  history.** Past roughly 14 jobs a day the charts, the busiest-weekday figure
+  and the Attention list quietly ran on a truncated slice of the period they
+  claimed to cover. The dashboard now reads the settled weeks separately from
+  the live one, so the whole window is always counted.
+- **Turning the app lock on or off could fail with no message at all.** If the
+  phone's keychain refused the write — which happens when the app is woken on a
+  locked phone — the switch snapped back and said nothing. It now tells you the
+  setting couldn't be changed.
+- **"Send reset link" could tell you the email was on its way when it wasn't.**
+  A few kinds of failure showed the "check your inbox" panel anyway, so you'd
+  wait for mail that was never sent. Only a genuinely sent link says so now.
+- **A password typed with a trailing space was measured before the space was
+  removed.** The strength meter and the 8-character rule read one value and the
+  account was given another, so a 7-character password could get through. All
+  three now read the same thing.
+- **The confirm button on Delete account was unreadable in dark mode.**
+- **A photo batch that hit both a "too large" file and a dropped connection
+  lost the filenames.** You were told the upload would be retried without being
+  told which file never can be.
+- **One employee's failed push could cost everyone their nightly summary.** If a
+  single send failed while the 6 pm "tomorrow's jobs" digest was going out, the
+  whole run was abandoned and nobody got their schedule.
+- **A single malformed staff record could stop the "job finished?" nudge for the
+  entire team** — permanently, and with nothing logged anywhere.
+- **Adding a photo and closing the job at the same moment could crash the app.**
+- **A job whose dates were set outside the app reported a nonsense length** —
+  a card reading "Day 400 of 900", and a calendar badge claiming a job today
+  every day for a year. Long jobs are now capped consistently wherever they're
+  counted.
+- **Sharing a job photo now says what went wrong** if the share fails, instead
+  of the generic message.
+- **The app keeps fewer live connections open in the background.** The staff
+  list behind the appointment sheets is released when the sheet closes, the
+  home-screen widget and Siri's schedule now share one connection instead of
+  opening one each, and two search caches are freed once they go stale — less
+  battery and data for the same behaviour.
+
 ## [1.43.1+69] - 2026-08-08
 
 ### Changed

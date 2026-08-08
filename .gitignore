@@ -68,6 +68,13 @@ unlinked_spec.ds
 
 # Android related — android/ was deleted 2026-08-05 (iOS-only). These stay so a
 # stray Gradle/keystore artifact can't be committed by accident.
+#
+# /android/ itself is ignored because a merge resurrected it once (33715f82,
+# 2026-08-08) and brought local.properties with it — which carries a live
+# MAPS_API_KEY. `flutter` regenerates that tree on any Android-touching
+# command, so ignoring the directory is the only thing that stops it coming
+# back a second time. Recover from git history if it is ever genuinely needed.
+/android/
 .gradle/
 *.jks
 
