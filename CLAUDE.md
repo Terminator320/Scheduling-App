@@ -1,12 +1,26 @@
 # CLAUDE.md
 
 Flutter app (Dart `^3.10.7`) for managing appointments, clients, and employees.
-Backend: Firebase (Auth, Firestore, Storage, App Check). Targets Android and iOS.
-**Ships to the App Store ONLY (decision 2026-07-08).** Android is a dev/test
-target on this Windows box and is never published to Play — keep `android/`
-and the Android Firebase app (they're the local dev harness; deleting them
-would leave no runnable platform on this machine), but don't chase
-Play-release work (keystore, Data Safety, Play Integrity).
+Backend: Firebase (Auth, Firestore, Storage, App Check). **iOS is the only
+platform.**
+**Ships to the App Store ONLY (decision 2026-07-08), and `android/` was
+DELETED on 2026-08-05** (owner call) once development moved from a Windows box
+to a Mac and iOS could build and run locally — Android had only ever been the
+dev/test harness that gave that Windows box something runnable, and it was
+never published to Play. Don't re-add it, don't restore Play-release work
+(keystore, Data Safety, Play Integrity), and don't "fix" an iOS-only assumption
+by reintroducing an Android branch. Recover the tree from git history if it is
+ever genuinely needed. Two Android remnants survive **deliberately** and are
+not dead code to clean up: `DefaultFirebaseOptions.android` (the Android
+Firebase app still exists in the console, and the shared `dev/.env` keys feed
+it) and the `platform: 'ios' | 'android'` field on `fcmTokens` docs, which the
+1.37.1 build on the App Store still writes.
+**`web/`, `windows/`, `linux/` and `macos/` STAY** (owner call, 2026-08-05,
+asked and answered when `android/` went). They are untouched `flutter create`
+boilerplate for platforms nothing targets or builds — leave them alone; their
+presence is not evidence that any of those platforms is supported. In
+particular `macos/Podfile` is scaffold, not a CocoaPods setup, and does not
+contradict the SPM-only rule in `ios/CLAUDE.md`.
 
 iOS notes live in `ios/CLAUDE.md` (loads when working under `ios/`) — SPM-only
 (there is no Podfile and never will be), iOS 18.0 deployment floor, App Attest,
@@ -30,13 +44,13 @@ flutter analyze   # baseline is `No issues found!` — any lint you see is yours
 `APP_ID`, `MESSAGING_SENDER_ID`, `PROJECT_ID`, `STORAGE_BUCKET`, plus the iOS
 pair `IOS_API_KEY`, `IOS_APP_ID` (read in `lib/firebase_options.dart` to build
 the iOS `FirebaseOptions`), plus `IOS_MAPS_API_KEY` (iOS client Google Maps
-key, parsed natively by `AppDelegate.swift`). Android also needs
-`google-services.json` plus `MAPS_API_KEY` in `android/local.properties`
-(gitignored, dev harness only). `IOS_MAPS_API_KEY` and `MAPS_API_KEY` are
-RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
-`GOOGLE_MAP_API_KEY`, which must never ship in the app.
+key, parsed natively by `AppDelegate.swift`). The first five are still required
+even though only iOS ships: three of them are platform-neutral, and
+`FIREBASE_API_KEY`/`APP_ID` still back `DefaultFirebaseOptions.android`.
+`IOS_MAPS_API_KEY` is a RESTRICTED CLIENT key — distinct from the server-side
+Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
 
-- **`dev/.env` holds Firebase client config plus RESTRICTED client keys (e.g. `IOS_MAPS_API_KEY`) only.** It's an asset bundled into the APK/AAB, so anything in it ships in the binary — restrict those keys app-side (bundle ID / package + API restrictions) in the Google Cloud Console. Server-side or unrestricted keys (Stripe, OpenAI, admin tokens, `GOOGLE_MAP_API_KEY`) must live in Google Secret Manager and be read from a Cloud Function — never in `dev/.env`.
+- **`dev/.env` holds Firebase client config plus RESTRICTED client keys (e.g. `IOS_MAPS_API_KEY`) only.** It's an asset bundled into the IPA, so anything in it ships in the binary — restrict those keys app-side (bundle ID / package + API restrictions) in the Google Cloud Console. Server-side or unrestricted keys (Stripe, OpenAI, admin tokens, `GOOGLE_MAP_API_KEY`) must live in Google Secret Manager and be read from a Cloud Function — never in `dev/.env`.
 
 ## Critical invariants
 
@@ -764,6 +778,45 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   fields only, so a plain substitution drops the function-owned `jobCount` and
   `createdAt` and blanks the count on every search and type-filter result until
   the TTL expires. Any new field `toMap()` doesn't emit inherits this.
+- **The Wave sync badge needs a LIVE doc read, and `ClientDetailView` is the one
+  surface that has one** (2026-08-07). Every other client surface is a one-shot
+  read — a paginated page, or the repository's cached scan window — and
+  `wave.syncState` is function-owned: the `waveUpsertCustomer` trigger stamps
+  `pending` *after* the save has already returned, and the outbox worker flips
+  it to `synced` up to five minutes later. So the record a screen holds always
+  predates the state the badge is trying to show, and the edit sheet pops back
+  a `copyWith` of that same record, which carries the PRE-EDIT sync state
+  through by design (it must — `waveSyncState` is not the form's to write).
+  The badge therefore could never move in response to an edit: it sat on
+  "Synced with Wave" while the push was still queued, and Settings ›
+  "Sync with Wave" — correctly — reported nothing left to send, because the
+  5-minute worker had already sent it. `clientStreamProvider`
+  (`clients_providers.dart`, an `autoDispose.family` over
+  `ClientsRepository.watchClient`) is the fix; the view keeps the handed-in
+  record as a **fallback**, so an offline or refused read leaves the detail on
+  screen instead of blanking it. Don't "simplify" the badge back onto a
+  passed-in record, and don't try to fix it by writing an optimistic `pending`
+  client-side — that would fork `mappedFieldsHash`'s projection into Dart, and
+  only the server knows whether an edit touched a Wave-mapped field.
+  This listener deliberately does **not** patch the search/scan cache:
+  `_patchWindow` merges `toMap()`, which omits `wave`, so the cached copy keeps
+  a stale sync state on purpose.
+- **A no-op push must HEAL the client's sync state, or the badge sticks
+  forever.** `upsertCustomer`'s already-synced short-circuit
+  (`functions/wave/customers.js`) returns `noop` without touching Wave — and it
+  now clears a stale `pending`/`error` via `healSyncState` before it does. That
+  state is reachable from an ordinary pair of edits: the first marks the doc
+  `pending` and enqueues, the second puts the mapped fields BACK, and
+  `shouldEnqueueClientWrite`'s rule 2 skips that write entirely — so the job the
+  first edit left behind arrives with nothing to push, and nothing else ever
+  clears the flag. `healSyncState` re-reads and re-hashes **inside the
+  transaction** rather than trusting the caller's hash: an edit landing in that
+  window must not be marked synced, or the badge claims Wave has data still
+  sitting in the outbox — the exact lie it exists to remove. It writes
+  `syncState`/`syncError` only, never `lastSyncedAt` (nothing reached Wave just
+  now), and the write re-fires the trigger harmlessly — unchanged mapped fields
+  return at rule 1. `tallyUpsert` still counts `noop` as nothing: no Wave
+  mutation was made, and the admin must not be told a client was pushed.
 - **`jobCount` is recomputed absolutely, never incremented.** `recountClientJobs`
   (`functions/client_job_count.js`) runs `retry: true`, so a retried event would
   double-count a `FieldValue.increment`; it runs a `count()` aggregate and SETS
@@ -1288,10 +1341,11 @@ RESTRICTED CLIENT keys — distinct from the server-side Secret-Manager
   - Adding a key: update both ARBs in lockstep, add the `@key` block in EN,
     run `flutter gen-l10n`. EN/FR drift surfaces in
     `lib/l10n/.gen/untranslated.json`.
-- Firebase callable responses on Android return nested objects as
-  `Map<dynamic, dynamic>`, not `Map<String, dynamic>`. Casting directly
-  with `as Map<String, dynamic>?` throws a `TypeError` at runtime.
-  Always cast loosely first: `(value as Map?)?.cast<String, dynamic>()`.
+- Cast callable responses loosely: `(value as Map?)?.cast<String, dynamic>()`,
+  never `as Map<String, dynamic>?`. This started as an Android-only `TypeError`
+  (that plugin returned nested objects as `Map<dynamic, dynamic>`), so it can no
+  longer bite now that Android is gone — but it stays the convention: it is the
+  same cost, and it doesn't depend on a plugin's choice of map type.
 - `whereArrayContainsAny` has a hard limit of 30 items. When querying by a
   list of IDs (e.g. employee IDs), chunk into batches of 30 and merge results
   in Dart. See `findBusyEmployees` in `firebase_appointments_repository.dart`
@@ -1334,14 +1388,24 @@ Always run `cd functions && npm run lint` before deploying.
 
 `GOOGLE_MAP_API_KEY` lives in Secret Manager only — it is **not** in `dev/.env`.
 
-App Check emulator setup: run app once → search Logcat for `DebugAppCheckProvider`
-UUID → register it in Firebase Console → App Check → your Android app → Manage
-debug tokens. The UUID is stable per AVD but changes on new AVDs or full
-reinstalls — re-register when it does. An unregistered token causes all Firestore
+App Check simulator setup: debug builds use `AppleDebugProvider` (App Attest is
+Release-only and fails on the Simulator), so run the app once → take the debug
+token from the Xcode console, or read `GACAppCheckDebugToken` out of the
+simulator app's preferences plist → register it in Firebase Console → App Check
+→ the iOS app → Manage debug tokens. The token is per-install: re-register after
+a full reinstall or a fresh simulator. An unregistered token causes all Firestore
 writes and non-cached reads to fail with `permission-denied` while cached reads
-still succeed, making the failure appear collection-specific.
+still succeed, making the failure appear collection-specific. Full walkthrough:
+`docs/IOS_MAC_BUILD.md` Phase E.
 
 ## Testing
 
-- Use `_scaledHarness` (Size 260×640, textScaler 2.0) to catch overflow.
-- Harness requirements, mocking rules and device-only caveats: `.claude/rules/testing.md`.
+- Catch overflow by pumping at a small-phone size with 2× text: set
+  `tester.view.physicalSize` (260 logical px wide is the usual worst case) and
+  wrap in a `MediaQuery` with `textScaler: TextScaler.linear(2)`. Each test file
+  owns a local `_harness` helper for this — **there is no shared
+  `_scaledHarness`**, despite what older plan docs call the pattern.
+- Harness requirements, mocking rules and device-only caveats: the **Test
+  Strategy** section of `docs/ARCHITECTURE.md`. (This used to point at
+  `.claude/rules/testing.md`, which does not exist — `.claude/` is gitignored
+  and was never committed, so that file was never available to anyone.)

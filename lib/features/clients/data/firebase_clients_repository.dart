@@ -127,6 +127,15 @@ class FirebaseClientsRepository implements ClientsRepository {
   }
 
   @override
+  Stream<ClientRecord?> watchClient(String id) => _clients
+      .doc(id)
+      .snapshots()
+      .map(
+        (doc) =>
+            doc.exists ? ClientRecord.fromMap(doc.id, doc.data() ?? {}) : null,
+      );
+
+  @override
   Future<List<ClientRecord>> fetchClientsCreatedSince(DateTime since) async {
     // Cap this so a windowed read can never turn into an unbounded query.
     final snapshot = await _clients
