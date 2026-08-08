@@ -542,8 +542,11 @@ class _PersonalJobSwitch extends StatelessWidget {
     type: MaterialType.transparency,
     child: SwitchListTile.adaptive(
       contentPadding: EdgeInsets.zero,
+      // No subtitle: the WHO section already carries enough on one screen
+      // (owner call, 2026-08-05). Turning the switch on visibly removes the
+      // client picker and the address field, which explains itself better than
+      // a line of hint text.
       title: Text(context.l10n.calendar_personalJob),
-      subtitle: Text(context.l10n.calendar_personalJobHint),
       value: value,
       activeTrackColor: Theme.of(context).colorScheme.primary,
       onChanged: onChanged,

@@ -148,6 +148,44 @@ void main() {
     });
   });
 
+  group('the terms link in the consent row', () {
+    testWidgets('the sentence carries a tappable "terms of service" run', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_harness(auth: auth));
+      await tester.pumpAndSettle();
+
+      // Ticking this box stamps termsAcceptedAt, so the agreement has to be
+      // reachable from the row that records the acceptance. The link is a
+      // TextSpan run inside the checkbox title, found by locating the run that
+      // carries a recognizer rather than by matching the copy.
+      final title = tester.widget<Text>(
+        find.descendant(
+          of: find.byKey(const Key('setupConsent')),
+          matching: find.byType(Text),
+        ),
+      );
+      final spans = <InlineSpan>[];
+      title.textSpan!.visitChildren((span) {
+        spans.add(span);
+        return true;
+      });
+      final linked = spans.whereType<TextSpan>().where(
+        (s) => s.recognizer != null,
+      );
+
+      expect(
+        linked,
+        hasLength(1),
+        reason: 'exactly one run of the consent sentence should be a link',
+      );
+      // The link text must be a real run of the sentence, not empty — an ARB
+      // drift that stops the link text appearing in the sentence falls back to
+      // one plain unlinked span, which this would catch.
+      expect(linked.single.text, isNotEmpty);
+    });
+  });
+
   group('the starting-password gate', () {
     testWidgets('refuses the shared default even though it is "strong"', (
       tester,

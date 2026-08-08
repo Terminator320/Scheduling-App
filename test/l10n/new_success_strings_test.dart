@@ -57,4 +57,30 @@ void main() {
       expect(s, isNotEmpty);
     }
   });
+
+  // `_ConsentRow` builds the terms link by locating auth_termsOfServiceLink
+  // VERBATIM inside auth_termsAndLocationConsent. When a translation rewords
+  // the phrase the widget falls back to one plain span — the sentence still
+  // renders, but the link silently disappears, and ticking the box then stamps
+  // termsAcceptedAt against an agreement the person had no way to open.
+  //
+  // The widget test for this only exercises the default locale, so this is the
+  // only thing standing between a French re-translation and a consent record
+  // that means nothing.
+  testWidgets('the consent sentence contains its link text in every locale', (
+    tester,
+  ) async {
+    for (final locale in AppLocalizations.supportedLocales) {
+      final l = await resolve(tester, locale);
+      expect(
+        l.auth_termsAndLocationConsent,
+        contains(l.auth_termsOfServiceLink),
+        reason:
+            'auth_termsOfServiceLink must appear verbatim inside '
+            'auth_termsAndLocationConsent in ${locale.languageCode}, or the '
+            'consent row renders with no link to the terms',
+      );
+      expect(l.auth_termsOfServiceLink, isNotEmpty);
+    }
+  });
 }

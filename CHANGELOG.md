@@ -10,6 +10,34 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.44.1+71] - 2026-08-08
+
+Restores work that was reverted in error before 1.44.0 went out, and which the
+1.44.0 build therefore shipped without.
+
+### Added
+- **You can now read the terms you're asked to accept.** The setup screen has
+  always made a new employee tick "I accept the terms of service", with nothing
+  to tap and no copy published anywhere. The terms are now online, "terms of
+  service" in that sentence opens them, and Settings has a Terms of Service row
+  beside Privacy Policy so they stay reachable afterwards.
+
+### Changed
+- **A finished job can be reopened from History.** The edit control on a
+  completed job lives at the bottom of its sheet, where the dead "Complete"
+  button used to sit — that's how a "Mark as complete" tapped on the wrong job
+  gets undone. It now works from the History page too, which is where finished
+  jobs actually live. Employees still just see that the job is complete.
+- **The personal-job switch dropped its explanatory line.** "Time blocked off —
+  no client or address needed" sat under every job form; turning the switch on
+  visibly removes the client and address fields, which says it better than a
+  line of text on an already-busy screen.
+- **The terms stop describing background location.** The app asks for "While
+  Using the App" only and stops receiving your location once it's closed, which
+  is what the privacy policy already said and what the app actually does. The
+  terms also now describe how an administrator creates an account outright,
+  rather than the invitation flow the app no longer has.
+
 ## [1.44.0+70] - 2026-08-08
 
 ### Added

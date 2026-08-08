@@ -35,12 +35,24 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
   const AppointmentHistoryView({
     required this.searchQuery,
     super.key,
+    this.isAdmin = false,
     this.filterTourWrap,
     this.firstRowTourWrap,
     this.onFirstPageSettled,
   });
 
   final String searchQuery;
+
+  /// The caller's resolved role, passed straight to `showEventDetails` as
+  /// `showActions`. Defaults CLOSED, like every other appointment surface —
+  /// a `true` default silently offers employees actions the rules reject with
+  /// an opaque `permission-denied`.
+  ///
+  /// History holds only `done` and `cancelled` jobs, so for an admin this
+  /// opens exactly one affordance per row: the action bar's Edit button on a
+  /// finished one, the edit chip on a cancelled one. Mark-as-done and Cancel
+  /// both hide themselves on a terminal job.
+  final bool isAdmin;
 
   /// Wraps the filter bar as its feature-tour step. Null when the host has
   /// no tour for it.
@@ -317,8 +329,11 @@ class _AppointmentHistoryViewState
             // denormalized employeeNames.
             crew: crewFor(app, colorMap: colorMap),
             dimWhenCancelled: true,
-            // showActions stays CLOSED — this history surface is read-only.
-            onTap: () => showEventDetails(context, app, showActions: false),
+            // Carries the caller's role rather than a hardcoded false: an
+            // admin needs to reach a finished job's Edit button from here,
+            // which is where finished jobs actually live.
+            onTap: () =>
+                showEventDetails(context, app, showActions: widget.isAdmin),
           ),
         ),
       ],
