@@ -91,13 +91,24 @@ abstract class AppointmentRecord with _$AppointmentRecord {
   /// in sync with functions/notification_utils.js.
   String get displayStatus => displayStatusAt(DateTime.now());
 
+  /// The job is closed — `cancelled`, or `done` in either of its spellings.
+  ///
+  /// These are the only statuses the clock ladder below can neither produce nor
+  /// erase, which is what makes this the one status test a pure module can ask
+  /// without a clock. `AppointmentStatus.isTerminal` is the widget-layer
+  /// mirror; this is the model-layer one, so `appointment_day_slice.dart` can
+  /// sort on it without pulling Material in through `status_chip.dart`.
+  bool get isClosed {
+    final s = status.toLowerCase();
+    return s == 'done' || s == 'completed' || s == 'cancelled';
+  }
+
   /// The clock-derived ladder, keyed on [now] so callers that already hold a
   /// clock (the dashboard reducers) share this one owner instead of re-deriving
   /// it — they drifted apart once already, and a personal block then showed as
   /// Scheduled on its card and Overdue on the dashboard.
   String displayStatusAt(DateTime now) {
-    final s = status.toLowerCase();
-    if (s == 'done' || s == 'completed' || s == 'cancelled') return status;
+    if (isClosed) return status;
     // A personal block is not a job being worked: it stays on its stored
     // status (which reads "Scheduled") instead of flipping to In Progress at
     // its start and Overdue at its end. The server's overdue sweep skips these
