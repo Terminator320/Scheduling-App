@@ -256,8 +256,18 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `DetailsActionBar.onEdit` instead, which takes over the slot the inert
   "Complete" indicator held — that job has no mark-done or cancel action left,
   so the slot was dead. `onEdit` is null-gated on the same `showActions`, so a
-  read-only surface (History, client job history) still renders the indicator
-  and offers nothing. Cancelled and open jobs keep the top chip.
+  read-only surface (client job history) still renders the indicator and offers
+  nothing. Cancelled and open jobs keep the top chip. The two move together:
+  don't restore the chip on a completed job without removing the button, and
+  don't drop the button without bringing the chip back, or a finished job
+  becomes uneditable again.
+  **`AppointmentHistoryView` takes an `isAdmin` and passes it straight through
+  as `showActions`** (restored 2026-08-08 after a revert dropped it). It used to
+  hardcode `false` on the grounds that History is a read-only surface, but
+  History is where `done` and `cancelled` jobs actually LIVE, so that made the
+  completed-job edit button above unreachable from the one screen an admin would
+  look for it on. It still DEFAULTS closed like every other appointment surface;
+  `HistoryScreen` passes `widget.isAdmin`.
 - **Personal jobs (`isPersonal`, added 2026-07-31) carry no client and no
   address.** The switch at the top of the form's WHO section is on BOTH the add
   and edit flows (unlike the template chips), because the flag is stored and
@@ -734,6 +744,35 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `completeEmployeeSetup` writes the consent stamps **only when the payload
   flags are actually `true`** — stamping unconditionally would mint a
   legally-flavoured consent record for someone who never saw the checkbox.
+- **The consent sentence LINKS to the terms, and the link is what makes the
+  stamp mean anything** (2026-08-05, restored 2026-08-08 after a revert dropped
+  it). Ticking the box stamps `termsAcceptedAt`, so the person must be able to
+  read what they are accepting; the setup screen used to demand acceptance of
+  terms that were published nowhere and tappable nowhere. `_ConsentRow`
+  (`account_setup_screen.dart`) builds the sentence by locating
+  `auth_termsOfServiceLink` **verbatim inside**
+  `auth_termsAndLocationConsent` and turning that run into the link, so the two
+  keys must stay consistent **in every locale** — a translation that rewords the
+  phrase silently renders a plain sentence with no link (`indexOf < 0` falls
+  back to one plain span on purpose: a missing link beats half a sentence or a
+  `-1` substring crash). It is a `StatefulWidget` solely to own and dispose the
+  `TapGestureRecognizer`; one built in `build` leaks on every rebuild. A tap on
+  that run is claimed by the recognizer, so it opens the terms instead of
+  toggling the checkbox; the rest of the tile still toggles.
+  **The per-locale half is pinned by `test/l10n/new_success_strings_test.dart`**,
+  which asserts the substring holds in every `supportedLocales` entry — the
+  widget test in `account_setup_screen_test.dart` only ever exercises the
+  default locale, so a French re-translation would otherwise drop the link with
+  nothing failing.
+  **Settings › Legal is the DURABLE route** — setup is shown once, only to a new
+  employee, and never again, so `LegalSettingsCard` carries a Terms of Service
+  row beside Privacy Policy. Both point at `AppUrls`
+  (`privacyPolicy`, `termsOfService`); the sources are
+  `docs/legal/privacy-policy.html` / `terms-of-service.html`, published to the
+  `es-pro-legal` GitHub Pages repo, where **the privacy policy is the index** —
+  which is why the terms page links to it by absolute URL rather than a relative
+  `privacy-policy.html` that would 404. Neither page is bundled: if the Pages
+  repo drifts from `docs/legal/`, the consent record points at the wrong text.
 - **Account re-provisioning REFRESHES the pending doc's editable fields, so
   `createAccount` takes the whole `EmployeeRecord` — never loose scalars.**
   `performCreateAccount`'s existing-doc branch *updates*
