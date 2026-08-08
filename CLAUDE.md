@@ -250,6 +250,14 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   Edit/Cancel/Delete affordances, which the rules then reject with an opaque
   `permission-denied`. Pass the caller's resolved role; never re-add a `true`
   default. (Rules remain the real gate — this is defense-in-depth plus UX.)
+  **A DONE job's edit affordance is the action bar's bottom button, not the
+  top chip** (owner call, 2026-08-08): `DetailsViewBody` suppresses
+  `DetailsEditChip` when the stored status is done and hands
+  `DetailsActionBar.onEdit` instead, which takes over the slot the inert
+  "Complete" indicator held — that job has no mark-done or cancel action left,
+  so the slot was dead. `onEdit` is null-gated on the same `showActions`, so a
+  read-only surface (History, client job history) still renders the indicator
+  and offers nothing. Cancelled and open jobs keep the top chip.
 - **Personal jobs (`isPersonal`, added 2026-07-31) carry no client and no
   address.** The switch at the top of the form's WHO section is on BOTH the add
   and edit flows (unlike the template chips), because the flag is stored and
@@ -1215,7 +1223,9 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   stays** on a collapsed row (deviating from the approved mockup, deliberately):
   a closed job renders on every day of its run, so without "Day 3 of 5" those
   rows are indistinguishable. `AgendaSliverList` emits one `_ClosedRule`
-  (`calendar_closedCount`, "Closed" because it covers cancelled too) at
+  (`calendar_closedCount`, which reads **"Done"** — owner call 2026-08-08,
+  reversing the earlier "Closed"; a cancelled visit sinks into the same block
+  and is counted by it, so the label is deliberately looser than the set) at
   `_firstClosedIndex`, and its `length - index` count is only valid because the
   sort guarantees the closed jobs are one contiguous tail — don't reorder them
   at the call site. Everywhere else (day route, dashboard, employee TODAY panel,
