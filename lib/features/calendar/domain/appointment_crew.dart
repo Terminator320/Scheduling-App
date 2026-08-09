@@ -1,5 +1,6 @@
 import 'package:flutter/painting.dart' show Color;
 
+import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
 /// One assignee as an appointment surface renders them.
@@ -32,8 +33,7 @@ List<AppointmentCrew> crewFor(
   final crew = <AppointmentCrew>[];
   for (var i = 0; i < ids.length; i++) {
     final id = ids[i];
-    final name =
-        nameMap?[id] ?? (i < fallbackNames.length ? fallbackNames[i] : '');
+    final name = nameMap?[id] ?? assigneeNameAt(fallbackNames, i) ?? '';
     if (name.trim().isEmpty) continue;
     crew.add(AppointmentCrew(name: name, color: colorMap[id]));
   }

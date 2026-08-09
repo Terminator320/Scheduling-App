@@ -56,10 +56,22 @@ final employeeNameMapProvider = Provider<Map<String, String>>(
   (ref) => _memoizedEmployeeMap(ref, _nameMapMemoProvider, (e) => e.name),
 );
 
-final employeesStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
-  if (ref.authUid == null) return Stream.value(const []);
-  return ref.watch(employeesRepositoryProvider).watchEmployees();
-});
+/// Active employees only.
+///
+/// `autoDispose`, because its consumers are transient — the two appointment
+/// sheets and the Dashboard. Without it, opening the add-appointment sheet
+/// ONCE attached a second live `users` listener (alongside the always-on
+/// `watchAllUsers()`) for the rest of the session.
+///
+/// Deliberately NOT derived from `allUsersStreamProvider`: that one orders by
+/// `name`, and Firestore excludes docs missing the orderBy field, so an
+/// unnamed active employee would silently drop out of the crew picker — which
+/// changes who can see a visit. That part is load-bearing; keep it.
+final employeesStreamProvider =
+    StreamProvider.autoDispose<List<EmployeeRecord>>((ref) {
+      if (ref.authUid == null) return Stream.value(const []);
+      return ref.watch(employeesRepositoryProvider).watchEmployees();
+    });
 
 typedef _EmployeeSearchEntry = ({
   EmployeeRecord employee,

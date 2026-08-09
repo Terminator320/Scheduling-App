@@ -7,6 +7,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
+import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
@@ -34,12 +35,24 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
   const AppointmentHistoryView({
     required this.searchQuery,
     super.key,
+    this.isAdmin = false,
     this.filterTourWrap,
     this.firstRowTourWrap,
     this.onFirstPageSettled,
   });
 
   final String searchQuery;
+
+  /// The caller's resolved role, passed straight to `showEventDetails` as
+  /// `showActions`. Defaults CLOSED, like every other appointment surface —
+  /// a `true` default silently offers employees actions the rules reject with
+  /// an opaque `permission-denied`.
+  ///
+  /// History holds only `done` and `cancelled` jobs, so for an admin this
+  /// opens exactly one affordance per row: the action bar's Edit button on a
+  /// finished one, the edit chip on a cancelled one. Mark-as-done and Cancel
+  /// both hide themselves on a terminal job.
+  final bool isAdmin;
 
   /// Wraps the filter bar as its feature-tour step. Null when the host has
   /// no tour for it.
@@ -180,7 +193,7 @@ class _AppointmentHistoryViewState
       for (var i = 0; i < a.employeeIds.length; i++) {
         final id = a.employeeIds[i];
         if (id.isEmpty) continue;
-        final name = i < a.employeeNames.length ? a.employeeNames[i] : '';
+        final name = assigneeNameAt(a.employeeNames, i) ?? '';
         final existing = names[id];
         if (existing == null || (existing.isEmpty && name.isNotEmpty)) {
           names[id] = name;
@@ -316,8 +329,11 @@ class _AppointmentHistoryViewState
             // denormalized employeeNames.
             crew: crewFor(app, colorMap: colorMap),
             dimWhenCancelled: true,
-            // showActions stays CLOSED — this history surface is read-only.
-            onTap: () => showEventDetails(context, app, showActions: false),
+            // Carries the caller's role rather than a hardcoded false: an
+            // admin needs to reach a finished job's Edit button from here,
+            // which is where finished jobs actually live.
+            onTap: () =>
+                showEventDetails(context, app, showActions: widget.isAdmin),
           ),
         ),
       ],
@@ -474,19 +490,8 @@ class _AppointmentHistoryViewState
 
   // This can't scroll itself — it lands inside ISP's SliverFillRemaining, and a nested
   // ListView there would throw an intrinsic-dimension error.
-  Widget _skeleton() => const Padding(
-    padding: EdgeInsets.all(AppSpacing.sp12),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SkeletonListTile(),
-        SizedBox(height: AppSpacing.sp8),
-        SkeletonListTile(),
-        SizedBox(height: AppSpacing.sp8),
-        SkeletonListTile(),
-      ],
-    ),
-  );
+  Widget _skeleton() =>
+      const SkeletonList(padding: EdgeInsets.all(AppSpacing.sp12));
 
   Widget _buildEmptyState(BuildContext context) {
     final l10n = context.l10n;

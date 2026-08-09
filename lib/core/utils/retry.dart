@@ -1,5 +1,20 @@
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+/// The one `retryWhen` predicate for the post-sign-in token-propagation race.
+///
+/// A Firestore read or listen fired right after sign-in can come back
+/// `permission-denied` until the freshly minted auth token propagates. Lives
+/// here, beside [retryStream] and [retryAsync], because it exists only to
+/// serve them — it was copied byte-identically into three repositories, two of
+/// which carried a "keep in sync" comment naming only ONE twin, so neither
+/// author knew there were three.
+///
+/// A genuine rules rejection still surfaces once the retries are exhausted.
+bool isAuthPropagationDenied(Object error) =>
+    error is FirebaseException && error.code == 'permission-denied';
+
 Future<T> retryAsync<T>(
   Future<T> Function() op, {
   required List<Duration> delays,

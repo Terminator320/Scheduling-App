@@ -184,9 +184,18 @@ class AppointmentImageUploadService {
           uploaded: appendFailed ? uploaded : const [],
         ),
       );
+      // The permanent failures counted in the SAME pass belong here too. A
+      // batch holding one oversized photo and one network blip deletes the
+      // oversized file above, so it can never retry — reporting only the
+      // retryable ones left the person waiting for a retry that cannot happen,
+      // with the one actionable detail ("this file is too large") withheld.
       _notifier.reportFailure(
         entry.appointmentId,
-        failedCount: survivors.length + (appendFailed ? uploaded.length : 0),
+        failedCount:
+            survivors.length +
+            (appendFailed ? uploaded.length : 0) +
+            permanentFailures,
+        tooLargeFileNames: tooLargeNames,
       );
     } else {
       await _store.remove(entry.id);

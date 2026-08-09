@@ -84,6 +84,16 @@ DateTime lastWorkDayOf(AppointmentRecord appointment) =>
 int _dayCountOfWindow(DateTime start, DateTime end) =>
     calendarDaysBetween(start.dateOnly, lastWorkDayOfWindow(start, end)) + 1;
 
+/// [_dayCountOfWindow] capped at [maxAppointmentSpanDays].
+///
+/// The cap is client-side only — `firestore.rules` constrains neither instant —
+/// so a doc written by the console, the Admin SDK or another build can exceed
+/// it. Every day-scoping answer routes through here so they cannot disagree
+/// about how long a corrupt run is; a value below 1 still means a corrupt pair
+/// with no day to render on, and each caller guards for that.
+int _clampedDayCount(DateTime start, DateTime end) =>
+    math.min(_dayCountOfWindow(start, end), maxAppointmentSpanDays);
+
 /// The concrete window a daily [start]–[end] pair occupies on [day].
 ({DateTime start, DateTime end}) _windowOn(
   DateTime day,
@@ -120,16 +130,25 @@ bool runsOn(AppointmentRecord appointment, DateTime day) =>
 /// rather than by day. Testing `startTime` against the bounds instead drops a
 /// run from the very week it is being worked, whenever it began earlier.
 bool runsInRange(AppointmentRecord appointment, DateTime start, DateTime end) {
-  final firstDay = appointment.startTime.dateOnly;
-  final lastDay = lastWorkDayOf(appointment);
+  final count = _clampedDayCount(appointment.startTime, appointment.endTime);
   // Corrupt record — end precedes start, so there is no day it runs.
-  if (lastDay.isBefore(firstDay)) return false;
+  if (count < 1) return false;
+  final firstDay = appointment.startTime.dateOnly;
+  final lastDay = addCalendarDays(firstDay, count - 1);
   return firstDay.isBefore(end) && !lastDay.isBefore(start.dateOnly);
 }
 
 /// The record as it appears on [day], or null when it doesn't run that day.
+///
+/// Clamped to [maxAppointmentSpanDays] like [expandToDays] and [_windowsOf].
+/// The cap is client-side only — `firestore.rules` constrains neither instant —
+/// so a doc written by the console, the Admin SDK or another build can exceed
+/// it. Left unclamped, this one owner of day-scoping disagreed with itself: the
+/// calendar rendered 14 slices while every `runsOn` consumer counted the full
+/// corrupt length, giving a drawer badge that read "1 job today" every day for
+/// a year and a card counter reading "Day 400 of 900".
 AppointmentDaySlice? sliceFor(AppointmentRecord appointment, DateTime day) {
-  final count = _dayCountOfWindow(appointment.startTime, appointment.endTime);
+  final count = _clampedDayCount(appointment.startTime, appointment.endTime);
   if (count < 1) return null;
   final index = calendarDaysBetween(appointment.startTime.dateOnly, day) + 1;
   if (index < 1 || index > count) return null;
@@ -184,9 +203,8 @@ List<({DateTime start, DateTime end})> _windowsOf(
   DateTime start,
   DateTime end,
 ) {
-  final count = _dayCountOfWindow(start, end);
-  if (count < 1) return const [];
-  final days = math.min(count, maxAppointmentSpanDays);
+  final days = _clampedDayCount(start, end);
+  if (days < 1) return const [];
   final firstDay = start.dateOnly;
   return [
     for (var i = 0; i < days; i++)
@@ -236,15 +254,30 @@ Map<DateTime, List<AppointmentDaySlice>> expandToDays(
     }
   }
   for (final slices in slicesByDay.values) {
-    slices.sort(_byAllDayThenWindowStart);
+    slices.sort(_agendaOrder);
   }
   return slicesByDay;
 }
 
-/// An all-day block owns the whole day, so it reads above the clock; the rest
-/// run in clock order. A continuing TIMED job has a real start time today and
-/// deliberately takes its place in that order rather than being pinned.
-int _byAllDayThenWindowStart(AppointmentDaySlice a, AppointmentDaySlice b) {
+/// Three tiers, outermost first.
+///
+/// **Open before closed.** A day's agenda answers "what is left to do", so a
+/// job finished at 7 AM must not hold its slot above the 8 AM job that hasn't
+/// started. Both terminal states sink — a cancelled visit is as done with as a
+/// completed one. It reads the STORED status via [AppointmentRecord.isClosed],
+/// never `displayStatus`, so this comparator stays clock-free like the rest of
+/// the module.
+///
+/// **All-day before timed.** An all-day block owns the whole day, so it reads
+/// above the clock. A continuing TIMED job has a real start time today and
+/// deliberately takes its place in clock order rather than being pinned.
+///
+/// **Then window start.** Both tiers above apply within the closed block too,
+/// so the finished work still reads in the order it happened.
+int _agendaOrder(AppointmentDaySlice a, AppointmentDaySlice b) {
+  final aClosed = a.appointment.isClosed;
+  final bClosed = b.appointment.isClosed;
+  if (aClosed != bClosed) return aClosed ? 1 : -1;
   final aAllDay = a.appointment.isAllDay;
   final bAllDay = b.appointment.isAllDay;
   if (aAllDay != bAllDay) return aAllDay ? -1 : 1;

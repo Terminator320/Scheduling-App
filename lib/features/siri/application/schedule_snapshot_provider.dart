@@ -19,14 +19,10 @@ final scheduleSnapshotProvider =
       // Rebuilds this snapshot when the calendar day rolls over, so an app
       // left running overnight can't keep publishing yesterday's day buckets.
       final startOfToday = ref.watch(currentDayProvider);
-      final range = AppointmentDateRange(
-        start: startOfToday,
-        end: DateTime(
-          startOfToday.year,
-          startOfToday.month,
-          startOfToday.day + scheduleSnapshotLookaheadDays + 1,
-        ),
-      );
+      // The shared mirror window — the home widget asks for the same value, so
+      // for an employee the two mirrors share ONE listener instead of opening
+      // two whose windows nest.
+      final range = AppointmentDateRange.forMirrors(startOfToday);
       final appts = identity.role == 'admin'
           ? ref.watch(appointmentsInRangeProvider(range))
           : ref.watch(

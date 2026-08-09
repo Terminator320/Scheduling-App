@@ -10,7 +10,11 @@ const scheduleSnapshotVersion = 2;
 /// Days carried beyond today; Phase-2 date queries ("what's my schedule
 /// Friday?") resolve against these buckets, and anything further out gets
 /// "I only have your schedule for the next 7 days."
-const scheduleSnapshotLookaheadDays = 7;
+///
+/// The length of the window that supplies them
+/// ([AppointmentDateRange.forMirrors]), not an independent number — the home
+/// widget shares that window, so a second value here would fork its listener.
+const scheduleSnapshotLookaheadDays = mirrorLookaheadDays;
 
 /// Defensive per-day cap — Siri reads at most one day out loud.
 const scheduleSnapshotPerDayCap = 30;

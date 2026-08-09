@@ -55,6 +55,11 @@ Widget _wrap({
             ? Stream<List<AppointmentRecord>>.error(appointmentsError)
             : Stream.value(appointments),
       ),
+      // The settled weeks are a one-shot read, not part of the live stream —
+      // these tests supply everything through the live half.
+      dashboardHistoryProvider.overrideWith(
+        (_) async => const <AppointmentRecord>[],
+      ),
       // Fresh stream per provider: Stream.value is single-subscription.
       employeesStreamProvider.overrideWith((_) => Stream.value(const [_jane])),
       allUsersStreamProvider.overrideWith((_) => Stream.value(const [_jane])),

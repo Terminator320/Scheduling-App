@@ -22,6 +22,11 @@ class ImageViewer extends ConsumerStatefulWidget {
     required List<ImageProvider> images,
     int initialIndex = 0,
   }) {
+    // Clamped because the index is composed by the caller from two lists
+    // (resolved existing URLs + local files) and the first of those can still
+    // be resolving. An out-of-range index reads `images[_currentIndex]` on
+    // Save/Share and throws a RangeError out of a gesture handler.
+    final index = images.isEmpty ? 0 : initialIndex.clamp(0, images.length - 1);
     final scheme = Theme.of(context).colorScheme;
     return Navigator.of(context).push(
       PageRouteBuilder(
@@ -30,7 +35,7 @@ class ImageViewer extends ConsumerStatefulWidget {
         transitionDuration: const Duration(milliseconds: 250),
         reverseTransitionDuration: const Duration(milliseconds: 200),
         pageBuilder: (_, _, _) =>
-            ImageViewer(images: images, initialIndex: initialIndex),
+            ImageViewer(images: images, initialIndex: index),
         transitionsBuilder: (_, animation, _, child) {
           final curved = CurvedAnimation(
             parent: animation,
@@ -187,7 +192,10 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
 
   Future<void> _share() => _runExclusive(
     'IMG-SHARE',
-    context.l10n.error_somethingWentWrongPleaseTryAgain,
+    // A specific intro, like its neighbour _saveToPhotos — the generic string
+    // is forbidden at catch sites (.claude/rules/error-handling.md) precisely
+    // because it costs the room the message needs to say what failed.
+    context.l10n.calendar_couldNotSharePhoto,
     () async {
       final file = await _currentImageFile();
       if (file == null) throw StateError('image source not resolvable');

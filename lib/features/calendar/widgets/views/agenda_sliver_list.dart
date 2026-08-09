@@ -39,6 +39,15 @@ class AgendaSliverList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Where the day's remaining work ends, or -1 when nothing is closed.
+    // `expandToDays` already sorts open before closed, so the closed jobs are
+    // one contiguous run at the tail — which is what lets the rule be a single
+    // marker at this index and its count a plain `length - index`. Resolved
+    // once here, never inside the item builder, which runs per row per rebuild.
+    final firstClosedIndex = events.indexWhere(
+      (slice) => slice.appointment.isClosed,
+    );
+
     return SliverMainAxisGroup(
       slivers: [
         if (isLoading)
@@ -65,33 +74,78 @@ class AgendaSliverList extends StatelessWidget {
                 final slice = events[index];
                 final e = slice.appointment;
 
+                final card = Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sp16,
+                    vertical: AppSpacing.sp4,
+                  ),
+                  child: AppointmentCard(
+                    appointment: e,
+                    slice: slice,
+                    crew: crewFor(e, colorMap: colorMap, nameMap: nameMap),
+                    selected: selectedAppointmentId == e.id,
+                    collapseWhenClosed: true,
+                    dimWhenCancelled: true,
+                    onTap: () {
+                      if (onAppointmentTap != null) {
+                        onAppointmentTap!(e);
+                      } else {
+                        showEventDetails(context, e, showActions: isAdmin);
+                      }
+                    },
+                  ),
+                );
+
                 return FadeInItem(
                   key: ValueKey(e.id),
                   index: index,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sp16,
-                      vertical: AppSpacing.sp4,
-                    ),
-                    child: AppointmentCard(
-                      appointment: e,
-                      slice: slice,
-                      crew: crewFor(e, colorMap: colorMap, nameMap: nameMap),
-                      selected: selectedAppointmentId == e.id,
-                      onTap: () {
-                        if (onAppointmentTap != null) {
-                          onAppointmentTap!(e);
-                        } else {
-                          showEventDetails(context, e, showActions: isAdmin);
-                        }
-                      },
-                    ),
-                  ),
+                  child: index == firstClosedIndex
+                      ? Column(
+                          children: [
+                            _ClosedRule(count: events.length - index),
+                            card,
+                          ],
+                        )
+                      : card,
                 );
               },
             ),
           ),
       ],
+    );
+  }
+}
+
+/// The rule between the day's remaining work and the jobs that are finished or
+/// cancelled. It reads "Done" (owner call) even though cancelled visits sink
+/// into the same block — the count covers both.
+class _ClosedRule extends StatelessWidget {
+  const _ClosedRule({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.sp16 + 2,
+        AppSpacing.sp12,
+        AppSpacing.sp16 + 2,
+        AppSpacing.sp4,
+      ),
+      child: Row(
+        children: [
+          Text(
+            context.l10n.calendar_closedCount(count).toUpperCase(),
+            style: theme.monoType.label.copyWith(
+              color: theme.palette.textTertiary,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sp8 + 2),
+          const Expanded(child: Divider(height: 1, thickness: 1)),
+        ],
+      ),
     );
   }
 }

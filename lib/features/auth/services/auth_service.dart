@@ -56,6 +56,51 @@ class AuthService {
     return _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
   }
 
+  /// Whether the signed-in address has been verified.
+  ///
+  /// Load-bearing during setup: the account is minted on a SHARED starting
+  /// password, so signing in proves nothing about who you are.
+  /// `completeEmployeeSetup` refuses without a verified email, which is what
+  /// keeps a stranger who knows the address stuck on the setup screen instead
+  /// of activating the account and leaving the `invited` state (where the
+  /// rules grant nothing).
+  bool get isEmailVerified => _auth.currentUser?.emailVerified ?? false;
+
+  /// Sends Firebase's own verification email to the signed-in address.
+  Future<void> sendVerificationEmail() async {
+    final user = _auth.currentUser;
+    if (user == null) throw const AuthFailureSessionExpired();
+    try {
+      await user.sendEmailVerification();
+    } catch (e, st) {
+      final failure = _mapSetupError(e);
+      _logger.authFailure(
+        'sendVerificationEmail failed',
+        failure,
+        e,
+        st,
+      );
+      throw failure;
+    }
+  }
+
+  /// Re-reads the account and, once verified, forces a fresh ID token.
+  ///
+  /// The token refresh is the half that matters: `completeEmployeeSetup` reads
+  /// `email_verified` off the **token**, which was minted at sign-in. A bare
+  /// [User.reload] updates the local object and leaves the callable still
+  /// seeing `false`, so setup would keep failing after the person had done
+  /// everything right.
+  Future<bool> refreshEmailVerified() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    await user.reload();
+    final refreshed = _auth.currentUser;
+    if (refreshed == null || !refreshed.emailVerified) return false;
+    await refreshed.getIdToken(true);
+    return true;
+  }
+
   /// Completes the signed-in employee's own account setup.
   ///
   /// ORDER IS THE GUARANTEE. The password is replaced FIRST, then the account
@@ -141,6 +186,12 @@ class AuthService {
       }
       if (e.message == 'account-not-found') {
         return const AuthFailureNoAccountRecord();
+      }
+      // The screen gates on this before submitting, so reaching it means the
+      // token still carried the pre-verification claim — which the "Check
+      // again" action fixes by forcing a refresh.
+      if (e.message == 'email-not-verified') {
+        return const AuthFailureEmailNotVerified();
       }
       if (e.code == 'resource-exhausted') {
         return const AuthFailureTooManyRequests();

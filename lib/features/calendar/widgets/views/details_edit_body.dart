@@ -84,8 +84,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     // One length feeds both the flag and the label, so they can't disagree:
     // the run-length string is a plain interpolation, and a multi-day flag
     // paired with a length of 1 would render "1 days".
-    final rawSpan = calendarDaysBetween(state.selectedDate, state.endDate) + 1;
-    final spanLength = rawSpan < 1 ? 1 : rawSpan;
+    final spanLength = runLengthDays(state.selectedDate, state.endDate);
 
     return FormSheetFrame(
       title: context.l10n.calendar_editAppointment,
@@ -244,51 +243,13 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     );
     final notifier = ref.read(provider.notifier);
 
-    // Editing a repeating visit asks whether the change should apply to just
-    // this visit or to future ones too, same as delete does. But if the
-    // repeat rule itself is what changed, we skip that prompt and just
-    // rewrite the whole series.
     final state = ref.read(provider);
     if (state.isSaving) return; // a save (or its prompt) is already in flight
-    var applyToSeries = false;
-    if (appointment.seriesId.isNotEmpty && state.repeat == state.savedRepeat) {
-      // Busy the form while the prompt is open so a second tap can't stack a
-      // duplicate dialog. We reset it below before save() takes over the flag.
-      notifier.setSaving(busy: true);
-      // One extra read per series edit — an admin action — so the dialog's
-      // consequence line and button count are true rather than decorative.
-      final outlook = await _seriesOutlook(ref, appointment);
-      if (!context.mounted) {
-        notifier.setSaving(busy: false);
-        return;
-      }
-      final choice = await showSeriesScopeDialog(
-        context,
-        title: context.l10n.calendar_applyChangesTo,
-        contextLabel: context.l10n.calendar_repeatsEveryLabel(
-          repeatIntervalLabel(context.l10n, state.repeat).toUpperCase(),
-        ),
-        thisOnlyLabel: context.l10n.calendar_editThisVisitOnly,
-        thisAndFutureLabel: context.l10n.calendar_editThisAndFutureVisits,
-        thisOnlyDetail: context.l10n.calendar_thisVisitKeepsSeries(
-          DateUtilsHelper.formatDate(appointment.startTime),
-        ),
-        thisAndFutureDetail: outlook.last == null
-            ? null
-            : context.l10n.calendar_remainingVisitsThrough(
-                outlook.count,
-                DateUtilsHelper.formatDate(outlook.last!),
-              ),
-        primaryLabelFor: (choice) => choice == SeriesScopeChoice.thisOnly
-            ? context.l10n.calendar_saveThisVisit
-            : context.l10n.calendar_saveNVisits(outlook.count),
-      );
-      // Reset before the mounted guard — the notifier is context-free, and
-      // bailing while still busy would wedge a surviving controller.
-      notifier.setSaving(busy: false);
-      if (!context.mounted || choice == null) return;
-      applyToSeries = choice == SeriesScopeChoice.thisAndFuture;
-    }
+
+    final applyToSeries = await _resolveSeriesScope(context, ref, state);
+    // null means the admin dismissed the scope dialog, or the sheet went away
+    // while it was open — either way there is nothing to save.
+    if (applyToSeries == null || !context.mounted) return;
 
     // An unnamed personal block saves as "Personal" — same rule as the add
     // flow, since the stored title is what every read surface falls back to.
@@ -321,11 +282,83 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       outcome = await attempt(forceBusy: true);
       if (!context.mounted) return;
     }
+    _announce(context, ref, outcome);
+  }
+
+  /// Asks whether an edit to a repeating visit applies to this visit only or
+  /// to future ones too, and returns that as `applyToSeries`.
+  ///
+  /// **`null` means "stop"** — the admin dismissed the dialog, or the sheet was
+  /// torn down while it was open. `false` is a real answer, not an absence.
+  ///
+  /// Split out of [_save] because it owns a busy-flag handoff of its own: the
+  /// form is marked busy for the duration so a second tap cannot stack a
+  /// duplicate dialog, and every exit from here — including the mounted bail —
+  /// has to clear it before `save()` takes the flag over.
+  ///
+  /// Skipped entirely when the repeat RULE is what changed: that rewrites the
+  /// whole series regardless, so there is nothing to ask.
+  Future<bool?> _resolveSeriesScope(
+    BuildContext context,
+    WidgetRef ref,
+    EventDetailsState state,
+  ) async {
+    final appointment = widget.appointment;
+    if (appointment.seriesId.isEmpty || state.repeat != state.savedRepeat) {
+      return false;
+    }
+    final provider = eventDetailsControllerProvider(
+      EventDetailsKey(appointment),
+    );
+    // Busied for the whole dialog, so a second tap can't stack a duplicate.
+    final notifier = ref.read(provider.notifier)..setSaving(busy: true);
+    // One extra read per series edit — an admin action — so the dialog's
+    // consequence line and button count are true rather than decorative.
+    final outlook = await _seriesOutlook(ref, appointment);
+    if (!context.mounted) {
+      notifier.setSaving(busy: false);
+      return null;
+    }
+    final choice = await showSeriesScopeDialog(
+      context,
+      title: context.l10n.calendar_applyChangesTo,
+      contextLabel: context.l10n.calendar_repeatsEveryLabel(
+        repeatIntervalLabel(context.l10n, state.repeat).toUpperCase(),
+      ),
+      thisOnlyLabel: context.l10n.calendar_editThisVisitOnly,
+      thisAndFutureLabel: context.l10n.calendar_editThisAndFutureVisits,
+      thisOnlyDetail: context.l10n.calendar_thisVisitKeepsSeries(
+        DateUtilsHelper.formatDate(appointment.startTime),
+      ),
+      thisAndFutureDetail: outlook.last == null
+          ? null
+          : context.l10n.calendar_remainingVisitsThrough(
+              outlook.count,
+              DateUtilsHelper.formatDate(outlook.last!),
+            ),
+      primaryLabelFor: (choice) => choice == SeriesScopeChoice.thisOnly
+          ? context.l10n.calendar_saveThisVisit
+          : context.l10n.calendar_saveNVisits(outlook.count),
+    );
+    // Reset before the mounted guard — the notifier is context-free, and
+    // bailing while still busy would wedge a surviving controller.
+    notifier.setSaving(busy: false);
+    if (!context.mounted || choice == null) return null;
+    return choice == SeriesScopeChoice.thisAndFuture;
+  }
+
+  /// Turns a settled save outcome into the one notice it earns.
+  ///
+  /// Both no-op outcomes surface NOTHING: `Invalid` is already shown as field
+  /// errors, and `BusyEmployees` was resolved above — the dialog either forced
+  /// a retry or the admin backed out.
+  void _announce(
+    BuildContext context,
+    WidgetRef ref,
+    EventDetailsSaveOutcome outcome,
+  ) {
     switch (outcome) {
-      case EventDetailsInvalid():
-        return;
-      // Already resolved above; the dialog either forced a retry or bailed.
-      case EventDetailsBusyEmployees():
+      case EventDetailsInvalid() || EventDetailsBusyEmployees():
         return;
       case EventDetailsSaved(
         :final appointment,
@@ -426,6 +459,11 @@ class _EditPhotosSection extends ConsumerWidget {
       isEditing: true,
       onPickImages: () async {
         final picked = await pickAppointmentImages(context, ref);
+        // The longest await in the app — an OS action sheet and then the
+        // camera/Photos picker. The notifier is autoDispose.family, so
+        // calling it after this view was torn down under the picker throws a
+        // StateError out of an unawaited callback, filed as FATAL.
+        if (!context.mounted) return;
         if (picked.isNotEmpty) notifier.addImages(picked);
       },
       onRemoveExisting: notifier.removeExistingImage,

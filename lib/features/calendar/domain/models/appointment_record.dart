@@ -3,6 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 
@@ -91,13 +92,23 @@ abstract class AppointmentRecord with _$AppointmentRecord {
   /// in sync with functions/notification_utils.js.
   String get displayStatus => displayStatusAt(DateTime.now());
 
+  /// The job is closed — `cancelled`, or `done` in either of its spellings.
+  ///
+  /// These are the only statuses the clock ladder below can neither produce nor
+  /// erase, which is what makes this the one status test a pure module can ask
+  /// without a clock. The vocabulary itself lives in
+  /// `appointment_status_values.dart` — shared with the History query's
+  /// `whereIn`, which is where it had drifted — and is deliberately reachable
+  /// without pulling Material in through `status_chip.dart`, so
+  /// `appointment_day_slice.dart` can sort on it.
+  bool get isClosed => isTerminalStatusRaw(status);
+
   /// The clock-derived ladder, keyed on [now] so callers that already hold a
   /// clock (the dashboard reducers) share this one owner instead of re-deriving
   /// it — they drifted apart once already, and a personal block then showed as
   /// Scheduled on its card and Overdue on the dashboard.
   String displayStatusAt(DateTime now) {
-    final s = status.toLowerCase();
-    if (s == 'done' || s == 'completed' || s == 'cancelled') return status;
+    if (isClosed) return status;
     // A personal block is not a job being worked: it stays on its stored
     // status (which reads "Scheduled") instead of flipping to In Progress at
     // its start and Overdue at its end. The server's overdue sweep skips these
@@ -124,6 +135,13 @@ abstract class AppointmentRecord with _$AppointmentRecord {
         .toList();
   }
 }
+
+/// How many days beyond today the two off-screen schedule mirrors fetch.
+///
+/// One owner for both, so [AppointmentDateRange.forMirrors] produces a single
+/// range value and they share one Firestore listener. `Siri`'s
+/// `scheduleSnapshotLookaheadDays` is this value.
+const int mirrorLookaheadDays = 7;
 
 @immutable
 class AppointmentDateRange {
@@ -179,6 +197,28 @@ class AppointmentDateRange {
     final offset = calendarDaysBetween(DateTime(1970), d) % 7;
     final start = addCalendarDays(d, -offset);
     return AppointmentDateRange(start: start, end: addCalendarDays(start, 7));
+  }
+
+  /// The ONE window both off-screen schedule mirrors fetch.
+  ///
+  /// The Siri snapshot needs today + 7 days; the home-screen widget needs only
+  /// today + tomorrow. Both are held open for the whole session by
+  /// `AppSyncListeners`, and both ask the same `myAppointmentsProvider` family
+  /// — which is keyed by range VALUE — so two different ranges meant two
+  /// permanent Firestore listeners per signed-in user, streaming overlapping
+  /// documents forever, with the widget's window a strict subset of the
+  /// snapshot's. `buildWidgetPayload` re-scopes to today/tomorrow in Dart
+  /// anyway, so the wider list feeds it unchanged.
+  ///
+  /// Same reasoning as [AppointmentDateRange.forWeekBucketOf]: two surfaces
+  /// looking at the same data must produce EQUAL ranges, or they fork a second
+  /// query.
+  factory AppointmentDateRange.forMirrors(DateTime today) {
+    final start = today.dateOnly;
+    return AppointmentDateRange(
+      start: start,
+      end: addCalendarDays(start, mirrorLookaheadDays + 1),
+    );
   }
 
   /// The window the calendar screen actually needs: the visible month's grid

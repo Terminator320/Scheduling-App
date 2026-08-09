@@ -42,7 +42,7 @@
 <h1>Privacy Policy</h1>
 <p class="meta">
   Application: <strong>ES Pro</strong> · Effective date: July 8, 2026 ·
-  Last updated: August 5, 2026
+  Last updated: August 8, 2026
 </p>
 
 <p>
@@ -148,7 +148,7 @@
     </tr>
     <tr>
       <td>Photos</td>
-      <td>Images you take or select to attach to appointments or profiles.</td>
+      <td>Images you take or select to attach to appointments.</td>
       <td>To store and display images you choose to add.</td>
     </tr>
   </tbody>
@@ -299,10 +299,14 @@
     snapshot of your own upcoming jobs — such as the time, the client or job
     name, and the address — into a private storage area shared between the App
     and its widget on your device, so the widget can display it and Siri can
-    answer questions like “what’s my next job?”. This snapshot stays on your
-    device, is not transmitted to us or to Apple, and is removed when you sign
-    out or delete the App. Remove the widget, or turn off Siri access for the
-    App in your device Settings, to stop using these features.</li>
+    answer questions like “what’s my next job?”. The snapshot itself is a file on
+    your device: it is not uploaded to us, and neither we nor Apple can read it.
+    It is removed when you sign out or delete the App. Because the widget has to
+    stay current while the App is closed, the job details it shows are refreshed
+    by a silent push message, which — like any notification — reaches your device
+    through Apple’s push notification service. Remove the widget, or turn off
+    Siri access for the App in your device Settings, to stop using these
+    features.</li>
   <li><strong>Lock Screen job card (Live Activities).</strong> If enabled, a
     card on your Lock Screen shows your current or next job — the client or job
     name, the address, and the time. Because the card is updated while the App is
@@ -428,8 +432,10 @@
     <em>disable</em> an employee’s account, which immediately ends that person’s
     access and deletes their stored location, push tokens, and Lock Screen job
     cards; the profile record itself is kept, because past appointments refer to
-    it. An administrator cannot delete an employee’s account — only the account
-    holder can, from within the App.</li>
+    it. Once you have completed setup, an administrator can disable your account
+    but cannot delete it — only you can, from within the App. Before you have
+    completed setup, while the account is still pending first sign-in, an
+    administrator can remove it outright.</li>
   <li><strong>Client records</strong> created within a business remain part of
     that business’s records for as long as the business keeps them. A client
     that is no longer active is normally <em>archived</em> rather than deleted:
@@ -445,16 +451,22 @@
     however old they are.</li>
   <li><strong>Crash diagnostics</strong> are retained by Firebase Crashlytics
     for a limited period in accordance with Google’s policies.</li>
-  <li><strong>Push notification tokens</strong> are kept only while your device
-    is registered for notifications; the token for a device is removed when you
-    sign out on it or turn off notifications. <strong>Lock Screen job card
-    tokens</strong> are removed when the card ends, when you turn the feature
-    off, or when you sign out.</li>
+  <li><strong>Push notification tokens</strong> are removed when you sign out on
+    that device, when you delete your account, or when an administrator disables
+    or deletes your account. Turning notifications off in your device Settings
+    stops the notifications from being shown, but does not by itself delete the
+    stored token — sign out on the device if you want it removed.
+    <strong>Lock Screen job card tokens</strong> are removed when the card ends,
+    when you turn the feature off, or when you sign out.</li>
   <li><strong>Location for reminders</strong> is not kept as a history: only your
-    single most recent reading is stored, each new reading overwrites the last,
-    and it is deleted when you sign out, delete your account, turn off
-    location access for the App, or have your account deleted or disabled by
-    an administrator.</li>
+    single most recent reading is stored, and each new reading overwrites the
+    last. It is deleted when you sign out, delete your account, or have your
+    account deleted or disabled by an administrator. Revoking location permission
+    stops any further readings being taken, but does not by itself delete the
+    reading already stored: until one of the events above occurs, that last
+    reading remains, and administrators can still see it on the live map, shown
+    with how long ago it was recorded. Sign out if you want it removed
+    straight away.</li>
 </ul>
 <p>
   We keep personal information only as long as necessary for the purposes
@@ -510,10 +522,14 @@
   <li><strong>Device permissions.</strong> You can grant or revoke camera,
     photo, contacts, location, and Face ID permissions at any time in your
     device’s Settings; features that rely on a permission will be limited if it
-    is revoked. Turning off location access disables only the “time to leave”
-    reminders and your pin on the staff map. The Lock Screen job card can be
-    turned off in Settings → Notifications, and the home-screen widget by
-    removing it from your Home Screen.</li>
+    is revoked. Turning off location access stops the App taking any further
+    readings, which ends the “time to leave” reminders; the last reading already
+    stored is not deleted by revoking the permission, and stays visible to
+    administrators on the staff map — labelled with how long ago it was taken —
+    until you sign out, delete your account, or an administrator disables or
+    deletes it (see Section 6). The Lock Screen job card can be turned off in
+    Settings → Notifications, and the home-screen widget by removing it from
+    your Home Screen.</li>
   <li><strong>If you are a client of a business</strong> that uses the App,
     please direct access, correction, and deletion requests to that business,
     which controls its records; you may also contact us and we will assist or
@@ -562,7 +578,7 @@
 
 <footer>
   © 2026 Plombier Eau Secours. ES Pro Privacy Policy — last updated
-  August 5, 2026.
+  August 8, 2026.
 </footer>
 
 </body>

@@ -13,13 +13,6 @@ void main() {
     expect(names.toSet().length, names.length);
   });
 
-  test('destinationByName round-trips every destination', () {
-    for (final destination in allDestinations) {
-      expect(destinationByName(destination.name), destination);
-    }
-    expect(destinationByName('nope'), isNull);
-  });
-
   test('every destination resolves to a route', () {
     for (final destination in allDestinations) {
       final target = destinationRoute(

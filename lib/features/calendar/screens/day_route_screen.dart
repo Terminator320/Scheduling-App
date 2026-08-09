@@ -14,6 +14,7 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
@@ -239,9 +240,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         if (id.isEmpty) continue;
         byId.putIfAbsent(
           id,
-          () =>
-              nameMap[id] ??
-              (i < a.employeeNames.length ? a.employeeNames[i] : id),
+          () => nameMap[id] ?? assigneeNameAt(a.employeeNames, i) ?? id,
         );
       }
     }
