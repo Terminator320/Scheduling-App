@@ -199,10 +199,12 @@ final widgetPayloadProvider =
       }
       // Rebuild on day rollover so app doesn't keep showing yesterday's jobs.
       final today = ref.watch(currentDayProvider);
-      final range = AppointmentDateRange(
-        start: today,
-        end: DateTime(today.year, today.month, today.day + 3),
-      );
+      // The shared mirror window, not this payload's own today+tomorrow: the
+      // Siri snapshot holds a permanent listener on the same family, and its
+      // window is a strict superset of what the widget needs. Asking for the
+      // same range value means one listener for both.
+      // `buildWidgetPayload` re-scopes to today/tomorrow in Dart regardless.
+      final range = AppointmentDateRange.forMirrors(today);
       final appts = ref.watch(
         myAppointmentsProvider((employeeId: empId, range: range)),
       );

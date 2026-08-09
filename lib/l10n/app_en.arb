@@ -32,6 +32,38 @@
   "@auth_signedInAs": {
     "description": "Mono chip beside the locked email on the setup screen"
   },
+  "auth_verifyEmailTitle": "Verify your email",
+  "@auth_verifyEmailTitle": {
+    "description": "Heading of the email-verification step on the setup screen"
+  },
+  "auth_verifyEmailBody": "Open the link we email you, then tap Check again. Setup can't finish until your address is verified.",
+  "@auth_verifyEmailBody": {
+    "description": "Explains the email-verification step on the setup screen"
+  },
+  "auth_sendVerificationEmail": "Send verification email",
+  "@auth_sendVerificationEmail": {
+    "description": "Button that sends the verification email for the first time"
+  },
+  "auth_resendVerificationEmail": "Resend email",
+  "@auth_resendVerificationEmail": {
+    "description": "Button that sends the verification email again"
+  },
+  "auth_verificationEmailSent": "Email sent. Check your inbox and your spam folder.",
+  "@auth_verificationEmailSent": {
+    "description": "Confirmation shown after the verification email is sent"
+  },
+  "auth_checkVerification": "Check again",
+  "@auth_checkVerification": {
+    "description": "Button that re-reads the account to pick up a just-clicked verification link"
+  },
+  "auth_emailNotVerifiedYet": "Not verified yet. Open the link in the email, then tap Check again.",
+  "@auth_emailNotVerifiedYet": {
+    "description": "Shown when the verification check ran and the address is still unverified"
+  },
+  "auth_emailVerified": "VERIFIED",
+  "@auth_emailVerified": {
+    "description": "Mono chip beside the locked email once the address is verified"
+  },
   "auth_accountReadySignInAgain": "Your account is ready. Sign in with your new password.",
   "@auth_accountReadySignInAgain": {
     "description": "Success banner when the profile is not readable yet after setup"
@@ -177,10 +209,6 @@
   "@calendar_personalJob": {
     "description": "Switch in the job form that marks the job as personal time for the crew rather than a client visit."
   },
-  "calendar_personalJobHint": "Time blocked off — no client or address needed.",
-  "@calendar_personalJobHint": {
-    "description": "Subtitle under the personal-job switch, explaining that it hides the client and address fields."
-  },
   "calendar_hideCalendar": "Hide calendar",
   "@calendar_hideCalendar": {
     "description": "Handle between the month grid and the day's jobs — drag or tap it up to fold the grid away."
@@ -192,6 +220,15 @@
   "calendar_allDay": "All day",
   "@calendar_allDay": {
     "description": "Switch in the job form, and the label shown in place of a time range on a job that runs the whole day."
+  },
+  "calendar_closedCount": "Done · {count}",
+  "@calendar_closedCount": {
+    "description": "Label on the rule that separates the day's remaining work from the jobs that are finished or cancelled, in the calendar agenda. Cancelled visits sink into the same block, so this one word covers both (owner call).",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "calendar_dayOfCount": "Day {index} of {count}",
   "@calendar_dayOfCount": {
@@ -555,10 +592,6 @@
   "validation_titleIsRequired": "Title is required",
   "@validation_titleIsRequired": {
     "description": "Title is required"
-  },
-  "calendar_date": "Date",
-  "@calendar_date": {
-    "description": "Date"
   },
   "calendar_selectDate": "Select date",
   "@calendar_selectDate": {
@@ -1087,6 +1120,10 @@
   "error_noAccountRecordContactAdmin": "We couldn't find your employee record. Ask your admin to check your account.",
   "@error_noAccountRecordContactAdmin": {
     "description": "Shown when the signed-in uid resolves to no users doc during setup"
+  },
+  "error_verifyYourEmailBeforeFinishing": "Verify your email address before finishing setup.",
+  "@error_verifyYourEmailBeforeFinishing": {
+    "description": "Setup was attempted before the signed-in address was verified"
   },
   "error_sessionExpiredSignInAgain": "Your session expired. Sign in again to finish setting up.",
   "@error_sessionExpiredSignInAgain": {
@@ -1639,6 +1676,10 @@
   "@settings_myDetailsEmergencyBlurb": {
     "description": "Caption under the emergency-contact section on My details, stating who can read it"
   },
+  "error_introSaveAppLock": "Couldn't change the app lock setting",
+  "@error_introSaveAppLock": {
+    "description": "Intro for a failed App Lock toggle (keychain write failed)"
+  },
   "error_introSaveMyDetails": "Couldn't save your details",
   "@error_introSaveMyDetails": {
     "description": "Error intro for ME-SAVE (the user's own emergency contact)"
@@ -1718,6 +1759,10 @@
   "settings_privacyPolicy": "Privacy Policy",
   "@settings_privacyPolicy": {
     "description": "Settings tile label that opens the hosted privacy policy in the browser"
+  },
+  "settings_termsOfService": "Terms of Service",
+  "@settings_termsOfService": {
+    "description": "Settings tile label that opens the hosted terms of service in the browser. This row is the durable route to the terms — the setup-screen consent link is shown once, and only to a new employee."
   },
   "error_couldNotOpenLink": "Couldn't open the link.",
   "@error_couldNotOpenLink": {
@@ -1974,6 +2019,10 @@
   "calendar_couldNotSavePhoto": "Couldn't save the photo. Please try again.",
   "@calendar_couldNotSavePhoto": {
     "description": "Error notice when saving an appointment photo to the photo library fails"
+  },
+  "calendar_couldNotSharePhoto": "Couldn't share the photo. Please try again.",
+  "@calendar_couldNotSharePhoto": {
+    "description": "Error notice when sharing an appointment photo fails"
   },
   "calendar_photoLibraryAccessNeeded": "Photo access is off. Enable it in Settings to save photos.",
   "@calendar_photoLibraryAccessNeeded": {
@@ -2847,7 +2896,11 @@
   },
   "auth_termsAndLocationConsent": "I accept the terms of service and agree to share my location while I'm on the clock.",
   "@auth_termsAndLocationConsent": {
-    "description": "Combined terms and location consent checkbox gating the Create account button"
+    "description": "Combined terms and location consent checkbox gating the Create account button. Must contain auth_termsOfServiceLink verbatim — the screen finds that substring and turns it into the tappable link to the hosted terms page."
+  },
+  "auth_termsOfServiceLink": "terms of service",
+  "@auth_termsOfServiceLink": {
+    "description": "The tappable portion of the consent checkbox, opening the hosted terms page. MUST appear verbatim inside auth_termsAndLocationConsent in the same locale, or the sentence renders as plain text with no link."
   },
   "auth_passwordStrengthSemantics": "Password strength: {label}",
   "@auth_passwordStrengthSemantics": {

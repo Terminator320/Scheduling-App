@@ -178,6 +178,17 @@ reverting the cap.
 - **Emulator only:** clearing app data regenerates the App Check debug token;
   re-register it in the console or every write fails `permission-denied` while
   cached reads still succeed (making it look collection-specific).
+- **A deploy that REMOVES an export prompts for deletion — read the list before
+  confirming.** Every deploy through 2026-08-04 was additive or flat, so each
+  log row below says "no deletion prompt"; the `#compat-1.37.1` retirement
+  (27 → 25, dropping `createEmployeeInvite` and `redeemSignupCode`) is the first
+  that is not. Confirm the CLI names **exactly** the functions you intended and
+  nothing else — an orphan the docs forgot about is deleted just as silently as
+  an intended one. Deleting a callable is **not** reversible for a client build
+  that still calls it: the call fails `not-found` immediately, everywhere, with
+  no rollout window. Redeploying restores it, so the recovery is fast, but the
+  outage starts the instant the delete lands. This is still never a reason to
+  pass `--force`.
 
 ---
 
@@ -193,6 +204,7 @@ Copy this into the release PR / notes:
 [ ] every changed allowlist is a SUPERSET; every new field is optional
 [ ] no rules cap is tighter than a shipped client OR callable write path
 [ ] indexes: unchanged → omit target · changed → include it
+[ ] if any export was REMOVED: deletion prompt lists exactly those, nothing else
 [ ] deployed backend  (no --force)
 [ ] verified function count + logs
 [ ] smoke-tested with the OLD build
@@ -220,49 +232,50 @@ what production is running.
 | 2026-08-04 | `5ac67343` | functions, **rules** | 27 | **Second codebase-audit pass. No export change** — 27 → 27, verified identical to `functions/index.js` before deploying, so no deletion prompt. Functions: `propagateClientEdits` now floors its query at `now − MAX_APPOINTMENT_SPAN_MS` and filters on `endTime` (a client edit was skipping any job already under way); `countFutureAssignments` same fix client-side; `runTravelAwareReminderSweep` flattened to `Promise.all`; `deleteAccount`'s orchestration extracted to the new `account_policy.js` (behaviour unchanged, response still `{deleted:true}`). **Rules: `emergencyFieldNotSet` added to `/users` `allow update`** — the emergency pair may now be REMOVED but never WRITTEN, closing the peer-readable-PII hole. Deliberately NOT the flat denylist the audit first proposed: that form rejects the `FieldValue.delete()` scrub and would brick any doc still carrying the pair. **No backfill needed or run** — owner confirmed no emergency contact has ever been entered, and the guard is safe either way; `scripts/backfill-emergency.js` deleted. **Old-build check:** `emergencyContact` does not exist anywhere in `lib/` at `v1.37.0+62`, so the 1.37.1+64 App Store build never writes those fields and cannot be broken by this rule. No `assertPayloadShape` allowlist or `requireString` cap changed. `firestore.indexes.json` and `storage.rules` unchanged → both targets omitted; every changed query kept its existing index shape. Deployed without `--force`. Rules deployed twice (a stale comment on `allow create` was corrected in the second pass). Verified post-deploy: 27 functions live, rules released, clean `STARTUP TCP probe` on all changed functions, zero `unexpected-field`. |
 
 | 2026-08-04 | `108b410b` | functions, rules, storage | 27 | **Two-way Wave sync (1.43.0+68). No export change** — 27 → 27, diffed against `functions/index.js` before deploying, so no deletion prompt. `waveImportCustomers` now drains the outbox to Wave (`drainForSync`, bounded 20 jobs / 20 s) BEFORE importing, and returns five additive fields (`pushedCreated`/`pushedUpdated`/`pushedPending`/`pushedFailed`/`pushIncomplete`). **Additive only — 1.37.1 parses the import half by name and ignores the rest**, and its Import button simply also pushes now, which the 5-minute `waveSyncWorker` does anyway. No `assertPayloadShape` allowlist changed (still `new Set()`), no `requireString` cap changed, no rules or index change → `firestore:rules,storage` were re-released byte-identical for completeness. **Two data-loss fixes ride along, both pre-existing:** `importCustomers` now takes a `skipClientIds` protect-list from `listOutstandingClientIds` (an import was overwriting a client whose edit was still queued AND re-stamping `wave.lastSyncedHash`, so the pending push then no-opped and the edit vanished with the row reading "synced"); and the import is hash-gated, skipping any client whose stored hash already matches, which cuts a steady-state run from ~650 writes + ~650 `waveUpsertCustomer` invocations to ~0 and stops the app reporting "650 clients updated" after a sync that changed nothing. **`waveScheduledImport` gets the same protect-list** and needed it more — it runs unattended. Deployed without `--force`. Verified post-deploy: 27 live, exact match against the 27 exports (no orphans, no extras), rules + storage released, and zero ERROR entries on any changed function — the only two errors in the window were `redeemSignupCode` rejecting a non-POST rollout probe (correct behaviour, untouched by this change). The "request was not authenticated" warnings on the scheduled/trigger functions are the usual rollout-probe noise, matching the identical cluster at every prior deploy. **App build 1.43.0+68 can ship now** — this had to land first, since against the old backend the "Sync with Wave" button would have been a pure clobbering import. |
+| 2026-08-08 | (release 1.44.0+70, uncommitted at deploy time) | functions, rules, **indexes** | **25** | **The `#compat-1.37.1` retirement — the repo's FIRST deletion deploy** (27 → 25), plus the 2026-08-08 codebase audit and the 1.43.1 Wave heal. **Deleted: `createEmployeeInvite`, `redeemSignupCode`** — the deletion list named exactly those two and nothing else. Gate was owner confirmation that every device is on 1.40+. `redeemSignupCode` was the last unauthenticated callable in the codebase. **The CLI ABORTS on deletion in non-interactive mode** — it released rules and indexes, uploaded the function source, then stopped with "Aborting because deletion cannot proceed in non-interactive mode", leaving prod on new-rules + old-functions. That half-state is safe (the removed grants are unused by any shipped build) but must be closed. Fix is the CLI's own suggestion, `firebase functions:delete <name> --region us-central1`, then re-run the deploy; **`functions:delete --force` is NOT `deploy --force`** — it only skips the y/n prompt for the named functions and touches no index or TTL policy. Record this: any future deploy that removes an export will hit the same abort. **Rules: removals only** — `allow delete` withdrawn from `/users` and `/clients`, the `/signupCodes` block and the 4th `/users` read clause deleted. No cap changed, nothing added, so no shipped write path can be broken. **`firestore:indexes` included** (the `signupCodes` TTL `fieldOverride` was dropped from the file). The CLI reported "1 field override defined in your project that is not present in your indexes file" and **correctly refused to delete it without `--force`** — so the live `signupCodes` TTL policy REMAINS. Left deliberately: the collection was verified empty in prod before the deploy and rules now deny all access, so it reaps nothing and costs nothing. Never `--force` this away (it deleted all 5 live TTL policies in 2026-07-21). **Compatibility check:** every `assertPayloadShape` allowlist and every `requireString`/`optionalString` cap byte-identical to `108b410b` — no narrowing, no new required field. **`completeEmployeeSetup` gained an `email_verified` identity guard** (above the rate limiter). Prod was queried first: **zero `invited` users**, so nobody could be stranded mid-onboarding. It is still a real forward constraint — **do not create an employee account until app build 1.44.0+70 ships**, because the shipped 1.43.x setup screen has no way to send or confirm a verification email. `storage.rules` unchanged since `108b410b` → target omitted. Deployed without `--force`. **Verified post-deploy:** 25 live, exact match against `index.js`'s 25 exports (no orphans, no extras); a confirming `--only functions` re-run reported all 25 "Skipped (No changes detected)", proving prod's source matches local; clean `STARTUP TCP probe succeeded after 1 attempt` on all 25; zero `unexpected-field` and zero `email-not-verified`. The only ERROR entries are 12 `Invalid request, unable to process.` at 21:14:38-53 — two per callable, the Cloud Run rollout probe hitting `onCall` with a non-callable request, the same benign cluster as every prior deploy. **Zero errors after the deploy window.** |
 
-### The `#compat-1.37.1` shim
+### The `#compat-1.37.1` shim — RETIRED 2026-08-08
 
-1.37.1+64 (`2b1ace5`, head of `origin/notification`) is the build on the App
-Store. Verified compatible with this backend without changes: all 8 callables it
-uses have byte-identical `assertPayloadShape` allowlists; the new
-`isValidAppointmentData` caps equal its `TextLimits` exactly and every field it
-writes is a non-nullable `@Default('')` string (so nothing trips the
-`null is string` rejection); `isValidUserData` passes its `updateEmployee` field
-map; and the push `data` keys are unchanged.
+**Gone.** No shipping code or rule is gated on it any more. Kept here as the
+record of what was removed and why, so none of it is re-added by accident.
+`grep -rn "#compat-1.37.1"` still hits this file, the two CLAUDE.mds,
+`docs/ARCHITECTURE.md`, `docs/CLOUD_FUNCTIONS.md`, `docs/cost-breakdown.html`
+and the dated `docs/audits/` + `docs/plans/` snapshots — all of those are
+history now, not instructions. It also hits `functions/wave/callables.js` and
+`lib/features/wave/data/wave_service.dart`, which were **never** deletion sites
+(see the `waveImportCustomers` note at the end of this section).
 
-Three things would have broken, so they are shimmed rather than deleted:
+The shim existed for 1.37.1+64 (`2b1ace5`, head of `origin/notification`), which
+was the App Store build from P4c until 1.40.0+65 replaced it. The owner
+confirmed 2026-08-08 that **every device in the fleet is on 1.40+**, which is
+the gate this always waited on — note the gate is "no device still RUNS it", not
+"it is no longer downloadable". Retired in one sweep:
 
-| What | Why 1.37.1 needs it |
+| What | Why it could go |
 |---|---|
-| `createEmployeeInvite`, `redeemSignupCode` (+ `invites.js`, `signup_code_utils.js`, the `/signupCodes` rules block and its TTL entry) | Called from `firebase_employees_repository.dart:82` and `:109`. Deleting them kills the invite flow and strands anyone mid-invite. |
-| `allow delete` on `/users`, and the fourth `/users` read clause (`email_verified` + `invited` + email match) | "Delete employee" is a live button (`employee_details_view.dart:45`); the read clause is how the accept screen finds its own doc while `uid` is still empty. |
-| `allow delete` on `/clients` (added to the shim 2026-08-03) | 1.37.1 predates the 2026-08-01 no-delete decision and ships an **ungated** "Delete client" button doing a direct `doc.delete()` (`client_detail_view.dart:72`). Withdrawing the grant fails it with an opaque `permission-denied`. |
+| `createEmployeeInvite`, `redeemSignupCode`, `invites.js`, `signup_code_utils.js` (+ both jest suites), the `/signupCodes` rules block and its `firestore.indexes.json` TTL entry | Only 1.37.1 called them (`firebase_employees_repository.dart:82`, `:109`). 1.40.0+ has no reference anywhere in `lib/`. The `signupCodes` collection was verified **empty in prod** before the TTL policy was dropped, so nothing is stranded. |
+| `allow delete` on `/users`, and the fourth `/users` read clause (`email_verified` + `invited` + email match) | 1.40.0+ has no users-doc delete path, and an invited person reads their own doc through clause 3 (`uid` is set at creation by `createEmployeeAccount`). |
+| `allow delete` on `/clients` | 1.40.0's Delete button is behind `kShowTestingDeleteClient = kDebugMode`, so it is unreachable in any release build; 1.41+ removed it outright. `deleteClient` is now the only delete path in rules as well as in code. |
 
-**Three of these leave a real hole open, not one** (corrected 2026-08-04 — an
-earlier revision of this section claimed only the `/clients` grant did):
+**Two real holes closed with it** — while the grants were live, an admin on the
+old build could delete a client with job history (orphaning those appointments,
+exactly what `deleteClient`'s live `count()` gate prevents) or delete a `users`
+doc (permanently orphaning every past appointment's `employeeIds` crew link).
 
-1. **`allow delete` on `/clients`** lets a 1.37.1 admin delete a client that
-   still has appointments and orphan that history — precisely what the new
-   `deleteClient` callable's live `count()` gate exists to prevent.
-2. **`allow delete` on `/users`** lets that same build delete a `users` doc,
-   orphaning every past appointment's `employeeIds` crew link. That is the very
-   thing the 2026-08-02 no-delete decision withdrew. Access itself fails closed
-   (`authAccessChange` disables the Auth account), but the crew-link orphaning
-   is permanent.
-3. **A direct `email` write on `/users`** — not a shim *entry*, but the same
-   kind of hole and worth stating here. `allow update` denylists only
-   `uid`/`termsAcceptedAt`/`locationConsentAt`, so 1.37.1's employee edit
-   (which writes `email` straight to Firestore with no Auth call) silently
-   desyncs the two stores: the person keeps signing in at the old address while
-   every admin surface shows the new one. This build routes every email edit
-   through `changeEmployeeEmail` instead, so tightening the rule costs the
-   current build nothing — but it would break 1.37.1's employee edit with an
-   opaque `permission-denied`, which is why it waits for the same sweep. The
-   suggested clause is in `docs/audits/CODEBASE_AUDIT.md`.
+**One related hole is still OPEN and is NOT part of this sweep:** `allow update`
+on `/users` denylists only `uid`/`termsAcceptedAt`/`locationConsentAt`, so
+`email` can still be written directly to Firestore without the matching Auth
+change. The current build never does — every email edit routes through
+`changeEmployeeEmail` — so tightening the rule now costs nothing, and the reason
+it waited (breaking 1.37.1's employee edit) is gone. The suggested clause is in
+`docs/audits/CODEBASE_AUDIT.md`. Do it as its own reviewed change; it is a rules
+*tightening*, not a removal.
 
-The current build never deletes directly and never writes `email` directly, so
-retiring all of it costs nothing here.
+Also unblocked by this retirement, and likewise not done here: **disabling open
+sign-up in the Firebase Auth console** (F1 in
+`docs/audits/SECURITY_ASSESSMENT_2026-08-04.md`), which shared this gate because
+1.37.1's invite acceptance called client-side `register()`.
 
-Retire all of it in one sweep — `grep -rn "#compat-1.37.1"` — once no 1.37.1
-build remains in the field. Nothing in the current build calls any of it.
+Note `waveImportCustomers` was tagged `#compat-1.37.1` but is **not** a deletion
+site and keeps its (inaccurate, two-way) name: renaming a deployed callable
+breaks every shipped build, not just the old one.

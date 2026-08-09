@@ -8,12 +8,14 @@ AppointmentRecord _record({
   required DateTime end,
   bool isAllDay = false,
   String id = 'a1',
+  String status = 'pending',
 }) => AppointmentRecord(
   id: id,
   title: 'Repipe',
   startTime: start,
   endTime: end,
   isAllDay: isAllDay,
+  status: status,
 );
 
 void main() {
@@ -150,6 +152,128 @@ void main() {
         index[DateTime(2026, 8, 3)]!.map((s) => s.appointment.id).toList(),
         ['allday', 'early', 'late'],
       );
+    });
+
+    test("sinks closed jobs below the day's open work", () {
+      final day = DateTime(2026, 8, 3);
+      final range = AppointmentDateRange(start: day, end: DateTime(2026, 8, 4));
+
+      final doneEarly = _record(
+        start: DateTime(2026, 8, 3, 7),
+        end: DateTime(2026, 8, 3, 8),
+        id: 'done',
+        status: 'done',
+      );
+      final cancelledMidday = _record(
+        start: DateTime(2026, 8, 3, 11),
+        end: DateTime(2026, 8, 3, 12),
+        id: 'cancelled',
+        status: 'cancelled',
+      );
+      final openLate = _record(
+        start: DateTime(2026, 8, 3, 15),
+        end: DateTime(2026, 8, 3, 16),
+        id: 'open',
+      );
+
+      final index = expandToDays([
+        doneEarly,
+        cancelledMidday,
+        openLate,
+      ], range);
+
+      expect(index[day]!.map((s) => s.appointment.id).toList(), [
+        'open',
+        'done',
+        'cancelled',
+      ]);
+    });
+
+    test('the all-day and clock tiers still apply inside the closed block', () {
+      final day = DateTime(2026, 8, 3);
+      final range = AppointmentDateRange(start: day, end: DateTime(2026, 8, 4));
+
+      final closedTimedEarly = _record(
+        start: DateTime(2026, 8, 3, 8),
+        end: DateTime(2026, 8, 3, 9),
+        id: 'closedEarly',
+        status: 'done',
+      );
+      final closedTimedLate = _record(
+        start: DateTime(2026, 8, 3, 14),
+        end: DateTime(2026, 8, 3, 15),
+        id: 'closedLate',
+        status: 'cancelled',
+      );
+      final closedAllDay = _record(
+        start: day,
+        end: DateTime(2026, 8, 3, 23, 59),
+        isAllDay: true,
+        id: 'closedAllDay',
+        status: 'done',
+      );
+
+      final index = expandToDays([
+        closedTimedLate,
+        closedTimedEarly,
+        closedAllDay,
+      ], range);
+
+      expect(index[day]!.map((s) => s.appointment.id).toList(), [
+        'closedAllDay',
+        'closedEarly',
+        'closedLate',
+      ]);
+    });
+
+    test('the legacy `completed` spelling sinks too', () {
+      final day = DateTime(2026, 8, 3);
+      final legacy = _record(
+        start: DateTime(2026, 8, 3, 7),
+        end: DateTime(2026, 8, 3, 8),
+        id: 'legacy',
+        status: 'completed',
+      );
+      final open = _record(
+        start: DateTime(2026, 8, 3, 15),
+        end: DateTime(2026, 8, 3, 16),
+        id: 'open',
+      );
+
+      final index = expandToDays([
+        legacy,
+        open,
+      ], AppointmentDateRange(start: day, end: DateTime(2026, 8, 4)));
+
+      expect(index[day]!.map((s) => s.appointment.id).toList(), [
+        'open',
+        'legacy',
+      ]);
+    });
+
+    test('an in-progress job is open, so it keeps its clock slot', () {
+      final day = DateTime(2026, 8, 3);
+      final inProgress = _record(
+        start: DateTime(2026, 8, 3, 9),
+        end: DateTime(2026, 8, 3, 10),
+        id: 'inProgress',
+        status: 'in_progress',
+      );
+      final pendingLater = _record(
+        start: DateTime(2026, 8, 3, 15),
+        end: DateTime(2026, 8, 3, 16),
+        id: 'pending',
+      );
+
+      final index = expandToDays([
+        pendingLater,
+        inProgress,
+      ], AppointmentDateRange(start: day, end: DateTime(2026, 8, 4)));
+
+      expect(index[day]!.map((s) => s.appointment.id).toList(), [
+        'inProgress',
+        'pending',
+      ]);
     });
 
     test(
@@ -303,6 +427,55 @@ void main() {
         ),
         isFalse,
       );
+    });
+  });
+
+  group('the maxAppointmentSpanDays clamp', () {
+    // The cap is client-side only — firestore.rules constrains neither
+    // instant — so a doc written by the console, the Admin SDK or another
+    // build can exceed it. When these owners disagree the drawer badge reads
+    // "1 job today" every day for a year and a card reads "Day 400 of 900".
+    final corrupt = _record(
+      start: DateTime(2026, 8, 2, 9),
+      end: DateTime(2028, 8, 2, 17),
+    );
+
+    test('sliceFor reports the clamped length, like expandToDays', () {
+      final slice = sliceFor(corrupt, DateTime(2026, 8, 2));
+      expect(slice, isNotNull);
+      expect(slice!.dayCount, maxAppointmentSpanDays);
+    });
+
+    test('sliceFor stops at the clamped last day', () {
+      // Day 14 is the last one it runs.
+      expect(sliceFor(corrupt, DateTime(2026, 8, 15)), isNotNull);
+      expect(sliceFor(corrupt, DateTime(2026, 8, 16)), isNull);
+    });
+
+    test('runsOn agrees with the calendar about the last day', () {
+      expect(runsOn(corrupt, DateTime(2026, 8, 15)), isTrue);
+      expect(runsOn(corrupt, DateTime(2026, 8, 16)), isFalse);
+      // A year later would have been "still running" before the clamp.
+      expect(runsOn(corrupt, DateTime(2027, 8, 3)), isFalse);
+    });
+
+    test('runsInRange stops at the clamped end too', () {
+      expect(
+        runsInRange(corrupt, DateTime(2026, 8, 10), DateTime(2026, 8, 18)),
+        isTrue,
+      );
+      expect(
+        runsInRange(corrupt, DateTime(2027, 1, 4), DateTime(2027, 1, 11)),
+        isFalse,
+      );
+    });
+
+    test('an ordinary run is untouched by the clamp', () {
+      final normal = _record(
+        start: DateTime(2026, 8, 2, 9),
+        end: DateTime(2026, 8, 6, 17),
+      );
+      expect(sliceFor(normal, DateTime(2026, 8, 2))!.dayCount, 5);
     });
   });
 }

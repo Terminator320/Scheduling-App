@@ -543,10 +543,8 @@ async function reclaimStaleJobs(ctx) {
  * @return {!Promise<void>}
  */
 async function dispatchQueuedJobs(ctx) {
-  const {
-    db, logger, backoffFn, maxAttempts, batchLimit, deadlineMs, pastDeadline,
-    nowValue, nowMs, nowFn, dispatchUpsert, summary,
-  } = ctx;
+  const {db, logger, batchLimit, deadlineMs, pastDeadline, nowValue, nowFn,
+    summary} = ctx;
 
   const snap = await db.collection(QUEUE_COLLECTION)
       .where("status", "==", "queued")
@@ -569,147 +567,186 @@ async function dispatchQueuedJobs(ctx) {
       break;
     }
 
-    const jobId = doc.id;
     const jobData = doc.data() || {};
-
-    // --- Claim the job transactionally ----------------------------------
-    // We use the actual claim time here, not the drain-start clock — with a
-    // stale stamp, a long drain could make a job look lease-expired to a
-    // concurrent reclaim pass while it's still being dispatched.
+    // The actual claim time, not the drain-start clock — with a stale stamp,
+    // a long drain could make a job look lease-expired to a concurrent
+    // reclaim pass while it is still being dispatched.
     const claimStamp = nowFn ? nowFn() : new Date();
-    let claimed = false;
-    try {
-      await db.runTransaction(async (tx) => {
-        // Reset on each retry so a prior abandoned callback run doesn't bleed.
-        claimed = false;
-        const fresh = await tx.get(doc.ref);
-        if (!fresh || !fresh.exists) return; // deleted between query and claim
-        const freshData = fresh.data() || {};
-        if (freshData.status !== "queued") return; // already claimed/done
-        tx.update(doc.ref, {status: "inflight", claimedAt: claimStamp});
-        claimed = true;
-      });
-    } catch (txErr) {
-      // Transaction failure (contention, etc.) — skip and let the next run
-      // retry.
-      logger.warn("WAVE-WORKER claim transaction failed", {
-        jobId,
-        error: sanitizeError(txErr),
-      });
+
+    if (!await claimJob(ctx, doc, claimStamp)) {
       summary.skipped += 1;
       continue;
     }
-
-    if (!claimed) {
-      summary.skipped += 1;
-      continue;
-    }
-
     summary.processed += 1;
 
-    // --- Dispatch -------------------------------------------------------
-    const type = jobData.type;
-    let dispatchError = null;
-    let upsertStatus;
-
-    try {
-      if (type === "customerUpsert") {
-        const clientId = clientIdFromRefPath(jobData.refPath);
-        // The return value feeds tallyUpsert below — see the pointer on
-        // upsertCustomer in customers.js.
-        const outcome = await dispatchUpsert(clientId, {
-          db,
-          graphql: ctx.graphql,
-          businessId: ctx.businessId,
-          // Lets the upsert run its crash-retry duplicate check (search Wave
-          // before creating) when a previous attempt may have half-finished.
-          priorAttempts:
-            typeof jobData.attempts === "number" ? jobData.attempts : 0,
-        });
-        upsertStatus = (outcome || {}).status;
-      } else {
-        // Unknown job type — treat as a permanent failure (non-retryable).
-        throw new TypeError(`Unknown job type: ${String(type)}`);
-      }
-    } catch (err) {
-      dispatchError = err;
-    }
-
-    // --- Resolve outcome (guarded against a concurrent re-enqueue) -------
-    if (!dispatchError) {
-      // Success.
-      const applied = await commitOutcome(db, doc.ref, claimStamp, {
-        status: "done",
-        lastError: null,
-      });
-      if (applied) {
-        summary.done += 1;
-        tallyUpsert(summary, upsertStatus);
-      } else {
-        logger.info("WAVE-WORKER outcome superseded (done skipped)", {jobId});
-      }
-      continue;
-    }
-
-    // Error path — classify and update.
-    const retryable = isRetryable(dispatchError);
-    const newAttempts = (typeof jobData.attempts === "number" ?
-      jobData.attempts : 0) + 1;
-    const sanitized = sanitizeError(dispatchError);
-
-    if (retryable && newAttempts < maxAttempts) {
-      // Back to queued with backoff, using the injected clock so retry time
-      // stays testable and consistent with the query's `nowValue`.
-      const delayMs = backoffFn(newAttempts - 1);
-      const nextAttemptAt = new Date(nowMs + delayMs);
-
-      const applied = await commitOutcome(db, doc.ref, claimStamp, {
-        status: "queued",
-        attempts: newAttempts,
-        nextAttemptAt,
-        lastError: sanitized,
-      });
-      if (applied) {
-        summary.retried += 1;
-      } else {
-        logger.info("WAVE-WORKER outcome superseded (retry skipped)", {jobId});
-      }
-    } else {
-      // Dead-letter: not retryable OR attempts cap reached.
-      const clientId = clientIdFromRefPath(jobData.refPath);
-      const errKind = (dispatchError instanceof WaveApiError) ?
-        dispatchError.kind :
-        (dispatchError instanceof WaveValidationError ?
-          "validation" : "unexpected");
-
-      const applied = await commitOutcome(db, doc.ref, claimStamp, {
-        status: "dead",
-        attempts: newAttempts,
-        lastError: sanitized,
-      });
-      if (applied) {
-        logger.error("WAVE-WORKER dead-lettering job", {
-          jobId,
-          clientId,
-          errorClass: dispatchError.constructor ?
-            dispatchError.constructor.name : "Error",
-          errorKind: errKind,
-          attempts: newAttempts,
-          retryable,
-        });
-        // Surface the terminal failure on the client doc, best effort, so
-        // the admin UI shows 'error' instead of forever-'pending'. Skipped
-        // for WaveValidationError, since that already wrote a richer message
-        // via writeSyncError in customers.js.
-        if (!(dispatchError instanceof WaveValidationError)) {
-          await markClientSyncError(db, jobData.refPath, sanitized, logger);
-        }
-        summary.dead += 1;
-      } else {
-        logger.info("WAVE-WORKER outcome superseded (dead skipped)", {jobId});
-      }
-    }
+    const result = await dispatchJob(ctx, jobData);
+    await resolveOutcome(ctx, doc, jobData, claimStamp, result);
   }
+}
+
+/**
+ * Transactionally claims one queued job for this drain.
+ *
+ * Returns false for every reason the job is not ours to run — deleted between
+ * the query and the claim, already claimed by a concurrent drain, or a
+ * transaction failure — because the caller treats all three identically: skip
+ * it and let the next run pick it up.
+ *
+ * @param {!DrainContext} ctx Shared drain state.
+ * @param {!Object} doc The queue doc snapshot from the batch query.
+ * @param {!Date} claimStamp The lease stamp; `commitOutcome` matches on it.
+ * @return {!Promise<boolean>} whether this drain now owns the job.
+ */
+async function claimJob(ctx, doc, claimStamp) {
+  const {db, logger} = ctx;
+  let claimed = false;
+  try {
+    await db.runTransaction(async (tx) => {
+      // Reset on each retry so a prior abandoned callback run doesn't bleed:
+      // Firestore may re-run the callback, and a `true` left over from an
+      // aborted attempt would claim a job this drain does not hold.
+      claimed = false;
+      const fresh = await tx.get(doc.ref);
+      if (!fresh || !fresh.exists) return; // deleted between query and claim
+      const freshData = fresh.data() || {};
+      if (freshData.status !== "queued") return; // already claimed/done
+      tx.update(doc.ref, {status: "inflight", claimedAt: claimStamp});
+      claimed = true;
+    });
+  } catch (txErr) {
+    logger.warn("WAVE-WORKER claim transaction failed", {
+      jobId: doc.id,
+      error: sanitizeError(txErr),
+    });
+    return false;
+  }
+  return claimed;
+}
+
+/**
+ * Runs one claimed job's side effect.
+ *
+ * Never throws: the error is returned so the caller can classify it and write
+ * a durable outcome. A throw here would leave the job `inflight` until the
+ * reclaim pass finds it.
+ *
+ * @param {!DrainContext} ctx Shared drain state.
+ * @param {!Object} jobData The claimed job's stored fields.
+ * @return {!Promise<{upsertStatus: (string|undefined), error: ?Error}>}
+ */
+async function dispatchJob(ctx, jobData) {
+  const {db, dispatchUpsert} = ctx;
+  try {
+    if (jobData.type !== "customerUpsert") {
+      // Unknown job type — a permanent failure, never retried.
+      throw new TypeError(`Unknown job type: ${String(jobData.type)}`);
+    }
+    const clientId = clientIdFromRefPath(jobData.refPath);
+    // The return value feeds tallyUpsert — see the pointer on upsertCustomer
+    // in customers.js.
+    const outcome = await dispatchUpsert(clientId, {
+      db,
+      graphql: ctx.graphql,
+      businessId: ctx.businessId,
+      // Lets the upsert run its crash-retry duplicate check (search Wave
+      // before creating) when a previous attempt may have half-finished.
+      priorAttempts:
+        typeof jobData.attempts === "number" ? jobData.attempts : 0,
+    });
+    return {upsertStatus: (outcome || {}).status, error: null};
+  } catch (err) {
+    return {upsertStatus: undefined, error: err};
+  }
+}
+
+/**
+ * Writes the durable outcome for one dispatched job and tallies it.
+ *
+ * Every write goes through `commitOutcome`, which applies only while the job
+ * is still `inflight` under THIS claim — a client edit that re-enqueued the
+ * client mid-dispatch must not be clobbered by a late outcome.
+ *
+ * @param {!DrainContext} ctx Shared drain state; `ctx.summary` is mutated.
+ * @param {!Object} doc The queue doc snapshot.
+ * @param {!Object} jobData The claimed job's stored fields.
+ * @param {!Date} claimStamp This drain's lease stamp.
+ * @param {{upsertStatus: (string|undefined), error: ?Error}} result
+ * @return {!Promise<void>}
+ */
+async function resolveOutcome(ctx, doc, jobData, claimStamp, result) {
+  const {db, logger, backoffFn, maxAttempts, nowMs, summary} = ctx;
+  const jobId = doc.id;
+  const dispatchError = result.error;
+
+  if (!dispatchError) {
+    const applied = await commitOutcome(db, doc.ref, claimStamp, {
+      status: "done",
+      lastError: null,
+    });
+    if (applied) {
+      summary.done += 1;
+      tallyUpsert(summary, result.upsertStatus);
+    } else {
+      logger.info("WAVE-WORKER outcome superseded (done skipped)", {jobId});
+    }
+    return;
+  }
+
+  const retryable = isRetryable(dispatchError);
+  const newAttempts = (typeof jobData.attempts === "number" ?
+    jobData.attempts : 0) + 1;
+  const sanitized = sanitizeError(dispatchError);
+
+  if (retryable && newAttempts < maxAttempts) {
+    // Back to queued with backoff, using the injected clock so retry time
+    // stays testable and consistent with the query's `nowValue`.
+    const delayMs = backoffFn(newAttempts - 1);
+    const applied = await commitOutcome(db, doc.ref, claimStamp, {
+      status: "queued",
+      attempts: newAttempts,
+      nextAttemptAt: new Date(nowMs + delayMs),
+      lastError: sanitized,
+    });
+    if (applied) {
+      summary.retried += 1;
+    } else {
+      logger.info("WAVE-WORKER outcome superseded (retry skipped)", {jobId});
+    }
+    return;
+  }
+
+  // Dead-letter: not retryable OR attempts cap reached.
+  const errKind = (dispatchError instanceof WaveApiError) ?
+    dispatchError.kind :
+    (dispatchError instanceof WaveValidationError ?
+      "validation" : "unexpected");
+
+  const applied = await commitOutcome(db, doc.ref, claimStamp, {
+    status: "dead",
+    attempts: newAttempts,
+    lastError: sanitized,
+  });
+  if (!applied) {
+    logger.info("WAVE-WORKER outcome superseded (dead skipped)", {jobId});
+    return;
+  }
+  logger.error("WAVE-WORKER dead-lettering job", {
+    jobId,
+    clientId: clientIdFromRefPath(jobData.refPath),
+    errorClass: dispatchError.constructor ?
+      dispatchError.constructor.name : "Error",
+    errorKind: errKind,
+    attempts: newAttempts,
+    retryable,
+  });
+  // Surface the terminal failure on the client doc, best effort, so the admin
+  // UI shows 'error' instead of forever-'pending'. Skipped for
+  // WaveValidationError, since that already wrote a richer message via
+  // writeSyncError in customers.js.
+  if (!(dispatchError instanceof WaveValidationError)) {
+    await markClientSyncError(db, jobData.refPath, sanitized, logger);
+  }
+  summary.dead += 1;
 }
 
 /**

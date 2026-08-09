@@ -535,65 +535,10 @@ async function runTravelAwareReminderSweep(deps) {
   // per distinct employee, reused across all of that employee's candidates.
   const employeeIds = [...new Set(
       candidates.flatMap((c) => toIdList(c.employeeIds)))];
-  const presenceByEmployee = new Map();
-  if (employeeIds.length > 0) {
-    try {
-      const refs = employeeIds.map((id) => db
-          .collection("users").doc(id)
-          .collection("presence").doc("location"));
-      const snaps = await db.getAll(...refs);
-      snaps.forEach((s, i) => {
-        presenceByEmployee.set(
-            employeeIds[i], s && s.exists ? (s.data() || null) : null);
-      });
-    } catch (err) {
-      // No presence just demotes every origin to the address chain.
-      if (logger) logger.warn("travel: presence getAll failed", {err});
-    }
-  }
-  // The per-employee context queries are independent, so issue them
-  // concurrently rather than blocking on each in turn. One employee's query
-  // throwing just falls back to [] for them, without failing the others.
-  const contextByEmployee = new Map();
-  const lookbackStart = new Date(
-      nowMs - PREV_APPOINTMENT_LOOKBACK_HOURS * 60 * MINUTE_MS);
-  const contextEnd = new Date(nowMs + TRAVEL_WINDOW_MS + MAX_BOOKING_MS);
-  await Promise.all(employeeIds.map(async (employeeDocId) => {
-    try {
-      // Upper-bounded on the same field. Without that bound the query would
-      // match every future appointment, and a pre-booked series would
-      // saturate CONTEXT_QUERY_MAX. The bound clears the window by
-      // MAX_BOOKING_MS since an intervening job can run a full day past it.
-      const ctxSnap = await db
-          .collection("appointments")
-          .where("employeeIds", "array-contains", employeeDocId)
-          .where("endTime", ">", lookbackStart)
-          .where("endTime", "<=", contextEnd)
-          .orderBy("endTime")
-          .limit(CONTEXT_QUERY_MAX)
-          .get();
-      // At the cap the query is a PREFIX ordered by endTime ASC, so the
-      // furthest-out docs are dropped — which is exactly where a multi-day run
-      // sorts. decideOrigin's near-term prongs are unaffected, but the
-      // intervening-job prong can silently stop seeing a long run. Warn rather
-      // than truncate in silence, like runOverduePromptSweep does.
-      if (logger && ctxSnap && ctxSnap.size === CONTEXT_QUERY_MAX) {
-        logger.warn("travel: context query hit the cap", {
-          employeeDocId,
-          cap: CONTEXT_QUERY_MAX,
-        });
-      }
-      contextByEmployee.set(
-          employeeDocId,
-          ((ctxSnap && ctxSnap.docs) || []).map(
-              (doc) => ({id: doc.id, ...(doc.data() || {})})));
-    } catch (err) {
-      if (logger) {
-        logger.warn("travel: context query failed", {employeeDocId, err});
-      }
-      contextByEmployee.set(employeeDocId, []);
-    }
-  }));
+  const [presenceByEmployee, contextByEmployee] = await Promise.all([
+    loadPresenceByEmployee(deps, employeeIds),
+    loadContextByEmployee(deps, employeeIds, nowMs),
+  ]);
 
   let reminded = 0;
   let started = 0;
@@ -647,6 +592,93 @@ async function runTravelAwareReminderSweep(deps) {
   const flipped = await runOnSiteFlipPass(deps);
   return {reminded, liveActivitiesStarted: started, liveActivitiesFlipped:
     flipped};
+}
+
+/**
+ * Every candidate assignee's latest presence fix, in ONE `getAll`.
+ *
+ * A failure here is not fatal to the sweep: with no presence, `decideOrigin`
+ * simply demotes to the address chain, and past that to the fixed 30-minute
+ * reminder — the degradation this whole feature is built around.
+ *
+ * @param {!Object} deps `{db, logger}`.
+ * @param {!Array<string>} employeeIds Distinct assignee doc ids.
+ * @return {!Promise<!Map<string, ?Object>>} keyed by employee doc id.
+ */
+async function loadPresenceByEmployee(deps, employeeIds) {
+  const {db, logger} = deps;
+  const presenceByEmployee = new Map();
+  if (employeeIds.length === 0) return presenceByEmployee;
+  try {
+    const refs = employeeIds.map((id) => db
+        .collection("users").doc(id)
+        .collection("presence").doc("location"));
+    const snaps = await db.getAll(...refs);
+    snaps.forEach((s, i) => {
+      presenceByEmployee.set(
+          employeeIds[i], s && s.exists ? (s.data() || null) : null);
+    });
+  } catch (err) {
+    if (logger) logger.warn("travel: presence getAll failed", {err});
+  }
+  return presenceByEmployee;
+}
+
+/**
+ * Each candidate assignee's surrounding appointments, for `decideOrigin`.
+ *
+ * One query per distinct employee, issued concurrently — they are independent,
+ * and one throwing falls back to `[]` for that person rather than failing the
+ * others.
+ *
+ * @param {!Object} deps `{db, logger}`.
+ * @param {!Array<string>} employeeIds Distinct assignee doc ids.
+ * @param {number} nowMs Sweep clock in millis.
+ * @return {!Promise<!Map<string, !Array<!Object>>>} keyed by employee doc id.
+ */
+async function loadContextByEmployee(deps, employeeIds, nowMs) {
+  const {db, logger} = deps;
+  const contextByEmployee = new Map();
+  const lookbackStart = new Date(
+      nowMs - PREV_APPOINTMENT_LOOKBACK_HOURS * 60 * MINUTE_MS);
+  const contextEnd = new Date(nowMs + TRAVEL_WINDOW_MS + MAX_BOOKING_MS);
+  await Promise.all(employeeIds.map(async (employeeDocId) => {
+    try {
+      // Upper-bounded on the same field. Without that bound the query would
+      // match every future appointment, and a pre-booked series would
+      // saturate CONTEXT_QUERY_MAX. The bound clears the window by
+      // MAX_BOOKING_MS since an intervening job can run a full day past it.
+      const ctxSnap = await db
+          .collection("appointments")
+          .where("employeeIds", "array-contains", employeeDocId)
+          .where("endTime", ">", lookbackStart)
+          .where("endTime", "<=", contextEnd)
+          .orderBy("endTime")
+          .limit(CONTEXT_QUERY_MAX)
+          .get();
+      // At the cap the query is a PREFIX ordered by endTime ASC, so the
+      // furthest-out docs are dropped — which is exactly where a multi-day run
+      // sorts. decideOrigin's near-term prongs are unaffected, but the
+      // intervening-job prong can silently stop seeing a long run. Warn rather
+      // than truncate in silence, like runOverduePromptSweep does.
+      if (logger && ctxSnap && ctxSnap.size === CONTEXT_QUERY_MAX) {
+        logger.warn("travel: context query hit the cap", {
+          employeeDocId,
+          cap: CONTEXT_QUERY_MAX,
+        });
+      }
+      contextByEmployee.set(
+          employeeDocId,
+          ((ctxSnap && ctxSnap.docs) || []).map(
+              (doc) => ({id: doc.id, ...(doc.data() || {})})));
+    } catch (err) {
+      if (logger) {
+        logger.warn("travel: context query failed", {employeeDocId, err});
+      }
+      contextByEmployee.set(employeeDocId, []);
+    }
+  }));
+  return contextByEmployee;
 }
 
 /**

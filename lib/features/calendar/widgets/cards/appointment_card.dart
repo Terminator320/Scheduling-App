@@ -55,8 +55,18 @@ class AppointmentCard extends StatelessWidget {
     this.footer,
     this.dimWhenCancelled = false,
     this.emphasizeToday = false,
+    this.collapseWhenClosed = false,
     this.slice,
   });
+
+  /// Minimum height of a collapsed row's body.
+  ///
+  /// The collapsed padding + title + meta line lands near 56px, which already
+  /// clears Material's 48px minimum — but not by enough to leave to chance at
+  /// the OS's smallest text scale. Pinning it makes the tap target structural
+  /// rather than incidental. Growing the other way needs nothing: the body is a
+  /// Column, so large text simply makes the row taller.
+  static const double _kClosedMinHeight = 48;
 
   final AppointmentRecord appointment;
 
@@ -74,12 +84,21 @@ class AppointmentCard extends StatelessWidget {
   final Widget? footer;
 
   /// Strikes the title through and drops the card to 0.6 opacity when the
-  /// visit is cancelled. History and client job history want this; the day's
-  /// agenda does not.
+  /// visit is cancelled. History, client job history and — since closed jobs
+  /// sank into their own block — the day's agenda all want this.
   final bool dimWhenCancelled;
 
   /// Today's cards use a 3px bar rather than 4px, per the design.
   final bool emphasizeToday;
+
+  /// The calendar agenda's sunk-block treatment for a closed job: the green
+  /// success tint for `done`, and a collapsed body that puts the time beside
+  /// the client and drops the crew avatars.
+  ///
+  /// Opt-in because the agenda is the only surface that SORTS closed work to
+  /// the bottom — everywhere else a finished job still sits in context, where
+  /// shrinking it would just hide information.
+  final bool collapseWhenClosed;
 
   /// This card's day within a multi-day run. Null for surfaces that show a job
   /// once (history, client job history) rather than per day.
@@ -88,21 +107,12 @@ class AppointmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final compact = context.isCompact;
     final status = AppointmentStatus.fromRaw(appointment.displayStatus);
     final isCancelled = dimWhenCancelled && status.isCancelled;
+    final collapsed = collapseWhenClosed && appointment.isClosed;
 
     final timeLabel = _timeLabel(context);
-
-    // One band per crew member rather than the first assignee's colour alone:
-    // a two-person job now reads as two-person at a glance, and nobody's colour
-    // is thrown away. An assignee with no colour is skipped, not greyed.
-    final barColors = [
-      for (final member in crew.take(_kMaxCrewShown))
-        if (member.color case final stored?)
-          crewColorOf(theme, stored.toARGB32()),
-    ];
 
     // A personal job has no client, so it names itself in that slot rather
     // than leaving the meta line as the crew alone.
@@ -127,7 +137,7 @@ class AppointmentCard extends StatelessWidget {
         decoration: appCardDecoration(
           theme,
           radius: AppRadius.rCard,
-          color: selected ? scheme.secondaryContainer : scheme.surface,
+          color: _cardColor(theme, status: status, collapsed: collapsed),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(AppRadius.rCard),
@@ -147,39 +157,20 @@ class AppointmentCard extends StatelessWidget {
                     children: [
                       Container(
                         width: emphasizeToday ? 3 : 4,
-                        decoration: _crewBarDecoration(theme, barColors),
+                        decoration: _crewBarDecoration(
+                          theme,
+                          _barColors(theme),
+                        ),
                       ),
                       Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: AppSpacing.cardPaddingY,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _TitleRow(
-                                title: appointment.title,
-                                status: status,
-                                compact: compact,
-                                isCancelled: isCancelled,
-                              ),
-                              const SizedBox(height: 7),
-                              Text(timeLabel, style: theme.monoType.data),
-                              if (metaLine.isNotEmpty) ...[
-                                const SizedBox(height: 7),
-                                _CrewRow(
-                                  crew: crew,
-                                  label: metaLine,
-                                  compact: compact,
-                                ),
-                              ],
-                              if (footer != null) ...[
-                                const SizedBox(height: AppSpacing.sp8),
-                                footer!,
-                              ],
-                            ],
-                          ),
+                        child: _body(
+                          theme: theme,
+                          status: status,
+                          timeLabel: timeLabel,
+                          metaLine: metaLine,
+                          compact: compact,
+                          collapsed: collapsed,
+                          isCancelled: isCancelled,
                         ),
                       ),
                     ],
@@ -193,6 +184,98 @@ class AppointmentCard extends StatelessWidget {
     );
 
     return isCancelled ? Opacity(opacity: 0.6, child: card) : card;
+  }
+
+  /// One band per crew member rather than the first assignee's colour alone: a
+  /// two-person job reads as two-person at a glance, and nobody's colour is
+  /// thrown away. An assignee with no colour is skipped, not greyed.
+  ///
+  /// Capped at [_kMaxCrewShown] — the SAME cap the avatar stack uses, so the
+  /// bands and the faces can never disagree about how much of the crew the
+  /// card is showing.
+  List<Color> _barColors(ThemeData theme) => [
+    for (final member in crew.take(_kMaxCrewShown))
+      if (member.color case final stored?)
+        crewColorOf(theme, stored.toARGB32()),
+  ];
+
+  /// The card's fill.
+  ///
+  /// Selection wins outright; a collapsed *done* job otherwise takes the same
+  /// success token the "Complete" chip fills with, so the card and its own
+  /// chip can't disagree. (In light the two are the same green anyway.)
+  Color _cardColor(
+    ThemeData theme, {
+    required AppointmentStatus status,
+    required bool collapsed,
+  }) {
+    if (selected) return theme.colorScheme.secondaryContainer;
+    if (collapsed && status.isDone) return theme.statusColors.successContainer;
+    return theme.colorScheme.surface;
+  }
+
+  /// The card's text column — full height, or the agenda's collapsed row for a
+  /// closed job.
+  ///
+  /// Collapsed drops the crew avatars and puts the time beside the client on
+  /// one line. The colour bar still carries the crew, so *who* survives the
+  /// collapse; only the faces go.
+  Widget _body({
+    required ThemeData theme,
+    required AppointmentStatus status,
+    required String timeLabel,
+    required String metaLine,
+    required bool compact,
+    required bool collapsed,
+    required bool isCancelled,
+  }) {
+    final titleRow = _TitleRow(
+      title: appointment.title,
+      status: status,
+      compact: compact,
+      isCancelled: isCancelled,
+    );
+
+    if (collapsed) {
+      return ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: _kClosedMinHeight),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              titleRow,
+              const SizedBox(height: 5),
+              _ClosedMetaRow(time: timeLabel, label: metaLine),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: AppSpacing.cardPaddingY,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          titleRow,
+          const SizedBox(height: 7),
+          Text(timeLabel, style: theme.monoType.data),
+          if (metaLine.isNotEmpty) ...[
+            const SizedBox(height: 7),
+            _CrewRow(crew: crew, label: metaLine, compact: compact),
+          ],
+          if (footer != null) ...[
+            const SizedBox(height: AppSpacing.sp8),
+            footer!,
+          ],
+        ],
+      ),
+    );
   }
 
   /// The card's mono time line, scoped to the day this card represents.
@@ -293,6 +376,50 @@ class _TitleRow extends StatelessWidget {
         Expanded(child: titleContent),
         const SizedBox(width: AppSpacing.sp8),
         chip,
+      ],
+    );
+  }
+}
+
+/// A closed job's single meta line: the mono time, then the client.
+///
+/// The time keeps its multi-day counter — a 5-day run marked done still shows
+/// on every one of its days, and without "Day 2 of 5" those rows are
+/// indistinguishable from each other.
+class _ClosedMetaRow extends StatelessWidget {
+  const _ClosedMetaRow({required this.time, required this.label});
+
+  final String time;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Flexible(
+          child: Text(
+            time,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.monoType.data.copyWith(
+              color: theme.palette.textTertiary,
+            ),
+          ),
+        ),
+        if (label.isNotEmpty) ...[
+          const SizedBox(width: AppSpacing.sp8 + 2),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.palette.textTertiary,
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }

@@ -10,11 +10,21 @@ dev/test harness that gave that Windows box something runnable, and it was
 never published to Play. Don't re-add it, don't restore Play-release work
 (keystore, Data Safety, Play Integrity), and don't "fix" an iOS-only assumption
 by reintroducing an Android branch. Recover the tree from git history if it is
-ever genuinely needed. Two Android remnants survive **deliberately** and are
+ever genuinely needed. **`/android/` is now in `.gitignore`, and that entry is
+load-bearing** (2026-08-08): a merge (`33715f82`) silently resurrected the tree
+and brought `android/local.properties` with it, which carries a live
+`MAPS_API_KEY` — a committed secret. `flutter` regenerates that directory on any
+Android-touching command, so ignoring it is the only thing that stops a second
+resurrection; deleting the files alone does not. Don't remove the entry to
+"restore" an Android build. Two Android remnants survive **deliberately** and are
 not dead code to clean up: `DefaultFirebaseOptions.android` (the Android
 Firebase app still exists in the console, and the shared `dev/.env` keys feed
 it) and the `platform: 'ios' | 'android'` field on `fcmTokens` docs, which the
-1.37.1 build on the App Store still writes.
+CURRENT build still writes — `push_registration_controller.dart` stamps
+`Platform.isIOS ? 'ios' : 'android'`, so on an iOS-only fleet the value is
+always `'ios'` but the write is live code, not a legacy row. (An earlier note
+here credited the 1.37.1 App Store build for it; that was wrong even then, and
+retiring the shim on 2026-08-08 changed nothing about this field.)
 **`web/`, `windows/`, `linux/` and `macos/` STAY** (owner call, 2026-08-05,
 asked and answered when `android/` went). They are untouched `flutter create`
 boilerplate for platforms nothing targets or builds — leave them alone; their
@@ -72,7 +82,7 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   previously-populated one — so pass `previous` (the prior emission) from the
   `ref.listen` in `main.dart`. A first-seen empty doc is a bootstrap window
   (fresh-sign-in `uid == null` branch, or an invited account signed in before
-  `redeemSignupCode` activates its doc), NOT a deletion. Never simplify back to
+  `completeEmployeeSetup` activates its doc), NOT a deletion. Never simplify back to
   `doc.isEmpty` alone, or invited employees get wrongly kicked out mid-activation
   (cold-start already-deleted accounts are caught earlier by `SplashScreen`).
 - **Employee visibility:** Employees see only appointments where their doc id is
@@ -91,6 +101,13 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   silently undone. (This bullet previously described a two-tier "cached value
   falling back to a fresh read" that the code does not have and should not
   grow — the single awaited read is both simpler and strictly safer.)
+  **`employeeIds` and `employeeNames` are paired POSITIONALLY, and the bounds
+  check has one owner: `assigneeNameAt(names, i)`** (same file, returns null for
+  "no name here"). It was re-spelled at five sites; the differing missing-name
+  fallbacks around it are legitimately per-surface (the day route shows the id,
+  the history filter shows nothing), so the helper owns only the LOOKUP and each
+  caller keeps its own substitute. The edit-sheet copy is the dangerous one — a
+  blank name there flows into `mergeRetainedAssignees` and is written back.
 - **Image validation:** Reject uploads where first 4 bytes aren't JPEG
   (`FF D8 FF`) or PNG (`89 50 4E`). Extension alone is not sufficient.
 - **Image upload pipeline:** Single stage — `ImagePickerService` resizes +
@@ -99,6 +116,30 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   uploads. `ImageCompressService` was removed — don't reintroduce a second
   compression pass. Background dispatch via `AppointmentImageUploadService`
   after appointment save; the picker's temp files are deleted in a `finally`.
+- **Photos are RENDERED from `storagePath`, never from the persisted `url`**
+  (2026-08-08). `getDownloadURL()` mints a permanent `?alt=media&token=…` URL
+  that anyone holding it can read with **no auth and no rules evaluation**, so a
+  URL captured while an employee was active kept working after
+  `deactivateEmployee` disabled their Auth account and revoked their tokens —
+  which is exactly what `storage.rules`' `status == 'active'` gate on
+  appointment images exists to stop. `AppointmentImageUrlResolver`
+  (`core/images/`) resolves at render time so every read re-evaluates the
+  rules, and falls back to the stored `url` only when `storagePath` is empty on
+  a legacy doc — that fallback is why this needed no migration.
+  `ImageStorageService` **still writes `url`**, deliberately: builds that
+  predate the resolver render from it, so dropping the write now would blank
+  photos on any phone that hasn't updated. Retire it once the fleet has moved,
+  the way the 1.37.1 shim was retired.
+  **Resolved URLs are POSITIONAL, so they must be carried with the list they
+  were resolved for** — `PhotoPickerSection` keys them on `_resolvedFor` and
+  serves `const []` until that matches `existingImages`. A Storage round-trip
+  per photo is a real window, not "a frame or two": a partial or stale list
+  shifts every index beside it, so removing photo 0 rendered the *deleted*
+  photo, an untapped placeholder opened a NEW photo, and the viewer's
+  `initialIndex` (composed as `existingUrls.length + i`) ran past the end of
+  the provider list and threw a `RangeError` out of Save/Share. Offset a
+  viewer index by the URLs actually handed to the viewer, never by
+  `existingImages.length`; `ImageViewer.open` also clamps, as depth.
 - **Offline photo-upload queue:** a failed/incomplete photo batch is persisted
   by `PendingUploadStore` (one JSON list under the SharedPreferences key
   `pending_photo_uploads`, entries pruned after 7 days) so uploads survive
@@ -173,7 +214,16 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   leak into a write). Don't add `overdue` to `appointmentValues` or the
   allowlist; reading `AppointmentStatus.overdue.raw` **throws** on purpose so a
   stray write path fails loudly at the source instead of emitting an
-  off-allowlist value that the rules reject with an opaque `permission-denied`. (`confirmed` was retired 2026-07-09 when the picker
+  off-allowlist value that the rules reject with an opaque `permission-denied`.
+  **"Terminal" as a set of RAW STRINGS has one owner:
+  `terminalStatusRawValues` in `calendar/domain/appointment_status_values.dart`**
+  (2026-08-08) — `{done, completed, cancelled}`, deliberately Material-free so
+  `AppointmentRecord.isClosed` and the History query's `whereIn` can share it.
+  It had four definitions and the History one had dropped the legacy
+  `completed` alias, so such a doc rendered as Done on its card and was
+  **invisible in History and history search**, with no error anywhere.
+  `AppointmentStatus.isTerminal` is the enum-level mirror and
+  `appointment_status_values_test.dart` pins the two together. (`confirmed` was retired 2026-07-09 when the picker
   collapsed to three states; `done` is labeled "Complete" in the UI. Account
   statuses `active`/`invited`/`disabled` live in the separate `UserStatus` enum
   — `shared/widgets/feedback/user_status_chip.dart` — not `AppointmentStatus`.)
@@ -200,6 +250,24 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   Edit/Cancel/Delete affordances, which the rules then reject with an opaque
   `permission-denied`. Pass the caller's resolved role; never re-add a `true`
   default. (Rules remain the real gate — this is defense-in-depth plus UX.)
+  **A DONE job's edit affordance is the action bar's bottom button, not the
+  top chip** (owner call, 2026-08-08): `DetailsViewBody` suppresses
+  `DetailsEditChip` when the stored status is done and hands
+  `DetailsActionBar.onEdit` instead, which takes over the slot the inert
+  "Complete" indicator held — that job has no mark-done or cancel action left,
+  so the slot was dead. `onEdit` is null-gated on the same `showActions`, so a
+  read-only surface (client job history) still renders the indicator and offers
+  nothing. Cancelled and open jobs keep the top chip. The two move together:
+  don't restore the chip on a completed job without removing the button, and
+  don't drop the button without bringing the chip back, or a finished job
+  becomes uneditable again.
+  **`AppointmentHistoryView` takes an `isAdmin` and passes it straight through
+  as `showActions`** (restored 2026-08-08 after a revert dropped it). It used to
+  hardcode `false` on the grounds that History is a read-only surface, but
+  History is where `done` and `cancelled` jobs actually LIVE, so that made the
+  completed-job edit button above unreachable from the one screen an admin would
+  look for it on. It still DEFAULTS closed like every other appointment surface;
+  `HistoryScreen` passes `widget.isAdmin`.
 - **Personal jobs (`isPersonal`, added 2026-07-31) carry no client and no
   address.** The switch at the top of the form's WHO section is on BOTH the add
   and edit flows (unlike the template chips), because the flag is stored and
@@ -380,6 +448,20 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   run are invisible there. (`notification_messages.js` and `travel_utils.js`
   were closed by the 2026-08-04 audit — see the two bullets above.)
   See `docs/plans/2026-08-02-multi-day-appointments.md` §8.
+  **The 14-day cap is applied by ONE clamp, `_clampedDayCount`, and every
+  day-scoping answer routes through it** (2026-08-08): `sliceFor`/`runsOn`,
+  `runsInRange`, `expandToDays` and `dailyWindowsOverlap`. The cap is
+  client-side only — `firestore.rules` constrains neither instant — so a doc
+  written by the console, the Admin SDK or another build CAN exceed it, and
+  when the owners disagreed the calendar rendered 14 slices while every
+  `runsOn` consumer counted the full corrupt length: a drawer badge reading
+  "1 job today" every day for a year, a card counter reading "Day 400 of 900".
+  `AppointmentFormValidator` is the one deliberate exception — it reads the
+  RAW count, because it is the caller that has to see an out-of-range value in
+  order to refuse it.
+  **A form's run length has one owner too, `runLengthDays`** (beside
+  `appointmentSpan`): the `end − start + 1` rule was hand-copied into both form
+  bodies, which even shared the same five-line comment.
 - **Job templates are display-only quick-fill, NEVER stored.** `JobTemplate`
   (`calendar/domain/models/job_template.dart`) backs the one-tap chips on the
   **add** flow only (`onApplyTemplate`, null on edit); picking one just seeds the
@@ -439,13 +521,12 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
 - **Users collection read rule** has three clauses (see `firestore.rules`):
   admin, `status == 'active'`, or `uid == request.auth.uid` (own doc). New
   queries on `users` must satisfy one clause via their WHERE constraints or
-  they'll be rejected. A fourth
-  `email_verified && status == 'invited' && email == token.email` clause exists
-  only because the retired code flow left `uid` empty until redemption; P4c
-  mints the Auth account up front, so an invited person now reads their own doc
-  through clause 3 and **no current-build path calls clause 4** — it is retained
-  purely as the `#compat-1.37.1` shim for the build still on the App Store, and
-  goes when that does. An ordinary
+  they'll be rejected. **Three, not four** — a fourth
+  `email_verified && status == 'invited' && email == token.email` clause existed
+  only because the retired code flow left `uid` empty until redemption, and it
+  was deleted 2026-08-08 with the rest of the `#compat-1.37.1` shim. P4c mints
+  the Auth account up front, so an invited person reads their own doc through
+  clause 3; don't re-add an email-matched clause. An ordinary
   employee still cannot see a pending account: clause 2 requires `active`.
 - **Employee accounts: the admin invites, the employee sets up** (P4c,
   2026-08-02 — this REPLACED the one-time signup-code flow entirely). The
@@ -465,12 +546,16 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   still on `Welcome123!`. Pinned by a test (`verifyInOrder`, plus the half that
   matters: a thrown `updatePassword` must `verifyNever` the activation).
   **Be precise about how strong this is: it is client-side ordering, NOT a
-  server check.** `completeEmployeeSetup` verifies only auth + a matching doc +
-  `status == 'invited'`; it does not verify that the password actually rotated,
-  so anything reaching the callable directly activates an un-rotated account.
-  `enforceAppCheck: true` is what actually stands in the way there, and App
-  Check is attestation, not authorization. Don't build on this as if the server
-  enforced it.
+  server check.** `completeEmployeeSetup` verifies auth + `email_verified` + a
+  matching doc + `status == 'invited'`; it does not verify that the password
+  actually rotated, so anything reaching the callable directly activates an
+  un-rotated account. `enforceAppCheck: true` plus that mailbox check are what
+  stand in the way there, and App Check is attestation, not authorization.
+  Don't build on the ordering as if the server enforced it.
+  **The password itself is validated TRIMMED** — `completeAccountSetup` stores
+  `newPassword.trim()`, so checking the raw text let `"Aa1!bcd "` pass the
+  8-character rule and set a 7-character password. The strength meter and the
+  requirements checklist read the same trimmed value.
   **The setup screen rejects `kDefaultStartingPassword` by name**
   (`account_setup_screen.dart`, `validation_passwordMustDifferFromStarting`).
   That check is load-bearing, not belt-and-braces: `Welcome123!` satisfies every
@@ -516,22 +601,35 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   **The security posture is weaker than the codes it replaced, deliberately and
   with the owner's sign-off.** `Welcome123!` is known to everyone forever, so
   between creation and first sign-in anyone who knows an employee's email can
-  sign in as them and complete setup. What holds instead: an `invited` user is
-  granted **nothing** by `firestore.rules` — no clients, no appointments, no
-  peers — so the window is "can reach the setup screen as this person", not "can
-  read the business"; and **the window is under the admin's control** (create
-  the account when you are handing the credentials over, not weeks ahead). That
-  mitigation is operational, not technical, and belongs in the onboarding
-  instructions. `create_account_screen.dart`, both `accept_invite_*` screens,
+  sign in as them. **What stops them going further is
+  `completeEmployeeSetup`'s `email_verified` guard (added 2026-08-08): setup
+  requires control of the MAILBOX, not just knowledge of the address.**
+  Before that guard the window was priced here as "can reach the setup screen
+  as this person, not read the business", and that was wrong — the race winner
+  called the callable, landed `active`, and (if the row was provisioned with
+  `isAdmin: true`) landed *admin*, which reaches the whole `/clients` PII
+  collection. Nothing about the code had drifted; the written risk assessment
+  had. Reaching the setup screen is still all an unverified caller gets: an
+  `invited` user is granted **nothing** by `firestore.rules` — no clients, no
+  appointments, no peers. **The residual risk is now "whoever holds the mailbox
+  AND the shared password can activate the account"**, and the window remains
+  under the admin's control (create the account when you are handing the
+  credentials over, not weeks ahead). That last mitigation is operational, not
+  technical, and belongs in the onboarding instructions.
+  Client side, `AccountSetupScreen` sends Firebase's own verification email and
+  gates its CTA on `AuthService.refreshEmailVerified()`, which **forces an ID
+  token refresh** — the callable reads `email_verified` off the token, minted at
+  sign-in, so a bare `User.reload()` would leave the server refusing an address
+  the person had already verified. `create_account_screen.dart`, both `accept_invite_*` screens,
   `CodeEntryBoxes`, `signup_code_dialog`, `InvitePreview` and the
   `revokeInvite`/`previewInvite` callables are all **deleted** — there is
   nothing left to "accept" in THIS build, which is why sign-in's bottom prompt
-  went with them. **The Dart side is gone; the backend side is not.** The
-  `signupCodes` collection and the `createEmployeeInvite`/`redeemSignupCode`
-  callables are still deployed as the `#compat-1.37.1` shim, because the build
-  on the App Store still calls them — see `docs/DEPLOYMENT.md`. Nothing in this
-  build does; don't wire anything new to them, and drop the whole shim
-  (`grep -rn "#compat-1.37.1"`) once 1.37.1 is off the field. Design:
+  went with them. **The backend half is gone too, as of 2026-08-08**: once every
+  device was on 1.40+, the whole `#compat-1.37.1` shim was retired —
+  `invites.js`, `signup_code_utils.js`, the `createEmployeeInvite`/
+  `redeemSignupCode` callables, the `signupCodes` collection's rules block and
+  TTL entry, and the two `allow delete` grants. There is no code-based invite
+  anywhere in the stack and none should be reintroduced. Design:
   `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.
 - **An employee's email is their SIGN-IN identity, so an edit to it moves BOTH
   stores or neither** (2026-08-04, which re-enabled a field that had been
@@ -646,6 +744,35 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `completeEmployeeSetup` writes the consent stamps **only when the payload
   flags are actually `true`** — stamping unconditionally would mint a
   legally-flavoured consent record for someone who never saw the checkbox.
+- **The consent sentence LINKS to the terms, and the link is what makes the
+  stamp mean anything** (2026-08-05, restored 2026-08-08 after a revert dropped
+  it). Ticking the box stamps `termsAcceptedAt`, so the person must be able to
+  read what they are accepting; the setup screen used to demand acceptance of
+  terms that were published nowhere and tappable nowhere. `_ConsentRow`
+  (`account_setup_screen.dart`) builds the sentence by locating
+  `auth_termsOfServiceLink` **verbatim inside**
+  `auth_termsAndLocationConsent` and turning that run into the link, so the two
+  keys must stay consistent **in every locale** — a translation that rewords the
+  phrase silently renders a plain sentence with no link (`indexOf < 0` falls
+  back to one plain span on purpose: a missing link beats half a sentence or a
+  `-1` substring crash). It is a `StatefulWidget` solely to own and dispose the
+  `TapGestureRecognizer`; one built in `build` leaks on every rebuild. A tap on
+  that run is claimed by the recognizer, so it opens the terms instead of
+  toggling the checkbox; the rest of the tile still toggles.
+  **The per-locale half is pinned by `test/l10n/new_success_strings_test.dart`**,
+  which asserts the substring holds in every `supportedLocales` entry — the
+  widget test in `account_setup_screen_test.dart` only ever exercises the
+  default locale, so a French re-translation would otherwise drop the link with
+  nothing failing.
+  **Settings › Legal is the DURABLE route** — setup is shown once, only to a new
+  employee, and never again, so `LegalSettingsCard` carries a Terms of Service
+  row beside Privacy Policy. Both point at `AppUrls`
+  (`privacyPolicy`, `termsOfService`); the sources are
+  `docs/legal/privacy-policy.html` / `terms-of-service.html`, published to the
+  `es-pro-legal` GitHub Pages repo, where **the privacy policy is the index** —
+  which is why the terms page links to it by absolute URL rather than a relative
+  `privacy-policy.html` that would 404. Neither page is bundled: if the Pages
+  repo drifts from `docs/legal/`, the consent record points at the wrong text.
 - **Account re-provisioning REFRESHES the pending doc's editable fields, so
   `createAccount` takes the whole `EmployeeRecord` — never loose scalars.**
   `performCreateAccount`'s existing-doc branch *updates*
@@ -674,7 +801,23 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `orderBy`**: `watchAllUsers`' `orderBy('name')` makes Firestore exclude docs
   missing `name`, which would drop an unnamed active employee out of the
   picker (and silently change who can see a visit). That asymmetry is also why
-  it isn't derived from `allUsersStreamProvider`.
+  it isn't derived from `allUsersStreamProvider`. **`employeesStreamProvider`
+  is `autoDispose`** (2026-08-08): its consumers are the two transient
+  appointment sheets plus the Dashboard, so without it opening the
+  add-appointment sheet ONCE pinned a second live `users` listener for the rest
+  of the session, alongside the always-on `watchAllUsers()`.
+- **The dashboard's window is SPLIT: one live listener, one `.get()`.**
+  `DashboardAggregator.liveRangeAround` (this ISO week through next Monday /
+  the 3-day pending horizon) is watched; `historyRangeAround` (the seven
+  settled weeks behind it) is read once through
+  `AppointmentsRepository.fetchInRange`. Held as one range it was a **70-day**
+  business-wide live listener capped at `_rangeStreamLimit`, so above ~14
+  jobs/day the 8-week trends, busiest-weekday and Attention list were computed
+  over a silent PREFIX. The two results **must be merged by doc id**
+  (`DashboardAggregator.mergeById`, live wins) and never concatenated — each
+  query reaches back to its own `fetchStart`, so they overlap by a fortnight.
+  Adding a reducer that needs older data means widening the HISTORY half, not
+  the live one.
 - **ClientRecord legacy back-compat:** pre-Wave-reshape "business-only" client
   docs stored their name under `businessName` with an empty `name`.
   `ClientRecord.fromMap` handles it in **two** halves, and both are load-bearing:
@@ -733,15 +876,13 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   lazily backfilled and can be stale, missing or wrong. Rules cannot express
   "only when this client has no appointments" (no cheap foreign-collection
   count), so the callable is the only place that guarantee can live and
-  **nothing in this build deletes a client directly**.
-  **`allow delete` on `/clients` nonetheless survives as a second
-  `#compat-1.37.1` shim entry** (owner call 2026-08-03): 1.37.1+64 predates the
-  no-delete decision and still ships an *ungated* Delete button doing a direct
-  `doc.delete()`, which withdrawing the grant would break with an opaque
-  `permission-denied`. Be precise about the cost — while that grant is there the
-  hole is REAL: a 1.37.1 admin can still orphan a client's job history, which is
-  the very thing the callable's count() gate prevents. It goes with the rest of
-  the shim (grep `#compat-1.37.1`); never wire anything new to it.
+  **nothing deletes a client directly**.
+  **`allow delete` on `/clients` is now WITHDRAWN** (2026-08-08). It had
+  survived as a `#compat-1.37.1` shim entry for that build's ungated Delete
+  button, and while it did the hole was real — an admin on the old build could
+  orphan a client's job history, the very thing the callable's `count()` gate
+  prevents. That is closed: the callable is the only delete path, in rules as
+  well as in code. Never re-add the grant.
   `canDeleteClient`
   (`domain/policies/client_delete_policy.dart`) is **advisory UI only** — it
   keeps the swipe and the detail footer from offering what the server would
@@ -885,18 +1026,21 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   because it indexes them by `storedIndex`; passing a display-ordered list
   silently mislabels every day.
 - **A user-doc rules cap must not be tighter than the widest value a shipped
-  write path can produce.** `createEmployeeInvite` accepts `phone` up to 40
-  chars while `TextLimits.phone` is 15, so `isValidUserData` caps phone at
-  **40** — a cap of 15 would make every invite-created doc with a longer phone
+  write path can produce.** `createEmployeeAccount` accepts `phone` up to 40
+  chars while `TextLimits.phone` is 24, so `isValidUserData` caps phone at
+  **40** — a tighter cap would make every server-created doc with a longer phone
   permanently un-updatable, including by `deactivateEmployee`. Rules caps mirror
-  the *server* limit; the client caps with `TextLimits`. Same reasoning for the
+  the *server* limit; the client caps with `TextLimits`. **Retiring a callable
+  does NOT license tightening a cap it set**: the docs it created outlive it, so
+  the 40 survives `createEmployeeInvite` (deleted 2026-08-08) on the strength of
+  the rows still in the collection. Same reasoning for the
   P4b `emergencyPhone`: rules cap **40**, client caps `TextLimits.phone`.
   **The converse also holds: a client cap must not be LOOSER than the callable's,
   or the field silently accepts a value the callable rejects as
   `invalid-argument`** — which reaches the user as an unexplained "Something went
   wrong" they cannot fix by editing. That is why the `users` name halves use
-  `TextLimits.employeeNameHalf` (**100**), matching `createEmployeeInvite` and
-  `redeemSignupCode` exactly, rather than the 200-char `TextLimits.firstName`
+  `TextLimits.employeeNameHalf` (**100**), matching `createEmployeeAccount` and
+  `completeEmployeeSetup` exactly, rather than the 200-char `TextLimits.firstName`
   used for clients. `name` is the JOIN of those halves, so it legitimately
   reaches 201 — its server and rules caps are **250**, sized to the composed
   value and never to a half. Same reason for **`TextLimits.authEmail` (254)**:
@@ -987,6 +1131,32 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `fcmTokens`, every `liveActivityTokens` row and the `liveActivityCards`
   marker. `allow delete` is withdrawn from `/users`; the Admin SDK bypasses
   rules, so console cleanup is unaffected.
+- **Revoking a PERMISSION deletes nothing server-side, and the published privacy
+  policy now says so** (2026-08-08 audit). `presence/location` is deleted only by
+  `PresenceSyncController.unregister()` and `fcmTokens` only by
+  `unregisterCurrentDevice()`, and both are reached from exactly three places:
+  sign-out, self-service account deletion, and the server-side disable/delete
+  bridge (`functions/bridge.js`). Losing the OS permission mid-stream only runs
+  `_stop()`, which cancels the subscription and timers — no network call. That
+  matters because **the stored fix keeps rendering on the admin live map**:
+  `LiveMapAggregator.join` filters on missing/inactive user, never on freshness,
+  and `staff_marker_icon.dart` has no staleness branch, so a months-old pin is
+  visually identical to a live one (only the roster row and info card show the
+  age). The policy used to promise deletion on revocation and promise the pin
+  disappeared; owner call was to correct the TEXT rather than the code, so
+  `docs/legal/privacy-policy.html` §6 and §8 now describe this behaviour
+  exactly. **The two must stay in step**: if you ever wire permission-revocation
+  into a delete, or add a freshness filter to the map, update those two sections
+  in the same change — and republish (see below), or the site keeps describing
+  the old behaviour.
+- **`docs/legal/*.html` are SOURCES, not the published pages.** The live site is
+  the separate `gvogas/es-pro-legal` GitHub Pages repo, where
+  `privacy-policy.html` is published as **`index.html`** (which is why the other
+  pages link to the privacy policy by absolute root URL — a relative
+  `privacy-policy.html` 404s). The four files must stay **byte-identical** across
+  the two repos; a 2026-08-08 audit found the support page still describing the
+  signup-code flow deleted in P4c, months after the app stopped having it.
+  Editing `docs/legal/` alone changes nothing a user can read.
 - **A disabled or invited employee's colour is TAKEN.** `usedColors` reads
   `allUsersStreamProvider`, never `employeesStreamProvider` — the latter filters
   to `status == 'active'`, so a disabled employee's colour was offered again and
@@ -1096,6 +1266,35 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   semantics label always speaks the full month. Note the widget test asserts
   against **viewport width**, not a scale: the test font is far wider per glyph
   than the shipped one.
+- **The calendar agenda sinks CLOSED jobs to the bottom of the day, and only
+  the calendar does** (2026-08-08). `_agendaOrder` in `appointment_day_slice.dart`
+  gained a first tier — open before closed — above the existing all-day and
+  window-start tiers, which still apply *within* the closed block. It reads the
+  STORED status through **`AppointmentRecord.isClosed`**, never `displayStatus`,
+  so the comparator stays clock-free like the rest of that module; `isClosed` is
+  the model-layer mirror of `AppointmentStatus.isTerminal` and exists precisely
+  so a pure module can ask without pulling Material in through `status_chip.dart`
+  (it is also the one owner of the `done`/`completed`/`cancelled` triple —
+  `displayStatusAt` calls it rather than re-spelling it). Both terminal states
+  sink: a cancelled visit is as done with as a completed one.
+  A closed job then renders in the **collapsed** treatment —
+  `AppointmentCard(collapseWhenClosed: true)`, opt-in and passed ONLY by
+  `AgendaSliverList`: the success tint for `done`, a one-line body putting the
+  time beside the client, and no avatar stack (the crew bar still carries
+  colour, so *who* survives the collapse). **`_kClosedMinHeight` (48) is
+  load-bearing, not belt-and-braces** — the collapsed row lands near 56px, close
+  enough that a small text scale drops it under Material's minimum, and the row
+  is still a full `InkWell` opening the same sheet. The **multi-day counter
+  stays** on a collapsed row (deviating from the approved mockup, deliberately):
+  a closed job renders on every day of its run, so without "Day 3 of 5" those
+  rows are indistinguishable. `AgendaSliverList` emits one `_ClosedRule`
+  (`calendar_closedCount`, which reads **"Done"** — owner call 2026-08-08,
+  reversing the earlier "Closed"; a cancelled visit sinks into the same block
+  and is counted by it, so the label is deliberately looser than the set) at
+  `_firstClosedIndex`, and its `length - index` count is only valid because the
+  sort guarantees the closed jobs are one contiguous tail — don't reorder them
+  at the call site. Everywhere else (day route, dashboard, employee TODAY panel,
+  client job history) keeps its own sort and the plain full-height card.
 - **`AppointmentCard` is the ONE appointment card** — calendar agenda, day
   route, client job history, both dashboard sections and the paginated history
   list (`AppointmentTile` is deleted, along with `colorFromMap` and
@@ -1311,7 +1510,11 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   ids, keys and `step()` wrapper. Six screens had a copy of the trio that had to
   stay in sync (`keys[id]!` force-unwraps; `indexOf`/`length` feed "step N of
   M") and Settings had already drifted. One `late final _tour = TourSteps(dest,
-  isAdmin:)` per screen — don't re-inline it.
+  isAdmin:)` per screen — don't re-inline it. **The app bar's `bottom:` slot
+  uses `stepBarIf`**, the `PreferredSizeWidget` sibling of `stepIf`: without it
+  that one slot escaped the class's ownership and Clients, History and Team each
+  re-spelled the same six-line `has(id) ? TourShowcaseBar(...) : bar` block by
+  hand.
 - **The account-exit teardown lives in `AccountExitListeners`**
   (`core/app/account_exit_listeners.dart`), the sibling of `AppSyncListeners`.
   The ORDER is load-bearing: push, presence and Live Activity de-register

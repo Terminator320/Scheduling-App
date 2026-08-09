@@ -83,10 +83,9 @@ mutation PatchCustomer($input: CustomerPatchInput!) {
   }
 }`;
 
-const LIST_CUSTOMERS = `
-query ListCustomers($id: ID!, $page: Int!, $pageSize: Int!) {
-  business(id: $id) {
-    customers(page: $page, pageSize: $pageSize, sort: [NAME_ASC]) {
+// One owner for the listing's page + node selection, so the full and delta
+// documents below can't drift on what they read back.
+const LIST_CUSTOMERS_BODY = `
       pageInfo { currentPage totalPages totalCount }
       edges {
         node {
@@ -107,7 +106,41 @@ query ListCustomers($id: ID!, $page: Int!, $pageSize: Int!) {
             postalCode
           }
         }
-      }
+      }`;
+
+const LIST_CUSTOMERS = `
+query ListCustomers($id: ID!, $page: Int!, $pageSize: Int!) {
+  business(id: $id) {
+    customers(page: $page, pageSize: $pageSize, sort: [NAME_ASC]) {${
+  LIST_CUSTOMERS_BODY}
+    }
+  }
+}`;
+
+// Delta listing. `modifiedAtAfter` filters SERVER-SIDE, so Wave returns only
+// what changed — strictly better than paging everything and stopping early.
+// Confirmed against the live schema 2026-08-04 (see
+// scripts/wave-introspect-customer-sort.js).
+//
+// This is a SEPARATE document rather than one query with a nullable `$since`:
+// omitting a variable to make an argument "not present" is real GraphQL, but
+// it is subtle third-party behaviour, and a server that instead read it as
+// `modifiedAtAfter: null` would silently return nothing — a full import that
+// imports zero customers and reports success. Two documents make that
+// unrepresentable.
+//
+// Sort stays NAME_ASC: we page the entire filtered set either way, so
+// MODIFIED_AT_ASC would buy nothing and gives the two documents a second
+// difference to keep in step.
+const LIST_CUSTOMERS_SINCE = `
+query ListCustomersSince(
+  $id: ID!, $page: Int!, $pageSize: Int!, $since: DateTime!
+) {
+  business(id: $id) {
+    customers(
+      page: $page, pageSize: $pageSize, sort: [NAME_ASC]
+      modifiedAtAfter: $since
+    ) {${LIST_CUSTOMERS_BODY}
     }
   }
 }`;
@@ -272,7 +305,14 @@ async function upsertCustomer(clientId, deps = {}) {
     // arrives to find nothing to push. The admin-facing badge reads this field,
     // so without the heal that client shows "Sync pending" forever while every
     // later sync correctly reports nothing to do.
-    await healSyncState(db, ref);
+    //
+    // Gated on the state we already read: a no-op is the steady-state outcome
+    // for most clients, and healSyncState opens a transaction (a second read)
+    // that would return immediately on an already-synced doc. A doc that turned
+    // pending since this read has its own queued job and needs no heal.
+    if (wave.syncState !== "synced") {
+      await healSyncState(db, ref);
+    }
     return {status: "noop"};
   }
 
@@ -544,6 +584,98 @@ async function writeSyncError(db, ref, now, inputErrors) {
 const BATCH_LIMIT = 500;
 
 /**
+ * Decides what one Wave customer means locally and stages that write.
+ *
+ * Extracted from [importCustomers]' page loop because every one of the five
+ * counters it touches feeds the watermark logic afterwards, and a single
+ * miscounted `skippedPending` silently loses Wave-side data — that decision
+ * deserves to be readable on its own rather than buried three levels into a
+ * paging loop.
+ *
+ * Mutates `ctx.summary` and stages onto `ctx.batch`.
+ *
+ * @param {?Object} node One Wave customer node, or null.
+ * @param {{db: !Object, batch: !Object, now: !Function, summary: !Object,
+ *   skipClientIds: !Set<string>, existingByWaveId: !Map<string, !Object>}} ctx
+ * @return {boolean} whether an operation was staged on the batch.
+ */
+function importOneCustomer(node, ctx) {
+  const {db, batch, now, summary, skipClientIds, existingByWaveId} = ctx;
+  if (!node) return false;
+  if (node.isArchived === true) {
+    summary.skippedArchived += 1;
+    return false;
+  }
+  const fields = fromWaveCustomer(node);
+  const hash = mappedFieldsHash(fields);
+  const docFields = {
+    ...fields,
+    wave: {
+      syncState: "synced",
+      syncError: null,
+      lastSyncedHash: hash,
+      lastSyncedAt: now(),
+    },
+  };
+
+  const waveId = fields.waveCustomerId;
+  const existing = waveId ? existingByWaveId.get(waveId) : undefined;
+  if (existing) {
+    // The local edit wins while it is still queued for Wave. Overwriting
+    // here would also stamp lastSyncedHash from Wave's values, which
+    // turns the pending push into a no-op and destroys the edit
+    // permanently — see listOutstandingClientIds in worker.js.
+    if (skipClientIds.has(existing.ref.id)) {
+      summary.skippedPending += 1;
+      return false;
+    }
+    // Nothing to write: `hash` is taken over the SAME `toWaveCustomerInput`
+    // projection that produced the stored `lastSyncedHash`, and the update
+    // below sets the doc's mapped fields to exactly `fields` — so a match
+    // means this write would be byte-identical. (That equality is already
+    // load-bearing: it is what `shouldEnqueueClientWrite`'s Rule 2 uses to
+    // stop an import feeding every client straight back into the outbox.)
+    //
+    // `hasCreatedAt` is NOT optional here. The branch below backfills a
+    // missing `createdAt`, and the clients list orders by it — Firestore
+    // excludes docs missing an orderBy field, so skipping one would leave
+    // a legacy doc permanently invisible in the list.
+    if (existing.hasCreatedAt && existing.lastSyncedHash === hash) {
+      summary.skippedUnchanged += 1;
+      return false;
+    }
+    // Preserve the original createdAt. Only backfill it when the
+    // existing doc lacks one (e.g. a doc from an earlier import that
+    // omitted it).
+    const update = {...docFields, updatedAt: now()};
+    if (!existing.hasCreatedAt) update.createdAt = now();
+    batch.set(existing.ref, update, {merge: true});
+    summary.updated += 1;
+    return true;
+  }
+
+  const newRef = db.collection("clients").doc();
+  // createdAt/updatedAt are required: the clients list orders by
+  // createdAt, and Firestore excludes docs missing that field. `archived`
+  // is required for the same reason — the list FILTERS on it, so a doc
+  // without it is invisible there while still turning up in search.
+  // Deliberately create-only: setting it on the update branch above
+  // would un-archive every archived client on every scheduled import.
+  batch.set(newRef, {
+    ...docFields,
+    archived: false,
+    createdAt: now(),
+    updatedAt: now(),
+  });
+  summary.imported += 1;
+  // Cache so duplicate Wave ids within the same import collapse to one.
+  if (waveId) {
+    existingByWaveId.set(waveId, {ref: newRef, hasCreatedAt: true});
+  }
+  return true;
+}
+
+/**
  * One-time Wave → App seed. Paginates customers, skips archived ones, and
  * writes active ones to `clients`. Idempotent on `waveCustomerId` — we don't
  * use it as the doc id directly, since Wave Node ids are base64 and can
@@ -558,9 +690,18 @@ const BATCH_LIMIT = 500;
  *   back for `listOutstandingClientIds` would close a require cycle. Every
  *   caller must supply it — omitting it silently re-opens the clobber
  *   described on that helper.
+ *
+ *   `since` (an ISO-8601 string, optional) switches the run to a DELTA
+ *   import: Wave filters by `modifiedAtAfter` server-side and returns only
+ *   customers changed after that instant. Absent → full import. The caller
+ *   owns the watermark, because it owns `wave/connection`; this function is
+ *   deliberately stateless about it.
  * @return {!Promise<!Object>} Summary `{totalCount, imported, updated,
- *   skippedArchived, skippedPending, skippedUnchanged, pages}`. `updated`
- *   counts only customers whose Wave-mapped fields actually differed.
+ *   skippedArchived, skippedPending, skippedUnchanged, pages, delta}`.
+ *   `updated` counts only customers whose Wave-mapped fields actually
+ *   differed. **`totalCount` is the size of the QUERIED set, so on a delta
+ *   run it is the number of changed customers, not the roster size** — don't
+ *   render it as "you have N clients".
  */
 async function importCustomers(deps = {}) {
   const db = deps.db || adminFirestore().getFirestore();
@@ -570,9 +711,15 @@ async function importCustomers(deps = {}) {
     deps.pageSize : 100;
   const businessId = deps.businessId || await readBusinessId(db);
   const skipClientIds = deps.skipClientIds || new Set();
+  const since = typeof deps.since === "string" && deps.since ? deps.since : "";
+  const isDelta = since !== "";
 
-  // Single pass over existing clients → Map<waveCustomerId, docRef>.
-  const existingByWaveId = await buildWaveIdIndex(db);
+  // Single pass over existing clients → Map<waveCustomerId, docRef>, built
+  // LAZILY (see the page loop): a delta run that finds nothing changed would
+  // otherwise pay ~650 document reads to resolve zero customers. Note the
+  // saving is inside THIS function — the sync around it still does its own
+  // reads (connection doc, rate limiter, queue queries).
+  let existingByWaveId = null;
 
   let batch = db.batch();
   let opsInBatch = 0;
@@ -582,7 +729,7 @@ async function importCustomers(deps = {}) {
   // updated in the app" on every single press.
   const summary = {
     totalCount: 0, imported: 0, updated: 0, skippedArchived: 0,
-    skippedPending: 0, skippedUnchanged: 0, pages: 0,
+    skippedPending: 0, skippedUnchanged: 0, pages: 0, delta: isDelta,
   };
 
   const flushIfFull = async () => {
@@ -593,93 +740,33 @@ async function importCustomers(deps = {}) {
     }
   };
 
+  // Hoisted: the document and its extra variable are decided once, not
+  // re-paired on every page.
+  const listQuery = isDelta ? LIST_CUSTOMERS_SINCE : LIST_CUSTOMERS;
+  const listArgs = isDelta ? {id: businessId, since} : {id: businessId};
+
   let page = 1;
   for (;;) {
-    const data = await graphql(
-        LIST_CUSTOMERS, {id: businessId, page, pageSize},
-    );
+    const data = await graphql(listQuery, {...listArgs, page, pageSize});
     const customers =
       data && data.business ? data.business.customers : null;
     const pageInfo = (customers && customers.pageInfo) || {};
     const edges = (customers && Array.isArray(customers.edges)) ?
       customers.edges : [];
     summary.pages += 1;
+    // Built here rather than up front, so an empty delta page reads nothing.
+    if (edges.length && !existingByWaveId) {
+      existingByWaveId = await buildWaveIdIndex(db);
+    }
     if (typeof pageInfo.totalCount === "number") {
       summary.totalCount = pageInfo.totalCount;
     }
 
     for (const edge of edges) {
-      const node = edge && edge.node;
-      if (!node) continue;
-      if (node.isArchived === true) {
-        summary.skippedArchived += 1;
-        continue;
-      }
-      const fields = fromWaveCustomer(node);
-      const hash = mappedFieldsHash(fields);
-      const docFields = {
-        ...fields,
-        wave: {
-          syncState: "synced",
-          syncError: null,
-          lastSyncedHash: hash,
-          lastSyncedAt: now(),
-        },
-      };
-
-      const waveId = fields.waveCustomerId;
-      const existing = waveId ? existingByWaveId.get(waveId) : undefined;
-      if (existing) {
-        // The local edit wins while it is still queued for Wave. Overwriting
-        // here would also stamp lastSyncedHash from Wave's values, which
-        // turns the pending push into a no-op and destroys the edit
-        // permanently — see listOutstandingClientIds in worker.js.
-        if (skipClientIds.has(existing.ref.id)) {
-          summary.skippedPending += 1;
-          continue;
-        }
-        // Nothing to write: `hash` is taken over the SAME `toWaveCustomerInput`
-        // projection that produced the stored `lastSyncedHash`, and the update
-        // below sets the doc's mapped fields to exactly `fields` — so a match
-        // means this write would be byte-identical. (That equality is already
-        // load-bearing: it is what `shouldEnqueueClientWrite`'s Rule 2 uses to
-        // stop an import feeding every client straight back into the outbox.)
-        //
-        // `hasCreatedAt` is NOT optional here. The branch below backfills a
-        // missing `createdAt`, and the clients list orders by it — Firestore
-        // excludes docs missing an orderBy field, so skipping one would leave
-        // a legacy doc permanently invisible in the list.
-        if (existing.hasCreatedAt && existing.lastSyncedHash === hash) {
-          summary.skippedUnchanged += 1;
-          continue;
-        }
-        // Preserve the original createdAt. Only backfill it when the
-        // existing doc lacks one (e.g. a doc from an earlier import that
-        // omitted it).
-        const update = {...docFields, updatedAt: now()};
-        if (!existing.hasCreatedAt) update.createdAt = now();
-        batch.set(existing.ref, update, {merge: true});
-        summary.updated += 1;
-      } else {
-        const newRef = db.collection("clients").doc();
-        // createdAt/updatedAt are required: the clients list orders by
-        // createdAt, and Firestore excludes docs missing that field. `archived`
-        // is required for the same reason — the list FILTERS on it, so a doc
-        // without it is invisible there while still turning up in search.
-        // Deliberately create-only: setting it on the update branch above
-        // would un-archive every archived client on every scheduled import.
-        batch.set(newRef, {
-          ...docFields,
-          archived: false,
-          createdAt: now(),
-          updatedAt: now(),
-        });
-        summary.imported += 1;
-        // Cache so duplicate Wave ids within the same import collapse to one.
-        if (waveId) {
-          existingByWaveId.set(waveId, {ref: newRef, hasCreatedAt: true});
-        }
-      }
+      const wrote = importOneCustomer(edge && edge.node, {
+        db, batch, now, summary, skipClientIds, existingByWaveId,
+      });
+      if (!wrote) continue;
       opsInBatch += 1;
       await flushIfFull();
     }

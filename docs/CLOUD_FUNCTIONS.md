@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-04 by auditing the source against the app's call sites and
+refreshed 2026-08-08 by auditing the source against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -34,13 +34,15 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 > wrong before — verify against the live list rather than trusting it.
 
 
-- **27 functions defined** in code and **27 deployed** as of 2026-08-04
-  (corrected — an earlier revision said 23/22 and claimed P4c *deleted* the
-  invite callables). P4c added `createEmployeeAccount`,
-  `completeEmployeeSetup` and `deleteEmployeeAccount` but **kept**
-  `createEmployeeInvite` and `redeemSignupCode` as the `#compat-1.37.1` shim;
-  `revokeInvite` and `previewInvite` were never deployed and do not exist in
-  code. `changeEmployeeEmail` landed 2026-08-04 (26 → 27). (v2, Node.js 24, 256 MB; `us-central1`
+- **25 functions defined** in code and **25 deployed**, verified against
+  `functions_list_functions` on 2026-08-08 — an exact match, no orphans and no
+  extras. The retirement deploy has now RUN. P4c added `createEmployeeAccount`,
+  `completeEmployeeSetup` and `deleteEmployeeAccount` and kept
+  `createEmployeeInvite` / `redeemSignupCode` as the `#compat-1.37.1` shim;
+  `changeEmployeeEmail` landed 2026-08-04 (26 → 27); **the shim was retired
+  2026-08-08 (27 → 25)** once every device was on 1.40+, deleting those two
+  callables. `revokeInvite` and `previewInvite` were never deployed and never
+  existed in code. (v2, Node.js 24, 256 MB; `us-central1`
   except `validateUploadedImage` in `us-east1`). The 2026-07-18 deploy shipped
   `placesReverseGeocode`, the travel-aware `sendUpcomingJobReminders` rebuild,
   and the codebase-audit fixes (overdue-sweep ordering, bounded travel-context
@@ -54,11 +56,13 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   **enabled in the console 2026-07-11** — this list previously said it was still
   outstanding, which was wrong. Still outstanding: on-device push verification.
   TTL was extended to `liveActivityTokens`, `rateLimits`, and `signupCodes` on
-  2026-07-20 (the `signupCodes` policy is **still live and its `fieldOverride`
-  is still in `firestore.indexes.json`** — corrected 2026-08-04; an earlier
-  revision claimed it had been removed, which would have dropped a live TTL
-  policy on the next `firestore:indexes` deploy. It retires with the rest of
-  the `#compat-1.37.1` shim), and a `fieldOverride` for the new `appointmentSeriesNotices` claim
+  2026-07-20. **The `signupCodes` `fieldOverride` was removed from
+  `firestore.indexes.json` on 2026-08-08** with the rest of the
+  `#compat-1.37.1` shim, so the next `firestore:indexes` deploy DROPS that live
+  TTL policy — which is intended here, and only safe because the collection was
+  verified **empty in prod** first (a TTL policy is the only reaper for those
+  docs; dropping it over a non-empty collection strands them forever). A
+  `fieldOverride` for the `appointmentSeriesNotices` claim
   ledger was added to `firestore.indexes.json` on 2026-07-21 (that ledger has no
   in-code reaper, so the TTL is its only cleanup). Every policy's **expiration
   offset normalized to `0`** — the
@@ -111,7 +115,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `placesReverseGeocode` | callable | `onCall` | `places.js` | live staff-location map (admin) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · durable 120/hr |
 | `deleteAccount` | callable | `onCall` | `account.js` | `account_deletion_service.dart` | — | App Check ✓ · reauth ≤5min · durable 5/15min |
 | `createEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (invite sheet, roster row Reset password) | — | App Check ✓ · admin · durable 20/hr·uid |
-| `completeEmployeeSetup` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` → `auth_service.dart` (account setup screen) | — | App Check ✓ · authed (own doc) · durable 5/15min·uid |
+| `completeEmployeeSetup` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` → `auth_service.dart` (account setup screen) | — | App Check ✓ · authed (own doc) · `email_verified` ✓ · durable 5/15min·uid |
 | `deleteEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (pending-account row) | — | App Check ✓ · admin · durable 20/hr·uid |
 | `changeEmployeeEmail` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (inside `updateEmployee`, when the email changed on a doc with a `uid`) | — | App Check ✓ · admin · durable 20/hr·uid |
 | `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
@@ -150,11 +154,12 @@ slot if the Auth delete fails server-side. Auth user is deleted **first**
 ## Employee accounts (admin invites, employee sets up)
 
 Rebuilt by **P4c, 2026-08-02**, replacing the one-time signup-code flow in the
-APP. `revokeInvite` and `previewInvite` were never deployed and do not exist in
-code, but `invites.js`, `signup_code_utils.js`, `createEmployeeInvite` and
-`redeemSignupCode` all SURVIVE as the `#compat-1.37.1` shim (corrected
-2026-08-04 — an earlier revision said they were deleted). Nothing in this build
-calls them. All four callables
+APP — and as of **2026-08-08 the signup-code flow is gone from the backend too**:
+`invites.js`, `signup_code_utils.js`, `createEmployeeInvite` and
+`redeemSignupCode` were deleted with the rest of the `#compat-1.37.1` shim.
+`revokeInvite` and `previewInvite` were never deployed and never existed in
+code. **`redeemSignupCode` was the last unauthenticated callable in the
+codebase**; every remaining one requires auth. All four callables
 below share `APP_CHECK = {enforceAppCheck: true}`. Full design:
 `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.
 
@@ -210,6 +215,17 @@ one. Flips `status` to `active` and stamps the setup profile. Refuses
 replayed call (or two devices finishing at once) can't rewrite a consent record;
 `not-found / account-not-found` when there's no doc for the uid.
 
+**It refuses an unverified address** — `failed-precondition / email-not-verified`
+unless `req.auth.token.email_verified` is true. That is what prices the shared
+`Welcome123!` window: anyone who knows an employee's email can sign in as them
+and reach the setup screen, but leaving `invited` now needs control of the
+MAILBOX, and `firestore.rules` grants an `invited` user nothing. It is an
+IDENTITY guard, so it sits **above** the rate limiter — an unverified caller
+must not be able to burn the real employee's five slots. The client half is
+`AuthService.refreshEmailVerified()`, which forces `getIdToken(true)`: the claim
+is read off the token minted at sign-in, so a bare `reload()` leaves the server
+refusing an address the person has already verified.
+
 **The caller must have already changed the password.** The server cannot see a
 password, so "you must replace the shared default" is true only because
 `AuthService.completeAccountSetup` calls `User.updatePassword` first and this
@@ -244,11 +260,11 @@ order is the standard one (auth → `assertAdmin` → payload →
 `enforceDurableRateLimit` 20/hr per admin uid → work), and an id containing `/`
 is rejected up front because `.doc()` throws synchronously on it and would
 surface as an opaque `internal`. No rules change: the deletes are Admin SDK.
-Note `allow delete` on `/users` is withdrawn from THIS build's code path but is
-still granted in `firestore.rules` as a `#compat-1.37.1` shim, so a 1.37.1
-client can still delete a users doc and orphan its crew links — see
-docs/DEPLOYMENT.md. Transactional core exported as `performDeleteAccount` for
-jest.
+Note `allow delete` on `/users` is withdrawn from this build's code path AND
+from `firestore.rules` — the `#compat-1.37.1` grant that kept a 1.37.1 client
+able to delete a users doc (orphaning its crew links) was retired 2026-08-08;
+see docs/DEPLOYMENT.md. Transactional core exported as `performDeleteAccount`
+for jest.
 
 ### `changeEmployeeEmail` — `employee_accounts.js`
 Admin-only. Moves an employee's **sign-in identity** in Firebase Auth and on
@@ -471,7 +487,10 @@ daily; a rare crash-retry duplicate is accepted). Queries `status in
 OPEN_STATUSES` (`pending`/`in_progress`/legacy `confirmed`, single-sourced from
 `OPEN_LIKE`) — it previously hardcoded `["pending", "confirmed"]`, silently
 dropping every `in_progress` job from the digest even though the pure grouping
-filter excludes only `cancelled`; the query and filter now agree.
+filter excludes only `cancelled`; the query and filter now agree. **Each
+employee's send is wrapped individually** — the sends run through one
+`Promise.all`, so before that a single transient token read rejected the whole
+map and cost every *other* employee tomorrow's schedule.
 
 ### `sendOverdueJobPrompts` — `notifications.js`
 Every 15 min (Toronto). The "job finished?" nudge: pushes assignees of a job
@@ -486,7 +505,13 @@ oldest, then filters `endTime ∈ (now-24h, now]` in code. At-most-once
 `appointmentOverduePrompts/{id}_{endMs}_{employeeDocId}` ledger; a claim that
 delivered **zero** pushes is released (doc deleted) so a later sweep retries
 that recipient, and each recipient's send is isolated so one transient failure
-can't abort the sweep. Candidates are processed serially, so it carries a **300s
+can't abort the sweep. **That isolation now covers building the ledger ref
+itself**, which is composed from the employee doc id: a `/` in an `employeeIds`
+element makes an invalid document path, and constructing it outside the `try`
+threw before any per-recipient handler could catch — one malformed id
+permanently killed every overdue prompt for the whole fleet. The scheduler body
+is also wrapped and logged like its two siblings, so a sweep that dies is
+visible instead of silent. Candidates are processed serially, so it carries a **300s
 timeout** (well over the 60s default) to keep a backlog from leaving the newest
 overdue jobs unprompted.
 
@@ -537,10 +562,10 @@ the automatic single-field index on `clientId` — no composite index needed.
 
 ### `deleteClient` — `clients.js`
 Admin-only callable, the **only** delete path for a client in this build.
-`allow delete` on `/clients` is withdrawn from this build's code path but is
-STILL GRANTED in `firestore.rules` as a `#compat-1.37.1` shim (1.37.1 ships an
-ungated Delete button), so the orphaning hole is real until that shim goes —
-see docs/DEPLOYMENT.md. The callable exists because rules cannot express
+`allow delete` on `/clients` is withdrawn from this build's code path AND from
+`firestore.rules` — the `#compat-1.37.1` grant (kept for 1.37.1's ungated
+Delete button) was retired 2026-08-08, closing the orphaning hole; see
+docs/DEPLOYMENT.md. The callable exists because rules cannot express
 "only when this client has
 no appointments" — there is no cheap way to count a foreign collection there.
 Refuses with `failed-precondition / client-has-history` when a **live `count()`
@@ -594,9 +619,12 @@ the lone exception. The limiter sits AFTER the payload validation so a burst of
 malformed submissions can't exhaust a legitimate caller's window.
 
 ### `waveImportCustomers` — `wave/callables.js`
-Admin **two-way** sync behind Settings › "Sync with Wave" (2026-08-04; the
-callable keeps its original name because the 1.37.1 App Store build still calls
-it — `#compat-1.37.1`).
+Admin **two-way** sync behind Settings › "Sync with Wave" (2026-08-04). The
+callable keeps its original, now-inaccurate name because renaming a deployed
+callable deletes the one **every** shipped build calls — a constraint that
+outlived the `#compat-1.37.1` shim it was first tagged with, and that any
+future rename still has to solve (deploy both names, then drop the old one
+once no build calls it).
 
 **Push, then pull, in that order.** `drainForSync` first drains pending
 `waveSyncQueue` jobs to Wave, then `importCustomers` pulls Wave customers back
@@ -651,34 +679,69 @@ Writes `createdAt`/`updatedAt` on every client doc it does write (the
 list/search order by `createdAt`, and Firestore excludes docs missing the
 orderBy field). Rate-limited 5/hr; 300s timeout.
 
-**Still O(all customers) on the Wave side — but it needn't be.** The hash gate
-removes the writes and the trigger fan-out, not the ~7 `LIST_CUSTOMERS` pages
-or the `buildWaveIdIndex` scan.
+**Delta import (2026-08-04).** Introspection against the live API
+(`functions/scripts/wave-introspect-customer-sort.js`) established that
+`business.customers` accepts `modifiedAtAfter: DateTime` /
+`modifiedAtBefore`, and that `CustomerSort` offers `MODIFIED_AT_ASC/DESC`
+alongside `CREATED_AT_*` and `NAME_*`. The filter is the better lever than the
+sort — it runs server-side, so Wave returns only what changed instead of us
+paging everything and stopping early.
 
-Introspection against the live API on 2026-08-04
-(`functions/scripts/wave-introspect-customer-sort.js`) settled what is
-available, so this is no longer a guess:
+`importCustomers` therefore takes an optional `since` (ISO-8601). Present → the
+`LIST_CUSTOMERS_SINCE` document; absent → the full `LIST_CUSTOMERS`. These are
+**two separate documents on purpose**: omitting a variable to make an argument
+"not present" is valid GraphQL, but relying on that against a third-party
+server risks it being read as `modifiedAtAfter: null` — a full import that
+imports nothing and reports success. Both must keep passing strings as
+variables; Wave refuses inline `String` arguments (see `functions/CLAUDE.md`).
 
-- `CustomerSort` = `CREATED_AT_ASC/DESC`, `MODIFIED_AT_ASC/DESC`,
-  `NAME_ASC/DESC`.
-- `business.customers` accepts `page`, `pageSize`, `sort`, `email`,
-  **`modifiedAtAfter: DateTime`** and `modifiedAtBefore: DateTime`.
+The watermark lives on `wave/connection` (`customerDeltaSince`,
+`lastFullImportAt`) and `importCustomers` stays stateless about it. The whole
+read → decide → import → advance sequence has **one owner**,
+`importWithWatermark` in `wave/callables.js`, used by both the interactive sync
+and `waveScheduledImport`; the decisions are the pure `resolveImportWindow` /
+`watermarkPatch` in `wave/import_schedule.js`, placed beside `isImportDue`
+because the two cadences interact.
 
-`modifiedAtAfter` is the better lever than the sort: it filters server-side, so
-Wave returns only what changed instead of us paging everything and stopping
-early. A delta import is therefore `customers(modifiedAtAfter: $since, sort:
-[MODIFIED_AT_ASC], …)` with a watermark on `wave/connection`.
+- **The watermark is the run's START minus `DELTA_OVERLAP_MS` (5 min).** From
+  the end, it would drop anything edited mid-run; without the overlap, anything
+  edited in the same second the query went out, and no slack for clock skew
+  against Wave.
+- **It advances only over a window that was fully covered.** A throw leaves
+  both stamps (the next run redoes an idempotent window). So does a run that
+  reported `skippedPending > 0`: those clients were deliberately protected from
+  the clobber and therefore not imported, so advancing would hide any Wave-side
+  change to them until the next full pass. An *unknown* `skippedPending` is
+  treated as not-covered for the same reason — holding is free, advancing
+  wrongly loses data.
+- **A delta-only failure retries once as a full import.** Otherwise a bad
+  `modifiedAtAfter` is sticky: the watermark stays put, every interactive sync
+  rebuilds the same failing query, and nothing self-heals until the 7-day
+  resync ages the window out — while the scheduled path keeps working, so the
+  breakage is admin-facing only.
+- **A failed watermark WRITE is logged, not thrown.** The import already
+  committed; failing there would report a successful sync as an error and throw
+  away the push counts the notice exists to surface.
+- **A full pass is forced every `FULL_RESYNC_INTERVAL_MS` (7 days).** Not for
+  deletes — the import has never deleted a local client and still doesn't, so a
+  customer removed in Wave keeps its doc either way. It is a backstop for
+  `modifiedAt` itself: we are trusting Wave to bump it for every field we map
+  and cannot verify that. Note this interval is shorter than both import
+  cadences, so a scheduled run whose last full pass was a cadence ago goes full
+  — in practice the delta mostly benefits the interactive sync, which is
+  accepted.
+- **A watermark ahead of now is refused**, not honoured — otherwise a clock or
+  data fault makes every subsequent run import nothing, forever.
 
-Two constraints on that design, neither optional:
-- **Take the watermark from the run's START time (minus a small overlap), and
-  advance it only on a fully successful run.** A half-failed run must redo its
-  window; the overlap absorbs clock skew and edits landing mid-run.
-- **A periodic full resync is still required.** An archive flips `isArchived`
-  and so counts as a modification, but a customer *deleted* in Wave returns no
-  node at all and can never appear in a delta window.
+`buildWaveIdIndex` is now built **lazily**, so a delta run that finds nothing
+changed costs one Wave call and zero Firestore reads instead of ~650 document
+reads to resolve nothing. When a delta does have work, it still reads the whole
+`clients` collection — a targeted `whereIn` lookup over just the changed wave
+ids would avoid that, and is the remaining optimisation here.
 
-Not built. `LIST_CUSTOMERS` must keep passing its strings as variables when it
-gains `$since` — Wave refuses inline `String` arguments (see `functions/CLAUDE.md`).
+**`totalCount` on a delta summary is the size of the queried set** — the number
+of changed customers, not the roster size. Don't render it as "you have N
+clients".
 
 ### `waveUpsertCustomer` — `wave/callables.js`
 `clients/{id}` write trigger. When a client's Wave-mapped fields change, marks

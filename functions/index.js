@@ -12,8 +12,6 @@ const bridge = require("./bridge");
 const places = require("./places");
 const account = require("./account");
 const employeeAccounts = require("./employee_accounts");
-// TODO(george): delete with the 1.37.1 shim (#compat-1.37.1)
-const invites = require("./invites");
 const maintenance = require("./maintenance");
 const waveCallables = require("./wave/callables");
 const clientPropagation = require("./client_propagation");
@@ -34,17 +32,6 @@ exports.createEmployeeAccount = employeeAccounts.createEmployeeAccount;
 exports.completeEmployeeSetup = employeeAccounts.completeEmployeeSetup;
 exports.deleteEmployeeAccount = employeeAccounts.deleteEmployeeAccount;
 exports.changeEmployeeEmail = employeeAccounts.changeEmployeeEmail;
-// BACKWARD-COMPAT SHIM for the 1.37.1+64 build still on the App Store, which
-// calls these two from firebase_employees_repository.dart (:82 and :109). P4c
-// replaced the signup-code flow with createEmployeeAccount /
-// completeEmployeeSetup, but deleting these while 1.37.1 is live would break
-// every invite already in flight AND the admin's "Invite employee" button.
-// Retire them — with invites.js, signup_code_utils.js, the /signupCodes rules
-// block, its TTL policy in firestore.indexes.json, and the fourth /users read
-// clause — once no 1.37.1 build remains in the field.
-// TODO(george): delete with the 1.37.1 shim (#compat-1.37.1)
-exports.createEmployeeInvite = invites.createEmployeeInvite;
-exports.redeemSignupCode = invites.redeemSignupCode;
 exports.purgeExpiredHistory = maintenance.purgeExpiredHistory;
 exports.waveBootstrap = waveCallables.waveBootstrap;
 exports.waveGetConnection = waveCallables.waveGetConnection;

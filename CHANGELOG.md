@@ -10,7 +10,123 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
-## [Unreleased]
+## [1.44.1+71] - 2026-08-08
+
+Restores work that was reverted in error before 1.44.0 went out, and which the
+1.44.0 build therefore shipped without.
+
+### Added
+- **You can now read the terms you're asked to accept.** The setup screen has
+  always made a new employee tick "I accept the terms of service", with nothing
+  to tap and no copy published anywhere. The terms are now online, "terms of
+  service" in that sentence opens them, and Settings has a Terms of Service row
+  beside Privacy Policy so they stay reachable afterwards.
+
+### Changed
+- **A finished job can be reopened from History.** The edit control on a
+  completed job lives at the bottom of its sheet, where the dead "Complete"
+  button used to sit — that's how a "Mark as complete" tapped on the wrong job
+  gets undone. It now works from the History page too, which is where finished
+  jobs actually live. Employees still just see that the job is complete.
+- **The personal-job switch dropped its explanatory line.** "Time blocked off —
+  no client or address needed" sat under every job form; turning the switch on
+  visibly removes the client and address fields, which says it better than a
+  line of text on an already-busy screen.
+- **The terms stop describing background location.** The app asks for "While
+  Using the App" only and stops receiving your location once it's closed, which
+  is what the privacy policy already said and what the app actually does. The
+  terms also now describe how an administrator creates an account outright,
+  rather than the invitation flow the app no longer has.
+- **The support page and privacy policy were corrected to match the app.** The
+  support page still told a new employee to wait for an emailed signup code and
+  create their own account — a flow that no longer exists, so the instructions
+  couldn't be followed. It now describes what actually happens: your admin
+  creates the account and hands you an email and starting password, and the app
+  walks you through verifying your address and choosing your own password. The
+  privacy policy also had four statements that promised more than the app does —
+  most importantly that turning off location access deletes your stored location
+  and removes your pin from the staff map. It does neither; it stops new
+  readings, and the last one stays until you sign out, delete your account, or
+  an admin disables it. The policy now says so plainly.
+
+## [1.44.0+70] - 2026-08-08
+
+### Added
+- **A new employee now has to verify their email address before setup can
+  finish.** The setup screen emails them a link and keeps "Finish" refused
+  until it has been opened. This matters because the account is created on a
+  starting password everyone knows: until now, anyone who knew an employee's
+  email address could sign in as them first and complete setup themselves —
+  ending up with a working account, and an admin one if the person had been
+  set up as an admin. Reaching the setup screen is now all that gets you;
+  finishing it needs the mailbox. Nothing changes for the admin: create the
+  account and hand over the same two lines as before.
+- **Finished and cancelled jobs move to the bottom of the day.** In the
+  calendar's day list they now sit below a "Closed · N" divider in a shorter
+  green row that puts the time next to the client, so what's left to do is what
+  you read first. They're still tappable and still open the same job. On a
+  multi-day job the "Day 3 of 5" counter stays on the collapsed row, since a
+  closed job still appears on every day it runs.
+
+### Changed
+- **Job photos are loaded fresh each time they're shown.** Every photo used to
+  carry a permanent public link, which meant a link captured while someone
+  worked here kept opening that photo after their access was removed. Photos
+  are now fetched against whoever is actually looking at them. Photos on jobs
+  saved by older versions still open exactly as before.
+
+### Fixed
+- **A job could show as Complete on its card and be missing from History
+  entirely.** Jobs saved by much older versions of the app store their finished
+  state under an older name; the History list and history search didn't know
+  about it, so those jobs were invisible in both — with no error and nothing to
+  suggest anything was wrong. They're back.
+- **The dashboard's 8-week trends could be built from only part of your
+  history.** Past roughly 14 jobs a day the charts, the busiest-weekday figure
+  and the Attention list quietly ran on a truncated slice of the period they
+  claimed to cover. The dashboard now reads the settled weeks separately from
+  the live one, so the whole window is always counted.
+- **Turning the app lock on or off could fail with no message at all.** If the
+  phone's keychain refused the write — which happens when the app is woken on a
+  locked phone — the switch snapped back and said nothing. It now tells you the
+  setting couldn't be changed.
+- **"Send reset link" could tell you the email was on its way when it wasn't.**
+  A few kinds of failure showed the "check your inbox" panel anyway, so you'd
+  wait for mail that was never sent. Only a genuinely sent link says so now.
+- **A password typed with a trailing space was measured before the space was
+  removed.** The strength meter and the 8-character rule read one value and the
+  account was given another, so a 7-character password could get through. All
+  three now read the same thing.
+- **The confirm button on Delete account was unreadable in dark mode.**
+- **A photo batch that hit both a "too large" file and a dropped connection
+  lost the filenames.** You were told the upload would be retried without being
+  told which file never can be.
+- **One employee's failed push could cost everyone their nightly summary.** If a
+  single send failed while the 6 pm "tomorrow's jobs" digest was going out, the
+  whole run was abandoned and nobody got their schedule.
+- **A single malformed staff record could stop the "job finished?" nudge for the
+  entire team** — permanently, and with nothing logged anywhere.
+- **Adding a photo and closing the job at the same moment could crash the app.**
+- **A job whose dates were set outside the app reported a nonsense length** —
+  a card reading "Day 400 of 900", and a calendar badge claiming a job today
+  every day for a year. Long jobs are now capped consistently wherever they're
+  counted.
+- **Sharing a job photo now says what went wrong** if the share fails, instead
+  of the generic message.
+- **The app keeps fewer live connections open in the background.** The staff
+  list behind the appointment sheets is released when the sheet closes, the
+  home-screen widget and Siri's schedule now share one connection instead of
+  opening one each, and two search caches are freed once they go stale — less
+  battery and data for the same behaviour.
+
+## [1.43.1+69] - 2026-08-08
+
+### Changed
+- **Syncing with Wave is much faster.** It now asks Wave only for the customers
+  that changed since the last sync, instead of re-reading the whole customer
+  list every time. A sync with nothing to do finishes almost immediately. A
+  full pass still runs at least weekly, so nothing can quietly drift out of
+  step.
 
 ### Fixed
 - **The Wave badge on a client now reflects what's actually happening.** After

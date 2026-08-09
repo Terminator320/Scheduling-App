@@ -202,6 +202,34 @@ void main() {
       );
     });
 
+    test(
+      'a mixed permanent + transient batch still names the too-large file',
+      () async {
+        await stageEntry('a1', ['big.jpg', 'ok.jpg']);
+        when(() => storage.uploadImage(any(), any())).thenAnswer((
+          invocation,
+        ) async {
+          final file = invocation.positionalArguments[1] as File;
+          if (file.path.endsWith('big.jpg')) {
+            throw const ImageUploadFailureTooLarge();
+          }
+          throw Exception('network');
+        });
+
+        await makeService().drainPending();
+
+        final failure = notifier.failureFor('a1');
+        // The oversized file was deleted from staging, so it can NEVER retry —
+        // reporting only the retryable one left the user waiting for a retry
+        // that cannot happen, with the one actionable detail withheld.
+        expect(failure?.tooLargeFileNames, contains(endsWith('big.jpg')));
+        // Both count: one permanently rejected, one queued for another go.
+        expect(failure?.failedCount, 2);
+        // The retryable half is still queued.
+        expect((await store.load()).single.paths.single, endsWith('ok.jpg'));
+      },
+    );
+
     test('is reentrancy-safe (second call while draining no-ops)', () async {
       await stageEntry('a1', ['1.jpg']);
       final gate = Completer<AppointmentImage>();

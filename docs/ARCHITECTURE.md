@@ -17,11 +17,11 @@ lib/
 │   ├── adaptive/                     iOS adaptive layer — context.isCupertino (the single iOS-vs-Android UI seam) + showAdaptiveActionSheet, AdaptiveProgressIndicator, AppScrollBehavior (iOS CupertinoScrollbar), adaptive_pickers (showAdaptiveTimePicker / showAdaptiveDatePicker — Cupertino wheel on iOS, Material elsewhere; promoted out of features/calendar/utils once the employee availability rows reused them) + cupertino_time_picker (the wheel sheets behind them); Android unchanged
 │   ├── animations/                  Shared animation widgets (FadeInItem, TapScale, AnimatedLoadingButton, AnimatedFormFieldWrapper — transition-only field shake)
 │   ├── connectivity/                App-wide connectivity — connectivity_providers.dart + offline_banner.dart (OfflineBanner shown when the device drops offline; connectivity_plus)
-│   ├── constants/                   app_urls.dart — external URL constants (e.g. the Settings privacy-policy link)
+│   ├── constants/                   app_urls.dart — external URL constants: privacyPolicy + termsOfService, the two hosted legal pages (sources in docs/legal/, published to the es-pro-legal Pages repo). Read by the Settings Legal card and by the setup screen's consent link
 │   ├── deep_links/                  The one app_links consumer — deep_link_target.dart (pure classifyDeepLink(Uri) → sealed DeepLinkTarget: AppointmentLink / IgnoredLink) + deep_link_dispatcher.dart (initial link + stream, onError-guarded; routes by target). IgnoredLink covers any URI carrying `homeWidget` — both plugins observe the same openURL, so without that skip every widget/Live-Activity/Siri tap would open twice. P4c reduced this to the appointment branch ALONE: InviteLink, the /login route race and awaitLoginRoute are deleted, so an old esproschedule://invite?code=… link sitting in someone's messages falls through to IgnoredLink instead of reaching a screen that no longer exists
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
-│   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service
-│   ├── launchers/                   external_uri_launcher.dart (launchExternalUri — the ONE launch+log+notice implementation; the others are thin wrappers over it) + phone_call_launcher.dart (launchPhoneCall — shared tel: dialer) + web_url_launcher.dart (launchWebUrl — external https: opener for the Settings privacy-policy link) + route_map_launcher.dart (launchGoogleMapsRoute — opens a prebuilt multi-stop directions URI); parallel AddressMapLauncher (keeps its own guard — it surfaces a sanctioned SnackBar, not a notice) / EmailComposeLauncher
+│   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service + appointment_image_url_resolver.dart (AppointmentImageUrlResolver — resolves a photo's display URL from its `storagePath` at RENDER time, so `storage.rules` is re-evaluated on every read; the persisted `url` is a permanent tokenized link that bypasses rules entirely and is only a fallback for legacy docs with no storagePath)
+│   ├── launchers/                   external_uri_launcher.dart (launchExternalUri — the ONE launch+log+notice implementation; the others are thin wrappers over it) + phone_call_launcher.dart (launchPhoneCall — shared tel: dialer) + web_url_launcher.dart (launchWebUrl — external https: opener for the Settings privacy-policy / terms rows and the setup screen's consent link) + route_map_launcher.dart (launchGoogleMapsRoute — opens a prebuilt multi-stop directions URI); parallel AddressMapLauncher (keeps its own guard — it surfaces a sanctioned SnackBar, not a notice) / EmailComposeLauncher
 │   ├── layout/                      Responsive shell — MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the calendar Split; isTwoPane (shortestSide ≥ 600) for the list master-detail; isCompact / isNarrowWidth for small-phone & large-text row folding)
 │   ├── navigation/                  Sealed AppDestination = HubTab (4 IndexedStack panes) + PushedDestination (plain routes); destinationRoute, navigateToDestination, goHomeToCalendar, HubShellScope; top_route_observer.dart (TopRouteObserver on MaterialApp.navigatorObservers — records the navigator's current top route name; its one caller, the deep-link dispatcher's awaitLoginRoute, went with P4c's invite branch, so it has no in-app caller now and is retained deliberately; keep its lack of a didRemove override, since pushNamedAndRemoveUntil pushes before it removes)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics) — `warn` records a non-fatal, `breadcrumb` only leaves a trail; `unhandled_error_severity.dart` gates the `fatal:` flag on main.dart's two global handlers so an unhandled `permission-denied` (auth teardown racing a live listener) is recorded, not filed as a crash
@@ -32,13 +32,13 @@ lib/
 │   ├── security/                    BiometricAuthService (local_auth) + AppLock app-wide biometric gate
 │   ├── storage/                     SecureStorageService + SecureStorageKeys — encrypted local storage (flutter_secure_storage)
 │   ├── theme/                       Design tokens (AppColors, AppSpacing, AppRadius), button_styles (destructiveOutlinedButtonStyle, accentPillButtonStyle — the tinted Edit pill shared by the client and team detail headers), ThemeData, ThemeNotifier
-│   ├── utils/                       l10n_extensions.dart (context.l10n), date helpers, current_day_provider.dart (currentDayProvider — the local calendar day, self-invalidating at midnight; the off-screen schedule mirrors watch it so day buckets can't go stale overnight), language controller, sheet focus, retry.dart (retryAsync/retryStream — one post-sign-in permission-denied retry while the auth token propagates), reentrant_sync.dart (ReentrantSync mixin — coalesce-not-drop guard shared by the push/presence/live-activity registration controllers' sync())
+│   ├── utils/                       l10n_extensions.dart (context.l10n), date helpers, current_day_provider.dart (currentDayProvider — the local calendar day, self-invalidating at midnight; the off-screen schedule mirrors watch it so day buckets can't go stale overnight), language controller, sheet focus, retry.dart (retryAsync/retryStream — one post-sign-in permission-denied retry while the auth token propagates — plus the exported `isAuthPropagationDenied` predicate the three repositories share, which had been three byte-identical private copies), reentrant_sync.dart (ReentrantSync mixin — coalesce-not-drop guard shared by the push/presence/live-activity registration controllers' sync())
 │   └── validators/                  Auth input validators (email format, password rules), text_limits (TextLimits — the client-side length caps), phone_format (formatPhoneNumber / phoneDigits / PhoneInputFormatter — the `(514) 555-1234` mask every phone field types through; numbers are STORED formatted)
 │
 ├── shared/widgets/                  Reusable UI components used across ≥2 features, grouped by type
 │   ├── app_bars/                    app_top_bar (AppTopBar — the standard primary app bar every screen uses; slims in landscape)
 │   ├── primitives/                  app_avatar (contrast-aware initials circle), app_back_button (shared leading back arrow), busy_button_icon (spinner-or-icon slot for *.icon buttons), fade_in_item, name_initials (shared initials derivation), quick_action_button (QuickActionsRow + QuickActionButton — tinted Call/Email/Directions tiles), section_label (uppercase mini-header)
-│   ├── feedback/                    app_empty_state, centered_error_text (CenteredErrorText — shared centered load-failure message), error_snack_bar (errorSnackBar — shared error SnackBar for the sites that bypass NoticeService), skeleton_loader (shimmer), warning_note (WarningNote — the amber caveat box; a caveat on a SUCCESS, not a failure), status_pill (shared rounded label + text-scale cap), status_chip (appointment lifecycle + AppointmentStatus.fromRaw the canonical status mapper, and AppointmentStatus.storedRaw the canonical stored-status normalizer — overdue/legacy → pending), user_status_chip (account UserStatus: active/invited/disabled + UserStatus.fromRaw)
+│   ├── feedback/                    app_empty_state, centered_error_text (CenteredErrorText — shared centered load-failure message), error_snack_bar (errorSnackBar — shared error SnackBar for the sites that bypass NoticeService), skeleton_loader (shimmer — SkeletonLoader / SkeletonListTile / SkeletonAppointmentRow, plus SkeletonList, the standard N-row list loading state; deliberately NOT scrollable, since two callers sit inside infinite_scroll_pagination's SliverFillRemaining, which asks its child for intrinsics), warning_note (WarningNote — the amber caveat box; a caveat on a SUCCESS, not a failure), status_pill (shared rounded label + text-scale cap), status_chip (appointment lifecycle + AppointmentStatus.fromRaw the canonical status mapper, and AppointmentStatus.storedRaw the canonical stored-status normalizer — overdue/legacy → pending), user_status_chip (account UserStatus: active/invited/disabled + UserStatus.fromRaw)
 │   ├── fields/                      address_autocomplete_field, labeled_text_field (built-in shake + animated error row), app_search_bar, clear_text_button (ClearTextButton — the one clear-"x" suffix), form_helpers
 │   ├── cards/                       list_item_tile (shared row layout behind client/employee tiles), info_card (InfoCard + InfoCardRow — bordered card of tappable rows with tinted icon chips)
 │   ├── dialogs/                     confirm_dialog (showConfirmDialog — shared Cancel/confirm, destructive variant)
@@ -56,10 +56,10 @@ lib/
 │   └── .gen/                        Auto-generated app_localizations*.dart (gitignored); regenerate with `flutter gen-l10n`
 │
 └── features/
-    ├── auth/                        Sign-in, account setup, password reset, account-status monitoring; activeUserIdentityProvider resolves (role, docId) for the off-screen schedule mirrors (widget + Siri) — null wipes them. Restyled in P4b (2026-08-02) onto the hero-gradient + lifted-card chrome in AuthScaffold. P4c (2026-08-02) replaced invite acceptance with **account_setup_screen.dart**: an admin-created account signs in normally, and a status of 'invited' routes here instead of the hub. It collects a new password + confirm (PasswordStrengthMeter above the PasswordRequirementsChecklist), names, phone, and one combined terms + location-consent checkbox gating the CTA; the password is changed BEFORE activation, which is the whole reason the shared starting password can't survive setup. **create_account_screen.dart, both accept_invite_* screens, CodeEntryBoxes, AuthCodeField and signup_code_policy.dart are all DELETED**
-    ├── calendar/                    Appointments — creation, editing, viewing, repeating series, image uploads (offline-durable via PendingUploadStore), day_route_screen (a day's stops numbered in start order, day picker + employee switcher → multi-stop maps handoff); JobTemplate quick-fill chips seed title/duration on the add form (display-only, never stored)
+    ├── auth/                        Sign-in, account setup, password reset, account-status monitoring; activeUserIdentityProvider resolves (role, docId) for the off-screen schedule mirrors (widget + Siri) — null wipes them. Restyled in P4b (2026-08-02) onto the hero-gradient + lifted-card chrome in AuthScaffold. P4c (2026-08-02) replaced invite acceptance with **account_setup_screen.dart**: an admin-created account signs in normally, and a status of 'invited' routes here instead of the hub. It collects a new password + confirm (PasswordStrengthMeter above the PasswordRequirementsChecklist), names, phone, and one combined terms + location-consent checkbox gating the CTA — whose "terms of service" run is a LINK to the hosted terms page (AppUrls.termsOfService), found by locating auth_termsOfServiceLink verbatim inside auth_termsAndLocationConsent, so the two ARB keys must stay consistent per locale or the sentence renders link-less; the password is changed BEFORE activation, which is the whole reason the shared starting password can't survive setup. **create_account_screen.dart, both accept_invite_* screens, CodeEntryBoxes, AuthCodeField and signup_code_policy.dart are all DELETED**
+    ├── calendar/                    Appointments — creation, editing, viewing, repeating series, image uploads (offline-durable via PendingUploadStore), day_route_screen (a day's stops numbered in start order, day picker + employee switcher → multi-stop maps handoff); JobTemplate quick-fill chips seed title/duration on the add form (display-only, never stored). The detail sheet's action bar is role-shaped: an employee gets Mark as complete (gated on hasStarted) and, once done, an inert Complete indicator; an admin gets Cancel and, on a finished job, an Edit button — which replaces both the old dead indicator and the header edit chip, hidden by DetailsViewBody when isDone so one screen never offers the same edit twice
     ├── clients/                     Client management — CRUD, contacts, appointment history; client detail shows a Job history section (ClientJobHistorySection → fetchClientHistory, clientId-only single-field query sorted in Dart)
-    ├── dashboard/                   Admin dashboard — pure stat reducers (DashboardAggregator) over one 8-week appointments range → hero/workload/trends/attention sections + fl_chart WeeklyBarChart
+    ├── dashboard/                   Admin dashboard — pure stat reducers (DashboardAggregator) → hero/workload/trends/attention sections + fl_chart WeeklyBarChart. Its 8-week window is **split in two**: `liveRangeAround` (this ISO week onward / the 3-day pending horizon) is a live listener, `historyRangeAround` (the seven settled weeks behind it) is a one-shot `fetchInRange`. Held as one range it was a 70-day business-wide listener capped at the 1000-doc range limit, so above ~14 jobs/day every trend was computed over a silent prefix. The two results are merged by doc id (`mergeById`, live wins) and never concatenated — each query reaches back to its own `fetchStart`, so they overlap by a fortnight
     ├── employees/                   Team roster + person detail (rebuilt in P4, 2026-08-02). The user doc carries firstName/lastName, jobTitle (JobTitle enum — NOT the access role), a Sunday-indexed workingDays[7] + work start/end minutes, maxJobsPerDay (0 = no cap), onCall, and the emergencyContact/emergencyPhone pair (their own section on both the edit sheet and the detail view, apart from hours and access); `name` is always recomposed through composeEmployeeName so it can never go empty (watchAllUsers orders by it). Roster row shows "<jobTitle> · <n> jobs today" from ONE day-range listener reduced in Dart (employeeJobsTodayProvider), never a query per row. Detail = EmployeeProfileCard (avatar-as-colour-swatch + status/on-call chips + Edit pill) → Call/Email quick actions → KeyValuePanel → EmployeeTodaySection (AppointmentCards, renders "No jobs today" rather than omitting). EmployeeFormSheet split into InvitePersonSheet + EditPersonSheet on FormSheetFrame; disable/enable lives in the edit sheet footer with a future-assignment count caption. **There is no delete** — disable is the only removal (owner decision 2026-08-02). An **invited** person's row is a PendingInviteTile instead (P4c): a dashed avatar and in-place expansion rather than a detail sheet, revealing the SIGN-IN DETAILS block — their email and the shared starting password, with one Copy-both pill — plus Reset password / Remove account. **Expanding is NOT a re-issue** (unlike the retired code flow): the starting password is a fixed shared value, so the row renders it with no server round-trip, and only Reset password re-provisions. EmployeeFormActivity keys its busy state by doc id (savingIds / deletingAccountIds) rather than one app-wide bool, and the row reads its own key through a Riverpod select — so one row's reset can't spin another's credentials away, and the reentrancy guard can't silently swallow a different row's tap; `_credentialsFor` keys any re-issued pair to its account so a recycled State can't cross-render one person's password onto another's row. `widgets/fields/credential_line.dart` owns the whole credential surface shared by that row and NewAccountDialog — `CredentialLine`, `CopyCredentialsButton`, `credentialPanelDecoration` and `copyCredentialsToClipboard` (the ONE sanctioned egress of a starting password); they were separate copies and had drifted on both the confirmed-state icon and the panel fill
     ├── feature_tour/                In-app guided tours (showcaseview 5.x), 43 steps across 11 scopes as of 2026-08-04. Keyed on the sealed **TourScope**, NOT AppDestination: `DestinationTour` wraps a screen, `FormTour` wraps one of the three create-flow sheets (addAppointment/addClient/invitePerson) — which is the only reason "how do I create an appointment" is expressible at all. `storageKey` is BOTH the showcase scope name and the SharedPreferences entry (a destination's is its bare `.name`, so installed devices don't replay; form keys are namespaced `sheet_*`). One FeatureTourHost per scope registers its own scope and auto-starts once (device-local tourSeenProvider); visibility is gated by the scope's sealed TYPE — a HubTab on HubShellScope, a PushedDestination or FormTour on `ModalRoute.isCurrent`. tourStepsFor is the pure role-aware step catalog; screens wire per-step GlobalKeys and wrap through `TourSteps.stepIf`. `ready:` must be false while ANY target is still absent — a PARTIAL start finishes and marks the WHOLE scope seen, so the dropped steps are gone (paginated Clients/History gate on the views' `onFirstPageSettled`; Team on `allUsersStreamProvider.hasValue`). Settings "Replay app tour" row is the only reset
     ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes a two-day payload (todayJobs + tomorrowJobs + on-device rolloverAt) into the App Group (home_widget); mirrors functions/widget_payload_utils.js; the today bucket is endTime-based for isAllDay records and nextJob prefers a timed job; Android no-op
@@ -68,7 +68,7 @@ lib/
     ├── notifications/               FCM push client — PushRegistrationController (token upsert for active employees/admins, resync-coalesced), FcmTokenRepository, push_notification_service, notificationAuthStatusProvider (Settings recovery row); core/notifications/fcm_background_handler rewrites the widget from a push while the app is closed
     ├── presence/                    Live-location tracking + admin live staff map — PresenceSyncController owns a foreground-only geolocator stream (250 m / 2-min throttle + 10-min heartbeat, throttle clock rolls back on a failed write) for active employees/admins — the `location` UIBackgroundModes entry was removed 2026-07-27 after an App Store 2.5.4 rejection, so iOS suspends the stream on background; never re-add it, PresenceRepository writes users/{docId}/presence/location (self-only); OS permission is the only switch. Admin-only live_map_screen joins collectionGroup('presence') to watchAllUsers() via LiveMapAggregator (pure reducers, presenceStaleAfter == PRESENCE_STALE_MINUTES) → google_maps_flutter markers; staff_roster_sheet lists everyone sharing location nearest-first (LiveMapAggregator.sortedByProximity/distanceMeters/cityFromAddress — all pure)
     ├── onboarding/                  First-launch intro carousel (OnboardingGate = app home) + onboardingSeen gate
-    ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle, notification-permission recovery row, Live job card switch (iOS-only, hidden where unsupported), and my_details_screen — the ONLY self-service edit surface (own emergency contact; everything else about a person is admin-owned)
+    ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle, notification-permission recovery row, Live job card switch (iOS-only, hidden where unsupported), LegalSettingsCard (Privacy Policy + Terms of Service rows — the durable route to the terms, since the setup screen's consent link is shown once and only to a new employee), and my_details_screen — the ONLY self-service edit surface (own emergency contact; everything else about a person is admin-owned)
     ├── siri/                        Siri App Intents snapshot — ScheduleSnapshotService writes a today+7d payload under the App Group key `schedule_snapshot` (nothing renders it); buildScheduleSnapshot is hand-mirrored with ios/SiriIntents/ScheduleSnapshot.swift (schema v2 — bump scheduleSnapshotVersion and supportedVersion together); payload is field-limited because the App Group reads while locked
     ├── splash/                      Auth resolution on cold start (screen + routing logic)
     └── wave/                        Wave Accounting integration — read-only connection status + per-client sync badge + auto-import cadence picker + the two-way "Sync with Wave" action (all writes are Cloud-Function-owned). `domain/wave_sync_notice.dart` composes the result notice from a `WaveSyncSummary`: one clause per direction, zero-valued clauses dropped, and clauses for still-queued / dead-lettered / push-failed so an all-zero run can't be reported as success
@@ -133,6 +133,13 @@ silently forks a second. Build one through a factory, never by hand:
 | `forDay(day)` | One calendar day, midnight → next midnight (exclusive) |
 | `visibleMonth(focusedDay)` | The month ±14 days, a deliberate superset of every grid shape |
 | `forCalendar(focusedDay:, selectedDay:)` | The month grid ∪ the selected day |
+| `forMirrors(today)` | Today → `mirrorLookaheadDays`, the ONE window both off-screen mirrors ask for |
+
+`forMirrors` exists because the home widget and the Siri snapshot watched
+*nested* ranges (2 days and 8 days) — two permanently-alive business-wide
+listeners where one suffices. `mirrorLookaheadDays` owns the length and
+`scheduleSnapshotLookaheadDays` is that value; the widget still buckets only
+today/tomorrow out of the shared result.
 
 All of them use **calendar** arithmetic (`DateTime(y, m, d + 1)`), never
 `add(Duration(days: 1))`, which lands an hour off real midnight on the two
@@ -225,7 +232,12 @@ quick-action row, and client / phone / address / notes together in a
 still owns it), with any extra business contacts below via the same
 `ClientContactsCards`. Empty sections — notes, materials, employees, pictures —
 are omitted entirely rather than rendered as "None" rows, so a sparse
-appointment stays short.
+appointment stays short. Its header edit chip is hidden once the job is `done`:
+the `DetailsActionBar`'s Edit button is the same action, and it is the admin's
+only way back off Complete, since the status picker lives in the edit form. An
+employee sees the inert Complete indicator in that slot instead — the rules let
+an assignee write `status:'done'` and nothing else. The chip and the button move
+together; a cancelled job keeps the chip.
 
 ### The calendar's two scroll areas (P2, reworked 2026-07-31)
 
@@ -329,6 +341,17 @@ bit the `displayStatusAt` ladder and `_who`:
 | `expandToDays(...)` | The whole run fanned into per-work-day slices, clamped at 14 |
 | `lastWorkDayOf` / `lastWorkDayOfWindow` | The last day the crew starts work (the raw-pair form is for the booking-conflict dialog, which holds a resolved pair and no record yet) |
 | `dailyWindowsOverlap(...)` | Whether two runs actually clash — all window pairs, not matching day indices |
+
+**The 14-day cap is applied by one clamp, `_clampedDayCount`,** and every
+day-scoping answer above routes through it. The cap is client-side only —
+`firestore.rules` constrains neither instant — so a doc written by the console,
+the Admin SDK or another build can exceed it, and when the owners disagreed the
+calendar rendered 14 slices while every `runsOn` consumer counted the full
+corrupt length (a drawer badge reading "1 job today" every day for a year).
+`AppointmentFormValidator` is the one deliberate exception: it reads the RAW
+count, because it is the caller that must SEE an out-of-range value to refuse
+it. A form's run length has one owner too — `runLengthDays`, beside
+`appointmentSpan`.
 
 **The end date names the last day the crew STARTS work**, never the morning an
 overnight run finishes, so the length is `end − start + 1` for day jobs and
@@ -486,11 +509,13 @@ one production use is `PhoneInputFormatter`
 `(514) 555-1234` as the user types — see the phone-format invariant in
 `CLAUDE.md` for what that means for storage, `tel:` launching and search.
 
-Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allowlisted at both the repository (`{pending, in_progress, done, cancelled}`) and `firestore.rules`. Employees can only write `status='done'`. Edits that re-serialize a whole record normalize the stored status through `AppointmentStatus.storedRaw(status)` first (seed + series `propagate`) so a legacy `confirmed`/unknown value can't be re-written verbatim and rejected. `AppointmentStatus.overdue` is a **display-only** state — never stored, never in the picker (`appointmentValues`) or allowlist; `AppointmentRecord.displayStatus` derives it (and `in_progress`) from the clock, and reading `overdue.raw` throws so it can't leak into a write.
+Status enums (`AppointmentStatus` written by `updateAppointmentStatus`) are allowlisted at both the repository (`{pending, in_progress, done, cancelled}`) and `firestore.rules`. Employees can only write `status='done'`. Edits that re-serialize a whole record normalize the stored status through `AppointmentStatus.storedRaw(status)` first (seed + series `propagate`) so a legacy `confirmed`/unknown value can't be re-written verbatim and rejected. `AppointmentStatus.overdue` is a **display-only** state — never stored, never in the picker (`appointmentValues`) or allowlist; `AppointmentRecord.displayStatus` derives it (and `in_progress`) from the clock, and reading `overdue.raw` throws so it can't leak into a write. **"Terminal" as a set of raw strings has one owner: `terminalStatusRawValues` in `calendar/domain/appointment_status_values.dart`** — `{done, completed, cancelled}`, deliberately Material-free so `AppointmentRecord.isClosed` and the History query's `whereIn` can share it without importing `status_chip.dart`. It had four definitions and the History one had dropped the legacy `completed` alias, so such a doc rendered as Done on its card and was invisible in History and history search, with no error anywhere; `AppointmentStatus.isTerminal` is the enum-level mirror and `appointment_status_values_test.dart` pins the two together.
 
 ### Theming
 
 `ThemeNotifier` (InheritedWidget) holds `ThemeMode`, `textScale`, and language. `design_tokens.dart` is the single source of truth for spacing, radius, shadows, and durations. **Never hardcode raw colours in `build()`** — always use `Theme.of(context).colorScheme.*`. Status colours that have no Material 3 analog (success green, warning amber, invited purple, in-progress blue, overdue orange) live in `AppStatusColors`, a `ThemeExtension` registered on both light and dark `ThemeData`.
+
+The four `ThemeExtension`s — `AppStatusColors`, `AppCardStyle`, `AppPalette`, `AppMonoType` — live one level down in `core/theme/extensions/` (each carries ~40 fields plus a `copyWith` and a `lerp`, which is what made the token file 965 lines) and are **re-exported by `design_tokens.dart`**. That single import path is a precondition of the split, not a nicety: every `theme.palette` / `theme.statusColors` call site resolves its getter through it. **Import `design_tokens.dart`, never an extension file directly.**
 
 ### Platform Adaptivity (iOS)
 
@@ -546,7 +571,11 @@ is its own
 `clients/widgets/views/appointment_history_view.dart`, which groups by year then
 day and filters by year/employee via the reusable `HistoryFilterBar`
 (`clients/widgets/sections/`). It is no longer a `ClientsMode` of the clients
-screen.
+screen. The view takes the caller's `isAdmin` (default **false**, like every
+appointment surface) and passes it to `showEventDetails` as `showActions` —
+history is where `done` and `cancelled` jobs live, so hardcoding `false` there
+put a finished job's Edit button out of reach on the one screen an admin would
+look for it.
 
 The four `HubTab` panes live in one persistent `HubShell`
 (`routes/hub_shell.dart`) — an `IndexedStack` that builds a tab on its first
@@ -687,7 +716,9 @@ employee signs in normally (login_screen — no "accept invite" entry any more)
       signs out.
 
 AccountSetupScreen (signed-in email shown; new password + confirm, names,
-phone, one combined terms + location-consent checkbox gating the CTA)
+phone, one combined terms + location-consent checkbox gating the CTA — its
+"terms of service" run opens the hosted terms page, so the stamp below records
+acceptance of something the person could actually read)
   └── AuthService.completeAccountSetup(newPassword, firstName, lastName,
   │     phone, termsAccepted, locationConsent)
   ├── User.updatePassword FIRST — ORDER IS THE GUARANTEE. The server cannot
@@ -928,14 +959,15 @@ rateLimits/{route__uid}  True sliding window written by enforceDurableRateLimit.
                        dropped each call, and a call is rejected when >= max remain
   expiresAt: timestamp optional Firestore TTL target
 
-(signupCodes was retired from the APP by P4c, 2026-08-02, but it is NOT gone:
- the collection, its `/signupCodes` rules block (firestore.rules), its TTL
- fieldOverride (firestore.indexes.json) and the `createEmployeeInvite` /
- `redeemSignupCode` callables that read and write it all survive as the
- `#compat-1.37.1` shim for the build still on the App Store. Nothing in THIS
- build touches it. Do not "clean up" the rules block or the TTL entry ahead of
- the shim sweep — removing a fieldOverride and deploying `firestore:indexes`
- drops the live TTL policy. Retire the lot together; see docs/DEPLOYMENT.md.)
+(signupCodes is GONE. P4c retired it from the app 2026-08-02; the backend half
+ — the `/signupCodes` rules block, its TTL fieldOverride in
+ firestore.indexes.json, and the `createEmployeeInvite` / `redeemSignupCode`
+ callables that read and wrote it — survived as the `#compat-1.37.1` shim until
+ 2026-08-08, when every device was confirmed on 1.40+ and the lot was deleted.
+ The collection was verified empty in prod first, which is what made dropping
+ the fieldOverride safe: deploying `firestore:indexes` without it drops the live
+ TTL policy, and that policy is the only reaper those docs have. Apply the same
+ check before removing any other TTL entry. See docs/DEPLOYMENT.md.)
 
 appointmentReminders/{apptId_startMs_employeeDocId}   Per-recipient idempotency
                        ledger for the 30-min reminder sweep: create() fails if
@@ -960,6 +992,16 @@ wave/{docId}           Wave Accounting connection metadata (e.g. wave/connection
                        for the daily waveScheduledImport). Token lives only in
                        Secret Manager. Read only via the waveGetConnection
                        callable — never client-side (read+write denied).
+  customerDeltaSince   Delta-import watermark: imports ask Wave for customers
+                       modified after this instant. Set to the run's START minus
+                       a 5-min overlap, and ONLY over a window fully covered —
+                       a throw, or a run that protected pending clients, HOLDS
+                       it. Advancing past a window that was never imported
+                       hides those customers from every later delta.
+  lastFullImportAt     When the last unfiltered pass ran. A full pass is forced
+                       every 7 days as the backstop for Wave's `modifiedAt`,
+                       which we trust to move on every mapped change and cannot
+                       verify. Both fields are Admin-SDK-only, like the doc.
 
 waveSyncQueue/{jobId}  Outbox for Wave sync jobs — enqueued by the waveUpsertCustomer
                        clients trigger, drained by the scheduled waveSyncWorker
@@ -996,9 +1038,9 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. For overflow tests, pump the widget at a **small-phone size with 2× text** — set `tester.view.physicalSize` (a 260-wide logical viewport is the usual worst case) and wrap in a `MediaQuery` carrying `textScaler: TextScaler.linear(2)`. Each test file keeps its own local `_harness` helper for this; there is no shared one.
 
-Run: `flutter test` (1647 passing as of 2026-08-05 — that is the runner's count;
-`grep`ing for `test(`/`testWidgets(` gives 1603, since some cases are generated
-inside loops; `functions` adds 798 jest
+Run: `flutter test` (1713 passing as of 2026-08-08 — that is the runner's count;
+`grep`ing for `test(`/`testWidgets(` gives 1669, since some cases are generated
+inside loops; `functions` adds 820 jest
 tests in `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0 info
 lints** — see Analysis & Linting below; see

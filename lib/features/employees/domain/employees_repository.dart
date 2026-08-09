@@ -87,6 +87,14 @@ abstract class EmployeesRepository {
   /// Streams the signed-in user's `users/{uid}` doc — a single listener that
   /// covers name, status, and role.
   Stream<Map<String, dynamic>> watchUserDoc(String uid);
+
+  /// The doc id [watchUserDoc] last resolved for [uid], or null if it has not
+  /// emitted a populated doc for that uid yet.
+  ///
+  /// Exists so a caller that already watches that stream does not pay a second
+  /// `where('uid').limit(1).get()` purely to learn the id the stream had in
+  /// hand and discarded. Null just means "ask the slow way".
+  String? cachedUserDocId(String uid);
 }
 
 class UserUidMatch {

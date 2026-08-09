@@ -45,6 +45,11 @@ enum AppointmentStatus {
   bool get isCancelled => this == cancelled;
 
   /// Terminal states exit the active workflow.
+  ///
+  /// The enum-level mirror of `terminalStatusRawValues`
+  /// (`features/calendar/domain/appointment_status_values.dart`), which owns
+  /// the raw-string vocabulary the History query and `AppointmentRecord`
+  /// share. `appointment_status_values_test.dart` pins the two together.
   bool get isTerminal => isDone || isCancelled;
 }
 

@@ -77,7 +77,7 @@ class PresenceRepository {
         .limit(_presenceStreamLimit)
         .snapshots()
         .map(_toFixes),
-    retryWhen: _isAuthPropagationDenied,
+    retryWhen: isAuthPropagationDenied,
   );
 
   /// One malformed doc must not drop the whole map — skip it and keep going.
@@ -104,8 +104,3 @@ class PresenceRepository {
     return fixes;
   }
 }
-
-// Retries permission-denied errors caused by auth-token propagation lag —
-// there's a twin of this in firebase_employees_repository.dart, keep them in sync.
-bool _isAuthPropagationDenied(Object error) =>
-    error is FirebaseException && error.code == 'permission-denied';
