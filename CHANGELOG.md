@@ -37,6 +37,17 @@ Restores work that was reverted in error before 1.44.0 went out, and which the
   is what the privacy policy already said and what the app actually does. The
   terms also now describe how an administrator creates an account outright,
   rather than the invitation flow the app no longer has.
+- **The support page and privacy policy were corrected to match the app.** The
+  support page still told a new employee to wait for an emailed signup code and
+  create their own account — a flow that no longer exists, so the instructions
+  couldn't be followed. It now describes what actually happens: your admin
+  creates the account and hands you an email and starting password, and the app
+  walks you through verifying your address and choosing your own password. The
+  privacy policy also had four statements that promised more than the app does —
+  most importantly that turning off location access deletes your stored location
+  and removes your pin from the staff map. It does neither; it stops new
+  readings, and the last one stays until you sign out, delete your account, or
+  an admin disables it. The policy now says so plainly.
 
 ## [1.44.0+70] - 2026-08-08
 

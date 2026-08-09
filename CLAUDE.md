@@ -1131,6 +1131,32 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `fcmTokens`, every `liveActivityTokens` row and the `liveActivityCards`
   marker. `allow delete` is withdrawn from `/users`; the Admin SDK bypasses
   rules, so console cleanup is unaffected.
+- **Revoking a PERMISSION deletes nothing server-side, and the published privacy
+  policy now says so** (2026-08-08 audit). `presence/location` is deleted only by
+  `PresenceSyncController.unregister()` and `fcmTokens` only by
+  `unregisterCurrentDevice()`, and both are reached from exactly three places:
+  sign-out, self-service account deletion, and the server-side disable/delete
+  bridge (`functions/bridge.js`). Losing the OS permission mid-stream only runs
+  `_stop()`, which cancels the subscription and timers — no network call. That
+  matters because **the stored fix keeps rendering on the admin live map**:
+  `LiveMapAggregator.join` filters on missing/inactive user, never on freshness,
+  and `staff_marker_icon.dart` has no staleness branch, so a months-old pin is
+  visually identical to a live one (only the roster row and info card show the
+  age). The policy used to promise deletion on revocation and promise the pin
+  disappeared; owner call was to correct the TEXT rather than the code, so
+  `docs/legal/privacy-policy.html` §6 and §8 now describe this behaviour
+  exactly. **The two must stay in step**: if you ever wire permission-revocation
+  into a delete, or add a freshness filter to the map, update those two sections
+  in the same change — and republish (see below), or the site keeps describing
+  the old behaviour.
+- **`docs/legal/*.html` are SOURCES, not the published pages.** The live site is
+  the separate `gvogas/es-pro-legal` GitHub Pages repo, where
+  `privacy-policy.html` is published as **`index.html`** (which is why the other
+  pages link to the privacy policy by absolute root URL — a relative
+  `privacy-policy.html` 404s). The four files must stay **byte-identical** across
+  the two repos; a 2026-08-08 audit found the support page still describing the
+  signup-code flow deleted in P4c, months after the app stopped having it.
+  Editing `docs/legal/` alone changes nothing a user can read.
 - **A disabled or invited employee's colour is TAKEN.** `usedColors` reads
   `allUsersStreamProvider`, never `employeesStreamProvider` — the latter filters
   to `status == 'active'`, so a disabled employee's colour was offered again and
