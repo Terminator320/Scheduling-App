@@ -321,6 +321,10 @@
   "@calendar_assignedLabel": {
     "description": "Mono all-caps label above the assignee panel in the appointment detail sheet. Already uppercase in source."
   },
+  "calendar_hasPhotos": "Has photos",
+  "@calendar_hasPhotos": {
+    "description": "Spoken form of the photo icon on an appointment card, appended to the card's semantics label when the job carries pictures."
+  },
   "calendar_photosLabel": "PHOTOS",
   "@calendar_photosLabel": {
     "description": "Mono all-caps label above the photo row in the appointment detail sheet. Already uppercase in source."
@@ -344,6 +348,15 @@
   "calendar_jobsCount": "{count, plural, =1{1 JOB} other{{count} JOBS}}",
   "@calendar_jobsCount": {
     "description": "Mono all-caps count of the selected day's jobs, shown right-aligned in the agenda header. Already uppercase in source.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_jobsDoneCount": "{count, plural, =1{1 DONE} other{{count} DONE}}",
+  "@calendar_jobsDoneCount": {
+    "description": "Appended to the agenda header's job count once some of the day's jobs are closed, reading '3 JOBS · 1 DONE'. Counts finished and cancelled visits alike, matching the 'Done' rule in the list below. Already uppercase in source.",
     "placeholders": {
       "count": {
         "type": "int"

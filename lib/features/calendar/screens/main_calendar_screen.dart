@@ -329,9 +329,26 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       monthLabelShort: _monthShortLabelFormat.format(_focusedDay),
       yearLabel: _yearLabelFormat.format(_focusedDay),
       dayTitle: DateUtilsHelper.formatDayHeader(selectedDay),
-      jobLabel: context.l10n.calendar_jobsCount(selectedEvents.length),
+      jobLabel: _jobLabel(context, selectedEvents),
       today: today,
     );
+  }
+
+  /// The agenda header's count: the day's total, plus how much of it is behind
+  /// them once anything is closed — `3 JOBS · 1 DONE`.
+  ///
+  /// Counts `isClosed`, not `done` alone, so the header can't disagree with the
+  /// "Done" rule the agenda draws over the same block below it.
+  static String _jobLabel(
+    BuildContext context,
+    List<AppointmentDaySlice> events,
+  ) {
+    final l10n = context.l10n;
+    final total = l10n.calendar_jobsCount(events.length);
+    final closed = events.where((slice) => slice.appointment.isClosed).length;
+    return closed == 0
+        ? total
+        : '$total · ${l10n.calendar_jobsDoneCount(closed)}';
   }
 
   @override
