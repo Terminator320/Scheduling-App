@@ -113,6 +113,7 @@ class AppointmentCard extends StatelessWidget {
     final collapsed = collapseWhenClosed && appointment.isClosed;
 
     final timeLabel = _timeLabel(context);
+    final hasPhotos = appointment.pictures.isNotEmpty;
 
     // A personal job has no client, so it names itself in that slot rather
     // than leaving the meta line as the crew alone.
@@ -130,6 +131,9 @@ class AppointmentCard extends StatelessWidget {
       timeLabel,
       for (final member in crew) member.name,
       if (client.isNotEmpty) client,
+      // The glyph is the only cue that a job carries photos, so it has to be
+      // spoken — the card excludes its subtree's own semantics.
+      if (hasPhotos) context.l10n.calendar_hasPhotos,
     ].join(', ');
 
     final card = TapScale(
@@ -171,6 +175,7 @@ class AppointmentCard extends StatelessWidget {
                           compact: compact,
                           collapsed: collapsed,
                           isCancelled: isCancelled,
+                          hasPhotos: hasPhotos,
                         ),
                       ),
                     ],
@@ -228,12 +233,14 @@ class AppointmentCard extends StatelessWidget {
     required bool compact,
     required bool collapsed,
     required bool isCancelled,
+    required bool hasPhotos,
   }) {
     final titleRow = _TitleRow(
       title: appointment.title,
       status: status,
       compact: compact,
       isCancelled: isCancelled,
+      hasPhotos: hasPhotos,
     );
 
     if (collapsed) {
@@ -318,12 +325,14 @@ class _TitleRow extends StatelessWidget {
     required this.status,
     required this.compact,
     required this.isCancelled,
+    required this.hasPhotos,
   });
 
   final String title;
   final AppointmentStatus status;
   final bool compact;
   final bool isCancelled;
+  final bool hasPhotos;
 
   @override
   Widget build(BuildContext context) {
@@ -339,22 +348,36 @@ class _TitleRow extends StatelessWidget {
       ),
     );
 
-    Widget titleContent = titleText;
-    if (status == AppointmentStatus.overdue) {
-      // The crew bar encodes identity, not status, so overdue needs its own
-      // glyph.
-      titleContent = Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
+    // The crew bar encodes identity, not status, so overdue needs its own glyph.
+    final warning = status == AppointmentStatus.overdue
+        ? Padding(
             padding: const EdgeInsets.only(top: 2, right: AppSpacing.sp4),
             child: Icon(
               Icons.warning_amber_rounded,
               size: 15,
               color: theme.statusColors.warning,
             ),
-          ),
+          )
+        : null;
+
+    // The photo cue rides the title rather than the time line, so it reaches
+    // the eye first and — because this row is shared — survives the agenda's
+    // collapsed treatment, where the meta line loses the crew avatars.
+    final photos = hasPhotos
+        ? const Padding(
+            padding: EdgeInsets.only(top: 2, left: AppSpacing.sp8),
+            child: _PhotoGlyph(),
+          )
+        : null;
+
+    Widget titleContent = titleText;
+    if (warning != null || photos != null) {
+      titleContent = Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ?warning,
           Expanded(child: titleText),
+          ?photos,
         ],
       );
     }
@@ -423,6 +446,24 @@ class _ClosedMetaRow extends StatelessWidget {
       ],
     );
   }
+}
+
+/// The card's "this job has photos" cue, at the end of the title line and just
+/// before the status chip. Presence only — the count lives in the detail sheet,
+/// and the card is answering "is there anything to look at here", not "how
+/// much".
+///
+/// Semantics are excluded because the card composes one label for the whole
+/// subtree; [AppointmentCard] adds the spoken form there.
+class _PhotoGlyph extends StatelessWidget {
+  const _PhotoGlyph();
+
+  @override
+  Widget build(BuildContext context) => Icon(
+    Icons.photo_outlined,
+    size: 15,
+    color: Theme.of(context).palette.textTertiary,
+  );
 }
 
 /// Every assignee's avatar, overlapped into a stack. Overlapping rather than

@@ -1293,7 +1293,11 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   and is counted by it, so the label is deliberately looser than the set) at
   `_firstClosedIndex`, and its `length - index` count is only valid because the
   sort guarantees the closed jobs are one contiguous tail — don't reorder them
-  at the call site. Everywhere else (day route, dashboard, employee TODAY panel,
+  at the call site. **The agenda header's count answers the same question and
+  must use the same predicate**: `_jobLabel` (`main_calendar_screen.dart`)
+  appends `· 1 DONE` to `3 JOBS` by counting `isClosed`, not `done` alone, so
+  the header and the rule drawn over that block can never disagree about how
+  much of the day is behind them. Everywhere else (day route, dashboard, employee TODAY panel,
   client job history) keeps its own sort and the plain full-height card.
 - **`AppointmentCard` is the ONE appointment card** — calendar agenda, day
   route, client job history, both dashboard sections and the paginated history

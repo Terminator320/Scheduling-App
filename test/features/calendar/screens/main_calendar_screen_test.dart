@@ -301,6 +301,47 @@ void main() {
     expect(find.textContaining('1 JOBS'), findsNothing);
   });
 
+  testWidgets('agenda header reports how much of the day is done', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today),
+          _appointment(2, today),
+          _appointment(3, today).copyWith(status: 'done'),
+        ]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('3 JOBS · 1 DONE'), findsOneWidget);
+  });
+
+  testWidgets('agenda header stays a bare count while nothing is closed', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today),
+          _appointment(2, today),
+        ]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 JOBS'), findsOneWidget);
+  });
+
   testWidgets('the header block grows with text scale instead of clipping', (
     tester,
   ) async {
