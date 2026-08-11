@@ -392,6 +392,8 @@
   "settings_myAvailabilityBlurb": "Les changements s'appliquent immédiatement.",
   "settings_availabilityConflict": "{days} a déjà du travail réservé — les tâches restent jusqu'à ce que quelqu'un les déplace.",
   "settings_myScheduling": "PLANIFICATION",
+  "settings_travelAlerts": "Alertes de départ",
+  "error_introSaveTravelAlerts": "Impossible de modifier votre réglage d'alertes",
   "settings_changeEmail": "Modifier le courriel de connexion",
   "settings_changeEmailBlurb": "Vous vous connecterez avec la nouvelle adresse dorénavant. Saisissez-la deux fois — une faute de frappe vous bloque jusqu'à ce qu'un administrateur la corrige.",
   "settings_confirmNewEmail": "Confirmer le nouveau courriel",

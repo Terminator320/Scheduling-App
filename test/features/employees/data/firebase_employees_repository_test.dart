@@ -866,6 +866,7 @@ void main() {
         workStartMinutes: workStartMinutes,
         workEndMinutes: workEndMinutes,
         onCall: onCall,
+        travelAlertsEnabled: true,
       );
       return (verify(() => docRef.update(captureAny())).captured.single as Map)
           .cast<String, dynamic>();

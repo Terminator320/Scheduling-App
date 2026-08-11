@@ -20,6 +20,7 @@ import 'package:scheduling/features/auth/application/account_status_provider.dar
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -32,6 +33,7 @@ import 'package:scheduling/features/notifications/application/push_registration_
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/settings/application/app_info_provider.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
+import 'package:scheduling/features/settings/application/my_details_providers.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
 import 'package:scheduling/features/settings/widgets/cards/account_settings_card.dart';
 import 'package:scheduling/features/settings/widgets/cards/appearance_settings_card.dart';
@@ -212,6 +214,50 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       await controller.sync();
     } else {
       await controller.unregister();
+    }
+  }
+
+  /// The traffic-aware departure push, per person.
+  ///
+  /// A SERVER-side flag, unlike the Live Activity toggle beside it: the sweep
+  /// decides the push kind, so a device-local preference could not reach it.
+  /// Turning it off degrades to the fixed 30-minute reminder rather than
+  /// dropping the notification — see `wantsTravelAlerts` in
+  /// `functions/travel_utils.js`.
+  Future<void> _toggleTravelAlerts({required bool value}) async {
+    final record = ref.read(myEmployeeRecordProvider);
+    if (record == null) return;
+
+    final l10n = context.l10n;
+    final notices = ref.read(noticeServiceProvider);
+    if (guardedOffline(context, ref, intro: l10n.error_introSaveTravelAlerts)) {
+      return;
+    }
+
+    try {
+      await ref
+          .read(employeesRepositoryProvider)
+          .updateSelfDetails(
+            docId: record.id,
+            phone: record.phone,
+            workingDays: record.workingDays,
+            workStartMinutes: record.workStartMinutes,
+            workEndMinutes: record.workEndMinutes,
+            onCall: record.onCall,
+            travelAlertsEnabled: value,
+          );
+    } catch (error, stackTrace) {
+      ref
+          .read(loggerProvider)
+          .warn('ME-SAVE travel alerts failed', error, stackTrace);
+      if (!mounted) return;
+      notices.error(
+        composeErrorNotice(
+          context,
+          intro: l10n.error_introSaveTravelAlerts,
+          error: error,
+        ),
+      );
     }
   }
 
@@ -466,6 +512,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       child: NotificationsSettingsCard(
         onNotificationsTap: _onNotificationsTap,
         onToggleLiveActivity: _toggleLiveActivity,
+        // Null hides the row until the person's own record has loaded —
+        // rendering the switch against a guessed default would show a state
+        // that may be wrong and then flip under them.
+        travelAlertsEnabled: ref
+            .watch(myEmployeeRecordProvider)
+            ?.travelAlertsEnabled,
+        onToggleTravelAlerts: _toggleTravelAlerts,
       ),
     ),
     if (_isAdmin) ...[

@@ -138,6 +138,46 @@ void main() {
       expect(record.onCall, isFalse);
     });
 
+    test('an absent travelAlertsEnabled reads as ON', () {
+      // Every doc written before the field existed has no value. Reading it as
+      // off would silence departure alerts fleet-wide, and the symptom is a
+      // push that does not arrive — which nobody reports. Mirrors
+      // `wantsTravelAlerts` in functions/travel_utils.js.
+      final record = EmployeeRecord.fromMap('e1', {'name': 'Old User'});
+
+      expect(record.travelAlertsEnabled, isTrue);
+    });
+
+    test('only an explicit false opts out of travel alerts', () {
+      expect(
+        EmployeeRecord.fromMap('e1', {
+          'travelAlertsEnabled': false,
+        }).travelAlertsEnabled,
+        isFalse,
+      );
+      expect(
+        EmployeeRecord.fromMap('e1', {
+          'travelAlertsEnabled': true,
+        }).travelAlertsEnabled,
+        isTrue,
+      );
+      // A doc written by the console bypasses the rules' type check.
+      expect(
+        EmployeeRecord.fromMap('e1', {
+          'travelAlertsEnabled': 'false',
+        }).travelAlertsEnabled,
+        isTrue,
+      );
+    });
+
+    test('toMap never emits travelAlertsEnabled', () {
+      // It is the person's own notification preference, written only by
+      // updateSelfDetails — an admin save must leave it exactly as it was.
+      const record = EmployeeRecord(id: 'e1', travelAlertsEnabled: false);
+
+      expect(record.toMap().containsKey('travelAlertsEnabled'), isFalse);
+    });
+
     test('an unknown stored jobTitle falls back to unset', () {
       final record = EmployeeRecord.fromMap('e1', {
         'jobTitle': 'plumber-in-chief',

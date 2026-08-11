@@ -52,6 +52,7 @@ void main() {
         workStartMinutes: any(named: 'workStartMinutes'),
         workEndMinutes: any(named: 'workEndMinutes'),
         onCall: any(named: 'onCall'),
+        travelAlertsEnabled: any(named: 'travelAlertsEnabled'),
       ),
     ).thenAnswer((_) async {});
     when(
@@ -163,6 +164,7 @@ void main() {
         workStartMinutes: any(named: 'workStartMinutes'),
         workEndMinutes: any(named: 'workEndMinutes'),
         onCall: any(named: 'onCall'),
+        travelAlertsEnabled: any(named: 'travelAlertsEnabled'),
       ),
     ).called(1);
     // The whole-record admin path must never run for a self edit — it carries
@@ -223,6 +225,7 @@ void main() {
         workStartMinutes: any(named: 'workStartMinutes'),
         workEndMinutes: any(named: 'workEndMinutes'),
         onCall: true,
+        travelAlertsEnabled: any(named: 'travelAlertsEnabled'),
       ),
     ).called(1);
     expect(find.byKey(const Key('myIdentitySaveBar')), findsNothing);
@@ -250,6 +253,7 @@ void main() {
           workStartMinutes: any(named: 'workStartMinutes'),
           workEndMinutes: any(named: 'workEndMinutes'),
           onCall: any(named: 'onCall'),
+          travelAlertsEnabled: any(named: 'travelAlertsEnabled'),
         ),
       ).captured.single;
       expect(captured, '(514) 555-0000');
@@ -295,6 +299,7 @@ void main() {
         workStartMinutes: any(named: 'workStartMinutes'),
         workEndMinutes: any(named: 'workEndMinutes'),
         onCall: any(named: 'onCall'),
+        travelAlertsEnabled: any(named: 'travelAlertsEnabled'),
       ),
     );
     verifyNever(

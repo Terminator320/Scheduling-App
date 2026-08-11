@@ -398,6 +398,9 @@ async function resolveReminderForAssignee(deps, args) {
   const {db, fetchImpl, apiKey, logger} = deps;
   const {candidate: c, employeeDocId, startMs, nowDate, nowMs,
     presence, employeeAppointments, estimates, cache} = args;
+  // Absent means ON, so an omitted arg (older call site, failed read) keeps
+  // the departure alert rather than silently dropping it.
+  const wantsAlerts = args.wantsAlerts !== false;
   const none = {reminded: 0, started: 0};
 
   const ledgerId = travelReminderLedgerId(
@@ -442,7 +445,11 @@ async function resolveReminderForAssignee(deps, args) {
   if (!isDue({startTimeMillis: startMs, leadMinutes, nowMillis: nowMs})) {
     return none;
   }
-  const kind = travelSeconds == null ? "reminder" : "leaveNow";
+  // An opted-out assignee degrades to the fixed 30-minute reminder rather than
+  // losing the notification — the same fallback a missing origin or a Routes
+  // failure already takes.
+  const kind = (travelSeconds == null || !wantsAlerts) ?
+      "reminder" : "leaveNow";
   const ctx = {
     clientName: c.clientName,
     // A personal job has no client, so the message names it by title —
@@ -535,10 +542,12 @@ async function runTravelAwareReminderSweep(deps) {
   // per distinct employee, reused across all of that employee's candidates.
   const employeeIds = [...new Set(
       candidates.flatMap((c) => toIdList(c.employeeIds)))];
-  const [presenceByEmployee, contextByEmployee] = await Promise.all([
-    loadPresenceByEmployee(deps, employeeIds),
-    loadContextByEmployee(deps, employeeIds, nowMs),
-  ]);
+  const [presenceByEmployee, contextByEmployee, travelPrefsByEmployee] =
+    await Promise.all([
+      loadPresenceByEmployee(deps, employeeIds),
+      loadContextByEmployee(deps, employeeIds, nowMs),
+      loadTravelPrefsByEmployee(deps, employeeIds),
+    ]);
 
   let reminded = 0;
   let started = 0;
@@ -574,6 +583,8 @@ async function runTravelAwareReminderSweep(deps) {
             nowMs,
             presence: presenceByEmployee.get(employeeDocId) || null,
             employeeAppointments: contextByEmployee.get(employeeDocId) || [],
+            // Absent means ON — see wantsTravelAlerts.
+            wantsAlerts: travelPrefsByEmployee.get(employeeDocId) !== false,
             estimates,
             cache,
           });
@@ -622,6 +633,59 @@ async function loadPresenceByEmployee(deps, employeeIds) {
     if (logger) logger.warn("travel: presence getAll failed", {err});
   }
   return presenceByEmployee;
+}
+
+/**
+ * Whether this person still wants the "time to leave" push.
+ *
+ * **Defaults to ON.** Every users doc written before this field existed has no
+ * value, so reading `undefined` as off would silence the whole fleet — and the
+ * symptom is a push that does not arrive, which nobody reports. Only an
+ * explicit `false` opts out.
+ *
+ * Scope is deliberately narrow: it gates the ESCALATION to `leaveNow` only.
+ * An opted-out assignee still gets the fixed 30-minute `reminder`, the same
+ * degradation every other travel failure already takes — the toggle turns off
+ * traffic-aware departure alerts, not their reminders.
+ *
+ * @param {?Object} user The users doc data, or null when it could not be read.
+ * @return {boolean}
+ */
+function wantsTravelAlerts(user) {
+  return !user || user.travelAlertsEnabled !== false;
+}
+
+/**
+ * Each candidate assignee's `travelAlertsEnabled` preference.
+ *
+ * One read per distinct assignee per sweep, alongside the presence and context
+ * loads above — the flag has to be known BEFORE the kind is chosen, which is
+ * before `sendToEmployee` reads the same doc. The candidate set is the jobs
+ * inside the 90-minute window, so this is a handful of reads every 5 minutes,
+ * not a roster scan.
+ *
+ * A failed read yields no entry, and `wantsTravelAlerts(null)` is true — the
+ * safe direction, since a transient Firestore error must not silence a
+ * departure alert.
+ *
+ * @param {!Object} deps `{db, logger}`.
+ * @param {!Array<string>} employeeIds Distinct assignee doc ids.
+ * @return {!Promise<!Map<string, boolean>>} keyed by employee doc id.
+ */
+async function loadTravelPrefsByEmployee(deps, employeeIds) {
+  const {db, logger} = deps;
+  const prefs = new Map();
+  if (employeeIds.length === 0) return prefs;
+  await Promise.all(employeeIds.map(async (id) => {
+    try {
+      const snap = await db.collection("users").doc(id).get();
+      prefs.set(id, wantsTravelAlerts(
+          snap && snap.exists ? (snap.data() || null) : null));
+    } catch (err) {
+      if (logger) logger.warn("travel: prefs read failed", {id, err});
+    }
+  }));
+  return prefs;
 }
 
 /**
@@ -743,6 +807,7 @@ module.exports = {
   parseRoutesDurationSeconds,
   computeTravelSeconds,
   travelReminderLedgerId,
+  wantsTravelAlerts,
   runTravelAwareReminderSweep,
   runOnSiteFlipPass,
 };

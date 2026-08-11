@@ -16,11 +16,18 @@ class NotificationsSettingsCard extends ConsumerWidget {
   const NotificationsSettingsCard({
     required this.onNotificationsTap,
     required this.onToggleLiveActivity,
+    required this.travelAlertsEnabled,
+    required this.onToggleTravelAlerts,
     super.key,
   });
 
   final void Function(AuthorizationStatus status) onNotificationsTap;
   final void Function({required bool value}) onToggleLiveActivity;
+
+  /// Null while the person's own record is still loading, which hides the row
+  /// rather than rendering a switch in a state that may be wrong.
+  final bool? travelAlertsEnabled;
+  final void Function({required bool value}) onToggleTravelAlerts;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -33,6 +40,7 @@ class NotificationsSettingsCard extends ConsumerWidget {
     // Hidden when the device/OS version can't host a Live Activity card.
     final showLiveActivity =
         ref.watch(liveActivitySupportedProvider).asData?.value ?? false;
+    final showTravelAlerts = travelAlertsEnabled != null;
     return SettingsSectionCard(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -44,7 +52,7 @@ class NotificationsSettingsCard extends ConsumerWidget {
                 : Icons.notifications_off_rounded,
             iconColor: granted ? scheme.primary : scheme.error,
             label: context.l10n.settings_notifications,
-            isLast: !showLiveActivity,
+            isLast: !showLiveActivity && !showTravelAlerts,
             trailing: Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
               spacing: AppSpacing.sp4,
@@ -71,10 +79,27 @@ class NotificationsSettingsCard extends ConsumerWidget {
               icon: Icons.directions_car_rounded,
               iconColor: scheme.primary,
               label: context.l10n.settings_liveActivity,
-              isLast: true,
+              isLast: !showTravelAlerts,
               trailing: Switch.adaptive(
                 value: ref.watch(liveActivityEnabledProvider),
                 onChanged: (value) => onToggleLiveActivity(value: value),
+                activeTrackColor: scheme.primary,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+          if (showTravelAlerts) ...[
+            const SettingsTileDivider(),
+            SettingsTile(
+              iconBg: scheme.primaryContainer,
+              icon: Icons.schedule_send_rounded,
+              iconColor: scheme.primary,
+              label: context.l10n.settings_travelAlerts,
+              isLast: true,
+              trailing: Switch.adaptive(
+                key: const Key('travelAlertsSwitch'),
+                value: travelAlertsEnabled!,
+                onChanged: (value) => onToggleTravelAlerts(value: value),
                 activeTrackColor: scheme.primary,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),

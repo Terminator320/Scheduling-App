@@ -220,6 +220,11 @@ service cloud.firestore {
                   && d.maxJobsPerDay >= 0
                   && d.maxJobsPerDay <= 50))
           && (!('onCall' in d.keys()) || d.onCall is bool)
+          // Per-person opt-out for the "time to leave" push. ABSENT means ON —
+          // every doc written before this field existed has no value, and the
+          // sweep reads undefined as enabled. See wantsTravelAlerts.
+          && (!('travelAlertsEnabled' in d.keys())
+              || d.travelAlertsEnabled is bool)
           && (!('colorValue' in d.keys()) || isValidColorValue(d.colorValue))
           && (!('role' in d.keys()) || isValidRole(d.role))
           && (!('status' in d.keys()) || isValidUserStatus(d.status))
@@ -278,7 +283,7 @@ service cloud.firestore {
       function isAvailabilityOnlyChange() {
         return request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['workingDays', 'workStartMinutes', 'workEndMinutes',
-                    'onCall', 'phone', 'updatedAt']);
+                    'onCall', 'phone', 'travelAlertsEnabled', 'updatedAt']);
       }
 
       // Two ways in. An ADMIN may update any doc. A PERSON may update their

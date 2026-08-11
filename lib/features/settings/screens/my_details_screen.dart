@@ -66,6 +66,11 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
   /// the identity bar exists to prevent.
   String _storedPhone = '';
 
+  /// Carried through every self write untouched — the toggle for it lives in
+  /// Settings, but the rules' `hasOnly` means the patch must still name it, and
+  /// sending a guessed default would flip somebody's push setting.
+  bool _travelAlertsEnabled = true;
+
   /// Seeds once, from the first record that arrives — a later snapshot must not
   /// overwrite what the person is part-way through changing.
   void _seed(EmployeeRecord record) {
@@ -76,6 +81,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     _workEndMinutes = record.workEndMinutes;
     _onCall = record.onCall;
     _storedPhone = record.phone;
+    _travelAlertsEnabled = record.travelAlertsEnabled;
   }
 
   /// Identity save — the emergency contact (subcollection) AND the phone (users
@@ -112,6 +118,9 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
         workStartMinutes: _workStartMinutes,
         workEndMinutes: _workEndMinutes,
         onCall: _onCall,
+        // Not the person's to change here — Settings owns that toggle, so the
+        // stored value is carried through untouched.
+        travelAlertsEnabled: _travelAlertsEnabled,
       );
       if (!mounted) return;
       setState(() => _storedPhone = edit.phone);
@@ -185,6 +194,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
             workStartMinutes: start,
             workEndMinutes: end,
             onCall: onCall,
+            travelAlertsEnabled: _travelAlertsEnabled,
           );
     } catch (error, stackTrace) {
       ref

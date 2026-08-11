@@ -1723,6 +1723,14 @@
   "@settings_myScheduling": {
     "description": "Admin-only section header on My details for scheduling limits"
   },
+  "settings_travelAlerts": "Time-to-leave alerts",
+  "@settings_travelAlerts": {
+    "description": "Settings toggle for the traffic-aware departure push; off still leaves the fixed 30-minute reminder"
+  },
+  "error_introSaveTravelAlerts": "Couldn't change your alert setting",
+  "@error_introSaveTravelAlerts": {
+    "description": "Error intro when the time-to-leave toggle fails to save"
+  },
   "settings_changeEmail": "Change sign-in email",
   "@settings_changeEmail": {
     "description": "Title of the dialog where a person changes their own sign-in email"

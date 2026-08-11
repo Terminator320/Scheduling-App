@@ -29,6 +29,13 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     // 0 means no cap.
     @Default(0) int maxJobsPerDay,
     @Default(false) bool onCall,
+    // Per-person opt-out for the traffic-aware "time to leave" push. Defaults
+    // to TRUE and an absent field reads as true, matching `wantsTravelAlerts`
+    // in `functions/travel_utils.js` — every doc written before this field
+    // existed has no value, and a default of false would silence the fleet.
+    // Opting out degrades to the fixed 30-minute reminder; it does not drop
+    // the notification.
+    @Default(true) bool travelAlertsEnabled,
     // NOTE: emergencyContact/emergencyPhone are NOT here — they live in
     // users/{docId}/private/emergency so rules can gate them to the admin and
     // the person themselves. See EmergencyContact.
@@ -65,6 +72,8 @@ abstract class EmployeeRecord with _$EmployeeRecord {
           (data['workEndMinutes'] as num?)?.toInt() ?? kDefaultWorkEndMinutes,
       maxJobsPerDay: (data['maxJobsPerDay'] as num?)?.toInt() ?? 0,
       onCall: data['onCall'] == true,
+      // `!= false`, never `== true`: an absent field must read as ON.
+      travelAlertsEnabled: data['travelAlertsEnabled'] != false,
       createdAt: firestoreDateTime(data['createdAt']),
     );
   }
@@ -90,6 +99,11 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     'workEndMinutes': workEndMinutes,
     'maxJobsPerDay': maxJobsPerDay,
     'onCall': onCall,
+    // NOTE: `travelAlertsEnabled` is deliberately NOT emitted. It is the
+    // person's own notification preference, written only by
+    // `updateSelfDetails` — an admin save must leave it exactly as it was, and
+    // emitting it here would let a future whole-record write flip somebody
+    // else's push setting.
   };
 
   bool get isAdmin => role == 'admin';

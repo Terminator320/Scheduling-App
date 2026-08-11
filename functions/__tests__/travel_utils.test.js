@@ -15,6 +15,7 @@ const {
   computeTravelSeconds,
   travelReminderLedgerId,
   runTravelAwareReminderSweep,
+  wantsTravelAlerts,
 } = require("../travel_utils");
 
 // Noon Toronto (EDT -4) on Wed 2026-07-08.
@@ -551,6 +552,54 @@ describe("runTravelAwareReminderSweep", () => {
         .toBe("time-sensitive");
   });
 
+  test("an opted-out assignee degrades to reminder, keeping the push",
+      async () => {
+        // The toggle turns off traffic-aware DEPARTURE alerts, not the
+        // reminder itself — losing the notification entirely would be a
+        // different, much worse feature.
+        const {db, ledgerCreates} = makeTravelDb({
+          users: {
+            e1: {
+              role: "employee", status: "active", travelAlertsEnabled: false,
+            },
+          },
+          tokens: {e1: [{id: "t", locale: "en"}]},
+          appointments: [job],
+          presence: {e1: {lat: 45.5, lng: -73.6, updatedAt: future(-5 * MIN)}},
+        });
+        const messaging = makeMessaging();
+        const res = await runTravelAwareReminderSweep({
+          db, messaging, fetchImpl: okFetch(600), apiKey: "k", now: NOW,
+          logger: silentLogger,
+        });
+
+        expect(res.reminded).toBe(1);
+        expect(ledgerCreates).toHaveLength(1);
+        expect(messaging.sent).toHaveLength(1);
+        expect(messaging.sent[0].data.kind).toBe("reminder");
+        // Not time-sensitive: that interruption level belongs to leaveNow.
+        expect(messaging.sent[0].apns.payload.aps["interruption-level"])
+            .toBeUndefined();
+      });
+
+  test("an opted-in assignee still gets leaveNow", async () => {
+    const {db} = makeTravelDb({
+      users: {
+        e1: {role: "employee", status: "active", travelAlertsEnabled: true},
+      },
+      tokens: {e1: [{id: "t", locale: "en"}]},
+      appointments: [job],
+      presence: {e1: {lat: 45.5, lng: -73.6, updatedAt: future(-5 * MIN)}},
+    });
+    const messaging = makeMessaging();
+    await runTravelAwareReminderSweep({
+      db, messaging, fetchImpl: okFetch(600), apiKey: "k", now: NOW,
+      logger: silentLogger,
+    });
+
+    expect(messaging.sent[0].data.kind).toBe("leaveNow");
+  });
+
   test("a not-yet-due job burns no ledger claim", async () => {
     const farJob = {...job, id: "far", startTime: future(80 * MIN)};
     const {db, ledgerCreates} = makeTravelDb({
@@ -705,5 +754,34 @@ describe("runTravelAwareReminderSweep", () => {
     const frMsg = messaging.sent.find((m) => m.token === "t2");
     expect(frMsg.data.kind).toBe("reminder");
     expect(frMsg.notification.title).toBe("Visite à venir");
+  });
+});
+
+describe("wantsTravelAlerts", () => {
+  test("an absent flag means ON", () => {
+    // Every users doc written before this field existed has no value. Reading
+    // undefined as off would silence the whole fleet, and the symptom is a
+    // push that does not arrive — which nobody reports.
+    expect(wantsTravelAlerts({})).toBe(true);
+  });
+
+  test("a null user means ON", () => {
+    // A failed read must not silence a departure alert.
+    expect(wantsTravelAlerts(null)).toBe(true);
+  });
+
+  test("an explicit true means ON", () => {
+    expect(wantsTravelAlerts({travelAlertsEnabled: true})).toBe(true);
+  });
+
+  test("only an explicit false opts out", () => {
+    expect(wantsTravelAlerts({travelAlertsEnabled: false})).toBe(false);
+  });
+
+  test("a non-boolean value does not opt out", () => {
+    // The rules type-check this field, but a doc written by the console or the
+    // Admin SDK bypasses them.
+    expect(wantsTravelAlerts({travelAlertsEnabled: "false"})).toBe(true);
+    expect(wantsTravelAlerts({travelAlertsEnabled: 0})).toBe(true);
   });
 });
