@@ -1116,11 +1116,31 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `test/core/security/emergency_contact_rules_test.dart`, which reads
   `firestore.rules` back (rules can't be unit-tested without the emulator).
 - **`MyDetailsScreen` (Settings › My details) is the ONLY surface where a person
-  edits their own record**, and it exists solely to exercise the owner half of
-  the grant above — the employee detail and edit sheets are admin-only. Keep it
-  scoped to the emergency contact: everything else about a person is
-  admin-owned, and `allow update` on `/users` is still admin-only, so a general
-  profile editor here would fail with `permission-denied`.
+  edits their own record** — the employee detail and edit sheets are admin-only.
+  It exists to exercise the two grants a person holds over their own data, and
+  is scoped to **exactly** those: the `private/emergency` subcollection (admin
+  OR owner) and P5's self-service clause. Everything else about a person is
+  admin-owned, so a general profile editor here would fail with
+  `permission-denied`. (It was emergency-contact-only until P5, 2026-08-10.)
+  **It carries TWO save behaviours on purpose** (owner call, 2026-08-10), and
+  they must not be unified in either direction. The **identity** fields (phone,
+  emergency contact, emergency phone) sit behind a Save/Discard bar that appears
+  only once the form is dirty — they are free-text, a half-typed phone number
+  auto-committing is a bad write with no undo, and dirtiness is recomputed
+  against the stored values rather than latched, so typing a change and typing
+  it back reads as pristine again. **Availability** (days, hours, on-call)
+  applies immediately, optimistically, rolling back and surfacing a notice on
+  failure — a switch that needs confirming reads as broken. **The consequence to
+  keep: an availability write must send the STORED phone, never the identity
+  controller's text**, or toggling a day silently commits the half-typed number
+  the bar exists to prevent. Pinned by a test.
+  The admin-only SCHEDULING section is `maxJobsPerDay` and nothing else, written
+  through the ordinary admin `updateEmployee` path because that field is not on
+  the self allowlist — and it is **hidden** for a technician rather than
+  disabled, since there is no path there that could ever succeed. Role, job
+  title and crew colour deliberately stay on the Team sheet: an admin editing
+  their own role from a self-service screen is a privilege-escalation shape with
+  no product reason to exist.
 - **The emergency pair is its own section, not a tail on availability.** Both
   the edit sheet (`MonoSectionLabel` `employees_sectionEmergency`) and the
   read-only detail view (its own `KeyValuePanel`, rendered only when non-empty)
@@ -1166,12 +1186,35 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   to `status == 'active'`, so a disabled employee's colour was offered again and
   two people ended up the same hue, which is what the appointment bar and the
   calendar dots key on.
-- **`isAvailabilityOnlyChange()` in `firestore.rules` has no caller yet.** It
-  exists for P5's own-doc self-service clause; `allow update` on `/users` is
-  still admin-only. Don't delete it as dead rules code, and don't wire it before
-  the My-details UI ships. A deploy prints `Unused function` plus two
-  `Invalid variable name` warnings for it — all three are artifacts of it being
-  uncalled and disappear once P5 wires it up.
+- **`allow update` on `/users` has TWO branches as of P5 (2026-08-10), and the
+  brackets around them are load-bearing.** It reads
+  `(isAdmin() || (isSelf() && isAvailabilityOnlyChange())) && <denylist> &&
+  <emergency guards> && isValidUserData(...)`. Without the outer parentheses the
+  denylist and the validator bind to the self branch alone and an admin write
+  skips both. `isSelf()` gates on `isActiveUser()` as well as
+  `resource.data.uid == request.auth.uid`: a **disabled** account keeps its Auth
+  credential until `syncUsersByUid` revokes it, and an **invited** one is
+  mid-setup with `completeEmployeeSetup` owning its doc — neither may self-edit,
+  and both must fall through to the admin branch.
+  **`isAvailabilityOnlyChange()` uses `hasOnly`, so it is a whitelist of the
+  ENTIRE diff, not a per-key permit**: one unnamed key rejects the whole write,
+  which reaches the user as an opaque `permission-denied` on an ordinary save.
+  `kSelfServiceUserFields`
+  (`employees/domain/policies/self_service_fields.dart`) is its hand-mirror, and
+  `test/features/employees/domain/self_service_fields_test.dart` reads the rules
+  back and fails the build if the two drift — Dart and CEL cannot share a
+  constant, so that test is the only thing enforcing it. Add a key to the RULES
+  first, then to the Dart set; the reverse order ships a silent
+  `permission-denied`. **`email` must never join the list** — it is a sign-in
+  identity, and Auth and Firestore move together through `changeEmployeeEmail`
+  or not at all. Neither may `maxJobsPerDay`, `role`, `jobTitle`, `colorValue`
+  or `status`: those stay admin-only on both branches.
+  The client write path is `EmployeesRepository.updateSelfDetails`, deliberately
+  **separate** from `updateEmployee` rather than a flag on it — that method's
+  patch carries `role`, `email` and the emergency `FieldValue.delete()` scrub,
+  every one of which the `hasOnly` would reject. It is a plain `update()`, not a
+  transaction (one person, one device, no concurrent writer, and see the
+  no-client-transactions rule).
 
 - **Calendar (rebuilt in P2, 2026-07-30):** `table_calendar` is **deleted**;
   the month view is our own `CalendarMonthGrid` + `CalendarMonthPager`. It
