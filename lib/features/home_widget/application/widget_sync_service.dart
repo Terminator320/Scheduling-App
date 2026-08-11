@@ -11,6 +11,7 @@ import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
@@ -21,20 +22,31 @@ const widgetAppGroupId = 'group.net.vogas.scheduling';
 const _iosWidgetName = 'ScheduleWidget';
 const _payloadKey = 'schedulePayload';
 
-Map<String, dynamic> _job(AppointmentRecord a) => {
-  // Carried so tapping the widget can deep-link back to the job. `?? ''`
-  // avoids sending null, since Swift decodes this field as non-optional.
-  'id': a.id ?? '',
-  // Emit an absolute UTC instant with the Z suffix — a bare toIso8601String()
-  // omits the zone designator the widget's formatter needs.
-  'startTime': a.startTime.toUtc().toIso8601String(),
-  'clientName': a.clientName,
-  'title': a.title,
-  'address': a.address,
-  'status': a.status,
-  // The widget speaks "All day" instead of the stored midnight–23:59 pair.
-  'isAllDay': a.isAllDay,
-};
+/// One job as the widget renders it, scoped to the day it appears on.
+///
+/// [slice] carries that day's window and position in the run — the widget must
+/// show TODAY's clock, not the run's first morning. `dayIndex`/`dayCount` are
+/// omitted for a single-day job so a pre-multi-day Swift decoder still parses
+/// (it reads them as `Int?`) and so the widget shows no counter.
+Map<String, dynamic> _job(AppointmentDaySlice slice) {
+  final a = slice.appointment;
+  return {
+    // Carried so tapping the widget can deep-link back to the job. `?? ''`
+    // avoids sending null, since Swift decodes this field as non-optional.
+    'id': a.id ?? '',
+    // Emit an absolute UTC instant with the Z suffix — a bare toIso8601String()
+    // omits the zone designator the widget's formatter needs.
+    'startTime': slice.windowStart.toUtc().toIso8601String(),
+    'clientName': a.clientName,
+    'title': a.title,
+    'address': a.address,
+    'status': a.status,
+    // The widget speaks "All day" instead of the stored midnight–23:59 pair.
+    'isAllDay': a.isAllDay,
+    if (slice.isMultiDay) 'dayIndex': slice.dayIndex,
+    if (slice.isMultiDay) 'dayCount': slice.dayCount,
+  };
+}
 
 /// How long after the last job of the day is finished the widget keeps showing
 /// today before it rolls forward to tomorrow's schedule.
@@ -50,46 +62,49 @@ Map<String, dynamic> buildWidgetPayload(
 }) {
   final startOfToday = now.dateOnly;
   final startOfTomorrow = DateTime(now.year, now.month, now.day + 1);
-  final startOfDayAfter = DateTime(now.year, now.month, now.day + 2);
 
-  bool inRange(AppointmentRecord a, DateTime lo, DateTime hi) =>
-      !a.startTime.isBefore(lo) && a.startTime.isBefore(hi);
   AppointmentStatus statusOf(AppointmentRecord a) =>
       AppointmentStatus.fromRaw(a.status);
 
-  final todayAll = appointments
-      .where((a) => inRange(a, startOfToday, startOfTomorrow))
-      .toList();
+  // A job is "on" a day when it WORKS that day — not when its stored startTime
+  // happens to fall in it. Without this a run that began yesterday is invisible
+  // today, which is the whole point of multi-day support.
+  List<AppointmentDaySlice> slicesOn(DateTime day) => [
+    for (final a in appointments) ?sliceFor(a, day),
+  ];
+
+  final todayAll = slicesOn(startOfToday);
   final todayIncomplete = todayAll
-      .where((a) => !statusOf(a).isTerminal)
+      .where((s) => !statusOf(s.appointment).isTerminal)
       .toList();
-  // "Still ahead of you today". An all-day block starts at midnight, so a
-  // start-time test would drop it from today the moment the day began — it
-  // stays listed until its 23:59 end passes.
-  bool stillAhead(AppointmentRecord a) =>
-      a.isAllDay ? a.endTime.isAfter(now) : a.startTime.isAfter(now);
+  // "Still ahead of you today", judged against THIS day's window. An all-day
+  // block starts at midnight, so a start test would drop it the moment the day
+  // began — it stays listed until its 23:59 end passes.
+  bool stillAhead(AppointmentDaySlice s) => s.appointment.isAllDay
+      ? s.windowEnd.isAfter(now)
+      : s.windowStart.isAfter(now);
 
   final todayJobs = todayIncomplete.where(stillAhead).toList()
-    ..sort((x, y) => x.startTime.compareTo(y.startTime));
+    ..sort((x, y) => x.windowStart.compareTo(y.windowStart));
   final tomorrowJobs =
-      appointments
-          .where(
-            (a) =>
-                inRange(a, startOfTomorrow, startOfDayAfter) &&
-                !statusOf(a).isTerminal,
-          )
-          .toList()
-        ..sort((x, y) => x.startTime.compareTo(y.startTime));
+      slicesOn(
+          startOfTomorrow,
+        ).where((s) => !statusOf(s.appointment).isTerminal).toList()
+        ..sort((x, y) => x.windowStart.compareTo(y.windowStart));
 
   DateTime? rolloverAt;
   if (todayIncomplete.isEmpty) {
-    final finished = todayAll.where((a) => !statusOf(a).isCancelled).toList();
+    final finished = todayAll
+        .where((s) => !statusOf(s.appointment).isCancelled)
+        .toList();
     // If today's jobs are empty or all cancelled, use a stable past instant so
-    // we don't churn; otherwise roll over 1h after the last job ends.
+    // we don't churn; otherwise roll over 1h after the last job ends. The
+    // window end, not the record's — a run rolls the widget over at the end of
+    // TODAY's window, not at the end of the whole run.
     rolloverAt = finished.isEmpty
         ? startOfToday
         : finished
-              .map((a) => a.endTime)
+              .map((s) => s.windowEnd)
               .reduce((a, b) => a.isAfter(b) ? a : b)
               .add(widgetRolloverGrace);
   }

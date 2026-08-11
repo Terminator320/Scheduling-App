@@ -128,5 +128,69 @@ void main() {
     test('locale is carried through', () {
       expect(buildWidgetPayload(const [], _now, locale: 'fr')['locale'], 'fr');
     });
+
+    test('a job that started yesterday and runs through today is listed', () {
+      final payload = buildWidgetPayload([
+        _appt(
+          id: 'multi',
+          start: DateTime(2026, 8, 1, 9),
+          end: DateTime(2026, 8, 5, 17),
+        ),
+      ], DateTime(2026, 8, 3, 7));
+
+      final today = payload['todayJobs'] as List;
+      expect(today, hasLength(1));
+      final job = (today.single as Map).cast<String, dynamic>();
+      expect(job['dayIndex'], 3);
+      expect(job['dayCount'], 5);
+      // The clock the widget shows must be TODAY's window, not Aug 1's.
+      expect(job['startTime'], _iso(DateTime(2026, 8, 3, 9)));
+    });
+
+    test('a night shift is listed on the evening it starts, not after', () {
+      final night = _appt(
+        id: 'night',
+        start: DateTime(2026, 8, 1, 22),
+        end: DateTime(2026, 8, 4, 6),
+      );
+
+      // Aug 3 is the last night the crew starts.
+      final onLastNight = buildWidgetPayload([night], DateTime(2026, 8, 3, 7));
+      expect(onLastNight['todayJobs'] as List, hasLength(1));
+
+      // Aug 4 is only the morning it ends — nobody starts work.
+      final morningAfter = buildWidgetPayload([night], DateTime(2026, 8, 4, 7));
+      expect(morningAfter['todayJobs'] as List, isEmpty);
+    });
+
+    test('a single-day job carries no day counter', () {
+      final payload = buildWidgetPayload([
+        _appt(
+          id: 'one',
+          start: DateTime(2026, 8, 3, 8, 30),
+          end: DateTime(2026, 8, 3, 10),
+        ),
+      ], DateTime(2026, 8, 3, 7));
+
+      final job = ((payload['todayJobs'] as List).single as Map)
+          .cast<String, dynamic>();
+      expect(job['dayIndex'], isNull);
+      expect(job['dayCount'], isNull);
+    });
+
+    test('a run continuing tomorrow is listed there with tomorrow window', () {
+      final payload = buildWidgetPayload([
+        _appt(
+          id: 'multi',
+          start: DateTime(2026, 8, 1, 9),
+          end: DateTime(2026, 8, 5, 17),
+        ),
+      ], DateTime(2026, 8, 3, 7));
+
+      final tomorrow = payload['tomorrowJobs'] as List;
+      final job = (tomorrow.single as Map).cast<String, dynamic>();
+      expect(job['dayIndex'], 4);
+      expect(job['startTime'], _iso(DateTime(2026, 8, 4, 9)));
+    });
   });
 }
