@@ -50,7 +50,8 @@ never restore a bare `.catch(() => {})` on either),
 `setup-not-pending` on a replay, and stamps the consent timestamps only when
 the flags are actually `true`), `deleteEmployeeAccount` (admin-only, and
 only while `invited` — doc first, Auth second, so a partial run converges)
-and `changeEmployeeEmail` (admin-only, 2026-08-04 — the ONLY thing that joins
+and `changeEmployeeEmail` (admin **or self** — the `self` branch landed with P5
+on 2026-08-10; the ONLY thing that joins
 the two stores on an email edit, and the reason
 `edit_person_sheet.dart`'s email field is editable again. **Auth FIRST,
 Firestore second, with a revert**: Auth owns sign-in and is the only store that
@@ -61,7 +62,23 @@ are PII**. The transaction re-checks both the previous email and uniqueness,
 raising `email-changed` on a concurrent edit. Refuses
 `account-has-no-auth` for a doc with no `uid`: nothing to join there, and the
 client writes that email directly under the rules.
-**It then pushes the person a `kind:"emailChanged"` notice naming the new
+**The identity guard is the pure `resolveEmailChangeCaller`, not
+`assertAdmin`** — it has to tell an admin from a person editing their own row.
+An active admin may move any doc, an active employee may move their OWN, and
+nothing else gets through: disabled (whose Auth credential outlives the status
+flip), invited, unknown role, missing bridge doc, or an employee naming another
+docId. **Widening this callable past admins must never widen WHICH doc a caller
+can reach** — that function exists to make the mistake hard to write. Guard
+order is auth → payload → identity → rate limit → work.
+**Who is notified depends on who acted**, and `isSelf` reports whether the
+caller IS the target independent of role, so an admin editing their own row is a
+self change. A self edit pushes the ACTIVE ADMINS instead
+(`notifyAdminsOfSelfEmailChange` → **`sendToActiveAdmins`**, the shared fan-out
+beside `sendToEmployee` that P6's time-off requests will reuse — build a new
+admin fan-out on it rather than inlining the role/status query). It carries the
+NAME, never the address: it reaches every admin's Lock Screen and an email is
+PII. An admin edit instead
+**pushes the person a `kind:"emailChanged"` notice naming the new
 address** (`notifyEmailChanged` → the shared `sendToEmployee`, now exported
 from `notification_utils.js` — never re-derive the token fetch, the role/active
 gate or stale-token pruning). It runs AFTER the commit and swallows everything:

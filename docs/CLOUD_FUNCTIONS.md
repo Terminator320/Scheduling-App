@@ -117,7 +117,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `createEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (invite sheet, roster row Reset password) | — | App Check ✓ · admin · durable 20/hr·uid |
 | `completeEmployeeSetup` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` → `auth_service.dart` (account setup screen) | — | App Check ✓ · authed (own doc) · `email_verified` ✓ · durable 5/15min·uid |
 | `deleteEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (pending-account row) | — | App Check ✓ · admin · durable 20/hr·uid |
-| `changeEmployeeEmail` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (inside `updateEmployee`, when the email changed on a doc with a `uid`) | — | App Check ✓ · admin · durable 20/hr·uid |
+| `changeEmployeeEmail` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (inside `updateEmployee`, when the email changed on a doc with a `uid`); `self_email_service.dart` (a person changing their own) | — | App Check ✓ · admin **or self** · durable 20/hr·uid |
 | `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
 | `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin |
 | `waveSetImportSchedule` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings cadence picker) | — | App Check ✓ · admin · durable 20/hr |
@@ -267,7 +267,8 @@ see docs/DEPLOYMENT.md. Transactional core exported as `performDeleteAccount`
 for jest.
 
 ### `changeEmployeeEmail` — `employee_accounts.js`
-Admin-only. Moves an employee's **sign-in identity** in Firebase Auth and on
+Admin **or the person themselves** (the `self` branch landed with P5,
+2026-08-10). Moves an employee's **sign-in identity** in Firebase Auth and on
 their `users` doc together. It exists because nothing else joined those two:
 `updateEmployee` writes Firestore alone, so an admin's email edit left the
 person signing in at the old address while every admin surface showed the new
@@ -291,8 +292,31 @@ costs no Auth write plus rollback; `performChangeEmail`'s transaction is the
 authoritative check and re-tests **both** halves — that the doc still holds the
 email we read (`aborted / email-changed` otherwise, which the client surfaces as
 "try again") and that no other doc holds the new one. Guard order is the
-standard one (auth → `assertAdmin` → payload → `enforceDurableRateLimit` 20/hr
-per admin uid → work), with the same `/`-in-docId rejection as the delete.
+standard one (auth → payload → identity → `enforceDurableRateLimit` 20/hr per
+caller uid → work), with the same `/`-in-docId rejection as the delete. The
+payload is validated before a slot is consumed so a burst of malformed
+submissions can't exhaust a legitimate caller's window, and the identity guard
+sits above the limiter so a non-entitled caller can't burn one either.
+
+**The identity guard is `resolveEmailChangeCaller`, not `assertAdmin`** — it has
+to tell an admin from a person editing their own row. Pure over the caller's
+`usersByUid` bridge data, so it is jest-tested without Firestore. An **active
+admin** may move any doc; an **active employee** may move their OWN; everything
+else is refused `permission-denied / not-admin` — a disabled account (whose Auth
+credential outlives the status flip until `syncUsersByUid` revokes it), an
+invited account mid-setup, an unknown role, a missing bridge doc, or an employee
+naming somebody else's docId. Widening this callable past admins must never
+widen WHICH doc a caller can reach.
+
+**Who gets notified depends on who acted.** `isSelf` reports whether the caller
+IS the target, independent of role, so an admin editing their own row counts as
+self. An admin edit pushes the EMPLOYEE (`notifyEmailChanged`); a self edit
+pushes the ACTIVE ADMINS (`notifyAdminsOfSelfEmailChange` → the shared
+`sendToActiveAdmins` in `notification_utils.js`, excluding the person who made
+the change). **The admin notice carries the NAME, never the address** — it lands
+on every admin's Lock Screen and an email is PII. Both are best-effort and run
+after the commit: the change is already durable in both stores, so a push
+failure must not hand the caller an error for something that worked.
 Transactional core exported as `performChangeEmail` for jest.
 
 On success it pushes the employee a `kind: "emailChanged"` notification naming

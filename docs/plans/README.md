@@ -42,15 +42,24 @@ at the top of each file, not its boxes.
 
 ### 1. Redesign — three projects and a half remain
 
-- **P5 — Phase A BUILT 2026-08-10** (`docs/plans/redesign-subdocs/2026-08-10-p5-my-details.md`).
-  The rules clause is called, `updateSelfDetails` exists, and My details now
-  carries the identity section (explicit Save/Discard bar — owner call), MY
-  AVAILABILITY with the amber conflict warning, and the admin-only SCHEDULING
-  panel. 1779 flutter green. **The rules are NOT deployed yet, and must go
-  before any app build carrying this UI**, or every self save fails
-  `permission-denied`. Phase B (self-service email via a `self` branch on
-  `changeEmployeeEmail` + the active-admins fan-out) and Phase C (the
-  time-to-leave toggle) are not started. Original scope notes follow:
+- **P5 — CODE-COMPLETE 2026-08-10, NOT DEPLOYED**
+  (`docs/plans/redesign-subdocs/2026-08-10-p5-my-details.md`). All three phases
+  built: the rules clause is called and `updateSelfDetails` exists (A); an
+  employee moves their own sign-in email through `changeEmployeeEmail`'s new
+  `self` branch, with re-auth, confirm-twice and an active-admins fan-out (B);
+  and the P4-parked time-to-leave toggle is live end to end (C). 1795 flutter /
+  850 jest green, analyzer and eslint clean.
+  **NOTHING IS DEPLOYED.** Deploy order is `firebase deploy --only
+  functions,firestore:rules` BEFORE any app build carrying this UI — the rules
+  clause must be live or every self save fails `permission-denied`, and the
+  callable's `self` branch must be live or an employee's email change is refused
+  as `not-admin`. Never `--force`. Not device-verified; the whole self-service
+  path is unreachable as an admin, so it needs a **technician** pass.
+  Deliberate deviations from the spec below, all recorded in the plan's
+  decisions section: no duplicate NOTIFICATIONS block (Settings already owns
+  it), no duplicate profile card, SCHEDULING scoped to `maxJobsPerDay`, and the
+  identity fields explicitly saved behind a Save/Discard bar (owner call) while
+  availability keeps apply-immediately. Original scope notes follow:
 - **P5 — smaller than the spec says. The Settings half is already built**;
   what remains is My details. `settings_screen.dart` renders the profile card, a
   My-details row, APPEARANCE / SECURITY / NOTIFICATIONS / INTEGRATIONS (Wave) /
