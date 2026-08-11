@@ -106,19 +106,99 @@ describe("buildWidgetPayload", () => {
     expect(buildWidgetPayload([], NOW, "fr").locale).toBe("fr");
     expect(buildWidgetPayload([], NOW).locale).toBe("en");
   });
+
+  // Multi-day, mirroring the Dart widget_payload_test.dart cases exactly.
+  // August is EDT, so Toronto is UTC-4 throughout.
+  const AUG3_0700 = new Date("2026-08-03T11:00:00.000Z");
+
+  test("a job that started earlier and runs through today is listed", () => {
+    const payload = buildWidgetPayload([
+      appt("multi", "2026-08-01T13:00:00.000Z", { // Aug 1 09:00
+        endTime: at("2026-08-05T21:00:00.000Z"), // Aug 5 17:00
+      }),
+    ], AUG3_0700);
+
+    expect(payload.todayJobs).toHaveLength(1);
+    const job = payload.todayJobs[0];
+    expect(job.dayIndex).toBe(3);
+    expect(job.dayCount).toBe(5);
+    // The clock the widget shows must be TODAY's window, not Aug 1's.
+    expect(job.startTime).toBe("2026-08-03T13:00:00.000Z");
+  });
+
+  test("a run continuing tomorrow is listed there with tomorrow's window",
+      () => {
+        const payload = buildWidgetPayload([
+          appt("multi", "2026-08-01T13:00:00.000Z", {
+            endTime: at("2026-08-05T21:00:00.000Z"),
+          }),
+        ], AUG3_0700);
+
+        expect(payload.tomorrowJobs).toHaveLength(1);
+        expect(payload.tomorrowJobs[0].dayIndex).toBe(4);
+        expect(payload.tomorrowJobs[0].startTime)
+            .toBe("2026-08-04T13:00:00.000Z");
+      });
+
+  test("a night shift is listed on the evening it starts, not after", () => {
+    const night = () => appt("night", "2026-08-02T02:00:00.000Z", {
+      endTime: at("2026-08-04T10:00:00.000Z"), // Aug 4 06:00
+    });
+
+    // Aug 3 is the last night the crew starts.
+    expect(buildWidgetPayload([night()], AUG3_0700).todayJobs).toHaveLength(1);
+    // Aug 4 is only the morning it ends — nobody starts work.
+    const after = buildWidgetPayload(
+        [night()], new Date("2026-08-04T11:00:00.000Z"));
+    expect(after.todayJobs).toHaveLength(0);
+  });
+
+  test("a single-day job carries no day counter", () => {
+    const payload = buildWidgetPayload([
+      appt("one", "2026-08-03T12:30:00.000Z"), // Aug 3 08:30
+    ], AUG3_0700);
+
+    const job = payload.todayJobs[0];
+    expect(job.dayIndex).toBeUndefined();
+    expect(job.dayCount).toBeUndefined();
+  });
+
+  test("rollover uses today's window end, not the run's final day", () => {
+    const payload = buildWidgetPayload([
+      appt("multi", "2026-08-01T13:00:00.000Z", {
+        endTime: at("2026-08-05T21:00:00.000Z"),
+        status: "done",
+      }),
+    ], AUG3_0700);
+
+    // Today's window ends Aug 3 17:00 Toronto, so rollover is 18:00 — not an
+    // instant two days out at the end of the whole run.
+    expect(payload.rolloverAt).toBe("2026-08-03T22:00:00.000Z");
+  });
 });
 
 describe("serializeWidgetJob", () => {
+  // A single-day slice around a record, matching what sliceForDay returns.
+  const slice = (record, windowStartIso, extra) => ({
+    record,
+    dayIndex: 1,
+    dayCount: 1,
+    windowStartMs: at(windowStartIso || "2026-07-08T18:00:00.000Z"),
+    windowEndMs: at("2026-07-08T19:00:00.000Z"),
+    isOvernight: false,
+    isMultiDay: false,
+    ...(extra || {}),
+  });
+
   test("null string fields become empty strings (Swift non-optional decode)",
       () => {
-        const job = serializeWidgetJob({
+        const job = serializeWidgetJob(slice({
           id: "a1",
-          startTime: at("2026-07-08T18:00:00.000Z"),
           clientName: null,
           title: null,
           address: null,
           status: null,
-        });
+        }));
         expect(job).toEqual({
           id: "a1",
           startTime: "2026-07-08T18:00:00.000Z",
@@ -131,8 +211,25 @@ describe("serializeWidgetJob", () => {
       });
 
   test("isAllDay is emitted as a real boolean, never null", () => {
-    expect(serializeWidgetJob({id: "a1", isAllDay: true}).isAllDay).toBe(true);
-    expect(serializeWidgetJob({id: "a1"}).isAllDay).toBe(false);
+    expect(serializeWidgetJob(slice({id: "a1", isAllDay: true})).isAllDay)
+        .toBe(true);
+    expect(serializeWidgetJob(slice({id: "a1"})).isAllDay).toBe(false);
+  });
+
+  test("the counter is omitted entirely for a single-day job", () => {
+    const job = serializeWidgetJob(slice({id: "a1"}));
+    expect("dayIndex" in job).toBe(false);
+    expect("dayCount" in job).toBe(false);
+  });
+
+  test("a multi-day slice carries its counter", () => {
+    const job = serializeWidgetJob(slice({id: "a1"}, null, {
+      dayIndex: 2,
+      dayCount: 5,
+      isMultiDay: true,
+    }));
+    expect(job.dayIndex).toBe(2);
+    expect(job.dayCount).toBe(5);
   });
 });
 
