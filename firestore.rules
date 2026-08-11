@@ -258,27 +258,52 @@ service cloud.firestore {
             || !(f in request.resource.data);
       }
 
-      // Built for P5's own-doc self-service clause, which is the only thing that
-      // will ever call it. P4 keeps `allow update` admin-only: there is no
-      // self-service UI yet, so opening the write early would widen the surface
-      // for nothing. P5 adds `|| (isSelf() && isAvailabilityOnlyChange())`.
+      // P5's self-service gate (2026-08-10). The uid match alone is not enough:
+      // a disabled account keeps its Auth credential until syncUsersByUid
+      // revokes it, and an `invited` account is mid-setup with
+      // completeEmployeeSetup owning its doc. Both must fall through to the
+      // admin-only branch rather than reaching the self one.
+      function isSelf() {
+        return isActiveUser()
+          && resource.data.uid == request.auth.uid;
+      }
+
+      // The self-service allowlist, called from `allow update` below (P5,
+      // 2026-08-10 — it was written in P4 and deliberately left uncalled until
+      // there was a UI behind it). Adding a key here grants every active
+      // employee the right to write it on their own doc, so check it is not a
+      // scheduling or identity field first. `email` in particular must NEVER
+      // join this list: it is a sign-in identity, and Auth and Firestore move
+      // together through changeEmployeeEmail or not at all.
       function isAvailabilityOnlyChange() {
         return request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['workingDays', 'workStartMinutes', 'workEndMinutes',
                     'onCall', 'phone', 'updatedAt']);
       }
 
-      // Only an admin can update. Account activation happens server-side via
-      // completeEmployeeSetup, so there's no client self-activation path. `uid` links this
-      // doc to an Auth account and clients can never change it — rewriting it could
-      // hijack another account's bridge doc. The three P4b stamps are function-owned
-      // for the same reason `jobCount`/`wave` are on clients: a compromised admin
-      // session must not be able to forge a consent record.
+      // Two ways in. An ADMIN may update any doc. A PERSON may update their
+      // OWN doc, and only the keys isAvailabilityOnlyChange() names —
+      // availability, on-call and their own phone. Scheduling fields (role,
+      // jobTitle, colorValue, maxJobsPerDay, status) stay admin-only on both
+      // paths, and `uid` plus the consent stamps stay function-owned, which is
+      // why the self branch cannot reach them either: they are not on the
+      // allowlist, so `hasOnly` rejects the whole write.
+      //
+      // The parentheses around the disjunction are load-bearing. Without them
+      // the denylist and isValidUserData bind to the self branch alone and an
+      // admin write skips both.
+      //
+      // Account activation still happens server-side via completeEmployeeSetup,
+      // so there's no client self-activation path. `uid` links this doc to an
+      // Auth account and clients can never change it — rewriting it could
+      // hijack another account's bridge doc. The three P4b stamps are
+      // function-owned for the same reason `jobCount`/`wave` are on clients: a
+      // compromised admin session must not be able to forge a consent record.
       // Diff-based, so it only fires when a write actually CHANGES one — every
-      // shipped path (updateEmployee's field-scoped map, deactivate/reactivate)
-      // leaves them untouched. The callables write via the Admin SDK, which
-      // bypasses rules entirely.
-      allow update: if isAdmin()
+      // shipped path (updateEmployee's field-scoped map, updateSelfDetails,
+      // deactivate/reactivate) leaves them untouched. The callables write via
+      // the Admin SDK, which bypasses rules entirely.
+      allow update: if (isAdmin() || (isSelf() && isAvailabilityOnlyChange()))
             && !request.resource.data.diff(resource.data)
                  .affectedKeys()
                  .hasAny(['uid', 'termsAcceptedAt', 'locationConsentAt'])
