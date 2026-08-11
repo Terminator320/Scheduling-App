@@ -8,6 +8,7 @@ import 'package:scheduling/features/employees/domain/models/emergency_contact.da
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
+import 'package:scheduling/features/employees/domain/policies/self_service_fields.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 
 /// Shared bound on every `users` stream to prevent unbounded snapshots.
@@ -245,6 +246,36 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       }
       txn.update(ref, updateData);
     });
+  }
+
+  @override
+  Future<void> updateSelfDetails({
+    required String docId,
+    required String phone,
+    required List<bool> workingDays,
+    required int workStartMinutes,
+    required int workEndMinutes,
+    required bool onCall,
+  }) async {
+    // Exactly the rules allowlist and nothing else — `hasOnly` rejects the
+    // whole write on one stray key. In particular NO emergency scrub here:
+    // `updateEmployee` sends one, and it would add two unnamed keys.
+    final patch = <String, dynamic>{
+      'phone': phone.trim(),
+      'workingDays': normalizeWorkingDays(workingDays),
+      'workStartMinutes': workStartMinutes,
+      'workEndMinutes': workEndMinutes,
+      'onCall': onCall,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    assert(
+      patch.keys.every(kSelfServiceUserFields.contains),
+      'self patch carries a key firestore.rules will reject',
+    );
+    // A plain update, not a transaction: one person editing their own doc from
+    // one device has no concurrent writer to guard against, and a needless
+    // client transaction is a real risk on iOS (see the no-transactions rule).
+    await _users.doc(docId).update(patch);
   }
 
   /// Moves the sign-in email in Firebase Auth AND on the users doc.
