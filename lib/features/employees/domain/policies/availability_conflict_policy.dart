@@ -44,5 +44,26 @@ Set<int> daysWithBookedWork({
   return conflicts;
 }
 
+/// Which weekdays a person already holds booked work on while being marked
+/// unavailable for them.
+///
+/// The dashboard's question, where [daysWithBookedWork] answers My details':
+/// that one compares a PENDING change, this one compares stored availability
+/// against reality. It is the same computation with a fully-available
+/// baseline — "coming from someone who works every day, which days does this
+/// person's actual availability turn off while still holding work?" — so it
+/// routes through the one owner rather than re-deriving the day scoping, which
+/// is where a `startTime` weekday would miss days 2+ of a multi-day run.
+Set<int> daysBookedOutsideAvailability({
+  required Iterable<AppointmentRecord> appointments,
+  required AppointmentDateRange range,
+  required List<bool> workingDays,
+}) => daysWithBookedWork(
+  appointments: appointments,
+  range: range,
+  previousWorkingDays: List<bool>.filled(7, true),
+  nextWorkingDays: workingDays,
+);
+
 bool _isWorking(List<bool> days, int index) =>
     index < days.length && days[index];

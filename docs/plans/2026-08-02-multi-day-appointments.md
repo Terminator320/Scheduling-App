@@ -45,10 +45,11 @@ about. Two dates cannot desync from themselves.
 
 ## 2. What is NOT changing
 
-- **No schema change, no migration, no rules change.** `startTime`/`endTime`
-  are already real instants and already carry the span. `isValidAppointmentData`
-  in `firestore.rules` does not constrain them, so the 14-day cap is
-  client-side only.
+- **No schema change and no migration.** `startTime`/`endTime` are already real
+  instants and already carry the span. *(Revised 2026-08-11: this shipped with
+  no rules change, and §10's open question about one was then answered YES —
+  `isValidAppointmentSpan` bounds the span at 14 days. It reaches client writes
+  only, so the client-side clamp is unchanged.)*
 - **`isMultiDay` is derived, never stored** (`endTime.dateOnly !=
   startTime.dateOnly`) — same discipline as `AppointmentStatus.overdue` being
   display-only.
@@ -223,7 +224,31 @@ Xcode/device-unverified.
    A card counting down to an end four days out would sit on the Lock Screen
    for the entire job, so the shape of the fix is a design question (per-day
    card? countdown to today's window end?) rather than a mirroring one.
-2. Whether the 14-day cap deserves a matching `firestore.rules` bound. Today
-   nothing constrains `startTime`/`endTime` there, so adding one is a
-   tightening, not a fix — and per CLAUDE.md a rules cap must never be tighter
-   than the widest value a shipped write path can produce.
+2. ~~Whether the 14-day cap deserves a matching `firestore.rules` bound.~~
+   **CLOSED 2026-08-11 — yes, and it is built.** `isValidAppointmentSpan` caps
+   `endTime - startTime` at `duration.value(14, 'd')` on `allow create` and on
+   the admin `allow update`.
+
+   Three things settled while building it, each worth keeping:
+
+   - **The bound is 14 days EXACTLY and INCLUSIVE.** Per CLAUDE.md a rules cap
+     must never be tighter than the widest value a shipped write path can
+     produce, and that widest value is *exactly* 14 days: `appointmentSpan`
+     rolls an overnight window's end onto the next calendar day, so a 14-day
+     run booked at a single clock time (09:00 → +14d 09:00) stores a span of
+     precisely 14 days. A `<` would have rejected it. An all-day 14-day block
+     is shorter (13d 23h59m), and a 15th day fails the validator first.
+   - **An out-of-range doc must stay updatable**, so the update branch reads
+     `isValidAppointmentSpan(...) || appointmentSpanNotWidened()`. Rules cannot
+     stop the Admin SDK or the console, so a doc past the cap can already
+     exist; refusing to write it at all would strand it — including against the
+     admin trying to CANCEL it, which is the one repair that matters. Same
+     asymmetry as `emergencyFieldNotSet`, and for the same reason.
+   - **It is a tightening, not a fix, and doesn't replace the client clamp.**
+     Rules govern client writes only, so `_clampedDayCount` is still what
+     contains a corrupt run. Every comment claiming "the cap is client-side
+     only" was corrected in the same change rather than left to rot.
+
+   Pinned by `test/core/security/appointment_span_rules_test.dart`, which reads
+   the rules back and fails the build if the literal drifts from
+   `maxAppointmentSpanDays`.

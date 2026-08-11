@@ -446,6 +446,45 @@ service cloud.firestore {
       return v is string && v.size() <= 128 && !v.matches('.*/.*');
     }
 
+    // The two instants are a DAILY WINDOW, and `maxAppointmentSpanDays` (14, in
+    // `calendar/domain/appointment_day_slice.dart`, hand-mirrored as
+    // MAX_APPOINTMENT_SPAN_DAYS in `functions/time_utils.js`) caps how long a
+    // run may be. Keep all three equal.
+    //
+    // 14 DAYS EXACTLY, INCLUSIVE — the widest span a shipped write path can
+    // produce, not the typical one. A 14-day run booked at a single clock time
+    // (09:00 -> +14d 09:00) is a legitimate chain of 24-hour windows, so `<`
+    // would reject it; a 15th day fails AppointmentFormValidator before a save
+    // is attempted. An all-day 14-day block is shorter still (13d 23h59m).
+    //
+    // `endTime >= startTime` holds for every shipped write because
+    // `appointmentSpan` rolls an overnight window's end onto the following
+    // calendar day rather than storing an end that precedes its start.
+    function isValidAppointmentSpan(d) {
+      return !('startTime' in d.keys()) || !('endTime' in d.keys())
+        || (d.startTime is timestamp
+            && d.endTime is timestamp
+            && d.endTime >= d.startTime
+            && d.endTime - d.startTime <= duration.value(14, 'd'));
+    }
+
+    // The Admin SDK and the console bypass these rules entirely, so a span past
+    // the cap can already exist and this can never be the thing that prevents
+    // one — it bounds CLIENT writes, which is why the app still clamps. Given
+    // such a doc exists, refusing to write it at all would leave it permanently
+    // un-updatable, including by the admin trying to CANCEL it, so an update
+    // that leaves the span no wider than it already was passes even out of
+    // range. Same asymmetry as emergencyFieldNotSet: the guard stops a bad
+    // value being INTRODUCED, it does not strand a doc that carries one.
+    // (An assignee's status flip never reaches here — that branch restricts the
+    // diff to status + updatedAt and skips the shape guards.)
+    function appointmentSpanNotWidened() {
+      return resource.data.startTime is timestamp
+        && resource.data.endTime is timestamp
+        && request.resource.data.endTime - request.resource.data.startTime
+           <= resource.data.endTime - resource.data.startTime;
+    }
+
     function isValidAppointmentData(d) {
       return (!('title' in d.keys()) || isBoundedString(d.title, 200))
         && (!('address' in d.keys()) || isBoundedString(d.address, 500))
@@ -485,7 +524,9 @@ service cloud.firestore {
       // the allowlist.
       allow create: if isAdmin()
         && isValidAppointmentStatus(request.resource.data.status)
-        && isValidAppointmentData(request.resource.data);
+        && isValidAppointmentData(request.resource.data)
+        // No existing doc to strand, so the span bound is outright here.
+        && isValidAppointmentSpan(request.resource.data);
 
       // Admins have full access (with the status allowlist still enforced); an
       // assigned employee can only flip the status to 'done' — nothing else.
@@ -494,7 +535,9 @@ service cloud.firestore {
       // and that branch already restricts the diff to status + updatedAt.
       allow update: if (isAdmin()
             && isValidAppointmentStatus(request.resource.data.status)
-            && isValidAppointmentData(request.resource.data))
+            && isValidAppointmentData(request.resource.data)
+            && (isValidAppointmentSpan(request.resource.data)
+                || appointmentSpanNotWidened()))
         || (isAssignedEmployee(resource.data)
             && request.resource.data.diff(resource.data)
                .affectedKeys()

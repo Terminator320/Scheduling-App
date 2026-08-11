@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
+import 'package:scheduling/features/dashboard/application/dashboard_providers.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
@@ -17,14 +20,27 @@ class AttentionFlagsSection extends StatelessWidget {
     required this.nameMap,
     required this.isAdmin,
     super.key,
+    this.neverSetUp = const [],
+    this.availabilityConflicts = const [],
   });
 
   final AttentionFlags flags;
   final Map<String, Color> colorMap;
   final Map<String, String> nameMap;
 
+  /// Accounts created but never set up — the person still holds the shared
+  /// starting password. Tapping one lands on the Team roster, where the
+  /// pending row owns Reset password and Remove.
+  final List<EmployeeRecord> neverSetUp;
+
+  /// Staff holding booked work on a weekday they are marked unavailable for.
+  final List<AvailabilityConflict> availabilityConflicts;
+
   /// Gates the admin-only Edit/Cancel/Delete actions on the sheet a card opens.
   final bool isAdmin;
+
+  bool get _isAllClear =>
+      flags.isAllClear && neverSetUp.isEmpty && availabilityConflicts.isEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +52,7 @@ class AttentionFlagsSection extends StatelessWidget {
       children: [
         SectionLabel(l10n.dashboard_attentionFlags),
         const SizedBox(height: AppSpacing.sp8),
-        if (flags.isAllClear)
+        if (_isAllClear)
           Row(
             children: [
               Icon(
@@ -72,7 +88,111 @@ class AttentionFlagsSection extends StatelessWidget {
               nameMap: nameMap,
               isAdmin: isAdmin,
             ),
+          if (neverSetUp.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sp16),
+            _PeopleGroup(
+              title: l10n.dashboard_neverSetUpHeader(neverSetUp.length),
+              rows: [
+                for (final person in neverSetUp)
+                  (name: person.name, detail: person.email),
+              ],
+            ),
+          ],
+          if (availabilityConflicts.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sp16),
+            _PeopleGroup(
+              title: l10n.dashboard_availabilityConflictHeader(
+                availabilityConflicts.length,
+              ),
+              rows: [
+                for (final conflict in availabilityConflicts)
+                  (
+                    name: conflict.employee.name,
+                    detail: l10n.dashboard_availabilityConflictDays(
+                      _dayNames(context, conflict.days),
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ],
+      ],
+    );
+  }
+}
+
+/// Sunday-indexed labels, UNROTATED — the conflict set holds STORED indices
+/// and `weekdayAbbreviationsForLocale` is indexed the same way. Passing a
+/// display-ordered list here silently names the wrong day.
+String _dayNames(BuildContext context, Set<int> days) {
+  final labels = weekdayAbbreviationsForLocale(
+    Localizations.localeOf(context).toString(),
+  );
+  final sorted = days.toList()..sort();
+  return [for (final day in sorted) labels[day]].join(', ');
+}
+
+typedef _PersonRow = ({String name, String detail});
+
+/// A flag group whose rows are people rather than jobs.
+class _PeopleGroup extends StatelessWidget {
+  const _PeopleGroup({required this.title, required this.rows});
+
+  final String title;
+  final List<_PersonRow> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp8),
+        Container(
+          decoration: appCardDecoration(
+            theme,
+            color: theme.colorScheme.surface,
+          ),
+          padding: const EdgeInsets.all(AppSpacing.sp12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (var i = 0; i < rows.length; i++) ...[
+                if (i > 0) const SizedBox(height: AppSpacing.sp8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        rows[i].name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sp8),
+                    Flexible(
+                      child: Text(
+                        rows[i].detail,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.end,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }

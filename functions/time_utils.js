@@ -18,9 +18,11 @@ const BUSINESS_TIME_ZONE = "America/Toronto";
  * The longest span a job may be booked for, in days.
  *
  * HAND-MIRRORED from `maxAppointmentSpanDays` in
- * `lib/features/calendar/domain/appointment_day_slice.dart` — the cap is
- * enforced client-side only (firestore.rules constrains neither instant), so
- * this copy exists purely to size the backend's query windows. Every sweep
+ * `lib/features/calendar/domain/appointment_day_slice.dart`, which also has a
+ * third copy as the `duration.value(14, 'd')` bound in `firestore.rules`. That
+ * bound governs CLIENT writes only — this module runs on the Admin SDK, which
+ * bypasses rules — so this copy still exists to size the backend's query
+ * windows and to clamp a doc that got past the cap some other way. Every sweep
  * that filters on `startTime` must reach at least this far back, or a job
  * already under way is invisible to it. Raise both together.
  */

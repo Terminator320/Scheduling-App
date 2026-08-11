@@ -107,4 +107,60 @@ void main() {
 
     expect(conflicts, isEmpty);
   });
+
+  group('daysBookedOutsideAvailability', () {
+    // The dashboard's question: not "what would this change break" but "what
+    // is already wrong". Same computation against a fully-available baseline.
+    test('work on a day the person does not work is reported', () {
+      final saturday = DateTime(2026, 8, 15, 9);
+
+      final conflicts = daysBookedOutsideAvailability(
+        appointments: [_job(start: saturday)],
+        range: range,
+        workingDays: fiveDayWeek,
+      );
+
+      expect(conflicts, {6});
+    });
+
+    test('work on a working day is never reported', () {
+      final conflicts = daysBookedOutsideAvailability(
+        appointments: [
+          _job(start: monday),
+          _job(start: wednesday),
+        ],
+        range: range,
+        workingDays: fiveDayWeek,
+      );
+
+      expect(conflicts, isEmpty);
+    });
+
+    test('a multi-day run is judged on every day it works', () {
+      // Friday through Sunday: the run STARTS on a working day, so a
+      // startTime-derived weekday would see nothing wrong with it.
+      final conflicts = daysBookedOutsideAvailability(
+        appointments: [
+          _job(
+            start: DateTime(2026, 8, 14, 9),
+            end: DateTime(2026, 8, 16, 17),
+          ),
+        ],
+        range: range,
+        workingDays: fiveDayWeek,
+      );
+
+      expect(conflicts, {6, 0});
+    });
+
+    test('a closed job is not a conflict', () {
+      final conflicts = daysBookedOutsideAvailability(
+        appointments: [_job(start: DateTime(2026, 8, 15, 9), status: 'done')],
+        range: range,
+        workingDays: fiveDayWeek,
+      );
+
+      expect(conflicts, isEmpty);
+    });
+  });
 }

@@ -46,6 +46,7 @@ Widget _wrap({
   required List<AppointmentRecord> appointments,
   required ClientsRepository clientsRepo,
   Object? appointmentsError,
+  List<EmployeeRecord> users = const [_jane],
 }) {
   return ProviderScope(
     overrides: [
@@ -62,7 +63,7 @@ Widget _wrap({
       ),
       // Fresh stream per provider: Stream.value is single-subscription.
       employeesStreamProvider.overrideWith((_) => Stream.value(const [_jane])),
-      allUsersStreamProvider.overrideWith((_) => Stream.value(const [_jane])),
+      allUsersStreamProvider.overrideWith((_) => Stream.value(users)),
       clientsRepositoryProvider.overrideWithValue(clientsRepo),
     ],
     child: ThemeNotifier(
@@ -185,6 +186,120 @@ void main() {
       find.text('All clear — nothing needs attention'),
       findsOneWidget,
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an account never set up is flagged even with no createdAt', (
+    tester,
+  ) async {
+    // `createdAt` is function-owned and absent on legacy docs, so "unknown
+    // age" must not become "not shown" — the person is still holding the
+    // shared starting password either way.
+    await withPhoneViewport(tester);
+    await tester.pumpWidget(
+      _wrap(
+        appointments: const [],
+        clientsRepo: clientsRepo,
+        users: const [
+          _jane,
+          EmployeeRecord(
+            id: 'e2',
+            name: 'Sam Pending',
+            email: 'sam@example.com',
+            status: 'invited',
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 account was never set up'), findsOneWidget);
+    expect(find.text('Sam Pending'), findsOneWidget);
+    // The section is no longer all-clear just because the jobs are.
+    expect(find.text('All clear — nothing needs attention'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an active roster alone stays all clear', (tester) async {
+    await withPhoneViewport(tester);
+    await tester.pumpWidget(
+      _wrap(appointments: const [], clientsRepo: clientsRepo),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('All clear — nothing needs attention'), findsOneWidget);
+  });
+
+  testWidgets('an archived client is neither counted nor listed', (
+    tester,
+  ) async {
+    // Behaviour change, owner call 2026-08-10: the dashboard answers "what
+    // should I look at now", and an archived client is one you decided not to
+    // look at. `fetchClientsCreatedSince` has no archived filter, so this can
+    // only be excluded in Dart.
+    when(() => clientsRepo.fetchClientsCreatedSince(any())).thenAnswer(
+      (_) async => [
+        ClientRecord.fromMap('c1', {
+          'name': 'Alice',
+          'createdAt': DateTime(2026, 7, 7),
+        }),
+        ClientRecord.fromMap('c2', {
+          'name': 'Bob',
+          'createdAt': DateTime(2026, 7, 7),
+          'archived': true,
+        }),
+      ],
+    );
+    await withPhoneViewport(tester);
+    await tester.pumpWidget(
+      _wrap(appointments: const [], clientsRepo: clientsRepo),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alice'), findsOneWidget);
+    expect(find.text('Bob'), findsNothing);
+    expect(find.text('1 in the last 8 weeks'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('switching the period re-counts the KPI tiles', (tester) async {
+    await withPhoneViewport(tester);
+    await tester.pumpWidget(
+      _wrap(
+        appointments: [
+          // Today.
+          _appt(id: 'today', start: DateTime(2026, 7, 8, 14)),
+          // Monday of the same ISO week — in Week and Month, not in Today.
+          _appt(id: 'mon', start: DateTime(2026, 7, 6, 9)),
+          // Earlier in July — only in Month.
+          _appt(id: 'early', start: DateTime(2026, 7, 2, 9)),
+        ],
+        clientsRepo: clientsRepo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    Finder bookedValue() => find.descendant(
+      of: find
+          .ancestor(
+            of: find.text('Booked'),
+            matching: find.byType(Column),
+          )
+          .first,
+      matching: find.byType(Text),
+    );
+    String booked() => tester.widget<Text>(bookedValue().first).data!;
+
+    expect(booked(), '1');
+
+    await tester.tap(find.text('Week'));
+    await tester.pumpAndSettle();
+    expect(booked(), '2');
+
+    await tester.tap(find.text('Month'));
+    await tester.pumpAndSettle();
+    expect(booked(), '3');
+
     expect(tester.takeException(), isNull);
   });
 

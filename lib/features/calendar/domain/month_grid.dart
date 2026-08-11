@@ -67,6 +67,7 @@ int weekStartForLocale(String locale) => _weekStartCache.putIfAbsent(
 final _symbolsCache = <String, DateFormat>{};
 final _longDateCache = <String, DateFormat>{};
 final _weekdayAbbrevCache = <String, DateFormat>{};
+final _monthAbbrevCache = <String, DateFormat>{};
 
 DateFormat _symbolsFormat(String locale) =>
     _symbolsCache.putIfAbsent(locale, () => DateFormat.yMMMM(locale));
@@ -79,9 +80,21 @@ DateFormat _symbolsFormat(String locale) =>
 DateFormat longDateFormatFor(String locale) =>
     _longDateCache.putIfAbsent(locale, () => DateFormat.yMMMMEEEEd(locale));
 
-/// "Wed" — the collapsed week strip's column heading.
+/// "Wed" — the collapsed week strip's column heading, and the History date
+/// rail's top line.
 DateFormat weekdayAbbrevFormatFor(String locale) =>
     _weekdayAbbrevCache.putIfAbsent(locale, () => DateFormat.E(locale));
+
+/// "August 2026" — History's sticky month bar.
+///
+/// The same skeleton [_symbolsFormat] already builds per locale, exposed rather
+/// than constructed a second time.
+DateFormat monthYearFormatFor(String locale) => _symbolsFormat(locale);
+
+/// "Aug" — the History date rail's top line in search mode, where results are
+/// not a contiguous run of days and a bare weekday says nothing.
+DateFormat monthAbbrevFormatFor(String locale) =>
+    _monthAbbrevCache.putIfAbsent(locale, () => DateFormat.MMM(locale));
 
 /// Narrow weekday labels ordered from the locale's first day. Never hardcode
 /// `S M T W T F S` — it is wrong for fr_CA.
