@@ -269,12 +269,39 @@ void main() {
     expect(find.byKey(const Key('myMaxJobsPerDay')), findsOneWidget);
   });
 
-  testWidgets('the email row is read-only', (tester) async {
-    // `email` is a sign-in identity: it must never be written on the users doc,
-    // so the row offers no edit until the callable's self branch ships.
+  testWidgets('the email row offers a change action', (tester) async {
     await pump(tester);
 
     expect(find.text('theo@example.com'), findsOneWidget);
-    expect(find.byKey(const Key('myChangeEmail')), findsNothing);
+    expect(find.byKey(const Key('myChangeEmail')), findsOneWidget);
+  });
+
+  testWidgets('changing the email never writes the users doc directly', (
+    tester,
+  ) async {
+    // `email` is a sign-in identity and is deliberately absent from the
+    // self-service rules allowlist — it moves through changeEmployeeEmail,
+    // which owns BOTH stores, or not at all.
+    await pump(tester);
+
+    await tester.tap(find.byKey(const Key('myChangeEmail')));
+    await tester.pumpAndSettle();
+
+    verifyNever(
+      () => repo.updateSelfDetails(
+        docId: any(named: 'docId'),
+        phone: any(named: 'phone'),
+        workingDays: any(named: 'workingDays'),
+        workStartMinutes: any(named: 'workStartMinutes'),
+        workEndMinutes: any(named: 'workEndMinutes'),
+        onCall: any(named: 'onCall'),
+      ),
+    );
+    verifyNever(
+      () => repo.updateEmployee(
+        docId: any(named: 'docId'),
+        employee: any(named: 'employee'),
+      ),
+    );
   });
 }
