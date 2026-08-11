@@ -46,16 +46,17 @@ class UpcomingTodaySection extends StatelessWidget {
           for (var i = 0; i < ops.upcoming.length; i++) ...[
             if (i > 0) const SizedBox(height: AppSpacing.sp8),
             AppointmentCard(
-              appointment: ops.upcoming[i],
+              appointment: ops.upcoming[i].appointment,
               crew: crewFor(
-                ops.upcoming[i],
+                ops.upcoming[i].appointment,
                 colorMap: colorMap,
                 nameMap: nameMap,
               ),
+              slice: ops.upcoming[i],
               emphasizeToday: true,
               onTap: () => showEventDetails(
                 context,
-                ops.upcoming[i],
+                ops.upcoming[i].appointment,
                 showActions: isAdmin,
               ),
             ),

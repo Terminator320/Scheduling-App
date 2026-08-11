@@ -59,12 +59,12 @@ void main() {
     );
   });
 
-  test('falls back to the stored url when Storage refuses or is offline', () {
+  test('falls back to the stored url when Storage is offline', () {
     when(() => storage.ref(path)).thenReturn(ref);
     when(ref.getDownloadURL).thenThrow(Exception('offline'));
 
     // A broken tile for someone who IS entitled to the photo is worse than a
-    // stale URL; someone who is not gets the same 403 either way.
+    // stale URL, and a transport failure says nothing about entitlement.
     return expectLater(
       resolver.resolve(
         const AppointmentImage(url: stored, storagePath: path),
@@ -72,6 +72,25 @@ void main() {
       completion(stored),
     );
   });
+
+  for (final code in const ['unauthorized', 'permission-denied']) {
+    test('a $code rejection resolves to nothing, never the token url', () {
+      // The stored url reads with no auth and no rules evaluation, so falling
+      // back on a RULES rejection would hand a disabled employee a working
+      // link — the exact hole this resolver exists to close.
+      when(() => storage.ref(path)).thenReturn(ref);
+      when(ref.getDownloadURL).thenThrow(
+        FirebaseException(plugin: 'firebase_storage', code: code),
+      );
+
+      return expectLater(
+        resolver.resolve(
+          const AppointmentImage(url: stored, storagePath: path),
+        ),
+        completion(isEmpty),
+      );
+    });
+  }
 
   test('resolveAll keeps list order', () async {
     // The viewer opens at a tapped INDEX, so a reordered result would open

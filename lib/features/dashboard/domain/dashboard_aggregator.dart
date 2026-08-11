@@ -107,19 +107,25 @@ class DashboardAggregator {
     final dayStart = now.dateOnly;
     final counts = <String, int>{};
     var unassigned = 0;
-    final upcoming = <AppointmentRecord>[];
+    final upcoming = <AppointmentDaySlice>[];
     for (final a in appointments) {
       // Re-scoped through the slice owner: the range stream is a superset,
       // and testing `startTime` alone hid days 2+ of a multi-day run.
-      if (!runsOn(a, dayStart)) continue;
+      final slice = sliceFor(a, dayStart);
+      if (slice == null) continue;
       final display = statusCountKey(
         AppointmentStatus.fromRaw(displayStatusAt(a, now)),
       );
       counts[display] = (counts[display] ?? 0) + 1;
       if (a.employeeIds.isEmpty && !_isCancelled(a)) unassigned++;
-      if (a.startTime.isAfter(now) && !_isTerminal(a)) upcoming.add(a);
+      // THIS day's window, not the run's first morning — day 3 of a 14:00
+      // job is still ahead of a 09:00 reader, and sorting on the stored
+      // instant would float it above jobs that genuinely start earlier today.
+      if (slice.windowStart.isAfter(now) && !_isTerminal(a)) {
+        upcoming.add(slice);
+      }
     }
-    upcoming.sort((x, y) => x.startTime.compareTo(y.startTime));
+    upcoming.sort((x, y) => x.windowStart.compareTo(y.windowStart));
     return TodayOps(
       statusCounts: counts,
       unassignedCount: unassigned,

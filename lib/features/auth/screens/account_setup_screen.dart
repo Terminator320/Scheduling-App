@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +15,10 @@ import 'package:scheduling/features/auth/application/sign_in_controller.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/auth/widgets/account_setup/consent_row.dart';
+import 'package:scheduling/features/auth/widgets/account_setup/locked_email_panel.dart';
+import 'package:scheduling/features/auth/widgets/account_setup/setup_banner.dart';
+import 'package:scheduling/features/auth/widgets/account_setup/verify_email_panel.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
 import 'package:scheduling/features/auth/widgets/password_requirements_checklist.dart';
@@ -24,7 +27,6 @@ import 'package:scheduling/features/employees/domain/policies/starting_password_
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
-import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 
 /// First-run setup for an employee whose account an admin created.
 ///
@@ -408,143 +410,159 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l10n = context.l10n;
-    final bannerSuccess = _bannerSuccess;
-    final email = _authService.currentUser?.email ?? '';
-
     return AuthScaffold(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            l10n.auth_setUpYourAccountTitle,
+            context.l10n.auth_setUpYourAccountTitle,
             style: theme.textTheme.headlineLarge,
           ),
           const SizedBox(height: AppSpacing.sp16),
-          const _SetupBanner(),
-          if (email.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sp16),
-            _LockedEmailPanel(email: email, isVerified: _emailVerified),
-          ],
-          if (!_emailVerified) ...[
-            const SizedBox(height: AppSpacing.sp16),
-            _VerifyEmailPanel(
-              hasSent: _verificationSent,
-              isSending: _isSendingVerification,
-              isChecking: _isCheckingVerification,
-              notice: _verificationNotice,
-              onSend: _sendVerificationEmail,
-              onCheck: _checkVerification,
-            ),
-          ],
+          const SetupBanner(),
+          ..._identityPanels(),
           const SizedBox(height: AppSpacing.sp16),
-          LabeledTextField(
-            key: const Key('firstName'),
-            label: l10n.employees_firstName,
-            controller: _firstNameController,
-            required: true,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-            autofillHints: const [AutofillHints.givenName],
-            maxLength: TextLimits.employeeNameHalf,
-            errorText: _firstNameError,
-            onChanged: (_) => _onFieldChanged(),
-            onSubmitted: (_) => _lastNameFocus.requestFocus(),
-          ),
-          const SizedBox(height: AppSpacing.sp16),
-          LabeledTextField(
-            key: const Key('lastName'),
-            label: l10n.employees_lastName,
-            controller: _lastNameController,
-            focusNode: _lastNameFocus,
-            required: true,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-            autofillHints: const [AutofillHints.familyName],
-            maxLength: TextLimits.employeeNameHalf,
-            errorText: _lastNameError,
-            onChanged: (_) => _onFieldChanged(),
-            onSubmitted: (_) => _phoneFocus.requestFocus(),
-          ),
-          const SizedBox(height: AppSpacing.sp16),
-          LabeledTextField(
-            key: const Key('phone'),
-            label: l10n.employees_phoneNumber,
-            controller: _phoneController,
-            focusNode: _phoneFocus,
-            optional: true,
-            keyboard: TextInputType.phone,
-            textInputAction: TextInputAction.next,
-            autofillHints: const [AutofillHints.telephoneNumber],
-            inputFormatters: const [PhoneInputFormatter()],
-            maxLength: TextLimits.phone,
-            onSubmitted: (_) => _passwordFocus.requestFocus(),
-          ),
-          const SizedBox(height: AppSpacing.sp16),
-          AuthPasswordField(
-            label: l10n.auth_newPassword,
-            showLabel: true,
-            textInputAction: TextInputAction.next,
-            autofillHints: const [AutofillHints.newPassword],
-            controller: _passwordController,
-            focusNode: _passwordFocus,
-            enabled: !_isLoading,
-            errorText: _passwordError,
-            isObscured: _isObscured,
-            onSubmitted: _confirmFocus.requestFocus,
-            onChanged: _onPasswordChanged,
-            onToggleObscured: () => setState(() => _isObscured = !_isObscured),
-          ),
-          _passwordFeedback(),
-          const SizedBox(height: AppSpacing.sp16),
-          AuthPasswordField(
-            label: l10n.auth_confirmPassword,
-            showLabel: true,
-            prefixIcon: Icons.lock_reset_outlined,
-            autofillHints: const [AutofillHints.newPassword],
-            controller: _confirmController,
-            focusNode: _confirmFocus,
-            enabled: !_isLoading,
-            errorText: _confirmError,
-            isObscured: _isConfirmObscured,
-            onSubmitted: _finishSetup,
-            onChanged: _onFieldChanged,
-            onToggleObscured: () =>
-                setState(() => _isConfirmObscured = !_isConfirmObscured),
-          ),
-          const SizedBox(height: AppSpacing.sp24),
-          _ConsentRow(
-            value: _consented,
-            enabled: !_isLoading,
-            onChanged: (value) => setState(() => _consented = value),
-            onTapTerms: () =>
-                launchWebUrl(context, ref, AppUrls.termsOfService),
-          ),
-          AuthBanner(message: _bannerError),
-          if (bannerSuccess != null)
-            AuthBanner(
-              message: bannerSuccess,
-              kind: AuthBannerKind.success,
-            ),
-          const SizedBox(height: AppSpacing.sp24),
-          AnimatedLoadingButton(
-            label: l10n.auth_finishSetup,
-            isLoading: _isLoading,
-            // The checkbox and the verification panel ARE the gates — both are
-            // on screen and self-explanatory, so a disabled button needs no
-            // error copy of its own.
-            onPressed: _consented && _emailVerified ? _finishSetup : null,
-          ),
-          const SizedBox(height: AppSpacing.sp8),
-          Center(
-            child: TextButton(
-              onPressed: _isLoading ? null : _signOut,
-              child: Text(l10n.settings_logOut),
-            ),
-          ),
+          ..._formFields(context.l10n),
+          ..._submitBlock(context.l10n),
         ],
       ),
     );
+  }
+
+  /// The read-only email and, until it is proven, the verification step.
+  List<Widget> _identityPanels() {
+    final email = _authService.currentUser?.email ?? '';
+    return [
+      if (email.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.sp16),
+        LockedEmailPanel(email: email, isVerified: _emailVerified),
+      ],
+      if (!_emailVerified) ...[
+        const SizedBox(height: AppSpacing.sp16),
+        VerifyEmailPanel(
+          hasSent: _verificationSent,
+          isSending: _isSendingVerification,
+          isChecking: _isCheckingVerification,
+          notice: _verificationNotice,
+          onSend: _sendVerificationEmail,
+          onCheck: _checkVerification,
+        ),
+      ],
+    ];
+  }
+
+  /// Name, phone and the two password fields, in tab order.
+  List<Widget> _formFields(AppLocalizations l10n) => [
+    LabeledTextField(
+      key: const Key('firstName'),
+      label: l10n.employees_firstName,
+      controller: _firstNameController,
+      required: true,
+      textCapitalization: TextCapitalization.words,
+      textInputAction: TextInputAction.next,
+      autofillHints: const [AutofillHints.givenName],
+      maxLength: TextLimits.employeeNameHalf,
+      errorText: _firstNameError,
+      onChanged: (_) => _onFieldChanged(),
+      onSubmitted: (_) => _lastNameFocus.requestFocus(),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    LabeledTextField(
+      key: const Key('lastName'),
+      label: l10n.employees_lastName,
+      controller: _lastNameController,
+      focusNode: _lastNameFocus,
+      required: true,
+      textCapitalization: TextCapitalization.words,
+      textInputAction: TextInputAction.next,
+      autofillHints: const [AutofillHints.familyName],
+      maxLength: TextLimits.employeeNameHalf,
+      errorText: _lastNameError,
+      onChanged: (_) => _onFieldChanged(),
+      onSubmitted: (_) => _phoneFocus.requestFocus(),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    LabeledTextField(
+      key: const Key('phone'),
+      label: l10n.employees_phoneNumber,
+      controller: _phoneController,
+      focusNode: _phoneFocus,
+      optional: true,
+      keyboard: TextInputType.phone,
+      textInputAction: TextInputAction.next,
+      autofillHints: const [AutofillHints.telephoneNumber],
+      inputFormatters: const [PhoneInputFormatter()],
+      maxLength: TextLimits.phone,
+      onSubmitted: (_) => _passwordFocus.requestFocus(),
+    ),
+    const SizedBox(height: AppSpacing.sp16),
+    AuthPasswordField(
+      label: l10n.auth_newPassword,
+      showLabel: true,
+      textInputAction: TextInputAction.next,
+      autofillHints: const [AutofillHints.newPassword],
+      controller: _passwordController,
+      focusNode: _passwordFocus,
+      enabled: !_isLoading,
+      errorText: _passwordError,
+      isObscured: _isObscured,
+      onSubmitted: _confirmFocus.requestFocus,
+      onChanged: _onPasswordChanged,
+      onToggleObscured: () => setState(() => _isObscured = !_isObscured),
+    ),
+    _passwordFeedback(),
+    const SizedBox(height: AppSpacing.sp16),
+    AuthPasswordField(
+      label: l10n.auth_confirmPassword,
+      showLabel: true,
+      prefixIcon: Icons.lock_reset_outlined,
+      autofillHints: const [AutofillHints.newPassword],
+      controller: _confirmController,
+      focusNode: _confirmFocus,
+      enabled: !_isLoading,
+      errorText: _confirmError,
+      isObscured: _isConfirmObscured,
+      onSubmitted: _finishSetup,
+      onChanged: _onFieldChanged,
+      onToggleObscured: () =>
+          setState(() => _isConfirmObscured = !_isConfirmObscured),
+    ),
+  ];
+
+  /// Consent, any banner, and the primary action.
+  List<Widget> _submitBlock(AppLocalizations l10n) {
+    final bannerSuccess = _bannerSuccess;
+    return [
+      const SizedBox(height: AppSpacing.sp24),
+      ConsentRow(
+        value: _consented,
+        enabled: !_isLoading,
+        onChanged: (value) => setState(() => _consented = value),
+        onTapTerms: () => launchWebUrl(context, ref, AppUrls.termsOfService),
+      ),
+      AuthBanner(message: _bannerError),
+      if (bannerSuccess != null)
+        AuthBanner(
+          message: bannerSuccess,
+          kind: AuthBannerKind.success,
+        ),
+      const SizedBox(height: AppSpacing.sp24),
+      AnimatedLoadingButton(
+        label: l10n.auth_finishSetup,
+        isLoading: _isLoading,
+        // The checkbox and the verification panel ARE the gates — both are
+        // on screen and self-explanatory, so a disabled button needs no
+        // error copy of its own.
+        onPressed: _consented && _emailVerified ? _finishSetup : null,
+      ),
+      const SizedBox(height: AppSpacing.sp8),
+      Center(
+        child: TextButton(
+          onPressed: _isLoading ? null : _signOut,
+          child: Text(l10n.settings_logOut),
+        ),
+      ),
+    ];
   }
 
   /// The strength meter and the requirements checklist, rebuilt from the
@@ -569,355 +587,4 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       ],
     ),
   );
-}
-
-/// Explains why this screen exists at all: they signed in with a password
-/// somebody else chose, and it stops working the moment they finish here.
-class _SetupBanner extends StatelessWidget {
-  const _SetupBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.sp16),
-      decoration: BoxDecoration(
-        color: scheme.primaryContainer,
-        borderRadius: BorderRadius.circular(AppRadius.r12),
-      ),
-      child: Text(
-        context.l10n.auth_setUpYourAccountBody,
-        style: theme.textTheme.bodySmall?.copyWith(
-          color: scheme.onPrimaryContainer,
-        ),
-      ),
-    );
-  }
-}
-
-/// The sign-in email, presented read-only. Deliberately NOT a disabled
-/// [TextField]: there is nothing to focus, autofill must not target it, and a
-/// disabled field truncates at large text scale where a wrapping [Text] does
-/// not.
-class _LockedEmailPanel extends StatelessWidget {
-  const _LockedEmailPanel({required this.email, required this.isVerified});
-
-  final String email;
-  final bool isVerified;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final palette = theme.palette;
-    final l10n = context.l10n;
-
-    return Semantics(
-      readOnly: true,
-      label: l10n.common_email,
-      value: email,
-      excludeSemantics: true,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(AppSpacing.sp16),
-        decoration: BoxDecoration(
-          color: palette.lockedPanel,
-          borderRadius: BorderRadius.circular(AppRadius.r12),
-          border: Border.all(color: palette.lockedPanelBorder),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Wrap(
-              spacing: AppSpacing.sp8,
-              runSpacing: AppSpacing.sp4,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: [
-                Text(l10n.common_email, style: theme.textTheme.labelLarge),
-                _SignedInChip(isVerified: isVerified),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sp8),
-            Text(
-              email,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: palette.textBody,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Reads SIGNED IN until the address is verified, then VERIFIED. The icon
-/// changes with the label, so the state is never signalled by colour alone.
-class _SignedInChip extends StatelessWidget {
-  const _SignedInChip({required this.isVerified});
-
-  final bool isVerified;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final status = theme.statusColors;
-    final background = isVerified
-        ? status.successContainer
-        : scheme.primaryContainer;
-    final foreground = isVerified
-        ? status.onSuccessContainer
-        : scheme.onPrimaryContainer;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sp8,
-        vertical: 2,
-      ),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(AppRadius.rFull),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isVerified ? Icons.verified_outlined : Icons.lock_outline,
-            size: 12,
-            color: foreground,
-          ),
-          const SizedBox(width: AppSpacing.sp4),
-          Text(
-            isVerified
-                ? context.l10n.auth_emailVerified
-                : context.l10n.auth_signedInAs,
-            style: theme.monoType.micro.copyWith(color: foreground),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The email-verification step: send the link, then confirm it was opened.
-///
-/// This is a real gate, not a nudge — `completeEmployeeSetup` refuses without
-/// `email_verified`, because the account was created on a password every admin
-/// knows and control of the mailbox is the only thing that identifies the
-/// person on this screen.
-class _VerifyEmailPanel extends StatelessWidget {
-  const _VerifyEmailPanel({
-    required this.hasSent,
-    required this.isSending,
-    required this.isChecking,
-    required this.notice,
-    required this.onSend,
-    required this.onCheck,
-  });
-
-  final bool hasSent;
-  final bool isSending;
-  final bool isChecking;
-  final String? notice;
-  final VoidCallback onSend;
-  final VoidCallback onCheck;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final l10n = context.l10n;
-    final message = notice;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.sp16),
-      decoration: BoxDecoration(
-        color: scheme.tertiaryContainer,
-        borderRadius: BorderRadius.circular(AppRadius.r12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.mark_email_unread_outlined,
-                size: 18,
-                color: scheme.onTertiaryContainer,
-              ),
-              const SizedBox(width: AppSpacing.sp8),
-              Expanded(
-                child: Text(
-                  l10n.auth_verifyEmailTitle,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: scheme.onTertiaryContainer,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sp8),
-          Text(
-            l10n.auth_verifyEmailBody,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: scheme.onTertiaryContainer,
-            ),
-          ),
-          if (message != null) ...[
-            const SizedBox(height: AppSpacing.sp8),
-            Text(
-              message,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: scheme.onTertiaryContainer,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.sp12),
-          // Wrap, not Row: at large text scales the two labels are long enough
-          // to overflow side by side.
-          Wrap(
-            spacing: AppSpacing.sp8,
-            runSpacing: AppSpacing.sp8,
-            children: [
-              FilledButton.tonalIcon(
-                key: const Key('sendVerificationEmail'),
-                onPressed: isSending ? null : onSend,
-                icon: BusyButtonIcon(
-                  isBusy: isSending,
-                  icon: Icons.send_outlined,
-                ),
-                label: Text(
-                  hasSent
-                      ? l10n.auth_resendVerificationEmail
-                      : l10n.auth_sendVerificationEmail,
-                ),
-              ),
-              OutlinedButton.icon(
-                key: const Key('checkVerification'),
-                onPressed: isChecking ? null : onCheck,
-                icon: BusyButtonIcon(
-                  isBusy: isChecking,
-                  icon: Icons.refresh,
-                ),
-                label: Text(l10n.auth_checkVerification),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// One combined terms + location row on its own tinted surface. Unchecked
-/// disables the primary button, which is the whole gate.
-///
-/// "terms of service" inside the sentence is a LINK to the hosted terms page.
-/// That is not decoration: ticking this box stamps `termsAcceptedAt`, so the
-/// person has to be able to read what they are accepting. If the link ever
-/// stops resolving, the consent record stops meaning anything.
-///
-/// [StatefulWidget] only to own the [TapGestureRecognizer] — a recognizer built
-/// in `build` is never disposed and leaks on every rebuild.
-class _ConsentRow extends StatefulWidget {
-  const _ConsentRow({
-    required this.value,
-    required this.enabled,
-    required this.onChanged,
-    required this.onTapTerms,
-  });
-
-  final bool value;
-  final bool enabled;
-  final ValueChanged<bool> onChanged;
-  final VoidCallback onTapTerms;
-
-  @override
-  State<_ConsentRow> createState() => _ConsentRowState();
-}
-
-class _ConsentRowState extends State<_ConsentRow> {
-  // Reads `widget` at tap time, so it survives a parent rebuild handing down a
-  // new callback.
-  late final TapGestureRecognizer _termsTap = TapGestureRecognizer()
-    ..onTap = () => widget.onTapTerms();
-
-  @override
-  void dispose() {
-    _termsTap.dispose();
-    super.dispose();
-  }
-
-  /// The sentence with its "terms of service" run turned into a link.
-  ///
-  /// The link text is a separate ARB key that must appear verbatim inside the
-  /// sentence. When a translation drifts and it doesn't, this falls back to
-  /// one plain span: a missing link is a smaller failure than a consent row
-  /// that renders half a sentence, or crashes on a `-1` index.
-  InlineSpan _consentSpan(TextStyle? base, ColorScheme scheme) {
-    final sentence = context.l10n.auth_termsAndLocationConsent;
-    final linkText = context.l10n.auth_termsOfServiceLink;
-    final start = sentence.indexOf(linkText);
-    if (start < 0) return TextSpan(text: sentence, style: base);
-
-    return TextSpan(
-      style: base,
-      children: [
-        TextSpan(text: sentence.substring(0, start)),
-        TextSpan(
-          text: linkText,
-          style: base?.copyWith(
-            color: scheme.primary,
-            decoration: TextDecoration.underline,
-            decorationColor: scheme.primary,
-            fontWeight: FontWeight.w600,
-          ),
-          recognizer: _termsTap,
-        ),
-        TextSpan(text: sentence.substring(start + linkText.length)),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    // The tint rides `tileColor`, not a wrapping DecoratedBox — a ListTile
-    // paints onto the nearest Material, so an outer background would swallow
-    // its ink splashes (and asserts in debug).
-    return CheckboxListTile.adaptive(
-      key: const Key('setupConsent'),
-      value: widget.value,
-      activeColor: scheme.primary,
-      tileColor: scheme.primaryContainer,
-      controlAffinity: ListTileControlAffinity.leading,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sp8,
-        vertical: AppSpacing.sp4,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.r12),
-      ),
-      // Text.rich, not Text: the link run needs its own recognizer. A tap on
-      // that run is claimed by the recognizer rather than the tile, so it
-      // opens the terms instead of silently toggling consent — the rest of the
-      // row still toggles as before.
-      title: Text.rich(
-        _consentSpan(
-          theme.textTheme.bodySmall?.copyWith(
-            color: scheme.onPrimaryContainer,
-          ),
-          scheme,
-        ),
-      ),
-      onChanged: widget.enabled
-          ? (next) => widget.onChanged(next ?? false)
-          : null,
-    );
-  }
 }

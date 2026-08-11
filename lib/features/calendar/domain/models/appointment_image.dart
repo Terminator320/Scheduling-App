@@ -8,6 +8,8 @@ abstract class AppointmentImage with _$AppointmentImage {
   const factory AppointmentImage({
     @Default('') String url,
     @Default('') String storagePath,
+    // Round-tripped but never read off an instance: the rendered name comes
+    // from storagePath. Kept so an existing doc's field survives a rewrite.
     String? fileName,
     DateTime? uploadedAt,
   }) = _AppointmentImage;

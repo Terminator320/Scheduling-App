@@ -74,16 +74,29 @@ final myDetailsRangeProvider = Provider.autoDispose<AppointmentDateRange>((
   return AppointmentDateRange.forMirrors(ref.watch(currentDayProvider));
 });
 
-/// This person's own jobs in that window, reduced from the SHARED range stream.
+/// This person's own jobs in that window.
+///
+/// Role-branched, like the Siri snapshot and the drawer's job badge. The
+/// business-wide range query constrains `startTime` alone, and for a LIST
+/// query the rules are evaluated against the constraints — so
+/// `isAssignedEmployee` rejects a technician's whole query, and this warning
+/// silently never fired for the one role the screen exists to serve. An admin
+/// keeps reading the shared stream, so the range comment above holds for them.
 final myUpcomingAppointmentsProvider =
     Provider.autoDispose<List<AppointmentRecord>>((ref) {
-      final docId = ref.watch(activeUserIdentityProvider).value?.docId;
-      if (docId == null || docId.isEmpty) return const [];
+      final identity = ref.watch(activeUserIdentityProvider).value;
+      final docId = identity?.docId;
+      if (identity == null || docId == null || docId.isEmpty) return const [];
+      final range = ref.watch(myDetailsRangeProvider);
       final jobs =
-          ref
-              .watch(
-                appointmentsInRangeProvider(ref.watch(myDetailsRangeProvider)),
-              )
+          (identity.role == 'admin'
+                  ? ref.watch(appointmentsInRangeProvider(range))
+                  : ref.watch(
+                      myAppointmentsProvider((
+                        employeeId: docId,
+                        range: range,
+                      )),
+                    ))
               .value ??
           const <AppointmentRecord>[];
       return [

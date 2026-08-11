@@ -2625,10 +2625,6 @@
   "@nav_dashboard": {
     "description": "Navigation label for the admin dashboard destination"
   },
-  "nav_myDetails": "My details",
-  "@nav_myDetails": {
-    "description": "Navigation label for the signed-in user's own profile destination"
-  },
   "nav_groupToday": "TODAY",
   "@nav_groupToday": {
     "description": "Drawer group heading for destinations used during today's work; stored uppercase"

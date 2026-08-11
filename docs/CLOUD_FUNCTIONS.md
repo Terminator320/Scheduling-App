@@ -41,8 +41,9 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   `createEmployeeInvite` / `redeemSignupCode` as the `#compat-1.37.1` shim;
   `changeEmployeeEmail` landed 2026-08-04 (26 → 27); **the shim was retired
   2026-08-08 (27 → 25)** once every device was on 1.40+, deleting those two
-  callables. `revokeInvite` and `previewInvite` were never deployed and never
-  existed in code. (v2, Node.js 24, 256 MB; `us-central1`
+  callables. `revokeInvite` and `previewInvite` DID exist in code — P4b added
+  them (`461f84ba`) and P4c removed them (`ea375b1b`) — but they were never
+  deployed to prod. (v2, Node.js 24, 256 MB; `us-central1`
   except `validateUploadedImage` in `us-east1`). The 2026-07-18 deploy shipped
   `placesReverseGeocode`, the travel-aware `sendUpcomingJobReminders` rebuild,
   and the codebase-audit fixes (overdue-sweep ordering, bounded travel-context
@@ -157,8 +158,9 @@ Rebuilt by **P4c, 2026-08-02**, replacing the one-time signup-code flow in the
 APP — and as of **2026-08-08 the signup-code flow is gone from the backend too**:
 `invites.js`, `signup_code_utils.js`, `createEmployeeInvite` and
 `redeemSignupCode` were deleted with the rest of the `#compat-1.37.1` shim.
-`revokeInvite` and `previewInvite` were never deployed and never existed in
-code. **`redeemSignupCode` was the last unauthenticated callable in the
+`revokeInvite` and `previewInvite` were never deployed, but they DID exist in
+code between P4b (`461f84ba`) and P4c (`ea375b1b`).
+**`redeemSignupCode` was the last unauthenticated callable in the
 codebase**; every remaining one requires auth. All four callables
 below share `APP_CHECK = {enforceAppCheck: true}`. Full design:
 `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.

@@ -458,7 +458,10 @@ describe("changeEmployeeEmail caller branches", () => {
       email: "old@example.com", uid: "u1", status: "active", name: "Theo Roy",
     },
   });
-  const SELF = {uid: "self-uid"};
+  // The self branch demands a fresh re-auth, so every self caller carries a
+  // current `auth_time` the way a real re-authenticated client does.
+  const freshAuthTime = () => Math.floor(Date.now() / 1000);
+  const SELF = {uid: "self-uid", token: {auth_time: freshAuthTime()}};
   const selfBridge = {
     "self-uid": {role: "employee", status: "active", docId: "d1"},
   };
@@ -552,5 +555,48 @@ describe("changeEmployeeEmail caller branches", () => {
         changeEmployeeEmail.run({data: PAYLOAD, auth: null}),
     ).rejects.toThrow(/auth-required/);
     expect(auth.updateUser).not.toHaveBeenCalled();
+  });
+
+  test("a SELF change with a stale re-auth is refused", async () => {
+    // A still-valid ID token alone must not move a sign-in address — that is
+    // the unattended-unlocked-phone primitive SelfEmailService guards against
+    // client-side, restated here so a direct call can't skip it.
+    const trace = [];
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace, selfBridge));
+    getAuth.mockReturnValue(auth);
+
+    await expect(changeEmployeeEmail.run({
+      data: PAYLOAD,
+      auth: {uid: "self-uid", token: {auth_time: freshAuthTime() - 600}},
+    })).rejects.toThrow(/stale-auth/);
+    expect(auth.updateUser).not.toHaveBeenCalled();
+  });
+
+  test("a SELF change presenting no token at all is refused", async () => {
+    // Fails closed: a missing auth_time must not read as "recently
+    // re-authenticated".
+    const trace = [];
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace, selfBridge));
+    getAuth.mockReturnValue(auth);
+
+    await expect(
+        changeEmployeeEmail.run({data: PAYLOAD, auth: {uid: "self-uid"}}),
+    ).rejects.toThrow(/stale-auth/);
+    expect(auth.updateUser).not.toHaveBeenCalled();
+  });
+
+  test("an ADMIN change is NOT gated on re-auth freshness", async () => {
+    // Deliberate scope: updateEmployee has no re-auth step to satisfy, so
+    // gating it would reject every admin edit made minutes after sign-in.
+    const trace = [];
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace));
+    getAuth.mockReturnValue(auth);
+
+    await changeEmployeeEmail.run({data: PAYLOAD, auth: ADMIN});
+
+    expect(auth.updateUser).toHaveBeenCalled();
   });
 });

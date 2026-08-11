@@ -126,6 +126,17 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   (`core/images/`) resolves at render time so every read re-evaluates the
   rules, and falls back to the stored `url` only when `storagePath` is empty on
   a legacy doc — that fallback is why this needed no migration.
+  **A RULES REJECTION MUST NOT FALL BACK** (2026-08-11): the resolver's `catch`
+  used to be unconditional, so the one error it exists to convert into a blank
+  tile — a `permission-denied`/`unauthorized` from the `status == 'active'`
+  gate — was converted straight back into a working, rules-free token URL. It
+  now returns `''` for those two codes and keeps the fallback for everything
+  else (offline, transient Storage failures), which say nothing about
+  entitlement. An empty resolved URL is therefore a REFUSAL, not a pending
+  resolve: `PhotoPickerSection` renders the error tile and keeps it untappable,
+  and `buildImageProviders` substitutes a 1×1 transparent image rather than
+  dropping the entry — the viewer opens at an INDEX, so dropping one would
+  shift every photo beside it.
   `ImageStorageService` **still writes `url`**, deliberately: builds that
   predate the resolver render from it, so dropping the write now would blank
   photos on any phone that hasn't updated. Retire it once the fleet has moved,
@@ -412,6 +423,22 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   **`runsOn(appointment, day)`** (beside `sliceFor` in the same owner file) —
   never by comparing `startTime` at the call site. A reducer over
   `appointmentsInRangeProvider` without a day predicate is a bug.
+  **And a "today's window" test on a MULTI-DAY run must use the SLICE's
+  window, not the record's `startTime`** (2026-08-11): the dashboard's
+  "Upcoming today" re-scoped through `runsOn` and then asked
+  `startTime.isAfter(now)`, i.e. the run's first morning — so on day 3 of a
+  14:00 job the status counts included it while the section rendered "No visits
+  today", and sorting on the stored instant floated it above jobs genuinely
+  earlier that day. `computeTodayOps` now carries `AppointmentDaySlice`s.
+  **`appointmentsInRangeProvider` is ADMIN-ONLY, and every non-admin consumer
+  must role-branch to `myAppointmentsProvider`**: its query constrains
+  `startTime` alone, and for a LIST query the rules are evaluated against the
+  CONSTRAINTS, so `isAssignedEmployee` rejects a technician's whole query.
+  `MyDetailsScreen`'s availability-conflict warning read it raw, and the
+  rejection was swallowed by a `?? const []` — the warning silently never fired
+  for the only role that screen exists to serve, while a permanently-failing
+  listener stayed open. The Siri snapshot and the drawer badge already branch;
+  copy them.
   **A conflict check is a DAILY-window overlap, not an instant overlap.**
   `findBusyEmployees`' Firestore query is only a coarse prefilter; its results
   are filtered through **`dailyWindowsOverlap`** (same owner file). Testing the
@@ -466,8 +493,15 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   gates on `startTime > now`, so it already fires on day 1 only (days 2+ have
   no separate departure time and the crew is already on site), and the second
   gates on the run's real `endTime`. **Live Activities deliberately skip
-  multi-day jobs** — a four-day Lock Screen countdown is worse than no card;
-  see `docs/plans/2026-08-02-multi-day-appointments.md` §10.
+  multi-day jobs** — a four-day Lock Screen countdown is worse than no card.
+  That skip is `dayCountOf(c) > 1` in `resolveReminderForAssignee`
+  (`functions/travel_utils.js`), and it was BUILT 2026-08-11: this bullet
+  asserted it as fact from 2026-08-10 while no such gate existed anywhere, so
+  the card really did carry the run's `endTime` into
+  `Text(timerInterval:countsDown:)`. `docs/plans/2026-08-02-multi-day-appointments.md`
+  §10 deferred it, and the doc was right. Only the CARD is withheld — the
+  `leaveNow` push still goes out on day 1, which is the only day with a
+  departure time.
   **The 14-day cap is applied by ONE clamp, `_clampedDayCount`, and every
   day-scoping answer routes through it** (2026-08-08): `sliceFor`/`runsOn`,
   `runsInRange`, `expandToDays` and `dailyWindowsOverlap`. The cap is
@@ -1260,7 +1294,20 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   unattended unlocked phone changing the sign-in address is the account-takeover
   primitive — and the sheet demands the address **twice**, because the Admin SDK
   sets it with no proof of control and a typo locks the person out until an
-  admin undoes it. Firebase's `verifyBeforeUpdateEmail` is not the answer: it
+  admin undoes it. That ordering is pinned by
+  `test/features/settings/services/self_email_service_test.dart` (`verifyInOrder`
+  plus the half that matters: a thrown re-auth must `verifyNever` the callable),
+  the same way `completeAccountSetup`'s password-then-activate order is.
+  **The server restates it on the SELF branch**: `assertFreshReauth`
+  (`functions/security.js`, shared with `deleteAccount`) rejects a caller whose
+  `auth_time` is over 5 minutes old, so a direct call cannot skip the client's
+  ordering, and the self budget is 5/hour rather than the 20 account creation
+  uses. **The ADMIN branch is deliberately NOT gated on freshness** — it is
+  reached from `updateEmployee`, which has no re-auth step to satisfy, so the
+  check would reject every admin email edit made minutes after sign-in. That
+  residue is real and stated: an unattended *admin* session can still rewrite a
+  colleague's address, bounded by `assertAdmin` and the budget. Closing it needs
+  a re-auth prompt on the admin save path first. Firebase's `verifyBeforeUpdateEmail` is not the answer: it
   flips Auth OUTSIDE the callable and leaves `users.email` stale with no trigger
   to reconcile it — the exact desync the callable exists to end.
 - **`travelAlertsEnabled` defaults to ON, and absent MUST read as ON.**
