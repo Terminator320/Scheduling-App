@@ -14,11 +14,18 @@ class AppointmentAddressField extends StatelessWidget {
     required this.onSwitchToCustom,
     required this.onUseClientAddress,
     super.key,
+    this.optional = false,
   });
 
   final ClientRecord? selectedClient;
   final bool useCustomAddress;
   final TextEditingController addressController;
+
+  /// Marks the field "(Optional)". Set on a personal job, which may name a
+  /// place but doesn't have to — a client visit always has one to show, either
+  /// the client's or a custom one.
+  final bool optional;
+
   final VoidCallback onSwitchToCustom;
   final VoidCallback onUseClientAddress;
 
@@ -34,7 +41,10 @@ class AppointmentAddressField extends StatelessWidget {
           _AddressPill(client: selectedClient!, onChange: onSwitchToCustom)
         else ...[
           SheetFocusScroll(
-            child: AddressAutocompleteField(controller: addressController),
+            child: AddressAutocompleteField(
+              controller: addressController,
+              optional: optional,
+            ),
           ),
           if (selectedClient != null &&
               useCustomAddress &&

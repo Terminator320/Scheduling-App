@@ -279,16 +279,31 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   completed-job edit button above unreachable from the one screen an admin would
   look for it on. It still DEFAULTS closed like every other appointment surface;
   `HistoryScreen` passes `widget.isAdmin`.
-- **Personal jobs (`isPersonal`, added 2026-07-31) carry no client and no
-  address.** The switch at the top of the form's WHO section is on BOTH the add
-  and edit flows (unlike the template chips), because the flag is stored and
-  has to be reversible. Turning it on hides the client picker and the address
-  field, clears their controllers, and drops `clientRequired` from
-  `AppointmentFormValidator` — **the assignees stay required**, they are who the
-  block is for and who can see it. Both save paths write `clientId`/
-  `clientName`/`clientPhone`/`address` as **empty strings**, including when an
-  existing client visit is converted, so a hidden field can never keep a stale
-  value the UI no longer shows. Everything that speaks a client name falls back
+- **Personal jobs (`isPersonal`, added 2026-07-31) carry no client, and their
+  address is OPTIONAL** (owner call, 2026-08-11, which reversed the original
+  "no address"). The switch at the top of the form's WHO section is on BOTH the
+  add and edit flows (unlike the template chips), because the flag is stored and
+  has to be reversible. Turning it on hides the client picker, clears its
+  controller and drops `clientRequired` from `AppointmentFormValidator` —
+  **the assignees stay required**, they are who the block is for and who can
+  see it. Both save paths write `clientId`/`clientName`/`clientPhone` as
+  **empty strings**, including when an existing client visit is converted, so a
+  hidden field can never keep a stale value the UI no longer shows.
+  **`address` is deliberately NOT in that set**: a dentist appointment or a
+  supply run still happens somewhere, and the crew wants directions to it. The
+  field stays on screen for a personal job, marked "(Optional)"
+  (`AppointmentAddressField.optional`, forwarded to `AddressAutocompleteField`),
+  and both save paths write `address.trim()` unconditionally — so the
+  "hidden field can't keep a stale value" reasoning doesn't apply to it: what
+  saves is what the user can see and edit. The switch therefore must NOT clear
+  `controllers.address`, which is the one clear that was removed here; the
+  validator never required an address on any job, so nothing was relaxed there.
+  Every read surface already gated on `address.isNotEmpty` (the detail row, the
+  Directions quick action), so a personal job with one renders it and a
+  personal job without one is unchanged — and a *timed* one with an address is
+  now a genuinely routable travel candidate rather than one that always
+  degraded to the fixed 30-minute reminder for want of a destination.
+  Everything that speaks a client name falls back
   to the **title**: the card and the detail row say "Personal"
   (`calendar_personal`), the widget and Siri decoders already fell back to
   `title`, and `_who` in `functions/notification_messages.js` now does too

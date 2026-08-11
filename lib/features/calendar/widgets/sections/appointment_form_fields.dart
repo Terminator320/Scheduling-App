@@ -114,8 +114,9 @@ class AppointmentFormFields extends StatelessWidget {
   final bool useCustomAddress;
 
   /// Personal job: time blocked off for the crew rather than a client visit.
-  /// Hides the client picker, address, materials, photos, repeat and the
-  /// template chips, and drops the client and title from validation.
+  /// Hides the client picker, materials, photos, repeat and the template
+  /// chips, and drops the client and title from validation. The address stays,
+  /// marked optional — a personal block can still have somewhere to be.
   final bool isPersonal;
 
   /// No time was put in, so the block owns the whole day: the start/end rows
@@ -197,12 +198,13 @@ class AppointmentFormFields extends StatelessWidget {
 
   void _setPersonal(bool value) {
     // Clear the text fields the switch hides, so nothing stale is left in a
-    // controller the user can no longer see. Photos are deliberately NOT
-    // cleared here — dropping already-uploaded images off a flick of a switch
-    // is destructive and can't be undone from this form.
+    // controller the user can no longer see. The ADDRESS is deliberately not
+    // among them — it stays on screen as an optional field, so whatever it
+    // holds is visible and editable rather than stale. Photos are not cleared
+    // either: dropping already-uploaded images off a flick of a switch is
+    // destructive and can't be undone from this form.
     if (value) {
       controllers.clientSearch.clear();
-      controllers.address.clear();
       controllers.materials.clear();
     }
     onPersonalChanged!(value);
@@ -484,17 +486,19 @@ class AppointmentFormFields extends StatelessWidget {
   ];
 
   List<Widget> _detailsBody(BuildContext context, AppLocalizations l10n) => [
-    // --- Address (a personal job has none) ---
-    if (!isPersonal) ...[
-      AppointmentAddressField(
-        selectedClient: selectedClient,
-        useCustomAddress: useCustomAddress,
-        addressController: controllers.address,
-        onSwitchToCustom: _switchToCustomAddress,
-        onUseClientAddress: _useClientAddress,
-      ),
-      const SizedBox(height: AppSpacing.sp16),
-    ],
+    // --- Address. Offered on a personal job too, where it is OPTIONAL: a
+    // dentist appointment or a supply run still happens somewhere, and the
+    // crew wants directions to it. Marked optional there so the blank state
+    // reads as deliberate rather than unfinished.
+    AppointmentAddressField(
+      selectedClient: selectedClient,
+      useCustomAddress: useCustomAddress,
+      addressController: controllers.address,
+      optional: isPersonal,
+      onSwitchToCustom: _switchToCustomAddress,
+      onUseClientAddress: _useClientAddress,
+    ),
+    const SizedBox(height: AppSpacing.sp16),
     // --- Notes ---
     SheetFocusScroll(
       child: LabeledTextField(
@@ -544,8 +548,8 @@ class _PersonalJobSwitch extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       // No subtitle: the WHO section already carries enough on one screen
       // (owner call, 2026-08-05). Turning the switch on visibly removes the
-      // client picker and the address field, which explains itself better than
-      // a line of hint text.
+      // client picker and relaxes the address to optional, which explains
+      // itself better than a line of hint text.
       title: Text(context.l10n.calendar_personalJob),
       value: value,
       activeTrackColor: Theme.of(context).colorScheme.primary,

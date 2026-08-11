@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
+import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -244,18 +245,44 @@ void main() {
     expect(find.text('End Time'), findsOneWidget);
   });
 
-  testWidgets('a personal job hides the client picker and the address', (
+  testWidgets(
+    'a personal job hides the client picker but keeps the address, optional',
+    (tester) async {
+      await pumpAppointmentForm(tester, width: 400, isPersonal: true);
+
+      expect(find.text('Personal job'), findsOneWidget);
+      expect(find.text('Client'), findsNothing);
+      // A personal block can still have somewhere to be — the field stays, and
+      // says so rather than reading as an unfinished required one.
+      expect(find.text('Address'), findsWidgets);
+      expect(
+        tester
+            .widget<AppointmentAddressField>(
+              find.byType(AppointmentAddressField),
+            )
+            .optional,
+        isTrue,
+      );
+      // The rest of the form is untouched.
+      expect(find.text('WHO'), findsOneWidget);
+      expect(find.text('DETAILS'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('a client visit does not mark its address optional', (
     tester,
   ) async {
-    await pumpAppointmentForm(tester, width: 400, isPersonal: true);
+    await pumpAppointmentForm(tester, width: 400);
 
-    expect(find.text('Personal job'), findsOneWidget);
-    expect(find.text('Client'), findsNothing);
-    expect(find.text('Address'), findsNothing);
-    // The rest of the form is untouched.
-    expect(find.text('WHO'), findsOneWidget);
-    expect(find.text('DETAILS'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    expect(
+      tester
+          .widget<AppointmentAddressField>(
+            find.byType(AppointmentAddressField),
+          )
+          .optional,
+      isFalse,
+    );
   });
 
   testWidgets('switching a job to personal clears the hidden fields', (
@@ -274,9 +301,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(toggled, [true]);
-    // Neither field is visible any more, so neither may keep its value.
+    // The client picker is gone, so it may not keep its value.
     expect(controllers.clientSearch.text, isEmpty);
-    expect(controllers.address.text, isEmpty);
+    // The address field is still on screen, so what it holds is visible and
+    // editable — clearing it would silently drop a place the user typed.
+    expect(controllers.address.text, '9 Rue Test');
   });
 
   testWidgets('an all-day personal job drops the start and end rows', (
