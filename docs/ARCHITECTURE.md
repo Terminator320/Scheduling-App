@@ -324,10 +324,12 @@ A job may span up to `maxAppointmentSpanDays` (**14**) days, and its two stored
 times are a **daily window**: 9:00 AM–5:00 PM means 9–5 on *each* of those days,
 not one unbroken stretch through the nights.
 
-**No schema change.** `startTime`/`endTime` already carry the span, `isMultiDay`
-is derived and never stored (the same discipline as display-only `overdue`), and
-`firestore.rules` doesn't constrain either instant — so the 14-day cap is
-client-side only. Design and the remaining work: `docs/plans/2026-08-02-multi-day-appointments.md`.
+**No schema change.** `startTime`/`endTime` already carry the span and
+`isMultiDay` is derived and never stored (the same discipline as display-only
+`overdue`). `firestore.rules` bounds the span at 14 days on both `allow create`
+and the admin `allow update` — but that reaches CLIENT writes only, so the app's
+own clamp is still what contains a doc written by the console or the Admin SDK.
+Design and the remaining work: `docs/plans/2026-08-02-multi-day-appointments.md`.
 
 **`AppointmentDaySlice` (`calendar/domain/appointment_day_slice.dart`) is the
 one owner of day-scoping.** Everything routes through it rather than
@@ -343,9 +345,9 @@ bit the `displayStatusAt` ladder and `_who`:
 | `dailyWindowsOverlap(...)` | Whether two runs actually clash — all window pairs, not matching day indices |
 
 **The 14-day cap is applied by one clamp, `_clampedDayCount`,** and every
-day-scoping answer above routes through it. The cap is client-side only —
-`firestore.rules` constrains neither instant — so a doc written by the console,
-the Admin SDK or another build can exceed it, and when the owners disagreed the
+day-scoping answer above routes through it. The rules bound stops a client
+writing past the cap, but the console and the Admin SDK bypass rules entirely —
+so a doc can still exceed it, and when the owners disagreed the
 calendar rendered 14 slices while every `runsOn` consumer counted the full
 corrupt length (a drawer badge reading "1 job today" every day for a year).
 `AppointmentFormValidator` is the one deliberate exception: it reads the RAW

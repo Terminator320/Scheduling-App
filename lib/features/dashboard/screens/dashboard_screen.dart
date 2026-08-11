@@ -12,8 +12,11 @@ import 'package:scheduling/features/dashboard/application/dashboard_providers.da
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/dashboard/widgets/sections/attention_flags_section.dart';
 import 'package:scheduling/features/dashboard/widgets/sections/business_trends_section.dart';
+import 'package:scheduling/features/dashboard/widgets/sections/daily_load_section.dart';
 import 'package:scheduling/features/dashboard/widgets/sections/dashboard_hero.dart';
 import 'package:scheduling/features/dashboard/widgets/sections/employee_workload_section.dart';
+import 'package:scheduling/features/dashboard/widgets/sections/new_clients_section.dart';
+import 'package:scheduling/features/dashboard/widgets/sections/period_summary_section.dart';
 import 'package:scheduling/features/dashboard/widgets/sections/upcoming_today_section.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
@@ -157,6 +160,20 @@ class _StatsList extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Its own provider, so changing the period recomputes four
+              // counters instead of every section on the screen. It shares the
+              // stats' sources, so by the time this subtree builds it has
+              // settled too — the guard is for the frame where it has not.
+              ?ref
+                  .watch(dashboardPeriodSummaryProvider)
+                  .whenOrNull(
+                    data: (summary) => Padding(
+                      padding: const EdgeInsets.only(
+                        bottom: AppSpacing.sp24,
+                      ),
+                      child: PeriodSummarySection(summary: summary),
+                    ),
+                  ),
               tour.stepIf(
                 TourStepId.dashboardUpcoming,
                 UpcomingTodaySection(
@@ -172,11 +189,26 @@ class _StatsList extends ConsumerWidget {
                 EmployeeWorkloadSection(workload: stats.workload),
               ),
               const SizedBox(height: AppSpacing.sp24),
+              DailyLoadSection(days: stats.dailyLoad),
+              const SizedBox(height: AppSpacing.sp24),
               BusinessTrendsSection(
                 buckets: stats.weekBuckets,
                 busiestWeekday: stats.busiestWeekday,
               ),
               const SizedBox(height: AppSpacing.sp24),
+              ?ref
+                  .watch(newClientsProvider)
+                  .whenOrNull(
+                    data: (clients) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sp24),
+                      child: NewClientsSection(
+                        clients: clients,
+                        weeklyCounts: [
+                          for (final b in stats.weekBuckets) b.newClients,
+                        ],
+                      ),
+                    ),
+                  ),
               tour.stepIf(
                 TourStepId.dashboardAttention,
                 AttentionFlagsSection(
@@ -184,6 +216,13 @@ class _StatsList extends ConsumerWidget {
                   colorMap: colorMap,
                   nameMap: nameMap,
                   isAdmin: isAdmin,
+                  // Both default to empty, so a source still settling shows
+                  // the appointment flags rather than blocking the section.
+                  neverSetUp:
+                      ref.watch(neverSetUpAccountsProvider).value ?? const [],
+                  availabilityConflicts:
+                      ref.watch(availabilityConflictsProvider).value ??
+                      const [],
                 ),
               ),
               const SizedBox(height: AppSpacing.sp16),

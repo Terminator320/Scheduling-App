@@ -385,9 +385,20 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   two times are a DAILY WINDOW** (2026-08-03) — 9:00 AM–5:00 PM means 9–5 on
   *each* of those days, not one unbroken stretch through the nights. **No schema
   change**: `startTime`/`endTime` already carry the span, `isMultiDay` is
-  derived and never stored (same discipline as display-only `overdue`), and
-  `firestore.rules` doesn't constrain either instant, so the 14-day cap is
-  client-side only. Consequences that must stay in sync:
+  derived and never stored (same discipline as display-only `overdue`).
+  **`firestore.rules` bounds the span too, as of 2026-08-11** —
+  `isValidAppointmentSpan`, on `allow create` and the admin `allow update` —
+  but rules reach CLIENT writes only, so the app's clamp is still what contains
+  a console or Admin-SDK write. The bound is **14 days exactly and inclusive**:
+  a run booked at one clock time (09:00 → +14d 09:00) is a legitimate chain of
+  24-hour windows, so a `<` would reject the widest thing the form can save.
+  **An UPDATE whose span is out of range but not WIDENED still passes**
+  (`appointmentSpanNotWidened`) — the same asymmetry as `emergencyFieldNotSet`,
+  and for the same reason: a doc that already exceeds the cap must stay
+  updatable, or the admin trying to CANCEL it is refused too. Don't
+  "simplify" that branch into a flat bound. An assignee's status flip never
+  reaches either guard (that branch restricts the diff to `status`/`updatedAt`).
+  Consequences that must stay in sync:
   **`AppointmentDaySlice` (`calendar/domain/appointment_day_slice.dart`) is the
   ONE owner of day-scoping** — `sliceFor` / `expandToDays` / `lastWorkDayOf`
   (plus `lastWorkDayOfWindow`, its raw start/end form, for the one caller that
@@ -504,9 +515,9 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   departure time.
   **The 14-day cap is applied by ONE clamp, `_clampedDayCount`, and every
   day-scoping answer routes through it** (2026-08-08): `sliceFor`/`runsOn`,
-  `runsInRange`, `expandToDays` and `dailyWindowsOverlap`. The cap is
-  client-side only — `firestore.rules` constrains neither instant — so a doc
-  written by the console, the Admin SDK or another build CAN exceed it, and
+  `runsInRange`, `expandToDays` and `dailyWindowsOverlap`. The rules bound
+  stops a CLIENT writing past the cap, but the console and the Admin SDK
+  bypass rules entirely, so a doc CAN still exceed it, and
   when the owners disagreed the calendar rendered 14 slices while every
   `runsOn` consumer counted the full corrupt length: a drawer badge reading
   "1 job today" every day for a year, a card counter reading "Day 400 of 900".
@@ -1479,6 +1490,52 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   uses `IntrinsicHeight` to stretch the crew bar, so **nothing in its subtree may
   use `LayoutBuilder`, `AutoSizeText` or `FittedBox`** — they cannot report
   intrinsics.
+- **History carries its date on a LEFT RAIL, under a sticky month bar, and it
+  builds its own slivers** (P7 Phase D, 2026-08-11 —
+  `docs/plans/2026-08-11-history-restyle.md`). The rail is what leaves
+  `AppointmentCard` untouched: the two rejected layouts both had to restyle the
+  one shared card. Consequences, each of which was a real failure:
+  **Each month is a `SliverMainAxisGroup`, not a bare
+  `SliverPersistentHeader(pinned: true)` beside its list.** Repeated pinned
+  headers **stack** — a year of history parks twelve bars across the top of the
+  screen. A pinned header bounded by its own group scrolls away with its rows
+  instead. Pinned by a test that reads the bars actually PAINTED in the
+  viewport; a bar pushed out stays in the tree inside the cache extent, so
+  presence alone proves nothing.
+  **A sticky header cannot live inside `PagedListView`, so
+  `AppointmentHistoryView` re-owns what ISP used to do** — the prefetch
+  trigger, the new-page spinner/retry footer, and the one that is easy to miss:
+  **`PagingController.refresh()` only RESETS the state, it does not fetch.**
+  `_requestFirstPage` is what notices the reset and asks again; without it both
+  pull-to-refresh and the first-page Retry leave the skeleton shimmering
+  forever with no request in flight. Every `fetchNextPage()` from a builder
+  goes post-frame — the controller assigns its own value synchronously, so
+  calling it mid-build mutates a listenable during layout.
+  **The first-page indicators must NOT gain a scroll wrapper.** `AppEmptyState`
+  carries its own `SingleChildScrollView`, so wrapping it in a
+  `RefreshIndicator`'s `CustomScrollView` leaves two controllerless primary
+  scrollables under the screen's `PrimaryScrollScope` — the Scrollbar crash
+  above. ISP did not scroll those states either; pull-to-refresh on an empty
+  history is not a regression to "restore".
+  **SEARCH renders FLAT and the rail changes shape there.** Search spans every
+  appointment, so hits are not a contiguous run of days and month bars over
+  them are noise — the rail therefore shows the **month** instead of the
+  weekday, plus the **year** when the hit is not from the current one (read
+  from `currentDayProvider`, never `DateTime.now()`). A chip filter alone keeps
+  the month bars: only a text query goes flat.
+  **There is ONE count, `18 JOBS · 2 CANCELLED`, and no per-month counts ever.**
+  History is paginated, so a per-month figure could only report what had loaded
+  and would climb while you read it. The cancelled clause is a SUBSET of the
+  total, the same shape as the agenda's `4 JOBS · 1 DONE`, and search keeps the
+  clause (`5 RESULTS · 1 CANCELLED`) — dropping it on one state reads as a
+  different metric. The grouping, the tally and the two quick filters are the
+  pure `clients/domain/history_grouping.dart`; the cancelled-vs-complete
+  vocabulary lives with the rest of it in `appointment_status_values.dart`
+  (`isCancelledStatusRaw` / `isCompletedStatusRaw`), never re-spelled as a
+  `== 'cancelled'` at a call site. The quick-filter chips bind to the existing
+  `statusLabel` ("Complete"/"Cancelled") — don't add history-specific status
+  wording beside it. The **bold year separator is deleted**: the month bar
+  already carries the year.
 - **`findBusyEmployees` must exclude the appointment under edit.** Pass
   `excludeAppointmentId` from any edit-flow conflict check or the job collides
   with itself and reports every one of its own assignees as busy. The exclusion

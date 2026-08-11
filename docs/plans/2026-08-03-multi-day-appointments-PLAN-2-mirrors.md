@@ -307,9 +307,10 @@ dependency-free apart from `time_utils.js` so jest can load it directly.
 > Every day-scoping answer in `appointment_day_slice.dart` now routes through
 > **`_clampedDayCount`** (`min(end − start + 1, maxAppointmentSpanDays)`):
 > `sliceFor`/`runsOn`, `runsInRange`, `expandToDays` and `dailyWindowsOverlap`.
-> The cap is **client-side only** — `firestore.rules` constrains neither instant
-> — so a doc written by the console, the Admin SDK or another build CAN exceed
-> it, and when the owners disagreed the calendar rendered 14 slices while every
+> `firestore.rules` gained a matching bound on 2026-08-11, but it reaches
+> **client writes only** — the console and the Admin SDK bypass rules, so a doc
+> CAN still exceed it, and when the owners disagreed the calendar rendered 14
+> slices while every
 > `runsOn` consumer counted the full corrupt length (a drawer badge reading
 > "1 job today" every day for a year; a card counter reading "Day 400 of 900").
 > **`dayCountOf` in the JS mirror must clamp the same way**, and the worked

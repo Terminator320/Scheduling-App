@@ -3,9 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_aggregator.dart';
+import 'package:scheduling/features/dashboard/domain/dashboard_period.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/policies/availability_conflict_policy.dart';
 
 /// Injectable clock for tests. The range below is midnight-aligned, which
 /// keeps it stable and avoids extra listener churn.
@@ -46,56 +50,127 @@ final dashboardHistoryProvider =
       return ref.watch(appointmentsRepositoryProvider).fetchInRange(range);
     });
 
-/// Client createdAt timestamps within the dashboard window. Legacy docs that
-/// don't have a createdAt are excluded.
-final newClientDatesProvider = FutureProvider.autoDispose<List<DateTime>>((
+/// Clients created within the dashboard window, newest first.
+///
+/// Two exclusions, and the second is a deliberate behaviour change:
+///
+/// - **No `createdAt`** — a legacy doc has nothing to bucket by.
+/// - **Archived** — the dashboard answers *what should I look at now*, and an
+///   archived client is one you decided not to look at (owner call
+///   2026-08-10). Filtered in Dart on purpose: a
+///   `.where('archived', isEqualTo: false)` would need an
+///   `(archived, createdAt)` composite index and a deploy. The repo's "never
+///   filter a server page in Dart" rule is about `fetchClientsPage`, where a
+///   shortened page breaks the cursor and truncates the list permanently —
+///   this is a bounded one-shot read with no cursor and no pagination, so that
+///   hazard does not apply.
+final newClientsProvider = FutureProvider.autoDispose<List<ClientRecord>>((
   ref,
 ) async {
   final range = ref.watch(dashboardRangeProvider);
   final clients = await ref
       .watch(clientsRepositoryProvider)
       .fetchClientsCreatedSince(range.start);
-  return [
+  final recent = [
     for (final client in clients)
-      if (client.createdAt != null) client.createdAt!,
-  ];
+      if (client.createdAt != null && !client.archived) client,
+  ]..sort((a, b) => b.createdAt!.compareTo(a.createdAt!));
+  return recent;
 });
+
+/// Client createdAt timestamps within the dashboard window, derived from
+/// [newClientsProvider] so the two can never disagree about which clients
+/// count — and so the fetch happens once.
+final newClientDatesProvider = Provider.autoDispose<AsyncValue<List<DateTime>>>(
+  (ref) => ref
+      .watch(newClientsProvider)
+      .whenData((clients) => [for (final c in clients) c.createdAt!]),
+);
+
+/// The period the KPI numbers are counted over.
+///
+/// Deliberately reaches NO query: all three periods fit inside the window
+/// already fetched, so this is a pure in-memory filter. Nothing below may pass
+/// it to a range provider — a period that widened the live listener would undo
+/// the 2026-08-08 split.
+final dashboardPeriodProvider =
+    NotifierProvider.autoDispose<DashboardPeriodController, DashboardPeriod>(
+      DashboardPeriodController.new,
+    );
+
+class DashboardPeriodController extends Notifier<DashboardPeriod> {
+  @override
+  DashboardPeriod build() => DashboardPeriod.today;
+
+  /// Re-tapping the active segment is a no-op rather than a rebuild of every
+  /// section watching this.
+  void select(DashboardPeriod period) {
+    if (period == state) return;
+    state = period;
+  }
+}
+
+/// The two halves of the window, merged by doc id.
+///
+/// Split out so the KPI summary and the stats can share one merge, and so
+/// changing the period recomputes four counters rather than every section.
+final dashboardRecordsProvider =
+    Provider.autoDispose<AsyncValue<List<AppointmentRecord>>>((ref) {
+      final liveRange = ref.watch(dashboardLiveRangeProvider);
+      final appointments = ref.watch(appointmentsInRangeProvider(liveRange));
+      final history = ref.watch(dashboardHistoryProvider);
+
+      final failure = _firstFailure<List<AppointmentRecord>>([
+        appointments,
+        history,
+      ]);
+      if (failure != null) return failure;
+      // Merged by doc id, not concatenated: each query reaches back to its own
+      // `fetchStart` to catch a run already under way, so the live half
+      // re-reads the last fortnight of the history half.
+      return AsyncValue.data(
+        DashboardAggregator.mergeById(
+          appointments.requireValue,
+          history.requireValue,
+        ),
+      );
+    });
+
+/// The KPI numbers for the selected period.
+final dashboardPeriodSummaryProvider =
+    Provider.autoDispose<AsyncValue<PeriodSummary>>((ref) {
+      final records = ref.watch(dashboardRecordsProvider);
+      final clientDates = ref.watch(newClientDatesProvider);
+
+      final failure = _firstFailure<PeriodSummary>([records, clientDates]);
+      if (failure != null) return failure;
+      return AsyncValue.data(
+        DashboardAggregator.computePeriodSummary(
+          appointments: records.requireValue,
+          clientCreatedDates: clientDates.requireValue,
+          window: ref
+              .watch(dashboardPeriodProvider)
+              .windowFor(ref.read(dashboardClockProvider)()),
+        ),
+      );
+    });
 
 /// Combine appointments range, active employees, and new-clients into dashboard stats.
 final dashboardStatsProvider = Provider.autoDispose<AsyncValue<DashboardStats>>(
   (ref) {
-    final liveRange = ref.watch(dashboardLiveRangeProvider);
-    final appointments = ref.watch(appointmentsInRangeProvider(liveRange));
-    final history = ref.watch(dashboardHistoryProvider);
+    final records = ref.watch(dashboardRecordsProvider);
     final employees = ref.watch(employeesStreamProvider);
     final clientDates = ref.watch(newClientDatesProvider);
 
-    final sources = <AsyncValue<Object?>>[
-      appointments,
-      history,
+    final failure = _firstFailure<DashboardStats>([
+      records,
       employees,
       clientDates,
-    ];
-    for (final source in sources) {
-      if (source.hasError) {
-        return AsyncValue.error(
-          source.error!,
-          source.stackTrace ?? StackTrace.current,
-        );
-      }
-    }
-    if (sources.any((source) => source.isLoading)) {
-      return const AsyncValue.loading();
-    }
+    ]);
+    if (failure != null) return failure;
     return AsyncValue.data(
       DashboardAggregator.computeStats(
-        // Merged by doc id, not concatenated: each query reaches back to its
-        // own `fetchStart` to catch a run already under way, so the live half
-        // re-reads the last fortnight of the history half.
-        appointments: DashboardAggregator.mergeById(
-          appointments.requireValue,
-          history.requireValue,
-        ),
+        appointments: records.requireValue,
         employees: employees.requireValue,
         clientCreatedDates: clientDates.requireValue,
         now: ref.read(dashboardClockProvider)(),
@@ -103,3 +178,91 @@ final dashboardStatsProvider = Provider.autoDispose<AsyncValue<DashboardStats>>(
     );
   },
 );
+
+/// Accounts an admin created that were never set up.
+///
+/// The person is still sitting on the shared starting password, which is the
+/// one operational risk the P4c design creates — so the dashboard says so.
+///
+/// Read from [allUsersStreamProvider], never `employeesStreamProvider`: that
+/// one filters to `status == 'active'`, so this list would be permanently
+/// empty and the flag would silently never fire. `watchAllUsers()` is already
+/// always-on, so this costs no extra listener.
+///
+/// Sorted oldest-first, and a **null `createdAt` still lists** — the field is
+/// function-owned and absent on legacy docs, so "unknown age" must not become
+/// "not shown"; those sort last rather than being dropped.
+final neverSetUpAccountsProvider =
+    Provider.autoDispose<AsyncValue<List<EmployeeRecord>>>(
+      (ref) => ref.watch(allUsersStreamProvider).whenData((users) {
+        // Exact match: an empty or unknown status is not an invited account.
+        return [
+          for (final user in users)
+            if (user.isInvited) user,
+        ]..sort((a, b) {
+          final aAt = a.createdAt;
+          final bAt = b.createdAt;
+          if (aAt == null) return bAt == null ? 0 : 1;
+          if (bAt == null) return -1;
+          return aAt.compareTo(bAt);
+        });
+      }),
+    );
+
+/// A person and the weekdays they hold booked work on while being marked
+/// unavailable for them.
+typedef AvailabilityConflict = ({EmployeeRecord employee, Set<int> days});
+
+/// Roster-wide availability conflicts over the dashboard's live window.
+///
+/// Scoped to that window on purpose: it is the data already on screen, and a
+/// wider question would need its own query. A conflict further out than next
+/// Monday surfaces when the window reaches it.
+final availabilityConflictsProvider =
+    Provider.autoDispose<AsyncValue<List<AvailabilityConflict>>>((ref) {
+      final records = ref.watch(dashboardRecordsProvider);
+      final employees = ref.watch(employeesStreamProvider);
+
+      final failure = _firstFailure<List<AvailabilityConflict>>([
+        records,
+        employees,
+      ]);
+      if (failure != null) return failure;
+
+      final range = ref.watch(dashboardLiveRangeProvider);
+      final all = records.requireValue;
+      return AsyncValue.data([
+        for (final employee in employees.requireValue)
+          if (daysBookedOutsideAvailability(
+                appointments: [
+                  for (final a in all)
+                    if (a.employeeIds.contains(employee.id)) a,
+                ],
+                range: range,
+                workingDays: employee.workingDays,
+              )
+              case final days when days.isNotEmpty)
+            (employee: employee, days: days),
+      ]);
+    });
+
+/// The first error or loading state among [sources], or null when every one of
+/// them has settled with data.
+///
+/// Error before loading, deliberately: a source that has already failed must
+/// not be masked by a sibling still in flight, or the screen sits on a
+/// skeleton with nothing ever surfacing the failure.
+AsyncValue<T>? _firstFailure<T>(List<AsyncValue<Object?>> sources) {
+  for (final source in sources) {
+    if (source.hasError) {
+      return AsyncValue.error(
+        source.error!,
+        source.stackTrace ?? StackTrace.current,
+      );
+    }
+  }
+  if (sources.any((source) => source.isLoading)) {
+    return const AsyncValue.loading();
+  }
+  return null;
+}

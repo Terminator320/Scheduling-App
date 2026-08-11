@@ -1,6 +1,7 @@
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/dashboard/domain/dashboard_period.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
@@ -214,6 +215,101 @@ class DashboardAggregator {
     ];
   }
 
+  /// Jobs booked on each day of the current ISO week, against the roster's
+  /// capacity for that day.
+  ///
+  /// **Monday–Sunday of this week, not the next 7 days**, and that is a data
+  /// constraint rather than a preference: `liveRangeAround` runs from this
+  /// week's Monday to next Monday, so a rolling 7-day window would run off the
+  /// end of the fetched range on most weekdays and paint the missing days as
+  /// zero — the same silent under-count a whole-month period would have had.
+  ///
+  /// Counted through [runsOn], so a multi-day run is booked on every day it
+  /// works. Cancelled visits are excluded from both sides.
+  static List<DayLoad> computeDailyLoad(
+    List<AppointmentRecord> appointments,
+    List<EmployeeRecord> employees,
+    DateTime now,
+  ) {
+    final monday = mondayOf(now);
+    return [
+      for (var i = 0; i < DateTime.daysPerWeek; i++)
+        _dayLoadOn(
+          DateTime(monday.year, monday.month, monday.day + i),
+          appointments,
+          employees,
+        ),
+    ];
+  }
+
+  static DayLoad _dayLoadOn(
+    DateTime day,
+    List<AppointmentRecord> appointments,
+    List<EmployeeRecord> employees,
+  ) {
+    var count = 0;
+    for (final a in appointments) {
+      if (_isCancelled(a)) continue;
+      if (runsOn(a, day)) count++;
+    }
+    // DateTime.sunday is 7; workingDays is 0-indexed on Sunday.
+    final weekdayIndex = day.weekday % 7;
+    var capacity = 0;
+    for (final e in employees) {
+      if (weekdayIndex < e.workingDays.length && e.workingDays[weekdayIndex]) {
+        capacity += e.maxJobsPerDay;
+      }
+    }
+    return DayLoad(day: day, count: count, capacity: capacity);
+  }
+
+  /// The summary numbers for the selected period.
+  ///
+  /// Takes a resolved [DashboardWindow], never a `DashboardPeriod` — the
+  /// window rule has one owner (`DashboardPeriod.windowFor`) and switching on
+  /// the period in here would be a second.
+  ///
+  /// Scoped through [runsInRange], not `startTime`: the merged list reaches
+  /// back to each query's `fetchStart`, so a raw instant test would read a
+  /// fortnight of past work as in-window, and would drop a run that began
+  /// before the period but is still being worked inside it.
+  ///
+  /// **"Completed in this period" means a job that RUNS in the period and is
+  /// stored `done`** — there is no completion timestamp on the record, so this
+  /// is the honest available reading, not an approximation of one.
+  static PeriodSummary computePeriodSummary({
+    required List<AppointmentRecord> appointments,
+    required List<DateTime> clientCreatedDates,
+    required DashboardWindow window,
+  }) {
+    var booked = 0;
+    var completed = 0;
+    var cancelled = 0;
+    for (final a in appointments) {
+      if (!runsInRange(a, window.start, window.end)) continue;
+      final status = AppointmentStatus.fromRaw(a.status);
+      if (status.isCancelled) {
+        cancelled++;
+        continue;
+      }
+      // Cancelled work was never booked business — it is counted on its own.
+      booked++;
+      if (status.isDone) completed++;
+    }
+    var newClients = 0;
+    for (final date in clientCreatedDates) {
+      if (!date.isBefore(window.start) && date.isBefore(window.end)) {
+        newClients++;
+      }
+    }
+    return PeriodSummary(
+      booked: booked,
+      completed: completed,
+      cancelled: cancelled,
+      newClients: newClients,
+    );
+  }
+
   /// Finds the busiest weekday over the window, excluding cancelled visits.
   /// Ties go to the earliest weekday, and this returns null when nothing
   /// counts.
@@ -281,6 +377,7 @@ class DashboardAggregator {
   }) => DashboardStats(
     todayOps: computeTodayOps(appointments, now),
     workload: computeWorkload(appointments, employees, now),
+    dailyLoad: computeDailyLoad(appointments, employees, now),
     weekBuckets: computeWeekBuckets(appointments, clientCreatedDates, now),
     busiestWeekday: computeBusiestWeekday(appointments, now),
     flags: computeAttentionFlags(appointments, now),

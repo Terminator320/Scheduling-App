@@ -28,6 +28,106 @@ AppointmentRecord _appt({
 );
 
 void main() {
+  group('computeDailyLoad', () {
+    // 2026-07-08 is a Wednesday, so this week runs Mon 07-06 to Sun 07-12.
+    // EmployeeRecord already defaults workingDays to a Mon-Fri week, which is
+    // what the capacity cases below lean on.
+
+    test('covers Monday through Sunday of the current week', () {
+      final load = DashboardAggregator.computeDailyLoad(
+        const [],
+        const [],
+        _now,
+      );
+
+      expect(load, hasLength(7));
+      expect(load.first.day, DateTime(2026, 7, 6));
+      expect(load.last.day, DateTime(2026, 7, 12));
+    });
+
+    test('counts a multi-day run on every day it works', () {
+      final job = _appt(
+        id: 'multi',
+        start: DateTime(2026, 7, 6, 9),
+        duration: const Duration(days: 2, hours: 8),
+      );
+
+      final load = DashboardAggregator.computeDailyLoad([job], const [], _now);
+
+      expect([for (final d in load) d.count], [1, 1, 1, 0, 0, 0, 0]);
+    });
+
+    test('a cancelled visit is not booked work', () {
+      final job = _appt(
+        id: 'x',
+        start: DateTime(2026, 7, 8, 9),
+        status: 'cancelled',
+      );
+
+      final load = DashboardAggregator.computeDailyLoad([job], const [], _now);
+
+      expect(load.every((d) => d.count == 0), isTrue);
+    });
+
+    test('capacity sums only the staff who work that weekday', () {
+      const employee = EmployeeRecord(
+        id: 'e1',
+        name: 'Jane',
+        status: 'active',
+        maxJobsPerDay: 3,
+      );
+
+      final load = DashboardAggregator.computeDailyLoad(
+        const [],
+        const [employee],
+        _now,
+      );
+
+      // Monday-Friday carry the capacity; the weekend carries none.
+      expect([for (final d in load) d.capacity], [3, 3, 3, 3, 3, 0, 0]);
+    });
+
+    test('an unset maxJobsPerDay is never read as a ceiling', () {
+      // The field defaults to 0, so treating it as capacity would paint every
+      // day over-capacity on a roster that never configured it.
+      const employee = EmployeeRecord(
+        id: 'e1',
+        name: 'Jane',
+        status: 'active',
+      );
+      final job = _appt(id: 'x', start: DateTime(2026, 7, 8, 9));
+
+      final load = DashboardAggregator.computeDailyLoad(
+        [job],
+        const [employee],
+        _now,
+      );
+
+      expect(load.any((d) => d.isOverCapacity), isFalse);
+    });
+
+    test('a day booked past its capacity is flagged', () {
+      const employee = EmployeeRecord(
+        id: 'e1',
+        name: 'Jane',
+        status: 'active',
+        maxJobsPerDay: 1,
+      );
+      final wednesday = DateTime(2026, 7, 8, 9);
+
+      final load = DashboardAggregator.computeDailyLoad(
+        [
+          _appt(id: 'a', start: wednesday),
+          _appt(id: 'b', start: wednesday.add(const Duration(hours: 3))),
+        ],
+        const [employee],
+        _now,
+      );
+
+      expect(load[2].isOverCapacity, isTrue);
+    });
+  });
+
   group('mondayOf', () {
     test('returns Monday midnight for a mid-week day', () {
       expect(

@@ -151,9 +151,10 @@ function dayCountOf(r) {
  * the morning it ends.
  *
  * The count is clamped to `MAX_APPOINTMENT_SPAN_DAYS` like every day-scoping
- * answer on the Dart side. The cap is client-side only, so a doc written by the
- * console or the Admin SDK can exceed it; left unclamped this would report
- * "Day 400 of 900" on a corrupt record.
+ * answer on the Dart side. `firestore.rules` bounds client writes to the same
+ * cap, but the console and the Admin SDK bypass rules, so a doc can still
+ * exceed it; left unclamped this would report "Day 400 of 900" on a corrupt
+ * record.
  * @param {!Object} r
  * @param {number} dayMs Any instant inside the target Toronto day.
  * @return {?{dayIndex: number, dayCount: number, windowStartMs: number,

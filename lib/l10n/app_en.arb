@@ -1021,6 +1021,41 @@
   "@clients_allStaff": {
     "description": "History employee-filter chip option that clears the employee filter"
   },
+  "clients_historyFilterYear": "Year",
+  "@clients_historyFilterYear": {
+    "description": "Title of the single-select sheet the History year chip opens"
+  },
+  "clients_historyFilterStaff": "Staff",
+  "@clients_historyFilterStaff": {
+    "description": "Title of the single-select sheet the History crew chip opens"
+  },
+  "clients_historyJobsCount": "{count, plural, =1{1 JOB} other{{count} JOBS}}",
+  "@clients_historyJobsCount": {
+    "description": "History list count, all caps — the first half of '18 JOBS · 2 CANCELLED'",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clients_historyResultsCount": "{count, plural, =1{1 RESULT} other{{count} RESULTS}}",
+  "@clients_historyResultsCount": {
+    "description": "History count in search, all caps — search spans every appointment, so its hits are results rather than the day's jobs",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clients_historyCancelledCount": "{count, plural, other{{count} CANCELLED}}",
+  "@clients_historyCancelledCount": {
+    "description": "How many of the counted History rows were cancelled, all caps — a subset of the total, not an addition",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "clients_noAppointmentsMatchFilters": "No appointments match your filters",
   "@clients_noAppointmentsMatchFilters": {
     "description": "Empty state shown when the active history filters exclude every appointment"
@@ -1985,6 +2020,38 @@
   "@dashboard_title": {
     "description": "Admin dashboard screen title, drawer nav item, and settings tile label"
   },
+  "dashboard_summary": "Summary",
+  "@dashboard_summary": {
+    "description": "Section label above the dashboard's KPI tiles and their period control"
+  },
+  "dashboard_periodLabel": "Summary period",
+  "@dashboard_periodLabel": {
+    "description": "Accessibility label for the Today/Week/Month segmented control that scopes the KPI tiles"
+  },
+  "dashboard_periodToday": "Today",
+  "@dashboard_periodToday": {
+    "description": "Segmented control option counting the KPI tiles over today only"
+  },
+  "dashboard_periodWeek": "Week",
+  "@dashboard_periodWeek": {
+    "description": "Segmented control option counting the KPI tiles from Monday through the end of today"
+  },
+  "dashboard_periodMonth": "Month",
+  "@dashboard_periodMonth": {
+    "description": "Segmented control option counting the KPI tiles from the 1st through the end of today"
+  },
+  "dashboard_kpiBooked": "Booked",
+  "@dashboard_kpiBooked": {
+    "description": "KPI tile label for jobs running in the selected period, excluding cancelled ones"
+  },
+  "dashboard_kpiCompleted": "Completed",
+  "@dashboard_kpiCompleted": {
+    "description": "KPI tile label for jobs in the selected period whose stored status is done"
+  },
+  "dashboard_kpiCancelled": "Cancelled",
+  "@dashboard_kpiCancelled": {
+    "description": "KPI tile label for cancelled jobs in the selected period"
+  },
   "dashboard_visitsToday": "{count, plural, =1{visit today} other{visits today}}",
   "@dashboard_visitsToday": {
     "description": "Label rendered beside the hero's big count of today's visits; the number itself is a separate Text",
@@ -2009,6 +2076,27 @@
         "type": "int"
       }
     }
+  },
+  "dashboard_jobsPerDay": "Jobs booked per day — this week",
+  "@dashboard_jobsPerDay": {
+    "description": "Title of the dashboard chart showing how many jobs are booked on each day of the current week"
+  },
+  "dashboard_jobsPerDaySemantics": "{day}: {count} booked",
+  "@dashboard_jobsPerDaySemantics": {
+    "description": "Screen-reader label for one bar of the jobs-per-day chart",
+    "placeholders": {
+      "day": {
+        "type": "String",
+        "example": "Monday"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_overCapacity": "over capacity",
+  "@dashboard_overCapacity": {
+    "description": "Appended to a jobs-per-day bar's screen-reader label when the day is booked past the roster's capacity"
   },
   "dashboard_businessTrends": "Business trends",
   "@dashboard_businessTrends": {
@@ -2043,6 +2131,10 @@
   "@dashboard_completedVsCancelled": {
     "description": "Title of the grouped weekly bar chart of done vs cancelled visits"
   },
+  "dashboard_newClientsEmpty": "No new clients in the last 8 weeks",
+  "@dashboard_newClientsEmpty": {
+    "description": "Shown in the dashboard's New clients card when no client was added over the window"
+  },
   "dashboard_newClients": "New clients",
   "@dashboard_newClients": {
     "description": "Caption of the new-clients sparkline inside the trends card"
@@ -2062,6 +2154,34 @@
     "placeholders": {
       "day": {
         "type": "String"
+      }
+    }
+  },
+  "dashboard_neverSetUpHeader": "{count, plural, =1{1 account was never set up} other{{count} accounts were never set up}}",
+  "@dashboard_neverSetUpHeader": {
+    "description": "Attention group header for accounts an admin created that the person never completed setup for, so they still hold the shared starting password",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_availabilityConflictHeader": "{count, plural, =1{1 person is booked outside their availability} other{{count} people are booked outside their availability}}",
+  "@dashboard_availabilityConflictHeader": {
+    "description": "Attention group header for staff holding booked work on weekdays they are marked unavailable for",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_availabilityConflictDays": "Booked on {days}",
+  "@dashboard_availabilityConflictDays": {
+    "description": "Row subtitle naming the weekdays a person is booked on despite being unavailable",
+    "placeholders": {
+      "days": {
+        "type": "String",
+        "example": "Sat, Sun"
       }
     }
   },

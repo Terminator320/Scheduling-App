@@ -26,7 +26,7 @@ at the top of each file, not its boxes.
 | `2026-07-29-redesign-program.md` | **P1–P4c shipped (+P2b).** Remaining order **P5 → P7**; **P6 deferred/skippable**, P7b parallel. The binding spec for the rest. |
 | `redesign-subdocs/` | Complete history for P1–P4c — see the README in there. P4b is **withdrawn**. |
 | `redesign-subdocs/2026-07-30-p1-p2-DEVICE-TEST.md` | **Open runbook.** ~87 of 95 checks never run. |
-| `2026-08-02-multi-day-appointments.md` | Design. Shipped in the app and in the mirrors; §10 open items stand (Live Activities, the rules bound). |
+| `2026-08-02-multi-day-appointments.md` | Design. Shipped in the app and in the mirrors; of §10 only the Live Activities question is still open — the rules bound was built 2026-08-11. |
 | `2026-08-02-multi-day-appointments-PLAN-1-app.md` | **DONE** (`140fc92`). |
 | `2026-08-03-multi-day-appointments-PLAN-2-mirrors.md` | **DONE** 2026-08-10. Widget, Siri v3 and push text. Backend NOT deployed; the two Swift halves are Xcode/device-unverified. |
 | `2026-07-10-siri-app-intents-design.md` | Design, 6 phases. Phases 5–6 unscoped. |
@@ -34,6 +34,8 @@ at the top of each file, not its boxes.
 | `2026-07-20-siri-phase4-write-actions.md` | **NOT STARTED.** Mac + Apple-portal session. |
 | `2026-08-08-completed-jobs-agenda.md` | Built. Its companion **phone backfill has not been run for real**. |
 | `2026-08-10-photo-cue-and-day-count.md` | Built. Not device-verified. |
+| `redesign-subdocs/2026-08-11-p7-dashboard-history.md` | **P7 dashboard BUILT** (period control, jobs-per-day, new-clients rows, 2 new Attention flags); **History half not started.** App-side only. |
+| `2026-08-11-history-restyle.md` | **Design, chosen 2026-08-11. Not built.** P7's History half — date rail under a sticky month bar. |
 | `APP_STORE_SUBMISSION.md` | **The live release runbook.** 26 items open. |
 
 ---
@@ -86,11 +88,24 @@ at the top of each file, not its boxes.
   2026-08-10 and all still hold (an active-admins fan-out query, the EN+FR
   `_MESSAGES` rows, a `kind`-aware `_handlePushTap`, and a new ledger + TTL). The
   fan-out is now shared work: P5's self-service email notice needs it too.
-- **P7 Dashboard + History — the redesign pass, not the features.** Both
-  screens exist from July and work; what is missing is P7's scope. Verified
-  absent: the period segmented control (Today · Week · Month · Year) is not
-  wired anywhere in `lib/features/dashboard/`. History has year/crew dropdown
-  chips already, so its gap is the restyle, not the filtering.
+- **P7 Dashboard — BUILT 2026-08-11**
+  (`redesign-subdocs/2026-08-11-p7-dashboard-history.md`). The period control
+  ships as **Today · Week · Month; Year is dropped** — `fetchInRange` caps at
+  1000 docs and a year is ~1,825 jobs even at 5/day, so Year could only have
+  reported a silent prefix. It needs P7b's aggregate read path first. The three
+  surviving periods are **to-date** windows that fit inside the data already
+  fetched, so the control reaches no query at all. Also built: jobs-booked-per-day
+  with an over-capacity line, New clients as tappable rows (archived now
+  excluded — a behaviour change), and two new Attention flags (accounts never
+  set up, booked-outside-availability). Not device-verified.
+- **P7 History — DESIGNED 2026-08-11, NOT BUILT**
+  (`2026-08-11-history-restyle.md`). Date rail under a sticky month bar, which
+  replaces the year separator; the shared `AppointmentCard` is untouched; one
+  count at the top only (per-month counts would climb as pages load); quick
+  filters are Complete · Cancelled, reusing the existing `StatusChip` wording;
+  search spans everything and goes flat, with
+  the rail carrying month + year. The filtering itself doesn't change, so there
+  are no new server queries and nothing to deploy.
 - **P7b Wave invoice read path — not started.** It is what unblocks P7's six
   money sections, which the spec deliberately omits until then.
 
@@ -106,8 +121,10 @@ is still schema v2. `CLAUDE.md`, `docs/ARCHITECTURE.md`,
 - **Live Activities for a multi-day job** — deferred on purpose (a card
   counting down to an end four days out would sit on the Lock Screen for the
   whole job). Unsolved, not forgotten.
-- Whether the 14-day cap deserves a `firestore.rules` bound. Today the cap is
-  client-side only, so a console/Admin-SDK write can exceed it.
+- ~~Whether the 14-day cap deserves a `firestore.rules` bound.~~ **CLOSED
+  2026-08-11 — built.** `isValidAppointmentSpan` bounds it on create and on the
+  admin update, with a not-widened escape so an already-corrupt doc stays
+  cancellable. Client writes only, so the app's clamp stays. **Not deployed.**
 
 ### 3. Siri
 
