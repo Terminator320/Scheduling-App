@@ -2,7 +2,7 @@
 
 Completed plans/specs and superseded audit snapshots — kept for history, not
 maintained against the current code. Started 2026-07-10; last updated
-2026-07-22.
+2026-08-10.
 
 **Do not treat these as accurate references.** For current state see
 `docs/ARCHITECTURE.md`, `docs/CLOUD_FUNCTIONS.md`, and the active plans in
@@ -63,6 +63,22 @@ maintained against the current code. Started 2026-07-10; last updated
   role-aware in-app feature tours (showcaseview 5.x; built + committed on
   `notification`, "live tour of app"). `lib/features/feature_tour/`; CLAUDE.md
   carries the full invariant. On-device verification is the one residual item.
+
+- `2026-08-03-client-archive-and-delete.md` / `-plan.md` — archive-instead-of-
+  delete for clients, plus the `deleteClient` callable gated on a live `count()`
+  of the client's appointments (built + committed on `redesgin`; **functions,
+  rules and the `(archived, name, __name__)` index deployed 2026-08-03**, with
+  the required prod backfill run first — 674 clients patched). The design doc's
+  own "approved, not implemented" status line was stale at archive time and was
+  corrected. `allow delete` on `/clients` was withdrawn 2026-08-08 with the
+  `#compat-1.37.1` shim, so `deleteClient` is now the only delete path in rules
+  as well as in code.
+- `2026-08-04-drawer-icons-and-tour-expansion.md` / `-PLAN.md` — tinted icon
+  chips on the nav drawer rows, and the feature tour regrown from 14 screen-level
+  steps to 43, including the three create-flow **sheet** tours that the sealed
+  `TourScope` split made expressible (pushed, `2845d43a`..`881834b2`).
+  `lib/features/feature_tour/domain/tour_scope.dart`. On-device verification is
+  the one residual item.
 
 ## Superseded session snapshots
 - `2026-07-20-session-handoff.md` — a point-in-time "resume here" snapshot; its

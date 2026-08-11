@@ -223,13 +223,14 @@ service cloud.firestore {
           && (!('colorValue' in d.keys()) || isValidColorValue(d.colorValue))
           && (!('role' in d.keys()) || isValidRole(d.role))
           && (!('status' in d.keys()) || isValidUserStatus(d.status))
-          // Server-owned consent stamps. The denylist on `allow update` below is
-          // what actually keeps clients out of them; these caps exist because
-          // `allow create` has no field validation yet, so when P5 wires
-          // isValidUserData into create they are already correct instead of
-          // being a forgotten field family. `is timestamp` is exactly what
-          // the callables write, so the cap can't be tighter than a write
-          // path's widest value.
+          // Server-owned consent stamps. The denylists on `allow create` and
+          // `allow update` are what actually keep clients out of them; these
+          // caps only ever see a value the Admin SDK wrote, passing through on
+          // an unrelated update. `is timestamp` is exactly what the callables
+          // write, so the cap can't be tighter than a write path's widest
+          // value. (This comment used to say `allow create` had no field
+          // validation — it gained `isValidUserData` plus the key denylist on
+          // 2026-08-08.)
           && (!('termsAcceptedAt' in d.keys())
               || d.termsAcceptedAt is timestamp)
           && (!('locationConsentAt' in d.keys())

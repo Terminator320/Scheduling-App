@@ -48,9 +48,14 @@ implementation plan when its turn comes.
 ## Build order
 
 ```
-P1 foundation → P2 calendar → [P2b hardware-pass changes] → P3 clients → P4 team → P4b auth+invites → P5 settings/my-details → P6 time off → P7 dashboard/history
+P1 foundation → P2 calendar → [P2b hardware-pass changes] → P3 clients → P4 team → P4b auth+invites → P5 settings/my-details → P7 dashboard/history
                                                                                        P7b Wave invoices (parallel, unblocks P7 money sections)
+                                                                                       P6 time off   (parallel, DEFERRED — skippable, see P6)
 ```
+
+**Revised 2026-08-10:** P6 was between P5 and P7 and no longer is — the owner deferred it, so P7
+follows P5 directly and P6 becomes a parallel option like P7b. P4b is **withdrawn**, not built:
+P4c replaced the signup-code flow it delivered.
 
 **P1, P2 and P3 are shipped, plus P2b** — the owner changes that came out of the
 first run on real hardware (2026-07-31). Several P2 bullets below were revised
@@ -474,30 +479,115 @@ rules from `09` apply), owner/company sign-up (web, out of scope).
 
 ## P5 — Settings + My details
 
-**Settings** (pushed): profile row → My details; grouped panels APPEARANCE (theme, text size,
+> **Reconciled against the code 2026-08-10. Most of the Settings half already
+> shipped, and the rules paragraph below was wrong.** See the reconciliation
+> section after P7b for the full sweep.
+
+**Settings** (pushed): ~~profile row → My details; grouped panels APPEARANCE (theme, text size,
 language) · SECURITY (app lock, change password) · INTEGRATIONS (Wave, admin-only) ·
-NOTIFICATIONS; version footer. Existing rows/providers restyled, not rebuilt.
+NOTIFICATIONS; version footer.~~ **DONE** — `settings_screen.dart` already renders the profile
+card, a My-details row under ACCOUNT, and APPEARANCE / SECURITY / NOTIFICATIONS / INTEGRATIONS
+(Wave, admin-only) / LEGAL / HELP sections through `SettingsSectionCard`. LEGAL post-dates this
+spec (2026-08-05) and carries the Privacy Policy + Terms rows the consent stamp depends on.
+Nothing in the Settings half is outstanding.
 
 **My details** (pushed, everyone): profile card (photo pill deferred with email — see deviations);
 YOU CAN CHANGE THESE (phone, emergency contact; email shown read-only); MY AVAILABILITY (7 day
 toggles, start/end, on-call) — **applies immediately**, with the inline amber conflict warning when
-a turned-off day has booked work ("…the jobs stay until someone moves them"); TIME OFF section
-(P6); NOTIFICATIONS (existing toggles). For admins the SET BY YOUR ADMIN panel appears as an
+a turned-off day has booked work ("…the jobs stay until someone moves them"); ~~TIME OFF section
+(P6)~~ *(omitted while P6 is deferred)*; NOTIFICATIONS (existing toggles). For admins the SET BY YOUR ADMIN panel appears as an
 editable SCHEDULING panel; for technicians it is **hidden entirely**.
 
-**Rules.** A user may update **only** the self-service keys on their own doc —
-`affectedKeys().hasOnly(['phone', 'emergencyContact', 'workingDays', 'workStartMinutes',
-'workEndMinutes', 'onCall', 'updatedAt'])` under `resource.data.uid == request.auth.uid` —
-scheduling fields (role, jobTitle, colour, maxJobsPerDay, status) stay admin-only. Verified
-2026-07-29: no self-update clause exists today (clean add), the admin update clause is a
-denylist (`hasAny(['uid'])`) plus three per-field validators — new typed fields get the same
-opt-in `!('x' in keys()) || <check>` guards — and **`allow create` currently has zero field
-validation**, so the new caps must be applied to create as well (or creates stay the loophole).
+**The screen exists and holds the emergency contact only** (`my_details_screen.dart`), reading and
+writing `users/{docId}/private/emergency` — the emergency pair moved OFF the users doc on
+2026-08-02 because rules are document-level and `/users` read clause 2 lets every active employee
+read every active peer. Everything else in the list above is still to build.
+
+**Owner decision, 2026-08-10: an employee edits their OWN contact details here — phone AND
+email.** This supersedes "email shown read-only" above. The two are not the same size of job:
+
+- **Phone is nearly free.** `phone` is already in `isAvailabilityOnlyChange()`'s allowlist, so
+  wiring P5's self-service clause gives it with no new callable. Bind the field to
+  `TextLimits.phone` and `PhoneInputFormatter` (numbers are stored formatted, `(514) 555-1234`).
+- **Email is a sign-in identity and needs the joining callable.** The client must **never** write
+  `email` on the users doc — `email` must NOT join that allowlist. Auth and Firestore move together
+  or neither, which is the whole reason `changeEmployeeEmail` exists and is called from *inside*
+  `updateEmployee` rather than exposed as its own repository method. The shape:
+  - **Add a `self` branch to `changeEmployeeEmail`, don't write a second callable.** Keep one owner
+    for "an email edit moves both stores". Guard order stays auth → (admin **or** the caller's own
+    docId) → `assertPayloadShape` → `enforceDurableRateLimit` → work, and the per-caller budget
+    stays — this rewrites a sign-in identity. The Auth-first / Firestore-second ordering, the
+    revert, and the `email-changed` concurrent-edit rejection all apply unchanged.
+  - **Re-authenticate before the write.** An unattended unlocked phone changing the sign-in address
+    is the account-takeover primitive. `AccountDeletionService.reauthenticateWithPassword` already
+    exists for exactly this shape — reuse it. Any new password field owes
+    `enableIMEPersonalizedLearning: false` beside `obscureText`, unconditionally.
+  - **Know the typo hazard, and that it is recoverable.** The Admin SDK sets the address with no
+    proof the person controls it, so a mistyped email means they cannot sign in. An admin can undo
+    it with the same callable, so the blast radius is bounded — but the sheet should confirm the
+    address twice rather than lean on that. The alternative, Firebase's `verifyBeforeUpdateEmail`,
+    flips Auth **outside** the callable and leaves `users.email` stale with no trigger to reconcile
+    it — the exact desync the callable was built to end. If proof-of-control is wanted later, it
+    needs a two-phase `pendingEmail` + reconcile, specced separately.
+  - **Tell the admins, not the employee.** `notifyEmailChanged` pushes the person whose address
+    moved, which is right when an admin made the change and pointless when they made it themselves.
+    A self-service change should notify active admins instead — the same fan-out P6 needs, so build
+    it once (see P6's requirement 1).
+
+**Rules.** A user may update **only** the self-service keys on their own doc, under
+`resource.data.uid == request.auth.uid`; scheduling fields (role, jobTitle, colour, maxJobsPerDay,
+status) stay admin-only. **The key list is not this spec's to invent — `isAvailabilityOnlyChange()`
+is already written in `firestore.rules` and P5's job is to CALL it**, by adding
+`|| (isSelf() && isAvailabilityOnlyChange())` to `allow update`. As built it is
+`hasOnly(['workingDays', 'workStartMinutes', 'workEndMinutes', 'onCall', 'phone', 'updatedAt'])`.
+
+**`emergencyContact` must NOT be added to that list** (this spec originally listed it). It is not a
+users-doc field any more, and `allow update` routes both emergency keys through
+`emergencyFieldNotSet()`, which permits a write that leaves them ABSENT and refuses one that leaves
+a value. The subcollection already carries its own self-service grant
+(`isAdmin() || (isActiveUser() && myDocId() == userId)`), so My details edits them there and needs
+nothing new.
+
+~~**`allow create` currently has zero field validation**, so the new caps must be applied to create
+as well.~~ **CLOSED 2026-08-08** — `allow create` now runs `isValidUserData` and denies
+`uid`/`termsAcceptedAt`/`locationConsentAt`/`emergencyContact`/`emergencyPhone` outright. (One
+stale comment inside `isValidUserData` still says otherwise; it is a comment, not a gate.)
+
 The two "only an admin can write" rule comments become wrong and must be updated. Nothing is ever
 auto-unassigned: availability changes notify (inline warning + P7 dashboard flag), a human moves
 the jobs.
 
-## P6 — Time off (new feature)
+## P6 — Time off (new feature) — NOT STARTED · SKIPPABLE
+
+> **Owner call, 2026-08-10: P6 is deferred and may be skipped entirely.** Nothing has been
+> built — no `timeOff` collection, no rules, no surfaces; the only trace in the code is two
+> comments reserving the `PushedDestination.timeOff` slot. **It is not a prerequisite for P7**;
+> the build order below now runs P5 → P7 and treats this as a parallel option.
+>
+> **P7 must therefore omit, not stub, the three places it reaches into P6** — the Time off card,
+> the drawer's pending count, and the pending-time-off entry in Needs attention. That is the
+> spec's own empty-omitted rule (the same treatment the money sections get until P7b), so no
+> placeholder, no zero state, no disabled row.
+>
+> **Until then, the stopgap is a personal all-day block** — an admin books a `isPersonal` +
+> `isAllDay` appointment spanning the dates, assigned to whoever is away. Verified 2026-08-10 that
+> this genuinely covers the most valuable thing P6 would buy: the person **shows as busy in the
+> booking conflict dialog**, because `findBusyEmployees` skips only terminal jobs and
+> non-overlapping daily windows — it has no opinion about personal or all-day. It also renders on
+> every day of the run, is visible to the employee, and is deliberately spared both the travel push
+> and the "job finished?" nag. Its limits: the **14-day cap** means a three-week holiday is two
+> blocks; only an admin can book it (the appointment forms are admin-only), so there is no request
+> step; and it counts as a job in the dashboard's workload bars and jobs-per-day.
+>
+> **P5's availability is NOT a substitute and must not be sold as one.** `workingDays` /
+> `workStartMinutes` / `workEndMinutes` / `onCall` describe a *repeating weekly pattern*, so
+> turning Thursday off for a holiday turns off **every** Thursday. A dated absence is not
+> expressible there. That gap is precisely why P6 exists.
+>
+> Everything below is the design as approved on 2026-07-29, kept intact for whenever it is
+> picked up. Its four backend requirements were re-verified against the code on 2026-08-10 and
+> all still hold — with one addition: the **active-admins fan-out** it needs is now also needed by
+> P5's self-service email notice, so whichever lands first should build it for both.
 
 **Collection `timeOff`:** `{employeeDocId, uid, from, to, kind: holiday|sick|unpaid, note, status:
 pending|approved|declined, declineReason, decidedBy, decidedAt, createdAt, updatedAt}`. Allowance:
@@ -525,16 +615,24 @@ updates status pending→approved / pending→declined, **decline requires a non
   the P6 plan).
 - **Pushes:** request-created (to admins) and decision (to the employee) ride the existing FCM
   pipeline in `notifications.js`, with per-recipient idempotency ledgers like the existing kinds.
-  Verified 2026-07-29, four concrete requirements: (1) `sendToEmployee` is single-recipient and
-  **no admin fan-out helper or `where('role')` query exists in functions/** — the request-created
-  push needs a new active-admins query and a ledger id keyed per admin docId (or one admin's claim
-  suppresses the rest); the role filter itself won't fight it — callers pass their own role set,
-  like the timed sweeps do. (2) New kinds MUST be added to the `_MESSAGES` table in **both** EN
-  and FR — an unregistered kind silently sends an empty-title/empty-body push, no error. (3) The
-  client's `_handlePushTap` ignores `kind` and unconditionally yanks to the Calendar tab — it must
-  branch on `data['kind']` so a time-off tap opens the board/My details instead. (4) The new
-  ledger collection needs the Admin-SDK-only rules deny block and an offset-0 TTL policy, like the
-  existing ledgers.
+  Verified 2026-07-29 and **re-verified against the code 2026-08-10 — all four still hold**:
+  (1) `sendToEmployee` is single-recipient and **no admin fan-out helper or `where('role')` query
+  exists in functions/** — the request-created push needs a new active-admins query and a ledger id
+  keyed per admin docId (or one admin's claim suppresses the rest); the role filter itself won't
+  fight it — callers pass their own role set, like the timed sweeps do. It is now **exported from
+  `notification_utils.js`** (2026-08-04, for `notifyEmailChanged`), so call it — never re-derive the
+  token fetch, the role/active gate or stale-token pruning. (2) New kinds MUST be added to the
+  `_MESSAGES` table in **both** EN and FR — an unregistered kind silently sends an
+  empty-title/empty-body push, no error. That table now lives in
+  **`functions/notification_messages.js`**, and the pure decision helpers it reads
+  (`contextFor`, ledger ids, kind priority, recipient roles) live in
+  **`notification_policy.js`** — a new *pure* rule goes there and is re-exported from
+  `notification_utils.js`; only a helper that needs `deps` stays in the orchestration file.
+  (3) The client's `_handlePushTap` (`main.dart:247`) **still** ignores `kind` and unconditionally
+  yanks to the Calendar tab — it must branch on `data['kind']` so a time-off tap opens the
+  board/My details instead. (4) The new ledger collection needs the Admin-SDK-only rules deny block
+  and an **offset-0** TTL policy declared as a `fieldOverrides` entry in `firestore.indexes.json`
+  (console-only state gets deleted as drift), like the existing ledgers.
 - **Rules/query discipline:** the employee-read clause (`resource.data.employeeDocId ==
   myDocId()`) is only provable for list queries whose WHERE carries it — every employee-side
   `timeOff` query must filter `employeeDocId == <own docId>`, or Firestore rejects the whole query
@@ -544,11 +642,52 @@ updates status pending→approved / pending→declined, **decline requires a non
 
 **Dashboard** (pushed, admin): hero gradient card (today's count + completed / in progress); period
 segmented control **wired** (Today · Week · Month · Year re-filter the aggregator); KPI grid
-(only the tiles with data — see P7b); Time off card (P6); employee workload bars; New clients
+(only the tiles with data — see P7b); ~~Time off card (P6)~~ *(omitted while P6 is deferred)*;
+employee workload bars; New clients
 (from `createdAt`, tappable rows → client detail); Jobs booked per day (7 bars, over-capacity red
-using `maxJobsPerDay`); Needs attention (existing flags + pending time-off + availability-conflict
-+ stale invites). **Chart rule everywhere:** bars live in their own fixed-height track; value and
+using `maxJobsPerDay`); Needs attention (existing flags + ~~pending time-off~~ *(omitted while P6
+is deferred)* + availability-conflict + ~~stale invites~~ → **accounts never set up**). **Chart rule everywhere:** bars live in their own fixed-height track; value and
 axis labels are siblings outside it — labels sharing the flex column silently clip tall bars.
+
+> **Reconciled 2026-08-10 — three constraints this spec predates:**
+>
+> - **The period control cannot just widen the aggregator's range.** The dashboard window is
+>   deliberately SPLIT (2026-08-08): `DashboardAggregator.liveRangeAround` is a live listener,
+>   `historyRangeAround` is a one-shot `fetchInRange`, merged by doc id (live wins, never
+>   concatenated — they overlap by a fortnight). Held as one 70-day range it was a business-wide
+>   listener capped at `_rangeStreamLimit`, silently computing the trends over a PREFIX above
+>   ~14 jobs/day. **Month and Year must widen the HISTORY half**, never the live one.
+> - **"Jobs booked per day" counts a multi-day run on every day it runs.** The aggregator already
+>   scopes through `runsOn(...)`; a new reducer must too. A `startTime` comparison would drop days
+>   2+ of a run and, because the range stream is a superset of its range, report a fortnight of
+>   past jobs as today's.
+> - **"Stale invites" becomes "never finished setting up".** P4c deleted the signup-code invite flow
+>   and the backend went with it on 2026-08-08. **Owner call 2026-08-10: keep the flag, re-pointed
+>   at accounts still `status == 'invited'`** — created by an admin, never set up by the person, and
+>   therefore still sitting on the shared `Welcome123!`. It is the one operational risk that design
+>   creates, so the dashboard should say so.
+>
+>   Read them from **`allUsersStreamProvider`**, never `employeesStreamProvider` — the latter filters
+>   to `status == 'active'`, so it would be permanently empty and the flag would silently never fire.
+>   `watchAllUsers()` is already always-on, so this costs no extra listener. Test with
+>   `EmployeeRecord.isInvited` (an **exact** match — an empty or unknown status is not this). Age
+>   comes from the users doc's `createdAt`, which is function-owned and **nullable on legacy docs**:
+>   treat null as unknown and still list the row rather than dropping it. Tapping one should land on
+>   the Team roster, where `PendingInviteTile` already owns Reset password and Remove. No new query,
+>   no index, no rules change.
+>
+> - **"New clients" excludes archived clients.** Owner call 2026-08-10. The dashboard answers *what
+>   should I look at now*, and an archived client is one you decided not to look at.
+>
+>   Note this is a **behaviour change, not a no-op**: `fetchClientsCreatedSince` has no `archived`
+>   filter today, so archived clients are being counted. **Filter in Dart** —
+>   `if (!client.archived)` beside the existing `createdAt != null` guard in `newClientDatesProvider`
+>   — rather than adding `.where('archived', isEqualTo: false)`, which would need a new
+>   `(archived, createdAt)` composite index and a deploy. The repo's "never filter a server page in
+>   Dart" rule is about `fetchClientsPage`, where a shortened page breaks the cursor and truncates
+>   the list permanently; this read is a bounded one-shot window feeding a count, with no cursor and
+>   no pagination, so the hazard does not apply. The only cost is that archived clients still count
+>   toward the read cap, which is irrelevant at an 8-week window.
 
 **Money sections do not ship in P7.** Revenue trend, Avg ticket, Unpaid invoices, Top clients by
 revenue, Quotes won, First-time fix are **omitted** (not stubbed — empty-omitted rule) until P7b.
@@ -558,6 +697,16 @@ dropdown-menu sheets** (the reusable single-select sheet pattern from `06-sheets
 quick-filter chips; mono result count; day-grouped panels; cancelled struck through. Filtering
 stays the existing bounded Dart-side search (`historySearchProvider`); no new server queries.
 
+> **Reconciled 2026-08-10.** The Year/Crew filters already exist
+> (`HistoryFilterBar`) — as `FilterChip`s opening a **`MenuAnchor`**, not the sheet pattern. So
+> this is a presentation swap plus the chips/count/grouping, not new filtering. Two things this
+> spec predates: `AppointmentHistoryView` now takes an `isAdmin` and passes it straight through as
+> `showActions` (restored 2026-08-08 — History is where `done`/`cancelled` jobs live, so it is the
+> one screen an admin looks for a completed job's edit button on); and the closed-job **collapsed
+> green treatment is calendar-agenda-only by design** — History keeps the plain full-height
+> `AppointmentCard`. Don't "unify" it here; the agenda sinks closed work because it answers
+> *what's left today*, and History is a record where everything is closed.
+
 ## P7b — Wave invoice read path (independent project)
 
 Unblocks the six dashboard money sections. Server-side only: scheduled function queries Wave
@@ -566,6 +715,70 @@ Unblocks the six dashboard money sections. Server-side only: scheduled function 
 collection readable by admins via a callable, mirroring the `waveGetConnection` pattern — the app
 never talks to Wave directly and no client-side reads of the raw collection. Scoped and specced
 separately when it starts.
+
+## Reconciliation — what changed under this spec (2026-08-10)
+
+P5, P6 and P7 were specced on 2026-07-29. Eleven days and five projects later the
+code they build on has moved. The corrections are inline above; this is the list of
+**new obligations any of the three now inherits**, none of which existed when the
+spec was written. Read it before starting any of them.
+
+**A new screen is no longer just a screen.** P6's board and P5's My-details expansion
+each pick up:
+
+- **A sealed `AppDestination` member.** `PushedDestination.timeOff` is already reserved by a
+  comment in `drawer_catalog.dart`. `.name` is load-bearing twice over — it is the persisted
+  `tour_seen_tabs` key AND the showcase scope name, so renaming a member later replays or orphans
+  a tour.
+- **A drawer row is an icon chip, not a label.** `drawerRowIcon(d)` and `drawerDotColor(d)` are two
+  separate exhaustive switches over the sealed family; a new member fails to compile until both
+  are answered. Row padding is `sp8` on purpose (it keeps the 28px chip inside the 48px minimum).
+- **A feature tour.** Tours are keyed on the sealed `TourScope` — `DestinationTour` for a screen,
+  `FormTour` for a create-flow sheet. A data-dependent screen MUST pass `FeatureTourHost(ready:)`
+  false while its body is a placeholder: a partial start runs the surviving steps, marks the WHOLE
+  scope seen, and the dropped ones are gone for good. A paginated body has no `AsyncValue`, so it
+  exposes an `onFirstPageSettled` and gates on that.
+- **`guardedOffline` at every widget-layer write**, and a **sealed action outcome** from any
+  controller action with more than two results — a reentrancy skip is a `Busy` member, never a
+  fabricated `SocketException`, which `_classifyError` would render as "you appear to be offline"
+  while perfectly online.
+- **Notices, not SnackBars**, composed through `composeErrorNotice(context, intro:, error:)`. The
+  notice carries **no support tag** any more (2026-08-04) — the tag survives only as the
+  `logger.warn` label prefix, and a new operation still owes a new tag plus an `error_intro*` key
+  in both ARBs.
+- **Busy state as sets of doc ids, not booleans**, on anything that can show several rows acting at
+  once (`EmployeeFormActivity` is the reference). A time-off board approving three requests is
+  exactly the shape that bit the roster.
+- **Rules caps vs client caps vs callable caps**, now enforced by
+  `test/core/validators/text_limits_test.dart`, which reads `firestore.rules` back and fails the
+  build on a client cap that exceeds its rules or callable cap.
+
+**P6 additionally inherits the appointment model's day rules.** "Jobs in this window" on the
+request sheet, and "N jobs to reassign" on the review sheet, are **daily-window overlap questions**:
+route them through `runsOn` / `runsInRange` / `dailyWindowsOverlap` (`appointment_day_slice.dart`),
+never a `startTime` comparison. A range stream is a superset of its range — a reducer over
+`appointmentsInRangeProvider` without a day predicate is a bug, and that exact omission shipped in
+four surfaces before the 2026-08-04 audit caught it. The reassign path must also keep going through
+the appointment edit path so `mergeRetainedAssignees` holds.
+
+**P6's "approved days block the employee's calendar visually"** now lands on a calendar that
+renders per **work day** slices with an agenda comparator that sinks closed jobs. Whatever the
+blocking treatment is, it is not an appointment and must not be fed through `expandToDays`.
+
+## Open questions — all three SETTLED 2026-08-10
+
+Three things the code had settled differently from this spec. The owner's calls are recorded here
+and written into the sections above; the detail lives there, not here.
+
+1. ~~**P7 "Needs attention": what replaces stale invites?**~~ **ADD IT**, re-pointed at accounts
+   still `status == 'invited'` — created but never set up. See the P7 reconciliation block.
+2. ~~**P7 "New clients": do archived clients count?**~~ **HIDE THEM.** Note this is a behaviour
+   change: they are counted today. See the P7 reconciliation block for why the filter goes in Dart.
+3. ~~**P5's "photo pill deferred with email" — is it still deferred?**~~ **SETTLED 2026-08-10:
+   employees edit their own phone AND email in My details.** The full shape — the `self` branch on
+   `changeEmployeeEmail`, re-authentication, the typo hazard and who gets notified — is written up
+   in the P5 section above. The **photo pill stays deferred**; only the two contact fields were
+   asked for.
 
 ## Mobile-use requirements (added 2026-07-30)
 

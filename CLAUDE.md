@@ -445,8 +445,12 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   the person. Check every floor widened this way for the same gap.
   **NOT YET MIRRORED (owed by Plan 2):** the home widget, the Siri snapshot and
   `widget_payload_utils.js` still treat every job as single-day, so days 2+ of a
-  run are invisible there. (`notification_messages.js` and `travel_utils.js`
-  were closed by the 2026-08-04 audit — see the two bullets above.)
+  run are invisible there. **Push TEXT is on that list too** — `contextFor`
+  (`notification_policy.js`) carries no `endTime`, so an assignment push for a
+  five-day run still names only the first morning. What the 2026-08-04 audit
+  closed in `notification_messages.js` and `travel_utils.js` was the *reachability*
+  half — `hasWorkLeft`, the widened overdue/digest floors, the all-day and
+  personal-job wording — not the date range.
   See `docs/plans/2026-08-02-multi-day-appointments.md` §8.
   **The 14-day cap is applied by ONE clamp, `_clampedDayCount`, and every
   day-scoping answer routes through it** (2026-08-08): `sliceFor`/`runsOn`,

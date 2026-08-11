@@ -14,6 +14,36 @@
 > the schedule panel and a clear button on the address (§6.4, §6.9), the
 > measured month abbreviation (§9.2b), and the light-mode drawer haze (§1.6).
 
+> **Reconciled 2026-08-10 — still the runbook, but the app moved five projects
+> under it.** The checks below were written against P1+P2 and revised for P2b.
+> P3, P4, P4c and three later changes have since altered things a tester will
+> **see**, and none of them is a failure. Read this list first so you don't file
+> one:
+>
+> - **Drawer rows now carry a 28×28 tinted icon chip.** Label-only rows are the
+>   old design (2026-08-04).
+> - **Tours are 43 steps, not 14, and three of them start inside a sheet.**
+>   Opening Add appointment / Add client / Invite person for the first time on a
+>   fresh install starts a walkthrough *in the sheet*. That is the feature.
+> - **The day agenda sinks closed work.** `done` and `cancelled` jobs sort below
+>   the open ones under a "Done · N" rule, render as a collapsed ~56px row with a
+>   green tint, and lose their avatar stack (the crew colour bar stays). The
+>   header count reads `4 JOBS · 1 DONE`. Every one of those rows must still open
+>   the appointment sheet — that is check-worthy in itself.
+> - **The appointment card has a photo glyph** at the end of the title line when
+>   the job carries pictures, and a `Day 3 of 5` counter on a multi-day run.
+> - **All-day is offered on EVERY job now**, not just personal ones, and an
+>   appointment may span up to 14 days.
+> - **Clients** have swipe actions (archive; delete only when the job history is
+>   empty), an Archived chip and type-filter chips.
+> - **There is no signup code anywhere.** Creating a person mints a real account
+>   and shows an email + starting password to hand over. Any check mentioning an
+>   invite code is describing a flow that was deleted.
+> - **History shows an admin the Edit affordance on a completed job** (as the
+>   action bar's bottom button, not the top chip).
+>
+> §0.1's `d4b487f` pin is historical — check out the tip of `redesgin`.
+
 Neither P1 (foundation/navigation) nor P2 (calendar) has ever run on hardware.
 This is the single pass that covers both.
 
