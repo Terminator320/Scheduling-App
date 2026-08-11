@@ -191,14 +191,19 @@ Knock-on effects, all correct as-is:
 
 ## 8. Off-screen mirrors
 
-| Surface | Change |
-|---|---|
-| Home widget | `widgetPayloadProvider` range starts 14 d back; `buildWidgetPayload`'s `inRange` becomes an overlap test; job JSON gains `dayIndex`/`dayCount`; Swift `Job` decodes them as `Int?` so a pre-existing payload still parses. Mirrored in `widget_payload_utils.js`. |
-| Siri snapshot | Schema **v3** — adds the two fields, bumps `supportedVersion` in `ScheduleSnapshot.swift`, day-scopes `timePhrase` / `nextAppointment`. |
-| Push / digest | `_contextFor` carries the span; the date line reads "Aug 1 – Aug 5". |
-| Travel "leave now" | **Day 1 only.** Days 2+ have no separate departure time and the crew is already on site. Documented, not accidental. |
-| Overdue sweep | No change — already `endTime`-based. |
-| Live Activities | **Multi-day jobs skip Live Activities in this pass.** A card counting down to an end four days out would sit on the Lock Screen for the whole job. Noted as a follow-up, not solved here. |
+**SHIPPED in Plan 2, 2026-08-10** (`docs/plans/2026-08-03-multi-day-appointments-PLAN-2-mirrors.md`)
+— every row below is built except the Live Activities one, which moved to §10
+as designed. Swift (widget + Siri decoder) has no test harness and is still
+Xcode/device-unverified.
+
+| Surface | Change | State |
+|---|---|---|
+| Home widget | `buildWidgetPayload` buckets through `sliceFor` instead of testing `startTime`; job JSON gains `dayIndex`/`dayCount`; Swift `Job` decodes them as `Int?` so a pre-existing payload still parses. Mirrored in `widget_payload_utils.js`, whose caller's query floor reaches back `MAX_APPOINTMENT_SPAN_MS`. The Dart fetch range needed **no** change — `AppointmentDateRange.fetchStart` already reaches 14 d back. | Done |
+| Siri snapshot | Schema **v3** — adds `dayIndex`/`dayCount`/`isOvernight`, buckets a run on every day it works, bumps `supportedVersion`, and `timePhrase` speaks the counter. | Done |
+| Push / digest | `contextFor` carries `endTime`; the date line reads "Sat, Aug 1, 9:00 a.m. – Wed, Aug 5". | Done |
+| Travel "leave now" | **Day 1 only.** Days 2+ have no separate departure time and the crew is already on site. Documented, not accidental. | No change needed — verified |
+| Overdue sweep | Already `endTime`-based, so a job is correctly not nagged on day 2 of 5. | No change needed — verified |
+| Live Activities | **Multi-day jobs skip Live Activities.** A card counting down to an end four days out would sit on the Lock Screen for the whole job. | Deferred → §10 |
 
 ---
 
@@ -214,7 +219,10 @@ Knock-on effects, all correct as-is:
 
 ## 10. Open items
 
-1. **Live Activities for multi-day jobs** — deferred, see §8.
+1. **Live Activities for multi-day jobs** — deferred out of Plan 2, still open.
+   A card counting down to an end four days out would sit on the Lock Screen
+   for the entire job, so the shape of the fix is a design question (per-day
+   card? countdown to today's window end?) rather than a mirroring one.
 2. Whether the 14-day cap deserves a matching `firestore.rules` bound. Today
    nothing constrains `startTime`/`endTime` there, so adding one is a
    tightening, not a fix — and per CLAUDE.md a rules cap must never be tighter

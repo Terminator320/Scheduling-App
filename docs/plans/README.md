@@ -26,9 +26,9 @@ at the top of each file, not its boxes.
 | `2026-07-29-redesign-program.md` | **P1–P4c shipped (+P2b).** Remaining order **P5 → P7**; **P6 deferred/skippable**, P7b parallel. The binding spec for the rest. |
 | `redesign-subdocs/` | Complete history for P1–P4c — see the README in there. P4b is **withdrawn**. |
 | `redesign-subdocs/2026-07-30-p1-p2-DEVICE-TEST.md` | **Open runbook.** ~87 of 95 checks never run. |
-| `2026-08-02-multi-day-appointments.md` | Design. Shipped in the app; §10 open items stand. |
+| `2026-08-02-multi-day-appointments.md` | Design. Shipped in the app and in the mirrors; §10 open items stand (Live Activities, the rules bound). |
 | `2026-08-02-multi-day-appointments-PLAN-1-app.md` | **DONE** (`140fc92`). |
-| `2026-08-03-multi-day-appointments-PLAN-2-mirrors.md` | **NOT STARTED.** The off-screen mirrors. |
+| `2026-08-03-multi-day-appointments-PLAN-2-mirrors.md` | **DONE** 2026-08-10. Widget, Siri v3 and push text. Backend NOT deployed; the two Swift halves are Xcode/device-unverified. |
 | `2026-07-10-siri-app-intents-design.md` | Design, 6 phases. Phases 5–6 unscoped. |
 | `2026-07-19-siri-app-intents-implementation.md` | Phases 1–3 built; **no device pass ever run**. |
 | `2026-07-20-siri-phase4-write-actions.md` | **NOT STARTED.** Mac + Apple-portal session. |

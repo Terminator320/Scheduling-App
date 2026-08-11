@@ -443,15 +443,31 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `AppointmentStatus.fromRaw(status).isTerminal` explicitly, or a visit
   completed this morning still tells the admin to reassign it before disabling
   the person. Check every floor widened this way for the same gap.
-  **NOT YET MIRRORED (owed by Plan 2):** the home widget, the Siri snapshot and
-  `widget_payload_utils.js` still treat every job as single-day, so days 2+ of a
-  run are invisible there. **Push TEXT is on that list too** — `contextFor`
-  (`notification_policy.js`) carries no `endTime`, so an assignment push for a
-  five-day run still names only the first morning. What the 2026-08-04 audit
-  closed in `notification_messages.js` and `travel_utils.js` was the *reachability*
-  half — `hasWorkLeft`, the widened overdue/digest floors, the all-day and
-  personal-job wording — not the date range.
-  See `docs/plans/2026-08-02-multi-day-appointments.md` §8.
+  **The mirrors are day-scoped too** (Plan 2, 2026-08-10): the widget payload
+  (Dart `widget_sync_service.dart` + `functions/widget_payload_utils.js`), the
+  Siri snapshot (**schema v3**) and the push date line all fan a run across the
+  days it works. Each carries THAT day's window, never the run's first morning,
+  and a multi-day run gets a `dayIndex`/`dayCount` counter that is **omitted**
+  for a single-day job so an older decoder still parses.
+  **`functions/day_slice_utils.js` is a HAND-MIRROR of
+  `appointment_day_slice.dart`** — its jest cases deliberately reuse the Dart
+  tests' worked examples (Aug 1–5 day job; Aug 1 22:00 → Aug 4 06:00 = 3 nights
+  ending Aug 3), so a divergence fails a test instead of shipping. Change both
+  together. Two things it does NOT copy: it re-exports
+  `MAX_APPOINTMENT_SPAN_DAYS` from `time_utils.js` rather than restating a
+  third copy, and it rebuilds a window as a **wall-clock** time rather than
+  midnight-plus-elapsed-minutes, since the latter lands a 9:00 window at 10:00
+  on the two DST shift days. It also treats a record with **no `endTime`** as a
+  single-day job (the `hasWorkLeft` fallback) — the Dart model never emits one,
+  so only the server meets legacy and console-written docs, and reading the
+  absent end as "equal times" would make it overnight, count the run backwards
+  to zero days, and drop the job out of every mirror silently.
+  **The travel sweep and the overdue sweep need NO day-scoping**: the first
+  gates on `startTime > now`, so it already fires on day 1 only (days 2+ have
+  no separate departure time and the crew is already on site), and the second
+  gates on the run's real `endTime`. **Live Activities deliberately skip
+  multi-day jobs** — a four-day Lock Screen countdown is worse than no card;
+  see `docs/plans/2026-08-02-multi-day-appointments.md` §10.
   **The 14-day cap is applied by ONE clamp, `_clampedDayCount`, and every
   day-scoping answer routes through it** (2026-08-08): `sliceFor`/`runsOn`,
   `runsInRange`, `expandToDays` and `dailyWindowsOverlap`. The cap is
