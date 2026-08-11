@@ -79,19 +79,42 @@ function calendarDaysBetween(fromMs, toMs) {
 }
 
 /**
- * True when the record's daily window crosses midnight.
+ * The record's daily window resolved to plain numbers, or null when it carries
+ * no usable start.
  *
- * Equal times count as overnight: a booking at the same clock time on
+ * Equal start/end times count as OVERNIGHT: a booking at the same clock time on
  * consecutive days is a run of continuous 24-hour windows, and a strict `<`
  * would collapse each of them to zero length.
+ *
+ * A record with **no** `endTime` is a different case and must not take that
+ * branch. Legacy and console-written docs exist without one, and the Dart model
+ * never emits it as null, so the server is the only side that sees it. It is
+ * treated as a single-day job whose window collapses onto its start — the same
+ * fallback `hasWorkLeft` uses. Reading it as overnight instead would count the
+ * run backwards to zero days and drop the job out of every mirror silently.
+ * @param {!Object} r
+ * @return {?{startMs: number, endMs: number, overnight: boolean}}
+ */
+function resolveWindow(r) {
+  const startMs = toMillis(r.startTime);
+  if (startMs == null) return null;
+  const endMs = toMillis(r.endTime);
+  if (endMs == null) return {startMs, endMs: startMs, overnight: false};
+  return {
+    startMs,
+    endMs,
+    overnight: businessMinutesOfDay(endMs) <= businessMinutesOfDay(startMs),
+  };
+}
+
+/**
+ * True when the record's daily window crosses midnight.
  * @param {!Object} r
  * @return {boolean}
  */
 function isOvernightRecord(r) {
-  const s = businessMinutesOfDay(r.startTime);
-  const e = businessMinutesOfDay(r.endTime);
-  if (s == null || e == null) return false;
-  return e <= s;
+  const w = resolveWindow(r);
+  return w != null && w.overnight;
 }
 
 /**
@@ -101,9 +124,9 @@ function isOvernightRecord(r) {
  * @return {?number}
  */
 function lastWorkDayMs(r) {
-  const e = toMillis(r.endTime);
-  if (e == null) return null;
-  return isOvernightRecord(r) ? addDaysMs(e, -1) : dayStartMs(e);
+  const w = resolveWindow(r);
+  if (w == null) return null;
+  return w.overnight ? addDaysMs(w.endMs, -1) : dayStartMs(w.endMs);
 }
 
 /**
@@ -113,10 +136,10 @@ function lastWorkDayMs(r) {
  * @return {number}
  */
 function dayCountOf(r) {
-  const s = toMillis(r.startTime);
+  const w = resolveWindow(r);
   const last = lastWorkDayMs(r);
-  if (s == null || last == null) return 0;
-  return calendarDaysBetween(s, last) + 1;
+  if (w == null || last == null) return 0;
+  return calendarDaysBetween(w.startMs, last) + 1;
 }
 
 /**
@@ -138,26 +161,24 @@ function dayCountOf(r) {
  *   record: !Object}}
  */
 function sliceForDay(r, dayMs) {
-  const startMs = toMillis(r.startTime);
-  const endMs = toMillis(r.endTime);
-  if (startMs == null || endMs == null) return null;
+  const w = resolveWindow(r);
+  if (w == null) return null;
   const rawCount = dayCountOf(r);
   if (rawCount < 1) return null;
   const count = Math.min(rawCount, MAX_APPOINTMENT_SPAN_DAYS);
-  const index = calendarDaysBetween(startMs, dayMs) + 1;
+  const index = calendarDaysBetween(w.startMs, dayMs) + 1;
   if (index < 1 || index > count) return null;
 
-  const overnight = isOvernightRecord(r);
-  const startMinutes = businessMinutesOfDay(startMs);
-  const endMinutes = businessMinutesOfDay(endMs);
   return {
     record: r,
     dayIndex: index,
     dayCount: count,
-    windowStartMs: businessWallInstantMs(dayMs, startMinutes),
+    windowStartMs: businessWallInstantMs(
+        dayMs, businessMinutesOfDay(w.startMs)),
     windowEndMs: businessWallInstantMs(
-        overnight ? addDaysMs(dayMs, 1) : dayMs, endMinutes),
-    isOvernight: overnight,
+        w.overnight ? addDaysMs(dayMs, 1) : dayMs,
+        businessMinutesOfDay(w.endMs)),
+    isOvernight: w.overnight,
     isMultiDay: count > 1,
   };
 }

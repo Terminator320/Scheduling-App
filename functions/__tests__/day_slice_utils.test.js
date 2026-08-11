@@ -18,6 +18,7 @@ const {
   dayCountOf,
   lastWorkDayMs,
   calendarDaysBetween,
+  isOvernightRecord,
 } = require("../day_slice_utils");
 
 // Epoch ms of a Toronto wall-clock instant given its UTC ISO form.
@@ -124,6 +125,21 @@ describe("day_slice_utils", () => {
     expect(sliceForDay({startTime: null, endTime: null}, AUG3)).toBeNull();
     expect(dayCountOf({})).toBe(0);
   });
+
+  test("a record with no endTime is a single-day job, not a vanished one",
+      () => {
+        // Legacy and console-written docs exist without one. Reading the
+        // absent end as "equal times" would make it overnight, count the run
+        // backwards to zero days, and drop the job out of every mirror.
+        const r = {startTime: at("2026-08-03T13:00:00.000Z")};
+        expect(isOvernightRecord(r)).toBe(false);
+        expect(dayCountOf(r)).toBe(1);
+        const s = sliceForDay(r, AUG3);
+        expect(s.dayIndex).toBe(1);
+        expect(s.dayCount).toBe(1);
+        expect(s.windowStartMs).toBe(at("2026-08-03T13:00:00.000Z"));
+        expect(s.windowEndMs).toBe(at("2026-08-03T13:00:00.000Z"));
+      });
 
   test("a window on a DST shift day keeps its wall clock", () => {
     // Mar 8 2026 springs forward at 02:00, so that Toronto day is 23 hours

@@ -176,11 +176,17 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
 
 
 /**
- * Reads an employee's appointments in the widget lookahead window
- * ([today 00:00 Toronto, +WIDGET_LOOKAHEAD_DAYS days)), so the change push
- * can carry a fresh widget payload (served by the existing `(employeeIds
- * CONTAINS, startTime ASC)` index). Never throws — a failed read just
- * yields an empty window, and the notification still sends.
+ * Reads an employee's appointments for the widget payload, so the change push
+ * can carry a fresh one (served by the existing `(employeeIds CONTAINS,
+ * startTime ASC)` index). Never throws — a failed read just yields an empty
+ * window, and the notification still sends.
+ *
+ * The window is `[today 00:00 Toronto − MAX_APPOINTMENT_SPAN_MS,
+ * +WIDGET_LOOKAHEAD_DAYS days)`. The floor reaches back because the query
+ * filters on `startTime` alone: a multi-day run that began earlier still WORKS
+ * today, and a floor at today's midnight made it invisible to the push-written
+ * payload. `buildWidgetPayload` re-scopes to today/tomorrow by day-slice, so
+ * the wider read costs nothing beyond the extra docs.
  * @param {!Object} db
  * @param {string} employeeDocId
  * @param {(Date|number)} now
@@ -190,7 +196,7 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
 async function fetchEmployeeWidgetWindow(db, employeeDocId, now, logger) {
   try {
     const startMs = torontoDayStartMs(now);
-    const start = new Date(startMs);
+    const start = new Date(startMs - MAX_APPOINTMENT_SPAN_MS);
     const end = new Date(startMs + WIDGET_LOOKAHEAD_DAYS * DAY_MS);
     const snap = await db
         .collection("appointments")

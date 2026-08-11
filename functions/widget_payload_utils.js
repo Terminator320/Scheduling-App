@@ -17,10 +17,10 @@
  */
 
 const {
-  toMillis,
   businessYmd,
   businessMidnight,
 } = require("./time_utils");
+const {sliceForDay} = require("./day_slice_utils");
 
 // Terminal statuses filtered out of the widget's job list. Mirrors
 // AppointmentStatus.isTerminal (status_chip.dart) — done/cancelled plus the
@@ -28,13 +28,13 @@ const {
 const TERMINAL_STATUSES = new Set(["done", "completed", "cancelled"]);
 
 // How many days past today the "next job" lookahead spans, for the query the
-// push path builds: [today 00:00 Toronto, today + 3 days). The Dart mirrors
-// deliberately read a WIDER window (AppointmentDateRange.forMirrors, 8 days,
-// shared by the widget and the Siri snapshot so they can't fork a second
-// listener); both builders re-scope to today/tomorrow, so the two windows are
-// allowed to differ. Owed by Plan 2: this floor must reach back
-// MAX_APPOINTMENT_SPAN_MS, or a job that started yesterday and runs through
-// today is invisible to the push-written payload.
+// push path builds. Its FLOOR reaches MAX_APPOINTMENT_SPAN_MS behind today
+// (see fetchEmployeeWidgetWindow) so a job that started earlier and is still
+// running today is fetched; this constant is the forward half alone. The Dart
+// mirrors deliberately read a WIDER window (AppointmentDateRange.forMirrors,
+// 8 days, shared by the widget and the Siri snapshot so they can't fork a
+// second listener); both builders re-scope to today/tomorrow, so the two
+// windows are allowed to differ.
 const WIDGET_LOOKAHEAD_DAYS = 3;
 
 /**
@@ -65,18 +65,21 @@ function torontoDayStartMs(now) {
 }
 
 /**
- * Serializes one appointment record into the widget's job JSON, mirroring
- * `_job` in widget_sync_service.dart. `startTime` is an absolute UTC instant
- * with milliseconds so Swift's ISO8601DateFormatter can parse it, and every
- * other field must be a plain non-null string or the Swift decode fails.
- * @param {!Object} r Appointment record (`{id, startTime, clientName, ...}`).
+ * Serializes one day-slice into the widget's job JSON, mirroring `_job` in
+ * widget_sync_service.dart. `startTime` is THIS day's window start (not the
+ * run's first morning) as an absolute UTC instant with milliseconds so Swift's
+ * ISO8601DateFormatter can parse it, and every other field must be a plain
+ * non-null string or the Swift decode fails. `dayIndex`/`dayCount` are omitted
+ * for a single-day job — Swift reads them as `Int?`, so a payload without them
+ * still decodes.
+ * @param {!Object} slice A slice from `day_slice_utils.sliceForDay`.
  * @return {!Object}
  */
-function serializeWidgetJob(r) {
-  const ms = toMillis(r.startTime);
-  return {
+function serializeWidgetJob(slice) {
+  const r = slice.record;
+  const job = {
     id: String(r.id == null ? "" : r.id),
-    startTime: ms == null ? "" : new Date(ms).toISOString(),
+    startTime: new Date(slice.windowStartMs).toISOString(),
     clientName: String(r.clientName == null ? "" : r.clientName),
     title: String(r.title == null ? "" : r.title),
     address: String(r.address == null ? "" : r.address),
@@ -84,6 +87,11 @@ function serializeWidgetJob(r) {
     // The widget speaks "All day" instead of the stored midnight–23:59 pair.
     isAllDay: r.isAllDay === true,
   };
+  if (slice.isMultiDay) {
+    job.dayIndex = slice.dayIndex;
+    job.dayCount = slice.dayCount;
+  }
+  return job;
 }
 
 /**
@@ -131,45 +139,40 @@ function buildWidgetPayload(records, now, locale) {
   const nowMs = nowMillis(now);
   const startTodayMs = torontoDayStartOffsetMs(now, 0);
   const startTomorrowMs = torontoDayStartOffsetMs(now, 1);
-  const startDayAfterMs = torontoDayStartOffsetMs(now, 2);
-  const inRange = (r, lo, hi) => {
-    const ms = toMillis(r.startTime);
-    return ms != null && ms >= lo && ms < hi;
-  };
-  const sortByStart = (a, b) => toMillis(a.startTime) - toMillis(b.startTime);
+  // A job is "on" a day when it WORKS that day — not when its stored startTime
+  // happens to fall in it. Without this a run that began yesterday is invisible
+  // today, which is the whole point of multi-day support.
+  const slicesOn = (dayMs) => (records || [])
+      .map((r) => sliceForDay(r, dayMs))
+      .filter((s) => s != null);
+  const sortByWindow = (a, b) => a.windowStartMs - b.windowStartMs;
 
-  const todayAll = (records || [])
-      .filter((r) => inRange(r, startTodayMs, startTomorrowMs));
-  const todayIncomplete = todayAll.filter((r) => !isTerminalStatus(r.status));
-  // "Still ahead of you today". An all-day block starts at midnight, so a
-  // start-time test would drop it from today the moment the day began — it
-  // stays listed until its 23:59 end passes.
-  const stillAhead = (r) => {
-    if (r.isAllDay === true) {
-      const end = toMillis(r.endTime);
-      return end == null || end > nowMs;
-    }
-    return toMillis(r.startTime) > nowMs;
-  };
+  const todayAll = slicesOn(startTodayMs);
+  const todayIncomplete =
+      todayAll.filter((s) => !isTerminalStatus(s.record.status));
+  // "Still ahead of you today", judged against THIS day's window. An all-day
+  // block starts at midnight, so a start test would drop it the moment the day
+  // began — it stays listed until its 23:59 end passes.
+  const stillAhead = (s) => s.record.isAllDay === true ?
+      s.windowEndMs > nowMs : s.windowStartMs > nowMs;
   const todayJobs = todayIncomplete
       .filter(stillAhead)
-      .sort(sortByStart);
-  const tomorrowJobs = (records || [])
-      .filter((r) =>
-        inRange(r, startTomorrowMs, startDayAfterMs) &&
-        !isTerminalStatus(r.status))
-      .sort(sortByStart);
+      .sort(sortByWindow);
+  const tomorrowJobs = slicesOn(startTomorrowMs)
+      .filter((s) => !isTerminalStatus(s.record.status))
+      .sort(sortByWindow);
 
   let rolloverMs = null;
   if (todayIncomplete.length === 0) {
-    const finished = todayAll.filter((r) => !isCancelledStatus(r.status));
+    const finished =
+        todayAll.filter((s) => !isCancelledStatus(s.record.status));
     if (finished.length === 0) {
       rolloverMs = startTodayMs;
     } else {
-      const lastEnd = finished.reduce((mx, r) => {
-        const e = toMillis(r.endTime);
-        return e != null && e > mx ? e : mx;
-      }, -Infinity);
+      // TODAY's window end, not the record's — a run rolls the widget over at
+      // the end of today's work, not at the end of the whole run.
+      const lastEnd = finished.reduce(
+          (mx, s) => (s.windowEndMs > mx ? s.windowEndMs : mx), -Infinity);
       rolloverMs = lastEnd === -Infinity ?
         startTodayMs : lastEnd + ROLLOVER_GRACE_MS;
     }
