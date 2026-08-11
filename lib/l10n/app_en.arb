@@ -1723,6 +1723,26 @@
   "@settings_myScheduling": {
     "description": "Admin-only section header on My details for scheduling limits"
   },
+  "settings_changeEmail": "Change sign-in email",
+  "@settings_changeEmail": {
+    "description": "Title of the dialog where a person changes their own sign-in email"
+  },
+  "settings_changeEmailBlurb": "You'll sign in with the new address from now on. Type it twice — a typo locks you out until an admin fixes it.",
+  "@settings_changeEmailBlurb": {
+    "description": "Explains why the change-email dialog asks for the address twice"
+  },
+  "settings_confirmNewEmail": "Confirm new email",
+  "@settings_confirmNewEmail": {
+    "description": "Label of the second email field in the change-email dialog"
+  },
+  "settings_emailsDoNotMatch": "The two addresses don't match.",
+  "@settings_emailsDoNotMatch": {
+    "description": "Shown under the confirm field when the two typed addresses differ"
+  },
+  "error_introChangeEmail": "Couldn't change your sign-in email",
+  "@error_introChangeEmail": {
+    "description": "Error intro for ME-EMAIL (a person changing their own sign-in address)"
+  },
   "settings_unsavedChanges": "Unsaved changes",
   "@settings_unsavedChanges": {
     "description": "Label on the save/discard bar that appears once the My details identity form is edited"

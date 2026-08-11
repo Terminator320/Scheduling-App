@@ -8,6 +8,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
+import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
@@ -15,6 +16,8 @@ import 'package:scheduling/features/employees/domain/models/employee_record.dart
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/features/settings/application/my_details_providers.dart';
+import 'package:scheduling/features/settings/services/self_email_service.dart';
+import 'package:scheduling/features/settings/widgets/dialogs/change_email_dialog.dart';
 import 'package:scheduling/features/settings/widgets/sections/my_availability_section.dart';
 import 'package:scheduling/features/settings/widgets/sections/my_identity_section.dart';
 import 'package:scheduling/features/settings/widgets/sections/my_scheduling_section.dart';
@@ -199,6 +202,63 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     }
   }
 
+  /// Collects the new address + a re-auth password, then moves BOTH stores
+  /// through the callable.
+  ///
+  /// Never a users-doc write: `email` is a sign-in identity and is deliberately
+  /// absent from the self-service rules allowlist, so Auth and Firestore move
+  /// together through `changeEmployeeEmail` or not at all.
+  Future<void> _changeEmail(String docId, String currentEmail) async {
+    if (_isSaving) return;
+    final draft = await showChangeEmailSheet(
+      context,
+      currentEmail: currentEmail,
+    );
+    if (draft == null || !mounted) return;
+
+    final l10n = context.l10n;
+    final notices = ref.read(noticeServiceProvider);
+
+    if (guardedOffline(context, ref, intro: l10n.error_introChangeEmail)) {
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      await ref
+          .read(selfEmailServiceProvider)
+          .changeOwnEmail(
+            docId: docId,
+            email: draft.email,
+            password: draft.password,
+          );
+      if (!mounted) return;
+      notices.success(l10n.common_changesSaved);
+    } on AuthFailure catch (failure, stackTrace) {
+      // Typed branch first: a wrong password here is an expected outcome, and
+      // authFailure buckets it as a breadcrumb rather than an error record.
+      ref
+          .read(loggerProvider)
+          .authFailure('ME-EMAIL change failed', failure, failure, stackTrace);
+      if (!mounted) return;
+      notices.error(failure.toLocalizedMessage(context));
+    } catch (error, stackTrace) {
+      ref
+          .read(loggerProvider)
+          .warn('ME-EMAIL change failed', error, stackTrace);
+      if (!mounted) return;
+      notices.error(
+        composeErrorNotice(
+          context,
+          intro: l10n.error_introChangeEmail,
+          error: error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
   /// `maxJobsPerDay` is admin-owned, so this goes through the ordinary
   /// whole-record admin save rather than `updateSelfDetails` — the self
   /// allowlist does not name it, and `hasOnly` would reject the write.
@@ -313,9 +373,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
           initialEmergencyPhone: contact.phone,
           isSaving: _isSaving,
           onSave: (edit) => _saveIdentity(docId, edit),
-          // Wired once the callable's `self` branch ships. Until then the row
-          // is read-only: `email` must never be written on the users doc.
-          onChangeEmail: null,
+          onChangeEmail: () => _changeEmail(docId, record.email),
         ),
         const SizedBox(height: AppSpacing.sp24),
         Text(
