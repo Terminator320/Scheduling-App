@@ -39,6 +39,7 @@ const {
   OPEN_STATUSES,
   CHANGE_RECIPIENT_ROLES,
   TIMED_RECIPIENT_ROLES,
+  ADMIN_RECIPIENT_ROLES,
   ledgerBody,
   toIdList,
   nowMillis,
@@ -645,10 +646,60 @@ async function runDailyDigest(deps) {
   return {digests};
 }
 
+/**
+ * Pushes one localized message to every ACTIVE ADMIN.
+ *
+ * Shared fan-out: the self-service email change needs it, and P6's time-off
+ * requests will too — built once here rather than inlined at each call site,
+ * beside `sendToEmployee` and for the same reason (one owner for "who has live
+ * tokens, and is this recipient still entitled").
+ *
+ * **Best-effort, and it never throws.** Whatever prompted the notice has
+ * already committed, so a push failure must not surface as a failed operation
+ * — that would hand the caller an error for something that worked. Each
+ * recipient is isolated too, so one bad token cannot suppress the rest.
+ *
+ * @param {!Object} deps `{db, messaging, logger}`.
+ * @param {!Object} data Data payload (string values); `kind` etc.
+ * @param {function(string): {title: string, body: string}} buildMsg Localized
+ *   message builder keyed by 'en'|'fr'.
+ * @param {{excludeDocId: (string|undefined),
+ *          sendToEmployee: (!Function|undefined)}=} opts `excludeDocId` skips
+ *   the person who caused the notice — they do not need telling what they just
+ *   did. `sendToEmployee` is injectable for tests only.
+ * @return {!Promise<void>}
+ */
+async function sendToActiveAdmins(deps, data, buildMsg, opts) {
+  const {db, logger} = deps;
+  const options = opts || {};
+  const send = options.sendToEmployee || sendToEmployee;
+  try {
+    const snap = await db.collection("users")
+        .where("role", "==", "admin")
+        .where("status", "==", "active")
+        .get();
+    await Promise.all(snap.docs
+        .filter((doc) => doc.id !== options.excludeDocId)
+        .map((doc) => send(
+            deps, doc.id, data, buildMsg, ADMIN_RECIPIENT_ROLES,
+        ).catch((e) => {
+          if (logger) {
+            logger.warn("sendToActiveAdmins: recipient failed",
+                {docId: doc.id, err: String(e)});
+          }
+        })));
+  } catch (e) {
+    if (logger) {
+      logger.warn("sendToActiveAdmins: fan-out failed", {err: String(e)});
+    }
+  }
+}
+
 module.exports = {
   OPEN_STATUSES,
   SERIES_CLAIM_WINDOW_MS,
   TIMED_RECIPIENT_ROLES,
+  ADMIN_RECIPIENT_ROLES,
   toMillis,
   nowMillis,
   toIdList,
@@ -664,6 +715,7 @@ module.exports = {
   // active gate, and stale-token pruning. A new push path calls this rather
   // than re-deriving any of it (changeEmployeeEmail is the first non-job one).
   sendToEmployee,
+  sendToActiveAdmins,
   deliverRecipientOnce: _deliverRecipientOnce,
   handleAppointmentWrite,
   runDailyDigest,

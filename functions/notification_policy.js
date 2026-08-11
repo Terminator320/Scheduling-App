@@ -87,6 +87,11 @@ const KIND_PRIORITY = {
 // edits themselves. Time-based pushes also reach an assigned admin.
 const CHANGE_RECIPIENT_ROLES = new Set(["employee"]);
 const TIMED_RECIPIENT_ROLES = new Set(["employee", "admin"]);
+// Admin-only fan-outs: something a person did that the managers need to know
+// about. `sendToEmployee` re-checks the recipient's role against whichever set
+// it is handed, so passing one of the two above would silently deliver nothing
+// useful here (they both admit employees).
+const ADMIN_RECIPIENT_ROLES = new Set(["admin"]);
 
 /**
  * Normalizes an employeeIds field to an array of usable doc ids.
@@ -384,6 +389,7 @@ module.exports = {
   KIND_PRIORITY,
   CHANGE_RECIPIENT_ROLES,
   TIMED_RECIPIENT_ROLES,
+  ADMIN_RECIPIENT_ROLES,
   ledgerBody,
   toIdList,
   nowMillis,
