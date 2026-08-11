@@ -342,6 +342,49 @@ describe("buildNotificationMessage", () => {
         .toContain("2:30");
   });
 
+  test("a multi-day run reads as a date range, not just day one", () => {
+    // Aug 1 09:00 → Aug 5 17:00 Toronto. Naming only the first morning tells a
+    // tech nothing about a job they are on for the rest of the week.
+    const run = {
+      clientName: "Alice",
+      startTime: new Date("2026-08-01T13:00:00Z"),
+      endTime: new Date("2026-08-05T21:00:00Z"),
+    };
+    const en = buildNotificationMessage("assigned", run, "en");
+    expect(en.body).toContain("Sat, Aug 1");
+    expect(en.body).toContain("Wed, Aug 5");
+    const fr = buildNotificationMessage("assigned", run, "fr");
+    expect(fr.body).toContain("5 août");
+  });
+
+  test("a night shift's range ends on the last night, not the morning after",
+      () => {
+        // Aug 1 22:00 → Aug 4 06:00 = three nights, the last starting Aug 3.
+        const nights = {
+          clientName: "Alice",
+          startTime: new Date("2026-08-02T02:00:00Z"),
+          endTime: new Date("2026-08-04T10:00:00Z"),
+        };
+        const en = buildNotificationMessage("assigned", nights, "en");
+        expect(en.body).toContain("Mon, Aug 3");
+        expect(en.body).not.toContain("Aug 4");
+      });
+
+  test("a single-day job keeps its single date", () => {
+    const oneDay = {
+      clientName: "Alice",
+      startTime: new Date("2026-07-08T18:30:00Z"),
+      endTime: new Date("2026-07-08T20:30:00Z"),
+    };
+    expect(buildNotificationMessage("assigned", oneDay, "en").body)
+        .toBe("Alice · Wed, Jul 8, 2:30 p.m.");
+  });
+
+  test("a context with no endTime is unchanged", () => {
+    expect(buildNotificationMessage("assigned", ctx, "en").body)
+        .toBe("Alice · Wed, Jul 8, 2:30 p.m.");
+  });
+
   test("blank client name falls back", () => {
     const en = buildNotificationMessage(
         "assigned",

@@ -369,6 +369,9 @@ function contextFor(kind, before, after) {
     // instead — same fallback the widget and the Siri intents already use.
     title: d.title,
     startTime: d.startTime,
+    // The run's end, so a multi-day job's message reads a date RANGE rather
+    // than naming only the first morning.
+    endTime: d.endTime,
     // An all-day block stores a midnight start; the message speaks the date
     // alone rather than "12:00 a.m.".
     isAllDay: d.isAllDay === true,

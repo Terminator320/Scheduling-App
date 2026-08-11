@@ -4,9 +4,10 @@
  * @fileoverview The i18n (EN/FR) message table for push notifications plus the
  * pure `build*Message` helpers that consume it. Split out of
  * `notification_utils.js` to keep that module focused on the diff/ledger/send
- * pipeline. Depends only on `time_utils` for locale-aware time formatting, so
- * it closes no require cycle (nothing here requires back into
- * `notification_utils`).
+ * pipeline. Depends only on `time_utils` (locale-aware formatting) and
+ * `day_slice_utils` (the run's last work day), both of which are leaves, so it
+ * closes no require cycle — nothing here requires back into
+ * `notification_utils`.
  *
  * @module notification_messages
  */
@@ -15,7 +16,12 @@ const {
   formatBusinessTime,
   formatTimeOfDay,
   businessMinutesOfDay,
+  toMillis,
 } = require("./time_utils");
+const {
+  lastWorkDayMs,
+  calendarDaysBetween,
+} = require("./day_slice_utils");
 
 /**
  * Localized "Wed, Jul 8, 2:00 p.m." style datetime. An all-day block stores a
@@ -79,13 +85,27 @@ function _who(c, generic) {
 }
 
 /**
- * `_dateTime` for a message context — all-day aware.
+ * `_dateTime` for a message context — all-day and multi-day aware.
+ *
+ * A run spanning days reads as a range ("Wed, Aug 1, 9:00 a.m. – Sun, Aug 5"),
+ * because naming only the first morning tells a tech nothing about a job they
+ * are on for the rest of the week. The tail is date-only: the daily window
+ * means the clock time is the same every day, and it has already been spoken.
+ *
+ * The range ends on the last day the crew STARTS work, so a night shift
+ * finishing Tuesday 06:00 reads as ending Monday — `lastWorkDayMs` owns that
+ * rule for both this and the widget payload.
  * @param {string} locale
  * @param {!Object} c
  * @return {string}
  */
 function _when(locale, c) {
-  return _dateTime(locale, c.startTime, c.isAllDay === true);
+  const base = _dateTime(locale, c.startTime, c.isAllDay === true);
+  const last = lastWorkDayMs(c);
+  const startMs = toMillis(c.startTime);
+  if (last == null || startMs == null) return base;
+  if (calendarDaysBetween(startMs, last) < 1) return base;
+  return `${base} – ${_dateTime(locale, last, true)}`;
 }
 
 /**
