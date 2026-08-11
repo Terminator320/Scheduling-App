@@ -83,6 +83,7 @@ abstract class EmployeesRepository {
     required int workStartMinutes,
     required int workEndMinutes,
     required bool onCall,
+    required bool travelAlertsEnabled,
   });
 
   /// Streams `users/{docId}/private/emergency`.

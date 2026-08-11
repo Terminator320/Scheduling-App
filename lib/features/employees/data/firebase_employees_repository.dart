@@ -256,6 +256,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     required int workStartMinutes,
     required int workEndMinutes,
     required bool onCall,
+    required bool travelAlertsEnabled,
   }) async {
     // Exactly the rules allowlist and nothing else — `hasOnly` rejects the
     // whole write on one stray key. In particular NO emergency scrub here:
@@ -266,6 +267,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       'workStartMinutes': workStartMinutes,
       'workEndMinutes': workEndMinutes,
       'onCall': onCall,
+      'travelAlertsEnabled': travelAlertsEnabled,
       'updatedAt': FieldValue.serverTimestamp(),
     };
     assert(

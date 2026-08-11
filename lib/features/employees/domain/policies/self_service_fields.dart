@@ -13,5 +13,6 @@ const Set<String> kSelfServiceUserFields = {
   'workEndMinutes',
   'onCall',
   'phone',
+  'travelAlertsEnabled',
   'updatedAt',
 };
