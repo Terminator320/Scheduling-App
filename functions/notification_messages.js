@@ -292,8 +292,37 @@ function buildEmailChangedMessage(email, locale) {
   };
 }
 
+/**
+ * Tells an ADMIN that a team member moved their OWN sign-in address.
+ *
+ * Carries the NAME, never the address — this lands on every admin's Lock
+ * Screen and an email is PII. The admin opens the roster to see the new one.
+ *
+ * @param {string} name The person's display name.
+ * @param {string} locale 'en' or 'fr'.
+ * @return {{title: string, body: string}}
+ */
+function buildSelfEmailChangedMessage(name, locale) {
+  const who = String(name || "").trim();
+  if (locale === "fr") {
+    return {
+      title: "Courriel de connexion modifié",
+      body: who ?
+        `${who} a modifié son adresse de connexion.` :
+        "Un membre de l'équipe a modifié son adresse de connexion.",
+    };
+  }
+  return {
+    title: "Sign-in email changed",
+    body: who ?
+      `${who} changed their sign-in address.` :
+      "A team member changed their sign-in address.",
+  };
+}
+
 module.exports = {
   buildNotificationMessage,
   buildDigestMessage,
   buildEmailChangedMessage,
+  buildSelfEmailChangedMessage,
 };

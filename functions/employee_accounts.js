@@ -15,9 +15,13 @@ const {
 // role + active gate and stale-token pruning — never re-derive them here.
 const {
   sendToEmployee,
+  sendToActiveAdmins,
   TIMED_RECIPIENT_ROLES,
 } = require("./notification_utils");
-const {buildEmailChangedMessage} = require("./notification_messages");
+const {
+  buildEmailChangedMessage,
+  buildSelfEmailChangedMessage,
+} = require("./notification_messages");
 
 /**
  * The shared starting password every new employee account is created with.
@@ -340,6 +344,40 @@ async function performChangeEmail(db, docId, email, previousEmail, opts) {
 }
 
 /**
+ * Decides whether this caller may move [docId]'s email, and how.
+ *
+ * Pure over the caller's `usersByUid` bridge data so the guard is testable
+ * without Firestore. Two ways through and no third: an ACTIVE ADMIN may move
+ * any doc, and an ACTIVE EMPLOYEE may move their OWN. Everything else is
+ * refused — a disabled account (whose Auth credential outlives the status flip
+ * until syncUsersByUid revokes it), an invited account mid-setup, a missing
+ * bridge doc, an unknown role, or an employee naming somebody else's doc.
+ *
+ * Widening this callable past admins must never widen WHICH doc a caller can
+ * reach. That is the failure this function exists to make hard to write.
+ *
+ * `isSelf` reports whether the caller IS the target, independent of role,
+ * because it drives who gets notified — an admin editing their own row is a
+ * self change and must not push "someone changed their email" to themselves.
+ *
+ * @param {?Object} bridge The caller's `usersByUid/{uid}` data, or null.
+ * @param {string} docId The users-doc id being changed.
+ * @return {!Promise<{isSelf: boolean, callerDocId: string}>}
+ */
+async function resolveEmailChangeCaller(bridge, docId) {
+  const data = bridge || null;
+  if (!data || data.status !== "active") {
+    throw new HttpsError("permission-denied", "not-admin");
+  }
+  const callerDocId = data.docId || "";
+  // An empty callerDocId must never match an empty target.
+  const isSelf = callerDocId !== "" && callerDocId === docId;
+  if (data.role === "admin") return {isSelf, callerDocId};
+  if (data.role === "employee" && isSelf) return {isSelf: true, callerDocId};
+  throw new HttpsError("permission-denied", "not-admin");
+}
+
+/**
  * Moves an employee's sign-in email in Firebase Auth AND on their users doc.
  *
  * This exists because nothing else joins those two stores: `updateEmployee`
@@ -355,7 +393,7 @@ const changeEmployeeEmail = onCall(APP_CHECK, async (req) => {
   if (!req.auth || !req.auth.uid) {
     throw new HttpsError("unauthenticated", "auth-required");
   }
-  await assertAdmin(req.auth.uid);
+  const db = getFirestore();
   assertPayloadShape(req.data, new Set(["docId", "email"]));
   const docId = requireString(req.data, "docId", 128);
   // `.doc()` throws synchronously on an id containing a slash, which would
@@ -364,13 +402,19 @@ const changeEmployeeEmail = onCall(APP_CHECK, async (req) => {
     throw new HttpsError("invalid-argument", "invalid-docId");
   }
   const email = requireString(req.data, "email", 254).toLowerCase();
-  // Same per-admin budget as account creation: this rewrites a sign-in
-  // identity, so a compromised session must not be able to walk the roster.
+  // Guard order: auth → payload → IDENTITY → rate limit → work. The payload is
+  // validated before a slot is consumed so a burst of malformed submissions
+  // can't exhaust a legitimate caller's window; the identity guard sits above
+  // the limiter so a non-entitled caller still can't burn one.
+  const bridgeSnap = await db.collection("usersByUid").doc(req.auth.uid).get();
+  const {isSelf, callerDocId} = await resolveEmailChangeCaller(
+      bridgeSnap.exists ? bridgeSnap.data() : null, docId);
+  // Same per-caller budget either way: this rewrites a sign-in identity, so a
+  // compromised session must not be able to walk the roster.
   await enforceDurableRateLimit(
       "changeEmployeeEmail", req.auth.uid, CREATE_RATE_MAX,
       CREATE_RATE_WINDOW_MS);
 
-  const db = getFirestore();
   const auth = getAuth();
 
   const snap = await db.collection("users").doc(docId).get();
@@ -427,8 +471,15 @@ const changeEmployeeEmail = onCall(APP_CHECK, async (req) => {
     throw e;
   }
 
-  await notifyEmailChanged(
-      {db, messaging: getMessaging(), logger}, docId, email);
+  // Who needs telling depends on who did it. An ADMIN edit surprises the
+  // employee, so the employee is told. A SELF edit surprises nobody who made
+  // it — the admins are the ones who need to know a sign-in identity moved.
+  const deps = {db, messaging: getMessaging(), logger};
+  if (isSelf) {
+    await notifyAdminsOfSelfEmailChange(deps, callerDocId, docId);
+  } else {
+    await notifyEmailChanged(deps, docId, email);
+  }
   return {ok: true};
 });
 
@@ -464,6 +515,41 @@ async function notifyEmailChanged(deps, docId, email) {
   } catch (e) {
     // Never the address itself — emails are PII and this is a log line.
     logger.warn("changeEmployeeEmail: notify failed", {docId, err: String(e)});
+  }
+}
+
+/**
+ * Tells the active admins that someone changed their OWN sign-in address.
+ *
+ * `notifyEmailChanged` pushes the person whose address moved, which is right
+ * when an admin made the change and pointless when they made it themselves —
+ * so a self change notifies the managers instead, through the shared
+ * `sendToActiveAdmins` fan-out.
+ *
+ * Deliberately does NOT name the new address: this reaches every admin's Lock
+ * Screen, and an email is PII. Best-effort and after the commit, exactly like
+ * its sibling — the change is already durable in both stores, so a push
+ * failure must not hand the caller an error for something that worked.
+ *
+ * @param {!Object} deps `{db, messaging, logger}`.
+ * @param {string} callerDocId The person who made the change (excluded).
+ * @param {string} docId users doc id whose email moved.
+ * @return {!Promise<void>}
+ */
+async function notifyAdminsOfSelfEmailChange(deps, callerDocId, docId) {
+  try {
+    const snap = await deps.db.collection("users").doc(docId).get();
+    const name = (snap.exists && (snap.data() || {}).name) || "";
+    await sendToActiveAdmins(
+        deps,
+        {kind: "selfEmailChanged", docId},
+        (locale) => buildSelfEmailChangedMessage(name, locale),
+        {excludeDocId: callerDocId},
+    );
+  } catch (e) {
+    // Never the address itself — emails are PII and this is a log line.
+    logger.warn("changeEmployeeEmail: admin notify failed",
+        {docId, err: String(e)});
   }
 }
 
@@ -652,6 +738,8 @@ module.exports = {
   performCreateAccount,
   performDeleteAccount,
   performChangeEmail,
+  resolveEmailChangeCaller,
   notifyEmailChanged,
+  notifyAdminsOfSelfEmailChange,
   buildActivationPatch,
 };
