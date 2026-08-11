@@ -479,6 +479,36 @@ rules from `09` apply), owner/company sign-up (web, out of scope).
 
 ## P5 — Settings + My details
 
+> **CODE-COMPLETE 2026-08-10 — implementation plan and its decision log:
+> `redesign-subdocs/2026-08-10-p5-my-details.md`. NOT DEPLOYED, NOT
+> device-verified.** All three phases are built and green (1795 flutter / 850
+> jest). Deploy `functions,firestore:rules` BEFORE any app build carrying the
+> UI, and verify as a **technician** — the whole self-service path is
+> unreachable as an admin.
+>
+> **Four deliberate deviations from the text below**, each argued in the plan:
+> 1. **No NOTIFICATIONS block on My details.** `settings_screen.dart` already
+>    owns that section; a second copy would be two surfaces for one state. What
+>    was genuinely missing was the P4-parked time-to-leave toggle, which landed
+>    in the existing Settings section as `travelAlertsEnabled`.
+> 2. **No profile card on My details.** Settings renders `SettingsProfileCard`
+>    immediately above the row that navigates here, and the photo pill was
+>    already deferred with the email.
+> 3. **SCHEDULING is `maxJobsPerDay` and nothing else.** Role, job title and
+>    crew colour stay on the admin Team sheet — an admin editing their own role
+>    from a self-service screen is a privilege-escalation shape with no product
+>    reason to exist. It writes through the ADMIN rules branch, which is why a
+>    technician sees the section hidden rather than disabled.
+> 4. **Identity fields are explicitly saved** behind a dirty-gated Save/Discard
+>    bar (owner instruction, 2026-08-10), while availability keeps the
+>    apply-immediately behaviour this spec describes. Free-text identity fields
+>    auto-committing is a bad write with no undo; a switch that needs confirming
+>    reads as broken.
+>
+> Also note `isSelf()` did not exist and had to be written — it gates on
+> `isActiveUser()` as well as the uid match, so a disabled or invited account
+> falls through to the admin-only branch.
+>
 > **Reconciled against the code 2026-08-10. Most of the Settings half already
 > shipped, and the rules paragraph below was wrong.** See the reconciliation
 > section after P7b for the full sweep.

@@ -460,6 +460,37 @@ place, overflow errors will actually print.
 
 ---
 
+## P5 — My details (added 2026-08-10, none run)
+
+**Sign in as a TECHNICIAN, not an admin.** The admin branch of `allow update`
+masks a broken self clause completely, so an admin pass proves nothing here.
+Requires `firebase deploy --only functions,firestore:rules` to have run first —
+without it every check below fails `permission-denied`, which is the expected
+symptom of a missed deploy rather than a bug in the screen.
+
+| # | Check | Expect |
+|---|---|---|
+| P5.1 | Settings › My details, edit the phone | A Save/Discard bar appears **only after** the first keystroke |
+| P5.2 | Tap Discard | The stored phone comes back and the bar disappears |
+| P5.3 | Type a change, then type the original value back | The bar disappears again — dirtiness is recomputed, not latched |
+| P5.4 | Tap Save | Success notice; reopen the screen and the new phone is there |
+| P5.5 | Toggle a working day | Writes immediately, **no** save bar |
+| P5.6 | Turn off a day that holds a booked job | Amber note naming that day; the job is NOT moved |
+| P5.7 | Turn off a day with no work | No amber note |
+| P5.8 | Type into the phone field, then toggle a day WITHOUT saving | The half-typed phone must NOT be committed — reopen and confirm the stored phone is unchanged |
+| P5.9 | Airplane mode, then toggle a day | Toggle reverts and an offline notice appears |
+| P5.10 | Scroll to the bottom | **No** SCHEDULING section (technician) |
+| P5.11 | Sign in as an admin, open My details | SCHEDULING section with the max-jobs row, and it saves |
+| P5.12 | Tap the email row's edit action | Sheet demands the address twice plus the password |
+| P5.13 | Enter mismatched addresses | Save stays disabled and the mismatch message shows |
+| P5.14 | Enter a wrong password | A failure notice; the address must NOT have changed |
+| P5.15 | Complete the change, sign out, sign in with the NEW address | Succeeds |
+| P5.16 | On a second device signed in as an admin | A push arrives naming the person — and **not** their address |
+| P5.17 | Settings › NOTIFICATIONS | A "Time-to-leave alerts" row, on by default |
+| P5.18 | Turn it off, then trigger a departure alert | The push still arrives, as the plain 30-minute reminder (not time-sensitive), never silence |
+
+---
+
 ## Notes for the Claude session on the Mac
 
 - Start from `docs/plans/2026-07-30-p2-HANDOFF.md` §2 — it lists **14 deviations

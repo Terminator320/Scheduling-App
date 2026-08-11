@@ -1205,7 +1205,9 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   back and fails the build if the two drift — Dart and CEL cannot share a
   constant, so that test is the only thing enforcing it. Add a key to the RULES
   first, then to the Dart set; the reverse order ships a silent
-  `permission-denied`. **`email` must never join the list** — it is a sign-in
+  `permission-denied`. `travelAlertsEnabled` is on the list deliberately — a
+  per-person notification preference is exactly the category it exists for.
+  **`email` must never join it** — it is a sign-in
   identity, and Auth and Firestore move together through `changeEmployeeEmail`
   or not at all. Neither may `maxJobsPerDay`, `role`, `jobTitle`, `colorValue`
   or `status`: those stay admin-only on both branches.
@@ -1214,7 +1216,51 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   patch carries `role`, `email` and the emergency `FieldValue.delete()` scrub,
   every one of which the `hasOnly` would reject. It is a plain `update()`, not a
   transaction (one person, one device, no concurrent writer, and see the
-  no-client-transactions rule).
+  no-client-transactions rule). **Because the patch names every allowlisted key,
+  each caller must pass through the values it isn't changing** — My details
+  carries the stored `travelAlertsEnabled`, Settings carries the stored
+  availability, and both carry the STORED phone rather than in-progress text.
+  A guessed default there silently flips somebody's setting.
+- **An employee's own sign-in email moves through `changeEmployeeEmail`'s SELF
+  branch** (P5, 2026-08-10) — never a users-doc write, which is why `email` is
+  off the self allowlist. `resolveEmailChangeCaller`
+  (`functions/employee_accounts.js`, pure and jest-tested) is the one gate:
+  an **active admin** may move any doc, an **active employee** may move their
+  OWN, and nothing else gets through — disabled, invited, unknown role, missing
+  bridge doc, or an employee naming somebody else's docId. Widening the callable
+  past admins must never widen WHICH doc a caller can reach; that function
+  exists to make the mistake hard to write. Guard order is auth → payload →
+  identity → rate limit → work, and the per-caller budget stays: this rewrites a
+  sign-in identity.
+  **`isSelf` reports whether the caller IS the target, independent of role**,
+  because it routes the notification: an admin edit tells the EMPLOYEE
+  (`notifyEmailChanged`), a self edit tells the ACTIVE ADMINS
+  (`notifyAdminsOfSelfEmailChange` → the shared `sendToActiveAdmins`, which P6's
+  time-off requests will reuse — build new fan-outs on it rather than inlining
+  the query). An admin editing their own row is a *self* change and must not be
+  pushed a notice about what they just did. **The admin notice carries the NAME,
+  never the address**: it lands on every admin's Lock Screen and an email is PII.
+  Client side, `SelfEmailService` re-authenticates BEFORE calling — an
+  unattended unlocked phone changing the sign-in address is the account-takeover
+  primitive — and the sheet demands the address **twice**, because the Admin SDK
+  sets it with no proof of control and a typo locks the person out until an
+  admin undoes it. Firebase's `verifyBeforeUpdateEmail` is not the answer: it
+  flips Auth OUTSIDE the callable and leaves `users.email` stale with no trigger
+  to reconcile it — the exact desync the callable exists to end.
+- **`travelAlertsEnabled` defaults to ON, and absent MUST read as ON.**
+  `wantsTravelAlerts` (`functions/travel_utils.js`) and
+  `EmployeeRecord.fromMap`'s `!= false` are the two halves; every users doc
+  written before the field existed has no value, so an `undefined`-is-off
+  reading would silence departure alerts fleet-wide — and the symptom is a push
+  that never arrives, which nobody reports. Only an explicit `false` opts out.
+  **It gates the ESCALATION to `leaveNow` only**: an opted-out assignee still
+  gets the fixed 30-minute `reminder`, the same degradation a missing origin or
+  a Routes failure already takes. The toggle is in Settings › NOTIFICATIONS (a
+  SERVER flag, unlike the device-local Live Activity switch beside it — the
+  sweep picks the push kind, so a local preference could never reach it), and
+  the row is hidden until the person's own record loads rather than rendered
+  against a guessed default. `EmployeeRecord.toMap()` deliberately does NOT emit
+  it: an admin save must leave it exactly as it was.
 
 - **Calendar (rebuilt in P2, 2026-07-30):** `table_calendar` is **deleted**;
   the month view is our own `CalendarMonthGrid` + `CalendarMonthPager`. It
