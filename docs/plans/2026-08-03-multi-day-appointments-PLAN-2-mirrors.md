@@ -12,6 +12,18 @@ appointments off-screen, and adds ONE hand-mirrored JS copy of the slice rule
 
 **Tech Stack:** Dart/Flutter, Node 20 Cloud Functions (jest), Swift (WidgetKit + App Intents).
 
+> **BUILT 2026-08-10.** All nine tasks are done and committed on `redesgin`
+> (1803 flutter / 874 jest, `flutter analyze` clean, `npm run lint` clean).
+> Four deliberate deviations, each recorded in its commit: the JS mirror
+> re-exports `MAX_APPOINTMENT_SPAN_DAYS` from `time_utils.js` instead of
+> restating it; it rebuilds a window as a wall-clock time rather than
+> midnight-plus-elapsed-minutes (the plan's formula is an hour off on the two
+> DST shift days); it treats a record with no `endTime` as a single-day job
+> rather than dropping it; and Task 1's list comprehension uses the null-aware
+> element `?sliceFor(...)` because the analyzer rejects the plan's `if-case`
+> form. **Tasks 4 and 6 (Swift) remain Xcode- and device-unverified** — there
+> is no harness for either extension.
+>
 > **Reconciled against the code 2026-08-10 — still valid, three steps corrected.**
 > Nothing in this plan has been built (there is no `functions/day_slice_utils.js`,
 > and neither `widget_sync_service.dart` nor `widget_payload_utils.js` knows about
