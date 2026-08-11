@@ -44,9 +44,20 @@ struct Job: Codable, Hashable {
     // through `allDay`, never directly.
     let isAllDay: Bool?
 
+    // Optional for the same reason as `isAllDay` — a payload written before
+    // multi-day support carries neither key, and a missing one would fail the
+    // whole `Job`. Absent means a single-day job; both builders omit them
+    // rather than sending 1 of 1.
+    let dayIndex: Int?
+    let dayCount: Int?
+
     /// True for an all-day block, which stores a real midnight–23:59 span but
     /// must never be spoken as a clock time.
     var allDay: Bool { isAllDay == true }
+
+    /// True when this job runs across more than one day, so the row names
+    /// which day of the run it is showing.
+    var isMultiDay: Bool { (dayCount ?? 1) > 1 }
 
     var start: Date? {
         isoWithMillis.date(from: startTime)
@@ -191,12 +202,24 @@ private func moreLabel(_ n: Int, french: Bool, tomorrow: Bool) -> String {
 }
 
 private func timeLabel(_ job: Job, french: Bool) -> String {
-    if job.allDay { return french ? "Toute la journée" : "All day" }
-    guard let start = job.start else { return "" }
-    let fmt = DateFormatter()
-    fmt.locale = Locale(identifier: french ? "fr_CA" : "en_CA")
-    fmt.dateFormat = french ? "H 'h' mm" : "h:mm a"
-    return fmt.string(from: start)
+    let base: String
+    if job.allDay {
+        base = french ? "Toute la journée" : "All day"
+    } else if let start = job.start {
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: french ? "fr_CA" : "en_CA")
+        fmt.dateFormat = french ? "H 'h' mm" : "h:mm a"
+        base = fmt.string(from: start)
+    } else {
+        base = ""
+    }
+    // A run whose window crosses midnight counts nights, but the widget
+    // payload carries no overnight flag, so it says "Day" either way.
+    guard job.isMultiDay, let i = job.dayIndex, let n = job.dayCount else {
+        return base
+    }
+    let counter = french ? "Jour \(i) sur \(n)" : "Day \(i) of \(n)"
+    return base.isEmpty ? counter : "\(base) · \(counter)"
 }
 
 private func statusColor(_ status: String) -> Color {
