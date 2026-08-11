@@ -1689,6 +1689,52 @@
   "@settings_myDetailsEmergencyBlurb": {
     "description": "Caption under the emergency-contact section on My details, stating who can read it"
   },
+  "settings_myDetailsIdentity": "YOU CAN CHANGE THESE",
+  "@settings_myDetailsIdentity": {
+    "description": "Section header over the fields a person may edit about themselves on My details"
+  },
+  "settings_myDetailsIdentityBlurb": "Your manager sets everything else.",
+  "@settings_myDetailsIdentityBlurb": {
+    "description": "Caption under the editable-fields section on My details"
+  },
+  "settings_myDetailsEmailReadOnly": "Ask your manager to change this.",
+  "@settings_myDetailsEmailReadOnly": {
+    "description": "Caption under the read-only sign-in email row on My details"
+  },
+  "settings_myAvailability": "MY AVAILABILITY",
+  "@settings_myAvailability": {
+    "description": "Section header over the working-days and hours controls on My details"
+  },
+  "settings_myAvailabilityBlurb": "Changes apply right away.",
+  "@settings_myAvailabilityBlurb": {
+    "description": "Caption telling the user availability toggles save immediately, unlike the explicitly-saved fields above"
+  },
+  "settings_availabilityConflict": "{days} already has booked work — the jobs stay until someone moves them.",
+  "@settings_availabilityConflict": {
+    "description": "Amber warning shown when a person turns off a working day that still holds appointments",
+    "placeholders": {
+      "days": {
+        "type": "String",
+        "example": "Mon, Wed"
+      }
+    }
+  },
+  "settings_myScheduling": "SCHEDULING",
+  "@settings_myScheduling": {
+    "description": "Admin-only section header on My details for scheduling limits"
+  },
+  "settings_unsavedChanges": "Unsaved changes",
+  "@settings_unsavedChanges": {
+    "description": "Label on the save/discard bar that appears once the My details identity form is edited"
+  },
+  "common_discard": "Discard",
+  "@common_discard": {
+    "description": "Button that throws away unsaved edits and restores the stored values"
+  },
+  "error_introSaveAvailability": "Couldn't save your availability",
+  "@error_introSaveAvailability": {
+    "description": "Error intro for ME-SAVE when the immediate availability write fails"
+  },
   "error_introSaveAppLock": "Couldn't change the app lock setting",
   "@error_introSaveAppLock": {
     "description": "Intro for a failed App Lock toggle (keychain write failed)"
