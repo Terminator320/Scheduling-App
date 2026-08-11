@@ -5,6 +5,7 @@ import 'package:scheduling/features/siri/domain/schedule_snapshot.dart';
 
 AppointmentRecord _appt({
   required DateTime start,
+  DateTime? end,
   String? id = 'a1',
   String status = 'pending',
   String clientName = 'Ada',
@@ -12,7 +13,7 @@ AppointmentRecord _appt({
 }) => AppointmentRecord(
   id: id,
   startTime: start,
-  endTime: start.add(const Duration(hours: 1)),
+  endTime: end ?? start.add(const Duration(hours: 1)),
   status: status,
   clientName: clientName,
   address: address,
@@ -204,6 +205,74 @@ void main() {
       expect(appointment['clientName'], '');
       expect(appointment['title'], 'Vacation');
       expect(appointment['isAllDay'], isTrue);
+    });
+
+    test('the schema version is bumped for the new fields', () {
+      expect(scheduleSnapshotVersion, 3);
+    });
+
+    test('a multi-day job is bucketed on every day it runs', () {
+      final snapshot = build([
+        _appt(
+          id: 'm',
+          start: DateTime(2026, 7, 19, 9),
+          end: DateTime(2026, 7, 21, 17),
+        ),
+      ]);
+
+      expect(_appointmentsOn(snapshot, '2026-07-19'), hasLength(1));
+      expect(_appointmentsOn(snapshot, '2026-07-20'), hasLength(1));
+      expect(_appointmentsOn(snapshot, '2026-07-21'), hasLength(1));
+      expect(_appointmentsOn(snapshot, '2026-07-22'), isEmpty);
+
+      final day2 = _appointmentsOn(snapshot, '2026-07-20').single;
+      expect(day2['dayIndex'], 2);
+      expect(day2['dayCount'], 3);
+      expect(day2['isOvernight'], isFalse);
+      // Siri must speak THIS day's window, not the run's first morning.
+      expect(
+        day2['startMillis'],
+        DateTime(2026, 7, 20, 9).millisecondsSinceEpoch,
+      );
+      expect(
+        day2['endMillis'],
+        DateTime(2026, 7, 20, 17).millisecondsSinceEpoch,
+      );
+    });
+
+    test('a single-day job carries no counter', () {
+      final snapshot = build([_appt(start: DateTime(2026, 7, 19, 9))]);
+
+      final appointment = _appointmentsOn(snapshot, '2026-07-19').single;
+      expect(appointment.containsKey('dayIndex'), isFalse);
+      expect(appointment.containsKey('dayCount'), isFalse);
+      expect(appointment.containsKey('isOvernight'), isFalse);
+    });
+
+    test('a night shift is bucketed on the nights it starts, not the last '
+        'morning', () {
+      // Jul 19 22:00 → Jul 22 06:00: three nights, the last starting Jul 21.
+      final snapshot = build([
+        _appt(
+          id: 'n',
+          start: DateTime(2026, 7, 19, 22),
+          end: DateTime(2026, 7, 22, 6),
+        ),
+      ]);
+
+      expect(_appointmentsOn(snapshot, '2026-07-19'), hasLength(1));
+      expect(_appointmentsOn(snapshot, '2026-07-21'), hasLength(1));
+      expect(_appointmentsOn(snapshot, '2026-07-22'), isEmpty);
+
+      final lastNight = _appointmentsOn(snapshot, '2026-07-21').single;
+      expect(lastNight['dayIndex'], 3);
+      expect(lastNight['dayCount'], 3);
+      expect(lastNight['isOvernight'], isTrue);
+      // The window runs into the following morning.
+      expect(
+        lastNight['endMillis'],
+        DateTime(2026, 7, 22, 6).millisecondsSinceEpoch,
+      );
     });
   });
 }
