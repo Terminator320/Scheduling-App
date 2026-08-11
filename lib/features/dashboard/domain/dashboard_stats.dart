@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show immutable;
 
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
@@ -15,7 +16,10 @@ class TodayOps {
   /// Keyed by normalized display-status raw value ('pending', 'in_progress', 'done', 'cancelled').
   final Map<String, int> statusCounts;
   final int unassignedCount;
-  final List<AppointmentRecord> upcoming;
+
+  /// Day-scoped, so a multi-day run is judged by TODAY's window rather than
+  /// the morning it first started — and the card can show "Day 3 of 5".
+  final List<AppointmentDaySlice> upcoming;
 
   /// Every visit today regardless of status — the hero's big number.
   int get total => statusCounts.values.fold(0, (sum, n) => sum + n);

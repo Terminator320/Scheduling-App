@@ -12,8 +12,8 @@ Future<void> launchWebUrl(
   WidgetRef ref,
   String url,
 ) async {
-  final uri = Uri.tryParse(url.trim());
-  if (uri == null || !uri.hasScheme || !uri.hasAuthority) {
+  final uri = parseWebUrl(url);
+  if (uri == null) {
     // Not a catch, but still a user-visible failure — without this it is the
     // one launch path that leaves no Crashlytics trail to match a screenshot
     // against. The URL is a compile-time constant, so it is safe to carry.
@@ -28,4 +28,17 @@ Future<void> launchWebUrl(
     tag: 'LAUNCH-URL',
     errorMessage: context.l10n.error_couldNotOpenLink,
   );
+}
+
+/// The URL as something worth handing to the OS, or null when it isn't.
+///
+/// Both a scheme AND an authority are required: `launchUrl` happily accepts a
+/// bare "example.com" and then fails at the platform boundary, and a
+/// scheme-only value like "https:" opens nothing. These are the Terms and
+/// Privacy links that give the consent record its meaning, so the gate is
+/// pinned rather than assumed.
+Uri? parseWebUrl(String url) {
+  final uri = Uri.tryParse(url.trim());
+  if (uri == null || !uri.hasScheme || !uri.hasAuthority) return null;
+  return uri;
 }

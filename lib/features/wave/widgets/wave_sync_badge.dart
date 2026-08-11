@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
+
+/// Sync states already reported, so an unrecognized one is filed ONCE per
+/// process rather than on every rebuild of the row it sits in — the reason
+/// logging inside a build method is otherwise forbidden.
+final Set<String> _reportedUnknownStates = <String>{};
 
 /// Small chip reflecting Wave sync state; renders nothing when empty/unknown.
 class WaveSyncBadge extends StatelessWidget {
@@ -83,6 +89,13 @@ class WaveSyncBadge extends StatelessWidget {
           foreground: scheme.onErrorContainer,
         );
       default:
+        // `syncState` is a SERVER-owned vocabulary, so a state added
+        // backend-side (say `conflict`) would ship as a blank space on an
+        // admin-only surface with no signal anywhere. Empty is the ordinary
+        // "never synced" case and is not worth reporting.
+        if (syncState.isNotEmpty && _reportedUnknownStates.add(syncState)) {
+          AppLogger().warn('WAVE-BADGE unknown syncState: $syncState');
+        }
         return null;
     }
   }

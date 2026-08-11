@@ -9,6 +9,7 @@ const {
   optionalString,
   assertAdmin,
   enforceDurableRateLimit,
+  assertFreshReauth,
 } = require("./security");
 // index.js already loads notifications.js in every container, so this costs no
 // extra cold start. sendToEmployee is the one owner of the token fetch, the
@@ -55,6 +56,15 @@ const CREATE_RATE_WINDOW_MS = 60 * 60 * 1000;
 // Setup runs once per person; a handful of retries covers a fumbled password.
 const SETUP_RATE_MAX = 5;
 const SETUP_RATE_WINDOW_MS = 15 * 60 * 1000;
+
+// changeEmployeeEmail rewrites a SIGN-IN IDENTITY, which is the
+// account-takeover primitive an unattended unlocked phone offers — so it is
+// budgeted far tighter than account creation, and it demands a fresh re-auth
+// the same way deleteAccount does. The client re-authenticates before calling
+// (SelfEmailService); this is the server-side half of that guarantee.
+const EMAIL_CHANGE_RATE_MAX = 5;
+const EMAIL_CHANGE_RATE_WINDOW_MS = 60 * 60 * 1000;
+const EMAIL_CHANGE_REAUTH_MAX_AGE_SECONDS = 5 * 60;
 
 // Mirrors JobTitle.raw (lib/features/employees/domain/models/job_title.dart)
 // and the rules' isValidJobTitle allowlist.
@@ -402,18 +412,34 @@ const changeEmployeeEmail = onCall(APP_CHECK, async (req) => {
     throw new HttpsError("invalid-argument", "invalid-docId");
   }
   const email = requireString(req.data, "email", 254).toLowerCase();
-  // Guard order: auth → payload → IDENTITY → rate limit → work. The payload is
-  // validated before a slot is consumed so a burst of malformed submissions
-  // can't exhaust a legitimate caller's window; the identity guard sits above
-  // the limiter so a non-entitled caller still can't burn one.
+  // Guard order: auth → payload → IDENTITY → re-auth freshness → rate limit →
+  // work. The payload is validated before a slot is consumed so a burst of
+  // malformed submissions can't exhaust a legitimate caller's window; the
+  // identity guards sit above the limiter so a non-entitled caller still can't
+  // burn one.
   const bridgeSnap = await db.collection("usersByUid").doc(req.auth.uid).get();
   const {isSelf, callerDocId} = await resolveEmailChangeCaller(
       bridgeSnap.exists ? bridgeSnap.data() : null, docId);
+  // A valid ID token alone must not be enough to move your OWN sign-in
+  // address: SelfEmailService re-authenticates first, but that is a
+  // client-side ordering, and anything reaching this callable directly
+  // bypasses it. Same check deleteAccount makes, for the same reason.
+  //
+  // SELF ONLY, deliberately. The admin branch is reached from
+  // `updateEmployee`, which has no re-auth step to satisfy this — gating it
+  // here would reject every admin email edit made more than five minutes
+  // after sign-in. Closing the admin half needs a re-auth prompt on that save
+  // path first; until then an unattended admin session can still rewrite a
+  // colleague's address, bounded only by assertAdmin and the budget below.
+  if (isSelf) {
+    assertFreshReauth(
+        req.auth, "changeEmployeeEmail", EMAIL_CHANGE_REAUTH_MAX_AGE_SECONDS);
+  }
   // Same per-caller budget either way: this rewrites a sign-in identity, so a
   // compromised session must not be able to walk the roster.
   await enforceDurableRateLimit(
-      "changeEmployeeEmail", req.auth.uid, CREATE_RATE_MAX,
-      CREATE_RATE_WINDOW_MS);
+      "changeEmployeeEmail", req.auth.uid, EMAIL_CHANGE_RATE_MAX,
+      EMAIL_CHANGE_RATE_WINDOW_MS);
 
   const auth = getAuth();
 

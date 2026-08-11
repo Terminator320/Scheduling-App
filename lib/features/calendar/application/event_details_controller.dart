@@ -11,13 +11,12 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
-import 'package:scheduling/features/calendar/application/appointment_series_editor.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_outcome.dart';
+import 'package:scheduling/features/calendar/application/event_details_save_pipeline.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
-import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -330,18 +329,24 @@ class EventDetailsController extends Notifier<EventDetailsState>
   void setSaving({required bool busy}) =>
       state = state.copyWith(isSaving: busy);
 
-  /// Builds the final assignee list: the selected employees plus any original
-  /// assignees that weren't in the picker, so we don't silently unassign them.
+  /// The write half of a save. Built per call so it closes over nothing.
+  EventDetailsSavePipeline _pipeline() => EventDetailsSavePipeline(
+    repo: ref.read(appointmentsRepositoryProvider),
+    resolveStorage: () => ref.mounted ? ref.read(imageStorageProvider) : null,
+    logger: ref.read(loggerProvider),
+  );
+
+  /// The final assignee list. The awaited active-employee read is the point —
+  /// see [_resolveActiveEmployees].
   Future<({List<String> ids, List<String> names})> _resolveAssignees(
     AppointmentRecord appointment,
+    EventDetailsSavePipeline pipeline,
   ) async {
     final activeEmployees = await _resolveActiveEmployees();
-    return mergeRetainedAssignees(
-      originalIds: appointment.employeeIds,
-      originalNames: appointment.employeeNames,
-      selectedIds: state.selectedEmployees.map((e) => e.id).toList(),
-      selectedNames: state.selectedEmployees.map((e) => e.name).toList(),
-      activeIds: activeEmployees.map((e) => e.id).toSet(),
+    return pipeline.resolveAssignees(
+      appointment: appointment,
+      selected: state.selectedEmployees,
+      activeEmployees: activeEmployees,
     );
   }
 
@@ -369,6 +374,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     // being dismissed (Riverpod 3).
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
+    final pipeline = _pipeline();
     // Only resolve the upload service if there are photos, so we skip
     // initializing FirebaseStorage otherwise.
     final uploader = state.newImages.isEmpty
@@ -420,8 +426,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
         }
       }
 
-      final assignees = await _resolveAssignees(appointment);
-      final updated = _buildUpdatedRecord(
+      final assignees = await _resolveAssignees(appointment, pipeline);
+      final updated = pipeline.buildUpdatedRecord(
         appointment,
         id: id,
         title: title,
@@ -431,24 +437,34 @@ class EventDetailsController extends Notifier<EventDetailsState>
         start: start,
         end: end,
         assignees: assignees,
+        selectedClient: state.selectedClient,
+        pictures: state.existingImages,
+        status: state.editingStatus,
+        repeat: state.repeat,
+        isPersonal: state.isPersonal,
+        isAllDay: state.isAllDay,
       );
 
-      final saved = await _applySeriesChange(
+      final saved = await pipeline.applySeriesChange(
         appointment,
-        repo: repo,
         updated: updated,
         id: id,
         start: start,
         end: end,
         applyToSeries: applyToSeries,
+        repeat: state.repeat,
+        savedRepeat: state.savedRepeat,
       );
 
-      await _applyPhotoChanges(
+      await pipeline.applyPhotoChanges(
         id: id,
-        repo: repo,
         uploader: uploader,
         removedImages: removedImages,
         newImages: newImages,
+        // The repeat baseline for the NEXT edit — state, so it stays here.
+        onRecordWritten: () {
+          if (ref.mounted) state = state.copyWith(savedRepeat: state.repeat);
+        },
       );
 
       if (ref.mounted) state = state.copyWith(isSaving: false);
@@ -457,30 +473,6 @@ class EventDetailsController extends Notifier<EventDetailsState>
       logger.warn('APPT-SAVE saveChanges failed', e, st);
       if (ref.mounted) state = state.copyWith(isSaving: false);
       return EventDetailsFailed(e);
-    }
-  }
-
-  /// Applies photo changes after the record write — this ordering matters.
-  Future<void> _applyPhotoChanges({
-    required String id,
-    required AppointmentsRepository repo,
-    required AppointmentImageUploadService? uploader,
-    required List<AppointmentImage> removedImages,
-    required List<File> newImages,
-  }) async {
-    // Use arrayRemove only for removed photos to avoid clobbering concurrent uploads.
-    if (removedImages.isNotEmpty) {
-      await repo.removeAppointmentPictures(id, removedImages);
-    }
-
-    // Update baseline for next edit.
-    if (ref.mounted) state = state.copyWith(savedRepeat: state.repeat);
-
-    // Clean up images only after the doc stops referencing them.
-    await _deleteOrphanedImages(removedImages, tag: 'APPT-SAVE');
-
-    if (newImages.isNotEmpty) {
-      uploader?.uploadInBackground(appointmentId: id, newImages: newImages);
     }
   }
 
@@ -522,92 +514,6 @@ class EventDetailsController extends Notifier<EventDetailsState>
     return null;
   }
 
-  // Build the edited record from the form fields and the resolved assignees.
-  AppointmentRecord _buildUpdatedRecord(
-    AppointmentRecord appointment, {
-    required String id,
-    required String title,
-    required String address,
-    required String notes,
-    required String materialsNeeded,
-    required DateTime start,
-    required DateTime end,
-    required ({List<String> ids, List<String> names}) assignees,
-  }) {
-    final isPersonal = state.isPersonal;
-    // A personal job carries no client and no address — including when an
-    // existing client visit is converted into one, so the stored copies are
-    // cleared rather than left behind on a job that no longer shows them.
-    final pickedClient = isPersonal ? null : state.selectedClient;
-    return AppointmentRecord(
-      id: id,
-      title: title.trim(),
-      startTime: start,
-      endTime: end,
-      clientId: isPersonal ? '' : pickedClient?.id ?? appointment.clientId,
-      clientName: isPersonal
-          ? ''
-          : pickedClient?.displayName ?? appointment.clientName,
-      clientPhone: isPersonal
-          ? ''
-          : pickedClient?.phone ?? appointment.clientPhone,
-      address: isPersonal ? '' : address.trim(),
-      isPersonal: isPersonal,
-      isAllDay: state.isAllDay,
-      employeeIds: assignees.ids,
-      employeeNames: assignees.names,
-      notes: notes.trim(),
-      materialsNeeded: materialsNeeded.trim(),
-      // Pictures are included here only for the outcome/UI — actual updates
-      // go through append/remove instead.
-      pictures: state.existingImages,
-      status: state.editingStatus,
-      repeat: state.repeat,
-      seriesId: appointment.seriesId,
-    );
-  }
-
-  // Apply the edit: rewrite the series if the repeat changed, propagate it if
-  // applyToSeries is set, or otherwise just update the single appointment.
-  Future<EventDetailsSaved> _applySeriesChange(
-    AppointmentRecord appointment, {
-    required AppointmentsRepository repo,
-    required AppointmentRecord updated,
-    required String id,
-    required DateTime start,
-    required DateTime end,
-    required bool applyToSeries,
-  }) async {
-    final seriesEditor = AppointmentSeriesEditor(repo);
-    if (state.repeat != state.savedRepeat) {
-      final result = await seriesEditor.rewrite(
-        updated: updated,
-        appointment: appointment,
-        id: id,
-        start: start,
-        end: end,
-        repeat: state.repeat,
-      );
-      return EventDetailsSaved(
-        result.updated,
-        futureBookings: result.futureBookings,
-        removedBookings: result.removedBookings,
-      );
-    }
-    if (applyToSeries && appointment.seriesId.isNotEmpty) {
-      final updatedSiblings = await seriesEditor.propagate(
-        updated: updated,
-        appointment: appointment,
-        id: id,
-        start: start,
-        end: end,
-      );
-      return EventDetailsSaved(updated, updatedSiblings: updatedSiblings);
-    }
-    await repo.updateAppointment(updated);
-    return EventDetailsSaved(updated);
-  }
-
   /// Returns null on success, or the failure error otherwise. When
   /// [includeFuture] is set, this also deletes the series' future visits in
   /// one batch (done/cancelled visits are preserved).
@@ -646,7 +552,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
       }
 
       // Delete orphaned images after docs are gone.
-      await _deleteOrphanedImages(orphanedImages, tag: 'APPT-DEL');
+      if (ref.mounted) {
+        await _pipeline().deleteOrphanedImages(
+          orphanedImages,
+          tag: 'APPT-DEL',
+        );
+      }
 
       if (ref.mounted) state = state.copyWith(isSaving: false);
       return null;
@@ -654,22 +565,6 @@ class EventDetailsController extends Notifier<EventDetailsState>
       logger.warn('APPT-DEL deleteAppointment failed', e, st);
       if (ref.mounted) state = state.copyWith(isSaving: false);
       return e;
-    }
-  }
-
-  /// Best-effort cleanup — if it fails, the orphaned bytes are harmless, so
-  /// we just log it.
-  Future<void> _deleteOrphanedImages(
-    List<AppointmentImage> images, {
-    required String tag,
-  }) async {
-    if (images.isEmpty || !ref.mounted) return;
-    final storage = ref.read(imageStorageProvider);
-    final logger = ref.read(loggerProvider);
-    try {
-      await storage.deleteImages(images);
-    } catch (e, st) {
-      logger.warn('$tag deleteImages failed (orphaned bytes)', e, st);
     }
   }
 }

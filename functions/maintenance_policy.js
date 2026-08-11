@@ -113,6 +113,9 @@ async function runHistoryPurge(deps) {
 }
 
 module.exports = {
+  // Exported for unit tests: the purge is the only unattended, irreversible
+  // deletion in the repo, so its bounds are asserted against these rather than
+  // against copied literals.
   HISTORY_RETENTION_YEARS,
   PURGE_STATUSES,
   PURGE_BATCH_SIZE,

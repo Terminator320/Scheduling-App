@@ -174,8 +174,42 @@ void main() {
       ];
       final ops = DashboardAggregator.computeTodayOps(appointments, _now);
       expect(ops.upcoming, hasLength(5));
-      expect(ops.upcoming.first.id, 'h13');
-      expect(ops.upcoming.last.id, 'h17');
+      expect(ops.upcoming.first.appointment.id, 'h13');
+      expect(ops.upcoming.last.appointment.id, 'h17');
+    });
+
+    test('a multi-day run is upcoming on THIS day, not its first morning', () {
+      // Aug 1 was the run's first morning; _now is Jul 8, so use a run that
+      // started before today and works again this afternoon.
+      final running = AppointmentRecord(
+        id: 'multi',
+        title: 'Reno',
+        startTime: DateTime(2026, 7, 6, 14),
+        endTime: DateTime(2026, 7, 10, 18),
+        employeeIds: const ['e1'],
+      );
+      final ops = DashboardAggregator.computeTodayOps([running], _now);
+
+      expect(ops.upcoming.map((s) => s.appointment.id), ['multi']);
+      expect(ops.upcoming.single.windowStart, DateTime(2026, 7, 8, 14));
+      expect(ops.upcoming.single.dayIndex, 3);
+    });
+
+    test('upcoming sorts on the day window, not the stored instant', () {
+      final continuing = AppointmentRecord(
+        id: 'multi',
+        title: 'Reno',
+        startTime: DateTime(2026, 7, 6, 16),
+        endTime: DateTime(2026, 7, 10, 18),
+        employeeIds: const ['e1'],
+      );
+      final ops = DashboardAggregator.computeTodayOps([
+        continuing,
+        _appt(id: 'today14', start: DateTime(2026, 7, 8, 14)),
+      ], _now);
+
+      // Sorting on startTime would float the run (Jul 6) above the 14:00 job.
+      expect(ops.upcoming.map((s) => s.appointment.id), ['today14', 'multi']);
     });
   });
 
@@ -418,7 +452,11 @@ void main() {
     });
 
     test('the live copy wins a collision', () {
-      final live = _appt(id: 'a', start: DateTime(2026, 7, 7, 9), status: 'done');
+      final live = _appt(
+        id: 'a',
+        start: DateTime(2026, 7, 7, 9),
+        status: 'done',
+      );
       final stale = _appt(id: 'a', start: DateTime(2026, 7, 7, 9));
 
       final merged = DashboardAggregator.mergeById([live], [stale]);
@@ -429,10 +467,14 @@ void main() {
     });
 
     test('a record with no doc id is kept rather than collapsed', () {
-      final a = _appt(id: 'x', start: DateTime(2026, 7, 7, 9))
-          .copyWith(id: null);
-      final b = _appt(id: 'y', start: DateTime(2026, 7, 7, 10))
-          .copyWith(id: null);
+      final a = _appt(
+        id: 'x',
+        start: DateTime(2026, 7, 7, 9),
+      ).copyWith(id: null);
+      final b = _appt(
+        id: 'y',
+        start: DateTime(2026, 7, 7, 10),
+      ).copyWith(id: null);
 
       // Dropping real work out of the Attention list is worse than a possible
       // double-count.

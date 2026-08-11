@@ -228,6 +228,29 @@ describe("upsertCustomer no-op", () => {
     expect(ref.updates).toHaveLength(0);
   });
 
+  test("a doc with no lastSyncedHash is left alone", async () => {
+    // Nothing has demonstrably reached Wave, so there is no evidence the
+    // pending flag is stale — healing here would claim a push that never
+    // happened. Only reachable on a doc linked out-of-band.
+    const data = {
+      ...CLIENT,
+      waveCustomerId: "wave-1",
+      wave: {syncState: "pending"},
+    };
+    const ref = clientRef(data);
+    const result = await upsertCustomer("c1", {
+      db: upsertDb(ref), graphql: graphqlSeq(patchOk("wave-1")),
+      businessId: "biz-1", now,
+    });
+
+    // No hash to match, so this is a real patch rather than a no-op — and the
+    // heal never runs.
+    expect(result).toEqual({status: "patched", waveCustomerId: "wave-1"});
+    expect(ref.updates).not.toContainEqual(
+        {"wave.syncState": "synced", "wave.syncError": null},
+    );
+  });
+
   test("a doc deleted during the no-op is not resurrected", async () => {
     const hash = mappedFieldsHash(CLIENT);
     const data = {

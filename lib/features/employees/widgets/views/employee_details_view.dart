@@ -56,6 +56,11 @@ class EmployeeDetailsView extends ConsumerWidget {
     // always passes that rule and a failed read means the read failed — NOT
     // that there is none on file. If this view is ever reused on a non-admin
     // surface it must distinguish the two, the way MyDetailsScreen does.
+    //
+    // Loading and error deliberately render the SAME thing here (the panel is
+    // omitted below when the rows are empty), which is what "not shown" means
+    // on a read-only surface. The failure itself is not swallowed: the
+    // provider logs it once per error emission.
     final emergency =
         ref.watch(emergencyContactProvider(employee.id)).value ??
         EmergencyContact.empty;

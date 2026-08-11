@@ -39,7 +39,10 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     // NOTE: emergencyContact/emergencyPhone are NOT here — they live in
     // users/{docId}/private/emergency so rules can gate them to the admin and
     // the person themselves. See EmergencyContact.
-    // Server timestamp, same read-only contract as ClientRecord.createdAt.
+    // Server timestamp, same read-only contract as ClientRecord.createdAt —
+    // though unlike that one it has no reader yet (ClientRecord's drives the
+    // dashboard trends). Parsed so the field is available and never written
+    // back: toMap() must not emit it.
     DateTime? createdAt,
   }) = _EmployeeRecord;
   const EmployeeRecord._();

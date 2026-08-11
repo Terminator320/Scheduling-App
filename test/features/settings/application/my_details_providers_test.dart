@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/settings/application/my_details_providers.dart';
 
@@ -20,9 +21,18 @@ void main() {
   // The conflict provider reduces `myUpcomingAppointmentsProvider`, so
   // overriding that one keeps these tests free of Firestore and of the
   // identity chain — the reduction is what is under test here.
+  // Pin the clock. myDetailsRangeProvider builds its window off
+  // currentDayProvider, so without this the fixtures below rot: they passed on
+  // the day they were written and then fell out of the window, which made the
+  // "reports nothing" cases pass for the wrong reason.
+  final today = DateTime(2026, 8, 10);
+
   ProviderContainer containerWith(List<AppointmentRecord> jobs) {
     final container = ProviderContainer(
-      overrides: [myUpcomingAppointmentsProvider.overrideWith((ref) => jobs)],
+      overrides: [
+        currentDayProvider.overrideWithValue(today),
+        myUpcomingAppointmentsProvider.overrideWith((ref) => jobs),
+      ],
     );
     addTearDown(container.dispose);
     return container;

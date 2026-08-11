@@ -253,15 +253,27 @@ class _EditablePhotoStrip extends StatelessWidget {
     final url = entry.key < existingUrls.length
         ? existingUrls[entry.key]
         : null;
+    // An EMPTY resolved url is a rules rejection, not a pending resolve — the
+    // resolver refuses to fall back to the rules-free token URL. Show the
+    // error tile and keep it untappable rather than fetching nothing.
+    final refused = url != null && url.isEmpty;
     return Stack(
       children: [
         Padding(
           padding: const EdgeInsets.only(right: AppSpacing.sp8),
           child: GestureDetector(
-            onTap: url == null ? null : () => onOpenViewer(context, entry.key),
+            onTap: url == null || refused
+                ? null
+                : () => onOpenViewer(context, entry.key),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(AppRadius.r8),
-              child: url == null
+              child: refused
+                  ? SizedBox(
+                      width: 90,
+                      height: 90,
+                      child: _photoErrorTile(context),
+                    )
+                  : url == null
                   ? SizedBox(
                       width: 90,
                       height: 90,

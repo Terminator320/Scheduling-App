@@ -3,7 +3,11 @@ const logger = require("firebase-functions/logger");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
 
-const {assertPayloadShape, enforceDurableRateLimit} = require("./security");
+const {
+  assertPayloadShape,
+  enforceDurableRateLimit,
+  isReauthStale,
+} = require("./security");
 const {runAccountDeletion} = require("./account_policy");
 
 // deleteAccount is capped at AUTH_RATE_MAX attempts per AUTH_RATE_WINDOW_MS,
@@ -15,19 +19,6 @@ const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
 // deleteAccount requires the caller to have re-authenticated within this
 // window, since a still-valid ID token alone shouldn't trigger deletion.
 const REAUTH_MAX_AGE_SECONDS = 5 * 60;
-
-/**
- * True when the caller's re-authentication is missing or too old to permit an
- * irreversible delete. Pure/testable.
- * @param {*} authTime ID-token `auth_time` (epoch seconds) or undefined.
- * @param {number} nowSec Current time in epoch seconds.
- * @param {number} maxAgeSeconds Allowed staleness window in seconds.
- * @return {boolean}
- */
-function isReauthStale(authTime, nowSec, maxAgeSeconds) {
-  return typeof authTime !== "number" ||
-      nowSec - authTime > maxAgeSeconds;
-}
 
 // ----- deleteAccount callable ------------------------------------------------
 //
@@ -84,6 +75,7 @@ const deleteAccount = onCall(
 
 module.exports = {
   deleteAccount,
-  // Exported for unit tests.
+  // Re-exported from security.js (its one owner, shared with
+  // changeEmployeeEmail) so the existing unit tests keep their import path.
   isReauthStale,
 };

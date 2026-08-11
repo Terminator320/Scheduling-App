@@ -30,6 +30,7 @@ const {
   endLiveActivity,
 } = require("./live_activity_dispatch");
 const {liveActivityCtx} = require("./live_activity_utils");
+const {dayCountOf} = require("./day_slice_utils");
 const {
   listCardsDueForOnSite,
   clearCardMarker,
@@ -474,7 +475,12 @@ async function resolveReminderForAssignee(deps, args) {
     cache,
   });
   let started = 0;
-  if (kind === "leaveNow" && delivered > 0) {
+  // Live Activities deliberately skip multi-day jobs: the card carries the
+  // run's `endTime`, and the on-site flip renders that as a live countdown —
+  // so a five-day run parks a five-day countdown on the Lock Screen. The
+  // leaveNow push itself still goes out; only the card is withheld.
+  const isMultiDay = dayCountOf(c) > 1;
+  if (kind === "leaveNow" && delivered > 0 && !isMultiDay) {
     // Best-effort — a Live Activity failure must not change `reminded` or
     // abort the sweep. No card just leaves the plain leaveNow push
     // unchanged.

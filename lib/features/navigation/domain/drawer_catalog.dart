@@ -33,7 +33,9 @@ List<DrawerGroup> drawerGroups({required bool isAdmin}) => [
     ),
   (
     title: (l10n) => l10n.nav_groupAccount,
-    // PushedDestination.myDetails joins here in P5.
+    // My details is NOT a drawer row: P5 landed it inside Settings, which is
+    // where its two grants (own emergency contact, self-service availability)
+    // sit beside the rest of a person's own preferences.
     rows: [PushedDestination.settings],
   ),
 ];

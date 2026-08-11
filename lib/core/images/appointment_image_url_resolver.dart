@@ -42,11 +42,20 @@ class AppointmentImageUrlResolver {
       return await _storage.ref(image.storagePath).getDownloadURL();
     } catch (e, st) {
       _logger.warn('IMG-URL resolve failed: ${image.storagePath}', e, st);
-      // The stored url is a strictly better outcome than a broken tile for
-      // someone who IS entitled to the photo; someone who is not gets the
-      // same 403 the rules would have given them.
+      // A RULES REJECTION MUST NOT FALL BACK. The stored url is the permanent
+      // token URL described above — it reads with no auth and no rules
+      // evaluation — so returning it here would hand back a working, rules-free
+      // link in exactly the case this class exists to refuse. Everything else
+      // (offline, a transient Storage failure) keeps the fallback, which is
+      // strictly better than a broken tile for someone who IS entitled.
+      if (_isPermissionDenied(e)) return '';
       return image.url;
     }
+  }
+
+  static bool _isPermissionDenied(Object error) {
+    if (error is! FirebaseException) return false;
+    return error.code == 'unauthorized' || error.code == 'permission-denied';
   }
 
   /// Resolves in list order so the returned URLs line up index-for-index with

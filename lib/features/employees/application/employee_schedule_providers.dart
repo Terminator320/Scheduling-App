@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
@@ -47,11 +50,29 @@ final employeeJobsTodayProvider = Provider.autoDispose<Map<String, int>>((ref) {
 /// themselves, so a peer's read errors rather than returning empty — surfaces
 /// must render it only when they already know the viewer is entitled, and
 /// treat an error as "not shown", never as "none on file".
+/// The failure is logged HERE, once per error emission, and rethrown.
+///
+/// Not in the three consumers' error branches: those live inside `build`, so
+/// they fire on every rebuild, and all three would have to carry the same
+/// call. Without it a failing read on this path was invisible in Crashlytics
+/// while every surface quietly rendered "not shown" — a swallowed failure with
+/// no log is the shape the error-handling rules exist to forbid.
 final emergencyContactProvider = StreamProvider.autoDispose
     .family<EmergencyContact, String>((ref, docId) {
+      final logger = ref.watch(loggerProvider);
       return ref
           .watch(employeesRepositoryProvider)
-          .watchEmergencyContact(docId);
+          .watchEmergencyContact(docId)
+          .transform(
+            StreamTransformer<EmergencyContact, EmergencyContact>.fromHandlers(
+              handleError: (error, stackTrace, sink) {
+                logger.warn('EMP-EMERGENCY watch failed', error, stackTrace);
+                // Rethrown, so a surface still tells the two apart: an error
+                // must never render as "none on file".
+                sink.addError(error, stackTrace);
+              },
+            ),
+          );
     });
 
 /// How many future jobs an employee is still assigned to — the caption under

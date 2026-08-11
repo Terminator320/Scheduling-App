@@ -68,7 +68,7 @@ lib/
     ├── notifications/               FCM push client — PushRegistrationController (token upsert for active employees/admins, resync-coalesced), FcmTokenRepository, push_notification_service, notificationAuthStatusProvider (Settings recovery row); core/notifications/fcm_background_handler rewrites the widget from a push while the app is closed
     ├── presence/                    Live-location tracking + admin live staff map — PresenceSyncController owns a foreground-only geolocator stream (250 m / 2-min throttle + 10-min heartbeat, throttle clock rolls back on a failed write) for active employees/admins — the `location` UIBackgroundModes entry was removed 2026-07-27 after an App Store 2.5.4 rejection, so iOS suspends the stream on background; never re-add it, PresenceRepository writes users/{docId}/presence/location (self-only); OS permission is the only switch. Admin-only live_map_screen joins collectionGroup('presence') to watchAllUsers() via LiveMapAggregator (pure reducers, presenceStaleAfter == PRESENCE_STALE_MINUTES) → google_maps_flutter markers; staff_roster_sheet lists everyone sharing location nearest-first (LiveMapAggregator.sortedByProximity/distanceMeters/cityFromAddress — all pure)
     ├── onboarding/                  First-launch intro carousel (OnboardingGate = app home) + onboardingSeen gate
-    ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle, notification-permission recovery row, Live job card switch (iOS-only, hidden where unsupported), LegalSettingsCard (Privacy Policy + Terms of Service rows — the durable route to the terms, since the setup screen's consent link is shown once and only to a new employee), and my_details_screen — the ONLY self-service edit surface (own emergency contact; everything else about a person is admin-owned)
+    ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle, notification-permission recovery row, Live job card switch (iOS-only, hidden where unsupported), LegalSettingsCard (Privacy Policy + Terms of Service rows — the durable route to the terms, since the setup screen's consent link is shown once and only to a new employee), and my_details_screen — the ONLY self-service edit surface. Since P5 (2026-08-10) it covers the person's own phone, emergency contact + emergency phone, full availability (working days, hours, on-call), `travelAlertsEnabled`, and — through `SelfEmailService`, which re-authenticates first and calls `changeEmployeeEmail` rather than writing the doc — their own sign-in email. It carries TWO save behaviours on purpose: identity fields sit behind a dirty-gated Save/Discard bar (a half-typed phone auto-committing is a bad write with no undo), while availability applies immediately and optimistically, rolling back on failure. Still admin-owned on both branches and NOT reachable here: `maxJobsPerDay` (admin-only section, hidden for a technician), `role`, `jobTitle`, `colorValue`, `status`
     ├── siri/                        Siri App Intents snapshot — ScheduleSnapshotService writes a today+7d payload under the App Group key `schedule_snapshot` (nothing renders it); buildScheduleSnapshot is hand-mirrored with ios/SiriIntents/ScheduleSnapshot.swift (schema v2 — bump scheduleSnapshotVersion and supportedVersion together); payload is field-limited because the App Group reads while locked
     ├── splash/                      Auth resolution on cold start (screen + routing logic)
     └── wave/                        Wave Accounting integration — read-only connection status + per-client sync badge + auto-import cadence picker + the two-way "Sync with Wave" action (all writes are Cloud-Function-owned). `domain/wave_sync_notice.dart` composes the result notice from a `WaveSyncSummary`: one clause per direction, zero-valued clauses dropped, and clauses for still-queued / dead-lettered / push-failed so an all-zero run can't be reported as success
@@ -855,8 +855,13 @@ users/{docId}/fcmTokens/{token}   FCM push tokens, one doc per device (doc id =
                        to these fields; deleteAccount recursiveDelete()s them
                        with the parent doc; stale tokens self-clean on send failure
   platform: 'ios' | 'android'   'android' is retained in the shape, not dead:
-                       the 1.37.1 build on the App Store still writes it, and
-                       the app itself has been iOS-only since 2026-08-05
+                       the CURRENT build still writes this field —
+                       push_registration_controller.dart stamps
+                       `Platform.isIOS ? 'ios' : 'android'` — so on an iOS-only
+                       fleet the value is always 'ios' but the write is live
+                       code, not a legacy row. (An earlier note credited the
+                       1.37.1 App Store build; that was wrong even then, and
+                       retiring that shim on 2026-08-08 changed nothing here.)
   locale: 'en' | 'fr'  drives per-device notification language server-side
   uid: string          must equal the caller's auth uid
   createdAt, updatedAt server timestamps
@@ -1020,7 +1025,7 @@ waveSyncQueue/{jobId}  Outbox for Wave sync jobs — enqueued by the waveUpsertC
 
 All `TODO(pre-ship)` scaffolding has been removed. The Flutter-side test
 scaffolding is gone (the employee delete/disable flow is a real shipped feature
-with the `EMP-DEL` error tag), and the Cloud Functions App Check carve-out was
+with the `EMP-DELETE` error tag), and the Cloud Functions App Check carve-out was
 retired in 1.25.1 — every callable now sets `enforceAppCheck: true` (verify:
 `grep -rn "enforceAppCheck: false" functions` returns nothing).
 

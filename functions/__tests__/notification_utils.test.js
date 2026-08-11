@@ -443,6 +443,39 @@ describe("buildNotificationMessage", () => {
     expect(withNone.title).toBe("New job assigned");
     expect(absent.title).toBe("New job assigned");
   });
+
+  test("every repeat interval the app can store has a phrase", () => {
+    // Mirrors RepeatInterval (repeat_interval.dart). A missing case here ships
+    // a job announced as one-off when it repeats.
+    for (const raw of ["four_months", "six_months", "one_year"]) {
+      for (const locale of ["en", "fr"]) {
+        const msg = buildNotificationMessage(
+            "assigned", {...ctx, repeat: raw}, locale);
+        expect(msg.title).toBe(locale === "fr" ?
+          "Nouvelle visite récurrente" : "New repeating job assigned");
+      }
+    }
+    expect(buildNotificationMessage(
+        "assigned", {...ctx, repeat: "four_months"}, "en").body,
+    ).toContain("repeats every 4 months");
+  });
+
+  test("an unknown kind yields empty strings rather than a blank push", () => {
+    // The fan-out treats an empty title/body as nothing to send; a partial
+    // message would reach a Lock Screen looking broken.
+    expect(buildNotificationMessage("nope", ctx, "en"))
+        .toEqual({title: "", body: ""});
+  });
+
+  test("a null context does not throw", () => {
+    expect(buildNotificationMessage("assigned", null, "en").body)
+        .toContain("Client");
+  });
+
+  test("an unknown locale falls back to EN, never to nothing", () => {
+    expect(buildNotificationMessage("assigned", ctx, "es").title)
+        .toBe("New job assigned");
+  });
 });
 
 describe("buildDigestMessage", () => {

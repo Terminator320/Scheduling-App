@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
-import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
@@ -18,12 +17,10 @@ import 'package:scheduling/features/employees/domain/policies/crew_color_policy.
 import 'package:scheduling/features/employees/domain/policies/employee_form_validator.dart';
 import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
+import 'package:scheduling/features/employees/widgets/fields/availability_panel.dart';
 import 'package:scheduling/features/employees/widgets/fields/employee_color_grid.dart';
 import 'package:scheduling/features/employees/widgets/fields/job_title_chips.dart';
-import 'package:scheduling/features/employees/widgets/fields/working_days_picker.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
-import 'package:scheduling/shared/widgets/cards/sheet_panel_row.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
@@ -212,27 +209,6 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
         ..addAll(next);
     });
     return next.values.every((e) => e == null);
-  }
-
-  Future<void> _pickTime({required bool isStart}) async {
-    // Same adaptive picker the appointment form uses — a Cupertino wheel on
-    // iOS, Material elsewhere. A raw showTimePicker here made availability the
-    // one place in the app that picked a time with a different control.
-    final picked = await showAdaptiveTimePicker(
-      context,
-      initialTime: minutesToTimeOfDay(
-        isStart ? _workStartMinutes : _workEndMinutes,
-      ),
-    );
-    if (picked == null || !mounted) return;
-    setState(() {
-      if (isStart) {
-        _workStartMinutes = timeOfDayToMinutes(picked);
-      } else {
-        _workEndMinutes = timeOfDayToMinutes(picked);
-      }
-      errors['hours'] = null;
-    });
   }
 
   Future<void> _pickMaxJobs() async {
@@ -492,49 +468,29 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
   ) => [
     MonoSectionLabel(l10n.employees_sectionAvailability),
     const SizedBox(height: AppSpacing.sp8),
-    SheetPanel(
-      children: [
-        SheetPanelRow(
-          label: l10n.employees_workingDays,
-          child: WorkingDaysPicker(
-            workingDays: _workingDays,
-            onChanged: (next) => setState(() => _workingDays = next),
-          ),
-        ),
-        SheetFieldRow(
-          label: l10n.employees_startsAt,
-          value: materialL10n.formatTimeOfDay(
-            minutesToTimeOfDay(_workStartMinutes),
-          ),
-          useMonoValue: true,
-          accent: true,
-          onTap: () => _pickTime(isStart: true),
-        ),
-        SheetFieldRow(
-          label: l10n.employees_endsAt,
-          value: materialL10n.formatTimeOfDay(
-            minutesToTimeOfDay(_workEndMinutes),
-          ),
-          useMonoValue: true,
-          accent: true,
-          errorText: errors['hours'],
-          onTap: () => _pickTime(isStart: false),
-        ),
-        SheetFieldRow(
-          label: l10n.employees_maxJobsPerDay,
-          value: _maxJobsPerDay == 0 ? l10n.employees_noCap : '$_maxJobsPerDay',
-          useMonoValue: true,
-          onTap: _pickMaxJobs,
-        ),
-        SheetPanelRow(
-          label: l10n.employees_onCall,
-          trailing: Switch.adaptive(
-            value: _onCall,
-            activeTrackColor: theme.colorScheme.primary,
-            onChanged: (value) => setState(() => _onCall = value),
-          ),
-        ),
-      ],
+    // The SAME panel Settings › My details renders, so the two can't drift on
+    // a row's treatment or on which time picker it opens.
+    AvailabilityPanel(
+      workingDays: _workingDays,
+      workStartMinutes: _workStartMinutes,
+      workEndMinutes: _workEndMinutes,
+      onCall: _onCall,
+      hoursErrorText: errors['hours'],
+      // Admin-only, and written through the admin save path — it is not on the
+      // self-service allowlist, so it is a slot rather than part of the patch.
+      maxJobsRow: SheetFieldRow(
+        label: l10n.employees_maxJobsPerDay,
+        value: _maxJobsPerDay == 0 ? l10n.employees_noCap : '$_maxJobsPerDay',
+        useMonoValue: true,
+        onTap: _pickMaxJobs,
+      ),
+      onChanged: (days, start, end, {required onCall}) => setState(() {
+        _workingDays = days;
+        _workStartMinutes = start;
+        _workEndMinutes = end;
+        _onCall = onCall;
+        errors['hours'] = null;
+      }),
     ),
     const SizedBox(height: AppSpacing.sp24),
     // Its own section, not a tail on AVAILABILITY — who to call in an
