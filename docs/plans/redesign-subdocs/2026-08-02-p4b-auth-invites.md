@@ -1,5 +1,12 @@
 # P4b — Auth + invites Implementation Plan
 
+> ## ⚠️ WITHDRAWN — do not execute this plan
+>
+> The signup-code invite lifecycle below was replaced by P4c on 2026-08-02 and
+> its backend was deleted from production on 2026-08-08. Only the restyled
+> sign-in and reset-password surfaces survive. See
+> `2026-08-02-p4c-HANDOFF.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans to implement this plan task-by-task.
 > Steps use checkbox (`- [ ]`) syntax for tracking.

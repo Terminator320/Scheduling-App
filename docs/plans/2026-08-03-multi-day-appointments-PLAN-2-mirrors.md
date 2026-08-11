@@ -12,6 +12,21 @@ appointments off-screen, and adds ONE hand-mirrored JS copy of the slice rule
 
 **Tech Stack:** Dart/Flutter, Node 20 Cloud Functions (jest), Swift (WidgetKit + App Intents).
 
+> **Reconciled against the code 2026-08-10 — still valid, three steps corrected.**
+> Nothing in this plan has been built (there is no `functions/day_slice_utils.js`,
+> and neither `widget_sync_service.dart` nor `widget_payload_utils.js` knows about
+> day slicing; the Siri snapshot is still v2). What moved underneath it:
+> **Task 1 Step 5** described a fetch range that no longer exists and is rewritten
+> to "confirm, don't touch"; **Task 2** must now mirror the 14-day clamp the Dart
+> side grew on 2026-08-08; **Task 3 Step 5** is confirmed still necessary, with the
+> caller named. **Task 7 (push/digest text) is still open** — `contextFor` in
+> `notification_policy.js` carries no `endTime` and `_when` renders the start
+> alone, so an assignment push for a five-day run still names only the first
+> morning. (`CLAUDE.md` says `notification_messages.js` was "closed by the
+> 2026-08-04 audit"; that refers to the `isAllDay` and personal-job `_who` fixes,
+> not to this.) Tasks 4–6 are unaffected: the snapshot already carries `isAllDay`
+> and `title` at v2, so the v3 bump this plan specifies is still the right move.
+
 **Prerequisite:** Plan 1 complete (`140fc92`).
 **Design doc:** `docs/plans/2026-08-02-multi-day-appointments.md` §8.
 **Plan 1:** `docs/plans/2026-08-02-multi-day-appointments-PLAN-1-app.md`.
@@ -222,26 +237,32 @@ and the two `_job(a)` call sites become `_job(s)`.
 
 Import `package:scheduling/features/calendar/domain/appointment_day_slice.dart`.
 
-- [ ] **Step 5: Widen the provider's fetch range**
+- [ ] **Step 5: Confirm the fetch range — do NOT change it**
 
-`widgetPayloadProvider` currently builds its range as `today` →
-`today + 3 days`. A job that started up to 14 days ago can still be running
-today, and the query filters on `startTime`, so it must reach back:
+> **Rewritten 2026-08-10.** This step described a range that no longer exists.
+> `widgetPayloadProvider` no longer builds `today → today + 3 days`; since
+> 2026-08-08 both off-screen mirrors resolve **`AppointmentDateRange.forMirrors(today)`**
+> (`mirrorLookaheadDays` = 7, +1), and `scheduleSnapshotLookaheadDays` is defined
+> as that same constant.
 
-```dart
-      final range = AppointmentDateRange(
-        start: today,
-        end: DateTime(today.year, today.month, today.day + 3),
-      );
-```
+The range is already correct for this plan and **must not be touched**. Two
+reasons, both load-bearing:
 
-Leave this constructor alone but confirm the repository call uses
-`range.fetchStart` (Plan 1 Task 4 changed `watchInRange` and
-`watchForEmployeeInRange` to do exactly that). Verify by reading
-`myAppointmentsProvider`'s repository method — if it reaches `fetchStart`,
-nothing to do here and you should say so in your report. If it does NOT, report
-`NEEDS_CONTEXT` rather than widening at this call site: `AppointmentDateRange`
-is value-keyed and a hand-widened range would fork a second Firestore listener.
+- It already reaches back. `AppointmentDateRange.fetchStart` widens the query
+  14 days behind `start`, and Plan 1 changed `watchInRange` /
+  `watchForEmployeeInRange` to use it — so a job that started 13 days ago and is
+  still running today is already in the stream. Confirm that by reading
+  `myAppointmentsProvider`'s repository method and say so in your report; if it
+  does NOT reach `fetchStart`, report `NEEDS_CONTEXT` rather than widening here.
+- **The widget and the Siri snapshot deliberately share one range.** They ask the
+  same value-keyed provider family and both are held open for the whole session by
+  `AppSyncListeners`, so two different windows means two permanent Firestore
+  listeners per signed-in employee — one a strict subset of the other. That was
+  fixed on 2026-08-08. Narrowing or widening one mirror's range on its own
+  re-forks it.
+
+`buildWidgetPayload` re-scopes to today/tomorrow in Dart regardless, so the wider
+list feeds it unchanged.
 
 - [ ] **Step 6: Verify**
 
@@ -269,6 +290,26 @@ Claude-Session: https://claude.ai/code/session_01KwcVuAQWUwYRgoF5djQw18
 
 This is the hand-mirrored copy of Plan 1's `appointment_day_slice.dart`. Keep it
 dependency-free apart from `time_utils.js` so jest can load it directly.
+
+> **Added 2026-08-10 — the Dart side grew a clamp after this plan was written.**
+> Every day-scoping answer in `appointment_day_slice.dart` now routes through
+> **`_clampedDayCount`** (`min(end − start + 1, maxAppointmentSpanDays)`):
+> `sliceFor`/`runsOn`, `runsInRange`, `expandToDays` and `dailyWindowsOverlap`.
+> The cap is **client-side only** — `firestore.rules` constrains neither instant
+> — so a doc written by the console, the Admin SDK or another build CAN exceed
+> it, and when the owners disagreed the calendar rendered 14 slices while every
+> `runsOn` consumer counted the full corrupt length (a drawer badge reading
+> "1 job today" every day for a year; a card counter reading "Day 400 of 900").
+> **`dayCountOf` in the JS mirror must clamp the same way**, and the worked
+> examples should gain a case for an over-long window so a drift fails a test.
+> Note the one deliberate Dart exception — `AppointmentFormValidator` reads the
+> RAW count, because it is the caller that has to see an out-of-range value in
+> order to refuse it. Nothing in the JS mirror has that job, so the JS side
+> clamps everywhere.
+>
+> Do **not** mirror `_agendaOrder`. `expandToDays` also sorts open-before-closed
+> now, but that is the calendar agenda's rule, not a day-scoping rule — the
+> widget and the snapshot have their own ordering.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -622,6 +663,22 @@ must also reach BACK far enough to see a still-running job. Find the caller
 (`grep -rn "WIDGET_LOOKAHEAD_DAYS" functions/`) and widen its lower bound by
 `MAX_APPOINTMENT_SPAN_DAYS`. **Read the query first** and report what you found
 — if the caller already reads a wide window, say so rather than widening twice.
+
+> **Verified 2026-08-10 — this step is still needed, and here is the answer to
+> the grep.** The caller is `notification_utils.js:~193`, which builds
+> `[businessMidnight(now), +WIDGET_LOOKAHEAD_DAYS days)` and filters on
+> `startTime`. Its floor is today 00:00 Toronto, so a job that started
+> yesterday and runs through today is **invisible to the push-written payload**
+> — which is the whole bug this task exists to fix. Widen the FLOOR by
+> `MAX_APPOINTMENT_SPAN_MS` (`time_utils.js`, added 2026-08-04, hand-mirroring
+> the Dart `maxAppointmentSpanDays`); leave the 3-day ceiling alone. The Dart
+> mirror needs no equivalent change — `fetchStart` already does this.
+>
+> Note also the comment on `WIDGET_LOOKAHEAD_DAYS` ("matches the Dart widget
+> range: [today 00:00, today + 3 days)") went stale on 2026-08-08 when the Dart
+> mirrors moved to `AppointmentDateRange.forMirrors` (8 days). The two windows
+> are allowed to differ — both builders re-scope to today/tomorrow — but fix the
+> comment while you are in the file.
 
 - [ ] **Step 6: Verify**
 

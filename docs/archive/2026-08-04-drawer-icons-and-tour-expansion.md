@@ -2,7 +2,8 @@
 
 **Date:** 2026-08-04
 **Branch:** `redesgin`
-**Status:** IMPLEMENTED 2026-08-04 (`2845d43a`..`fcc09cb`), uncommitted to origin.
+**Status:** IMPLEMENTED 2026-08-04 and **pushed** (`2845d43a`..`881834b2`).
+Not device-verified.
 Built as designed, with three deviations recorded in §7.
 
 Two related pieces of navigation/onboarding work:

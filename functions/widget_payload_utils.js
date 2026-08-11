@@ -27,8 +27,14 @@ const {
 // legacy `completed` alias.
 const TERMINAL_STATUSES = new Set(["done", "completed", "cancelled"]);
 
-// How many days past today the "next job" lookahead spans (matches the Dart
-// widget range: [today 00:00, today + 3 days)).
+// How many days past today the "next job" lookahead spans, for the query the
+// push path builds: [today 00:00 Toronto, today + 3 days). The Dart mirrors
+// deliberately read a WIDER window (AppointmentDateRange.forMirrors, 8 days,
+// shared by the widget and the Siri snapshot so they can't fork a second
+// listener); both builders re-scope to today/tomorrow, so the two windows are
+// allowed to differ. Owed by Plan 2: this floor must reach back
+// MAX_APPOINTMENT_SPAN_MS, or a job that started yesterday and runs through
+// today is invisible to the push-written payload.
 const WIDGET_LOOKAHEAD_DAYS = 3;
 
 /**

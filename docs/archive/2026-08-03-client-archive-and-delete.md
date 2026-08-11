@@ -1,6 +1,11 @@
 # Client archive + delete (swipe actions)
 
-Design, 2026-08-03. Status: **approved, not implemented.**
+Design, 2026-08-03. Status: **SHIPPED.** Built and committed on `redesgin`;
+backend deployed 2026-08-03 (`1c6a949`, `deleteClient`, 25 → 26 functions, the
+`(archived, name, __name__)` index), and the prod backfill ran **before** that
+deploy as required — 674 clients patched, confirmed by a follow-up dry run
+reporting 0. `allow delete` on `/clients` was withdrawn later, on 2026-08-08,
+when the `#compat-1.37.1` shim retired. Kept for its rationale only.
 
 ## What this changes and why
 
