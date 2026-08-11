@@ -12,6 +12,7 @@ import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
+import 'package:scheduling/features/employees/domain/policies/self_service_fields.dart';
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
 
@@ -839,6 +840,103 @@ void main() {
               .cast<String, dynamic>();
       expect(captured['status'], 'active');
       expect(captured.containsKey('updatedAt'), isTrue);
+    });
+  });
+
+  group('updateSelfDetails', () {
+    Future<Map<String, dynamic>> save({
+      String phone = '(514) 555-1234',
+      List<bool> workingDays = const [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+      ],
+      int workStartMinutes = 420,
+      int workEndMinutes = 960,
+      bool onCall = true,
+    }) async {
+      await repo().updateSelfDetails(
+        docId: 'u1',
+        phone: phone,
+        workingDays: workingDays,
+        workStartMinutes: workStartMinutes,
+        workEndMinutes: workEndMinutes,
+        onCall: onCall,
+      );
+      return (verify(() => docRef.update(captureAny())).captured.single as Map)
+          .cast<String, dynamic>();
+    }
+
+    test('writes the self-service values', () async {
+      final captured = await save();
+
+      expect(captured['phone'], '(514) 555-1234');
+      expect(captured['onCall'], isTrue);
+      expect(captured['workStartMinutes'], 420);
+      expect(captured['workEndMinutes'], 960);
+    });
+
+    test('the patch carries no key outside the rules allowlist', () async {
+      // The rules use `hasOnly`, so one stray key rejects the WHOLE write and
+      // reaches the user as an opaque permission-denied. This is the assertion
+      // that matters most in this group.
+      final captured = await save();
+
+      expect(captured.keys, everyElement(isIn(kSelfServiceUserFields)));
+    });
+
+    test('never sends the emergency scrub updateEmployee sends', () async {
+      // updateEmployee deletes the legacy emergency pair on every save. Doing
+      // that here would add two keys the allowlist does not name.
+      final captured = await save();
+
+      expect(captured.containsKey('emergencyContact'), isFalse);
+      expect(captured.containsKey('emergencyPhone'), isFalse);
+    });
+
+    test('never sends an admin-owned field', () async {
+      final captured = await save();
+
+      for (final admin in const ['role', 'status', 'email', 'maxJobsPerDay']) {
+        expect(captured.containsKey(admin), isFalse, reason: admin);
+      }
+    });
+
+    test('normalizes working days to seven flags', () async {
+      final captured = await save(workingDays: const [true, true]);
+
+      expect((captured['workingDays']! as List).length, 7);
+    });
+
+    test('trims the phone', () async {
+      final captured = await save(phone: '  (514) 555-1234  ');
+
+      expect(captured['phone'], '(514) 555-1234');
+    });
+
+    test('stamps updatedAt', () async {
+      final captured = await save();
+
+      expect(captured.containsKey('updatedAt'), isTrue);
+    });
+
+    test('is a plain update, never a transaction', () async {
+      // No concurrent writer to guard against — a person edits their own doc
+      // from one device — and the iOS transaction plugin bug makes a needless
+      // client transaction a real risk, not just overhead.
+      await save();
+
+      verifyNever(
+        () => firestore.runTransaction<void>(
+          any(),
+          timeout: any(named: 'timeout'),
+          maxAttempts: any(named: 'maxAttempts'),
+        ),
+      );
     });
   });
 }

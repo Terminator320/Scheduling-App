@@ -15,7 +15,7 @@ void main() {
   group('users self-service update', () {
     test('allow update carries the self clause', () {
       final updateBlock = RegExp(
-        r'allow update: if(.*?);',
+        'allow update: if(.*?);',
         dotAll: true,
       ).firstMatch(rules)?.group(1);
 
@@ -29,7 +29,7 @@ void main() {
       // denylist and isValidUserData bind to the self branch alone, and an
       // admin write skips both.
       final updateBlock = RegExp(
-        r'allow update: if(.*?);',
+        'allow update: if(.*?);',
         dotAll: true,
       ).firstMatch(rules)?.group(1);
 
