@@ -23,6 +23,7 @@ import 'package:scheduling/features/employees/widgets/fields/job_title_chips.dar
 import 'package:scheduling/features/employees/widgets/fields/working_days_picker.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
+import 'package:scheduling/shared/widgets/cards/sheet_panel_row.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
@@ -493,7 +494,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
     const SizedBox(height: AppSpacing.sp8),
     SheetPanel(
       children: [
-        _PanelRow(
+        SheetPanelRow(
           label: l10n.employees_workingDays,
           child: WorkingDaysPicker(
             workingDays: _workingDays,
@@ -525,7 +526,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
           useMonoValue: true,
           onTap: _pickMaxJobs,
         ),
-        _PanelRow(
+        SheetPanelRow(
           label: l10n.employees_onCall,
           trailing: Switch.adaptive(
             value: _onCall,
@@ -607,48 +608,6 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
 
 /// A panel row that is not a picker — a label beside arbitrary content
 /// (the working-day strip) or a trailing control (the on-call switch).
-class _PanelRow extends StatelessWidget {
-  const _PanelRow({required this.label, this.child, this.trailing});
-
-  final String label;
-  final Widget? child;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final labelText = Text(
-      label,
-      style: theme.textTheme.labelSmall?.copyWith(
-        color: theme.colorScheme.onSurfaceVariant,
-      ),
-    );
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sp16,
-        vertical: AppSpacing.sp12,
-      ),
-      child: trailing != null
-          ? Row(
-              children: [
-                Expanded(child: labelText),
-                const SizedBox(width: AppSpacing.sp8),
-                trailing!,
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                labelText,
-                const SizedBox(height: AppSpacing.sp8),
-                child!,
-              ],
-            ),
-    );
-  }
-}
-
 /// Disable / re-enable, with the count of jobs a human still has to move.
 ///
 /// P4 reassigns nothing — the spec's words are "availability changes notify,
