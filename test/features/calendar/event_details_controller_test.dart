@@ -428,6 +428,30 @@ void main() {
       },
     );
 
+    test('a personal job keeps its address and drops its client', () async {
+      readNotifier();
+      await waitForSeed();
+      final c = readNotifier()..setPersonal(value: true);
+
+      final outcome = await c.save(
+        _appointment,
+        title: 'Dentist',
+        address: '99 New St',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(outcome, isA<EventDetailsSaved>());
+      final saved = (outcome as EventDetailsSaved).appointment;
+      expect(saved.isPersonal, isTrue);
+      // The client is cleared — its picker is gone from the form. The address
+      // is not: that field stays on screen as an optional one, so the user can
+      // see and edit whatever gets saved.
+      expect(saved.clientId, isEmpty);
+      expect(saved.clientName, isEmpty);
+      expect(saved.address, '99 New St');
+    });
+
     test('writes updated appointment with edited values on success', () async {
       readNotifier();
       await waitForSeed();

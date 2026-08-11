@@ -271,11 +271,14 @@ independent scroll panes and no room for a rising strip.
 
 Two booleans on `AppointmentRecord`. **`isPersonal`** marks time blocked off for
 the crew rather than a visit to a client: the form hides the client picker,
-address, template chips, repeat, materials and photos, `AppointmentFormValidator`
+template chips, repeat, materials and photos, `AppointmentFormValidator`
 stops requiring a client *or* a title (a blank one saves as "Personal"), and both
-save paths write the client fields and the address as empty strings — including
+save paths write the client fields as empty strings — including
 when an existing job is converted, so a hidden field can't retain a value the UI
-no longer shows. The assignees stay required: they are who the block is for and,
+no longer shows. The **address is the exception** (owner call, 2026-08-11): it
+stays on the form, marked "(Optional)", and saves as typed — a personal block
+still happens somewhere, and the crew wants directions to it. The assignees
+stay required: they are who the block is for and,
 via `employeeIds`, who can see it. The switch is offered on the add form always
 and on the edit form **only for a job that is already personal**, so a client
 visit can't be converted mid-life.
@@ -903,9 +906,9 @@ appointments/{docId}
                        startTime/endTime are a DAILY WINDOW and may span up to
                        14 days; the span is the two instants, nothing else.
                        isMultiDay is DERIVED (AppointmentDaySlice), never stored
-  isPersonal: bool     time blocked off for the crew — no client, no address
-                       (both written as empty strings); never derives
-                       in_progress/overdue
+  isPersonal: bool     time blocked off for the crew — no client (those fields
+                       written as empty strings); the address is OPTIONAL and
+                       kept; never derives in_progress/overdue
   isAllDay: bool       stores a REAL midnight → 23:59 span, not a sentinel, so
                        range queries and orderBy('startTime') are unaffected;
                        the flag only changes how it is rendered/spoken

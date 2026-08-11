@@ -296,9 +296,9 @@ class AddEventController extends Notifier<AddEventState>
         clientId: client?.id ?? '',
         clientName: client?.displayName ?? '',
         clientPhone: client?.phone ?? '',
-        // The address field is hidden for a personal job, so drop whatever the
-        // controller still holds rather than saving a stale one.
-        address: isPersonal ? '' : address.trim(),
+        // Kept on a personal job too — the address field stays on screen there
+        // as an optional one, so what saves is what the user can see.
+        address: address.trim(),
         isPersonal: isPersonal,
         isAllDay: state.isAllDay,
         employeeIds: selectedEmployees.map((e) => e.id).toList(),

@@ -87,9 +87,11 @@ class EventDetailsSavePipeline {
     required bool isPersonal,
     required bool isAllDay,
   }) {
-    // A personal job carries no client and no address — including when an
-    // existing client visit is converted into one, so the stored copies are
-    // cleared rather than left behind on a job that no longer shows them.
+    // A personal job carries no client — including when an existing client
+    // visit is converted into one, so the stored copies are cleared rather
+    // than left behind on a job that no longer shows them. The ADDRESS is not
+    // cleared with them: the field stays on screen (optional) for a personal
+    // job, so whatever it holds is visible and the user's to edit.
     final pickedClient = isPersonal ? null : selectedClient;
     return AppointmentRecord(
       id: id,
@@ -103,7 +105,7 @@ class EventDetailsSavePipeline {
       clientPhone: isPersonal
           ? ''
           : pickedClient?.phone ?? appointment.clientPhone,
-      address: isPersonal ? '' : address.trim(),
+      address: address.trim(),
       isPersonal: isPersonal,
       isAllDay: isAllDay,
       employeeIds: assignees.ids,
