@@ -42,6 +42,15 @@ at the top of each file, not its boxes.
 
 ### 1. Redesign — three projects and a half remain
 
+- **P5 — Phase A BUILT 2026-08-10** (`docs/plans/redesign-subdocs/2026-08-10-p5-my-details.md`).
+  The rules clause is called, `updateSelfDetails` exists, and My details now
+  carries the identity section (explicit Save/Discard bar — owner call), MY
+  AVAILABILITY with the amber conflict warning, and the admin-only SCHEDULING
+  panel. 1779 flutter green. **The rules are NOT deployed yet, and must go
+  before any app build carrying this UI**, or every self save fails
+  `permission-denied`. Phase B (self-service email via a `self` branch on
+  `changeEmployeeEmail` + the active-admins fan-out) and Phase C (the
+  time-to-leave toggle) are not started. Original scope notes follow:
 - **P5 — smaller than the spec says. The Settings half is already built**;
   what remains is My details. `settings_screen.dart` renders the profile card, a
   My-details row, APPEARANCE / SECURITY / NOTIFICATIONS / INTEGRATIONS (Wave) /
