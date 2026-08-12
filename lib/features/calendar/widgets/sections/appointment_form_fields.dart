@@ -62,6 +62,45 @@ class AppointmentFormControllers {
   }
 }
 
+/// The ten pickers an appointment form drives, grouped the same way
+/// [AppointmentFormControllers] groups its nine controllers.
+///
+/// Every one of these is REQUIRED and always supplied by both call sites, so
+/// this buys readability rather than safety — a missing one was already a
+/// compile error. What it removes is ten near-identical lines from a
+/// 35-parameter constructor, and the temptation to answer "which of these does
+/// the edit flow not pass?" by reading all thirty-five.
+///
+/// The OPTIONAL callbacks deliberately stay on the widget: `onApplyTemplate`,
+/// `onPersonalChanged`, `onStatusChanged` and `onRequestAddClient` are each
+/// null on one flow and not the other, and that nullability is the thing a
+/// reader needs to see at the call site.
+class AppointmentFormCallbacks {
+  const AppointmentFormCallbacks({
+    required this.onSearchClients,
+    required this.onSelectClient,
+    required this.onClearClient,
+    required this.onToggleEmployee,
+    required this.onPickDate,
+    required this.onPickEndDate,
+    required this.onPickStartTime,
+    required this.onPickEndTime,
+    required this.onSelectRepeat,
+    required this.onUseCustomAddress,
+  });
+
+  final ValueChanged<String> onSearchClients;
+  final ValueChanged<ClientRecord> onSelectClient;
+  final VoidCallback onClearClient;
+  final ValueChanged<EmployeeRecord> onToggleEmployee;
+  final VoidCallback onPickDate;
+  final VoidCallback onPickEndDate;
+  final VoidCallback onPickStartTime;
+  final VoidCallback onPickEndTime;
+  final ValueChanged<RepeatInterval> onSelectRepeat;
+  final ValueChanged<bool> onUseCustomAddress;
+}
+
 /// Shared appointment form field stack for the add and edit flows. The status
 /// block only renders when both [editingStatus] and [onStatusChanged] are provided.
 class AppointmentFormFields extends StatelessWidget {
@@ -82,16 +121,7 @@ class AppointmentFormFields extends StatelessWidget {
     required this.employeeRequired,
     required this.materialsHint,
     required this.photosSection,
-    required this.onSearchClients,
-    required this.onSelectClient,
-    required this.onClearClient,
-    required this.onToggleEmployee,
-    required this.onPickDate,
-    required this.onPickEndDate,
-    required this.onPickStartTime,
-    required this.onPickEndTime,
-    required this.onSelectRepeat,
-    required this.onUseCustomAddress,
+    required this.callbacks,
     super.key,
     this.isMultiDay = false,
     this.isOvernight = false,
@@ -145,16 +175,8 @@ class AppointmentFormFields extends StatelessWidget {
   /// every section untouched.
   final Widget Function(TourStepId id, Widget child)? tourWrap;
 
-  final ValueChanged<String> onSearchClients;
-  final ValueChanged<ClientRecord> onSelectClient;
-  final VoidCallback onClearClient;
-  final ValueChanged<EmployeeRecord> onToggleEmployee;
-  final VoidCallback onPickDate;
-  final VoidCallback onPickEndDate;
-  final VoidCallback onPickStartTime;
-  final VoidCallback onPickEndTime;
-  final ValueChanged<RepeatInterval> onSelectRepeat;
-  final ValueChanged<bool> onUseCustomAddress;
+  /// The ten always-present pickers. See [AppointmentFormCallbacks].
+  final AppointmentFormCallbacks callbacks;
 
   /// Edit flow only. When null, the status block is omitted (add flow).
   final String? editingStatus;
@@ -179,13 +201,13 @@ class AppointmentFormFields extends StatelessWidget {
   void _selectClient(ClientRecord client) {
     controllers.clientSearch.text = client.displayName;
     controllers.address.text = AddressParser.canonicalToDisplay(client.address);
-    onSelectClient(client);
+    callbacks.onSelectClient(client);
   }
 
   void _clearClient() {
     controllers.clientSearch.clear();
     controllers.address.clear();
-    onClearClient();
+    callbacks.onClearClient();
   }
 
   Future<void> _addNewClient() async {
@@ -222,14 +244,14 @@ class AppointmentFormFields extends StatelessWidget {
 
   void _switchToCustomAddress() {
     controllers.address.clear();
-    onUseCustomAddress(true);
+    callbacks.onUseCustomAddress(true);
   }
 
   void _useClientAddress() {
     final client = selectedClient;
     if (client == null) return;
     controllers.address.text = AddressParser.canonicalToDisplay(client.address);
-    onUseCustomAddress(false);
+    callbacks.onUseCustomAddress(false);
   }
 
   /// Wraps [child] as [id]'s tour step, or leaves it alone when the host
@@ -315,7 +337,7 @@ class AppointmentFormFields extends StatelessWidget {
             selectedClient: selectedClient,
             results: clientResults,
             isSearching: isSearchingClient,
-            onChanged: onSearchClients,
+            onChanged: callbacks.onSearchClients,
             onSelect: _selectClient,
             onClear: _clearClient,
             errorText: _err(context, 'client'),
@@ -333,7 +355,7 @@ class AppointmentFormFields extends StatelessWidget {
       EmployeePicker(
         allEmployees: allEmployees,
         selectedEmployees: selectedEmployees,
-        onToggle: onToggleEmployee,
+        onToggle: callbacks.onToggleEmployee,
         errorText: _err(context, 'employees'),
       ),
     ),
@@ -365,7 +387,7 @@ class AppointmentFormFields extends StatelessWidget {
         accent: true,
         useMonoValue: true,
         errorText: _err(context, 'startTime'),
-        onTap: onPickStartTime,
+        onTap: callbacks.onPickStartTime,
       );
       final endRow = SheetFieldRow(
         label: !isMultiDay
@@ -378,7 +400,7 @@ class AppointmentFormFields extends StatelessWidget {
         accent: true,
         useMonoValue: true,
         errorText: _err(context, 'endTime'),
-        onTap: onPickEndTime,
+        onTap: callbacks.onPickEndTime,
       );
       // Start and end share one row until the screen is too narrow to read both.
       if (isNarrowPhone) return [startRow, endRow];
@@ -415,7 +437,10 @@ class AppointmentFormFields extends StatelessWidget {
             // about when the job happens reads as one block. Not offered on a
             // personal job.
             if (!isPersonal)
-              RepeatIntervalPicker(current: repeat, onChanged: onSelectRepeat),
+              RepeatIntervalPicker(
+                current: repeat,
+                onChanged: callbacks.onSelectRepeat,
+              ),
           ],
         ),
       ),
@@ -444,7 +469,7 @@ class AppointmentFormFields extends StatelessWidget {
       accent: true,
       useMonoValue: true,
       errorText: _err(context, 'date'),
-      onTap: onPickDate,
+      onTap: callbacks.onPickDate,
       trailing: const Icon(Icons.calendar_today_outlined, size: 18),
     );
     final endRow = SheetFieldRow(
@@ -454,7 +479,7 @@ class AppointmentFormFields extends StatelessWidget {
       accent: true,
       useMonoValue: true,
       errorText: _err(context, 'endDate'),
-      onTap: onPickEndDate,
+      onTap: callbacks.onPickEndDate,
       // The run length only earns its space once there is a run to describe.
       trailingLabel: !isMultiDay
           ? null
