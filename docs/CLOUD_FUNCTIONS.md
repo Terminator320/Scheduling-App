@@ -34,17 +34,18 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 > wrong before — verify against the live list rather than trusting it.
 
 
-- **OUTSTANDING as of 2026-08-11: the backend has NOT been deployed since
-  2026-08-08.** The function *count* is unchanged (still 25, `index.js` was not
-  touched), but the code behind several of them has moved and prod is running
-  the older bodies: `changeEmployeeEmail`'s non-admin re-auth gate and its
-  20/hr → 5/hr budget, the travel-alert opt-out now skipping the Routes call,
-  the multi-day Live Activity skip and the crew-colour
-  parse in `travel_utils.js`, the shared `day_slice_utils.js` day-scoping used
-  by the widget payload and push text, and the one `TERMINAL_STATUSES` owner in
-  `time_utils.js`. `firestore.rules` is also behind — it carries the P5
-  self-service clause and the new `isValidAppointmentSpan` bound. Deploy
-  `functions` and `firestore:rules` together; see `docs/DEPLOYMENT.md`.
+- **CLEARED 2026-08-11: the 2026-08-08 → 2026-08-11 gap has been deployed.**
+  All 25 functions were updated together with `firestore.rules` and
+  `storage.rules`, so prod now runs `changeEmployeeEmail`'s non-admin re-auth
+  gate and its 20/hr → 5/hr budget, the travel-alert opt-out skipping the
+  Routes call, the multi-day Live Activity skip and the crew-colour parse in
+  `travel_utils.js`, the shared `day_slice_utils.js` day-scoping behind the
+  widget payload and push text, the one `TERMINAL_STATUSES` owner in
+  `time_utils.js`, plus the P5 self-service rules clause and
+  `isValidAppointmentSpan`. Note the trap this gap illustrates: the function
+  *count* never moved (25 throughout, `index.js` untouched), so a count check
+  looked clean for three days while prod ran older bodies — check the deploy
+  log, not the count.
 - **25 functions defined** in code and **25 deployed**, verified against
   `functions_list_functions` on 2026-08-08 — an exact match, no orphans and no
   extras. The retirement deploy has now RUN. P4c added `createEmployeeAccount`,
