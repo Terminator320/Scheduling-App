@@ -1,7 +1,23 @@
 # App Store Submission — ES Pro
 
-`net.vogas.scheduling` · team **H5XWLU87AX** · v**1.36.0+60** · branch
-`notification` · launch scope **App Store only** (iPhone + iPad).
+`net.vogas.scheduling` · team **H5XWLU87AX** · v**1.45.0+72** · branch
+`redesgin` · launch scope **App Store only** (iPhone + iPad).
+
+> ## ⚠️ THE APP IS LIVE — this is no longer a launch runbook
+>
+> **Recorded 2026-08-11 on the owner's report:** ES Pro was **accepted by Apple**
+> and is on the App Store; **1.45.0+72 is the 4th update** since that first
+> release. Read every "first store cut" / "first upload" instruction below as
+> **history**, not as a pending task.
+>
+> **Part 13's list has not been reconciled against four shipped submissions** —
+> items like "confirm the app record", "pricing = Free", "add the French
+> localization", "upload screenshots" and "attach the reviewed build and submit"
+> were almost certainly done during the first release, but nobody ticked them
+> here, so the count is not trustworthy. Treat an unticked box as *unknown*,
+> not as *outstanding*. The genuinely recurring parts of this file are the **Mac
+> build runbook** (Parts 2–5), the **ASC copy blocks** (Part 11), and the
+> **device checks** (Part 6).
 
 Single source of truth for shipping this app: the Mac build runbook, the
 material that gets typed into App Store Connect (ASC), and the remaining
@@ -111,7 +127,7 @@ phone, or photos — so it adds no new collected data type.
   already builds iOS options from `dev/.env` with
   `iosBundleId: net.vogas.scheduling` — re-running rewrites the file into the
   literal-values style and breaks the env-based setup.
-- [ ] **First Xcode open resolves the SPM packages** — `firebase-ios-sdk`,
+- [x] **First Xcode open resolves the SPM packages** — `firebase-ios-sdk`,
   `google_maps_flutter_ios_sdk9` (Maps SDK 9.x), `live_activities`,
   `saver_gallery`. No Podfile; same SPM flow throughout.
 
@@ -242,8 +258,8 @@ Open `ios/Runner.xcworkspace`.
   deletes it; assign/reschedule/cancel/unassign each deliver the correct
   localized push with the app **killed**; reminder fires ~28 min out and writes
   its ledger doc; digest and overdue prompts fire; FR device gets French text.
-- [ ] **iPad pass** — split/master-detail layouts at tablet width.
-- [ ] **Admin live staff map renders + resolves addresses.** `AppDelegate`
+- [x] **iPad pass** — split/master-detail layouts at tablet width.
+- [x] **Admin live staff map renders + resolves addresses.** `AppDelegate`
   parses `IOS_MAPS_API_KEY` from the bundled `dev/.env` and calls
   `GMSServices.provideAPIKey(...)`; a missing key means a blank map plus a
   console line, never a crash. Backend is live. Grant location, confirm your own
@@ -254,18 +270,18 @@ Open `ios/Runner.xcworkspace`.
   travel-time leave-now reminders are not silently falling back to fixed 30-min
   timing. (Cloud Functions logs corroborate: zero `travel:` warnings in 8 days,
   and any misconfiguration would log a 403 on every attempt.)
-- [ ] **Notification tap deep-link** — tapping a push opens the specific
+- [x] **Notification tap deep-link** — tapping a push opens the specific
   appointment's detail sheet (not just the calendar root).
   **[was contradictory]** the old runbook listed deep-linking as a known
   deferral; it was implemented and taps now resolve `data.appointmentId`.
-- [ ] **Home-screen widget** — add in all three sizes, today's jobs render, a
+- [x] **Home-screen widget** — add in all three sizes, today's jobs render, a
   job rolls off the small widget once it starts, sign-out clears the widget.
-- [ ] **Wake-on-push widget refresh** — with the employee's app **fully closed**,
+- [x] **Wake-on-push widget refresh** — with the employee's app **fully closed**,
   have an admin move a job for later today. The widget updates **without opening
   the app** (`content-available` wakes `firebaseMessagingBackgroundHandler`,
   which rewrites the App Group payload). The visible push still shows alongside.
   iOS throttles background wakes under Low Power Mode — allow a short delay.
-- [ ] **Live Activity card** (new in 1.34, deployed 2026-07-19) — with a job
+- [x] **Live Activity card** (new in 1.34, deployed 2026-07-19) — with a job
   scheduled, confirm the "time to leave" card appears on the Lock Screen and in
   the Dynamic Island, the Directions button opens Maps, it flips to "On site" at
   the start time, and it clears when the job is marked complete. Confirm the
@@ -276,7 +292,7 @@ Open `ios/Runner.xcworkspace`.
 - [ ] **Siri phrases** (Phase 1) — "what's on my schedule today", "what's my
   next appointment", and the job-count phrase, per
   `ios/SiriIntents/README.md`.
-- [ ] **Time Sensitive Notifications entitlement** — needed for the `leaveNow`
+- [x] **Time Sensitive Notifications entitlement** — needed for the `leaveNow`
   interruption level. Confirm it's on the Runner target.
 
 ## Part 7. Archive + upload
@@ -585,7 +601,31 @@ In French and English:
 ES Pro is built for a plumbing crew by the company that runs one. Sign-in is by invitation from your administrator, so the whole team stays on one shared schedule.
 ```
 
-**What's New in This Version** (first App Store release)
+**What's New in This Version** — v1.45.0+72, the 4th update (2026-08-11)
+```
+• My details — update your own phone number, working days and hours, on-call
+  status, emergency contact, and sign-in email from Settings.
+• Redesigned Dashboard — Today, Week and Month views, jobs booked per day
+  against your daily limit, and new alerts for accounts that were never set up
+  and jobs booked outside someone's availability.
+• Redesigned History — grouped by month with the date beside each job, plus
+  quick filters for Complete and Cancelled work.
+• Multi-day jobs now show on every day they run, including the home-screen
+  widget, Siri and notifications, with a "Day 3 of 5" counter.
+• Time-to-leave alerts can now be switched on or off per person.
+```
+
+> **Write this block fresh for every update — it is per-version and users only
+> ever see the newest one.** Name features with the wording the app actually
+> uses (check `lib/l10n/app_en.arb` / `app_fr.arb`), or the note points at
+> something nobody can find on screen: the copy above uses *My details*,
+> *Time-to-leave alerts*, *Dashboard*, *Complete* and *Cancelled* for exactly
+> that reason. Keep the FR block in step — it is a shipped store locale, not a
+> nice-to-have.
+
+<details>
+<summary>Superseded: the first-release copy (kept for history)</summary>
+
 ```
 First release of ES Pro on the App Store.
 
@@ -597,6 +637,7 @@ First release of ES Pro on the App Store.
 - Works offline and syncs when you reconnect
 - Full French and English
 ```
+</details>
 
 **Support URL** (required)
 ```
@@ -694,7 +735,27 @@ En français et en anglais :
 ES Pro est conçu pour une équipe de plomberie par l'entreprise qui en exploite une. La connexion se fait sur invitation de votre administrateur, pour que toute l'équipe partage le même horaire.
 ```
 
-**Nouveautés de cette version** (première sortie)
+**Nouveautés de cette version** — v1.45.0+72, 4e mise à jour (2026-08-11)
+```
+• Mes informations — modifiez vous-même votre numéro de téléphone, vos jours et
+  heures de travail, votre statut de garde, votre contact d'urgence et votre
+  courriel de connexion, depuis les Réglages.
+• Tableau de bord repensé — vues Aujourd'hui, Semaine et Mois, chantiers
+  réservés par jour selon votre limite quotidienne, et nouvelles alertes pour
+  les comptes jamais configurés et les chantiers réservés en dehors des
+  disponibilités.
+• Historique repensé — regroupé par mois avec la date à côté de chaque
+  chantier, et filtres rapides Terminé et Annulé.
+• Les chantiers sur plusieurs jours apparaissent maintenant chaque jour où ils
+  ont lieu, y compris dans le widget, Siri et les notifications, avec un
+  compteur « Jour 3 sur 5 ».
+• Les alertes de départ peuvent maintenant être activées ou désactivées par
+  personne.
+```
+
+<details>
+<summary>Remplacé : le texte de la première sortie (conservé pour l'historique)</summary>
+
 ```
 Première version d'ES Pro sur l'App Store.
 
@@ -706,6 +767,7 @@ Première version d'ES Pro sur l'App Store.
 - Fonctionne hors ligne et se synchronise au retour du réseau
 - Entièrement en français et en anglais
 ```
+</details>
 
 ## Part 11. Screenshots
 
