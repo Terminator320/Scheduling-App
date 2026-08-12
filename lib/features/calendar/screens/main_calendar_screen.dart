@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:scheduling/core/app/photo_upload_failure_listener.dart';
+import 'package:scheduling/core/app/role_upgrade_listener.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
-import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
-import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/collapse_state.dart';
@@ -35,7 +35,6 @@ import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart'
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
-import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
 
 class MainCalendar extends ConsumerStatefulWidget {
   const MainCalendar({
@@ -58,8 +57,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   late AppointmentDateRange _appointmentRange;
-  PhotoUploadNotifier? _uploadNotifier;
-  bool _upgradingToAdmin = false;
   late DateFormat _monthLabelFormat;
   late DateFormat _monthShortLabelFormat;
   late DateFormat _yearLabelFormat;
@@ -81,17 +78,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       focusedDay: _focusedDay,
       selectedDay: _focusedDay,
     );
-    _initStreams();
-  }
-
-  void _initStreams() {
-    _uploadNotifier = ref.read(photoUploadNotifierProvider);
-    _uploadNotifier?.latestFailure.addListener(_onUploadFailure);
   }
 
   @override
   void dispose() {
-    _uploadNotifier?.latestFailure.removeListener(_onUploadFailure);
     _agendaController.dispose();
     super.dispose();
   }
@@ -103,34 +93,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   void _toggleCollapse() {
     _collapse.toggle();
     setState(() {});
-  }
-
-  void _onUploadFailure() {
-    final failure = _uploadNotifier?.latestFailure.value;
-    if (failure == null || !mounted) return;
-    final appointmentId = failure.appointmentId;
-    final scheme = Theme.of(context).colorScheme;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      errorSnackBar(
-        context,
-        context.l10n.calendar_photoUploadFailedSnackbar,
-        action: SnackBarAction(
-          label: context.l10n.calendar_open,
-          textColor: scheme.onErrorContainer,
-          onPressed: () async {
-            final appointment = await ref
-                .read(appointmentsRepositoryProvider)
-                .getAppointmentById(appointmentId);
-            if (!mounted || appointment == null) return;
-            await showEventDetails(
-              context,
-              appointment,
-              showActions: widget.isAdmin,
-            );
-          },
-        ),
-      ),
-    );
   }
 
   // Show the "today" control whenever the day on screen isn't today — not just
@@ -249,21 +211,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         );
   }
 
-  // If a non-admin gets upgraded to 'admin', route them to the admin calendar after this frame. The flag just guards against firing more than once.
-  void _upgradeIfAdmin(String? role) {
-    if (role != 'admin' || !mounted || _upgradingToAdmin) return;
-    _upgradingToAdmin = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      navigateToDestination(
-        context,
-        HubTab.calendar,
-        isAdmin: true,
-        employeeId: widget.employeeId,
-      );
-    });
-  }
-
   Future<void> _pickMonth() async {
     final picked = await MonthYearPicker.show(context, _focusedDay);
     if (picked != null && mounted) _setFocusedDay(picked);
@@ -354,65 +301,68 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   @override
   Widget build(BuildContext context) {
     ref.listen(_appointmentsProvider, _onAppointmentsAsyncChange);
-    if (!widget.isAdmin) {
-      ref.listen<AsyncValue<String>>(
-        userRoleProvider,
-        (_, next) => _upgradeIfAdmin(next.value),
-      );
-      _upgradeIfAdmin(ref.read(userRoleProvider).value);
-    }
 
     final data = _prepareBuild(context);
 
-    return FeatureTourHost(
-      scope: _tour.scope,
+    // Both wrappers are session concerns that merely happen to be hosted here:
+    // a background photo upload fails long after its sheet is gone, and a
+    // role upgrade has to re-route whatever shell the person is standing in.
+    return RoleUpgradeListener(
+      employeeId: widget.employeeId,
       isAdmin: widget.isAdmin,
-      ready: !data.isLoading,
-      stepKeys: _tour.keys,
-      child: Scaffold(
-        floatingActionButton: _addAppointmentFab(context),
-        endDrawer: AppNavDrawer(
+      child: PhotoUploadFailureListener(
+        showActions: widget.isAdmin,
+        child: FeatureTourHost(
+          scope: _tour.scope,
           isAdmin: widget.isAdmin,
-          employeeId: widget.employeeId,
-          userName: data.userName,
-        ),
-        body: Column(
-          children: [
-            CalendarHeaderBlock(
-              monthLabel: data.monthLabel,
-              monthLabelShort: data.monthLabelShort,
-              yearLabel: data.yearLabel,
-              onPickMonth: _pickMonth,
-              routeButton: _dayRouteButton(context),
-              weekStrip: _weekStrip(data.today, data.colorMap),
+          ready: !data.isLoading,
+          stepKeys: _tour.keys,
+          child: Scaffold(
+            floatingActionButton: _addAppointmentFab(context),
+            endDrawer: AppNavDrawer(
+              isAdmin: widget.isAdmin,
+              employeeId: widget.employeeId,
+              userName: data.userName,
             ),
-            Expanded(
-              // The header block reserves the status bar itself.
-              child: SafeArea(
-                top: false,
-                child: Stack(
-                  children: [
-                    _content(
-                      isLoading: data.isLoading,
-                      colorMap: data.colorMap,
-                      nameMap: data.nameMap,
-                      today: data.today,
-                      dayTitle: data.dayTitle,
-                      jobLabel: data.jobLabel,
-                    ),
-                    Positioned(
-                      bottom: AppSpacing.sp16,
-                      left: AppSpacing.sp16,
-                      child: _TodayPill(
-                        visible: _showTodayButton(data.today),
-                        onPressed: () => _goToToday(data.today),
-                      ),
-                    ),
-                  ],
+            body: Column(
+              children: [
+                CalendarHeaderBlock(
+                  monthLabel: data.monthLabel,
+                  monthLabelShort: data.monthLabelShort,
+                  yearLabel: data.yearLabel,
+                  onPickMonth: _pickMonth,
+                  routeButton: _dayRouteButton(context),
+                  weekStrip: _weekStrip(data.today, data.colorMap),
                 ),
-              ),
+                Expanded(
+                  // The header block reserves the status bar itself.
+                  child: SafeArea(
+                    top: false,
+                    child: Stack(
+                      children: [
+                        _content(
+                          isLoading: data.isLoading,
+                          colorMap: data.colorMap,
+                          nameMap: data.nameMap,
+                          today: data.today,
+                          dayTitle: data.dayTitle,
+                          jobLabel: data.jobLabel,
+                        ),
+                        Positioned(
+                          bottom: AppSpacing.sp16,
+                          left: AppSpacing.sp16,
+                          child: _TodayPill(
+                            visible: _showTodayButton(data.today),
+                            onPressed: () => _goToToday(data.today),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

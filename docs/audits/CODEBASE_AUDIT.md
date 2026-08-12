@@ -5,12 +5,13 @@
 > `flutter test` **1906 passing** · `functions npm run lint` clean ·
 > `jest` **901 passing** (up from 1897 / 882).
 >
-> **Not implemented, each deliberately — see "What was not done" at the bottom:**
-> S2 (the deploy itself — the owner's trigger), S3 (**false finding**, verified
-> no change needed), I6 (the three structural refactors), I10 (declined: the fix
-> is worse than the finding), and 6 of the 10 test gaps in I3.
-> **S1 must be fixed-and-deployed together** — it is corrected here but the
-> pending deploy is what makes it real.
+> **UPDATE 2026-08-11 (later the same day): everything deferred here has now
+> been closed except I10, which stays declined.** S2 (the deploy) RAN, so S1's
+> DST fix is live. The remaining 6 test gaps (C3, C4, C6, C8, C9, C10) are
+> written, and all three I6 refactors are done. Only S3 (**false finding**,
+> verified no change needed) and I10 (the fix is worse than the finding) were
+> never actioned. Details in "What was not done" at the bottom, which now
+> records what changed.
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 `firestore.indexes.json`, `lib/l10n/*.arb`, `pubspec.yaml`, `functions/package.json`).
@@ -552,32 +553,47 @@ survived that check:
 
 ## What was not done, and why
 
-Everything above is implemented except these. None was skipped for convenience —
-each is a judgement worth the owner's attention.
+**Superseded 2026-08-11 — all but I10 and the false finding are now closed.**
+Each entry below keeps its original reasoning and records what actually
+happened.
 
-- **S2 — the deploy.** Not mine to trigger. `firebase deploy --only
-  functions,firestore:rules` (never `--force`). S1's rules fix rides in it, so
-  the DST rejection stays live in prod until this runs.
+- **S2 — the deploy: DONE.** Ran `firebase deploy --only
+  functions,firestore:rules,storage` (no `--force`), 25 → 25 with no export
+  change and therefore no deletion prompt. `firestore:indexes` was deliberately
+  omitted — the file was unchanged, and omitting it leaves the surviving
+  `signupCodes` TTL policy alone. **S1's DST fix is live**, so the autumn
+  rejection window is closed. Deploy-log row in `docs/DEPLOYMENT.md`.
 - **S3 — `waveBootstrap` rate limit: FALSE FINDING, no change made.** The
   callable *is* rate-limited (`wave/callables.js:162`, `wave-bootstrap`,
   `WAVE_BOOTSTRAP_RATE_MAX`), placed deliberately on the not-yet-connected path
   only and before any Wave network call. The reviewer read the decorator and
   stopped. Guard order is correct as it stands.
-- **I10 — the Team tab's session-long listener: DECLINED.** The proposed fix
+- **I10 — the Team tab's session-long listener: STILL DECLINED.** The proposed fix
   gates each roster row's watch on `HubShellScope.currentOf`, which makes every
   row rebuild on every tab switch and read `0 jobs` whenever Team is not the
   current tab. That trades one extra listener over a single day's documents —
   the finding's own impact rating was low — for churn on a hot path and a
   visible wrong count. Revisit only with a cheaper signal than per-row
   visibility.
-- **I6 — the three structural refactors: NOT DONE.** Extracting
-  `HistorySliverList` out of `appointment_history_view.dart` (750 lines), moving
-  the two non-calendar listeners out of `main_calendar_screen.dart` (819), and
-  grouping `AppointmentFormFields`' 10 picker callbacks. All three are pure
-  structure with no behaviour to pin, they touch three of the largest and
-  newest files in the repo, and the third's own finding notes every param is
-  `required` so a miss is already a compile error. Worth doing on their own
-  branch where the diff is reviewable, not folded into a 59-file audit pass.
+- **I6 — the three structural refactors: ALL THREE DONE** (2026-08-11, as their
+  own pass rather than folded into the 59-file audit diff, which was the
+  original objection).
+  - `HistorySliverList` extracted to
+    `clients/widgets/lists/history_sliver_list.dart`, taking `rows/colorMap/
+    currentYear/inSearch/footer/onRowBuilt/firstRowTourWrap/isAdmin`.
+    Deliberately sequenced AFTER C6, so the new pagination tests were in place
+    to catch a behaviour change in the extraction.
+  - The two non-calendar listeners moved to `core/app/` as widget wrappers:
+    `PhotoUploadFailureListener` and `RoleUpgradeListener`. Wrappers rather
+    than a `ref`-taking class like `AppSyncListeners`, because both need
+    `BuildContext` and one needs an `initState`/`dispose` subscription.
+    **`.claude/rules/frontend.md`'s sanctioned-SnackBar reference moved with
+    it**, as this finding required.
+  - `AppointmentFormCallbacks` groups the 10 required pickers beside
+    `AppointmentFormControllers`; the four OPTIONAL callbacks stay on the
+    widget, since their nullability is what distinguishes the two flows and is
+    worth seeing at the call site. There were **three** call sites, not two —
+    the widget test harness is the third, and the compiler found it.
 - **I3 — 4 of 10 test gaps closed.** Done: the multi-day Live Activity skip
   (C1, in `travel_utils.test.js` — the existing harness had to be reused, and
   `live_activity_dispatch` is now mocked file-wide so the card is observable),
@@ -585,12 +601,36 @@ each is a judgement worth the owner's attention.
   plus new coverage for this pass's own fixes: the shared status vocabulary
   (`status_vocabulary.test.js`), the DST headroom in the rules bound, the Siri
   address scoping, and B1's personal-address guard in **both** directions.
-  Still open: **C3** `availabilityConflictsProvider`, **C4** the two
-  Sunday-indexed weekday labellings, **C6** History's second page (no test ever
-  loads one), **C8** `validateUploadedImage`'s read-failure path — which wants
-  the `*_policy.js` extraction its finding describes before it can be tested at
-  all — **C9** the new-clients `archived` exclusion, and **C10** the
-  personal↔client conversion directions at the controller layer.
+  **The remaining six were closed 2026-08-11 — I3 is now 10 of 10.**
+  - **C3** `availability_conflicts_provider_test.dart` (8): the wiring, not the
+    policy — right assignee, every assignee of a shared job, a clear person
+    OMITTED rather than listed empty, a multi-day run counting the day it
+    works, and — the one that matters — a failed read surfacing as an error
+    instead of as "All clear".
+  - **C4** `weekday_labelling_test.dart` (5): every bar labelled with its own
+    weekday across a whole week, so any rotation moves at least one label onto
+    the wrong date, plus `joinWeekdayNames` ordering by stored index.
+  - **C6** `appointment_history_pagination_test.dart` (9): needed a
+    **cursor-aware** fake repo — every previous stub returned the same list
+    whatever `after` held, which is exactly why no test had ever loaded page
+    two. Covers the prefetch, the cursor's identity, the short-page stop, the
+    `refresh()`-does-not-fetch trap on both pull-to-refresh and Retry, and a
+    failed second page not spinning.
+  - **C8** required the extraction this finding predicted:
+    `runImageValidation` now lives in `maintenance_policy.js` with `readHeader`/
+    `deleteFile`/`logger` injected, and `maintenance.js` resolves its file
+    handle **lazily** so a non-appointment path still never touches Storage.
+    `image_validation_policy.test.js` (19) pins the read-failure branch —
+    which DELETES the user's photo, deliberately failing closed — including
+    that it never falls through to the magic-byte check and survives a delete
+    that also fails.
+  - **C9** `new_clients_provider_test.dart` (6): the `archived` and null-
+    `createdAt` exclusions are one guard, since `newClientDatesProvider`
+    force-unwraps `createdAt`.
+  - **C10** `event_details_personal_conversion_test.dart` (11): both conversion
+    directions — client fields cleared to empty strings even with a client
+    still selected in the form, the address KEPT and trimmed, and `isAllDay`
+    surviving both ways.
 - **B13(a) resolved as a doc fix, not a code change.** `DetailsActionBar` does
   offer Mark-as-complete on a started personal block; the CLAUDE.md sentence
   claiming otherwise was corrected rather than the behaviour changed. If the

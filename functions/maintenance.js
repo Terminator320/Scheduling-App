@@ -3,58 +3,46 @@ const {onSchedule} = require("firebase-functions/v2/scheduler");
 const {getStorage} = require("firebase-admin/storage");
 const {getFirestore} = require("firebase-admin/firestore");
 const logger = require("firebase-functions/logger");
-const {hasValidImageMagic} = require("./image_magic");
 const {
   HISTORY_RETENTION_YEARS,
-  isAppointmentImagePath,
+  runImageValidation,
   runHistoryPurge,
 } = require("./maintenance_policy");
 
+/**
+ * Reads the first 8 bytes of a Storage object — enough for every magic-byte
+ * signature `hasValidImageMagic` tests.
+ * @param {!Object} file A Storage file handle.
+ * @return {!Promise<!Buffer>}
+ */
+function readMagicHeader(file) {
+  const stream = file.createReadStream({start: 0, end: 7});
+  const chunks = [];
+  return new Promise((resolve, reject) => {
+    stream.on("data", (c) => chunks.push(c));
+    stream.on("end", () => resolve(Buffer.concat(chunks)));
+    stream.on("error", reject);
+  });
+}
+
 // Validates magic bytes of newly uploaded appointment images and deletes any
 // file that isn't JPEG or PNG — the Storage rule trusts client-provided
-// contentType, so this closes that gap server-side.
+// contentType, so this closes that gap server-side. The decision itself lives
+// in maintenance_policy.js, which is testable; this wires the I/O to it.
 const validateUploadedImage = onObjectFinalized(async (event) => {
   const obj = event.data;
   const filePath = obj.name ?? "";
+  // Resolved lazily: the policy short-circuits on a non-appointment path, and
+  // `.file("")` on an empty name throws — so nothing may touch Storage until
+  // the path has been accepted.
+  const fileHandle = () => getStorage().bucket(obj.bucket).file(filePath);
 
-  if (!isAppointmentImagePath(filePath)) return;
-
-  const file = getStorage().bucket(obj.bucket).file(filePath);
-  let buffer;
-  try {
-    const stream = file.createReadStream({start: 0, end: 7});
-    const chunks = [];
-    await new Promise((resolve, reject) => {
-      stream.on("data", (c) => chunks.push(c));
-      stream.on("end", resolve);
-      stream.on("error", reject);
-    });
-    buffer = Buffer.concat(chunks);
-  } catch (err) {
-    logger.warn("validateUploadedImage: read failed — deleting", {
-      filePath,
-      err: err.message,
-    });
-    await file.delete().catch((delErr) =>
-      logger.error("validateUploadedImage: delete after read-fail failed", {
-        filePath,
-        err: delErr.message,
-      }),
-    );
-    return;
-  }
-
-  if (!hasValidImageMagic(buffer)) {
-    logger.warn("validateUploadedImage: invalid magic bytes — deleting", {
-      filePath,
-    });
-    await file.delete().catch((err) =>
-      logger.error("validateUploadedImage: delete failed", {
-        filePath,
-        err: err.message,
-      }),
-    );
-  }
+  await runImageValidation({
+    filePath,
+    readHeader: () => readMagicHeader(fileHandle()),
+    deleteFile: () => fileHandle().delete(),
+    logger,
+  });
 });
 
 // ----- Scheduled history purge ----------------------------------------------
