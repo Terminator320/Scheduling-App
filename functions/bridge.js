@@ -18,6 +18,10 @@ function shouldHaveBridge(data) {
   const status = data.status;
   if (typeof uid !== "string" || uid === "") return false;
   if (!VALID_BRIDGE_STATUS.has(status)) return false;
+  // `bridgeBody` writes `role` unconditionally, so a doc with no valid role
+  // has nothing to mirror — refuse it here too rather than letting an
+  // undefined reach the Admin SDK.
+  if (!VALID_ROLES.has(data.role)) return false;
   return true;
 }
 
@@ -144,7 +148,15 @@ const syncUsersByUid = onDocumentWritten(
       const mirrorBridge = async () => {
         // Skip writes with an unexpected role, as a defensive check. The
         // presence purge below still runs, so PII gets cleaned up regardless.
-        if (after && after.role && !VALID_ROLES.has(after.role)) {
+        //
+        // FAILS CLOSED on a MISSING role. This tested `after.role &&` first,
+        // which let a doc carrying no role at all through to `bridgeBody` —
+        // where `role: data.role` is written unconditionally, and
+        // `initializeApp()` sets no `ignoreUndefinedProperties`, so the Admin
+        // SDK threw inside a `retry: true` trigger. The bridge was then never
+        // written and every rules gate that resolves through it failed for that
+        // person. Only a console or Admin-SDK write can produce such a doc.
+        if (after && !VALID_ROLES.has(after.role)) {
           logger.warn("syncUsersByUid: unexpected role; skipping", {
             userId,
             role: after.role,

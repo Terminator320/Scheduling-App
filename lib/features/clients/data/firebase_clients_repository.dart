@@ -138,9 +138,13 @@ class FirebaseClientsRepository implements ClientsRepository {
   @override
   Future<List<ClientRecord>> fetchClientsCreatedSince(DateTime since) async {
     // Cap this so a windowed read can never turn into an unbounded query.
+    // DESCENDING is load-bearing: the cap truncates the far end, and every
+    // consumer renders newest-first, so ascending would drop the newest
+    // clients — the ones the dashboard exists to show — and keep the oldest.
+    // The same single-field index serves both directions.
     final snapshot = await _clients
         .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
-        .orderBy('createdAt')
+        .orderBy('createdAt', descending: true)
         .limit(ClientSearchPolicy.serverReadLimit)
         .get();
     return snapshot.docs

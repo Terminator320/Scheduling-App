@@ -766,6 +766,5 @@ module.exports = {
   performChangeEmail,
   resolveEmailChangeCaller,
   notifyEmailChanged,
-  notifyAdminsOfSelfEmailChange,
   buildActivationPatch,
 };

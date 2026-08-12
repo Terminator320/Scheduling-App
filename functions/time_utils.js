@@ -34,6 +34,65 @@ const MAX_APPOINTMENT_SPAN_DAYS = 14;
 const MAX_APPOINTMENT_SPAN_MS = MAX_APPOINTMENT_SPAN_DAYS * 24 * 60 * 60 * 1000;
 
 /**
+ * A job in one of these is finished with, so it no longer occupies anyone.
+ *
+ * HAND-MIRRORED from `terminalStatusRawValues` in
+ * `lib/features/calendar/domain/appointment_status_values.dart`. `completed` is
+ * the retired alias of `done` and is the whole reason this needs ONE owner: the
+ * set was spelled at four sites here and two of them had already dropped the
+ * alias, so a legacy `completed` doc was never purged by the retention sweep
+ * and never ended its Live Activity card. The app itself cannot write
+ * `completed`
+ * (`storedRaw` maps it onto the allowlist and the rules reject it), so only a
+ * console or Admin-SDK write reaches those paths — which is exactly why the
+ * divergence went unnoticed. Lives here because this module requires nothing
+ * else, so every payload module can reach it without a cycle.
+ */
+const TERMINAL_STATUSES = new Set(["done", "completed", "cancelled"]);
+
+/**
+ * Lower-cased status of a raw appointment field, or "".
+ * @param {*} status Raw stored value.
+ * @return {string}
+ */
+function normalizedStatus(status) {
+  return String(status || "").toLowerCase();
+}
+
+/**
+ * True when a status means the job is finished with, in either sense.
+ * @param {*} status Raw stored value.
+ * @return {boolean}
+ */
+function isTerminalStatus(status) {
+  return TERMINAL_STATUSES.has(normalizedStatus(status));
+}
+
+/**
+ * True when a status means the visit was called off.
+ *
+ * Case-insensitive on purpose: a console-written "Cancelled" must not read as
+ * live work on one surface and as cancelled on another.
+ * @param {*} status Raw stored value.
+ * @return {boolean}
+ */
+function isCancelledStatus(status) {
+  return normalizedStatus(status) === "cancelled";
+}
+
+/**
+ * True when a status means the job was seen through to the end.
+ *
+ * The complement of {@link isCancelledStatus} within the terminal set, so
+ * `completed` counts alongside `done`.
+ * @param {*} status Raw stored value.
+ * @return {boolean}
+ */
+function isCompletedStatus(status) {
+  return isTerminalStatus(status) && !isCancelledStatus(status);
+}
+
+/**
  * Minutes past business-local midnight for an instant, or null.
  *
  * The ordering key for anything listing a DAY's jobs. A multi-day run's stored
@@ -195,6 +254,11 @@ module.exports = {
   BUSINESS_TIME_ZONE,
   MAX_APPOINTMENT_SPAN_DAYS,
   MAX_APPOINTMENT_SPAN_MS,
+  TERMINAL_STATUSES,
+  normalizedStatus,
+  isTerminalStatus,
+  isCancelledStatus,
+  isCompletedStatus,
   businessMinutesOfDay,
   toMillis,
   hasWorkLeft,

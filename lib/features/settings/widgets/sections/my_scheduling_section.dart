@@ -74,7 +74,9 @@ class MySchedulingSection extends StatelessWidget {
           ),
       ],
     );
-    if (picked == null) return;
+    // The host is stateful and its callback reads `context.l10n` and calls
+    // `setState`, so a screen popped while the sheet is open must not reach it.
+    if (picked == null || !context.mounted) return;
     onChanged(picked);
   }
 }

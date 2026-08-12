@@ -28,8 +28,23 @@ const scheduleSnapshotPerDayCap = 30;
 /// [slice] scopes the record to ONE of the days it runs. The counter fields are
 /// omitted for a single-day job, so a decoder reading them as optional parses a
 /// payload that predates multi-day support unchanged.
-Map<String, dynamic> _appointment(AppointmentDaySlice slice) {
+///
+/// [viewerDocId] is the signed-in person's users-doc id, and it gates ONE field:
+/// a personal job's address. See [buildScheduleSnapshot].
+Map<String, dynamic> _appointment(
+  AppointmentDaySlice slice,
+  String viewerDocId,
+) {
   final a = slice.appointment;
+  // A personal block is somebody's private appointment — a clinic, a school.
+  // Since 2026-08-11 those carry a real address, and an ADMIN's snapshot holds
+  // the whole business, so this payload would put every employee's private
+  // location on the admin's device, readable while it is locked. The viewer's
+  // OWN personal jobs keep their address: it is their data, and directions to
+  // it is the point of the field. Client visits are unaffected — an address is
+  // what the crew is being sent to.
+  final isOthersPersonalJob =
+      a.isPersonal && !a.employeeIds.contains(viewerDocId);
   return {
     'id': a.id,
     // THIS day's window — a multi-day run works the same hours each day, and
@@ -40,7 +55,7 @@ Map<String, dynamic> _appointment(AppointmentDaySlice slice) {
     // A personal job has no client, so Siri names it by title instead — the
     // same fallback the widget and the push text already use.
     'title': a.title,
-    'address': a.address,
+    'address': isOthersPersonalJob ? '' : a.address,
     'status': AppointmentStatus.storedRaw(a.status),
     // An all-day block stores a real midnight–23:59 span; Siri says "all day"
     // rather than reading those two clock times out.
@@ -60,10 +75,18 @@ String _dayKey(DateTime day) =>
 /// Serializes the schedule the Siri App Intents extension answers from.
 /// Pure and unit-testable — carries one bucket per day, and excludes
 /// cancelled visits and id-less records, since Phase-4 write actions resolve by id.
+///
+/// [viewerDocId] is whose device this is. An employee only ever receives their
+/// own appointments, so it changes nothing for them; for an admin, whose
+/// snapshot is business-wide, it withholds the ADDRESS of other people's
+/// personal blocks — the one field in this payload that describes a third
+/// party's private whereabouts. Pass `''` and every personal address is
+/// withheld, which is the safe direction.
 Map<String, dynamic> buildScheduleSnapshot({
   required List<AppointmentRecord> appointments,
   required String role,
   required DateTime now,
+  String viewerDocId = '',
 }) {
   final startOfToday = now.dateOnly;
   // Keyed by day rather than by its formatted string, so the bucketing loop
@@ -101,7 +124,7 @@ Map<String, dynamic> buildScheduleSnapshot({
                     .take(
                       scheduleSnapshotPerDayCap,
                     ))
-              _appointment(slice),
+              _appointment(slice, viewerDocId),
           ],
         },
     ],

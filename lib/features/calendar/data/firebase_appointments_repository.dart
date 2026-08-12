@@ -78,7 +78,25 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   Future<AppointmentRecord?> getAppointmentById(String id) async {
     final doc = await _appointments.doc(id).get();
     if (!doc.exists) return null;
-    return AppointmentRecord.fromMap(doc.id, doc.data() ?? {});
+    return _recordFrom(doc.id, doc.data() ?? {});
+  }
+
+  /// Maps a doc, leaving a breadcrumb when it carried no `startTime`/`endTime`.
+  ///
+  /// `AppointmentRecord.fromMap` substitutes `DateTime.now()` for a missing
+  /// instant, and that fabricated time then seeds the edit sheet and is written
+  /// back by the next save — so a legacy or console-written row is silently
+  /// given a start time nobody chose. The range streams can't reach such a doc
+  /// (`orderBy('startTime')` excludes it), which is why only the by-id read and
+  /// the client-history query need this. Not an error record: nothing failed,
+  /// and the read still returns a usable record.
+  AppointmentRecord _recordFrom(String id, Map<String, dynamic> data) {
+    if (data['startTime'] == null || data['endTime'] == null) {
+      _logger.breadcrumb(
+        'APPT-LOAD $id has no startTime/endTime; substituting now',
+      );
+    }
+    return AppointmentRecord.fromMap(id, data);
   }
 
   @override
@@ -311,19 +329,42 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         .toList();
   }
 
+  /// The shared head of every range query: the widened `fetchStart` floor, the
+  /// range end, the `startTime` order and the doc cap.
+  ///
+  /// One owner because the dashboard's split — a live listener over the current
+  /// weeks plus a one-shot `.get()` over the settled ones — depends on both
+  /// halves reaching the SAME `fetchStart`. They overlap by a fortnight by
+  /// design and are merged by doc id, so a floor edited on one of the three
+  /// copies and not the others silently changes the overlap that merge assumes.
+  /// [employeeId] adds the assignee constraint the non-admin stream needs. It
+  /// is a CONSTRAINT, not a post-filter: for a list query the rules are
+  /// evaluated against the constraints, so without it `isAssignedEmployee`
+  /// rejects a technician's whole query.
+  Query<Map<String, dynamic>> _rangeQuery(
+    AppointmentDateRange range, {
+    String? employeeId,
+  }) {
+    Query<Map<String, dynamic>> query = _appointments;
+    if (employeeId != null) {
+      query = query.where('employeeIds', arrayContains: employeeId);
+    }
+    return query
+        .where(
+          'startTime',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(range.fetchStart),
+        )
+        .where('startTime', isLessThan: Timestamp.fromDate(range.end))
+        .orderBy('startTime')
+        .limit(_rangeStreamLimit);
+  }
+
   @override
   Stream<List<AppointmentRecord>> watchInRange(AppointmentDateRange range) {
     return retryStream(
-      () => _appointments
-          .where(
-            'startTime',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(range.fetchStart),
-          )
-          .where('startTime', isLessThan: Timestamp.fromDate(range.end))
-          .orderBy('startTime')
-          .limit(_rangeStreamLimit)
-          .snapshots()
-          .map((snapshot) => _mapRangeSnapshot(snapshot, 'APPT-RANGE')),
+      () => _rangeQuery(range).snapshots().map(
+        (snapshot) => _mapRangeSnapshot(snapshot, 'APPT-RANGE'),
+      ),
       retryWhen: isAuthPropagationDenied,
     );
   }
@@ -333,15 +374,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     AppointmentDateRange range,
   ) async {
     final snapshot = await retryAsync(
-      () => _appointments
-          .where(
-            'startTime',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(range.fetchStart),
-          )
-          .where('startTime', isLessThan: Timestamp.fromDate(range.end))
-          .orderBy('startTime')
-          .limit(_rangeStreamLimit)
-          .get(),
+      () => _rangeQuery(range).get(),
       // Same post-sign-in token-propagation window watchInRange retries for —
       // this one is fired from the dashboard, which can be the first screen a
       // freshly signed-in admin lands on.
@@ -383,9 +416,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         .where('clientId', isEqualTo: clientId)
         .limit(limit)
         .get();
-    return snapshot.docs
-        .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
-        .toList()
+    return snapshot.docs.map((doc) => _recordFrom(doc.id, doc.data())).toList()
       ..sort((a, b) => b.startTime.compareTo(a.startTime));
   }
 
@@ -467,17 +498,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     AppointmentDateRange range,
   ) {
     return retryStream(
-      () => _appointments
-          .where('employeeIds', arrayContains: employeeId)
-          .where(
-            'startTime',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(range.fetchStart),
-          )
-          .where('startTime', isLessThan: Timestamp.fromDate(range.end))
-          .orderBy('startTime')
-          .limit(_rangeStreamLimit)
-          .snapshots()
-          .map((snapshot) => _mapRangeSnapshot(snapshot, 'APPT-MYRANGE')),
+      () => _rangeQuery(range, employeeId: employeeId).snapshots().map(
+        (snapshot) => _mapRangeSnapshot(snapshot, 'APPT-MYRANGE'),
+      ),
       retryWhen: isAuthPropagationDenied,
     );
   }

@@ -860,13 +860,16 @@ void main() {
       bool onCall = true,
     }) async {
       await repo().updateSelfDetails(
-        docId: 'u1',
-        phone: phone,
-        workingDays: workingDays,
-        workStartMinutes: workStartMinutes,
-        workEndMinutes: workEndMinutes,
-        onCall: onCall,
-        travelAlertsEnabled: true,
+        EmployeeRecord(
+          id: 'u1',
+          name: 'Self',
+          email: 'self@example.com',
+          phone: phone,
+          workingDays: workingDays,
+          workStartMinutes: workStartMinutes,
+          workEndMinutes: workEndMinutes,
+          onCall: onCall,
+        ),
       );
       return (verify(() => docRef.update(captureAny())).captured.single as Map)
           .cast<String, dynamic>();

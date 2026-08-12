@@ -19,7 +19,7 @@ const {
   toMillis,
 } = require("./time_utils");
 const {
-  lastWorkDayMs,
+  clampedLastWorkDayMs,
   calendarDaysBetween,
 } = require("./day_slice_utils");
 
@@ -94,14 +94,16 @@ function _who(c, generic) {
  *
  * The range ends on the last day the crew STARTS work, so a night shift
  * finishing Tuesday 06:00 reads as ending Monday — `lastWorkDayMs` owns that
- * rule for both this and the widget payload.
+ * rule for both this and the widget payload. Rendered through the CLAMPED form:
+ * a doc written past the cap by the console must not print a tail the counter,
+ * the snapshot and the card all disagree with.
  * @param {string} locale
  * @param {!Object} c
  * @return {string}
  */
 function _when(locale, c) {
   const base = _dateTime(locale, c.startTime, c.isAllDay === true);
-  const last = lastWorkDayMs(c);
+  const last = clampedLastWorkDayMs(c);
   const startMs = toMillis(c.startTime);
   if (last == null || startMs == null) return base;
   if (calendarDaysBetween(startMs, last) < 1) return base;

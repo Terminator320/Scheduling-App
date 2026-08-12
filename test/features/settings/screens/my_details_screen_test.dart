@@ -45,15 +45,7 @@ void main() {
       () => repo.saveEmergencyContact(any(), any()),
     ).thenAnswer((_) async {});
     when(
-      () => repo.updateSelfDetails(
-        docId: any(named: 'docId'),
-        phone: any(named: 'phone'),
-        workingDays: any(named: 'workingDays'),
-        workStartMinutes: any(named: 'workStartMinutes'),
-        workEndMinutes: any(named: 'workEndMinutes'),
-        onCall: any(named: 'onCall'),
-        travelAlertsEnabled: any(named: 'travelAlertsEnabled'),
-      ),
+      () => repo.updateSelfDetails(any()),
     ).thenAnswer((_) async {});
     when(
       () => repo.updateEmployee(
@@ -158,13 +150,9 @@ void main() {
     expect((captured as EmergencyContact).contact, 'Marie');
     verify(
       () => repo.updateSelfDetails(
-        docId: 'me-1',
-        phone: any(named: 'phone'),
-        workingDays: any(named: 'workingDays'),
-        workStartMinutes: any(named: 'workStartMinutes'),
-        workEndMinutes: any(named: 'workEndMinutes'),
-        onCall: any(named: 'onCall'),
-        travelAlertsEnabled: any(named: 'travelAlertsEnabled'),
+        any(
+          that: isA<EmployeeRecord>().having((r) => r.id, 'id', 'me-1'),
+        ),
       ),
     ).called(1);
     // The whole-record admin path must never run for a self edit — it carries
@@ -219,13 +207,9 @@ void main() {
 
     verify(
       () => repo.updateSelfDetails(
-        docId: 'me-1',
-        phone: any(named: 'phone'),
-        workingDays: any(named: 'workingDays'),
-        workStartMinutes: any(named: 'workStartMinutes'),
-        workEndMinutes: any(named: 'workEndMinutes'),
-        onCall: true,
-        travelAlertsEnabled: any(named: 'travelAlertsEnabled'),
+        any(
+          that: isA<EmployeeRecord>().having((r) => r.id, 'id', 'me-1'),
+        ),
       ),
     ).called(1);
     expect(find.byKey(const Key('myIdentitySaveBar')), findsNothing);
@@ -246,17 +230,10 @@ void main() {
       await tester.pumpAndSettle();
 
       final captured = verify(
-        () => repo.updateSelfDetails(
-          docId: 'me-1',
-          phone: captureAny(named: 'phone'),
-          workingDays: any(named: 'workingDays'),
-          workStartMinutes: any(named: 'workStartMinutes'),
-          workEndMinutes: any(named: 'workEndMinutes'),
-          onCall: any(named: 'onCall'),
-          travelAlertsEnabled: any(named: 'travelAlertsEnabled'),
-        ),
+        () => repo.updateSelfDetails(captureAny()),
       ).captured.single;
-      expect(captured, '(514) 555-0000');
+      // The STORED phone, not the half-typed text in the identity field.
+      expect((captured as EmployeeRecord).phone, '(514) 555-0000');
     },
   );
 
@@ -292,15 +269,7 @@ void main() {
     await tester.pumpAndSettle();
 
     verifyNever(
-      () => repo.updateSelfDetails(
-        docId: any(named: 'docId'),
-        phone: any(named: 'phone'),
-        workingDays: any(named: 'workingDays'),
-        workStartMinutes: any(named: 'workStartMinutes'),
-        workEndMinutes: any(named: 'workEndMinutes'),
-        onCall: any(named: 'onCall'),
-        travelAlertsEnabled: any(named: 'travelAlertsEnabled'),
-      ),
+      () => repo.updateSelfDetails(any()),
     );
     verifyNever(
       () => repo.updateEmployee(

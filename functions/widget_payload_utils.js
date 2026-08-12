@@ -19,13 +19,15 @@
 const {
   businessYmd,
   businessMidnight,
+  isTerminalStatus,
+  isCancelledStatus,
 } = require("./time_utils");
 const {sliceForDay} = require("./day_slice_utils");
 
-// Terminal statuses filtered out of the widget's job list. Mirrors
-// AppointmentStatus.isTerminal (status_chip.dart) — done/cancelled plus the
-// legacy `completed` alias.
-const TERMINAL_STATUSES = new Set(["done", "completed", "cancelled"]);
+// The terminal/cancelled vocabulary comes from `time_utils`' one owner and is
+// RE-EXPORTED here, the way `day_slice_utils` re-exports the span cap, so the
+// widget's existing importers keep working. It used to be a local copy of the
+// set; two of the four copies had already dropped the `completed` alias.
 
 // How many days past today the "next job" lookahead spans, for the query the
 // push path builds. Its FLOOR reaches MAX_APPOINTMENT_SPAN_MS behind today
@@ -44,15 +46,6 @@ const WIDGET_LOOKAHEAD_DAYS = 3;
  */
 function nowMillis(now) {
   return now instanceof Date ? now.getTime() : Number(now);
-}
-
-/**
- * True for a status the widget hides (done/cancelled/legacy completed).
- * @param {*} status
- * @return {boolean}
- */
-function isTerminalStatus(status) {
-  return TERMINAL_STATUSES.has(String(status || "").toLowerCase());
 }
 
 /**
@@ -111,15 +104,6 @@ function torontoDayStartOffsetMs(now, n) {
 // today before rolling forward to tomorrow (mirrors widgetRolloverGrace in
 // widget_sync_service.dart).
 const ROLLOVER_GRACE_MS = 60 * 60 * 1000;
-
-/**
- * True for a cancelled job (excluded when computing the last job's end time).
- * @param {*} status
- * @return {boolean}
- */
-function isCancelledStatus(status) {
-  return String(status || "").toLowerCase() === "cancelled";
-}
 
 /**
  * Builds the widget payload for one employee. It carries both days plus a

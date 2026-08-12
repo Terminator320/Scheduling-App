@@ -215,9 +215,23 @@ class _FlagGroup extends StatelessWidget {
   /// Gates the admin-only actions on the sheet a card opens.
   final bool isAdmin;
 
+  /// How many cards this group renders, however many the reducer found.
+  ///
+  /// The `overdueOpen` reducer deliberately has NO range predicate — a job that
+  /// went overdue nine weeks ago still needs closing — so this list is the only
+  /// unbounded one on the screen, and it was spread into a plain `Column` inside
+  /// a `ListView(children:)`: nothing lazy, every card built AND laid out on the
+  /// first frame, each with its own `IntrinsicHeight` pass, re-paid on every live
+  /// snapshot and every period-control tap. The COUNT is what matters here and
+  /// the group's title already carries it (`dashboard_overdueOpenHeader`), so
+  /// only the render is capped — the same shape as `NewClientsSection.rowLimit`.
+  static const int rowLimit = 5;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final shown = appointments.take(rowLimit).toList();
+    final hidden = appointments.length - shown.length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -228,19 +242,21 @@ class _FlagGroup extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.sp8),
-        for (var i = 0; i < appointments.length; i++) ...[
+        for (var i = 0; i < shown.length; i++) ...[
           if (i > 0) const SizedBox(height: AppSpacing.sp8),
           AppointmentCard(
-            appointment: appointments[i],
-            crew: crewFor(
-              appointments[i],
-              colorMap: colorMap,
-              nameMap: nameMap,
-            ),
-            onTap: () => showEventDetails(
-              context,
-              appointments[i],
-              showActions: isAdmin,
+            appointment: shown[i],
+            crew: crewFor(shown[i], colorMap: colorMap, nameMap: nameMap),
+            onTap: () =>
+                showEventDetails(context, shown[i], showActions: isAdmin),
+          ),
+        ],
+        if (hidden > 0) ...[
+          const SizedBox(height: AppSpacing.sp8),
+          Text(
+            context.l10n.dashboard_andMoreVisits(hidden),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],

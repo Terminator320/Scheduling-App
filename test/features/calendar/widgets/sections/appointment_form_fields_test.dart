@@ -19,6 +19,8 @@ void main() {
     String clientQuery = '',
     List<ClientRecord> clientResults = const [],
     ValueChanged<ClientRecord>? onSelectClient,
+    ClientRecord? selectedClient,
+    bool useCustomAddress = true,
     Future<ClientRecord?> Function(String initialName)? onRequestAddClient,
     ValueChanged<JobTemplate>? onApplyTemplate,
     Map<String, AppointmentFormError> errors = const {},
@@ -64,12 +66,12 @@ void main() {
             child: AppointmentFormFields(
               controllers: controllers,
               allEmployees: const [],
-              selectedClient: null,
+              selectedClient: selectedClient,
               clientResults: clientResults,
               isSearchingClient: false,
               selectedEmployees: const [],
               repeat: RepeatInterval.none,
-              useCustomAddress: true,
+              useCustomAddress: useCustomAddress,
               isPersonal: isPersonal,
               onPersonalChanged: showPersonalSwitch
                   ? (onPersonalChanged ?? (_) {})
@@ -303,9 +305,56 @@ void main() {
     expect(toggled, [true]);
     // The client picker is gone, so it may not keep its value.
     expect(controllers.clientSearch.text, isEmpty);
-    // The address field is still on screen, so what it holds is visible and
-    // editable — clearing it would silently drop a place the user typed.
+    // A HAND-TYPED address survives: a personal block may well have somewhere
+    // to be, and this is the case the field exists for.
     expect(controllers.address.text, '9 Rue Test');
+  });
+
+  testWidgets('switching to personal drops the CLIENT address', (
+    tester,
+  ) async {
+    // `_selectClient` writes the client's address into the controller and it
+    // renders as a read-only pill, so the admin never typed it. The switch is
+    // the first row of WHO while the field is far below in DETAILS, so leaving
+    // it behind silently gave the personal block a client's street — which the
+    // travel sweep then uses as the crew's destination.
+    final controllers = await pumpAppointmentForm(
+      tester,
+      width: 400,
+      selectedClient: const ClientRecord(
+        id: 'c1',
+        name: 'Marchetti',
+        address: '12 Rue Principale',
+      ),
+      useCustomAddress: false,
+      onPersonalChanged: (_) {},
+    );
+    controllers.address.text = '12 Rue Principale';
+
+    await tester.tap(find.byType(SwitchListTile).first);
+    await tester.pumpAndSettle();
+
+    expect(controllers.address.text, isEmpty);
+  });
+
+  testWidgets('an address typed before any client is picked survives', (
+    tester,
+  ) async {
+    // `useCustomAddress` is still false at this point — it only flips when the
+    // admin taps "Change" on the pill — so testing that flag ALONE would wipe
+    // an address the user typed themselves. Both halves of the guard matter.
+    final controllers = await pumpAppointmentForm(
+      tester,
+      width: 400,
+      useCustomAddress: false,
+      onPersonalChanged: (_) {},
+    );
+    controllers.address.text = '400 Rue Mine';
+
+    await tester.tap(find.byType(SwitchListTile).first);
+    await tester.pumpAndSettle();
+
+    expect(controllers.address.text, '400 Rue Mine');
   });
 
   testWidgets('an all-day personal job drops the start and end rows', (

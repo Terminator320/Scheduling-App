@@ -143,6 +143,27 @@ function dayCountOf(r) {
 }
 
 /**
+ * `lastWorkDayMs`, clamped to `MAX_APPOINTMENT_SPAN_DAYS` from the start day.
+ *
+ * The clamped form for anything that RENDERS the run's tail. `lastWorkDayMs`
+ * is deliberately raw, and `sliceForDay`/`dayCountOf` clamp on the way out — so
+ * the push text was the one day-scoping consumer reading a corrupt doc's real
+ * end, printing "Wed, Aug 1, 9:00 a.m. – Sun, Mar 12 2028" while the widget
+ * counter, the Siri snapshot and the card all said "Day n of 14". Only the
+ * console and the Admin SDK can write such a doc, since `firestore.rules`
+ * bounds client writes to the same cap.
+ * @param {!Object} r
+ * @return {?number}
+ */
+function clampedLastWorkDayMs(r) {
+  const w = resolveWindow(r);
+  const last = lastWorkDayMs(r);
+  if (w == null || last == null) return last;
+  const cap = addDaysMs(w.startMs, MAX_APPOINTMENT_SPAN_DAYS - 1);
+  return last > cap ? cap : last;
+}
+
+/**
  * The record as it appears on the Toronto day containing `dayMs`, or null when
  * it doesn't run that day.
  *
@@ -192,6 +213,7 @@ module.exports = {
   calendarDaysBetween,
   isOvernightRecord,
   lastWorkDayMs,
+  clampedLastWorkDayMs,
   dayCountOf,
   sliceForDay,
 };

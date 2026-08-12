@@ -17,6 +17,8 @@
  * @module maintenance_policy
  */
 
+const {TERMINAL_STATUSES} = require("./time_utils");
+
 /** Appointments older than this (by `startTime`) are eligible for purge. */
 const HISTORY_RETENTION_YEARS = 2;
 
@@ -24,8 +26,14 @@ const HISTORY_RETENTION_YEARS = 2;
  * ONLY terminal appointments are ever purged. A `pending`/`in_progress` job
  * is live work no matter how old its startTime is — widening this set deletes
  * jobs that were never finished.
+ *
+ * Derived from `time_utils`' TERMINAL_STATUSES rather than restated, so it
+ * cannot drift from the other three copies again: this one had dropped the
+ * legacy `completed` alias, so such a doc was never eligible for purge at any
+ * age and quietly outlived the retention policy. The array form is what
+ * Firestore's `where("status", "in", ...)` needs.
  */
-const PURGE_STATUSES = ["done", "cancelled"];
+const PURGE_STATUSES = [...TERMINAL_STATUSES];
 
 /** Well under Firestore's 500-writes-per-batch ceiling, with headroom. */
 const PURGE_BATCH_SIZE = 200;

@@ -170,7 +170,7 @@ class _SheetFilterChip extends StatelessWidget {
           AdaptiveSheetAction(value: i, label: options[i].label),
       ],
     );
-    if (chosen == null) return;
+    if (chosen == null || !context.mounted) return;
     options[chosen].onSelected();
   }
 

@@ -22,6 +22,7 @@ const {
   businessMinutesOfDay,
   hasWorkLeft,
   MAX_APPOINTMENT_SPAN_MS,
+  isCancelledStatus,
 } = require("./time_utils");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -166,8 +167,7 @@ function diffAppointmentForNotifications(before, after, now, id) {
   const nowMs = nowMillis(now);
   const acc = {};
 
-  const isCancelled = (d) =>
-    d && String(d.status || "").toLowerCase() === "cancelled";
+  const isCancelled = (d) => Boolean(d) && isCancelledStatus(d.status);
   const stillLive = (d) => hasWorkLeft(d, nowMs);
 
   if (!before && after) {
@@ -266,7 +266,7 @@ function groupTomorrowsJobsByEmployee(records, now) {
   const endMs = end.getTime();
   const grouped = {};
   for (const r of records || []) {
-    if (String(r.status || "").toLowerCase() === "cancelled") continue;
+    if (isCancelledStatus(r.status)) continue;
     const ms = toMillis(r.startTime);
     if (ms == null) continue;
     // Overlap, not "starts tomorrow": a multi-day run booked days ago is
@@ -382,14 +382,10 @@ function contextFor(kind, before, after) {
 
 module.exports = {
   DAY_MS,
-  OVERDUE_LOOKBACK_MS,
   OVERDUE_QUERY_WINDOW_MS,
   OVERDUE_SWEEP_MAX,
   WIDGET_PAYLOAD_MAX_BYTES,
-  LEDGER_TTL_MS,
-  OPEN_LIKE,
   OPEN_STATUSES,
-  KIND_PRIORITY,
   CHANGE_RECIPIENT_ROLES,
   TIMED_RECIPIENT_ROLES,
   ADMIN_RECIPIENT_ROLES,

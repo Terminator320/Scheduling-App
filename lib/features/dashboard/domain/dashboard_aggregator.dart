@@ -232,26 +232,34 @@ class DashboardAggregator {
     DateTime now,
   ) {
     final monday = mondayOf(now);
+    // ONE bucketing pass through the day-scoping owner, not seven scans. This
+    // asked `runsOn` per (job, day), and `runsOn` builds an `AppointmentDaySlice`
+    // only to discard it as a bool — so a week's worth of probes allocated ~7×
+    // the list length and threw ~6/7 of it away, on every live snapshot AND
+    // every employees-stream emission. `expandToDays` does the same clamped
+    // day-scoping in one pass and keys by the same normalized day.
+    final byDay = expandToDays(
+      [
+        for (final a in appointments)
+          if (!_isCancelled(a)) a,
+      ],
+      AppointmentDateRange(
+        start: monday,
+        end: addCalendarDays(monday, DateTime.daysPerWeek),
+      ),
+    );
     return [
       for (var i = 0; i < DateTime.daysPerWeek; i++)
-        _dayLoadOn(
-          DateTime(monday.year, monday.month, monday.day + i),
-          appointments,
-          employees,
-        ),
+        _dayLoadOn(addCalendarDays(monday, i), byDay, employees),
     ];
   }
 
   static DayLoad _dayLoadOn(
     DateTime day,
-    List<AppointmentRecord> appointments,
+    Map<DateTime, List<AppointmentDaySlice>> slicesByDay,
     List<EmployeeRecord> employees,
   ) {
-    var count = 0;
-    for (final a in appointments) {
-      if (_isCancelled(a)) continue;
-      if (runsOn(a, day)) count++;
-    }
+    final count = slicesByDay[day]?.length ?? 0;
     // DateTime.sunday is 7; workingDays is 0-indexed on Sunday.
     final weekdayIndex = day.weekday % 7;
     var capacity = 0;

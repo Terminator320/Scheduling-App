@@ -107,7 +107,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           onAllDayChanged: (value) => notifier.setAllDay(value: value),
           // Offered only on a job that was already personal, so an ordinary
           // client visit can't be converted mid-life (which would wipe its
-          // client and address).
+          // client).
           onPersonalChanged: appointment.isPersonal
               ? (value) => notifier.setPersonal(value: value)
               : null,

@@ -34,7 +34,7 @@ class GooglePlacesRepository implements PlacesRepository {
           )
           .call({'input': stripped, 'sessionToken': sessionToken});
     } catch (e, st) {
-      _logger.warn('placesAutocomplete callable failed', e, st);
+      _logger.warn('ADDR-PLACES placesAutocomplete callable failed', e, st);
       throw MapsErrorMapper.map(e, st);
     }
 
@@ -46,7 +46,7 @@ class GooglePlacesRepository implements PlacesRepository {
           .map((e) => AddressSuggestion.fromJson(e.cast<String, dynamic>()))
           .toList();
     } catch (e, st) {
-      _logger.warn('placesAutocomplete response parse failed', e, st);
+      _logger.warn('ADDR-PLACES placesAutocomplete response parse failed', e, st);
       throw MapsFailureParse(cause: e, stackTrace: st);
     }
   }
@@ -65,7 +65,7 @@ class GooglePlacesRepository implements PlacesRepository {
           )
           .call({'placeId': placeId, 'sessionToken': sessionToken});
     } catch (e, st) {
-      _logger.warn('placesGetDetails callable failed', e, st);
+      _logger.warn('ADDR-PLACES placesGetDetails callable failed', e, st);
       throw MapsErrorMapper.map(e, st);
     }
 
@@ -114,7 +114,7 @@ class GooglePlacesRepository implements PlacesRepository {
         postalCode: postalCode,
       );
     } catch (e, st) {
-      _logger.warn('placesGetDetails response parse failed', e, st);
+      _logger.warn('ADDR-PLACES placesGetDetails response parse failed', e, st);
       throw MapsFailureParse(cause: e, stackTrace: st);
     }
   }
@@ -134,7 +134,7 @@ class GooglePlacesRepository implements PlacesRepository {
           )
           .call({'lat': lat, 'lng': lng, 'locale': locale});
     } catch (e, st) {
-      _logger.warn('placesReverseGeocode callable failed', e, st);
+      _logger.warn('ADDR-PLACES placesReverseGeocode callable failed', e, st);
       throw MapsErrorMapper.map(e, st);
     }
 
@@ -145,7 +145,7 @@ class GooglePlacesRepository implements PlacesRepository {
       final address = data['address'];
       return address == null ? null : address as String;
     } catch (e, st) {
-      _logger.warn('placesReverseGeocode response parse failed', e, st);
+      _logger.warn('ADDR-PLACES placesReverseGeocode response parse failed', e, st);
       throw MapsFailureParse(cause: e, stackTrace: st);
     }
   }

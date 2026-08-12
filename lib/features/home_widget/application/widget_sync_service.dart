@@ -206,6 +206,15 @@ final widgetPayloadProvider =
     Provider.autoDispose<AsyncValue<Map<String, dynamic>?>>((ref) {
       final empIdAsync = ref.watch(widgetEmployeeIdProvider);
       if (empIdAsync.isLoading) return const AsyncValue.loading();
+      // An identity read that FAILED is propagated as an error, never collapsed
+      // into a settled null: null means "signed out, clear the widget", and a
+      // Firestore failure is not that. See `AppSyncListeners._isUnsettled`.
+      if (empIdAsync.hasError) {
+        return AsyncValue<Map<String, dynamic>?>.error(
+          empIdAsync.error!,
+          empIdAsync.stackTrace ?? StackTrace.current,
+        );
+      }
       final empId = empIdAsync.value;
       if (empId == null) {
         return const AsyncValue<Map<String, dynamic>?>.data(

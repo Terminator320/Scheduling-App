@@ -1,6 +1,21 @@
 "use strict";
 
 /**
+ * `live_activity_dispatch` is mocked for the whole file so the multi-day skip
+ * at the bottom can observe whether a CARD was started. Nothing else in here
+ * asserts on Live Activities, and the real dispatch no-ops against this
+ * harness anyway.
+ */
+jest.mock("../live_activity_dispatch", () => ({
+  startLiveActivity: jest.fn(async () => 1),
+  updateLiveActivity: jest.fn(async () => 0),
+  endLiveActivity: jest.fn(async () => 0),
+}));
+
+const {startLiveActivity} = require("../live_activity_dispatch");
+
+
+/**
  * Unit tests for the travel-time "leave now" pure helpers and the injectable
  * sweep orchestration (runTravelAwareReminderSweep).
  */
@@ -784,4 +799,82 @@ describe("wantsTravelAlerts", () => {
     expect(wantsTravelAlerts({travelAlertsEnabled: "false"})).toBe(true);
     expect(wantsTravelAlerts({travelAlertsEnabled: 0})).toBe(true);
   });
+});
+
+// ----- the multi-day Live Activity skip -------------------------------------
+
+describe("the multi-day Live Activity skip", () => {
+  // Built 2026-08-11 and shipped untested. A regression is invisible in every
+  // other signal — the leaveNow push still goes out and `reminded` is
+  // unchanged — and the only symptom is a Lock Screen card counting down to the
+  // END of a multi-day run, which is days of countdown on somebody's phone.
+  // CLAUDE.md asserted this gate as fact for a day before it existed, which is
+  // exactly why it needs a test and not a sentence.
+  const dayJob = {
+    id: "job1",
+    status: "pending",
+    startTime: future(20 * MIN),
+    // 12:20 -> 20:20 the SAME day: one work day, so it keeps its card.
+    endTime: future(20 * MIN + 8 * 60 * MIN),
+    employeeIds: ["e1"],
+    clientName: "Acme",
+    address: "123 Main St",
+  };
+  const activeE1 = {
+    users: {e1: {role: "employee", status: "active"}},
+    tokens: {e1: [{id: "t", locale: "en"}]},
+  };
+
+  const sweepWith = async (job) => {
+    const {db} = makeTravelDb({
+      ...activeE1,
+      appointments: [job],
+      presence: {e1: {lat: 45.5, lng: -73.6, updatedAt: future(-5 * MIN)}},
+    });
+    return runTravelAwareReminderSweep({
+      db,
+      messaging: makeMessaging(),
+      fetchImpl: okFetch(600),
+      apiKey: "k",
+      now: NOW,
+      logger: silentLogger,
+      estimateCache: new Map(),
+    });
+  };
+
+  beforeEach(() => startLiveActivity.mockClear());
+
+  test("a single-day leaveNow still starts a card", async () => {
+    // The control: without it the skip below could pass for the wrong reason.
+    const res = await sweepWith(dayJob);
+
+    expect(res.reminded).toBe(1);
+    expect(startLiveActivity).toHaveBeenCalledTimes(1);
+  });
+
+  test("a multi-day run gets the push but NO card", async () => {
+    const res = await sweepWith({
+      ...dayJob,
+      endTime: future(20 * MIN + 4 * 24 * 60 * MIN),
+    });
+
+    expect(res.reminded).toBe(1);
+    expect(res.liveActivitiesStarted).toBe(0);
+    expect(startLiveActivity).not.toHaveBeenCalled();
+  });
+
+  test("a single overnight shift is one work day and keeps its card",
+      async () => {
+        // The gate is the run's LENGTH in work days, not how many hours it
+        // covers — a night shift must not lose its card.
+        // 12:20 -> 06:00 the next morning. The window crosses midnight, so
+        // the run counts NIGHTS and the end date names the morning it
+        // finishes — one work day, one card.
+        await sweepWith({
+          ...dayJob,
+          endTime: future(20 * MIN + 17 * 60 * MIN + 40 * MIN),
+        });
+
+        expect(startLiveActivity).toHaveBeenCalledTimes(1);
+      });
 });

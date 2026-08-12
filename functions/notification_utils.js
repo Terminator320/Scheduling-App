@@ -25,6 +25,8 @@ const {liveActivityCtx} = require("./live_activity_utils");
 const {
   toMillis,
   MAX_APPOINTMENT_SPAN_MS,
+  isCancelledStatus,
+  isCompletedStatus,
 } = require("./time_utils");
 const {
   buildNotificationMessage,
@@ -87,13 +89,19 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
   if (!entry) {
     const userSnap = await userRef.get();
     const user = userSnap.exists ? (userSnap.data() || {}) : null;
-    const tokensSnap = user ?
-      await userRef.collection("fcmTokens").get() : null;
-    entry = {user, tokenDocs: (tokensSnap && tokensSnap.docs) || []};
+    entry = {user, tokenDocs: null};
     if (cache) cache.set(employeeDocId, entry);
   }
+  if (!entry.user) return 0;
+  // Tokens are read lazily and then cached beside the user. A `null` means "not
+  // fetched yet", distinct from `[]` = "fetched, none registered" — which is
+  // what lets a pass that only needed the user doc (the travel sweep's prefs
+  // read) seed this cache without paying for a tokens read it may never use.
+  if (entry.tokenDocs == null) {
+    const tokensSnap = await userRef.collection("fcmTokens").get();
+    entry.tokenDocs = (tokensSnap && tokensSnap.docs) || [];
+  }
   const {user, tokenDocs} = entry;
-  if (!user) return 0;
   // Recipients are filtered server-side to active accounts of an allowed role.
   const allowed = roles || CHANGE_RECIPIENT_ROLES;
   if (!allowed.has(user.role) || user.status !== "active") return 0;
@@ -228,16 +236,19 @@ async function fetchEmployeeWidgetWindow(db, employeeDocId, now, logger) {
  * @return {!Promise<void>}
  */
 async function endCardOnTerminal(id, before, after, deps, now) {
-  const statusOf = (d) => String((d || {}).status || "").toLowerCase();
+  const statusOf = (d) => (d || {}).status;
   const targets = new Set();
   if (before && !after) {
     // Deleted.
     for (const e of toIdList(before.employeeIds)) targets.add(e);
   } else if (before && after) {
-    const becameDone = statusOf(before) !== "done" &&
-        statusOf(after) === "done";
-    const becameCancelled = statusOf(before) !== "cancelled" &&
-        statusOf(after) === "cancelled";
+    // Through the shared owners rather than a literal "done": this tested
+    // `=== "done"` and so left the card running forever on a flip to the legacy
+    // `completed` alias.
+    const becameDone = !isCompletedStatus(statusOf(before)) &&
+        isCompletedStatus(statusOf(after));
+    const becameCancelled = !isCancelledStatus(statusOf(before)) &&
+        isCancelledStatus(statusOf(after));
     if (becameDone || becameCancelled) {
       // Union both sides, since one save can change status and assignees
       // at the same time.

@@ -2207,6 +2207,15 @@
       }
     }
   },
+  "dashboard_andMoreVisits": "{count, plural, =1{1 more not shown} other{{count} more not shown}}",
+  "@dashboard_andMoreVisits": {
+    "description": "Footer under a capped attention-flag group, naming how many visits are not rendered",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "error_introLoadDashboard": "Couldn't load the dashboard",
   "@error_introLoadDashboard": {
     "description": "Error intro for DASH-LOAD"

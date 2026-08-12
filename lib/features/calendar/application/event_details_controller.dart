@@ -127,7 +127,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
         ],
       );
     } catch (e, st) {
-      logger.warn('enrichSelectedEmployees failed', e, st);
+      logger.warn('APPT-LOAD enrichSelectedEmployees failed', e, st);
     }
   }
 
@@ -165,7 +165,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
         state = state.copyWith(client: client);
       }
     } catch (e, st) {
-      logger.warn('loadClientIfNeeded failed', e, st);
+      logger.warn('APPT-LOAD loadClientIfNeeded failed', e, st);
     }
   }
 

@@ -212,7 +212,7 @@ class AuthService {
       try {
         await _authCache.clear();
       } catch (e, st) {
-        _logger.warn('signOut: auth cache clear failed', e, st);
+        _logger.warn('ACCT-SIGNOUT auth cache clear failed', e, st);
       }
     }
   }

@@ -198,14 +198,24 @@ class AppointmentFormFields extends StatelessWidget {
 
   void _setPersonal(bool value) {
     // Clear the text fields the switch hides, so nothing stale is left in a
-    // controller the user can no longer see. The ADDRESS is deliberately not
-    // among them — it stays on screen as an optional field, so whatever it
-    // holds is visible and editable rather than stale. Photos are not cleared
-    // either: dropping already-uploaded images off a flick of a switch is
-    // destructive and can't be undone from this form.
+    // controller the user can no longer see. Photos are not cleared: dropping
+    // already-uploaded images off a flick of a switch is destructive and can't
+    // be undone from this form.
+    //
+    // The ADDRESS stays, because a personal block may well have somewhere to
+    // be — EXCEPT when it is the client's own address. `_selectClient` writes
+    // that into the controller, and until then it renders as a read-only pill,
+    // so the admin never typed it and it belongs to a client this block is no
+    // longer for. Both halves of the test matter: with no client selected the
+    // field is the editable one, so whatever it holds was typed by hand and
+    // must survive — including an address entered before the switch was
+    // flipped.
     if (value) {
       controllers.clientSearch.clear();
       controllers.materials.clear();
+      if (selectedClient != null && !useCustomAddress) {
+        controllers.address.clear();
+      }
     }
     onPersonalChanged!(value);
   }

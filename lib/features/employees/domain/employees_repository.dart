@@ -76,15 +76,9 @@ abstract class EmployeesRepository {
   ///
   /// The keys written here must stay equal to `kSelfServiceUserFields`, which
   /// mirrors the rules; `self_service_fields_test.dart` pins that equality.
-  Future<void> updateSelfDetails({
-    required String docId,
-    required String phone,
-    required List<bool> workingDays,
-    required int workStartMinutes,
-    required int workEndMinutes,
-    required bool onCall,
-    required bool travelAlertsEnabled,
-  });
+  /// Takes the whole record — see the implementation for why loose scalars were
+  /// a trap here. Pass `record.copyWith(...)` of just the fields that changed.
+  Future<void> updateSelfDetails(EmployeeRecord employee);
 
   /// Streams `users/{docId}/private/emergency`.
   ///
