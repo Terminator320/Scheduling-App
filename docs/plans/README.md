@@ -153,15 +153,23 @@ card? a countdown to today's window end?) is an unanswered design question.
   `docs/audits/AUDIT_FOLLOWUPS.md` §2, the one item in that file still open. It
   needs GCP billing access, so it cannot be done from here.
 
-### 7. App Store submission — 25 open items
+### 7. App Store — SHIPPED. The runbook is now a release checklist, not a launch one
 
-`APP_STORE_SUBMISSION.md` is the runbook. The clusters: the on-device Part 6
-checks (iPad pass, live map + Routes API, push deep link, home-screen widget,
+**ES Pro was accepted by Apple and is live**; 1.45.0+72 is the **4th update**
+(owner-reported 2026-08-11). `APP_STORE_SUBMISSION.md` still reads in places
+like a pre-launch document and **its unticked boxes have never been reconciled
+against four shipped submissions** — the app record, pricing, the FR
+localization, screenshots and "attach the build and submit" were evidently done
+during the first release and simply never ticked. Treat an unticked box there as
+*unknown*, not *outstanding*; the count is not a work list.
+
+What is genuinely still open, as far as the repo can tell: the **on-device Part 6
+checks** (iPad pass, live map + Routes API, push deep link, home-screen widget,
 wake-on-push refresh, Live Activity card, Siri phrases), the **Time Sensitive
-Notifications entitlement**, ASC App Privacy needing **Precise Location**
-added, the FR localization, screenshots, and then archive → TestFlight →
-submit. One is blocked by Firestore itself: the `liveActivityCards` TTL policy
-cannot be created yet.
+Notifications entitlement**, and ASC App Privacy needing **Precise Location**
+added. One is blocked by Firestore itself: the `liveActivityCards` TTL policy
+cannot be created yet. **A reconciliation pass over Part 13 is worth doing
+once** — it is the difference between a checklist and a list of ghosts.
 
 **The legal pages are NOT on that list — they are published and correct.** All
 four (`terms-of-service`, `accessibility`, `support`, and the privacy policy
