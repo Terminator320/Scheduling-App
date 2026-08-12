@@ -46,7 +46,8 @@ class AppointmentFormInput {
   final bool isPersonal;
 
   /// No time was put in, so the block owns the whole day and neither time is
-  /// required. Only reachable on a personal job.
+  /// required. Offered on every job, and defaulted on for an untimed personal
+  /// block.
   final bool isAllDay;
 }
 

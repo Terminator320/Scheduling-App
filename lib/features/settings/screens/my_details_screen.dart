@@ -66,11 +66,6 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
   /// the identity bar exists to prevent.
   String _storedPhone = '';
 
-  /// Carried through every self write untouched — the toggle for it lives in
-  /// Settings, but the rules' `hasOnly` means the patch must still name it, and
-  /// sending a guessed default would flip somebody's push setting.
-  bool _travelAlertsEnabled = true;
-
   /// Seeds once, from the first record that arrives — a later snapshot must not
   /// overwrite what the person is part-way through changing.
   void _seed(EmployeeRecord record) {
@@ -81,12 +76,14 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     _workEndMinutes = record.workEndMinutes;
     _onCall = record.onCall;
     _storedPhone = record.phone;
-    _travelAlertsEnabled = record.travelAlertsEnabled;
   }
 
   /// Identity save — the emergency contact (subcollection) AND the phone (users
   /// doc). Two stores, so both are awaited before the success notice.
-  Future<void> _saveIdentity(String docId, MyIdentityEdit edit) async {
+  Future<void> _saveIdentity(
+    EmployeeRecord record,
+    MyIdentityEdit edit,
+  ) async {
     // Set synchronously before the first await, or a double-tap starts a
     // second concurrent write.
     if (_isSaving) return;
@@ -105,22 +102,23 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     try {
       final repository = ref.read(employeesRepositoryProvider);
       await repository.saveEmergencyContact(
-        docId,
+        record.id,
         EmergencyContact(
           contact: edit.emergencyContact,
           phone: edit.emergencyPhone,
         ),
       );
+      // Only the fields this form owns are named; everything else on the
+      // allowlist rides along on the record, so Settings' travel-alerts toggle
+      // can't be clobbered by an omission here.
       await repository.updateSelfDetails(
-        docId: docId,
-        phone: edit.phone,
-        workingDays: _workingDays,
-        workStartMinutes: _workStartMinutes,
-        workEndMinutes: _workEndMinutes,
-        onCall: _onCall,
-        // Not the person's to change here — Settings owns that toggle, so the
-        // stored value is carried through untouched.
-        travelAlertsEnabled: _travelAlertsEnabled,
+        record.copyWith(
+          phone: edit.phone,
+          workingDays: _workingDays,
+          workStartMinutes: _workStartMinutes,
+          workEndMinutes: _workEndMinutes,
+          onCall: _onCall,
+        ),
       );
       if (!mounted) return;
       setState(() => _storedPhone = edit.phone);
@@ -149,7 +147,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
   /// back matters more than the latency — a toggle left showing the new value
   /// after a refused write is a lie about what the server holds.
   Future<void> _applyAvailability(
-    String docId,
+    EmployeeRecord record,
     List<bool> days,
     int start,
     int end, {
@@ -188,13 +186,17 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
       await ref
           .read(employeesRepositoryProvider)
           .updateSelfDetails(
-            docId: docId,
-            phone: _storedPhone,
-            workingDays: days,
-            workStartMinutes: start,
-            workEndMinutes: end,
-            onCall: onCall,
-            travelAlertsEnabled: _travelAlertsEnabled,
+            // `phone` is named EXPLICITLY from the stored value, never left to
+            // ride along on `record`: this fires on a switch tap while the
+            // identity form may hold a half-typed number, and a just-saved
+            // phone can still be newer than the record snapshot in flight.
+            record.copyWith(
+              phone: _storedPhone,
+              workingDays: days,
+              workStartMinutes: start,
+              workEndMinutes: end,
+              onCall: onCall,
+            ),
           );
     } catch (error, stackTrace) {
       ref
@@ -382,7 +384,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
           initialEmergencyContact: contact.contact,
           initialEmergencyPhone: contact.phone,
           isSaving: _isSaving,
-          onSave: (edit) => _saveIdentity(docId, edit),
+          onSave: (edit) => _saveIdentity(record, edit),
           onChangeEmail: () => _changeEmail(docId, record.email),
         ),
         const SizedBox(height: AppSpacing.sp24),
@@ -407,7 +409,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
             ),
           ),
           onChanged: (days, start, end, {required onCall}) =>
-              _applyAvailability(docId, days, start, end, onCall: onCall),
+              _applyAvailability(record, days, start, end, onCall: onCall),
         ),
         const SizedBox(height: AppSpacing.sp24),
         MySchedulingSection(

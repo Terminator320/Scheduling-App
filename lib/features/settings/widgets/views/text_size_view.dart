@@ -303,7 +303,7 @@ class _ScaleGlyph extends StatelessWidget {
           'A',
           style: TextStyle(
             fontSize: 11 + (scale - 0.8) * 16,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             color: isSelected ? primary : muted,
             height: 1,
           ),

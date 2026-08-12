@@ -31,6 +31,7 @@ const {
 } = require("./live_activity_dispatch");
 const {liveActivityCtx} = require("./live_activity_utils");
 const {dayCountOf} = require("./day_slice_utils");
+const {isTerminalStatus, isCancelledStatus} = require("./time_utils");
 const {
   listCardsDueForOnSite,
   clearCardMarker,
@@ -144,9 +145,8 @@ const PENDING_LIKE = new Set(["pending", "confirmed"]);
 // `in_progress` has no "time to leave" left to remind about.
 const PENDING_STATUSES = [...PENDING_LIKE];
 
-// A job in one of these no longer occupies the employee. Legacy `completed`
-// is the retired alias of `done`.
-const TERMINAL = new Set(["done", "completed", "cancelled"]);
+// "No longer occupies the employee" comes from `time_utils`' one owner — see
+// isTerminalStatus. This module used to carry its own copy of the set.
 
 /**
  * Trimmed address or "".
@@ -178,7 +178,7 @@ function decideOrigin({presence, employeeAppointments, candidate, now}) {
   let intervening = null;
   for (const r of apps) {
     if (candidate && r.id === candidate.id) continue;
-    if (TERMINAL.has(String(r.status || "").toLowerCase())) continue;
+    if (isTerminalStatus(r.status)) continue;
     const startMs = toMillis(r.startTime);
     const endMs = toMillis(r.endTime);
     if (startMs == null || endMs == null) continue;
@@ -210,7 +210,7 @@ function decideOrigin({presence, employeeAppointments, candidate, now}) {
   const floorMs = nowMs - PREV_APPOINTMENT_LOOKBACK_HOURS * 60 * MINUTE_MS;
   for (const r of apps) {
     if (candidate && r.id === candidate.id) continue;
-    if (String(r.status || "").toLowerCase() === "cancelled") continue;
+    if (isCancelledStatus(r.status)) continue;
     const endMs = toMillis(r.endTime);
     if (endMs == null || endMs > nowMs || endMs <= floorMs) continue;
     if (_address(r) === "") continue;
@@ -548,16 +548,19 @@ async function runTravelAwareReminderSweep(deps) {
   // per distinct employee, reused across all of that employee's candidates.
   const employeeIds = [...new Set(
       candidates.flatMap((c) => toIdList(c.employeeIds)))];
+  // Declared before the prefs read so that read can SEED it: the prefs pass
+  // fetches each candidate's `users` doc, and `sendToEmployee` needs the very
+  // same doc later in this sweep — it used to read it a second time.
+  const cache = new Map();
   const [presenceByEmployee, contextByEmployee, travelPrefsByEmployee] =
     await Promise.all([
       loadPresenceByEmployee(deps, employeeIds),
       loadContextByEmployee(deps, employeeIds, nowMs),
-      loadTravelPrefsByEmployee(deps, employeeIds),
+      loadTravelPrefsByEmployee(deps, employeeIds, cache),
     ]);
 
   let reminded = 0;
   let started = 0;
-  const cache = new Map();
   // Warm-instance memo, injectable so tests get a clean map per run.
   const estimates = deps.estimateCache || _estimateCache;
   pruneEstimates(estimates, nowMs);
@@ -666,7 +669,7 @@ function wantsTravelAlerts(user) {
  *
  * One read per distinct assignee per sweep, alongside the presence and context
  * loads above — the flag has to be known BEFORE the kind is chosen, which is
- * before `sendToEmployee` reads the same doc. The candidate set is the jobs
+ * before `sendToEmployee` needs the same doc. The candidate set is the jobs
  * inside the 90-minute window, so this is a handful of reads every 5 minutes,
  * not a roster scan.
  *
@@ -676,17 +679,24 @@ function wantsTravelAlerts(user) {
  *
  * @param {!Object} deps `{db, logger}`.
  * @param {!Array<string>} employeeIds Distinct assignee doc ids.
+ * @param {!Map=} cache The sweep's `sendToEmployee` cache, seeded with each
+ *   users doc this pass reads so the delivery pass doesn't read it again.
+ *   Tokens are left `null` (= not fetched) rather than `[]`.
  * @return {!Promise<!Map<string, boolean>>} keyed by employee doc id.
  */
-async function loadTravelPrefsByEmployee(deps, employeeIds) {
+async function loadTravelPrefsByEmployee(deps, employeeIds, cache) {
   const {db, logger} = deps;
   const prefs = new Map();
   if (employeeIds.length === 0) return prefs;
   await Promise.all(employeeIds.map(async (id) => {
     try {
       const snap = await db.collection("users").doc(id).get();
-      prefs.set(id, wantsTravelAlerts(
-          snap && snap.exists ? (snap.data() || null) : null));
+      const user = snap && snap.exists ? (snap.data() || null) : null;
+      prefs.set(id, wantsTravelAlerts(user));
+      // Seed the sweep's send cache with the doc we just paid for.
+      // `sendToEmployee` fetches `fcmTokens` lazily, so a null there means
+      // "not read yet" rather than "no tokens".
+      if (cache && !cache.has(id)) cache.set(id, {user, tokenDocs: null});
     } catch (err) {
       if (logger) logger.warn("travel: prefs read failed", {id, err});
     }
@@ -776,7 +786,7 @@ async function runOnSiteFlipPass(deps) {
       // the marker, since the Lock Screen card outlives the Firestore doc.
       // We also clear the marker here so this doesn't retry every sweep.
       if (!record ||
-          TERMINAL.has(String(record.status || "").toLowerCase())) {
+          isTerminalStatus(record.status)) {
         await endLiveActivity(deps, {
           appointmentId: String(marker.appointmentId),
           employeeDocId: marker.employeeDocId,
@@ -808,7 +818,6 @@ module.exports = {
   selectTravelCandidates,
   computeLeadMinutes,
   isDue,
-  canDeferRoutes,
   buildRoutesRequestBody,
   parseRoutesDurationSeconds,
   computeTravelSeconds,

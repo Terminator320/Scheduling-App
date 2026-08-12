@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
+import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
@@ -30,7 +31,6 @@ import 'package:scheduling/features/live_activity/application/live_activity_pref
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
-import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/settings/application/app_info_provider.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
 import 'package:scheduling/features/settings/application/my_details_providers.dart';
@@ -237,15 +237,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     try {
       await ref
           .read(employeesRepositoryProvider)
-          .updateSelfDetails(
-            docId: record.id,
-            phone: record.phone,
-            workingDays: record.workingDays,
-            workStartMinutes: record.workStartMinutes,
-            workEndMinutes: record.workEndMinutes,
-            onCall: record.onCall,
-            travelAlertsEnabled: value,
-          );
+          .updateSelfDetails(record.copyWith(travelAlertsEnabled: value));
     } catch (error, stackTrace) {
       ref
           .read(loggerProvider)
@@ -377,12 +369,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     setState(() => _isSigningOut = true);
     try {
       // Clean up this device's push token, presence, and Live Activity state
-      // — best effort, so a failure here doesn't block sign-out.
-      await ref
-          .read(pushRegistrationControllerProvider)
-          .unregisterCurrentDevice();
-      await ref.read(presenceSyncControllerProvider).unregister();
-      await ref.read(liveActivityRegistrationControllerProvider).unregister();
+      // — best effort, so a failure here doesn't block sign-out. The ORDER is
+      // owned by `deregisterThisDevice`; all three exits share it.
+      await deregisterThisDevice(ref);
       await ref.read(authServiceProvider).signOut();
     } catch (e, st) {
       // Log but still route to login so the user isn't stuck signed in.
@@ -435,14 +424,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final logger = ref.read(loggerProvider);
     try {
       await _deletionService.reauthenticateWithPassword(password);
-      // Drop this device's push token while still authenticated, before deleteAccount revokes access.
-      await ref
-          .read(pushRegistrationControllerProvider)
-          .unregisterCurrentDevice();
-      await ref.read(presenceSyncControllerProvider).unregister();
-      await ref.read(liveActivityRegistrationControllerProvider).unregister();
+      // Drop this device's registrations while still authenticated, before
+      // deleteAccount revokes access — same shared order as the other exits.
+      await deregisterThisDevice(ref);
       await _deletionService.deleteAccount();
-    } on AuthFailure catch (e) {
+    } on AuthFailure catch (e, st) {
+      // Logged before the mounted guard: this fires AFTER push, presence and
+      // the Live Activity have already de-registered, so a half-torn-down
+      // account must leave a trace. `authFailure` keeps a user-correctable
+      // wrong password a breadcrumb and records the rest.
+      logger.authFailure('ACCT-DEL settings.delete_account', e, e, st);
       if (!mounted) return;
       setState(() => _isDeletingAccount = false);
       notices.error(e.toLocalizedMessage(context));

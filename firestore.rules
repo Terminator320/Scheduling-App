@@ -451,11 +451,22 @@ service cloud.firestore {
     // MAX_APPOINTMENT_SPAN_DAYS in `functions/time_utils.js`) caps how long a
     // run may be. Keep all three equal.
     //
-    // 14 DAYS EXACTLY, INCLUSIVE — the widest span a shipped write path can
-    // produce, not the typical one. A 14-day run booked at a single clock time
-    // (09:00 -> +14d 09:00) is a legitimate chain of 24-hour windows, so `<`
-    // would reject it; a 15th day fails AppointmentFormValidator before a save
-    // is attempted. An all-day 14-day block is shorter still (13d 23h59m).
+    // 14 DAYS INCLUSIVE, PLUS A DST HOUR — the widest span a shipped write path
+    // can produce, not the typical one. A 14-day run booked at a single clock
+    // time (09:00 -> +14d 09:00) is a legitimate chain of 24-hour windows, so
+    // `<` would reject it; a 15th day fails AppointmentFormValidator before a
+    // save is attempted.
+    //
+    // The +2h is NOT slack, it is the unit mismatch. The app's cap counts
+    // CALENDAR days and `combineDateAndTime` composes LOCAL wall-clock
+    // instants, while `duration.value` is absolute. A window containing the
+    // autumn DST fall-back therefore stores one hour MORE than its calendar
+    // length: that widest run becomes 14d 1h, and an all-day 14-day block goes
+    // from 13d 23h59m to 14d 0h59m. A flat 14d bound rejected both — a booking
+    // the form had already accepted, failing as an opaque permission-denied for
+    // roughly two weeks each autumn. Sized to one DST hour plus the all-day
+    // minute; `_clampedDayCount` is still the real enforcement, and the
+    // calendar-day count is what a 15th day is refused by.
     //
     // `endTime >= startTime` holds for every shipped write because
     // `appointmentSpan` rolls an overnight window's end onto the following
@@ -465,7 +476,8 @@ service cloud.firestore {
         || (d.startTime is timestamp
             && d.endTime is timestamp
             && d.endTime >= d.startTime
-            && d.endTime - d.startTime <= duration.value(14, 'd'));
+            && d.endTime - d.startTime
+                 <= duration.value(14, 'd') + duration.value(2, 'h'));
     }
 
     // The Admin SDK and the console bypass these rules entirely, so a span past

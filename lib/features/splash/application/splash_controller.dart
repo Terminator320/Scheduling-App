@@ -54,10 +54,10 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
       () => employeesRepo.findUserByUid(user.uid),
       delays: const [Duration(milliseconds: 500), Duration(milliseconds: 1500)],
       onRetry: (attempt, e, st) =>
-          logger.warn('splash findUserByUid retry $attempt', e, st),
+          logger.warn('SPLASH findUserByUid retry $attempt', e, st),
     );
   } catch (e, st) {
-    logger.warn('splash findUserByUid failed after retries', e, st);
+    logger.warn('SPLASH findUserByUid failed after retries', e, st);
     rethrow;
   }
   if (match == null) {
@@ -86,7 +86,7 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
   }
   unawaited(
     authCache.save(employee).catchError((Object e, StackTrace st) {
-      logger.warn('splash.auth_cache_save', e, st);
+      logger.warn('SPLASH auth cache save failed', e, st);
     }),
   );
   return SplashGoToCalendar(isAdmin: employee.isAdmin, employeeId: employee.id);

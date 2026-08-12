@@ -66,6 +66,18 @@ class AppSyncListeners {
     });
   }
 
+  /// True when an emission says nothing about whether the person is signed out.
+  ///
+  /// Both mirrors below publish `null` to mean SIGNED OUT and clear the App
+  /// Group. But an `AsyncError` carries a null value too, and so does
+  /// `AsyncLoading` — so keying on `value == null` alone made a failed Firestore
+  /// read (past `retryAsync`) blank the home-screen widget and have Siri answer
+  /// "no appointments" to someone who has jobs. Both surfaces are off-screen,
+  /// so nothing reported it. A stale mirror beats a wrongly-empty one: keeping
+  /// the last good payload is the honest degradation while the read is broken.
+  static bool _isUnsettled(AsyncValue<Object?> next) =>
+      next.isLoading || next.hasError;
+
   void _widgetSync() {
     // iOS home-screen widget only. It never wires up on Android, so the
     // employee-appointments listener it would open never opens.
@@ -74,6 +86,7 @@ class AppSyncListeners {
       prev,
       next,
     ) {
+      if (_isUnsettled(next)) return;
       final payload = next.value;
       final service = ref.read(widgetSyncServiceProvider);
       if (payload == null) {
@@ -91,6 +104,7 @@ class AppSyncListeners {
       prev,
       next,
     ) {
+      if (_isUnsettled(next)) return;
       final payload = next.value;
       final service = ref.read(scheduleSnapshotServiceProvider);
       if (payload == null) {

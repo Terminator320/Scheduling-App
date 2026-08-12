@@ -44,8 +44,10 @@ final dashboardHistoryRangeProvider =
 /// under the screen, so a live listener over them was pure cost — and, held
 /// together with the live half in ONE 1000-doc-capped stream, it was also what
 /// silently truncated the trend charts above ~14 jobs/day.
+/// Kept warm on the same grace as the live half — see [keepWarmWithGrace].
 final dashboardHistoryProvider =
     FutureProvider.autoDispose<List<AppointmentRecord>>((ref) {
+      keepWarmWithGrace(ref);
       final range = ref.watch(dashboardHistoryRangeProvider);
       return ref.watch(appointmentsRepositoryProvider).fetchInRange(range);
     });
@@ -64,9 +66,11 @@ final dashboardHistoryProvider =
 ///   shortened page breaks the cursor and truncates the list permanently —
 ///   this is a bounded one-shot read with no cursor and no pagination, so that
 ///   hazard does not apply.
+/// Kept warm on the same grace as the live half — see [keepWarmWithGrace].
 final newClientsProvider = FutureProvider.autoDispose<List<ClientRecord>>((
   ref,
 ) async {
+  keepWarmWithGrace(ref);
   final range = ref.watch(dashboardRangeProvider);
   final clients = await ref
       .watch(clientsRepositoryProvider)
@@ -230,14 +234,19 @@ final availabilityConflictsProvider =
       if (failure != null) return failure;
 
       final range = ref.watch(dashboardLiveRangeProvider);
-      final all = records.requireValue;
+      // Grouped by assignee in ONE pass. This used to rebuild a filtered copy
+      // of the whole merged list per employee — O(employees × records) `contains`
+      // checks plus a fresh list each, on every live snapshot.
+      final byEmployee = <String, List<AppointmentRecord>>{};
+      for (final a in records.requireValue) {
+        for (final id in a.employeeIds) {
+          (byEmployee[id] ??= <AppointmentRecord>[]).add(a);
+        }
+      }
       return AsyncValue.data([
         for (final employee in employees.requireValue)
           if (daysBookedOutsideAvailability(
-                appointments: [
-                  for (final a in all)
-                    if (a.employeeIds.contains(employee.id)) a,
-                ],
+                appointments: byEmployee[employee.id] ?? const [],
                 range: range,
                 workingDays: employee.workingDays,
               )

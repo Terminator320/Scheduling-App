@@ -483,6 +483,7 @@
   "dashboard_allClear": "Tout est en ordre — rien à signaler",
   "dashboard_pendingSoonHeader": "{count, plural, =1{1 visite en attente commence d'ici 48 heures} other{{count} visites en attente commencent d'ici 48 heures}}",
   "dashboard_overdueOpenHeader": "{count, plural, =1{1 visite passée n'a jamais été clôturée} other{{count} visites passées n'ont jamais été clôturées}}",
+  "dashboard_andMoreVisits": "{count, plural, =1{1 autre non affichée} other{{count} autres non affichées}}",
   "error_introLoadDashboard": "Impossible de charger le tableau de bord",
   "common_share": "Partager",
   "calendar_savePhoto": "Enregistrer dans Photos",

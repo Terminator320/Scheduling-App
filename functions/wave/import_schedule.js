@@ -117,7 +117,6 @@ module.exports = {
   SCHEDULE_VALUES,
   resolveImportWindow,
   watermarkPatch,
-  DELTA_OVERLAP_MS,
   FULL_RESYNC_INTERVAL_MS,
   WEEK_MS,
   MONTH_MS,

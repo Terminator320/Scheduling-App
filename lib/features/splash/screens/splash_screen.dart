@@ -50,7 +50,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             Object e,
             StackTrace st,
           ) {
-            ref.read(loggerProvider).warn('splash.auth_cache_load', e, st);
+            ref.read(loggerProvider).warn('SPLASH auth cache load failed', e, st);
             return null;
           });
 
@@ -58,7 +58,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     try {
       await ref.read(firebaseReadyProvider.future);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('splash.firebase_ready', e, st);
+      ref.read(loggerProvider).warn('SPLASH firebase init failed', e, st);
     }
     if (!mounted || _navigated) return;
 
@@ -121,7 +121,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
         next.when(
           data: _go,
           error: (e, st) {
-            ref.read(loggerProvider).warn('splash resolution failed', e, st);
+            ref.read(loggerProvider).warn('SPLASH resolution failed', e, st);
             _go(const SplashGoToLogin());
           },
           loading: () {},

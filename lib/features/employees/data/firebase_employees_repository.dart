@@ -249,25 +249,25 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   @override
-  Future<void> updateSelfDetails({
-    required String docId,
-    required String phone,
-    required List<bool> workingDays,
-    required int workStartMinutes,
-    required int workEndMinutes,
-    required bool onCall,
-    required bool travelAlertsEnabled,
-  }) async {
+  Future<void> updateSelfDetails(EmployeeRecord employee) async {
     // Exactly the rules allowlist and nothing else — `hasOnly` rejects the
     // whole write on one stray key. In particular NO emergency scrub here:
     // `updateEmployee` sends one, and it would add two unnamed keys.
+    //
+    // Takes the WHOLE record rather than loose scalars, the same shape and for
+    // the same reason as `createAccount`: because `hasOnly` forces the patch to
+    // name every allowlisted key, each caller has to pass through the fields it
+    // is NOT changing, and the three of them re-spelled all seven. A field
+    // omitted there silently overwrote somebody's setting, and adding a key to
+    // `kSelfServiceUserFields` meant three edits with no compile error to catch
+    // a miss. Callers now hand over `record.copyWith(...)` of just what changed.
     final patch = <String, dynamic>{
-      'phone': phone.trim(),
-      'workingDays': normalizeWorkingDays(workingDays),
-      'workStartMinutes': workStartMinutes,
-      'workEndMinutes': workEndMinutes,
-      'onCall': onCall,
-      'travelAlertsEnabled': travelAlertsEnabled,
+      'phone': employee.phone.trim(),
+      'workingDays': normalizeWorkingDays(employee.workingDays),
+      'workStartMinutes': employee.workStartMinutes,
+      'workEndMinutes': employee.workEndMinutes,
+      'onCall': employee.onCall,
+      'travelAlertsEnabled': employee.travelAlertsEnabled,
       'updatedAt': FieldValue.serverTimestamp(),
     };
     assert(
@@ -277,7 +277,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     // A plain update, not a transaction: one person editing their own doc from
     // one device has no concurrent writer to guard against, and a needless
     // client transaction is a real risk on iOS (see the no-transactions rule).
-    await _users.doc(docId).update(patch);
+    await _users.doc(employee.id).update(patch);
   }
 
   /// Moves the sign-in email in Firebase Auth AND on the users doc.

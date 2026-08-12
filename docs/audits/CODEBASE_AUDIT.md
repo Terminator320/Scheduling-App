@@ -1,467 +1,597 @@
-# Codebase Audit — 2026-08-11
+# Codebase Audit — 2026-08-11 (second pass)
+
+> **STATUS: implemented same day**, on the owner's "do all findings" instruction.
+> Verification after the pass: `flutter analyze` → No issues found ·
+> `flutter test` **1906 passing** · `functions npm run lint` clean ·
+> `jest` **901 passing** (up from 1897 / 882).
+>
+> **Not implemented, each deliberately — see "What was not done" at the bottom:**
+> S2 (the deploy itself — the owner's trigger), S3 (**false finding**, verified
+> no change needed), I6 (the three structural refactors), I10 (declined: the fix
+> is worse than the finding), and 6 of the 10 test gaps in I3.
+> **S1 must be fixed-and-deployed together** — it is corrected here but the
+> pending deploy is what makes it real.
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
-`firestore.indexes.json`, `lib/l10n/*.arb`, `pubspec.yaml`, `docs/`).
-Baseline: working tree at `8bf07c6e` on `redesgin`, version `1.44.1+71`, tree clean.
+`firestore.indexes.json`, `lib/l10n/*.arb`, `pubspec.yaml`, `functions/package.json`).
+Baseline: working tree at `55ea3cb3` on `redesgin`, tree clean at start.
+
+This is the second pass of the day. The first pass (archived as
+`CODEBASE_AUDIT_2026-08-11-first-pass.md`, baseline `8bf07c6e`) was implemented
+in `a90474cc`; two commits have landed since — `84a1bf6f` (P7 dashboard +
+History restyle + the rules span bound) and `55ea3cb3` (personal jobs keep an
+address). Both are unreviewed, and most of what follows is in them.
 
 ## Summary
 
-- **Scanned:** whole repo — 5 parallel deep reviewers (security, bugs, dead
-  code/conventions, performance, maintainability) on top of the deterministic
-  static pass.
-- **Status (2026-08-11): ALL 20 findings actioned.** See *Resolution* below for
-  what was built, what was scoped deliberately, and the two findings that
-  turned out to rest on a wrong premise.
-- **Reported: 20**
-  (⚠️ 0 pre-ship · 🔴 3 security · 🟠 6 bugs · 🔵 10 improvements · 🟡 code-quality notes)
-- **Verification after the fix pass:** `flutter analyze` clean · `flutter test`
-  **1844 passed / 0 failed** (was 1801/1) · `functions` jest **882/882** (was
-  874) · `functions` ESLint clean · no BOMs · no EN/FR ARB drift.
+- Scanned: 366 `lib/` Dart files, 34 `functions/` modules, both rules files,
+  706×2 ARB keys, 12 indexes + 12 field overrides.
+- **Auto-fixed (safe, in the diff): 2** — two comments left factually false by
+  the last two commits. Nothing else at the static level was fixable: the
+  analyzer is `No issues found!`, `dart fix` has nothing, functions ESLint is
+  clean, there are no orphaned files, and all four unused-dependency hits are
+  verified false positives.
+- **Reported for your decision: 31** (⚠️ 1 pre-deploy · 🔴 5 security ·
+  🟠 13 bugs · 🔵 12 improvements) + 6 optional code-quality notes.
+- Verification: `flutter analyze` → **No issues found!** (unchanged from
+  baseline) · targeted tests green · functions ESLint clean.
 
-**Top 3 to look at first:** B1 (a test that rots with the calendar and has
-silently voided its own file's coverage), B2 (P5's availability warning is dead
-for every technician), B4 (`CLAUDE.md` asserts a Live-Activity protection that
-no code implements).
+## Auto-applied cleanups (review the diff)
 
-## Resolution — 2026-08-11 fix pass
+| File:line | Change | Why |
+|---|---|---|
+| `lib/features/calendar/domain/policies/appointment_form_validator.dart:49` | `isAllDay` doc: "Only reachable on a personal job" → offered on every job, defaulted on for an untimed personal block | Stale since the 2026-08-03 owner call that put all-day on every job. In a repo where comments carry the spec, a false one is a trap |
+| `lib/features/calendar/widgets/views/details_edit_body.dart:110` | Dropped "and address" from the mid-life-conversion comment | `55ea3cb3` stopped wiping the address; the comment still claimed it did |
 
-**Backend changes are NOT deployed.** S1, B4 and B5 all need
-`firebase deploy --only functions`.
+> Full detail is in `git diff`. Nothing below this line was auto-changed.
+> `docs/audits/CODEBASE_AUDIT.md` was moved to
+> `CODEBASE_AUDIT_2026-08-11-first-pass.md` to keep the earlier pass.
 
-| # | What was done |
-|---|---|
-| S1 | `isReauthStale` lifted into `security.js` beside a new `assertFreshReauth`; `changeEmployeeEmail` now demands a re-auth under 5 min **on the self branch**, and its budget drops 20/h → 5/h. **Scoped deliberately:** the ADMIN branch is reached from `updateEmployee`, which has no re-auth step, so gating it would reject every admin email edit made minutes after sign-in. Closing that half needs a re-auth prompt on the admin save path first — the residue is stated in `CLAUDE.md` rather than left implied. |
-| S2 | No action, as reported — only matters if the repo's visibility changes. |
-| S3 | No action, as reported — informational; no code path passes a `buf`. |
-| B1 | Clock pinned via `currentDayProvider.overrideWithValue` in `containerWith`. The three vacuous tests now sit inside the window and fail for the right reasons. |
-| B2 | `myUpcomingAppointmentsProvider` role-branches to `myAppointmentsProvider`, matching the Siri snapshot and the drawer badge. |
-| B3 | `computeTodayOps` holds the `AppointmentDaySlice` and tests/sorts `windowStart`; `TodayOps.upcoming` carries slices, so the dashboard card now shows "Day 3 of 5" too. Two new tests. |
-| B4 | The skip is now REAL: `dayCountOf(c) > 1` in `resolveReminderForAssignee`. The `leaveNow` push still goes out; only the card is withheld. `CLAUDE.md` corrected to say it was built on 2026-08-11 and that the plan doc was right. |
-| B5 | `colorValue` is parsed from its stored numeric-string form, so a push-started card shows the crew colour instead of always-orange. |
-| B6 | The resolver returns `''` on `unauthorized`/`permission-denied` and keeps the fallback for transport failures. An empty URL is a REFUSAL: `PhotoPickerSection` renders the error tile untappable and `buildImageProviders` substitutes a 1×1 transparent image so viewer indices don't shift. Two new tests. |
-| I1 | `self_email_service_test.dart` added — `verifyInOrder` plus a thrown re-auth that must `verifyNever` the callable. |
-| I2 | **Premise was wrong.** `healSyncState` is already pinned by five pre-existing tests in `wave_customers.test.js` (via `upsertCustomer`), including the concurrent-edit case. Added the one genuine gap: a doc with no `lastSyncedHash` is left alone. |
-| I3 | **Premise was wrong.** `notification_messages.js` is covered by ~30 tests in `notification_utils.test.js` — `_who`, multi-day ranges, the night-shift end, the personal-job fallback and all-day are all there. Moving them to a new file would be churn; added the genuinely-missing cases instead (every repeat interval, unknown kind, null ctx, unknown locale). |
-| I4 | The log moved to the ONE place that isn't a build method: `emergencyContactProvider` transforms its stream, logs `EMP-EMERGENCY` once per error emission and rethrows. The detail view's loading/error collapse is now documented as deliberate (the panel is omitted either way) rather than silently ambiguous. |
-| I5 | All four drifts corrected in `ARCHITECTURE.md` / `CLOUD_FUNCTIONS.md`, including a full description of P5's dirty-gated-identity vs. immediate-availability split and the genuinely admin-only field list. |
-| I6 | 923 → 591 lines. The five presentational widgets moved to `features/auth/widgets/account_setup/*.dart` (one class per file); `build()` is ~22 lines over `_identityPanels` / `_formFields` / `_submitBlock`. |
-| I7 | `AvailabilityPanel` (`employees/widgets/fields/`) is now the one panel both screens render. This closed a real drift the audit didn't name: My details picked its times with a raw `showTimePicker` while the Team sheet used `showAdaptiveTimePicker`, so the same row opened a Material dialog on one screen and a Cupertino wheel on the other. |
-| I8 | `event_details_save_pipeline.dart` owns assignee merge, record build, series branch and photo changes over explicit values; the controller keeps state, reentrancy and `ref.mounted`. Storage resolution stays LAZY and mounted-guarded — resolving it eagerly initialized FirebaseStorage on photo-free saves, which the tests caught. |
-| I9 | Tests for all six: `firestore_parsing`, `breakpoints` (including the exact 1.4 boundary), `dialableUri` + `parseWebUrl` (both extracted as pure helpers), `mediaPermissionResultOf` (extracted; pins `limited`→granted and `restricted`→permanent) and `hub_shell_scope`'s three nav branches. |
-| I10 | `WAVE-BADGE unknown syncState` is logged once per distinct value per process — a Set guard, so a build method can't spam it. |
-| 🟡 | `nav_myDetails` removed from both ARBs and the stale `drawer_catalog.dart` comment rewritten; "exported for unit tests" comments added to `live_activity_registry.js` and `maintenance_policy.js`. **Not done, deliberately:** the `heroGradient` swap (a design decision, as the note itself says) and deleting `ParsedAddress`'s components / `AppointmentImage.fileName` / `EmployeeRecord.createdAt` — those are reserved fields whose removal would ripple through a tested server field mask for no behavioural gain, so each now carries a comment saying so rather than being silently left ambiguous. |
+## ⚠️ Pre-deploy checklist
 
-## Auto-applied cleanups
+There are **zero** `TODO(pre-ship)` markers left anywhere in `lib/` or
+`functions/` — verified, along with zero `TODO`/`FIXME`/`HACK`/`XXX`/`TEMP`.
+No destructive testing scaffolding survives. One release-gating item remains:
 
-**None at audit time** — the statics were already green and both candidate
-cleanups failed verification as "safe" (see *Notes*). Everything in the
-*Resolution* table above was applied afterwards, on request, as a deliberate
-fix pass rather than an automatic one.
+- [ ] **The backend is still not deployed, and it now carries three passes of
+  security work.** `a90474cc` (S1 `assertFreshReauth` on `changeEmployeeEmail`'s
+  SELF branch, budget 20/h → 5/h; B4 multi-day Live Activity skip; B5 crew
+  colour) and `84a1bf6f` (the `isValidAppointmentSpan` rules bound) are both
+  local-only. Until they deploy, a self sign-in-email change is protected **only**
+  by `SelfEmailService`'s client-side re-auth ordering — a direct callable
+  invocation with a valid ID token bypasses it, which is the account-takeover
+  primitive that gate was written for. **Fix S1 below before deploying**, since
+  the same deploy ships the flawed span bound. Runbook: `docs/DEPLOYMENT.md`.
 
-## ⚠️ Pre-ship checklist
+## 🔴 Security findings (review required)
 
-**Empty, verified.** There are zero `TODO(pre-ship)`, `FIXME`, `HACK`, `XXX`,
-`TEMP` or `REMOVEME` markers anywhere in `lib/`, `test/`, `functions/`,
-`firestore.rules` or `storage.rules`. The last known one
-(`lib/core/testing_flags.dart`) was deleted 2026-08-03 with the client
-archive/delete work. All 11 callables enforce App Check; there is no
-`enforceAppCheck: false` carve-out left to flip.
+### S1 — the new span bound is an absolute duration, but the app's cap is wall-clock calendar days · severity: medium · confidence: high
+- **Where:** `firestore.rules:468` (`isValidAppointmentSpan`)
+- **Risk:** Not an exploit — a **denial of a legitimate write**, in the pending
+  deploy. The rule bounds `d.endTime - d.startTime <= duration.value(14, 'd')`
+  (exactly 1 209 600 s), while the client cap is a calendar-day count and the
+  instants are composed from **local wall clock** (`combineDateAndTime` →
+  `DateTime(y, m, d, h, m)`). I traced the widest saveable run: with equal
+  start/end times `isOvernightWindow` is true, so `appointmentSpan` rolls the end
+  onto the next day, storing **exactly 14 days**. Any such run whose window
+  contains the November DST fall-back gains an hour → `14d 1h` → `allow create`
+  denies it. A 14-day **all-day** block goes `13d 23h 59m` → `14d 0h 59m` and is
+  denied too. The form has already validated, so the admin gets an opaque
+  `permission-denied` on a booking the product explicitly allows, for roughly a
+  two-week window each autumn. `appointmentSpanNotWidened()` does not help on
+  create.
+- **Fix:** bound at `duration.value(14, 'd') + duration.value(2, 'h')` (one DST
+  hour plus the all-day minute of headroom) and correct both the rules comment
+  and the matching CLAUDE.md line, which currently state the arithmetic that is
+  wrong. `_clampedDayCount` remains the real enforcement. Do this **before** the
+  deploy above.
+- **Note:** two reviewers disagreed here — the bug reviewer concluded the bound
+  "cannot reject a legal save". That holds only in the absence of a DST
+  transition; I verified the arithmetic directly.
 
-## 🔴 Security findings
+### S2 — production is running without the newest server-side controls · severity: medium · confidence: high on code, medium on prod state
+- **Where:** `functions/employee_accounts.js:434-442`, `firestore.rules`
+- **Risk:** see the pre-deploy item above. Cannot inspect prod from here.
+- **Fix:** `firebase deploy --only functions,firestore:rules` (never `--force`).
 
-### S1 — `changeEmployeeEmail` has no server-side re-auth freshness check · severity: medium · confidence: high
+### S3 — `waveBootstrap` is the only admin callable making an external credentialed call with no rate limit · severity: low · confidence: high
+- **Where:** `functions/wave/callables.js:127-136`
+- **Risk:** auth, `assertAdmin`, App Check and `assertPayloadShape` are all
+  present, and the already-connected path short-circuits — but a compromised
+  admin session can loop `listBusinesses` against Wave unbounded with the
+  Secret-Manager token. Every sibling callable is capped.
+- **Fix:** `enforceDurableRateLimit` (e.g. 10/h per uid) after payload validation.
 
-- **Where:** `functions/employee_accounts.js:392-416`
-- **Risk:** Guard chain is auth → payload → `resolveEmailChangeCaller` → rate
-  limit → work, with no `auth_time` staleness check. Its sibling irreversible
-  callable does have one: `functions/account.js:52-61` rejects
-  `isReauthStale(authTime, nowSec, 300)` *before* the limiter. P5 opened this
-  callable to the SELF branch (`employee_accounts.js:375-376`), so any active
-  employee can rewrite their own sign-in identity, and the only proof-of-password
-  is client-side at `lib/features/settings/services/self_email_service.dart:51`.
-  That file's own comment names the threat: *"an unattended unlocked phone
-  changing the sign-in address is the account-takeover primitive."* A caller with
-  a valid ID token but no fresh re-auth (unattended unlocked device, stolen
-  token, patched client) can call the callable directly, move the address to a
-  mailbox they control, then trigger a password reset. The admin branch is the
-  stronger version of the same primitive — rewriting a *colleague's* sign-in
-  identity. App Check raises the bar but is attestation, not authorization.
-  Budget is `CREATE_RATE_MAX` = **20 sign-in-identity rewrites per hour per
-  caller** (`:414-416`), which is generous for a self-service path.
-- **Fix:** Lift `isReauthStale` out of `account.js` into `security.js` and apply
-  it in `changeEmployeeEmail` above the limiter, matching `deleteAccount`.
-  Consider a tighter budget on the self branch. Needs a functions deploy.
-- **Note:** `CLAUDE.md` documents the client-side ordering honestly and does not
-  claim server enforcement — but unlike the `Welcome123!` window, it does not
-  record this as an accepted residual either. Worth a decision either way.
+### S4 — employees' personal-appointment addresses now reach the admin's App Group snapshot · severity: low · confidence: medium (privacy-scope owner call)
+- **Where:** `lib/features/siri/domain/schedule_snapshot.dart:43`
+- **Risk:** `55ea3cb3` changed personal jobs from `address: ''` to a real
+  address. The Siri snapshot is business-wide for admins and the App Group
+  payload stays readable **while the device is locked** — which is exactly why
+  `functions/CLAUDE.md` deliberately excludes notes, phone and pictures from it.
+  An admin's locked phone now holds the location of every employee's private
+  appointment (clinic, school). Not a rules hole; an admin can already read the
+  doc in-app.
+- **Fix:** either omit `address` for `isPersonal` records in
+  `buildScheduleSnapshot`, or record the accepted residual in the Siri bullet.
 
-### S2 — `ios/GoogleService-Info.plist` is reachable in git history · severity: low · confidence: high
+### S5 — fail-open `isAdmin` default on the dashboard route · severity: low · confidence: high
+- **Where:** `lib/routes/app_routes.dart:64` — `isAdmin: args?.isAdmin ?? true`
+- **Risk:** unreachable today (every caller passes `DashboardArgs`), but this
+  flag flows into the dashboard cards' `showActions`, the one gate CLAUDE.md says
+  must never regain a `true` default — a default of `true` previously showed
+  employees Edit/Cancel/Delete affordances the rules then rejected. A bare
+  `pushNamed(dashboard)` would re-open it.
+- **Fix:** `?? false`, and drop the comment defending the direction.
 
-- **Where:** commit `bc5a7aaa` (deleted at `6f89c3cb`); not in the working tree,
-  correctly gitignored via `**/GoogleService-Info.plist`.
-- **Risk:** Same class as `dev/.env` — restricted client config that ships inside
-  the IPA anyway, with App Check + rules as the real defense. Impact is limited
-  while the repo is private; it matters only if this repo ever becomes public.
-- **Fix:** Purge from history and rotate only if the repo's visibility changes.
-  No action needed today. (Value not reproduced here.)
+## 🟠 Bug findings (review required)
 
-### S3 — 9 moderate npm advisories in `functions/`, all transitive · severity: low · confidence: high
+### B1 — flipping Personal ON carries the selected client's street address onto the block, from off-screen · severity: medium-high · confidence: high
+- **Where:** `lib/features/calendar/widgets/sections/appointment_form_fields.dart:199` (`_setPersonal`)
+- **Problem:** `55ea3cb3` removed `controllers.address.clear()` from
+  `_setPersonal`, on the stated grounds that the field "stays on screen … so
+  whatever it holds is visible and editable rather than stale". That is not true
+  in the add flow: the switch is at `:275` (first row of WHO) and the address
+  field at `:493` (DETAILS), with the whole SCHEDULE section between them — I
+  verified the ordering. Meanwhile `_selectClient:181` has already written the
+  client's address into that controller, and `setPersonal` nulls
+  `selectedClient`, so nothing on screen links the two any more.
+  Repro: pick client "Marchetti" (address auto-fills) → realise it's a dentist
+  appointment → flip Personal ON → Save. Stored: `isPersonal: true,
+  clientId: '', address: "<Marchetti's street>"`. That address is **not
+  cosmetic** — a timed personal job is a travel candidate by design, so the crew
+  is pushed a `leaveNow` with a drive time to the wrong place, the Live Activity
+  Directions button opens it, and the job joins the day-route stop list.
+- **Fix:** clear the address in `_setPersonal(true)` **only when
+  `selectedClient != null`** — i.e. when the text came from `_selectClient` /
+  `_useClientAddress` — leaving a hand-typed address alone. That keeps the new
+  invariant without restoring the blanket clear.
 
-- **Where:** `functions/package.json:19-22` → `firebase-admin@13.6.0` →
-  `@google-cloud/firestore` / `@google-cloud/storage` / `google-gax` → `uuid`
-  (missing buffer bounds check in v3/v5/v6 when `buf` is supplied).
-- **Risk:** No code path in this repo passes a `buf`. Zero high/critical.
-- **Fix:** Informational. A `firebase-admin` bump is a separate deliberate change
-  — note the existing memory that admin@14 breaks on functions 7.x.
+### B2 — a Firestore error blanks the home widget and makes Siri say "no appointments" · severity: medium-high · confidence: high
+- **Where:** `lib/core/app/app_sync_listeners.dart:76-84` and `:96-101`; feeders
+  `lib/features/siri/application/schedule_snapshot_provider.dart:14-18`,
+  `lib/features/home_widget/application/widget_sync_service.dart:208-214`
+- **Problem:** both listeners branch on `next.value == null` alone. An
+  `AsyncError` has `value == null`, and so does `AsyncLoading` — so a failed read
+  is indistinguishable from **signed out**, and the listener calls `clear()` /
+  `clearSnapshot()`. The providers make it worse: they test `isLoading` then
+  `value == null`, so an identity read error returns settled `AsyncData(null)`.
+  `appts.whenData(...)` correctly preserves the error, but the listener discards
+  the distinction. Result: three Firestore failures past `retryAsync` wipe the
+  Home-screen widget and have Siri answer "no appointments" for someone who has
+  jobs — on two off-screen surfaces, with nothing reporting it.
+- **Fix:** gate both listeners with `if (next.isLoading || next.hasError) return;`
+  (one file, covers both), and propagate `hasError` as `AsyncValue.error` in the
+  two providers rather than collapsing it to `AsyncData(null)`.
 
-## 🟠 Bug findings
+### B3 — three action-sheet pickers invoke their callback with no `context.mounted` guard · severity: medium · confidence: high
+- **Where:** `lib/features/settings/widgets/sections/my_scheduling_section.dart:77`,
+  `lib/features/clients/widgets/sections/history_filter_bar.dart:174`,
+  `lib/features/calendar/widgets/fields/repeat_interval_picker.dart:44`
+- **Problem:** all three are `StatelessWidget`s that `await
+  showAdaptiveActionSheet(...)` then call the parent callback checking only for
+  null. The guard was skipped exactly where `mounted` isn't in scope — every
+  Stateful caller does guard (`day_route_screen.dart:340`,
+  `edit_person_sheet.dart:227`, `wave_settings_section.dart:131`), as do
+  `email_compose_launcher` and `address_map_launcher`. Traced the worst path:
+  `my_scheduling_section._pick` → `_saveMaxJobs` (`my_details_screen.dart:275`),
+  which immediately reads `context.l10n`, calls `guardedOffline(context, …)` and
+  `setState`. Popping the screen with the sheet open is setState-after-dispose →
+  `FlutterError.onError` → recorded as a **FATAL** by this app's handler.
+- **Fix:** `if (picked == null || !context.mounted) return;` at all three.
 
-### B1 — A time-rotting test is failing, and has silently voided its own file's coverage · severity: high · confidence: high
+### B4 — the terminal-status vocabulary is spelled 4× in `functions/`, and two copies have drifted · severity: low · confidence: high
+- **Where:** `functions/travel_utils.js:149` and
+  `functions/widget_payload_utils.js:28` (both correct, 3 values) vs
+  `functions/maintenance_policy.js:28` (`["done","cancelled"]`) and
+  `functions/notification_utils.js:237` (`statusOf(after) === "done"`)
+- **Problem:** the two divergent copies both omit the legacy `completed` alias.
+  Consequences, and note these are **milder than they first look** — I checked
+  the reachability: the app cannot write `completed` (`storedRaw` maps it to the
+  4-value allowlist and the rules reject it), so only a console or Admin-SDK
+  write reaches these paths. Given such a doc: (a) `endCardOnTerminal` never
+  ends the Live Activity card on a flip to `completed`; (b) a `completed` doc
+  older than the 2-year retention is **never purged** — a retention gap, not
+  data loss, and its images are still referenced by the surviving doc, so
+  nothing orphans. Dart fixed this exact drift on 2026-08-08 with
+  `terminalStatusRawValues`; JS never got an owner.
+- **Fix:** put `TERMINAL_STATUSES` in `functions/time_utils.js` (the existing
+  shared-constant home, already the mirror anchor for
+  `MAX_APPOINTMENT_SPAN_DAYS`) and derive all four sites from it.
 
-- **Where:** `test/features/settings/application/my_details_providers_test.dart:46`
-  (failing), `:53`, `:59`, `:65` (now vacuous)
-- **Problem:** The test pins a job to Monday **2026-08-10** and overrides
-  `myUpcomingAppointmentsProvider`, but never overrides `currentDayProvider`. So
-  `myDetailsRangeProvider` (`lib/features/settings/application/my_details_providers.dart:74`)
-  builds `AppointmentDateRange.forMirrors(DateTime.now())`, whose window starts at
-  *today*. The test passed on the day it was written and has failed every day
-  since: as of 2026-08-11 the job is in the past, `expandToDays` scopes it out,
-  and the expected `{1}` comes back `{}`.
-  **The bigger problem is the three tests that still "pass".** "reports nothing
-  when the day being switched off is free", "reports nothing when no day is
-  switched off" and "a cancelled job is not a conflict" now pass because *every*
-  job is out of range — not because the logic works. Four of the file's five
-  tests are asserting nothing. This is the only red in an otherwise green
-  1802-test suite, so it also masks the next real regression here.
-- **Fix:** Pin the clock, using the idiom that already exists one directory over
-  at `test/features/employees/application/employee_schedule_providers_test.dart:35`
-  — add `currentDayProvider.overrideWithValue(DateTime(2026, 8, 10))` to the
-  container overrides in `containerWith`. Then re-confirm the three vacuous tests
-  actually exercise their branches.
+### B5 — `on AuthFailure catch` during account deletion logs nothing at all · severity: medium (observability) · confidence: high
+- **Where:** `lib/features/settings/screens/settings_screen.dart:445`
+- **Problem:** the typed branch does `setState` + `notices.error(...)` + `return`
+  with no `logger.warn`, no `logger.authFailure`, no stack trace — while the
+  generic `catch` two lines below correctly logs `ACCT-DEL`. It is one of only
+  two unlogged catch blocks among 136 in `lib/` (the other is the sanctioned
+  `writeWidgetPayloadJson`). It also catches `AuthFailurePermissionDenied` and
+  `AuthFailureUnknown`, which `isExpected` buckets **false** — precisely the ones
+  meant to file a record. And it fires *after* push, presence and Live Activity
+  have already been de-registered (`:439-443`), so a half-torn-down account
+  leaves no trace. `logger` is already in scope at `:435`.
+- **Fix:** `on AuthFailure catch (e, st)` +
+  `logger.authFailure('ACCT-DEL settings.delete_account', e, e, st)` before the
+  `mounted` guard. Also update `.claude/rules/error-handling.md`, which still
+  says there are **four** auth catch sites — this is the fifth.
 
-### B2 — P5's availability-conflict warning is dead for every technician · severity: high · confidence: high
+### B6 — three providers mask stream errors as "no work" · severity: medium · confidence: high
+- **Where:** `lib/features/employees/application/employee_schedule_providers.dart:34`
+  and `:98`; `lib/features/settings/application/my_details_providers.dart:100`
+- **Problem:** `.value ?? const []` on the appointments range stream makes an
+  error indistinguishable from an empty day, unlogged. The roster reads "0 jobs
+  today", the employee TODAY panel reads empty, and the availability-conflict
+  warning never fires. `emergencyContactProvider`, 20 lines below in the same
+  file, does it correctly and its doc comment names the rule being broken here.
+  The first pass fixed the role-branch on these providers but left the mask.
+- **Fix:** copy the `emergencyContactProvider` pattern — log once in the
+  provider, propagate the error.
 
-- **Where:** `lib/features/settings/application/my_details_providers.dart:85`
-- **Problem:** `myUpcomingAppointmentsProvider` reads
-  `appointmentsInRangeProvider`, whose query
-  (`lib/features/calendar/data/firebase_appointments_repository.dart:314-329`)
-  constrains `startTime` only — no `employeeIds` constraint. But
-  `firestore.rules:482` grants `/appointments` read as
-  `isAdmin() || isAssignedEmployee(resource.data)`, and for a **list query**
-  Firestore evaluates rules against query *constraints*, not documents. A
-  non-admin's whole query is therefore rejected `permission-denied`.
-  `MyDetailsScreen` is the one deliberately employee-reachable self-service
-  surface — `my_details_screen.dart:349` uses `isAdmin` only to gate the
-  SCHEDULING section, and `:401-408` watches `myAvailabilityConflictProvider`
-  unconditionally. The rejection is swallowed by `?? const []` at
-  `my_details_providers.dart:87`, so for every technician the *"you're switching
-  off a day that still has booked work"* warning **silently never fires**, and a
-  permanently-failing Firestore listener is held open for the session.
-  Rules hold — this is a fail-closed silent feature failure, not data exposure.
-  It is exactly the query-constraints-must-mirror-a-rule-clause trap `CLAUDE.md`
-  documents.
-- **Fix:** Role-branch the way two sibling call sites already do —
-  `lib/features/siri/application/schedule_snapshot_provider.dart:26-33` and
-  `lib/features/navigation/widgets/app_nav_drawer.dart:305-308` both pick
-  `myAppointmentsProvider((employeeId:, range:))` for non-admins. That also makes
-  the manual `job.employeeIds.contains(docId)` filter at `:91` redundant.
-  Note the `:66-70` comment claiming the range is shared with the mirrors is only
-  true for an admin — an employee currently forks a second, denied listener.
+### B7 — `functions/bridge.js` role validation short-circuits on a missing role · severity: low-medium · confidence: medium-high
+- **Where:** `functions/bridge.js:147` — `if (after && after.role && !VALID_ROLES.has(after.role))`
+- **Problem:** `after.role &&` means a doc with **no** `role` skips validation and
+  reaches `bridgeBody` (`:30-36`), which writes `role: data.role`
+  unconditionally. `initializeApp()` sets no `ignoreUndefinedProperties`
+  (`index.js:6`), so admin Firestore throws — uncaught, inside a `retry: true`
+  trigger. The `usersByUid` bridge is then never written, and **every rules gate
+  that resolves through it fails for that person**. Needs a console/Admin-SDK
+  write to reach. This is `.claude/rules/security.md`'s own fail-closed rule,
+  broken by the one guard that doesn't follow it.
+- **Fix:** drop `after.role &&`; add `VALID_ROLES.has(data.role)` to
+  `shouldHaveBridge`.
 
-### B3 — Dashboard "Upcoming today" drops days 2+ of a multi-day run · severity: medium · confidence: high
+### B8 — raw `'cancelled'` comparisons bypass the owner that lowercases · severity: low · confidence: high
+- **Where:** `lib/features/employees/application/employee_schedule_providers.dart:37` and `:101`
+- **Problem:** the only raw `'cancelled'` comparisons left in `lib/`, against
+  P7's `isCancelledStatusRaw` — whose own file header says a second literal "is
+  the exact drift this module exists to end". The owner lowercases; these don't.
+  A console-written `'Cancelled'` counts as live load on the Team roster and
+  lists in the TODAY panel while History's tally excludes it: two surfaces
+  disagreeing with no error. (`firebase_appointments_repository.dart:277` is a
+  legitimate exact-match write-path variant — leave it.)
+- **Fix:** route both through `isCancelledStatusRaw`.
 
-- **Where:** `lib/features/dashboard/domain/dashboard_aggregator.dart:120` (and
-  the sort at `:122`)
-- **Problem:** The same loop re-scopes correctly at `:114`
-  (`if (!runsOn(a, dayStart)) continue;`) — and the comment directly above it at
-  `:112` even says *"testing `startTime` alone hid days 2+ of a multi-day run"* —
-  but two lines later the `upcoming` list tests `a.startTime.isAfter(now)`, i.e.
-  the run's **first morning**, not this day's window. The fix was applied to the
-  status counts and not to the upcoming list.
-  Concretely: a 5-day job, 14:00–18:00 daily, started Monday. Wednesday 09:00,
-  admin opens the Dashboard — the status counts include it, but
-  `upcoming_today_section.dart:38` renders "No visits today". Secondarily, `:122`
-  sorts by the stored instant, so a continuing run would float above today's
-  genuinely-earlier jobs.
-- **Fix:** Hold the slice from the `runsOn` check and use its window:
-  `final slice = sliceFor(a, dayStart); if (slice == null) continue; … if
-  (slice.windowStart.isAfter(now) && !_isTerminal(a)) upcoming.add(a);`, sorting
-  on the same `windowStart`. Optionally pass the slice into
-  `AppointmentCard(slice:)` so the dashboard shows "Day 3 of 5" like the agenda.
+### B9 — `fetchClientsCreatedSince` truncates from the wrong end · severity: low · confidence: high on code, low on reachability
+- **Where:** `lib/features/clients/data/firebase_clients_repository.dart:141`
+- **Problem:** `orderBy('createdAt')` is **ascending** under `limit(1000)`, so
+  past 1000 clients created inside the dashboard's 49-day window the query keeps
+  the *oldest* 1000 and drops the newest — while `newClientsProvider` sorts
+  descending and the section renders "newest first" plus a total. Same silent-
+  prefix failure that got the Year period dropped, but nothing warns here.
+  Unreachable at today's client count.
+- **Fix:** `orderBy('createdAt', descending: true)` — the same single-field index
+  serves both directions.
 
-### B4 — `CLAUDE.md` asserts a Live-Activity protection that no code implements · severity: medium · confidence: high
+### B10 — `_when` is the one day-scoping consumer that doesn't clamp to the 14-day cap · severity: low · confidence: high
+- **Where:** `functions/notification_messages.js:102-109`
+- **Problem:** uses `lastWorkDayMs(c)` raw where every other answer routes
+  through a clamp. A doc written past the cap by the console or Admin SDK (both
+  bypass the new `isValidAppointmentSpan`) renders a push reading
+  "Wed, Aug 1, 9:00 a.m. – Sun, Mar 12 2028" while the widget counter, Siri
+  snapshot and card all say "Day n of 14".
+- **Fix:** clamp the range tail to `MAX_APPOINTMENT_SPAN_DAYS`, mirroring
+  `sliceForDay`.
 
-- **Where:** `functions/travel_utils.js:237` (`selectTravelCandidates`),
-  `functions/live_activity_dispatch.js:203` (`startLiveActivity`); doc claim in
-  root `CLAUDE.md`
-- **Problem:** `CLAUDE.md` states as fact: *"**Live Activities deliberately skip
-  multi-day jobs** — a four-day Lock Screen countdown is worse than no card; see
-  `docs/plans/2026-08-02-multi-day-appointments.md` §10."* **No such skip
-  exists.** Verified: zero references to `isMultiDay`, `dayCountOf` or `dayCount`
-  anywhere in `travel_utils.js`, `live_activity_dispatch.js` or
-  `live_activity_utils.js`. The candidate filter excludes only `isAllDay` and
-  non-pending. The cited plan doc contradicts `CLAUDE.md` directly — line 206
-  lists Live Activities as `Deferred → §10`, and line 222 reads *"deferred out of
-  Plan 2, still open."*
-  Concretely: Aug 1–5, 09:00–17:00. At ~08:00 on Aug 1 the sweep starts the card;
-  `resolveReminderForAssignee` (`travel_utils.js:489`) builds ctx via
-  `liveActivityCtx`, carrying the raw `endTime` = **Aug 5 17:00**. After the
-  on-site flip, `ios/ScheduleWidget/JobLiveActivity.swift:163` renders
-  `Text(timerInterval: …, countsDown: true)` — a 4-day countdown parked on the
-  Lock Screen for the whole run, exactly the harm the doc claims is prevented.
-- **Fix:** Two options — gate the card (`if (dayCountOf(c) > 1)` before
-  `startLiveActivity`, using the already-exported `day_slice_utils.dayCountOf`),
-  or send *today's* window end (`sliceForDay(record, nowMs).windowEndMs`) instead
-  of the run's `endTime`. **Either way, correct the `CLAUDE.md` bullet** — as
-  written it will stop the next reader from noticing this is unbuilt.
+### B11 — `AppointmentRecord` silently fabricates missing times, and Save persists them · severity: low-medium · confidence: high
+- **Where:** `lib/features/calendar/domain/models/appointment_record.dart:50-51`
+- **Problem:** `?? DateTime.now()` for `startTime`/`endTime`. Two paths reach a
+  doc that could lack them: `getAppointmentById` (deep-link / push tap) and
+  `fetchClientHistory`, whose query filters `clientId` alone with **no
+  `orderBy('startTime')`** — so unlike the range streams it does not exclude
+  field-less docs. The fabricated instant seeds the edit sheet
+  (`event_details_controller.dart:88-91`) and a Save writes it.
+- **Fix:** at minimum log when the fallback fires, so a legacy/console doc is
+  visible rather than silently rewritten.
 
-### B5 — Live Activity crew-colour rail is dead code; every card is orange · severity: low · confidence: high
+### B12 — `wave/worker.js` documents a cap warning that does not exist · severity: low likelihood / medium-high if reached · confidence: high
+- **Where:** `functions/wave/worker.js:89-92`, `listOutstandingClientIds` at `:904`
+- **Problem:** the comment asserts `OUTSTANDING_MAX` is "why the callable logs
+  when the set comes back at the cap". There is no such log: the constant isn't
+  exported, the function returns a bare `Set`, and neither caller checks its
+  size. Past 2000 outstanding jobs the import protects a prefix, clobbers the
+  rest **and stamps `wave.lastSyncedHash` from Wave's values** — the queued job
+  then hashes the clobbered doc, matches, returns `noop`, and an accepted edit is
+  gone with the badge reading "Synced with Wave". Same shape as the multi-day
+  Live Activity skip that CLAUDE.md documented before it existed.
+- **Fix:** return `{ids, atCap}` and `logger.error` at both call sites.
 
-- **Where:** `functions/live_activity_dispatch.js:75`
-- **Problem:** `return typeof value === "number" ? value : 0;` — but `colorValue`
-  is stored as a **numeric string** by design, everywhere: `firestore.rules:156`
-  requires `s is string && s.matches('^-?[0-9]+$')`;
-  `employee_record.dart:94` and `firebase_employees_repository.dart:212` both
-  write `.toARGB32().toString()`; `employee_accounts.js:212` reads it with
-  `requireString`. The `number` branch is unreachable, so this always returns
-  `0`, and `LiveActivitiesAppAttributes.swift:202` does
-  `guard let value = employeeColorValue, value != 0 else { return .orange }`.
-  Every push-started Lock Screen card shows an orange rail instead of the crew
-  colour. The comment above it ("A failed read just yields 0") reads as a rare
-  fallback; it is the only path.
-- **Fix:** `const n = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
-  return Number.isFinite(n) ? n : 0;`
+### B13 — two CLAUDE.md claims contradict the code · severity: low · confidence: high
+- **Where:** CLAUDE.md, dashboard `displayStatusAt` bullet and the push section
+- **Problem:** (a) "personal jobs have no mark-done flow" — `DetailsActionBar`
+  (`details_action_bar.dart:47`) gates Mark-as-complete on
+  `hasStarted && !isDone && !isCancelled` with **no** `isPersonal` branch, so a
+  started personal block does offer it. The behaviour looks right; the written
+  justification for the Attention-list carve-out is wrong. (b) the overdue sweep
+  "queries `startTime` over 48h" — it is now
+  `OVERDUE_LOOKBACK_MS + MAX_APPOINTMENT_SPAN_MS` ≈ 15 days
+  (`functions/notification_policy.js:39`).
+- **Fix:** decide which side is authoritative for (a) — correcting the sentence
+  is the cheap answer, adding an `isPersonal` branch is the other — and correct
+  (b) outright.
 
-### B6 — Photo URL resolver falls back to the rules-bypassing token URL on a permission error · severity: low-medium · confidence: high (behaviour) / medium (severity)
+## 🔵 Areas to improve (review required)
 
-- **Where:** `lib/core/images/appointment_image_url_resolver.dart:43-48`
-- **Problem:** The `catch` is unconditional, and its comment claims *"someone who
-  is not entitled gets the same 403 the rules would have given them."* That is
-  not true of `image.url`: it is the permanent `?alt=media&token=…` URL from
-  `getDownloadURL()` which — as the class doc says at `:15-23` — *"anyone holding
-  it can read with no auth and no rules evaluation."* So the one error this
-  resolver exists to convert into a blank tile (a `permission-denied` from
-  `storage.rules`' `status == 'active'` gate) is instead converted back into a
-  working, rules-free URL. Blast radius is narrowed by the appointment doc read
-  itself being rules-gated, so this is a weakening rather than an open hole — but
-  the stated guarantee does not hold, and the comment will mislead whoever
-  retires the `url` write.
-- **Fix:** Only fall back when the failure is *not* a permission rejection
-  (`FirebaseException` code `unauthorized` / `permission-denied` → return empty),
-  and reword the comment to describe what the fallback actually does.
+### I1 — the Attention section eagerly builds an unbounded list of appointment cards · impact: high · confidence: high
+- **Where:** `lib/features/dashboard/widgets/sections/attention_flags_section.dart:230`
+- **Opportunity:** `_FlagGroup` spreads one `AppointmentCard` per record with no
+  cap, inside a plain `Column`, inside `ListView(children: [...])` — so nothing
+  is lazy: every card is built *and laid out* on the first frame. Its source is
+  `flags.overdueOpen`, explicitly "the ONE reducer here with no range predicate",
+  scanning ~10 weeks business-wide. Each card carries `IntrinsicHeight` (an extra
+  layout pass over the whole subtree), an avatar stack and a `StatusChip`, and
+  the cost is re-paid on every live snapshot and every period-control tap. Every
+  sibling section caps at 5 (`upcomingLimit`, `NewClientsSection.rowLimit`); this
+  is the only outlier. At 60 stale-open jobs — plausible, since the doc's own
+  rationale is that a job overdue nine weeks ago still needs closing — that is 60
+  `IntrinsicHeight` subtrees per frame.
+- **Suggested improvement:** keep the reducer unbounded (the header *count* is
+  the point) and cap the render: `take(_rowLimit)` plus an "N more" row, matching
+  `NewClientsSection`. Or emit slivers so the enclosing scroll view builds lazily.
 
-## 🔵 Areas to improve
+### I2 — the dashboard re-pays ~2000 document reads on every re-entry · impact: medium-high · confidence: high
+- **Where:** `lib/features/dashboard/application/dashboard_providers.dart:47`
+  (`dashboardHistoryProvider`) and `:67` (`newClientsProvider`)
+- **Opportunity:** both are bare `FutureProvider.autoDispose`. The live half has
+  `_keepWarmWithGrace` (3-minute grace,
+  `calendar/application/appointments_providers.dart:19`) so it survives a
+  leave-and-return with zero re-read — but the history `.get()` and
+  `fetchClientsCreatedSince` are torn down and re-issued in full, up to 1000 docs
+  each. Drilling into a job from the Attention list and coming back is exactly
+  that round trip, and `_StatsList` waits on both, so the skeleton reappears.
+- **Suggested improvement:** reuse the existing `_keepWarmWithGrace(ref)` in both.
 
-### I1 — `SelfEmailService`'s re-auth-before-callable ordering has no test · impact: high · confidence: high
+### I3 — test-coverage gaps, all verified by grepping behaviours not filenames · impact: high · confidence: high
+Verified individually — this repo's coverage often lives under the *caller's*
+file name, so each was checked by symbol and by behaviour. The ones that
+survived that check:
+- **`functions/travel_utils.js:482`** — the multi-day Live Activity skip
+  (`dayCountOf(c) > 1`), built three days ago as the first pass's B4. Zero test
+  references. A regression parks a 5-day countdown on the Lock Screen and
+  nothing errors.
+- **`functions/live_activity_utils.js:93`** — `liveActivityCtx`, the documented
+  single owner of the card context: **zero** test references against four call
+  sites. `buildContentState` field-picks its ctx and `_stateFor` re-lists the
+  fields a second time, so a dropped key silently falls back to "Client" — the
+  exact failure the helper was created to end.
+- **`lib/features/clients/widgets/views/appointment_history_view.dart:405,423`**
+  — **no test loads a second page.** All four `fetchHistoryPage` stubs return the
+  same list regardless of `after`, so the prefetch threshold, the
+  `hasNextPage`/`isLoading`/`error` bail and the post-frame deferral are
+  unexercised. These are the two bugs the commit message says were found while
+  building it; a regression means History silently stops at page 1 or spins.
+- **`dashboard_providers.dart:221`** — `availabilityConflictsProvider` entirely
+  untested (the policy below it *is* tested; the wiring above is the gap). Wrong-
+  person or empty flags render as "All clear".
+- **`attention_flags_section.dart:127` + `daily_load_chart.dart:67`** — the
+  Sunday-indexed *unrotated* weekday labelling in two brand-new widgets. Both
+  carry a comment saying a display-ordered list "silently names the wrong day";
+  neither is tested.
+- **`functions/notification_policy.js:362`** — `contextFor`, the push/digest ctx
+  builder (`isAllDay`, the personal-job `title` fallback, per-kind shape): no
+  test file references it.
+- **`functions/maintenance.js:33-45`** — `validateUploadedImage`: a **read**
+  failure on `createReadStream` deletes the user's just-uploaded photo. Untested,
+  and the module can't be `require`d because it resolves a Storage bucket at
+  load — which is the repo's own stated reason such decisions belong in a pure
+  `*_policy.js` sibling.
+- **`dashboard_providers.dart:71-95`** — the P7 `archived` exclusion and the
+  `createdAt`-null ordering in `newClientDatesProvider`/`recentNewClientsProvider`.
+- **`event_details_save_pipeline.dart`** — the personal↔client **conversion**
+  directions after `55ea3cb3`. Existing tests pin that a personal job *may* save
+  an address, not what conversion keeps or clears. This is B1's blast radius.
 
-- **Where:** `lib/features/settings/services/self_email_service.dart` (no test file)
-- **Opportunity:** Its own docstring says this ordering is what stops an
-  unattended unlocked phone moving the sign-in address. This is the same class of
-  invariant as `AuthService.completeAccountSetup`'s password-then-activate order,
-  which *is* pinned with a `verifyInOrder` test. This one isn't, so swapping the
-  two calls ships silently. Directly compounds S1, whose whole mitigation is this
-  client-side ordering.
-- **Suggested improvement:** Mirror the existing `verifyInOrder` pattern, plus
-  the half that matters — a thrown re-auth must `verifyNever` the callable.
+### I4 — the load-bearing de-registration order is hand-written at 3 sites, and only 1 is tested · impact: medium-high · confidence: high
+- **Where:** `lib/core/app/account_exit_listeners.dart:88-91`,
+  `lib/features/settings/screens/settings_screen.dart:381-385` and `:439-443`
+- **Opportunity:** push → presence → Live Activity, all before the credential is
+  revoked. CLAUDE.md states this "lives in `AccountExitListeners`" — that is
+  wrong for two of the three exits, and `AccountDeletionService` doesn't own it
+  either. Only the `core/app/` copy has a test
+  (`grep -rln unregisterCurrentDevice test/` returns that one file). Adding a
+  fourth token store means three edits with no compile error; an ordering
+  regression means de-registration hits a revoked credential and a stale FCM
+  token keeps pushing to a signed-out device.
+- **Suggested improvement:** extract `deregisterThisDevice(ref)` into
+  `core/app/` and call it from all three — this fixes a duplication *and* a
+  documentation inaccuracy at once.
 
-### I2 — `healSyncState`'s transactional race-safety has no test · impact: high · confidence: high
+### I5 — give the `functions/` cancelled/terminal vocabulary one owner · impact: medium · confidence: high
+- **Where:** B4's four sites, plus `String(x.status || "").toLowerCase() ===
+  "cancelled"` spelled **5×**: `notification_policy.js:170` and `:269`,
+  `travel_utils.js:213`, `widget_payload_utils.js:121`,
+  `notification_utils.js:239` (already the odd one out, testing `!== "cancelled"`
+  on a raw `statusOf`).
+- **Suggested improvement:** one `isCancelledStatus(status)` beside B4's shared
+  set. This is the same module family that already drifted twice.
 
-- **Where:** `functions/wave/customers.js` (absent from
-  `functions/__tests__/wave_customers.test.js`)
-- **Opportunity:** It re-reads and re-hashes *inside* the transaction rather than
-  trusting the caller's hash, specifically so an edit landing in that window is
-  not marked synced. That subtle property is unverified. A regression either
-  re-introduces the stuck-badge bug it was written to fix, or — worse — marks a
-  doc synced while an edit is still in the outbox, which is the exact lie the
-  badge exists to remove.
-- **Suggested improvement:** A jest test asserting the in-transaction re-hash and
-  that a concurrent-edit case leaves the state un-healed.
+### I6 — complexity hotspots · impact: medium · confidence: high
+- `lib/features/clients/widgets/views/appointment_history_view.dart` — **750
+  lines**, with `_AppointmentHistoryViewState` at **642** holding four concerns
+  (pagination driving, search indexing + filtering, sliver rendering, error/empty
+  states). P7 phase D moved ISP's job into this class. Extract `:529-693` as a
+  `HistorySliverList` StatelessWidget — it needs only
+  `rows/colorMap/currentYear/inSearch/footer/…`, and
+  `calendar/widgets/views/agenda_sliver_list.dart` is the precedent.
+- `lib/features/calendar/screens/main_calendar_screen.dart` — **819 lines**,
+  State **639**. Two concerns aren't calendar: the app-wide photo-upload-failure
+  SnackBar and role-upgrade routing. `lib/core/app/` exists for exactly this
+  (`AppSyncListeners`, `AccountExitListeners`). Caveat: the photo SnackBar is one
+  of the three sanctioned SnackBar sites, so `.claude/rules/frontend.md`'s file
+  reference moves with it.
+- `lib/features/calendar/widgets/sections/appointment_form_fields.dart` — 602
+  lines, **35 constructor params** across 2 call sites. Honest caveat: all are
+  `required`, so a miss *is* a compile error — this is readability cost, not the
+  silent `createAccount` trap. Grouping the 10 `onPick*`/`onSelect*` callbacks
+  into one class beside `AppointmentFormControllers` would be proportionate.
+- The large `functions/` modules (`wave/worker.js` 925, `wave/customers.js` 832,
+  `travel_utils.js` 819) decompose into small named functions already — **leave
+  them alone.**
 
-### I3 — `functions/notification_messages.js` has no dedicated test · impact: high · confidence: medium-high
+### I7 — two dashboard reducers do avoidable work per snapshot · impact: low-medium · confidence: high
+- `dashboard_aggregator.dart:229` `computeDailyLoad` makes **7 full passes** over
+  the merged list, each `runsOn` → `sliceFor` **allocating an
+  `AppointmentDaySlice`** just to discard it as a bool (~5,600 throwaway objects
+  at n≈800, re-run on every live snapshot and every `employeesStreamProvider`
+  emission). One outer pass incrementing a `Map<DateTime,int>` — or reusing
+  `expandToDays`, which already buckets in one pass — fixes it.
+- `dashboard_providers.dart:236-243` `availabilityConflictsProvider` builds a
+  fresh filtered copy of the entire merged list **per employee** (O(E·n)).
+  Group by assignee id once instead. Milliseconds each, but they land on the same
+  frame as I1.
 
-- **Where:** `functions/notification_messages.js` (only touched incidentally via
-  `employee_accounts.test.js`)
-- **Opportunity:** `_who` / `_when` / `_at` / `_whoAt` / `_repeatLabel` /
-  `buildNotificationMessage` / `buildDigestMessage` compose every EN/FR push and
-  digest, including the personal-job title fallback and the new multi-day range
-  line. `CLAUDE.md` documents this *exact* function drifting before — it is the
-  codebase's single most-repeated bug shape (`_who`, the display-status ladder,
-  the live-activity ctx), and this is the major instance with no direct test.
-- **Suggested improvement:** A jest file exercising `_who`, multi-day formatting
-  and the personal-job fallback directly.
+### I8 — two more 3+-site duplications worth an owner · impact: medium-low · confidence: high
+- `firebase_appointments_repository.dart:318`, `:336`, `:470` — the
+  `fetchStart`/`end`/`orderBy`/`limit` range-query head, verbatim 3×. The
+  dashboard's live/history split depends on both halves reaching the **same**
+  `fetchStart`; a one-sided edit silently changes the overlap `mergeById`
+  assumes. One private `_rangeQuery(range)` the three chain from.
+- `my_details_screen.dart:114`, `:190`, `settings_screen.dart:240` —
+  `updateSelfDetails`'s 7 named args re-spelled 3×, because the rules' `hasOnly`
+  forces the patch to name every allowlisted key. Adding a key to
+  `kSelfServiceUserFields` needs three edits and a miss is a silent
+  `permission-denied` on an ordinary save.
 
-### I4 — Every `emergencyContactProvider` error branch swallows without logging · impact: medium · confidence: high
+### I9 — the travel sweep reads each candidate's `users` doc twice · impact: low · confidence: high
+- **Where:** `functions/travel_utils.js:681` (`loadTravelPrefsByEmployee`) vs
+  `functions/notification_utils.js:86-93` (`sendToEmployee`'s cache-miss path)
+- **Opportunity:** the prefs pass reads `users/{id}` per candidate and never
+  lands the result in the `cache` Map `sendToEmployee` later consults, so the
+  same doc is read twice per sweep × 288 sweeps/day. One-line fix; tiny cost.
 
-- **Where:** `lib/features/employees/widgets/views/employee_details_view.dart:59-61`,
-  `lib/features/employees/widgets/sheets/edit_person_sheet.dart:151-155`,
-  `lib/features/settings/screens/my_details_screen.dart:365-371`
-- **Opportunity:** `.claude/rules/error-handling.md` is explicit: *"A user-visible
-  failure notice is not a substitute for a log… every swallowed failure needs a
-  `warn` beside it."* All three consumers skip it, so a failing read on this path
-  is invisible in Crashlytics. Separately, `employee_details_view.dart:59` uses
-  `.value ?? EmergencyContact.empty`, which collapses **loading** and **error**
-  into the same value.
-  *Scope note:* this is less severe than it first appears — `:211` omits the
-  panel entirely when the rows are empty, so a failed read renders as *not shown*
-  rather than *none on file*, which is what the `CLAUDE.md` invariant demands. The
-  real residue is the missing log plus loading being indistinguishable from
-  failure.
-- **Suggested improvement:** Add a tagged `logger.warn` in each error branch; on
-  the detail view, branch loading vs. error rather than collapsing both.
+### I10 — the Team tab pins a third session-long appointments listener · impact: low · confidence: medium
+- **Where:** `employee_schedule_providers.dart:32`, watched per row from
+  `employee_card.dart:33`, kept mounted by `hub_shell.dart:57`
+- **Opportunity:** the provider is `autoDispose` *specifically* so the range
+  stream's eviction grace can fire — but `HubShell`'s `IndexedStack` never
+  unmounts a visited tab, so the row watchers never leave and the grace can never
+  run. Gate the row's watch on tab visibility (`HubShellScope.currentOf`), as the
+  tours already do. Verify against the drawer badge, which shares
+  `todayRangeProvider` and must keep the range value identical or it forks a
+  second query.
 
-### I5 — `docs/ARCHITECTURE.md` no longer describes the P5 self-service surface · impact: medium · confidence: high
+### I11 — 15 `logger.warn` labels carry no tag prefix · impact: low · confidence: high
+- **Where:** `google_places_repository.dart:37,49,68,117,137,148`;
+  `splash_controller.dart:57,60`; `splash_screen.dart:124`;
+  `event_details_controller.dart:130,168`;
+  `appointment_form_concerns.dart:104`; `employees_screen.dart:277`;
+  `auth_service.dart:215`
+- **Opportunity:** the tag is now *the only place the tag lives* (notices no
+  longer carry one), so a Crashlytics search for the operation misses these
+  entirely. The Places repo is tagless while its own consumers use
+  `ADDR-AUTO`/`ADDR-DETAILS`. Prefix each and add the new tags to
+  `.claude/rules/error-handling.md`. The `login.*` family is a separate
+  self-consistent convention — normalize it deliberately or leave it.
 
-- **Where:** `docs/ARCHITECTURE.md:71`, `:848-849`, `:857-859`, `:1023`
-- **Opportunity:** Four verified drifts:
-  1. `:71` calls `my_details_screen` *"the ONLY self-service edit surface (own
-     emergency contact; everything else about a person is admin-owned)"*. Since
-     P5 (2026-08-10) the same screen self-edits phone, full availability,
-     `travelAlertsEnabled` and — via `SelfEmailService` — the person's own
-     sign-in email. A reader trusting this misjudges the self-service attack
-     surface, which is security-adjacent.
-  2. `:857-859` still credits the 1.37.1 build for the live `platform:` field —
-     root `CLAUDE.md` already corrected that sentence and `ARCHITECTURE.md`
-     wasn't updated with it.
-  3. `:1023` cites error tag `EMP-DEL`; the actual tag is `EMP-DELETE`
-     (`employee_form_controller.dart:289`).
-  4. `docs/CLOUD_FUNCTIONS.md:44,160-161` claims `revokeInvite`/`previewInvite`
-     *"never existed in code"* — they existed under P4b (`461f84ba`) and were
-     removed by P4c (`ea375b1b`).
-- **Suggested improvement:** Update all four; describe the P5 dirty-gated-identity
-  vs. immediate-availability split and list the genuinely admin-only fields
-  (`maxJobsPerDay`, `role`, `jobTitle`, `colorValue`, `status`).
+### I12 — six `functions/` exports nothing reads · impact: low · confidence: high
+- `notification_policy.js:385,389,390,392` (`OVERDUE_LOOKBACK_MS`,
+  `LEDGER_TTL_MS`, `OPEN_LIKE`, `KIND_PRIORITY`), `travel_utils.js:811`
+  (`canDeferRoutes`), `wave/import_schedule.js:120` (`DELTA_OVERLAP_MS`),
+  `employee_accounts.js:769` (`notifyAdminsOfSelfEmailChange`) — each used only
+  inside its own file, read by no module and no test. The constants themselves
+  are live; only the export surface is dead. May be a deliberate test seam;
+  drop the export lines only if you confirm that.
 
-### I6 — `account_setup_screen.dart` is 923 lines with a 140-line `build()` · impact: medium · confidence: high
+## 🟡 Code-quality suggestions (optional)
 
-- **Where:** `lib/features/auth/screens/account_setup_screen.dart` (923 lines;
-  `build()` at `:409-548`)
-- **Opportunity:** One `State` plus six more widget classes (`_SetupBanner`,
-  `_LockedEmailPanel`, `_SignedInChip`, `_VerifyEmailPanel`, `_ConsentRow`,
-  `_ConsentRowState`) in one file, against the project's one-class-per-file rule
-  and the ~60-line `build()` rule. This is the P4c activation screen — password
-  rotation ordering, `email_verified` gating, consent stamping — i.e. the screen
-  `CLAUDE.md` spends the most words on. Size raises the risk of the next edit.
-- **Suggested improvement:** Move the five presentational widgets to
-  `features/auth/widgets/account_setup/*.dart`; extract the ~74-line stacked
-  text-field block into a `_SetupFormFields` widget.
-
-### I7 — The AVAILABILITY panel is hand-duplicated across two screens · impact: medium · confidence: high
-
-- **Where:** `lib/features/employees/widgets/sheets/edit_person_sheet.dart:488-542`
-  and `lib/features/settings/widgets/.../my_availability_section.dart`
-- **Opportunity:** `CLAUDE.md` requires both screens *"render that panel
-  identically"* but the enforcement is manual. This is the documented drift shape
-  (`SheetPanelRow` was extracted for exactly this reason when the panel appeared
-  on My details in P5) with the last step left undone.
-- **Suggested improvement:** Extract one shared availability-panel widget used by
-  both. Also shrinks `edit_person_sheet.dart` (668 lines).
-
-### I8 — `event_details_controller.dart` mixes state setters with a 250-line save pipeline · impact: medium · confidence: medium
-
-- **Where:** `lib/features/calendar/application/event_details_controller.dart`
-  (680 lines; `save()` at `:348-461` plus `_applyPhotoChanges` /
-  `_settleAndValidate` / `_buildUpdatedRecord` / `_applySeriesChange`)
-- **Opportunity:** This is the controller `CLAUDE.md` flags most heavily for
-  correctness (assignee retention, `storedRaw` normalization, series propagation,
-  reentrancy). Each rule would be easier to unit-test in isolation, with a smaller
-  blast radius, if the pipeline were its own class.
-- **Suggested improvement:** Extract `event_details_save_pipeline.dart`; leave the
-  controller as state mutation + delegation. Structural judgment call, not a defect.
-
-### I9 — Six core helpers gating app-wide behaviour have no tests · impact: medium · confidence: high
-
-- **Where:** `lib/core/layout/breakpoints.dart`,
-  `lib/core/utils/firestore_parsing.dart`,
-  `lib/core/launchers/phone_call_launcher.dart`,
-  `lib/core/permissions/media_permission_service.dart`,
-  `lib/core/launchers/web_url_launcher.dart`,
-  `lib/core/navigation/hub_shell_scope.dart`
-- **Opportunity:** Ranked by what breaks silently: `firestoreDateTime` is the
-  single Firestore-date boundary (`Timestamp`/`DateTime`/legacy `String`/`null`)
-  — a dropped legacy-string fallback silently nulls dates on older docs.
-  `breakpoints.dart`'s compound getters gate layout app-wide and `CLAUDE.md`
-  records a real historical regression from exactly that shape (the 1.4× text-
-  scale case). `web_url_launcher` gates the Terms/Privacy links that give the
-  consent record its legal meaning.
-- **Suggested improvement:** Pure unit tests; all six are Firebase-free.
-
-### I10 — `WaveSyncBadge` silently renders nothing for an unknown `syncState` · impact: low-medium · confidence: medium
-
-- **Where:** `lib/features/wave/widgets/wave_sync_badge.dart:63-87`
-- **Opportunity:** `default: return null` over a server-owned string vocabulary.
-  A future server-side state (e.g. `conflict`) would ship invisibly on an
-  admin-only surface with no signal anywhere.
-- **Suggested improvement:** Log on the unrecognized branch so a mismatch reaches
-  Crashlytics instead of just looking blank.
-
-## 🟡 Code-quality suggestions
-
-- `lib/features/dashboard/widgets/sections/dashboard_hero.dart:59-68` — hand-rolls
-  `Color.alphaBlend(Colors.black.withValues(alpha: 0.2), scheme.primary)` where
-  the `AppPalette.heroGradient` token exists for exactly this hero role and is
-  used by `auth_form_widgets.dart:151`. **Not a mechanical swap** — the token
-  uses different colours (`AppColors.blue`→`navy`) *and* different alignments
-  (`Alignment(-0.5,-1)`→`(0.5,1)` vs `topLeft`→`bottomRight`), so adopting it
-  changes the dashboard's appearance. Treat as a design decision, not a cleanup.
-- `lib/l10n/app_en.arb:2628` + `lib/l10n/app_fr.arb:591` — `nav_myDetails` is
-  orphaned (zero call sites; P5 shipped using `settings_myDetails`). A stale
-  comment at `lib/features/navigation/domain/drawer_catalog.dart:36` still names
-  it. Both ARBs are otherwise perfectly matched at 687 keys with no EN/FR drift.
-  Per project rules, ARB keys are not stripped in a code sweep — flagged for a
-  deliberate l10n pass.
-- `lib/features/maps/domain/models/parsed_address.dart:10-13` —
-  `street`/`city`/`province`/`postalCode` are populated by
-  `google_places_repository.dart` but the only caller
-  (`address_autocomplete_field.dart:169-176`) reads `.fullAddress` alone; the
-  map round-trip is exercised only by a test. Either wire them up or trim the
-  model. (Distinct from the live `ParsedAddressFields` in `address_parser.dart`.)
-- `lib/features/employees/domain/models/employee_record.dart:43` —
-  `createdAt` is parsed but never read (unlike `ClientRecord.createdAt`, which
-  drives dashboard trends).
-- `lib/features/calendar/domain/models/appointment_image.dart:11` — `fileName` is
-  written and round-tripped but never read off an instance. Plausibly reserved.
-- `functions/live_activity_registry.js:352-359` and
-  `functions/maintenance_policy.js:117-119` export internal constants used only
-  by their own tests, without the "exported for unit tests" comment that
-  `apns_client.js` / `account.js` carry. Informational — matches an established
-  convention; worth a comment, not a change.
+- `appointment_history_view.dart:457` — `CircularProgressIndicator.adaptive()`
+  where `AdaptiveProgressIndicator` is the one seam (9 other sites use it).
+  `.adaptive` branches on `defaultTargetPlatform`, so a test forcing the look via
+  `ThemeData(platform:)` — the documented mechanism — cannot reach it. **Not
+  auto-applied** because the seam defaults to 20px against
+  `CircularProgressIndicator`'s 36px, so the swap is visible; pass an explicit
+  size if you want the current look.
+- `.claude/rules/error-handling.md` — the `guardedOffline` carve-out still names
+  "the two `accept_invite_*` screens", both deleted in P4c. The live carve-out is
+  `account_setup_screen.dart:298`, which surfaces offline through its own banner.
+  As written, the rule points at deleted files and the next reviewer flags a
+  correct site.
+- `lib/features/wave/widgets/wave_settings_section.dart:52` `_blockedOffline()` —
+  a hand-written widget-layer offline guard where `guardedOffline` is used at 13
+  other sites. Arguably a legitimate variant, since it surfaces the typed
+  `WaveNetwork` message `guardedOffline` cannot. Owner call: route it through, or
+  add the carve-out to the rule so it stops reading as drift.
+- `dashboard_hero.dart:79`, `text_size_view.dart:306` — `FontWeight.w800` with no
+  800 face bundled (Instrument Sans ships 400/500/600/700), so it renders as 700.
+  Cosmetic; the code claims a weight it cannot produce.
+- `lib/core/images/image_storage_service.dart:67` — `deleteImage` is public with
+  exactly one caller two lines below it (`deleteImages`); could be `_deleteImage`.
+- `functions/scripts/audit-client-phone-backfill-damage.js` — one-off forensic
+  script for the completed 2026-08-08 incident, `require`d by nothing. Keep as a
+  record or move under `docs/`; owner call.
 
 ## Notes / uncertainties
 
-- **Why zero auto-fixes.** The statics were already clean, so the only two
-  candidates came from the deep review, and both failed verification as "safe":
-  the `heroGradient` swap is not behaviour-preserving (different colours *and*
-  alignments), and ARB keys are explicitly report-only per
-  `references/project-map.md`. Reporting both rather than applying either.
-- **B1 left the suite red at audit time.** The failure pre-dated this audit (the
-  tree was clean on arrival). Fixed in the 2026-08-11 pass: the clock is pinned
-  to 2026-08-10 and the three previously-vacuous tests were re-checked.
-- **I corrected two reviewer findings during verification.** The emergency-contact
-  finding was returned as High/"tells an admin nobody has an emergency contact";
-  the panel is actually omitted when empty, so it renders as *not shown* — I
-  downgraded it to I4 and restated the real residue. The `heroGradient` swap was
-  returned as a one-line token swap; it isn't.
-- **Deliberately not flagged**, so they are not re-litigated later:
-  `groupTomorrowsJobsByEmployee`'s over-inclusive instant-span overlap
-  (self-documented, out of Plan 2 scope); the widget's "Day N of M" for a night
-  shift (`ScheduleWidget.swift:216` documents the missing `isOvernight` flag);
-  `_barColors` skipping colourless assignees while the avatar stack shows them
-  (documented at `appointment_card.dart:196`); `PURGE_STATUSES` omitting legacy
-  `completed` (fails safe); `EventDetailsController.save`'s reentrancy returning
-  `EventDetailsInvalid` rather than a `Busy` member (both surface nothing).
-- **Verified clean and stated plainly rather than padded:** all 8
-  `appointmentsInRangeProvider` consumers re-scope through the day-slice owner;
-  `day_slice_utils.js` is a faithful wall-clock mirror of the Dart; `storedRaw`
-  normalization is applied at all three re-serializing sites;
-  `kSelfServiceUserFields` matches the rules exactly (7 keys); the P5
-  `allow update` parentheses do bind the denylist and validator to both branches;
-  all 11 callables enforce App Check with correct guard order; no PII reaches
-  `logger.*` in `functions/`; no secrets in the working tree; role is never read
-  from SharedPreferences; all four credential fields set
-  `enableIMEPersonalizedLearning: false`; every `setState`-after-`await` across 39
-  files guards on `mounted`; no duplication cleared the 3+-site bar; the
-  performance pass found nothing actionable.
-- **Not covered:** device-only paths (`ImagePickerService`/`ImageStorageService`,
-  biometric app-lock, camera) per the project's testing rules; Swift under
-  `ios/` was read only where a Dart/JS finding crossed into it; catch-block
-  logging was sampled (~30 of 56 candidate files), not exhaustively swept.
+- **Verified clean, so explicitly not reported as findings:** zero orphaned ARB
+  keys of 706 (EN↔FR in exact lockstep, every key has its `@meta` block — I
+  checked this independently); zero unreferenced files; zero surviving fragments
+  of the retired flows (signup codes, the `#compat-1.37.1` shim,
+  `kShowTestingDeleteClient`, `table_calendar`, `AdaptiveShell`, …); 25 function
+  definitions == 25 `index.js` exports; no duplicate or stale index entries and
+  all 6 TTL policies still declared; zero UTF-8 BOMs; zero unused dependencies;
+  every `dispose()` present; 9/9 raw `Stream.listen` sites pass `onError`;
+  exactly the 3 sanctioned SnackBar sites; no `FirebaseFirestore.instance` in
+  UI; no `throw Exception(...)` in `lib/`; all 13 callables set
+  `enforceAppCheck: true` with the documented guard order; every documented
+  Dart↔JS mirror pair agrees; `displayStatusAt` has exactly one owner; every
+  `appointmentsInRangeProvider` consumer re-scopes through `runsOn` and
+  role-branches correctly; all four save controllers set their in-flight flag
+  before the first await.
+- **Two reviewers disagreed on S1** (whether the rules bound can reject a legal
+  save). I traced the wall-clock arithmetic myself and the DST case is real; see
+  the note under S1.
+- **I corrected two overstated impacts** from the reviewers before recording
+  them: B4's purge gap does **not** orphan Storage bytes (an unpurged doc still
+  references its images) and is reachable only by a console/Admin-SDK write, and
+  B4 as a whole is low rather than high severity for the same reason.
+- Cannot verify what production actually runs from here — S2's prod state is
+  inferred from the commit messages and `docs/DEPLOYMENT.md`.
+- Device-only surfaces (biometric app-lock, camera capture, the photo upload
+  method channels, Live Activities, the home widget and Siri extension) are
+  outside the harness; B2's blanking behaviour in particular wants a device check.
+- The two auto-fixes are comment-only, so no test could have covered them;
+  `flutter analyze` and the three touched-area suites were run anyway.
+
+## What was not done, and why
+
+Everything above is implemented except these. None was skipped for convenience —
+each is a judgement worth the owner's attention.
+
+- **S2 — the deploy.** Not mine to trigger. `firebase deploy --only
+  functions,firestore:rules` (never `--force`). S1's rules fix rides in it, so
+  the DST rejection stays live in prod until this runs.
+- **S3 — `waveBootstrap` rate limit: FALSE FINDING, no change made.** The
+  callable *is* rate-limited (`wave/callables.js:162`, `wave-bootstrap`,
+  `WAVE_BOOTSTRAP_RATE_MAX`), placed deliberately on the not-yet-connected path
+  only and before any Wave network call. The reviewer read the decorator and
+  stopped. Guard order is correct as it stands.
+- **I10 — the Team tab's session-long listener: DECLINED.** The proposed fix
+  gates each roster row's watch on `HubShellScope.currentOf`, which makes every
+  row rebuild on every tab switch and read `0 jobs` whenever Team is not the
+  current tab. That trades one extra listener over a single day's documents —
+  the finding's own impact rating was low — for churn on a hot path and a
+  visible wrong count. Revisit only with a cheaper signal than per-row
+  visibility.
+- **I6 — the three structural refactors: NOT DONE.** Extracting
+  `HistorySliverList` out of `appointment_history_view.dart` (750 lines), moving
+  the two non-calendar listeners out of `main_calendar_screen.dart` (819), and
+  grouping `AppointmentFormFields`' 10 picker callbacks. All three are pure
+  structure with no behaviour to pin, they touch three of the largest and
+  newest files in the repo, and the third's own finding notes every param is
+  `required` so a miss is already a compile error. Worth doing on their own
+  branch where the diff is reviewable, not folded into a 59-file audit pass.
+- **I3 — 4 of 10 test gaps closed.** Done: the multi-day Live Activity skip
+  (C1, in `travel_utils.test.js` — the existing harness had to be reused, and
+  `live_activity_dispatch` is now mocked file-wide so the card is observable),
+  `liveActivityCtx` and `contextFor` (C2, C5, new `live_activity_ctx.test.js`),
+  plus new coverage for this pass's own fixes: the shared status vocabulary
+  (`status_vocabulary.test.js`), the DST headroom in the rules bound, the Siri
+  address scoping, and B1's personal-address guard in **both** directions.
+  Still open: **C3** `availabilityConflictsProvider`, **C4** the two
+  Sunday-indexed weekday labellings, **C6** History's second page (no test ever
+  loads one), **C8** `validateUploadedImage`'s read-failure path — which wants
+  the `*_policy.js` extraction its finding describes before it can be tested at
+  all — **C9** the new-clients `archived` exclusion, and **C10** the
+  personal↔client conversion directions at the controller layer.
+- **B13(a) resolved as a doc fix, not a code change.** `DetailsActionBar` does
+  offer Mark-as-complete on a started personal block; the CLAUDE.md sentence
+  claiming otherwise was corrected rather than the behaviour changed. If the
+  intent was actually to withhold that button, that is a separate decision.

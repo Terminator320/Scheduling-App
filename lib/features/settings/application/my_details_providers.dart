@@ -88,17 +88,15 @@ final myUpcomingAppointmentsProvider =
       final docId = identity?.docId;
       if (identity == null || docId == null || docId.isEmpty) return const [];
       final range = ref.watch(myDetailsRangeProvider);
-      final jobs =
-          (identity.role == 'admin'
-                  ? ref.watch(appointmentsInRangeProvider(range))
-                  : ref.watch(
-                      myAppointmentsProvider((
-                        employeeId: docId,
-                        range: range,
-                      )),
-                    ))
-              .value ??
-          const <AppointmentRecord>[];
+      final jobs = appointmentsOrEmpty(
+        ref,
+        identity.role == 'admin'
+            ? ref.watch(appointmentsInRangeProvider(range))
+            : ref.watch(
+                myAppointmentsProvider((employeeId: docId, range: range)),
+              ),
+        'MYDET upcoming range stream failed',
+      );
       return [
         for (final job in jobs)
           if (job.employeeIds.contains(docId)) job,

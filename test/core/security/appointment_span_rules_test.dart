@@ -39,6 +39,19 @@ void main() {
       expect(bodyOf('isValidAppointmentSpan'), contains('<= duration.value'));
     });
 
+    test('the bound carries DST headroom over the calendar-day cap', () {
+      // The app's cap counts CALENDAR days and `combineDateAndTime` composes
+      // LOCAL wall-clock instants, while `duration.value` is absolute. A window
+      // containing the autumn fall-back therefore stores an hour MORE than its
+      // calendar length — the widest run becomes 14d 1h and a 14-day all-day
+      // block 14d 0h59m — so a flat 14d bound refused a booking the form had
+      // already accepted. Drop this term and that returns every November.
+      expect(
+        bodyOf('isValidAppointmentSpan'),
+        contains("duration.value(2, 'h')"),
+      );
+    });
+
     test('a doc missing either instant is not stranded by the guard', () {
       final guard = bodyOf('isValidAppointmentSpan');
 

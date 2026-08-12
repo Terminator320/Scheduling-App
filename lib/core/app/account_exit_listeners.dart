@@ -5,14 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/app/app_sync_listeners.dart';
+import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
-import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
-import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
@@ -83,12 +81,9 @@ class AccountExitListeners {
     try {
       final message = selectMessage(AppLocalizations.of(navContext));
       // Best-effort de-registration first — a failure here shouldn't block
-      // sign-out.
-      await ref
-          .read(pushRegistrationControllerProvider)
-          .unregisterCurrentDevice();
-      await ref.read(presenceSyncControllerProvider).unregister();
-      await ref.read(liveActivityRegistrationControllerProvider).unregister();
+      // sign-out. Order lives in `deregisterThisDevice`, shared with both of
+      // Settings' exits.
+      await deregisterThisDevice(ref);
       await ref.read(authServiceProvider).signOut();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {

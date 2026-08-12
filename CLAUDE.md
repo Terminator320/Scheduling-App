@@ -216,9 +216,14 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `DashboardAggregator.displayStatusAt` delegates to it.** The dashboard used to
   carry a hand-copied "mirror" of it and had already drifted — it was missing
   the `isPersonal` carve-out, so a personal block past its end read "Scheduled"
-  on its card and sat under the dashboard's Attention list as *overdue*, where
-  an admin had no affordance to clear it (personal jobs have no mark-done
-  flow). Never re-copy the ladder; add clock-derived rules to
+  on its card and sat under the dashboard's Attention list as *overdue* —
+  nagging an admin to close something "job finished?" is the wrong question
+  for. (A started personal block CAN be marked complete: `DetailsActionBar`
+  gates that button on `hasStarted && !isDone && !isCancelled` with no
+  `isPersonal` branch. An earlier note here justified the carve-out by claiming
+  personal jobs have no mark-done flow — they do; the carve-out stands on the
+  wrongness of the prompt, not on the absence of a way out.)
+  Never re-copy the ladder; add clock-derived rules to
   `displayStatusAt` only. The
   card/tile and the read-only detail header render `displayStatus`, but the edit
   picker and all writes seed from the real stored `status` (so `overdue` can't
@@ -404,9 +409,17 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   **`firestore.rules` bounds the span too, as of 2026-08-11** —
   `isValidAppointmentSpan`, on `allow create` and the admin `allow update` —
   but rules reach CLIENT writes only, so the app's clamp is still what contains
-  a console or Admin-SDK write. The bound is **14 days exactly and inclusive**:
-  a run booked at one clock time (09:00 → +14d 09:00) is a legitimate chain of
-  24-hour windows, so a `<` would reject the widest thing the form can save.
+  a console or Admin-SDK write. The bound is **14 days inclusive PLUS a two-hour
+  DST allowance**: a run booked at one clock time (09:00 → +14d 09:00) is a
+  legitimate chain of 24-hour windows, so a `<` would reject the widest thing the
+  form can save. The `+2h` is the unit mismatch, not slack — the app counts
+  CALENDAR days and `combineDateAndTime` composes LOCAL wall-clock instants,
+  while CEL's `duration.value` is absolute, so a window containing the autumn
+  fall-back stores an hour MORE than its calendar length (that widest run
+  becomes 14d 1h; a 14-day all-day block 14d 0h59m). A flat `duration.value(14,
+  'd')` therefore refused, for about two weeks each autumn, a booking the form
+  had already accepted — as an opaque `permission-denied`. Pinned by
+  `appointment_span_rules_test.dart`; don't "simplify" the term away.
   **An UPDATE whose span is out of range but not WIDENED still passes**
   (`appointmentSpanNotWidened`) — the same asymmetry as `emergencyFieldNotSet`,
   and for the same reason: a doc that already exceeds the cap must stay
@@ -1728,9 +1741,11 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `isOfflineProvider`, pushes the standard offline notice and returns true so
   the caller returns. The block was copy-pasted at six sites. It takes no
   `tag`: notices carry no support code (2026-08-04), so a tag now lives only in
-  the `logger.warn` label at the same site. The two `accept_invite_*`
-  screens deliberately stay out — they surface offline through their own
-  `AuthBanner`, not a notice. Controller-layer guards (`add_event`,
+  the `logger.warn` label at the same site. `AccountSetupScreen` deliberately
+  stays out — it surfaces offline through its own banner (`_bannerError`), not a
+  notice. (This named "the two `accept_invite_*` screens" until 2026-08-11, both
+  of which P4c deleted, so the rule pointed at nothing and the one live
+  carve-out read as drift.) Controller-layer guards (`add_event`,
   `event_details`, `client_form`) keep returning a typed failure instead.
 - **`DateFormat` is memoized per locale** (`calendar/domain/month_grid.dart`:
   `longDateFormatFor`, `weekdayAbbrevFormatFor`, `_symbolsFormat`). Constructing

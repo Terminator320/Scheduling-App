@@ -88,7 +88,8 @@ const DEFAULT_BATCH_LIMIT = 30;
 
 // Cap on the import's protect-list read (see listOutstandingClientIds). Sized
 // well above any realistic backlog; if it is ever hit the import protects a
-// prefix, which is why the callable logs when the set comes back at the cap.
+// prefix, which is why listOutstandingClientIds itself logs an error when the
+// read comes back at the cap.
 const OUTSTANDING_MAX = 2000;
 
 /** Base delay for exponential backoff in milliseconds (60 seconds). */
@@ -908,10 +909,25 @@ async function listOutstandingClientIds(deps = {}) {
       .where("status", "in", ["queued", "inflight"])
       .limit(limit)
       .get();
+  const docs = (snap && snap.docs) || [];
   const ids = new Set();
-  for (const doc of (snap && snap.docs) || []) {
+  for (const doc of docs) {
     const id = clientIdFromRefPath((doc.data() || {}).refPath);
     if (id) ids.add(id);
+  }
+  // Logged HERE, not at the callers: the header claimed the callable logged at
+  // the cap and none of them did, so the truncation was silent. Past the cap
+  // the import protects a prefix and CLOBBERS the rest with Wave's values —
+  // then stamps `lastSyncedHash` from them, so the queued job hashes the
+  // clobbered doc, matches, returns `noop`, and an accepted edit is gone with
+  // the badge reading "Synced with Wave".
+  if (docs.length >= limit) {
+    const log = deps.logger || require("firebase-functions/logger");
+    log.error("WAVE-WORKER outstanding protect-list hit its cap; the import " +
+        "will protect only a prefix and may overwrite queued client edits", {
+      limit,
+      protectedIds: ids.size,
+    });
   }
   return ids;
 }

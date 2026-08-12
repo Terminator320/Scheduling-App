@@ -38,10 +38,12 @@ void main() {
   Map<String, dynamic> build(
     List<AppointmentRecord> appointments, {
     String role = 'employee',
+    String viewerDocId = '',
   }) => buildScheduleSnapshot(
     appointments: appointments,
     role: role,
     now: now,
+    viewerDocId: viewerDocId,
   );
 
   group('buildScheduleSnapshot', () {
@@ -272,6 +274,73 @@ void main() {
       expect(
         lastNight['endMillis'],
         DateTime(2026, 7, 22, 6).millisecondsSinceEpoch,
+      );
+    });
+  });
+
+  group('a personal job address is scoped to its own crew', () {
+    // Personal blocks carry a real address as of 2026-08-11, and this payload
+    // sits in an App Group that stays readable while the device is LOCKED —
+    // which is why notes, phone and pictures are excluded from it. An admin's
+    // snapshot is business-wide, so without this an admin's locked phone held
+    // the location of every employee's private appointment (clinic, school),
+    // for a person who is not an app user and never consented.
+    AppointmentRecord personal({
+      required List<String> crew,
+      String address = '9 Clinic Rd',
+    }) => AppointmentRecord(
+      id: 'p1',
+      startTime: DateTime(2026, 7, 19, 9),
+      endTime: DateTime(2026, 7, 19, 10),
+      isPersonal: true,
+      title: 'Dentist',
+      address: address,
+      employeeIds: crew,
+    );
+
+    test('withheld when the viewer is not on the crew', () {
+      final snapshot = build(
+        [personal(crew: const ['someone-else'])],
+        role: 'admin',
+        viewerDocId: 'admin-1',
+      );
+
+      expect(_appointmentsOn(snapshot, '2026-07-19').single['address'], '');
+      // The block itself is still there — only its location is withheld, so
+      // Siri can still say the admin's day is not free.
+      expect(_appointmentsOn(snapshot, '2026-07-19').single['title'], 'Dentist');
+    });
+
+    test('kept for the viewer own personal block', () {
+      // Their data, and directions to it is the point of the field.
+      final snapshot = build(
+        [personal(crew: const ['me-1'])],
+        viewerDocId: 'me-1',
+      );
+
+      expect(
+        _appointmentsOn(snapshot, '2026-07-19').single['address'],
+        '9 Clinic Rd',
+      );
+    });
+
+    test('an unknown viewer withholds, which is the safe direction', () {
+      final snapshot = build([personal(crew: const ['me-1'])]);
+
+      expect(_appointmentsOn(snapshot, '2026-07-19').single['address'], '');
+    });
+
+    test('a CLIENT visit address is never withheld', () {
+      // The crew is being sent there; that is what the field is for.
+      final snapshot = build(
+        [_appt(start: DateTime(2026, 7, 19, 9))],
+        role: 'admin',
+        viewerDocId: 'admin-1',
+      );
+
+      expect(
+        _appointmentsOn(snapshot, '2026-07-19').single['address'],
+        '14 Elm St',
       );
     });
   });

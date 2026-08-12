@@ -6,6 +6,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
@@ -31,10 +32,14 @@ final todayRangeProvider = Provider<AppointmentDateRange>((ref) {
 /// of the session.
 final employeeJobsTodayProvider = Provider.autoDispose<Map<String, int>>((ref) {
   final range = ref.watch(todayRangeProvider);
-  final jobs = ref.watch(appointmentsInRangeProvider(range)).value ?? const [];
+  final jobs = appointmentsOrEmpty(
+    ref,
+    ref.watch(appointmentsInRangeProvider(range)),
+    'EMP-TODAY jobs-today range stream failed',
+  );
   final counts = <String, int>{};
   for (final job in jobs) {
-    if (job.status == 'cancelled') continue;
+    if (isCancelledStatusRaw(job.status)) continue;
     if (!runsOn(job, range.start)) continue;
     for (final id in job.employeeIds) {
       counts[id] = (counts[id] ?? 0) + 1;
@@ -94,11 +99,14 @@ final futureAssignmentCountProvider = FutureProvider.autoDispose
 final employeeTodayJobsProvider = Provider.autoDispose
     .family<List<AppointmentRecord>, String>((ref, employeeId) {
       final range = ref.watch(todayRangeProvider);
-      final jobs =
-          ref.watch(appointmentsInRangeProvider(range)).value ?? const [];
+      final jobs = appointmentsOrEmpty(
+        ref,
+        ref.watch(appointmentsInRangeProvider(range)),
+        'EMP-TODAY today-panel range stream failed',
+      );
       final today = [
         for (final job in jobs)
-          if (job.status != 'cancelled' &&
+          if (!isCancelledStatusRaw(job.status) &&
               job.employeeIds.contains(employeeId) &&
               runsOn(job, range.start))
             job,

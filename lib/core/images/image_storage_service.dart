@@ -64,7 +64,7 @@ class ImageStorageService {
     );
   }
 
-  Future<void> deleteImage(AppointmentImage image) async {
+  Future<void> _deleteImage(AppointmentImage image) async {
     final path = image.storagePath.isNotEmpty
         ? image.storagePath
         : _pathFromUrl(image.url);
@@ -81,7 +81,7 @@ class ImageStorageService {
     await Future.wait(
       images.map((img) async {
         try {
-          await deleteImage(img);
+          await _deleteImage(img);
         } catch (e, st) {
           _logger.warn(
             'IMG-DEL deleteImage failed (orphaned bytes): ${img.storagePath}',

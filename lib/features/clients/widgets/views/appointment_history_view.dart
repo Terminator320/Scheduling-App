@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
+import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -454,7 +455,10 @@ class _AppointmentHistoryViewState
     if (!state.isLoading) return const SizedBox.shrink();
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.sp16),
-      child: Center(child: CircularProgressIndicator.adaptive()),
+      // Through the one adaptive seam, not `.adaptive()`: that branches on
+      // `defaultTargetPlatform`, which a test forcing the look via
+      // `ThemeData(platform:)` cannot reach. Sized to keep the old footprint.
+      child: Center(child: AdaptiveProgressIndicator(size: 36, strokeWidth: 4)),
     );
   }
 
