@@ -118,6 +118,28 @@ function isOvernightRecord(r) {
 }
 
 /**
+ * The window-taking forms. Every public helper below resolves the window ONCE
+ * and threads it down: `resolveWindow` runs `businessMinutesOfDay` twice and
+ * each of those formats through `Intl`, so the old record-taking chain
+ * (`sliceForDay` → `dayCountOf` → `lastWorkDayMs`) resolved the same window
+ * three times per probe. Keep new internals on this form.
+ * @param {!{startMs: number, endMs: number, overnight: boolean}} w
+ * @return {number}
+ */
+function lastWorkDayOfWindow(w) {
+  return w.overnight ? addDaysMs(w.endMs, -1) : dayStartMs(w.endMs);
+}
+
+/**
+ * @param {?{startMs: number, endMs: number, overnight: boolean}} w
+ * @return {number}
+ */
+function dayCountOfWindow(w) {
+  if (w == null) return 0;
+  return calendarDaysBetween(w.startMs, lastWorkDayOfWindow(w)) + 1;
+}
+
+/**
  * Toronto midnight of the last day the crew STARTS work — never the morning an
  * overnight run finishes.
  * @param {!Object} r
@@ -126,7 +148,7 @@ function isOvernightRecord(r) {
 function lastWorkDayMs(r) {
   const w = resolveWindow(r);
   if (w == null) return null;
-  return w.overnight ? addDaysMs(w.endMs, -1) : dayStartMs(w.endMs);
+  return lastWorkDayOfWindow(w);
 }
 
 /**
@@ -136,10 +158,7 @@ function lastWorkDayMs(r) {
  * @return {number}
  */
 function dayCountOf(r) {
-  const w = resolveWindow(r);
-  const last = lastWorkDayMs(r);
-  if (w == null || last == null) return 0;
-  return calendarDaysBetween(w.startMs, last) + 1;
+  return dayCountOfWindow(resolveWindow(r));
 }
 
 /**
@@ -157,8 +176,8 @@ function dayCountOf(r) {
  */
 function clampedLastWorkDayMs(r) {
   const w = resolveWindow(r);
-  const last = lastWorkDayMs(r);
-  if (w == null || last == null) return last;
+  if (w == null) return null;
+  const last = lastWorkDayOfWindow(w);
   const cap = addDaysMs(w.startMs, MAX_APPOINTMENT_SPAN_DAYS - 1);
   return last > cap ? cap : last;
 }
@@ -185,7 +204,7 @@ function clampedLastWorkDayMs(r) {
 function sliceForDay(r, dayMs) {
   const w = resolveWindow(r);
   if (w == null) return null;
-  const rawCount = dayCountOf(r);
+  const rawCount = dayCountOfWindow(w);
   if (rawCount < 1) return null;
   const count = Math.min(rawCount, MAX_APPOINTMENT_SPAN_DAYS);
   const index = calendarDaysBetween(w.startMs, dayMs) + 1;

@@ -16,11 +16,12 @@ Widget _harness(Widget child) => MaterialApp(
 
 Widget _section({
   bool isSaving = false,
+  String initialPhone = '(514) 555-0000',
   Future<void> Function(MyIdentityEdit edit)? onSave,
   VoidCallback? onChangeEmail,
 }) => MyIdentitySection(
   email: 'theo@example.com',
-  initialPhone: '(514) 555-0000',
+  initialPhone: initialPhone,
   initialEmergencyContact: 'Ana',
   initialEmergencyPhone: '(514) 555-1111',
   isSaving: isSaving,
@@ -33,6 +34,29 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(_harness(_section()));
+
+    expect(find.byKey(const Key('myIdentitySaveBar')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the save bar goes away once the stored value catches up', (
+    tester,
+  ) async {
+    // Dirtiness is computed against the STORED values, and only the
+    // controllers were listened to — so a save that commits, re-emits the
+    // users doc and rebuilds this section with the new `initialPhone` left the
+    // bar on screen (with Discard as a visible no-op) until the next
+    // keystroke. Re-pumping with the committed value is exactly that rebuild.
+    await tester.pumpWidget(_harness(_section()));
+
+    await tester.enterText(find.byKey(const Key('myPhone')), '(514) 555-9999');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('myIdentitySaveBar')), findsOneWidget);
+
+    await tester.pumpWidget(
+      _harness(_section(initialPhone: '(514) 555-9999')),
+    );
+    await tester.pumpAndSettle();
 
     expect(find.byKey(const Key('myIdentitySaveBar')), findsNothing);
     expect(tester.takeException(), isNull);

@@ -10,6 +10,70 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.45.0+72] - 2026-08-11
+
+Gives everyone a place to edit their own details, rebuilds the dashboard and
+History screens, and finishes the job multi-day appointments started — a job
+that runs Monday to Friday now shows up on all five days everywhere, not just
+the day it began.
+
+### Added
+- **You can now change your own details.** Settings › My details used to hold
+  an emergency contact and nothing else. It now covers your phone number, your
+  emergency contact, and your whole availability — which days you work, your
+  hours, and whether you're on call. Availability applies the moment you tap it;
+  the phone and emergency fields wait behind a Save button, because a half-typed
+  phone number saving itself is worse than one extra tap. If you switch off a
+  day you already have work booked on, it says so and leaves the jobs alone for
+  a human to move.
+- **You can change the email you sign in with.** Same screen. It asks for your
+  password first and makes you type the new address twice — a typo there locks
+  you out until an admin undoes it. Your administrators are told when you change
+  it, and you're told when they change it for you.
+- **Time-to-leave alerts can be switched off per person.** Settings ›
+  Notifications. Off means you still get the ordinary half-hour reminder — you
+  just stop getting the traffic-aware "leave now" version.
+- **The dashboard covers Today, this Week, or this Month.** A period control at
+  the top switches the summary between them; booked, completed and cancelled
+  counts follow it. There's also a jobs-per-day chart for the week that marks
+  any day booked past the crew's capacity, and a new-clients section whose rows
+  open the client.
+- **The dashboard flags two more things worth knowing.** Accounts that were
+  created but never set up, and anyone booked on a day they're not available.
+- **Appointment cards show when a job has photos.** A small camera icon on the
+  card, and the day's header now reads "4 JOBS · 1 DONE" so you can see at a
+  glance how much of the day is behind you.
+
+### Changed
+- **History has been rebuilt.** Dates moved to a rail down the left, each month
+  gets a heading that sticks to the top while you scroll through it, and one
+  line tells you what you're looking at — "18 JOBS · 2 CANCELLED". Two quick
+  filters sit beside the year and staff pickers so you can jump to just the
+  completed or just the cancelled jobs. Searching switches to a flat list, since
+  results from all over the calendar don't group into months usefully.
+- **A personal job can have an address again.** A dentist appointment or a
+  supply run still happens somewhere, and the crew wants directions to it. The
+  address field stays on screen, marked optional. It no longer auto-fills from a
+  client you removed when you turned the job personal.
+- **A multi-day job now appears on every day it runs.** Previously it showed up
+  only on the day it started, which meant the home-screen widget went blank on
+  day two, Siri said "nothing today", and the assignment notification named only
+  the first morning. Each day now shows that day's hours plus a "Day 3 of 5"
+  counter, and a job spanning days reads as a date range in notifications.
+
+### Fixed
+- **The dashboard judged a running job by its first morning.** On day three of a
+  job that starts at 2pm, the counts included it while the list underneath said
+  "No visits today", and it sorted above jobs that were genuinely earlier.
+- **Live job cards were always orange, whoever the job belonged to.** Cards also
+  no longer appear for jobs spanning several days — a five-day countdown on your
+  Lock Screen is worse than no card at all.
+- **A job photo you're no longer entitled to see could still load.** It now
+  shows as an unavailable tile instead.
+- **The widget and Siri went blank on a temporary error.** A failed read was
+  being treated as "signed out", which wiped the schedule instead of leaving the
+  last one in place.
+
 ## [1.44.1+71] - 2026-08-08
 
 Restores work that was reverted in error before 1.44.0 went out, and which the

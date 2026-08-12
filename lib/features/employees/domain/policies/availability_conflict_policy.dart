@@ -1,5 +1,6 @@
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/month_grid.dart';
 
 /// Which weekdays a person is switching OFF while still holding booked work.
 ///
@@ -37,8 +38,7 @@ Set<int> daysWithBookedWork({
 
   final conflicts = <int>{};
   for (final day in expandToDays(open, range).keys) {
-    // DateTime.sunday is 7; the stored list is 0-indexed on Sunday.
-    final index = day.weekday % 7;
+    final index = sundayIndexOf(day);
     if (turnedOff.contains(index)) conflicts.add(index);
   }
   return conflicts;

@@ -801,6 +801,70 @@ describe("wantsTravelAlerts", () => {
   });
 });
 
+// ----- opting out of travel alerts ------------------------------------------
+
+describe("an opted-out assignee", () => {
+  // `wantsTravelAlerts` is unit-tested above, but the flag was only READ where
+  // `kind` is chosen — after the Routes call and after `computeLeadMinutes`.
+  // So an opted-out tech got the generic "Upcoming job" push at the
+  // TRAVEL-derived instant (up to MAX_LEAD_MINUTES early) rather than at the
+  // documented fixed 30, and the business paid Google Routes for an estimate
+  // that changed nothing. Both the code comment and CLAUDE.md described the
+  // degradation as "the fixed 30-minute reminder"; the code did not do it.
+  const job = {
+    id: "job1",
+    status: "pending",
+    startTime: future(20 * MIN),
+    employeeIds: ["e1"],
+    clientName: "Acme",
+    address: "123 Main St",
+  };
+
+  const sweepWith = async (travelAlertsEnabled) => {
+    const fetchImpl = okFetch(600);
+    const {db} = makeTravelDb({
+      users: {e1: {role: "employee", status: "active", travelAlertsEnabled}},
+      tokens: {e1: [{id: "t", locale: "en"}]},
+      appointments: [job],
+      presence: {e1: {lat: 45.5, lng: -73.6, updatedAt: future(-5 * MIN)}},
+    });
+    const res = await runTravelAwareReminderSweep({
+      db,
+      messaging: makeMessaging(),
+      fetchImpl,
+      apiKey: "k",
+      now: NOW,
+      logger: silentLogger,
+      estimateCache: new Map(),
+    });
+    return {res, fetchImpl};
+  };
+
+  beforeEach(() => startLiveActivity.mockClear());
+
+  test("opted IN still prices the drive", async () => {
+    // The control: without it the assertion below could pass for the wrong
+    // reason (a sweep that never reached the Routes call at all).
+    const {res, fetchImpl} = await sweepWith(true);
+
+    expect(res.reminded).toBe(1);
+    expect(fetchImpl).toHaveBeenCalled();
+  });
+
+  test("opted OUT is still notified, but never prices the drive", async () => {
+    const {res, fetchImpl} = await sweepWith(false);
+
+    // Still notified — opting out drops the ESCALATION, not the reminder.
+    expect(res.reminded).toBe(1);
+    // No Routes spend, which is also what forces the fixed 30-minute lead:
+    // `computeLeadMinutes(null)` is the fallback, so the flag has to be read
+    // BEFORE the estimate rather than beside `kind`.
+    expect(fetchImpl).not.toHaveBeenCalled();
+    // And no Lock Screen card, which only a leaveNow starts.
+    expect(startLiveActivity).not.toHaveBeenCalled();
+  });
+});
+
 // ----- the multi-day Live Activity skip -------------------------------------
 
 describe("the multi-day Live Activity skip", () => {

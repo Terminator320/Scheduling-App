@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/calendar/domain/month_grid.dart';
+import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 import 'package:scheduling/features/employees/widgets/fields/availability_panel.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
@@ -72,22 +72,11 @@ class MyAvailabilitySection extends StatelessWidget {
           const SizedBox(height: AppSpacing.sp12),
           WarningNote(
             message: l10n.settings_availabilityConflict(
-              _joinDayNames(context, conflictDays),
+              joinWeekdayNames(context, conflictDays),
             ),
           ),
         ],
       ],
     );
-  }
-
-  /// Sunday-indexed labels, UNROTATED — [conflictDays] holds STORED indices and
-  /// `weekdayAbbreviationsForLocale` is indexed the same way. Passing a
-  /// display-ordered list here silently names the wrong day.
-  String _joinDayNames(BuildContext context, Set<int> days) {
-    final labels = weekdayAbbreviationsForLocale(
-      Localizations.localeOf(context).toString(),
-    );
-    final ordered = days.toList()..sort();
-    return ordered.map((index) => labels[index]).join(', ');
   }
 }

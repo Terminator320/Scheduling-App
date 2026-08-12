@@ -370,9 +370,16 @@ async function performChangeEmail(db, docId, email, previousEmail, opts) {
  * because it drives who gets notified — an admin editing their own row is a
  * self change and must not push "someone changed their email" to themselves.
  *
+ * `isAdmin` is returned SEPARATELY and is not derivable from `isSelf`: the
+ * re-auth freshness gate keys on the role, never on self-ness. An admin
+ * editing their OWN roster row is `isSelf`, but reaches here through
+ * `updateEmployee`, which has no re-auth step — so gating that call on
+ * freshness rejected the whole save (name, phone, colour, availability) with
+ * an opaque `stale-auth` five minutes after sign-in.
+ *
  * @param {?Object} bridge The caller's `usersByUid/{uid}` data, or null.
  * @param {string} docId The users-doc id being changed.
- * @return {!Promise<{isSelf: boolean, callerDocId: string}>}
+ * @return {!Promise<{isSelf: boolean, isAdmin: boolean, callerDocId: string}>}
  */
 async function resolveEmailChangeCaller(bridge, docId) {
   const data = bridge || null;
@@ -382,8 +389,10 @@ async function resolveEmailChangeCaller(bridge, docId) {
   const callerDocId = data.docId || "";
   // An empty callerDocId must never match an empty target.
   const isSelf = callerDocId !== "" && callerDocId === docId;
-  if (data.role === "admin") return {isSelf, callerDocId};
-  if (data.role === "employee" && isSelf) return {isSelf: true, callerDocId};
+  if (data.role === "admin") return {isSelf, isAdmin: true, callerDocId};
+  if (data.role === "employee" && isSelf) {
+    return {isSelf: true, isAdmin: false, callerDocId};
+  }
   throw new HttpsError("permission-denied", "not-admin");
 }
 
@@ -418,20 +427,22 @@ const changeEmployeeEmail = onCall(APP_CHECK, async (req) => {
   // identity guards sit above the limiter so a non-entitled caller still can't
   // burn one.
   const bridgeSnap = await db.collection("usersByUid").doc(req.auth.uid).get();
-  const {isSelf, callerDocId} = await resolveEmailChangeCaller(
+  const {isSelf, isAdmin, callerDocId} = await resolveEmailChangeCaller(
       bridgeSnap.exists ? bridgeSnap.data() : null, docId);
-  // A valid ID token alone must not be enough to move your OWN sign-in
-  // address: SelfEmailService re-authenticates first, but that is a
-  // client-side ordering, and anything reaching this callable directly
+  // A valid ID token alone must not be enough for an EMPLOYEE to move their
+  // own sign-in address: SelfEmailService re-authenticates first, but that is
+  // a client-side ordering, and anything reaching this callable directly
   // bypasses it. Same check deleteAccount makes, for the same reason.
   //
-  // SELF ONLY, deliberately. The admin branch is reached from
-  // `updateEmployee`, which has no re-auth step to satisfy this — gating it
-  // here would reject every admin email edit made more than five minutes
-  // after sign-in. Closing the admin half needs a re-auth prompt on that save
-  // path first; until then an unattended admin session can still rewrite a
-  // colleague's address, bounded only by assertAdmin and the budget below.
-  if (isSelf) {
+  // KEYED ON ROLE, NOT ON `isSelf`. Every admin call arrives through
+  // `updateEmployee`, which has no re-auth step to satisfy this — including
+  // when an admin edits their OWN roster row, which is `isSelf`. Gating on
+  // self-ness therefore rejected that save entirely (name, phone, colour and
+  // availability with it) as an opaque `stale-auth`, five minutes after
+  // sign-in. Closing the admin half needs a re-auth prompt on that save path
+  // first; until then an unattended admin session can still rewrite an
+  // address, bounded only by the identity guard and the budget below.
+  if (!isAdmin) {
     assertFreshReauth(
         req.auth, "changeEmployeeEmail", EMAIL_CHANGE_REAUTH_MAX_AGE_SECONDS);
   }

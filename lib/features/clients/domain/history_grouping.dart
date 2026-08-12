@@ -1,3 +1,4 @@
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
@@ -43,7 +44,7 @@ List<HistoryMonthSection> monthSectionsOf(List<AppointmentRecord> rows) {
 /// reserves its width, so the cards stay aligned.
 bool startsDay(List<AppointmentRecord> rows, int index) {
   if (index == 0) return true;
-  return !_sameDay(rows[index - 1].startTime, rows[index].startTime);
+  return rows[index - 1].startTime.dateOnly != rows[index].startTime.dateOnly;
 }
 
 /// Counts the rows on screen and how many of them were called off.
@@ -69,9 +70,6 @@ enum HistoryStatusFilter {
     cancelled => isCancelledStatusRaw(appointment.status),
   };
 }
-
-bool _sameDay(DateTime a, DateTime b) =>
-    a.year == b.year && a.month == b.month && a.day == b.day;
 
 bool _sameMonth(AppointmentRecord a, AppointmentRecord b) =>
     a.startTime.year == b.startTime.year &&

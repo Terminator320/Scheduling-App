@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
 import 'package:scheduling/features/dashboard/application/dashboard_providers.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
@@ -109,7 +109,7 @@ class AttentionFlagsSection extends StatelessWidget {
                   (
                     name: conflict.employee.name,
                     detail: l10n.dashboard_availabilityConflictDays(
-                      _dayNames(context, conflict.days),
+                      joinWeekdayNames(context, conflict.days),
                     ),
                   ),
               ],
@@ -119,17 +119,6 @@ class AttentionFlagsSection extends StatelessWidget {
       ],
     );
   }
-}
-
-/// Sunday-indexed labels, UNROTATED — the conflict set holds STORED indices
-/// and `weekdayAbbreviationsForLocale` is indexed the same way. Passing a
-/// display-ordered list here silently names the wrong day.
-String _dayNames(BuildContext context, Set<int> days) {
-  final labels = weekdayAbbreviationsForLocale(
-    Localizations.localeOf(context).toString(),
-  );
-  final sorted = days.toList()..sort();
-  return [for (final day in sorted) labels[day]].join(', ');
 }
 
 typedef _PersonRow = ({String name, String detail});

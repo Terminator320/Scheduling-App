@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
+import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 /// Working days are **Sunday-indexed** (`[0]` = Sunday) to match
@@ -102,4 +104,42 @@ String formatWorkingDays(
         '${labels[cells[lastOn].storedIndex]}';
   }
   return [for (final index in working) labels[index]].join(', ');
+}
+
+/// Names a set of STORED (Sunday-indexed) day numbers as prose: "Sun, Wed".
+///
+/// It resolves the labels itself precisely so the unrotated rule has one owner:
+/// `weekdayAbbreviationsForLocale` is Sunday-indexed like [days], and handing a
+/// display-ordered list to a caller that indexes by stored number silently
+/// names the wrong day. Used by both surfaces that report availability
+/// conflicts — the dashboard's Attention list and My details.
+String joinWeekdayNames(BuildContext context, Set<int> days) {
+  final labels = weekdayAbbreviationsForLocale(
+    Localizations.localeOf(context).toString(),
+  );
+  final sorted = days.toList()..sort();
+  return [for (final day in sorted) labels[day]].join(', ');
+}
+
+/// The daily cap options: no cap, then 1–12, which covers any real crew day.
+const List<int> kMaxJobsOptions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/// The one daily-cap picker, shared by the admin Team sheet and My details.
+///
+/// Both offer the same field, so the option list and the `noCap` label rule
+/// have one owner — a hand-mirrored copy let a change to either land on one
+/// screen only. Resolves to null when the sheet was dismissed.
+Future<int?> showMaxJobsPicker(BuildContext context) {
+  final l10n = context.l10n;
+  return showAdaptiveActionSheet<int>(
+    context,
+    title: l10n.employees_maxJobsPerDay,
+    actions: [
+      for (final option in kMaxJobsOptions)
+        AdaptiveSheetAction(
+          label: option == 0 ? l10n.employees_noCap : '$option',
+          value: option,
+        ),
+    ],
+  );
 }
