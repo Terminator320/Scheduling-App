@@ -1,20 +1,15 @@
 # Active plans — index and outstanding work
 
-Swept 2026-08-10, and every open plan **reconciled against the code the same
-day** — each one carries a dated banner or inline block saying what moved under
-it. Four owner calls came out of that pass and are recorded in
-`2026-07-29-redesign-program.md`: employees will edit their own phone **and
-email** in My details; the dashboard's Attention list gains **accounts never set
-up**; **New clients hides archived**; and **P6 Time off is deferred and
-skippable**, so the remaining order is **P5 → P7**, with P6 and P7b parallel and
-optional. Everything in this directory is either **live work** or a reference a
-live plan depends on. Completed plans move to `docs/archive/`
-(see its README); dated audit snapshots live in `docs/audits/`.
+Swept 2026-08-11. Everything left in this directory is either **live work** or a
+reference a live plan depends on; ten documents whose work has shipped moved to
+`docs/archive/` in that sweep (see its README for what and why). Dated audit
+snapshots live in `docs/audits/` until they are superseded, then they move to
+the archive too.
 
 **Current state of the code is `CLAUDE.md`, `docs/ARCHITECTURE.md` and
 `docs/CLOUD_FUNCTIONS.md` — never a plan doc.** A plan records how something was
 decided and built; several here have unticked checkboxes for work that shipped
-months ago, because they were executed without ticking. Trust the status banner
+weeks ago, because they were executed without ticking. Trust the status banner
 at the top of each file, not its boxes.
 
 ---
@@ -23,108 +18,76 @@ at the top of each file, not its boxes.
 
 | Doc | State |
 |---|---|
-| `2026-07-29-redesign-program.md` | **P1–P4c shipped (+P2b).** Remaining order **P5 → P7**; **P6 deferred/skippable**, P7b parallel. The binding spec for the rest. |
-| `redesign-subdocs/` | Complete history for P1–P4c — see the README in there. P4b is **withdrawn**. |
-| `redesign-subdocs/2026-07-30-p1-p2-DEVICE-TEST.md` | **Open runbook.** ~87 of 95 checks never run. |
-| `2026-08-02-multi-day-appointments.md` | Design. Shipped in the app and in the mirrors; of §10 only the Live Activities question is still open — the rules bound was built 2026-08-11. |
-| `2026-08-02-multi-day-appointments-PLAN-1-app.md` | **DONE** (`140fc92`). |
-| `2026-08-03-multi-day-appointments-PLAN-2-mirrors.md` | **DONE** 2026-08-10. Widget, Siri v3 and push text. Backend NOT deployed; the two Swift halves are Xcode/device-unverified. |
+| `2026-07-29-redesign-program.md` | **P1–P5 and P7 shipped.** What it still owes is **P6** (deferred, skippable) and **P7b**. The binding spec for both. |
+| `redesign-subdocs/` | The build record for P1 through P7 — see the README in there. P4b is **withdrawn**. |
+| `redesign-subdocs/2026-07-30-p1-p2-DEVICE-TEST.md` | **§0–§10 closed 2026-08-11**, owner-reported passing. The **P5 block (18 checks) is still unrun** — no longer blocked (the deploy landed 2026-08-11), but it needs a technician account. |
 | `2026-07-10-siri-app-intents-design.md` | Design, 6 phases. Phases 5–6 unscoped. |
 | `2026-07-19-siri-app-intents-implementation.md` | Phases 1–3 built; **no device pass ever run**. |
 | `2026-07-20-siri-phase4-write-actions.md` | **NOT STARTED.** Mac + Apple-portal session. |
-| `2026-08-08-completed-jobs-agenda.md` | Built. Its companion **phone backfill has not been run for real**. |
-| `2026-08-10-photo-cue-and-day-count.md` | Built. Not device-verified. |
-| `redesign-subdocs/2026-08-11-p7-dashboard-history.md` | **P7 dashboard BUILT** (period control, jobs-per-day, new-clients rows, 2 new Attention flags); **History half not started.** App-side only. |
-| `2026-08-11-history-restyle.md` | **Design, chosen 2026-08-11. Not built.** P7's History half — date rail under a sticky month bar. |
 | `APP_STORE_SUBMISSION.md` | **The live release runbook.** 26 items open. |
 
 ---
 
 ## What has not been done
 
-### 1. Redesign — three projects and a half remain
+### 1. ~~The backend deploy~~ — DONE 2026-08-11, and it was the biggest item here
 
-- **P5 — CODE-COMPLETE 2026-08-10, NOT DEPLOYED**
-  (`docs/plans/redesign-subdocs/2026-08-10-p5-my-details.md`). All three phases
-  built: the rules clause is called and `updateSelfDetails` exists (A); an
+Deployed at `70579d22` (release 1.45.0+72), targets **functions, rules,
+storage**, 25 functions live — no export change, so no deletion prompt and none
+of the 2026-08-08 abort. The full row is in `docs/DEPLOYMENT.md`, which is the
+only reliable record of what production runs; read it rather than this
+paragraph. What went live: P5's `changeEmployeeEmail` self branch with its
+`assertFreshReauth` gate and 20/h → 5/h budget, the
+`isSelf() && isAvailabilityOnlyChange()` clause on `/users`,
+`isValidAppointmentSpan` with its +2h DST allowance, the multi-day Live Activity
+skip, and the `day_slice_utils.js` day-scoping behind the widget payload and
+push text. `firestore:indexes` was deliberately omitted, which is also what
+leaves the surviving `signupCodes` TTL policy alone — never `--force` it away.
+
+**What this unblocks:** the P5 device block in §4, and shipping an app build
+carrying the P5 UI (which was the ordering hazard — the rules clause had to be
+live first, or every self save fails `permission-denied`).
+
+### 2. Redesign — P6 and P7b remain
+
+- **P5 — SHIPPED AND DEPLOYED 2026-08-11**
+  (`redesign-subdocs/2026-08-10-p5-my-details.md`). All three phases built and
+  live: the rules clause is called and `updateSelfDetails` exists (A); an
   employee moves their own sign-in email through `changeEmployeeEmail`'s new
   `self` branch, with re-auth, confirm-twice and an active-admins fan-out (B);
-  and the P4-parked time-to-leave toggle is live end to end (C). 1795 flutter /
-  850 jest green, analyzer and eslint clean.
-  **NOTHING IS DEPLOYED.** Deploy order is `firebase deploy --only
-  functions,firestore:rules` BEFORE any app build carrying this UI — the rules
-  clause must be live or every self save fails `permission-denied`, and the
-  callable's `self` branch must be live or an employee's email change is refused
-  as `not-admin`. Never `--force`. Not device-verified; the whole self-service
-  path is unreachable as an admin, so it needs a **technician** pass.
-  Deliberate deviations from the spec below, all recorded in the plan's
-  decisions section: no duplicate NOTIFICATIONS block (Settings already owns
-  it), no duplicate profile card, SCHEDULING scoped to `maxJobsPerDay`, and the
-  identity fields explicitly saved behind a Save/Discard bar (owner call) while
-  availability keeps apply-immediately. Original scope notes follow:
-- **P5 — smaller than the spec says. The Settings half is already built**;
-  what remains is My details. `settings_screen.dart` renders the profile card, a
-  My-details row, APPEARANCE / SECURITY / NOTIFICATIONS / INTEGRATIONS (Wave) /
-  LEGAL / HELP. `MyDetailsScreen` exists but carries **only the emergency-contact
-  section**; the self-service phone edit, MY AVAILABILITY (7 day toggles + hours
-  + on-call, applying immediately with the amber conflict warning), the
-  notifications block and the admin-only SCHEDULING panel are unbuilt. The rules
-  half is written and **still uncalled**: P5's job is to add
-  `|| (isSelf() && isAvailabilityOnlyChange())` to `allow update` on `/users`,
-  not to invent a key list. Two spec corrections made 2026-08-10:
-  `emergencyContact` must **not** join that list (it lives in the
-  `private/emergency` subcollection and rules now refuse it on the parent doc),
-  and the `allow create` loophole the spec flagged was **closed on 2026-08-08**.
-  Also parked here from P4: the **time-to-leave alerts toggle**, which needs a
-  user-doc flag plus a `runTravelAwareReminderSweep` change.
+  and the P4-parked time-to-leave toggle is live end to end (C). **Still not
+  device-verified** — the whole self-service path is unreachable as an admin, so
+  it needs a **technician** pass, and that is now the only thing outstanding on
+  it. Deliberate deviations from the spec, all recorded in the
+  plan's decisions section: no duplicate NOTIFICATIONS block (Settings already
+  owns it), no duplicate profile card, SCHEDULING scoped to `maxJobsPerDay`, and
+  the identity fields explicitly saved behind a Save/Discard bar (owner call)
+  while availability keeps apply-immediately.
 - **P6 Time off — NOT STARTED, and DEFERRED (owner call 2026-08-10). Skippable.**
   No `timeOff` collection, no rules, no surfaces; the only trace in the code is
-  two comments reserving the `PushedDestination.timeOff` slot. **It is not a
-  prerequisite for P7** — the build order now runs P5 → P7, with P6 parallel and
-  optional like P7b. P7 must **omit, not stub**, the three places it reaches into
-  P6 (the Time off card, the drawer pending count, the pending-time-off Attention
-  entry), per the spec's own empty-omitted rule. The design is kept intact for
-  whenever it is picked up; its four backend requirements were re-verified
-  2026-08-10 and all still hold (an active-admins fan-out query, the EN+FR
-  `_MESSAGES` rows, a `kind`-aware `_handlePushTap`, and a new ledger + TTL). The
-  fan-out is now shared work: P5's self-service email notice needs it too.
-- **P7 Dashboard — BUILT 2026-08-11**
-  (`redesign-subdocs/2026-08-11-p7-dashboard-history.md`). The period control
-  ships as **Today · Week · Month; Year is dropped** — `fetchInRange` caps at
-  1000 docs and a year is ~1,825 jobs even at 5/day, so Year could only have
-  reported a silent prefix. It needs P7b's aggregate read path first. The three
-  surviving periods are **to-date** windows that fit inside the data already
-  fetched, so the control reaches no query at all. Also built: jobs-booked-per-day
-  with an over-capacity line, New clients as tappable rows (archived now
-  excluded — a behaviour change), and two new Attention flags (accounts never
-  set up, booked-outside-availability). Not device-verified.
-- **P7 History — DESIGNED 2026-08-11, NOT BUILT**
-  (`2026-08-11-history-restyle.md`). Date rail under a sticky month bar, which
-  replaces the year separator; the shared `AppointmentCard` is untouched; one
-  count at the top only (per-month counts would climb as pages load); quick
-  filters are Complete · Cancelled, reusing the existing `StatusChip` wording;
-  search spans everything and goes flat, with
-  the rail carrying month + year. The filtering itself doesn't change, so there
-  are no new server queries and nothing to deploy.
+  two comments reserving the `PushedDestination.timeOff` slot. It was never a
+  prerequisite for P7, and P7 shipped without it — the three places P7 reaches
+  into P6 (the Time off card, the drawer pending count, the pending-time-off
+  Attention entry) are **omitted, not stubbed**, per the spec's own
+  empty-omitted rule. The design is kept intact in the program spec for whenever
+  it is picked up; its four backend requirements were re-verified 2026-08-10 and
+  all still hold (an active-admins fan-out query, the EN+FR `_MESSAGES` rows, a
+  `kind`-aware `_handlePushTap`, and a new ledger + TTL). The fan-out is no
+  longer new work — P5 built and shipped `sendToActiveAdmins`.
+- **P7 — BUILT 2026-08-11, both halves**
+  (`redesign-subdocs/2026-08-11-p7-dashboard-history.md`, phases A–D). App-side
+  only; nothing to deploy. Dashboard: the period control ships as **Today ·
+  Week · Month; Year is dropped** — `fetchInRange` caps at 1000 docs and a year
+  is ~1,825 jobs even at 5/day, so Year could only have reported a silent
+  prefix, and it needs P7b's aggregate read path first. Also
+  jobs-booked-per-day with an over-capacity line, New clients as tappable rows
+  (archived now excluded — a behaviour change), and two new Attention flags
+  (accounts never set up, booked-outside-availability). History: the date rail
+  under a sticky month bar, which cost mostly the re-owned pagination a sticky
+  header cannot share with `PagedListView`. **Not device-verified.**
 - **P7b Wave invoice read path — not started.** It is what unblocks P7's six
-  money sections, which the spec deliberately omits until then.
-
-### 2. Multi-day appointments — Plan 2, the off-screen mirrors
-
-Days 2+ of a run are still invisible outside the app. Verified: no
-`functions/day_slice_utils.js`, and neither `widget_sync_service.dart` nor
-`functions/widget_payload_utils.js` knows about day slicing; the Siri snapshot
-is still schema v2. `CLAUDE.md`, `docs/ARCHITECTURE.md`,
-`functions/travel_utils.js` and `functions/notification_policy.js` all carry
-"owed by Plan 2" pointers. The design doc's own §10 also stands:
-
-- **Live Activities for a multi-day job** — deferred on purpose (a card
-  counting down to an end four days out would sit on the Lock Screen for the
-  whole job). Unsolved, not forgotten.
-- ~~Whether the 14-day cap deserves a `firestore.rules` bound.~~ **CLOSED
-  2026-08-11 — built.** `isValidAppointmentSpan` bounds it on create and on the
-  admin update, with a not-widened escape so an already-corrupt doc stays
-  cancellable. Client writes only, so the app's clamp stays. **Not deployed.**
+  money sections, which the spec deliberately omits until then, and the
+  dashboard's dropped **Year** period.
 
 ### 3. Siri
 
@@ -135,47 +98,79 @@ the Apple-portal keychain-sharing capability, a second Firebase app for the
 extension's App Attest, and the entitlement XML, in that order — landing the
 XML first breaks signed builds.
 
-### 4. Device verification — the largest single gap
+### 4. Device verification — §0–§10 closed, the rest still open
 
-Nothing in the redesign has been systematically exercised on hardware.
-`redesign-subdocs/2026-07-30-p1-p2-DEVICE-TEST.md` is the runbook (~95 checks,
-8 ticked). Read its §0.7 first: `main()` routes `FlutterError.onError` to
-Crashlytics, so overflows never reach `flutter run` stdout and about a third of
-the checks are meaningless without the temporary `dumpErrorToConsole` patch.
-Also unverified on a device: every P3/P4/P4c surface, the drawer icons + the 43
-tour steps, the closed-jobs agenda, and the photo cue.
+`redesign-subdocs/2026-07-30-p1-p2-DEVICE-TEST.md` is the runbook. **Its §0–§10
+were closed 2026-08-11 on the owner's report** that he had run them on hardware
+— recorded on his word, with no console capture or screenshot behind any
+individual box, so a later contradiction means "re-run that check", not "a
+regression against a known-good baseline". Read the banner in its Results
+section before relying on a specific box.
+
+**Still unrun:** the **P5 block (18 checks)**, which is now **unblocked** — the
+deploy in §1 landed 2026-08-11, so a `permission-denied` there is no longer the
+expected symptom of a missing deploy and should be read as a real finding. It
+needs a **technician** account; the path is unreachable as an admin. Also never
+exercised on a device:
+every P3/P4/P4c surface, the drawer icons + the 43 tour steps, the closed-jobs
+agenda, the photo cue, the restyled History, and the P7 dashboard — none of
+those has a runbook at all, which is now the real gap here. The Swift halves of
+the multi-day mirrors (widget decoder + Siri snapshot v3) are likewise
+Xcode/device-unverified; Swift has no test harness.
+
+If a pass is ever driven from the repo, read §0.7 first: `main()` routes
+`FlutterError.onError` to Crashlytics, so overflows never reach `flutter run`
+stdout and about a third of the checks are meaningless without the temporary
+`dumpErrorToConsole` patch.
 
 One loose end from the P4 device pass is still undiagnosed: a `RawScrollbar`
 assertion ("provided ScrollController is attached to more than one
 ScrollPosition") seen in the console, with no screen attributed to it.
 
-### 5. Data and ops
+### 5. One deferred design question — Live Activities for a multi-day job
+
+Carried forward from the multi-day design doc (now
+`docs/archive/2026-08-02-multi-day-appointments.md` §10) so it isn't lost with
+it. A card counting down to an end four days out would sit on the Lock Screen
+for the entire job, so **`resolveReminderForAssignee` skips multi-day jobs
+outright** (`dayCountOf(c) > 1`, built 2026-08-11) — the `leaveNow` push still
+goes out on day 1, which is the only day with a departure time. That skip is the
+containment, not the answer: what a multi-day card should actually be (a per-day
+card? a countdown to today's window end?) is an unanswered design question.
+
+### 6. Data and ops
 
 - **The client phone backfill has not been run for real.**
   `functions/scripts/backfill-client-phone-from-name.js`. The dry run against
   prod on 2026-08-08 reported 684 scanned / 347 to patch; the 14 ambiguous docs
   were reviewed and are deliberately left alone. Note it fires
-  `propagateClientEdits` and `waveUpsertCustomer`.
+  `propagateClientEdits` and `waveUpsertCustomer`. Its read-only damage audit
+  from the earlier botched run is `docs/audits/audit-client-phone-backfill-damage.js`.
 - **The `signupCodes` collection and its TTL policy remain in prod**,
   deliberately — the collection was verified empty and rules now deny all
   access. Never `--force` the policy away.
-- ~~P4c's production migration of `invited` users~~ — **closed**, not open. The
-  2026-08-08 deploy queried prod first and found **zero** `invited` users, so
-  there was nobody to strand. The migration section in the P4c handoff is
-  history.
+- **A hard budget cap for Google Maps Platform is still unset** —
+  `docs/audits/AUDIT_FOLLOWUPS.md` §2, the one item in that file still open. It
+  needs GCP billing access, so it cannot be done from here.
 
-### 6. App Store submission — 26 open items
+### 7. App Store submission — 25 open items
 
 `APP_STORE_SUBMISSION.md` is the runbook. The clusters: the on-device Part 6
 checks (iPad pass, live map + Routes API, push deep link, home-screen widget,
 wake-on-push refresh, Live Activity card, Siri phrases), the **Time Sensitive
 Notifications entitlement**, ASC App Privacy needing **Precise Location**
-added, **publishing `docs/legal/terms-of-service.html` to the `es-pro-legal`
-Pages repo**, the FR localization, screenshots, and then archive → TestFlight →
+added, the FR localization, screenshots, and then archive → TestFlight →
 submit. One is blocked by Firestore itself: the `liveActivityCards` TTL policy
 cannot be created yet.
 
-### 7. Function SDK downgrade — found and FIXED 2026-08-10, keep it from recurring
+**The legal pages are NOT on that list — they are published and correct.** All
+four (`terms-of-service`, `accessibility`, `support`, and the privacy policy
+served as the repo's `index`) return HTTP 200 from `gvogas.github.io/es-pro-legal`
+and were verified **byte-identical** to `docs/legal/` on 2026-08-11. Keep it that
+way: republishing is part of any edit to those files, not a follow-up task, or
+the consent checkbox stamps `termsAcceptedAt` against text nobody has read.
+
+### 8. Function SDK downgrade — found and FIXED 2026-08-10, keep it from recurring
 
 `functions/package.json` had been **downgraded** on 2026-08-08 (commit
 `11e1db9b`, "updating") from `firebase-admin ^13.6.0` / `firebase-functions
@@ -192,7 +187,7 @@ history from being deleted.
 `package.json` + `package-lock.json` were restored from the deployed tree
 (`5a42743e`) and reinstalled: firebase-functions 7.3.2, firebase-admin 13.10.0,
 `@google-cloud/firestore` 7.11.6, `Query.prototype.count` present. `npm run
-lint` clean, **820 jest passing**.
+lint` clean.
 
 **The jest suite cannot catch this class of regression** — it mocks
 firebase-admin, so it passed on the broken versions too. Note also that

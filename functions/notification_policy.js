@@ -254,8 +254,9 @@ function selectOverdueCandidates(records, now) {
  * then. This is an instant-span overlap rather than the app's daily-window
  * model (`AppointmentDaySlice`), so an overnight run can still be listed on
  * the morning it finishes — over-inclusive, which is the safe direction here.
- * The full mirror is Plan 2 (`docs/plans/2026-08-02-multi-day-appointments.md`
- * §8).
+ * Plan 2 mirrored that model into JS as `./day_slice_utils` (2026-08-10) and
+ * deliberately left the digest on the coarser test; switching it is a
+ * behaviour change, not a port.
  * @param {!Array<!Object>} records Appointment records.
  * @param {(Date|number)} now
  * @return {!Object<string, !Array<!Object>>}

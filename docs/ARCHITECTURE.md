@@ -332,7 +332,9 @@ not one unbroken stretch through the nights.
 `overdue`). `firestore.rules` bounds the span at 14 days on both `allow create`
 and the admin `allow update` — but that reaches CLIENT writes only, so the app's
 own clamp is still what contains a doc written by the console or the Admin SDK.
-Design and the remaining work: `docs/plans/2026-08-02-multi-day-appointments.md`.
+Design: `docs/archive/2026-08-02-multi-day-appointments.md` (shipped; the one
+item still open out of its §10 — what a Live Activity for a multi-day job should
+look like — was carried forward to `docs/plans/README.md` §5).
 
 **`AppointmentDaySlice` (`calendar/domain/appointment_day_slice.dart`) is the
 one owner of day-scoping.** Everything routes through it rather than
@@ -392,11 +394,31 @@ widening a floor to admit started jobs makes a status filter **mandatory** where
 it used to be free: a `startTime >= now` query could never match a completed
 job, so `countFutureAssignments` now tests `isTerminal` explicitly.
 
-**Not yet mirrored** (owed by Plan 2 — `docs/plans/2026-08-03-multi-day-appointments-PLAN-2-mirrors.md`):
-the home widget, `functions/widget_payload_utils.js` and the Siri snapshot still
-treat every job as single-day, so days 2+ of a run are invisible there.
-`notification_messages.js` and `travel_utils.js` were closed by the 2026-08-04
-audit.
+**The off-screen mirrors are day-scoped too**, as of Plan 2 (2026-08-10,
+archived at `docs/archive/2026-08-03-multi-day-appointments-PLAN-2-mirrors.md`):
+the widget payload (Dart `widget_sync_service.dart` + the hand-mirrored
+`functions/widget_payload_utils.js`), the Siri snapshot at **schema v3**, and
+the push date line each fan a run across the days it works. Each carries **that
+day's** window, never the run's first morning, and a multi-day run gets a
+`dayIndex`/`dayCount` counter that is **omitted** for a single-day job so an
+older decoder still parses. `functions/day_slice_utils.js` is the hand-mirror of
+`appointment_day_slice.dart` and its jest cases deliberately reuse the Dart
+tests' worked examples, so a divergence fails a test instead of shipping. Both
+Swift halves (widget decoder, Siri decoder) are Xcode/device-unverified — Swift
+has no test harness here.
+
+Three surfaces are deliberately **not** day-scoped. The travel sweep gates on
+`startTime > now`, so it already fires on day 1 only, and the overdue sweep
+gates on the run's real `endTime` — neither needs slicing. **Live Activities
+skip multi-day jobs outright** (`dayCountOf(c) > 1` in
+`resolveReminderForAssignee`): a four-day Lock Screen countdown is worse than no
+card, so only the CARD is withheld — the `leaveNow` push still goes out on day
+1. Two known gaps remain, both over- or under-inclusive in the safe direction
+and both commented at the site: `groupTomorrowsJobsByEmployee`
+(`notification_policy.js`) overlaps raw instants rather than daily windows, so
+an overnight run can be listed on the morning it finishes; and
+`travel_utils.js`' `MAX_BOOKING_MS` keeps a long run out of the travel context
+rather than risk `decideOrigin` picking a wrong origin from it.
 
 ### Repeating Appointments
 
@@ -580,7 +602,7 @@ is its own
 jobs live, so hardcoding `false` there put a finished job's Edit button out of
 reach on the one screen an admin would look for it.
 
-Since **P7 phase D** (2026-08-11, `docs/plans/2026-08-11-history-restyle.md`)
+Since **P7 phase D** (2026-08-11, `docs/archive/2026-08-11-history-restyle.md`)
 the list is grouped by **month**, not year-then-day: each month is a
 `SliverMainAxisGroup` pairing a pinned `HistoryMonthBar` with its rows, and each
 row carries its date on a left `HistoryDateRail`. The group is what makes the
