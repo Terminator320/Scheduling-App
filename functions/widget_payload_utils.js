@@ -25,9 +25,9 @@ const {
 const {sliceForDay} = require("./day_slice_utils");
 
 // The terminal/cancelled vocabulary comes from `time_utils`' one owner and is
-// RE-EXPORTED here, the way `day_slice_utils` re-exports the span cap, so the
-// widget's existing importers keep working. It used to be a local copy of the
-// set; two of the four copies had already dropped the `completed` alias.
+// NOT re-exported from here — importing it from this module would make the
+// widget path look like a second owner of a set that had already drifted in
+// two of its four former copies. Require it from `time_utils` directly.
 
 // How many days past today the "next job" lookahead spans, for the query the
 // push path builds. Its FLOOR reaches MAX_APPOINTMENT_SPAN_MS behind today
@@ -176,7 +176,6 @@ function buildWidgetPayload(records, now, locale) {
 
 module.exports = {
   WIDGET_LOOKAHEAD_DAYS,
-  isTerminalStatus,
   torontoDayStartMs,
   serializeWidgetJob,
   buildWidgetPayload,

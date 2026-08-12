@@ -1,6 +1,7 @@
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_period.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -260,8 +261,7 @@ class DashboardAggregator {
     List<EmployeeRecord> employees,
   ) {
     final count = slicesByDay[day]?.length ?? 0;
-    // DateTime.sunday is 7; workingDays is 0-indexed on Sunday.
-    final weekdayIndex = day.weekday % 7;
+    final weekdayIndex = sundayIndexOf(day);
     var capacity = 0;
     for (final e in employees) {
       if (weekdayIndex < e.workingDays.length && e.workingDays[weekdayIndex]) {

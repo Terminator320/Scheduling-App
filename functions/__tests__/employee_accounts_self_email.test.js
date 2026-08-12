@@ -8,19 +8,24 @@ describe("resolveEmailChangeCaller", () => {
 
   test("an active admin may change any doc", async () => {
     await expect(resolveEmailChangeCaller(admin, "u1"))
-        .resolves.toEqual({isSelf: false, callerDocId: "adm"});
+        .resolves.toEqual({isSelf: false, isAdmin: true, callerDocId: "adm"});
   });
 
   test("an active employee may change their OWN doc", async () => {
     await expect(resolveEmailChangeCaller(employee, "u1"))
-        .resolves.toEqual({isSelf: true, callerDocId: "u1"});
+        .resolves.toEqual({isSelf: true, isAdmin: false, callerDocId: "u1"});
   });
 
   test("an admin changing their own doc is still the admin path", async () => {
     // isSelf drives who gets NOTIFIED, so it must reflect who actually acted.
     // An admin editing their own row told nobody under an isSelf:false read.
+    //
+    // isAdmin stays TRUE here, and the two must not be collapsed: the re-auth
+    // freshness gate keys on isAdmin, and every admin call — this one included
+    // — arrives through `updateEmployee`, which has no re-auth step to satisfy
+    // it. Keying that gate on isSelf rejected an admin's own-row save outright.
     await expect(resolveEmailChangeCaller(admin, "adm"))
-        .resolves.toEqual({isSelf: true, callerDocId: "adm"});
+        .resolves.toEqual({isSelf: true, isAdmin: true, callerDocId: "adm"});
   });
 
   test("an employee may NOT change someone else's doc", async () => {

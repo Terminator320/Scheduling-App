@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-08 by auditing the source against the app's call sites and
+refreshed 2026-08-11 by auditing the source against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -34,6 +34,17 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 > wrong before — verify against the live list rather than trusting it.
 
 
+- **OUTSTANDING as of 2026-08-11: the backend has NOT been deployed since
+  2026-08-08.** The function *count* is unchanged (still 25, `index.js` was not
+  touched), but the code behind several of them has moved and prod is running
+  the older bodies: `changeEmployeeEmail`'s non-admin re-auth gate and its
+  20/hr → 5/hr budget, the travel-alert opt-out now skipping the Routes call,
+  the multi-day Live Activity skip and the crew-colour
+  parse in `travel_utils.js`, the shared `day_slice_utils.js` day-scoping used
+  by the widget payload and push text, and the one `TERMINAL_STATUSES` owner in
+  `time_utils.js`. `firestore.rules` is also behind — it carries the P5
+  self-service clause and the new `isValidAppointmentSpan` bound. Deploy
+  `functions` and `firestore:rules` together; see `docs/DEPLOYMENT.md`.
 - **25 functions defined** in code and **25 deployed**, verified against
   `functions_list_functions` on 2026-08-08 — an exact match, no orphans and no
   extras. The retirement deploy has now RUN. P4c added `createEmployeeAccount`,
@@ -118,7 +129,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `createEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (invite sheet, roster row Reset password) | — | App Check ✓ · admin · durable 20/hr·uid |
 | `completeEmployeeSetup` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` → `auth_service.dart` (account setup screen) | — | App Check ✓ · authed (own doc) · `email_verified` ✓ · durable 5/15min·uid |
 | `deleteEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (pending-account row) | — | App Check ✓ · admin · durable 20/hr·uid |
-| `changeEmployeeEmail` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (inside `updateEmployee`, when the email changed on a doc with a `uid`); `self_email_service.dart` (a person changing their own) | — | App Check ✓ · admin **or self** · durable 20/hr·uid |
+| `changeEmployeeEmail` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (inside `updateEmployee`, when the email changed on a doc with a `uid`); `self_email_service.dart` (a person changing their own) | — | App Check ✓ · admin **or self** · non-admin also needs re-auth <5 min · durable 5/hr·uid |
 | `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
 | `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin |
 | `waveSetImportSchedule` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings cadence picker) | — | App Check ✓ · admin · durable 20/hr |
@@ -294,11 +305,28 @@ costs no Auth write plus rollback; `performChangeEmail`'s transaction is the
 authoritative check and re-tests **both** halves — that the doc still holds the
 email we read (`aborted / email-changed` otherwise, which the client surfaces as
 "try again") and that no other doc holds the new one. Guard order is the
-standard one (auth → payload → identity → `enforceDurableRateLimit` 20/hr per
-caller uid → work), with the same `/`-in-docId rejection as the delete. The
-payload is validated before a slot is consumed so a burst of malformed
-submissions can't exhaust a legitimate caller's window, and the identity guard
-sits above the limiter so a non-entitled caller can't burn one either.
+standard one (auth → payload → identity → freshness → `enforceDurableRateLimit`
+**5/hr** per caller uid → work), with the same `/`-in-docId rejection as the
+delete. The payload is validated before a slot is consumed so a burst of
+malformed submissions can't exhaust a legitimate caller's window, and the
+identity guard sits above the limiter so a non-entitled caller can't burn one
+either. The budget is the same on both branches — this rewrites a sign-in
+identity, so a compromised session must not be able to walk the roster.
+
+**A NON-ADMIN caller additionally requires a fresh re-auth** —
+`assertFreshReauth` (`security.js`, shared with `deleteAccount`) rejects a
+caller whose `auth_time` is over **5 minutes** old, so a direct call cannot skip
+`SelfEmailService`'s re-authenticate-then-call ordering. **The gate keys on
+`isAdmin`, not on `isSelf`**, and the two are separate fields on
+`resolveEmailChangeCaller`'s result for exactly this reason: an admin editing
+their OWN roster row is `isSelf` but still arrives through `updateEmployee`,
+which has no re-auth step — keyed on self-ness, that save was rejected whole
+(name, phone, colour and availability with it, since `_changeAuthEmail` runs
+before the Firestore write) as an opaque `stale-auth`. `isSelf` routes the
+notification and nothing else. The **admin branch is deliberately not gated**,
+so that residue is real and stated — an unattended admin session can still
+rewrite a colleague's address, bounded by the identity guard and the budget
+above; closing it needs a re-auth prompt on the admin save path first.
 
 **The identity guard is `resolveEmailChangeCaller`, not `assertAdmin`** — it has
 to tell an admin from a person editing their own row. Pure over the caller's

@@ -1112,12 +1112,27 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `weekStartForLocale` and `weekdayLabelsForLocale`, which both read intl's
   Sunday-indexed `NARROWWEEKDAYS`. Storing Monday-first would put a `% 7`
   conversion at every read and write, and one missed conversion shifts a whole
-  roster by a day. Display order comes from `orderedWorkingDays`, whose cells
-  carry their own `storedIndex` — a widget must write back through that, never
-  through the visual position. `formatWorkingDays` (the detail page's DAYS row)
-  takes its `labels` **Sunday-indexed and unrotated** (`weekdayAbbreviationsForLocale`),
-  because it indexes them by `storedIndex`; passing a display-ordered list
-  silently mislabels every day.
+  roster by a day. **That conversion therefore has ONE owner,
+  `sundayIndexOf(day)` in `calendar/domain/month_grid.dart`** — it was private
+  there and had grown three more hand-spellings (the dashboard's capacity
+  reducer, `availabilityConflictPolicy`, the daily-load chart's bar labels),
+  each with its own restatement of the "DateTime.sunday is 7" comment. Never
+  write `day.weekday % 7` at a call site. Display order comes from
+  `orderedWorkingDays`, whose cells carry their own `storedIndex` — a widget
+  must write back through that, never through the visual position.
+  `formatWorkingDays` (the detail page's DAYS row) takes its `labels`
+  **Sunday-indexed and unrotated** (`weekdayAbbreviationsForLocale`), because it
+  indexes them by `storedIndex`; passing a display-ordered list silently
+  mislabels every day. **Naming a SET of stored day numbers as prose is
+  `joinWeekdayNames(context, days)`** (beside `formatWorkingDays`), which
+  resolves the labels itself precisely so that unrotated rule can't be got wrong
+  at a call site — the dashboard's Attention list and My details both report
+  availability conflicts and each carried an identical private copy.
+  **The daily-cap picker is shared too: `showMaxJobsPicker` + `kMaxJobsOptions`**,
+  same file. The admin Team sheet and My details offer the same
+  `maxJobsPerDay` field, and a hand-mirrored option list plus `noCap` label rule
+  is exactly the drift the `AvailabilityPanel` extraction had just ended one row
+  over.
 - **A user-doc rules cap must not be tighter than the widest value a shipped
   write path can produce.** `createEmployeeAccount` accepts `phone` up to 40
   chars while `TextLimits.phone` is 24, so `isValidUserData` caps phone at
@@ -1337,11 +1352,23 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `test/features/settings/services/self_email_service_test.dart` (`verifyInOrder`
   plus the half that matters: a thrown re-auth must `verifyNever` the callable),
   the same way `completeAccountSetup`'s password-then-activate order is.
-  **The server restates it on the SELF branch**: `assertFreshReauth`
+  **The server restates it for a NON-ADMIN caller**: `assertFreshReauth`
   (`functions/security.js`, shared with `deleteAccount`) rejects a caller whose
   `auth_time` is over 5 minutes old, so a direct call cannot skip the client's
-  ordering, and the self budget is 5/hour rather than the 20 account creation
-  uses. **The ADMIN branch is deliberately NOT gated on freshness** — it is
+  ordering. **That gate keys on the caller's ROLE (`isAdmin`), never on
+  `isSelf`** — the two are deliberately separate fields on
+  `resolveEmailChangeCaller`'s result, because an admin editing their OWN
+  roster row IS `isSelf` and yet arrives through `updateEmployee`, which has no
+  re-auth step to satisfy. Keyed on `isSelf`, that save was rejected outright —
+  and since `_changeAuthEmail` runs BEFORE the Firestore write, the whole edit
+  (name, phone, colour, availability with it) died as an opaque `stale-auth`
+  five minutes after sign-in. `isSelf` routes the NOTIFICATION and nothing
+  else; don't collapse them. The durable budget is **5/hour per caller uid on
+  BOTH branches**
+  (down from the 20 it shared with account creation) — the freshness gate is
+  what differs, not the budget: this rewrites a sign-in identity, so a
+  compromised session of either role must not be able to walk the roster.
+  **The ADMIN branch is deliberately NOT gated on freshness** — it is
   reached from `updateEmployee`, which has no re-auth step to satisfy, so the
   check would reject every admin email edit made minutes after sign-in. That
   residue is real and stated: an unattended *admin* session can still rewrite a
@@ -1357,7 +1384,17 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   that never arrives, which nobody reports. Only an explicit `false` opts out.
   **It gates the ESCALATION to `leaveNow` only**: an opted-out assignee still
   gets the fixed 30-minute `reminder`, the same degradation a missing origin or
-  a Routes failure already takes. The toggle is in Settings › NOTIFICATIONS (a
+  a Routes failure already takes.
+  **The flag must be read BEFORE the Routes call, not beside the `kind`
+  choice** — `resolveReminderForAssignee` skips the whole
+  `decideOrigin`/`computeTravelSeconds` block when it is off, so `travelSeconds`
+  stays null and `computeLeadMinutes(null)` yields the fixed 30. Read only at
+  `kind`, the escalation was suppressed but the LEAD TIME was still
+  travel-derived, so an opted-out tech got the generic "Upcoming job" push up to
+  `MAX_LEAD_MINUTES` (90) early on a long drive — and the business still paid
+  Google Routes for an estimate that changed nothing. Pinned by
+  `travel_utils.test.js` ("an opted-out assignee"), which asserts the sweep
+  never calls `fetchImpl`. The toggle is in Settings › NOTIFICATIONS (a
   SERVER flag, unlike the device-local Live Activity switch beside it — the
   sweep picks the push kind, so a local preference could never reach it), and
   the row is hidden until the person's own record loads rather than rendered

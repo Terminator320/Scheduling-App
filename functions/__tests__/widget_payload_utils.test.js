@@ -9,7 +9,6 @@
 const {
   buildWidgetPayload,
   serializeWidgetJob,
-  isTerminalStatus,
 } = require("../widget_payload_utils");
 
 // Noon Toronto (EDT -4) on Wed 2026-07-08.
@@ -230,15 +229,5 @@ describe("serializeWidgetJob", () => {
     }));
     expect(job.dayIndex).toBe(2);
     expect(job.dayCount).toBe(5);
-  });
-});
-
-describe("isTerminalStatus", () => {
-  test("terminal set is done/completed/cancelled", () => {
-    expect(isTerminalStatus("done")).toBe(true);
-    expect(isTerminalStatus("COMPLETED")).toBe(true);
-    expect(isTerminalStatus("cancelled")).toBe(true);
-    expect(isTerminalStatus("pending")).toBe(false);
-    expect(isTerminalStatus("in_progress")).toBe(false);
   });
 });

@@ -412,45 +412,54 @@ async function resolveReminderForAssignee(deps, args) {
       .collection("appointmentReminders").doc(ledgerId).get();
   if (existing && existing.exists) return none;
 
-  const origin = decideOrigin({
-    presence,
-    employeeAppointments,
-    candidate: c,
-    now: nowDate,
-  });
-  const destinationAddress = _address(c);
+  // An opted-out assignee degrades to the fixed 30-minute reminder rather than
+  // losing the notification — the same fallback a missing origin or a Routes
+  // failure already takes.
+  //
+  // THE FLAG MUST BE READ HERE, not just where `kind` is chosen below. The
+  // lead time is derived from `travelSeconds`, so gating only the kind still
+  // fired the generic "Upcoming job" push at the TRAVEL-derived instant (up to
+  // MAX_LEAD_MINUTES early on a long drive) instead of at the documented 30
+  // minutes — and still paid Google Routes for an estimate nobody asked for.
   let travelSeconds = null;
-  if (origin && destinationAddress !== "") {
-    // A recent estimate that leaves this pair well short of its leave
-    // instant defers the (billable) Routes call to a later sweep.
-    const key = `${c.id}|${employeeDocId}`;
-    const cached = readEstimate(estimates, key, nowMs);
-    if (canDeferRoutes({
-      seconds: cached, startTimeMillis: startMs, nowMillis: nowMs,
-    })) {
-      return none;
-    }
-    travelSeconds = await computeTravelSeconds({
-      fetchImpl,
-      apiKey,
-      origin,
-      destinationAddress,
+  if (wantsAlerts) {
+    const origin = decideOrigin({
+      presence,
+      employeeAppointments,
+      candidate: c,
       now: nowDate,
-      logger,
     });
-    if (travelSeconds != null) {
-      estimates.set(key, {seconds: travelSeconds, atMs: nowMs});
+    const destinationAddress = _address(c);
+    if (origin && destinationAddress !== "") {
+      // A recent estimate that leaves this pair well short of its leave
+      // instant defers the (billable) Routes call to a later sweep.
+      const key = `${c.id}|${employeeDocId}`;
+      const cached = readEstimate(estimates, key, nowMs);
+      if (canDeferRoutes({
+        seconds: cached, startTimeMillis: startMs, nowMillis: nowMs,
+      })) {
+        return none;
+      }
+      travelSeconds = await computeTravelSeconds({
+        fetchImpl,
+        apiKey,
+        origin,
+        destinationAddress,
+        now: nowDate,
+        logger,
+      });
+      if (travelSeconds != null) {
+        estimates.set(key, {seconds: travelSeconds, atMs: nowMs});
+      }
     }
   }
   const leadMinutes = computeLeadMinutes(travelSeconds);
   if (!isDue({startTimeMillis: startMs, leadMinutes, nowMillis: nowMs})) {
     return none;
   }
-  // An opted-out assignee degrades to the fixed 30-minute reminder rather than
-  // losing the notification — the same fallback a missing origin or a Routes
-  // failure already takes.
-  const kind = (travelSeconds == null || !wantsAlerts) ?
-      "reminder" : "leaveNow";
+  // `travelSeconds` is already null for an opted-out assignee, by the guard
+  // above — this line reads the consequence, never the flag.
+  const kind = travelSeconds == null ? "reminder" : "leaveNow";
   const ctx = {
     clientName: c.clientName,
     // A personal job has no client, so the message names it by title —
@@ -479,8 +488,10 @@ async function resolveReminderForAssignee(deps, args) {
   // run's `endTime`, and the on-site flip renders that as a live countdown —
   // so a five-day run parks a five-day countdown on the Lock Screen. The
   // leaveNow push itself still goes out; only the card is withheld.
-  const isMultiDay = dayCountOf(c) > 1;
-  if (kind === "leaveNow" && delivered > 0 && !isMultiDay) {
+  // `dayCountOf` is last in the chain on purpose: it resolves a window through
+  // `Intl`, and every reminder-only or undelivered candidate would otherwise
+  // pay for a value it discards.
+  if (kind === "leaveNow" && delivered > 0 && dayCountOf(c) <= 1) {
     // Best-effort — a Live Activity failure must not change `reminded` or
     // abort the sweep. No card just leaves the plain leaveNow push
     // unchanged.

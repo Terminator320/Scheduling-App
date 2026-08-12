@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 
 /// Seven bars — Monday to Sunday of the current week — with an over-capacity
@@ -19,7 +20,7 @@ class DailyLoadChart extends StatelessWidget {
 
   final List<DayLoad> days;
 
-  /// Sunday-indexed and UNROTATED — indexed by `day.weekday % 7`, the same way
+  /// Sunday-indexed and UNROTATED — indexed by `sundayIndexOf`, the same way
   /// `workingDays` is. A display-ordered list silently mislabels every bar.
   final List<String> weekdayLabels;
 
@@ -64,7 +65,7 @@ class DailyLoadChart extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.sp4),
                   Text(
-                    weekdayLabels[day.day.weekday % 7],
+                    weekdayLabels[sundayIndexOf(day.day)],
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: scheme.onSurfaceVariant,
                     ),

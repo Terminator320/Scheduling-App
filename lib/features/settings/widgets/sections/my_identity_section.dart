@@ -99,16 +99,31 @@ class _MyIdentitySectionState extends State<MyIdentitySection> {
     super.dispose();
   }
 
+  /// The STORED values are the other half of the comparison, so a save that
+  /// commits them has to re-run it — the controllers don't change, so nothing
+  /// else would. Without this the Save/Discard bar the section documents as
+  /// appearing "only once the form is dirty" survived its own successful save
+  /// (with Discard as a visible no-op) until the next keystroke.
+  ///
+  /// No `setState`: a rebuild is already in flight when this runs.
+  @override
+  void didUpdateWidget(MyIdentitySection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _isDirty = _computeDirty();
+  }
+
   /// Recomputed against the STORED values rather than latched as a one-way
   /// flag, so typing a change and typing it back reads as pristine again and
   /// the bar stops offering to save nothing.
   void _recomputeDirty() {
-    final dirty =
-        _phone.text != widget.initialPhone ||
-        _contact.text != widget.initialEmergencyContact ||
-        _emergencyPhone.text != widget.initialEmergencyPhone;
+    final dirty = _computeDirty();
     if (dirty != _isDirty) setState(() => _isDirty = dirty);
   }
+
+  bool _computeDirty() =>
+      _phone.text != widget.initialPhone ||
+      _contact.text != widget.initialEmergencyContact ||
+      _emergencyPhone.text != widget.initialEmergencyPhone;
 
   void _discard() {
     _phone.text = widget.initialPhone;

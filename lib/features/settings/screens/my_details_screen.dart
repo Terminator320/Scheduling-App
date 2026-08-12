@@ -51,6 +51,7 @@ class MyDetailsScreen extends ConsumerStatefulWidget {
 class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
   bool _seeded = false;
   bool _isSaving = false;
+  bool _isEmailSheetOpen = false;
 
   List<bool> _workingDays = kDefaultWorkingDays;
   int _workStartMinutes = kDefaultWorkStartMinutes;
@@ -221,11 +222,24 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
   /// absent from the self-service rules allowlist, so Auth and Firestore move
   /// together through `changeEmployeeEmail` or not at all.
   Future<void> _changeEmail(String docId, String currentEmail) async {
-    if (_isSaving) return;
-    final draft = await showChangeEmailSheet(
-      context,
-      currentEmail: currentEmail,
-    );
+    if (_isSaving || _isEmailSheetOpen) return;
+    // Its OWN guard, set synchronously before the sheet opens, rather than
+    // `_isSaving`: the modal barrier is not up yet on the frame the row is
+    // tapped, so an unguarded double-tap stacks two change-email sheets and
+    // dismissing the top one leaves a second live — two `changeOwnEmail` calls
+    // queued back to back against a 5/hour budget. It is deliberately NOT
+    // `_isSaving`, which drives the identity Save button's spinner and would
+    // render a busy state behind a sheet that has saved nothing.
+    _isEmailSheetOpen = true;
+    final ChangeEmailDraft? draft;
+    try {
+      draft = await showChangeEmailSheet(
+        context,
+        currentEmail: currentEmail,
+      );
+    } finally {
+      _isEmailSheetOpen = false;
+    }
     if (draft == null || !mounted) return;
 
     final l10n = context.l10n;
@@ -361,7 +375,25 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     // Both reads must land before the form is safe to show: the identity
     // section seeds its controllers ONCE, and a blank-by-default field over a
     // stored value invites the person to save the blank back.
-    if (record == null || emergency.isLoading) {
+    //
+    // A SETTLED roster that still doesn't hold us is an error, not a pending
+    // read. `myEmployeeRecordProvider` resolves the person by scanning
+    // `allUsersStreamProvider`, which is bounded by `_userStreamLimit` and —
+    // for an admin — ordered by `name`, which Firestore uses to EXCLUDE any
+    // doc missing that field. Both are narrow, but treating either as "still
+    // loading" leaves an indefinite spinner with no error and no retry. The
+    // identity is already settled here (see the caller), so this cannot fire
+    // on a slow sign-in.
+    final roster = ref.watch(allUsersStreamProvider);
+    if (record == null) {
+      if (roster.isLoading) {
+        return const Center(child: AdaptiveProgressIndicator(size: 32));
+      }
+      return Center(
+        child: CenteredErrorText(message: l10n.error_somethingWentWrong),
+      );
+    }
+    if (emergency.isLoading) {
       return const Center(child: AdaptiveProgressIndicator(size: 32));
     }
     // A failed emergency read is "we couldn't load it", never "you have none

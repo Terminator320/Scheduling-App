@@ -15,6 +15,32 @@
 const BUSINESS_TIME_ZONE = "America/Toronto";
 
 /**
+ * Hoisted because both take CONSTANT options and both sit in a hot loop:
+ * `day_slice_utils.js` reaches them ~18 times per `sliceForDay`, and the widget
+ * payload probes every record against every day. Constructing an
+ * `Intl.DateTimeFormat` costs ~100x a `.format()` on an existing one, so a
+ * 200-job window was paying roughly a second of pure CPU per push. Never move
+ * these back inside the functions.
+ */
+const YMD_FORMAT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const OFFSET_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: BUSINESS_TIME_ZONE,
+  hourCycle: "h23",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
+/**
  * The longest span a job may be booked for, in days.
  *
  * HAND-MIRRORED from `maxAppointmentSpanDays` in
@@ -195,12 +221,7 @@ function formatTimeOfDay(locale, value) {
  * @return {!Array<number>} `[year, month, day]` (month is 1-based).
  */
 function businessYmd(date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
+  return YMD_FORMAT
       .format(date)
       .split("-")
       .map(Number);
@@ -213,16 +234,7 @@ function businessYmd(date) {
  * @return {number}
  */
 function businessOffsetMs(date) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: BUSINESS_TIME_ZONE,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(date).reduce((acc, p) => {
+  const parts = OFFSET_FORMAT.formatToParts(date).reduce((acc, p) => {
     acc[p.type] = p.value;
     return acc;
   }, {});

@@ -19,8 +19,6 @@ const {
   normalizedStatus,
 } = require("../time_utils");
 const {PURGE_STATUSES} = require("../maintenance_policy");
-const {isTerminalStatus: widgetIsTerminal} =
-  require("../widget_payload_utils");
 
 describe("the terminal set", () => {
   test("carries the legacy completed alias", () => {
@@ -34,8 +32,6 @@ describe("the terminal set", () => {
     // maintenance_policy dropped `completed` and its own comment still claimed
     // "ONLY terminal appointments are ever purged" while excluding one.
     expect(PURGE_STATUSES).toEqual([...TERMINAL_STATUSES]);
-    // widget_payload_utils re-exports the shared predicate.
-    expect(widgetIsTerminal).toBe(isTerminalStatus);
   });
 });
 

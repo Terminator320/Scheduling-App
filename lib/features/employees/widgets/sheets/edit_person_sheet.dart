@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
@@ -29,9 +28,6 @@ import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 import 'package:scheduling/shared/widgets/sheets/form_sheet_frame.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
-
-/// The daily cap options: no cap, then 1–12, which covers any real crew day.
-const _kMaxJobsOptions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 /// Opens the edit-person sheet. Resolves to the saved record, or null when the
 /// sheet was cancelled.
@@ -212,18 +208,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
   }
 
   Future<void> _pickMaxJobs() async {
-    final l10n = context.l10n;
-    final picked = await showAdaptiveActionSheet<int>(
-      context,
-      title: l10n.employees_maxJobsPerDay,
-      actions: [
-        for (final option in _kMaxJobsOptions)
-          AdaptiveSheetAction(
-            label: option == 0 ? l10n.employees_noCap : '$option',
-            value: option,
-          ),
-      ],
-    );
+    final picked = await showMaxJobsPicker(context);
     if (picked == null || !mounted) return;
     setState(() => _maxJobsPerDay = picked);
   }
@@ -562,8 +547,6 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
   ];
 }
 
-/// A panel row that is not a picker — a label beside arbitrary content
-/// (the working-day strip) or a trailing control (the on-call switch).
 /// Disable / re-enable, with the count of jobs a human still has to move.
 ///
 /// P4 reassigns nothing — the spec's words are "availability changes notify,

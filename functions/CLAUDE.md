@@ -129,6 +129,16 @@ how they render the same instant. It must stay **dependency-free**: those three
 consumers sit on a `notification_utils` → `live_activity_dispatch` →
 `live_activity_utils` require chain, and any require here would close a cycle.
 Never re-inline a local `toMillis` or a bare `timeZone: "America/Toronto"`.
+**`businessYmd`/`businessOffsetMs` read HOISTED module-scope
+`Intl.DateTimeFormat`s (`YMD_FORMAT`/`OFFSET_FORMAT`), and that is a
+performance invariant, not tidiness** — both take constant options, and
+constructing an `Intl.DateTimeFormat` costs ~100x a `.format()` on an existing
+one. Nothing called them in a loop until `day_slice_utils.js` existed; it
+reaches them ~18 times per `sliceForDay`, and `buildWidgetPayload` probes every
+record against every day, so a busy tech's 200-doc window was paying about a
+second of pure CPU per push. Never move a formatter back inside one of these
+functions, and add a new constant-options formatter at module scope beside
+them.
 **`day_slice_utils.js` sits one level above it** — the pure hand-mirror of
 `lib/features/calendar/domain/appointment_day_slice.dart`, dependency-free
 apart from `time_utils.js`, so it is a leaf too and `widget_payload_utils.js` /
@@ -138,6 +148,17 @@ clamp; it **re-exports** `MAX_APPOINTMENT_SPAN_DAYS` rather than restating a
 third copy of the Dart constant. Its jest cases reuse the Dart suite's worked
 examples on purpose — a divergence between the two implementations fails a
 test rather than shipping, so change both together.
+**Its internals thread an already-resolved window** —
+`lastWorkDayOfWindow(w)` / `dayCountOfWindow(w)` are the real bodies and the
+record-taking `lastWorkDayMs`/`dayCountOf` are thin wrappers. `resolveWindow`
+runs `businessMinutesOfDay` twice and each of those formats through `Intl`, so
+the obvious record-taking chain (`sliceForDay` → `dayCountOf` →
+`lastWorkDayMs`) resolved the SAME window three times on every probe. Keep new
+internals on the window-taking form. For the same reason `travel_utils.js`
+asks `dayCountOf(c)` LAST in its Live-Activity condition
+(`kind === "leaveNow" && delivered > 0 && dayCountOf(c) <= 1`) — hoisted into a
+local, every reminder-only and undelivered candidate paid for a value it
+discards.
 Shared `defineSecret` params live
 in `params.js` (`GOOGLE_MAP_API_KEY`, `APNS_AUTH_KEY`, `APNS_KEY_ID`,
 `APNS_TEAM_ID`), imported by every consumer — a secret

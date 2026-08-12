@@ -6,11 +6,16 @@ import 'package:intl/intl.dart';
 const int monthGridMaxRows = 6;
 
 /// Dart's [DateTime.weekday] is Monday=1..Sunday=7; the grid works in
-/// Sunday=0..Saturday=6, matching intl's weekday-symbol arrays.
-int _sundayBased(DateTime day) => day.weekday % 7;
+/// Sunday=0..Saturday=6, matching intl's weekday-symbol arrays — and the same
+/// indexing `workingDays` is stored in.
+///
+/// Public because every surface that reads a Sunday-indexed list needs it, and
+/// CLAUDE.md's stated hazard is that "one missed conversion shifts a whole
+/// roster by a day". It had four spellings before; don't add a fifth.
+int sundayIndexOf(DateTime day) => day.weekday % 7;
 
 int _leadFor(DateTime month, int weekStart) =>
-    (_sundayBased(DateTime(month.year, month.month)) - weekStart + 7) % 7;
+    (sundayIndexOf(DateTime(month.year, month.month)) - weekStart + 7) % 7;
 
 /// Days in [month]. `day 0` of the next month is the last day of this one.
 int _daysInMonth(DateTime month) =>
@@ -40,7 +45,7 @@ List<DateTime> monthGridDays(DateTime month, {required int weekStart}) {
 
 /// The seven days of [day]'s week, starting at [weekStart].
 List<DateTime> weekOf(DateTime day, {required int weekStart}) {
-  final lead = (_sundayBased(day) - weekStart + 7) % 7;
+  final lead = (sundayIndexOf(day) - weekStart + 7) % 7;
   return [
     for (var i = 0; i < 7; i++)
       DateTime(day.year, day.month, day.day - lead + i),
