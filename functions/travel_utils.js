@@ -75,10 +75,11 @@ const CONTEXT_QUERY_MAX = 50;
 // one-off during an Aug 1-10 run then departs "from" that run's address at
 // 07:00, when they are at home and its window doesn't open until 09:00 —
 // a NEW wrong origin, traded for an old missing one.
-// Scoping that prong needs the daily-window model mirrored into JS, which is
-// owed by Plan 2 (docs/plans/2026-08-02-multi-day-appointments.md §8). Until
-// then a long run stays out of the context, exactly as before multi-day
-// booking existed — a known gap, not a regression.
+// Scoping that prong needs the daily-window model, which Plan 2 has since
+// mirrored into JS (`./day_slice_utils`, 2026-08-10) — so the blocker is now
+// that nobody has applied it here, not that the mirror is missing. Until then
+// a long run stays out of the context, exactly as before multi-day booking
+// existed — a known gap, not a regression.
 const MAX_BOOKING_MS = 24 * 60 * MINUTE_MS;
 
 // Sweep candidate window: MAX_LEAD_MINUTES ahead, so the longest computable

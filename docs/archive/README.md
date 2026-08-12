@@ -2,11 +2,20 @@
 
 Completed plans/specs and superseded audit snapshots — kept for history, not
 maintained against the current code. Started 2026-07-10; last updated
-2026-08-10.
+**2026-08-11**, when the docs sweep moved thirteen documents in: six plans whose
+work had shipped (the multi-day trio, the closed-jobs agenda, the photo cue, the
+History restyle), six superseded audit snapshots, and the pre-redesign
+`WORKFLOW.md`.
 
 **Do not treat these as accurate references.** For current state see
 `docs/ARCHITECTURE.md`, `docs/CLOUD_FUNCTIONS.md`, and the active plans in
 `docs/plans/`.
+
+Documents here are frozen as written, so several still cite each other by their
+old `docs/plans/` or `docs/audits/` paths. Those pointers are left alone on
+purpose — a task list that says "edit `docs/plans/X`" was true when it ran, and
+rewriting it would falsify the record. Read a bare filename as "same folder as
+this one".
 
 ## Executed plans / specs (feature shipped)
 - `INVITED_SIGNUP_REDESIGN.md` / `_PLAN.md` — canonical spec + implementation
@@ -80,19 +89,83 @@ maintained against the current code. Started 2026-07-10; last updated
   `lib/features/feature_tour/domain/tour_scope.dart`. On-device verification is
   the one residual item.
 
+- `2026-08-02-multi-day-appointments.md` (design) / `-PLAN-1-app.md` /
+  `2026-08-03-multi-day-appointments-PLAN-2-mirrors.md` — an appointment spans
+  up to 14 days and its two times are a **daily window**. Plan 1 built the app
+  half (`140fc92`, 2026-08-03): `AppointmentDaySlice` as the one owner of
+  day-scoping, and every consumer of the range stream re-scoped through
+  `runsOn`. Plan 2 built the off-screen mirrors (2026-08-10): the home widget,
+  `functions/day_slice_utils.js`, the Siri snapshot at **schema v3** and the
+  push date line, so days 2+ of a run stopped being invisible outside the app.
+  The design doc's §8 mirror table is complete and its §10 question 2 (a
+  `firestore.rules` span bound) was **closed and built 2026-08-11**
+  (`isValidAppointmentSpan`). **One open item was carried out of §10 rather than
+  archived with it** — what a Live Activity for a multi-day job should look like
+  — and now lives in `docs/plans/README.md` §5; the containment (skip multi-day
+  jobs outright) is built. The rules bound and the skip are **not deployed**.
+  Both Swift halves are Xcode/device-unverified. Every invariant is in
+  `CLAUDE.md`; the unticked checkboxes in both plans are an artifact of how they
+  were executed.
+- `2026-08-08-completed-jobs-agenda.md` — closed jobs (`done` **and**
+  `cancelled`) sink below the day's open work in the calendar agenda, take the
+  success tint, and render collapsed under a labelled rule (built 2026-08-08).
+  `_agendaOrder` in `appointment_day_slice.dart`, `AgendaSliverList`,
+  `AppointmentCard(collapseWhenClosed:)`. Only the calendar sinks them — every
+  other appointment surface keeps its own sort and the full-height card.
+- `2026-08-10-photo-cue-and-day-count.md` — two small agenda signals (built
+  2026-08-10): a photo glyph at the end of the title line when a job carries
+  pictures, and the agenda header's `4 JOBS · 1 DONE` second clause. Not
+  device-verified.
+- `2026-08-11-history-restyle.md` — P7's History half (built 2026-08-11): a left
+  date rail under a sticky month bar, replacing the bold year separator, with
+  the shared `AppointmentCard` untouched. `HistoryMonthBar`, `HistoryDateRail`,
+  `clients/domain/history_grouping.dart`. Its build record is P7 phase D in
+  `docs/plans/redesign-subdocs/2026-08-11-p7-dashboard-history.md`, which stays
+  active-adjacent with the rest of the redesign sub-docs.
+
 ## Superseded session snapshots
 - `2026-07-20-session-handoff.md` — a point-in-time "resume here" snapshot; its
   live next-action (the Siri Phase 4 write-actions runbook) lives in the active
   `docs/plans/2026-07-20-siri-phase4-write-actions.md`. Kept for history only.
+- `WORKFLOW.md` — the user-side UI map of the **pre-redesign** app (~2026-07-29),
+  written as the brief the redesign was specified against. Archived 2026-08-11
+  now that P1–P5 and P7 have shipped: the nav rail, `table_calendar`,
+  `AppointmentTile`, `AuthBrandHeader`, `google_fonts`, the `todayFab` and the
+  signup-code flow are all deleted, there are four hub tabs rather than six, and
+  it predates personal jobs, all-day blocks and multi-day appointments. It had
+  carried a SUPERSEDED banner since the redesign began and was flagged by the
+  2026-08-04 audit for presenting itself as current. Kept for its §6 constraints
+  and as the record of what the redesign was answering. Current sources of
+  truth: `CLAUDE.md`, `docs/ARCHITECTURE.md`.
 
 ## Superseded audit snapshots
 Point-in-time whole-repo audits; each run's findings were implemented at the
-time. Superseded by later audits — the active one is
-`docs/audits/CODEBASE_AUDIT.md` (2026-07-22 pass).
+time. Superseded by later audits — **the active one is
+`docs/audits/CODEBASE_AUDIT.md`, the 2026-08-11 second pass**, which is the only
+audit still being worked. `docs/audits/` also keeps
+`SECURITY_ASSESSMENT_2026-08-04.md` and `AUDIT_FOLLOWUPS.md` (one item, §2,
+still open).
 - `CODEBASE_AUDIT_2026-06-26.md`
 - `CODEBASE_AUDIT_2026-07-01.md`
 - `CODEBASE_AUDIT_2026-07-04.md`
 - `CODEBASE_AUDIT_2026-07-07.md`
+- `CODEBASE_AUDIT_2026-07-19.md` — the same-day deep pass that replaced the
+  `-earlier` run below.
+- `CODEBASE_AUDIT_2026-08-02-pre-p4c.md` — the 1.39.0+64 release cut, audited
+  *before* the P4c employee-account commits landed.
+- `CODEBASE_AUDIT_2026-08-02-post-p4c.md` — the re-run over the P4c result.
+  Supersedes the pre-P4c snapshot.
+- `CODEBASE_AUDIT_2026-08-04-first-pass.md` — closed 21 findings at `9b384aa`.
+- `CODEBASE_AUDIT_2026-08-04-second-pass.md` — a fresh sweep over the shipped
+  result at `46154b1`, not a re-run of the first pass's checks; it found a
+  distinct set.
+- `CODEBASE_AUDIT_2026-08-11-first-pass.md` — 20 findings at `8bf07c6e`, all
+  actioned in `a90474cc`. Superseded the same day by the second pass, which is
+  the live `docs/audits/CODEBASE_AUDIT.md`.
+- `MOBILE_AUDIT_2026-07-13.md` — a mobile-optimization-lens pass (perf, memory,
+  battery, network, mobile UX) rather than a general audit. Nothing mechanical
+  to fix; its verdict was that the hot paths already implement the mitigations
+  it hunts for.
 - `CODEBASE_AUDIT_2026-07-19-earlier.md` — the first 2026-07-19 run, which
   reported zero security findings and zero bugs. The **same-day deep pass that
   replaced it contradicts that conclusion** (it found the disabled-employee read

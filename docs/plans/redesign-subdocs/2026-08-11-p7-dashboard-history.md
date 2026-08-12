@@ -206,7 +206,7 @@ spec never asked to extend.
 
 ## Phase D — History restyle — **BUILT**
 
-The chosen design is `docs/plans/2026-08-11-history-restyle.md` (option B, the
+The chosen design is `docs/archive/2026-08-11-history-restyle.md` (option B, the
 date rail). What follows is what the build actually needed.
 
 **D1.** Year/Crew filters swapped from `MenuAnchor` to `showAdaptiveActionSheet`
