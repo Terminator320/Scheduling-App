@@ -4,8 +4,9 @@ The "time to leave" Live Activity (Lock Screen card + Dynamic Island). The
 Swift here was authored on the Windows dev box and has **never been compiled**.
 Everything below is Mac-side work.
 
-Design: [`docs/plans/2026-07-19-ios-live-activities.md`](../../docs/plans/2026-07-19-ios-live-activities.md).
-Plan: [`docs/plans/2026-07-19-ios-live-activities-implementation.md`](../../docs/plans/2026-07-19-ios-live-activities-implementation.md).
+Design: [`docs/archive/2026-07-19-ios-live-activities.md`](../../docs/archive/2026-07-19-ios-live-activities.md).
+Plan: [`docs/archive/2026-07-19-ios-live-activities-implementation.md`](../../docs/archive/2026-07-19-ios-live-activities-implementation.md).
+Both shipped and were archived; the residual item here is on-device verification.
 
 SPM-only project — there is no Podfile and never will be. Nothing here adds a
 dependency; ActivityKit, AppIntents, and WidgetKit are system frameworks.

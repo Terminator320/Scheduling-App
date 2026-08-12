@@ -621,13 +621,13 @@ Agreement" if you want it on the product page; **not optional to the app**)
 ```
 https://gvogas.github.io/es-pro-legal/terms-of-service.html
 ```
-Source: `docs/legal/terms-of-service.html` — publish it to the `es-pro-legal`
-Pages repo beside `support.html`. The app links to this URL in two places
-(`AppUrls.termsOfService`): the account-setup consent checkbox, whose tick
-stamps `termsAcceptedAt`, and the Settings › Legal row. **If the page is
-missing or the repo drifts from `docs/legal/`, every employee is accepting terms
-they can't read or that say something else** — republish it whenever that file
-changes, the same discipline as the accessibility page below.
+Source: `docs/legal/terms-of-service.html` — **published** to the `es-pro-legal`
+Pages repo beside `support.html`, verified byte-identical 2026-08-11. The app
+links to this URL in two places (`AppUrls.termsOfService`): the account-setup
+consent checkbox, whose tick stamps `termsAcceptedAt`, and the Settings › Legal
+row. **If the repo drifts from `docs/legal/`, every employee is accepting terms
+that say something else** — republish it whenever that file changes, the same
+discipline as the accessibility page below.
 
 **Accessibility URL** (optional, App Store Connect → App Accessibility →
 Accessibility Nutrition Labels → "Manage the accessibility URL"; shown on the
@@ -845,11 +845,13 @@ block submission regardless of the build.
 - [ ] Paste the demo account's email + password into ASC → App Review
   Information → Sign-In Required, plus the Part 12 review notes and a contact
   phone.
-- [ ] ⚠️ **Publish `docs/legal/terms-of-service.html`** to the `es-pro-legal`
-  Pages repo (and republish the privacy policy if it changed — both were
-  updated 2026-08-05). The app links to the terms URL from the account-setup
-  consent checkbox and Settings › Legal, so a missing page means every employee
-  accepts terms they cannot read.
+- [x] **Publish `docs/legal/terms-of-service.html`** to the `es-pro-legal`
+  Pages repo. **DONE** — verified 2026-08-11: all four pages return HTTP 200
+  and are **byte-identical** to `docs/legal/` (`terms-of-service.html`,
+  `accessibility.html`, `support.html`, and the privacy policy served as the
+  repo's `index`). The app links to the terms URL from the account-setup
+  consent checkbox and Settings › Legal, so re-verify this whenever any file in
+  `docs/legal/` changes — republishing is part of that edit, not a follow-up.
 
 **ASC content**
 - [ ] Confirm the app record (ES Pro, `net.vogas.scheduling`, Business /

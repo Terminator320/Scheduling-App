@@ -18,7 +18,7 @@ Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 Baseline: working tree at `55ea3cb3` on `redesgin`, tree clean at start.
 
 This is the second pass of the day. The first pass (archived as
-`CODEBASE_AUDIT_2026-08-11-first-pass.md`, baseline `8bf07c6e`) was implemented
+`docs/archive/CODEBASE_AUDIT_2026-08-11-first-pass.md`, baseline `8bf07c6e`) was implemented
 in `a90474cc`; two commits have landed since — `84a1bf6f` (P7 dashboard +
 History restyle + the rules span bound) and `55ea3cb3` (personal jobs keep an
 address). Both are unreviewed, and most of what follows is in them.
@@ -46,7 +46,9 @@ address). Both are unreviewed, and most of what follows is in them.
 
 > Full detail is in `git diff`. Nothing below this line was auto-changed.
 > `docs/audits/CODEBASE_AUDIT.md` was moved to
-> `CODEBASE_AUDIT_2026-08-11-first-pass.md` to keep the earlier pass.
+> `CODEBASE_AUDIT_2026-08-11-first-pass.md` to keep the earlier pass — which
+> the 2026-08-11 docs sweep then filed under `docs/archive/` with the rest of
+> the superseded snapshots.
 
 ## ⚠️ Pre-deploy checklist
 
@@ -54,7 +56,7 @@ There are **zero** `TODO(pre-ship)` markers left anywhere in `lib/` or
 `functions/` — verified, along with zero `TODO`/`FIXME`/`HACK`/`XXX`/`TEMP`.
 No destructive testing scaffolding survives. One release-gating item remains:
 
-- [ ] **The backend is still not deployed, and it now carries three passes of
+- [x] **The backend is still not deployed, and it now carries three passes of
   security work.** `a90474cc` (S1 `assertFreshReauth` on `changeEmployeeEmail`'s
   SELF branch, budget 20/h → 5/h; B4 multi-day Live Activity skip; B5 crew
   colour) and `84a1bf6f` (the `isValidAppointmentSpan` rules bound) are both
