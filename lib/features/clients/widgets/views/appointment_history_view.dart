@@ -7,18 +7,13 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
-import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/domain/month_grid.dart';
-import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
-import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
 import 'package:scheduling/features/clients/application/appointment_history_providers.dart';
 import 'package:scheduling/features/clients/domain/history_grouping.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
-import 'package:scheduling/features/clients/widgets/lists/history_date_rail.dart';
+import 'package:scheduling/features/clients/widgets/lists/history_sliver_list.dart';
 import 'package:scheduling/features/clients/widgets/sections/history_filter_bar.dart';
-import 'package:scheduling/features/clients/widgets/sections/history_month_bar.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
@@ -542,159 +537,19 @@ class _AppointmentHistoryViewState
     children: [
       _HistoryCountLine(tally: tallyOf(rows), inSearch: inSearch),
       Expanded(
-        child: _historyList(
+        child: HistorySliverList(
           rows: rows,
           colorMap: colorMap,
           currentYear: currentYear,
           inSearch: inSearch,
+          isAdmin: widget.isAdmin,
           footer: footer,
           onRowBuilt: onRowBuilt,
+          firstRowTourWrap: widget.firstRowTourWrap,
         ),
       ),
     ],
   );
-
-  /// The rows themselves — month-barred, or flat in search.
-  ///
-  /// Search spans every appointment rather than the month in view, so its hits
-  /// are not a contiguous run of days and month bars over scattered results
-  /// would be noise. The rail picks up the month instead.
-  Widget _historyList({
-    required List<AppointmentRecord> rows,
-    required Map<String, Color> colorMap,
-    required int currentYear,
-    required bool inSearch,
-    Widget? footer,
-    void Function(int index)? onRowBuilt,
-  }) {
-    Widget item(int index) => _historyItem(
-      rows,
-      index,
-      colorMap,
-      inSearch: inSearch,
-      currentYear: currentYear,
-      onRowBuilt: onRowBuilt,
-    );
-
-    final monthFormat = monthYearFormatFor(
-      Localizations.localeOf(context).toString(),
-    );
-    final extent = HistoryMonthBar.extentFor(context);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp12),
-      child: CustomScrollView(
-        slivers: [
-          if (inSearch)
-            SliverList.builder(
-              itemCount: rows.length,
-              itemBuilder: (context, index) => item(index),
-            )
-          else
-            for (final section in monthSectionsOf(rows))
-              // The group is what makes the bar STICKY rather than STACKING: a
-              // pinned header is bounded by its group's scroll extent, so July's
-              // bar pushes August's out on the way past instead of parking a
-              // second bar under it. A year of history would otherwise pile
-              // twelve bars across the top of the screen.
-              SliverMainAxisGroup(
-                slivers: [
-                  SliverPersistentHeader(
-                    pinned: true,
-                    delegate: HistoryMonthBar(
-                      label: monthFormat.format(section.month),
-                      extent: extent,
-                    ),
-                  ),
-                  SliverList.builder(
-                    itemCount: section.length,
-                    itemBuilder: (context, index) =>
-                        item(section.start + index),
-                  ),
-                ],
-              ),
-          // The paged list's spinner or retry row, and — with or without one —
-          // the gap that keeps the last card off the bottom edge.
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sp12),
-              child: footer ?? const SizedBox.shrink(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Every row goes through here, so the first-row tour wrap and the pager's
-  /// prefetch both key off ONE global index rather than a per-section one.
-  Widget _historyItem(
-    List<AppointmentRecord> rows,
-    int index,
-    Map<String, Color> colorMap, {
-    required bool inSearch,
-    required int currentYear,
-    void Function(int index)? onRowBuilt,
-  }) {
-    onRowBuilt?.call(index);
-    final row = _historyRow(
-      rows,
-      index,
-      colorMap,
-      inSearch: inSearch,
-      currentYear: currentYear,
-    );
-    final wrap = widget.firstRowTourWrap;
-    return index == 0 && wrap != null ? wrap(row) : row;
-  }
-
-  Widget _historyRow(
-    List<AppointmentRecord> rows,
-    int index,
-    Map<String, Color> colorMap, {
-    required bool inSearch,
-    required int currentYear,
-  }) {
-    final app = rows[index];
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sp8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            // Drops the rail's first line onto the card's title line rather
-            // than its top border.
-            padding: const EdgeInsets.only(top: AppSpacing.sp16),
-            child: HistoryDateRail(
-              day: DateUtils.dateOnly(app.startTime),
-              showDate: startsDay(rows, index),
-              inSearch: inSearch,
-              currentYear: currentYear,
-            ),
-          ),
-          Expanded(
-            child: AppointmentCard(
-              appointment: app,
-              // No live name map here — crewFor falls back to the record's
-              // denormalized employeeNames.
-              crew: crewFor(app, colorMap: colorMap),
-              // Dims a cancelled visit to 0.6 and strikes its title through.
-              // History keeps the plain full-height card otherwise: the
-              // agenda's collapsed green treatment exists to sink closed work
-              // out of the way of what's left today, and here everything is
-              // closed.
-              dimWhenCancelled: true,
-              // Carries the caller's role rather than a hardcoded false: an
-              // admin needs to reach a finished job's Edit button from here,
-              // which is where finished jobs actually live.
-              onTap: () =>
-                  showEventDetails(context, app, showActions: widget.isAdmin),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _skeleton() =>
       const SkeletonList(padding: EdgeInsets.all(AppSpacing.sp12));
