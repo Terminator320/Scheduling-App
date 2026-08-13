@@ -40,11 +40,11 @@
 //   - `propagateClientEdits` fans the corrected name/phone onto that client's
 //     FUTURE appointments. That is the point — it repairs the denormalized
 //     copies too.
-//   - `waveUpsertCustomer` enqueues an outbox job. The mappedFieldsHash gate
-//     means only genuinely-changed docs enqueue, but that can still be a few
-//     hundred jobs draining at waveSyncWorker's 5-minute cadence. Run this
-//     when the queue is quiet and let it drain before the next scheduled
-//     import.
+//   - `waveUpsertCustomer` enqueues an outbox job AND drains it in the same
+//     invocation. The mappedFieldsHash gate means only genuinely-changed docs
+//     enqueue, but that can still be a few hundred jobs, each drained by its
+//     own trigger against Wave's 60-calls/min ceiling. Run this when the queue
+//     is quiet and let it settle before the next scheduled import.
 //
 // Usage:
 //   For prod:

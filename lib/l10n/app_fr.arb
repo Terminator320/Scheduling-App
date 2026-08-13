@@ -706,5 +706,11 @@
   "employees_passwordReset": "Mot de passe réinitialisé",
   "employees_removeAccount": "Supprimer le compte",
   "employees_removeAccountConfirmBody": "Ceci supprime complètement le compte. Possible uniquement parce que la personne ne s'est jamais connectée.",
-  "employees_newPasswordIssued": "Nouveau mot de passe temporaire — le précédent ne fonctionne plus"
+  "employees_newPasswordIssued": "Nouveau mot de passe temporaire — le précédent ne fonctionne plus",
+  "wave_outboxPending": "{count, plural, =1{1 client en attente de synchronisation} other{{count} clients en attente de synchronisation}}",
+  "wave_outboxFailed": "{count, plural, =1{Échec de synchronisation pour 1 client} other{Échec de synchronisation pour {count} clients}}",
+  "wave_retryFailedButton": "Réessayer",
+  "wave_retryNoneRecovered": "Rien à réessayer — ces clients étaient déjà de retour dans la file.",
+  "wave_retryQueued": "{count, plural, =1{1 client remis en file pour Wave} other{{count} clients remis en file pour Wave}}",
+  "wave_retryPushed": "{count, plural, =1{1 client envoyé à Wave} other{{count} clients envoyés à Wave}}"
 }

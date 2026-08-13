@@ -501,14 +501,24 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   per-module closure in `notification_policy.js` and `client_propagation.js` —
   the same drift shape as `displayStatusAt` and `_who` — so route any new test
   through the shared helper rather than re-deriving `endTime ?? startTime`.
-  **Widening a floor to admit started jobs makes a status filter MANDATORY
-  where it used to be free.** A `startTime >= now` query cannot match a job
-  already marked done, so terminal jobs were excluded incidentally; reaching a
-  span back admits them. `countFutureAssignments`
+  **Admitting started jobs makes a status filter MANDATORY where it used to be
+  free.** A `startTime >= now` query cannot match a job already marked done, so
+  terminal jobs were excluded incidentally; any bound that reaches a run
+  already under way admits them. `countFutureAssignments`
   (`firebase_appointments_repository.dart`) therefore tests
   `AppointmentStatus.fromRaw(status).isTerminal` explicitly, or a visit
   completed this morning still tells the admin to reassign it before disabling
-  the person. Check every floor widened this way for the same gap.
+  the person. Check every bound relaxed this way for the same gap.
+  **That query asks `endTime >= now` and nothing else** (2026-08-13), on the
+  existing `(employeeIds CONTAINS, endTime ASC)` index — "has work left" is a
+  test on `endTime`, so the query states it rather than approximating it with
+  `startTime >= now - maxAppointmentSpanDays` and re-testing in Dart. The old
+  form had **no upper bound**: it read every job this person was assigned to
+  from a fortnight ago to the end of time — and the repeat horizon pre-books
+  five years out — to render one caption. Keep the status test in Dart: a
+  `whereIn` over the open statuses would need a third index field and would
+  silently drop any status the allowlist doesn't name, and this caption must
+  err towards telling the admin to reassign.
   **The mirrors are day-scoped too** (Plan 2, 2026-08-10): the widget payload
   (Dart `widget_sync_service.dart` + `functions/widget_payload_utils.js`), the
   Siri snapshot (**schema v3**) and the push date line all fan a run across the
@@ -1438,10 +1448,17 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `today` always comes from
   `currentDayProvider`, never `DateTime.now()`, or the circle sticks on
   yesterday in an app left open across midnight.
-  **`AppointmentDateRange.visibleMonth` overscans ±14 days, not ±7.** With the
-  variable-row grid the true worst case is ±6, so ±14 is now a deliberate
-  superset — keep it rather than tuning it to the current row rule, or a future
-  grid change silently empties the edge cells' dots.
+  **`AppointmentDateRange.visibleMonth` overscans ±7 days** (narrowed from ±14
+  on 2026-08-13). The variable-row grid trails at most 6 off-month days on each
+  side, so ±7 clears the worst case by one — where ±14 was a superset of every
+  grid shape including the fixed-6-row one P2 replaced, and cost a fortnight of
+  documents per month view on top of the fortnight `fetchStart` already adds.
+  That saving buys a coupling: the window is now sized to the row rule, so
+  bringing back a fixed row count leaves the edge cells dotless.
+  **`month_grid_overscan_test.dart` is that coupling made to fail loudly** — it
+  walks every month across a leap cycle at all seven week starts and asserts
+  the fetch window contains every rendered cell. Change the row rule and it
+  breaks there rather than in somebody's empty crew dots.
   **A single-day window has ONE owner: `AppointmentDateRange.forDay(day)`.**
   It is **calendar** arithmetic (`DateTime(y, m, d + 1)`), never
   `add(Duration(days: 1))`, which lands an hour off real midnight on the two
@@ -1758,11 +1775,20 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   that opens a detail view for a doc that no longer exists).
 - **Client "Job history" section** (`ClientJobHistorySection`, admin-only client
   detail) reads via `fetchClientHistory` (`clientJobHistoryProvider`, an
-  `autoDispose.family` that re-fetches on `onLocalWrite`). The query filters on
-  `clientId` alone so the automatic single-field index serves it — there is NO
-  `orderBy`, so newest-first is sorted in Dart over the bounded window. Don't add
-  a server `orderBy('startTime')`, or it needs a `(clientId, startTime)`
-  composite index.
+  `autoDispose.family` that re-fetches on `onLocalWrite`). It orders
+  `startTime` DESC on the **server** — `(clientId ASC, startTime DESC)`, added
+  2026-08-13 — and the `orderBy` is what makes the `limit` mean anything. It
+  filtered on `clientId` alone before that, on the reasoning that the automatic
+  single-field index served it and Dart could sort the page: but with no
+  `orderBy` Firestore falls back to `__name__` order, so a client with more
+  visits than the cap got an **arbitrary** slice of its history, and sorting
+  that slice newest-first afterwards made the wrong page look like the right
+  one. (The composite index the old note said this would need already existed —
+  `propagateClientEdits` added it.) Consequence to keep in mind: an
+  `orderBy('startTime')` makes Firestore exclude a doc that has no `startTime`,
+  so `getAppointmentById` is now the only read in that repository that can
+  reach a legacy or console-written row missing one — which is what
+  `_recordFrom`'s breadcrumb is left for.
 - **The team roster's "jobs today" count is ONE listener, not one per row.**
   `employeeJobsTodayProvider` reduces a single `appointmentsInRangeProvider` over
   today's range into a `Map<String,int>`; every row reads the map. The range

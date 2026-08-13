@@ -86,10 +86,15 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   /// `AppointmentRecord.fromMap` substitutes `DateTime.now()` for a missing
   /// instant, and that fabricated time then seeds the edit sheet and is written
   /// back by the next save — so a legacy or console-written row is silently
-  /// given a start time nobody chose. The range streams can't reach such a doc
-  /// (`orderBy('startTime')` excludes it), which is why only the by-id read and
-  /// the client-history query need this. Not an error record: nothing failed,
-  /// and the read still returns a usable record.
+  /// given a start time nobody chose. Not an error record: nothing failed, and
+  /// the read still returns a usable record.
+  ///
+  /// This has two callers, and `getAppointmentById` is now the only one that
+  /// can reach such a doc. `fetchClientHistory` could until it gained the
+  /// `orderBy` its `limit` needs to be meaningful, and Firestore excludes docs
+  /// missing the orderBy field — so a startTime-less row is invisible in a
+  /// client's job history now, and is repairable only through the deep link
+  /// that opens it by id.
   AppointmentRecord _recordFrom(String id, Map<String, dynamic> data) {
     if (data['startTime'] == null || data['endTime'] == null) {
       _logger.breadcrumb(
@@ -105,32 +110,35 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     // "Has work left", NOT "starts in the future". A tech can be on day 3 of a
     // 10-day run with nothing else booked — counting from `now` reported "0
     // upcoming jobs" under Disable account, so the admin disabled someone who
-    // was standing on a job site. The query floor therefore reaches back a full
-    // span and the real endTime test runs below (Firestore takes only the one
-    // inequality the index serves), which is also why this can't stay a
-    // count() aggregate. Served by the existing
-    // (employeeIds CONTAINS, startTime ASC) composite index.
-    final floor = DateTime(
-      now.year,
-      now.month,
-      now.day - maxAppointmentSpanDays,
-    );
+    // was standing on a job site.
+    //
+    // That test is `endTime >= now`, so the QUERY asks it directly. It used to
+    // ask `startTime >= now - maxAppointmentSpanDays` — a superset chosen to
+    // reach a run already under way — and that query has no upper bound at
+    // all, so it read every job this person is assigned to from a fortnight
+    // ago to the end of time (the repeat horizon pre-books five years out) to
+    // render one caption. Bounding the field the rule is about reads only the
+    // jobs that actually have work left. Served by the existing
+    // `(employeeIds CONTAINS, endTime ASC)` composite index.
+    //
+    // Two consequences, both accepted: a doc with no `endTime` is excluded by
+    // the filter rather than admitted and then counted on `fromMap`'s
+    // fabricated instant, and a run longer than `maxAppointmentSpanDays` (only
+    // reachable by a console or Admin-SDK write) is now counted correctly
+    // instead of falling out of the floor.
     final snapshot = await _appointments
         .where('employeeIds', arrayContains: employeeId)
-        .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(floor))
+        .where('endTime', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
         .get();
     return snapshot.docs
         .map((d) => AppointmentRecord.fromMap(d.id, d.data()))
-        // Terminal jobs are not "still assigned". The old `startTime >= now`
-        // query excluded them incidentally, since a job can't be marked done
-        // before it starts; reaching a span back deliberately admits started
-        // jobs, so the status test has to be explicit or a visit completed
-        // this morning still tells the admin to reassign it.
-        .where(
-          (a) =>
-              !a.endTime.isBefore(now) &&
-              !AppointmentStatus.fromRaw(a.status).isTerminal,
-        )
+        // Terminal jobs are not "still assigned". Deliberately kept in Dart
+        // rather than added as a `whereIn` constraint: that would need a third
+        // index field for a query the `endTime` bound already keeps small, and
+        // an `in` over the open statuses silently drops any status the
+        // allowlist doesn't name. This caption must err towards telling the
+        // admin to reassign, so an unknown status has to count.
+        .where((a) => !AppointmentStatus.fromRaw(a.status).isTerminal)
         .length;
   }
 
@@ -410,14 +418,17 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     int limit = 50,
   }) async {
     if (clientId.isEmpty) return const [];
-    // We only filter on clientId here (it just needs a single-field index)
-    // and sort newest-first ourselves in Dart.
+    // The `orderBy` is what makes the `limit` mean "the newest [limit] visits".
+    // Without it Firestore falls back to `__name__` order, so a client with
+    // more visits than the cap got an ARBITRARY slice of its history — sorted
+    // newest-first in Dart afterwards, which made the wrong page look right.
+    // Served by the `(clientId ASC, startTime DESC)` composite index.
     final snapshot = await _appointments
         .where('clientId', isEqualTo: clientId)
+        .orderBy('startTime', descending: true)
         .limit(limit)
         .get();
-    return snapshot.docs.map((doc) => _recordFrom(doc.id, doc.data())).toList()
-      ..sort((a, b) => b.startTime.compareTo(a.startTime));
+    return snapshot.docs.map((doc) => _recordFrom(doc.id, doc.data())).toList();
   }
 
   // A bounded scan window for history search, same approach as clients search.

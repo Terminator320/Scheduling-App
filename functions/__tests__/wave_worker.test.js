@@ -3,7 +3,9 @@
 const {
   enqueueCustomerUpsert,
   drainQueue,
+  requeueDeadJobs,
   shouldEnqueueClientWrite,
+  RATE_LIMITED_MAX_ATTEMPTS,
 } = require("../wave/worker");
 const {WaveValidationError} = require("../wave/customers");
 const {WaveApiError} = require("../wave/client");
@@ -1926,5 +1928,212 @@ describe("shouldEnqueueClientWrite", () => {
     };
     const before = {...base};
     expect(shouldEnqueueClientWrite(before, after)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Rate-limit budget + dead-letter recovery (2026-08-13)
+// ---------------------------------------------------------------------------
+
+describe("a rate-limit does not spend the ordinary attempt budget", () => {
+  /**
+   * A job sitting one failure below the ordinary dead-letter cap.
+   * @param {number} maxAttempts The ordinary budget.
+   * @return {!Object} A queue job fixture.
+   */
+  function jobAtTheBrink(maxAttempts) {
+    return {
+      id: "customerUpsert__c1",
+      data: {
+        type: "customerUpsert",
+        refPath: "clients/c1",
+        status: "queued",
+        attempts: maxAttempts - 1,
+        nextAttemptAt: new Date("2024-01-01"),
+        lastError: "WaveApiError(rateLimited)",
+        idempotencyKey: "customerUpsert__c1",
+      },
+    };
+  }
+
+  test("Wave rate-limiting us RETRIES a job the ordinary cap would kill",
+      async () => {
+        // The whole point. A rate-limit says we asked too fast; it says
+        // nothing about whether this client's payload can ever succeed.
+        // Spending the 5-attempt budget on it dead-letters a valid edit
+        // permanently — a `dead` job is never picked up by any drain again.
+        const maxAttempts = 3;
+        const {db, refs} = drainDb([jobAtTheBrink(maxAttempts)]);
+        const rateLimited = new WaveApiError("rateLimited", "slow down");
+        const logger = fakeLogger();
+
+        const summary = await drainQueue({
+          db, now, logger,
+          upsertCustomer: jest.fn(() => Promise.reject(rateLimited)),
+          maxAttempts,
+          backoffFn: fixedBackoff(),
+        });
+
+        expect(summary.retried).toBe(1);
+        expect(summary.dead).toBe(0);
+        const final = refs[0].updates[refs[0].updates.length - 1];
+        expect(final.status).toBe("queued");
+        // Still counted, so the backoff keeps growing — it just is not
+        // measured against the ordinary cap.
+        expect(final.attempts).toBe(maxAttempts);
+        expect(logger.error).not.toHaveBeenCalled();
+      });
+
+  test("but it is still BOUNDED — past the rate-limit budget it dies",
+      async () => {
+        const {db, refs} = drainDb([{
+          id: "customerUpsert__c1",
+          data: {
+            type: "customerUpsert",
+            refPath: "clients/c1",
+            status: "queued",
+            attempts: RATE_LIMITED_MAX_ATTEMPTS - 1,
+            nextAttemptAt: new Date("2024-01-01"),
+            lastError: "WaveApiError(rateLimited)",
+            idempotencyKey: "customerUpsert__c1",
+          },
+        }]);
+        const logger = fakeLogger();
+
+        const summary = await drainQueue({
+          db, now, logger,
+          upsertCustomer: jest.fn(
+              () => Promise.reject(new WaveApiError("rateLimited", "no"))),
+          maxAttempts: 5,
+          backoffFn: fixedBackoff(),
+        });
+
+        expect(summary.dead).toBe(1);
+        expect(refs[0].updates[refs[0].updates.length - 1].status)
+            .toBe("dead");
+      });
+
+  test("a NON-rate-limit failure still dies at the ordinary cap", () => {
+    // The budget is keyed on THIS failure's error, not stored on the job, so
+    // a job rate-limited four times and then failing on its own merits is
+    // judged on the ordinary budget — four failures are four failures once
+    // one of them is the job's fault.
+    const maxAttempts = 3;
+    const {db, refs} = drainDb([jobAtTheBrink(maxAttempts)]);
+
+    return drainQueue({
+      db, now, logger: fakeLogger(),
+      upsertCustomer: jest.fn(
+          () => Promise.reject(new WaveApiError("network", "down"))),
+      maxAttempts,
+      backoffFn: fixedBackoff(),
+    }).then((summary) => {
+      expect(summary.dead).toBe(1);
+      expect(refs[0].updates[refs[0].updates.length - 1].status).toBe("dead");
+    });
+  });
+});
+
+describe("requeueDeadJobs", () => {
+  /**
+   * A Firestore double holding a fixed set of dead-lettered jobs.
+   * @param {!Array<!Object>} jobs `{id, data}` fixtures.
+   * @return {!Object} `{db, refs}`.
+   */
+  function deadDb(jobs) {
+    const refs = jobs.map((j) => fakeRef(j.id, {...j.data}));
+    const snapshots = refs.map((ref, i) => snap(jobs[i].id,
+        {...jobs[i].data}, ref));
+    const db = {
+      collection: jest.fn(() => ({
+        where: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        get: jest.fn(() => Promise.resolve({docs: snapshots})),
+      })),
+      runTransaction: jest.fn(async (fn) => fn({
+        get: jest.fn((ref) => Promise.resolve(
+            snap(ref.id, ref._data, ref))),
+        update: jest.fn((ref, fields) => {
+          ref.updates.push(fields);
+          Object.assign(ref._data, fields);
+        }),
+      })),
+    };
+    return {db, refs};
+  }
+
+  /**
+   * A dead-lettered job fixture.
+   * @param {string} clientId The client it belongs to.
+   * @return {!Object}
+   */
+  function deadJob(clientId) {
+    return {
+      id: `customerUpsert__${clientId}`,
+      data: {
+        type: "customerUpsert",
+        refPath: `clients/${clientId}`,
+        status: "dead",
+        attempts: 5,
+        lastError: "WaveApiError(graphql)",
+        idempotencyKey: `customerUpsert__${clientId}`,
+      },
+    };
+  }
+
+  test("returns dead jobs to the queue with a fresh budget", async () => {
+    const {db, refs} = deadDb([deadJob("c1"), deadJob("c2")]);
+    const nowDate = new Date("2026-08-13T12:00:00Z");
+
+    const out = await requeueDeadJobs({db, now: () => nowDate});
+
+    expect(out).toEqual({requeued: 2, scanned: 2});
+    for (const ref of refs) {
+      const patch = ref.updates[ref.updates.length - 1];
+      expect(patch.status).toBe("queued");
+      // A full budget and immediate eligibility: the backoff that killed it
+      // must not be inherited, or the admin's press does nothing visible.
+      expect(patch.attempts).toBe(0);
+      expect(patch.nextAttemptAt).toBe(nowDate);
+      expect(patch.lastError).toBeNull();
+    }
+  });
+
+  test("leaves a job a client edit already re-enqueued alone", async () => {
+    // The deterministic job id means a concurrent edit rewrites this very
+    // doc with the CURRENT payload hash. Resetting the old dead job over it
+    // would throw that newer job away.
+    const {db, refs} = deadDb([deadJob("c1")]);
+    refs[0]._data.status = "queued";
+
+    const out = await requeueDeadJobs({db, now: () => new Date()});
+
+    expect(out).toEqual({requeued: 0, scanned: 1});
+    expect(refs[0].updates).toHaveLength(0);
+  });
+
+  test("one stubborn job does not abort the rest of the recovery",
+      async () => {
+        const {db, refs} = deadDb([deadJob("c1"), deadJob("c2")]);
+        const logger = fakeLogger();
+        let call = 0;
+        const realTxn = db.runTransaction;
+        db.runTransaction = jest.fn(async (fn) => {
+          call += 1;
+          if (call === 1) throw new Error("contention");
+          return realTxn(fn);
+        });
+
+        const out = await requeueDeadJobs({db, logger, now: () => new Date()});
+
+        expect(out).toEqual({requeued: 1, scanned: 2});
+        expect(logger.warn).toHaveBeenCalledTimes(1);
+        expect(refs[1].updates[0].status).toBe("queued");
+      });
+
+  test("an empty dead set is a clean no-op", async () => {
+    const {db} = deadDb([]);
+    expect(await requeueDeadJobs({db, now: () => new Date()}))
+        .toEqual({requeued: 0, scanned: 0});
   });
 });

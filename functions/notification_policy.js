@@ -21,7 +21,6 @@ const {
   businessMidnight,
   businessMinutesOfDay,
   hasWorkLeft,
-  MAX_APPOINTMENT_SPAN_MS,
   isCancelledStatus,
 } = require("./time_utils");
 
@@ -29,15 +28,18 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 // How long after its endTime a job stays eligible for the overdue prompt. A
 // job left open longer than this just gets no prompt — an accepted v1 gap.
+//
+// This is BOTH the eligibility window and the sweep's query floor, because the
+// sweep queries `endTime` directly (index `(status, endTime DESC)`). It used
+// to query `startTime` and so needed a floor of this PLUS the longest bookable
+// span — about 15 days — which meant re-reading every open job started in the
+// last fortnight, every 15 minutes, to act on the few that had just ended.
+// Querying the field the rule is actually about makes the scan the width of
+// the rule. It also drops the span coupling entirely: a run longer than
+// MAX_APPOINTMENT_SPAN_DAYS (only reachable by a console or Admin-SDK write,
+// which bypass the rules' span bound) is now swept on its real end time
+// instead of falling out of the floor.
 const OVERDUE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
-
-// The overdue sweep queries by startTime (endTime would need a new index),
-// so its floor must cover the eligibility window PLUS the longest bookable
-// span. That span used to be just under 24h; since multi-day appointments it
-// is MAX_APPOINTMENT_SPAN_DAYS, and a 48h floor silently stopped matching any
-// run longer than a day — those jobs never became candidates and were never
-// prompted to close.
-const OVERDUE_QUERY_WINDOW_MS = OVERDUE_LOOKBACK_MS + MAX_APPOINTMENT_SPAN_MS;
 
 // Safety valve bounding the candidate set so one run can't blow the function
 // timeout. Logs a warning instead of silently truncating if it's ever hit.
@@ -383,7 +385,7 @@ function contextFor(kind, before, after) {
 
 module.exports = {
   DAY_MS,
-  OVERDUE_QUERY_WINDOW_MS,
+  OVERDUE_LOOKBACK_MS,
   OVERDUE_SWEEP_MAX,
   WIDGET_PAYLOAD_MAX_BYTES,
   OPEN_STATUSES,

@@ -31,6 +31,12 @@ const {
   APNS_KEY_ID,
   APNS_TEAM_ID,
 } = require("./params");
+// Rider 3 on the daily digest — see sendDailyJobDigest.
+// `WAVE_FULL_ACCESS_TOKEN` comes from wave/auth.js rather than params.js
+// because the Wave module owns it; a secret may only be defined once, so
+// never re-`defineSecret` it here.
+const {WAVE_FULL_ACCESS_TOKEN} = require("./wave/auth");
+const {runWaveDaily} = require("./wave/callables");
 
 /**
  * Real injected deps for the orchestration functions. Carries NO APNs
@@ -99,18 +105,41 @@ const notifyAppointmentChanges = onDocumentWritten(
     },
 );
 
-// Travel-aware "time to leave" reminders, every 5 minutes. Drive time comes
-// from the Routes API, and every failure path degrades to a fixed 30-min
-// reminder. A per-recipient ledger makes sure each occurrence fires exactly
-// once, and a missed run just self-heals on the next sweep.
+// The 5-minute sweep. It carries BOTH timed push sweeps:
+//
+//   1. Travel-aware "time to leave" reminders. Drive time comes from the
+//      Routes API, and every failure path degrades to a fixed 30-min
+//      reminder. A per-recipient ledger makes sure each occurrence fires
+//      exactly once, and a missed run just self-heals on the next sweep.
+//   2. The overdue "job finished?" prompts, which used to be their own
+//      `every 15 minutes` scheduler (`sendOverdueJobPrompts`, deleted
+//      2026-08-13).
+//
+// **The merge is a COST change, not a behaviour change.** Cloud Scheduler
+// bills per job beyond the first three, and this repo had six; folding the
+// overdue sweep in here is one of the two merges that brought it to three, so
+// the whole schedule is inside the free allowance. Running the overdue sweep
+// three times as often is free of side effects because its per-recipient
+// ledger (`appointmentOverduePrompts/{id}_{endMs}_{employeeDocId}`,
+// create-fails-if-exists) is what guarantees at-most-once delivery — the
+// cadence never did. It is also now genuinely cheap: since it began querying
+// `endTime` over a 24 h window rather than `startTime` over ~15 days, a run
+// reads the handful of jobs that actually just ended.
+//
+// The two sweeps are isolated from each other. The reminder half calls a
+// billable Google Routes API and the overdue half is Firestore-only; a throw
+// in either must not skip the other, exactly as the digest isolates its TTL
+// prune. `timeoutSeconds` covers both, so it takes the larger of the two
+// budgets the separate functions had (120 and 300) plus headroom.
 const sendUpcomingJobReminders = onSchedule(
     {
       schedule: "every 5 minutes",
       timeZone: "America/Toronto",
       maxInstances: 1,
       secrets: [GOOGLE_MAP_API_KEY, ...APNS_SECRETS],
-      // Pairs run concurrently, each with up to one Routes round-trip.
-      timeoutSeconds: 120,
+      // Pairs run concurrently, each with up to one Routes round-trip; the
+      // overdue sweep then runs its own (job, assignee) fan-out.
+      timeoutSeconds: 420,
     },
     async () => {
       try {
@@ -123,17 +152,49 @@ const sendUpcomingJobReminders = onSchedule(
         // Log rather than rethrow — the next 5-min run self-heals anyway.
         logger.error("sendUpcomingJobReminders failed", {err});
       }
+
+      // Rides this schedule rather than owning a fourth timer. `liveDeps()`,
+      // not `liveActivityDeps()`: this half is Firestore-only and must not
+      // read the APNs secrets, matching what the deleted standalone function
+      // used.
+      try {
+        await runOverduePromptSweep(liveDeps());
+      } catch (err) {
+        logger.error("sendOverdueJobPrompts failed", {err});
+      }
     },
 );
 
-// Nightly digest at 18:00 America/Toronto — one push per employee with >=1
-// job tomorrow. No ledger here; it only runs once daily, so we accept the
-// occasional rare duplicate.
+// THE daily job, 18:00 America/Toronto. It is the digest plus two riders, and
+// they run strictly in that order because only the first is time-sensitive:
+//
+//   1. The digest — one push per employee with >=1 job tomorrow. No ledger; it
+//      runs once daily, so we accept the occasional rare duplicate.
+//   2. The Live Activity TTL prune.
+//   3. The daily Wave maintenance — drain the outbox, import if the cadence is
+//      due. This was `waveScheduledImport`, its own `every 24 hours` timer,
+//      until 2026-08-13.
+//
+// **The riders are a COST decision.** Cloud Scheduler bills per job beyond the
+// first three and this repo had six; folding Wave in here is one of the two
+// merges that brought it to three, i.e. inside the free allowance. The TTL
+// prune had already established the pattern.
+//
+// EACH RIDER IS ISOLATED IN ITS OWN try/catch, and that is the whole safety
+// argument for merging: the digest has already sent by the time either runs,
+// so neither can affect the push, and neither can skip the other. Add a
+// fourth rider the same way — never above the digest, never sharing a try.
+//
+// `timeoutSeconds` now has to cover all three (the Wave import is ~650
+// customers over ~7 pages and carried 540 s on its own), and the function
+// binds `WAVE_FULL_ACCESS_TOKEN` because rider 3 pushes to Wave.
 const sendDailyJobDigest = onSchedule(
     {
       schedule: "0 18 * * *",
       timeZone: "America/Toronto",
       maxInstances: 1,
+      secrets: [WAVE_FULL_ACCESS_TOKEN],
+      timeoutSeconds: 540,
     },
     async () => {
       const deps = liveDeps();
@@ -142,12 +203,9 @@ const sendDailyJobDigest = onSchedule(
       } catch (err) {
         // Log rather than rethrow, matching the reminder sweep: the digest
         // fans out with Promise.all, so one bad appointment rejecting the
-        // batch must not also skip the TTL prune below it.
+        // batch must not also skip the riders below it.
         logger.error("sendDailyJobDigest failed", {err});
       }
-      // Rides the digest rather than adding a whole new scheduler for it.
-      // Isolated in its own try so a failed prune can't fail the digest,
-      // which has already sent by this point.
       try {
         const tokens = await pruneExpiredActivityTokens(deps);
         const cards = await pruneExpiredCardMarkers(deps);
@@ -160,29 +218,12 @@ const sendDailyJobDigest = onSchedule(
       } catch (err) {
         logger.warn("liveActivity: TTL prune failed", {err});
       }
-    },
-);
-
-// Overdue "job finished?" prompts, every 15 minutes. A job whose endTime
-// passed within the last 24h while still pending/in_progress earns one
-// nudge, tracked via an endTime-keyed ledger that re-arms on reschedule.
-const sendOverdueJobPrompts = onSchedule(
-    {
-      schedule: "every 15 minutes",
-      timeZone: "America/Toronto",
-      maxInstances: 1,
-      // Well over the default 60s so a backlog can't leave the newest
-      // overdue jobs unprompted.
-      timeoutSeconds: 300,
-    },
-    async () => {
       try {
-        await runOverduePromptSweep(liveDeps());
+        await runWaveDaily();
       } catch (err) {
-        // Log rather than rethrow, matching the two sibling schedulers: the
-        // next 15-min run self-heals, and a throw here would surface as a
-        // failed invocation for something already retried by the clock.
-        logger.error("sendOverdueJobPrompts failed", {err});
+        // runWaveDaily catches internally; this is belt-and-braces so a
+        // future edit there cannot take the digest's invocation down with it.
+        logger.warn("runWaveDaily failed", {err});
       }
     },
 );
@@ -191,5 +232,4 @@ module.exports = {
   notifyAppointmentChanges,
   sendUpcomingJobReminders,
   sendDailyJobDigest,
-  sendOverdueJobPrompts,
 };

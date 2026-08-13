@@ -42,10 +42,14 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   bool _connectBusy = false;
   bool _syncBusy = false;
   bool _scheduleBusy = false;
+  bool _retryBusy = false;
 
-  /// True while either Wave round trip is in flight. The cadence picker adds
-  /// [_scheduleBusy] on top; the two buttons swap places, so neither needs it.
-  bool get _busy => _connectBusy || _syncBusy;
+  /// True while any Wave round trip is in flight. The cadence picker adds
+  /// [_scheduleBusy] on top; the Connect/Sync buttons swap places, so neither
+  /// needs it. [_retryBusy] IS in here — Retry drains the same queue Sync
+  /// does, so running both at once would have the two presses fighting over
+  /// the same jobs and reporting each other's work.
+  bool get _busy => _connectBusy || _syncBusy || _retryBusy;
 
   /// Fail-fast offline guard so the long-running Wave callables don't hang.
   /// Surfaces the network notice and returns true, so the caller can abort.
@@ -119,6 +123,41 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
     );
   }
 
+  /// Returns dead-lettered client edits to the queue and pushes them.
+  ///
+  /// The counter this acts on is the only trace a dead-lettered job leaves
+  /// outside one client's detail screen, so the notice has to distinguish all
+  /// three outcomes: nothing was left to requeue, jobs were requeued AND
+  /// pushed, or they were requeued but the push behind it failed. The last one
+  /// is still a success — the requeue is the durable half.
+  Future<void> _retryFailed() async {
+    if (_blockedOffline()) return;
+    await _runWaveAction(
+      tag: 'RETRY',
+      setBusy: ({required busy}) => setState(() => _retryBusy = busy),
+      action: () async {
+        final result = await ref.read(waveServiceProvider).retryFailedJobs();
+        if (!mounted) return;
+        // Re-read the counts rather than guessing them: the push may have
+        // moved `pending` too, and a concurrent edit may have added to it.
+        setState(() => _connection = null);
+        ref.invalidate(waveConnectionProvider);
+        final l10n = context.l10n;
+        final notices = ref.read(noticeServiceProvider);
+        if (result.requeued == 0) {
+          notices.success(l10n.wave_retryNoneRecovered);
+          return;
+        }
+        final pushed = result.pushed;
+        notices.success(
+          pushed == null || pushed == 0
+              ? l10n.wave_retryQueued(result.requeued)
+              : l10n.wave_retryPushed(pushed),
+        );
+      },
+    );
+  }
+
   Future<void> _pickSchedule(WaveImportSchedule current) async {
     final choice = await showAdaptiveActionSheet<WaveImportSchedule>(
       context,
@@ -180,6 +219,8 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
             onTapSchedule: _busy || _scheduleBusy
                 ? null
                 : () => _pickSchedule(connection.importSchedule),
+            retryBusy: _retryBusy,
+            onRetryFailed: _busy || _scheduleBusy ? null : _retryFailed,
           ),
         // Connect is first-time setup only — the status row replaces it once connected.
         if (!connected)
@@ -209,11 +250,15 @@ class _ConnectedStatus extends StatelessWidget {
     required this.connection,
     required this.scheduleBusy,
     required this.onTapSchedule,
+    required this.retryBusy,
+    required this.onRetryFailed,
   });
 
   final WaveConnection connection;
   final bool scheduleBusy;
   final VoidCallback? onTapSchedule;
+  final bool retryBusy;
+  final VoidCallback? onRetryFailed;
 
   @override
   Widget build(BuildContext context) {
@@ -271,7 +316,75 @@ class _ConnectedStatus extends StatelessWidget {
                 ),
           onTap: onTapSchedule,
         ),
+        // The outbox, which had nowhere to be shown. Both rows are omitted at
+        // zero AND at null — null means the count could not be taken (or an
+        // older backend did not send it), and "nothing shown" is the honest
+        // rendering of both. Never render null as 0: that reads as "the queue
+        // is empty", which is the one thing an admin would act on.
+        if (connection.hasPending)
+          _OutboxRow(
+            icon: Icons.schedule_rounded,
+            label: context.l10n.wave_outboxPending(connection.pendingCount!),
+            tone: scheme.onSurfaceVariant,
+          ),
+        if (connection.hasFailed)
+          _OutboxRow(
+            icon: Icons.error_outline_rounded,
+            label: context.l10n.wave_outboxFailed(connection.failedCount!),
+            tone: scheme.error,
+            action: retryBusy
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: AdaptiveProgressIndicator(),
+                  )
+                : TextButton(
+                    onPressed: onRetryFailed,
+                    child: Text(context.l10n.wave_retryFailedButton),
+                  ),
+          ),
       ],
+    );
+  }
+}
+
+/// One outbox line: an icon, a count sentence, and an optional trailing
+/// action. Kept as its own widget so the pending and failed rows cannot drift
+/// in padding or type scale.
+class _OutboxRow extends StatelessWidget {
+  const _OutboxRow({
+    required this.icon,
+    required this.label,
+    required this.tone,
+    this.action,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color tone;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: AppSpacing.sp4,
+        top: AppSpacing.sp8,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: tone),
+          const SizedBox(width: AppSpacing.sp8),
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(color: tone),
+            ),
+          ),
+          ?action,
+        ],
+      ),
     );
   }
 }

@@ -1010,15 +1010,16 @@ describe("runOverduePromptSweep", () => {
     expect(ledgerCreates.map((c) => c.key)).toEqual([overdueKey]);
     expect(ledgerCreates[0].data.expiresAt).toBeInstanceOf(Date);
     expect(ledgerDeletes).toEqual([]);
-    // The query needs to cover open statuses across a startTime window of
-    // 24h of eligibility PLUS the longest bookable span (14 days). A 48h
-    // floor silently stopped matching any run longer than a day, so those
-    // jobs were never prompted to close.
+    // The query IS the eligibility rule: open statuses, endTime in the last
+    // 24h. Bounding `endTime` rather than `startTime` is what keeps the scan
+    // the width of the rule — the old startTime form had to reach back 24h
+    // PLUS the longest bookable span (14 days) to see a multi-day run that had
+    // just ended, and re-read that whole fortnight every 15 minutes.
     expect(appointmentQueries).toEqual([
       {field: "status", op: "in",
         value: ["pending", "in_progress", "confirmed"]},
-      {field: "startTime", op: ">=", value: future(-(24 + 14 * 24) * HOUR)},
-      {field: "startTime", op: "<=", value: NOW},
+      {field: "endTime", op: ">", value: future(-24 * HOUR)},
+      {field: "endTime", op: "<=", value: NOW},
     ]);
     expect(messaging.sent).toHaveLength(1);
     expect(messaging.sent[0].data).toEqual({
