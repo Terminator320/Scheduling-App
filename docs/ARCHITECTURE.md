@@ -1060,9 +1060,12 @@ wave/{docId}           Wave Accounting connection metadata (e.g. wave/connection
                        which we trust to move on every mapped change and cannot
                        verify. Both fields are Admin-SDK-only, like the doc.
 
-waveSyncQueue/{jobId}  Outbox for Wave sync jobs — enqueued by the waveUpsertCustomer
-                       clients trigger, drained by the scheduled waveSyncWorker
-                       AND (bounded) by the interactive waveImportCustomers sync.
+waveSyncQueue/{jobId}  Outbox for Wave sync jobs — enqueued AND drained by the
+                       waveUpsertCustomer clients trigger (event-driven since
+                       2026-08-13; the 5-minute waveSyncWorker was deleted),
+                       with the daily waveScheduledImport as the retry/stale-lease
+                       safety net and the interactive waveImportCustomers sync
+                       draining (bounded) on demand.
                        Job claim + outcome write are transactional (read+write denied
                        to clients). A job here also PROTECTS its client from the
                        import: listOutstandingClientIds feeds importCustomers a

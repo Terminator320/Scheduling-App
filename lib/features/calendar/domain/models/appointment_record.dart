@@ -252,12 +252,22 @@ class AppointmentDateRange {
   DateTime get fetchStart =>
       DateTime(start.year, start.month, start.day - maxAppointmentSpanDays);
 
-  /// The month grid renders only the weeks the month occupies, so it shows at
-  /// most 6 leading and 6 trailing days — but the fetch keeps a wider ±14
-  /// window: it is a superset of every grid shape, and narrowing it buys one
-  /// query's worth of documents at the cost of dotless edge cells if the grid
-  /// ever grows a row back.
-  static const int _gridOverscanDays = 14;
+  /// How far past the month itself [AppointmentDateRange.visibleMonth]
+  /// fetches, so the grid's off-month cells still carry their crew dots.
+  ///
+  /// `monthGridRowCount` renders only the weeks the month occupies, which caps
+  /// the off-month days at **6** on each side — 7 is that worst case plus a
+  /// day. It was 14, a superset of every grid shape including the fixed-6-row
+  /// one this replaced (February starting on the week-start day trails 14
+  /// off-month days there), and 14 on each side is a fortnight of documents
+  /// per month view on top of the fortnight [fetchStart] already adds.
+  ///
+  /// The cost of the tighter window is that it is now tied to the row rule:
+  /// bring back a fixed row count and the edge cells go dotless. That is why
+  /// `month_grid_overscan_test.dart` walks every month across a leap cycle at
+  /// every one of the seven week starts and fails if either side exceeds this
+  /// — the check the old comment could only ask for in prose.
+  static const int _gridOverscanDays = 7;
 
   final DateTime start;
   final DateTime end;

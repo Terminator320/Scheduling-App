@@ -125,6 +125,15 @@ firebase deploy --only functions,firestore:rules
   query whose index is missing fails `FAILED_PRECONDITION`, which the
   best-effort callers swallow into a silent no-op — so if you changed a query,
   you must deploy indexes.
+  **An index deploy returns before the index is `READY`.** The deploy only
+  *starts* the build, so a function or app build that needs a new index races
+  it: check the Firestore console's Indexes tab before shipping the app, and
+  expect a scheduled sweep to fail `FAILED_PRECONDITION` (and self-heal on its
+  next run) in the gap. **Index EXEMPTIONS deploy the same way and are the
+  slower direction to undo** — re-adding an override you removed rebuilds the
+  index over the whole collection, so treat "which fields are exempt" as a
+  decision, not a toggle. See the `fieldOverrides` note in `functions/CLAUDE.md`
+  for what is exempt and why.
 - **Never pass `--force`.** It treats any prod field override missing from
   `firestore.indexes.json` as drift and DELETES it — this removed all 5 live TTL
   policies once (2026-07-21).
@@ -189,6 +198,45 @@ reverting the cap.
   no rollout window. Redeploying restores it, so the recovery is fast, but the
   outage starts the instant the delete lands. This is still never a reason to
   pass `--force`.
+
+---
+
+## Pending: the next deploy is a DELETION deploy (25 → 24)
+
+`waveSyncWorker` was deleted from the code on 2026-08-13 (owner call: the Wave
+push is event-driven now — `waveUpsertCustomer` enqueues *and* drains, and
+`waveScheduledImport` is the daily retry/stale-lease net). Prod still runs it
+until the next deploy.
+
+Expect the **non-interactive abort** the 2026-08-08 row documents: the CLI
+releases rules/indexes, uploads the source, then stops with "Aborting because
+deletion cannot proceed in non-interactive mode", leaving prod on
+new-rules + old-functions. Close it the way that row did:
+
+```bash
+firebase functions:delete waveSyncWorker --region us-central1
+firebase deploy --only functions,firestore:indexes     # never --force
+```
+
+`functions:delete --force` is **not** `deploy --force` — it only skips the y/n
+prompt for the named function and touches no index or TTL policy.
+
+The deletion prompt must list **`waveSyncWorker` and nothing else**. Two
+follow-ups it does not do for you:
+
+- **Delete the orphaned Cloud Scheduler job.** Removing the function does not
+  always remove its scheduler entry, and a stale entry keeps billing (only 3
+  jobs are free). Check `gcloud scheduler jobs list --location us-central1`
+  and delete `firebase-schedule-waveSyncWorker-us-central1` if it survives.
+  Getting to 5 jobs is the point of the change.
+- **`firestore:indexes` IS required this time** — the same deploy carries the
+  new `(status, endTime DESC)` and `(clientId, startTime DESC)` composites and
+  23 single-field exemptions. `sendOverdueJobPrompts` fails
+  `FAILED_PRECONDITION` (self-healing on its next 15-min run) until its index
+  reads `READY`, and the app build must not ship until the client-history one
+  does. The CLI will report the `signupCodes` TTL override as unmatched drift
+  and correctly refuse to delete it without `--force`; that is expected and
+  must stay refused.
 
 ---
 

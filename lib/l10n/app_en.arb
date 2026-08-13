@@ -787,7 +787,11 @@
   "validation_spanTooLong": "A job can run at most {days} days. Shorten the end date or book a second job.",
   "@validation_spanTooLong": {
     "description": "Shown on the appointment form when the booked span exceeds the maximum.",
-    "placeholders": { "days": { "type": "int" } }
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
   },
   "calendar_mustBeAfterStartTime": "Must be after start time",
   "@calendar_mustBeAfterStartTime": {
@@ -936,17 +940,29 @@
   "clients_archivedNotice": "Archived {name}",
   "@clients_archivedNotice": {
     "description": "Success notice after archiving a client.",
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "clients_unarchivedNotice": "Restored {name}",
   "@clients_unarchivedNotice": {
     "description": "Success notice after un-archiving a client.",
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "clients_deletedNotice": "Deleted {name}",
   "@clients_deletedNotice": {
     "description": "Success notice after deleting a client.",
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "clients_deleteTitle": "Delete client?",
   "@clients_deleteTitle": {
@@ -955,7 +971,11 @@
   "clients_deleteMessage": "{name} will be removed permanently. This can't be undone.",
   "@clients_deleteMessage": {
     "description": "Body of the confirm dialog before deleting a client.",
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "error_introArchiveClient": "Couldn't archive the client",
   "@error_introArchiveClient": {
@@ -3188,5 +3208,49 @@
   "employees_newPasswordIssued": "New temporary password — the previous one no longer works",
   "@employees_newPasswordIssued": {
     "description": "Caption under the credentials stating the password was just re-issued"
+  },
+  "wave_outboxPending": "{count, plural, =1{1 client waiting to sync} other{{count} clients waiting to sync}}",
+  "@wave_outboxPending": {
+    "description": "Settings > Wave: how many client edits are queued for Wave.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_outboxFailed": "{count, plural, =1{1 client failed to sync} other{{count} clients failed to sync}}",
+  "@wave_outboxFailed": {
+    "description": "Settings > Wave: how many client edits permanently failed to reach Wave.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_retryFailedButton": "Retry failed",
+  "@wave_retryFailedButton": {
+    "description": "Settings > Wave: button that returns failed client edits to the sync queue."
+  },
+  "wave_retryNoneRecovered": "Nothing to retry — those clients were already back in the queue.",
+  "@wave_retryNoneRecovered": {
+    "description": "Settings > Wave: notice when Retry failed found nothing left to requeue."
+  },
+  "wave_retryQueued": "{count, plural, =1{1 client queued for Wave again} other{{count} clients queued for Wave again}}",
+  "@wave_retryQueued": {
+    "description": "Settings > Wave: notice naming how many client edits were returned to the queue.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_retryPushed": "{count, plural, =1{1 client sent to Wave} other{{count} clients sent to Wave}}",
+  "@wave_retryPushed": {
+    "description": "Settings > Wave: notice naming how many requeued client edits reached Wave.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

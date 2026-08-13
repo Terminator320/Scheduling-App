@@ -139,12 +139,11 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `syncUsersByUid` | trigger | `onDocumentWritten users/{id}` | `bridge.js` | any `users` doc write | — | `retry: true` |
 | `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` |
 | `recountClientJobs` | trigger | `onDocumentWritten appointments/{id}` | `client_job_count.js` | a write that changes `clientId` | — | `retry: true` |
-| `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/callables.js` | any `clients` doc write | — | `retry: true` |
+| `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/callables.js` | any `clients` doc write | `WAVE_FULL_ACCESS_TOKEN` | `retry: true` · 300s · enqueues **and pushes** |
 | `validateUploadedImage` | trigger | `onObjectFinalized` (Storage) | `maintenance.js` | `appointments/*/images/*` upload | — | region `us-east1` |
 | `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | no `retry` (dupe push worse than missed) |
 | `purgeExpiredHistory` | scheduled | `0 3 1 1,4,7,10 *` — quarterly, 1st of Jan/Apr/Jul/Oct 03:00 (Toronto) | `maintenance.js` | quarterly | — | `maxInstances: 1` · 1800s |
-| `waveSyncWorker` | scheduled | `every 5 minutes` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 540s |
-| `waveScheduledImport` | scheduled | `every 24 hours` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 300s |
+| `waveScheduledImport` | scheduled | `every 24 hours` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 540s · **drains, then imports if due** |
 | `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` + `travel_utils.js` | timer | `GOOGLE_MAP_API_KEY` · `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | `maxInstances: 1` · `timeoutSeconds: 120` · ledger · Routes API |
 | `sendDailyJobDigest` | scheduled | `0 18 * * *` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` |
 | `sendOverdueJobPrompts` | scheduled | `every 15 minutes` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · 300s · ledger |
@@ -551,11 +550,18 @@ map and cost every *other* employee tomorrow's schedule.
 Every 15 min (Toronto). The "job finished?" nudge: pushes assignees of a job
 whose `endTime` passed within the last 24 h while its status is still open
 (`pending`/`in_progress`/legacy `confirmed` — server mirror of the app's
-display-only `overdue` state; nothing is ever stored). Queries by `startTime`
-over the last **48 h** (24 h eligibility + the <24 h max booking) **ordered
-`startTime` DESC** (existing `(status, startTime DESC)` index — no new index)
-so the `OVERDUE_SWEEP_MAX` cap keeps the newest-overdue jobs rather than the
-oldest, then filters `endTime ∈ (now-24h, now]` in code. At-most-once
+display-only `overdue` state; nothing is ever stored). Queries `endTime ∈
+(now−24 h, now]` — the eligibility rule itself, so the scan is its width and
+not a superset — **ordered `endTime` DESC** on the `(status, endTime DESC)`
+composite index (**added 2026-08-13; deploy `firestore:indexes` with it or the
+sweep fails `FAILED_PRECONDITION` and prompts nobody**) so the
+`OVERDUE_SWEEP_MAX` cap keeps the newest-overdue jobs rather than the ones
+closest to aging out. It queried `startTime` until then, which needed a floor
+of 24 h **plus the longest bookable span** — ~15 days, since a job that started
+a fortnight ago can still have just ended — and so re-read every open job of
+the past two weeks on each of the 96 daily runs to prompt the handful that had
+actually ended. A doc with no `endTime` is now excluded by the filter rather
+than read and dropped in code. At-most-once
 **per recipient** via the
 `appointmentOverduePrompts/{id}_{endMs}_{employeeDocId}` ledger; a claim that
 delivered **zero** pushes is released (doc deleted) so a later sweep retries
@@ -698,8 +704,9 @@ from `listOutstandingClientIds` (`wave/worker.js`, covering `queued` and
 `inflight`); skipped clients are counted as `skippedPending`.
 
 The push half is **best-effort and bounded** — `SYNC_PUSH_BATCH_LIMIT` (20) and
-`SYNC_PUSH_BUDGET_MS` (20 s), with `waveSyncWorker` mopping up the rest every 5
-minutes — so a drain failure is logged and swallowed rather than failing the
+`SYNC_PUSH_BUDGET_MS` (20 s), with the `waveUpsertCustomer` trigger having
+already pushed each edit as it was made and the daily sweep retrying the rest —
+so a drain failure is logged and swallowed rather than failing the
 import the admin actually pressed the button for. Both bounds are sized against
 the *client's* deadline (`kWaveSyncTimeoutSeconds`, 120 s, in
 `wave_service.dart`), not the 300 s function timeout: a callable can't be
@@ -802,28 +809,55 @@ clients".
 `clients/{id}` write trigger. When a client's Wave-mapped fields change, marks
 the doc `wave.syncState: pending` and enqueues a `customerUpsert` job on the
 `waveSyncQueue` outbox (deterministic job id → burst edits collapse to one job).
-Both writes land in one batch. No secret (only writes to Firestore). `retry:
-true` — idempotent and hash-guarded.
+Both writes land in one batch. `retry: true` — idempotent and hash-guarded.
 
-### `waveSyncWorker` — `wave/callables.js`
-Scheduled outbox drainer, **every 5 minutes**, single instance. Claims queued
-jobs transactionally, dispatches the Wave upsert, and writes the outcome under a
-concurrent-re-enqueue guard; a lease-reaper reclaims jobs stranded by a crashed
-instance. `batchLimit` 30 × 5-min cadence = 6 Wave calls/min (Wave allows 60/min).
-540s timeout with a wall-clock deadline at ~70% so it finishes outcome writes
-cleanly. Skips entirely (cheap cached read) while Wave isn't connected.
-Needs composite indexes `(status ASC, nextAttemptAt ASC)` and
-`(status ASC, claimedAt ASC)` on `waveSyncQueue`.
+**It then PUSHES that job immediately** (2026-08-13), which is what replaced the
+deleted `waveSyncWorker` scheduler. It binds `WAVE_FULL_ACCESS_TOKEN` and runs a
+bounded `drainQueue` (`batchLimit` 20, 180 s budget, 300 s function timeout)
+after the enqueue commits. Two properties are load-bearing:
+
+- **The drain must never throw.** The job is already durably queued, so a drain
+  failure is a delay, not a loss — and throwing would re-run the whole handler
+  under `retry: true` for something a retry cannot fix. It is caught and logged
+  at `warn`.
+- **It cannot loop.** `upsertCustomer` writes `wave.*` back onto the client doc,
+  which re-fires this trigger — but `mappedFieldsHash` is unchanged by that
+  write, so `shouldEnqueueClientWrite` returns false at the top and the re-fire
+  never reaches the drain.
+
+A disconnected install still enqueues (the outbox is durable) but does not
+drain; the connection gate is the cached `readWaveBusinessIdCached`, which is
+what keeps that case off a Firestore read per client edit.
+
+Draining here rather than on a 5-minute poll is both cheaper and faster: an idle
+day costs zero invocations instead of 288, it frees a Cloud Scheduler slot (only
+3 are free per billing account), and an edit reaches Wave in seconds instead of
+up to five minutes. Needs the same `waveSyncQueue` composite indexes the worker
+did: `(status ASC, nextAttemptAt ASC)` and `(status ASC, claimedAt ASC)`.
 
 ### `waveScheduledImport` — `wave/callables.js`
-Scheduled Wave → app auto-import, **every 24 hours**, single instance. Reads
-`wave/connection` and re-runs `importCustomers` only when the configured
-`importSchedule` cadence is due (`isImportDue` in `wave/import_schedule.js`, a
-pure jest-testable helper — `off` or any unknown value never runs). Server-
-triggered, so no App Check / rate limit. A due run stamps `lastAutoImportAt`; a
-failed run leaves it unchanged so the next day retries. 300s timeout.
+The daily Wave job, **every 24 hours**, single instance, 540 s timeout. It does
+two things, and the first runs unconditionally.
 
-It passes the same `skipClientIds` protect-list as `waveImportCustomers` (see
-that entry) — and needs it more, since it runs unattended: a client edit this
-overwrote before the guard existed was lost with nobody watching. It does not
-push first; `waveSyncWorker` owns that half.
+**1. Drains the outbox (app → Wave), always** — before the cadence check, in its
+own try/catch. This is the safety net under the event-driven push above, and it
+exists because two states cannot produce a client write to ride on: a job that
+failed and is sitting on its `nextAttemptAt` backoff, and a job left `inflight`
+by an instance that died mid-dispatch (reclaimed by `drainQueue`'s lease pass).
+**It runs even when `importSchedule` is `off`** — that setting governs the PULL,
+and `off` is the default, so gating the push on it would mean a default install
+never pushes automatically at all. Bounded to a 180 s slice so the import below
+still has budget.
+
+**2. Pulls (Wave → app), only when the cadence is due** — `isImportDue` in
+`wave/import_schedule.js`, a pure jest-testable helper (`off` or any unknown
+value never runs). Server-triggered, so no App Check / rate limit. A due run
+stamps `lastAutoImportAt`; a failed run leaves it unchanged so the next day
+retries.
+
+The order is also the push-before-pull invariant: an import overwrites every
+mapped field of a linked client AND stamps `wave.lastSyncedHash` from Wave's
+values, so an un-pushed local edit underneath it is not merely overwritten but
+marked *synced* — silently lost. It passes the same `skipClientIds` protect-list
+as `waveImportCustomers`, read AFTER the drain so a job the drain completed is
+not protected for nothing while anything it could not finish still is.

@@ -28,6 +28,7 @@ const {
   waveGetConnection,
   waveSetImportSchedule,
   waveImportCustomers,
+  waveRetryFailedJobs,
 } = require("../wave/callables");
 
 const ADMIN_UID = "admin-uid";
@@ -125,6 +126,8 @@ beforeEach(() => {
   // cases don't have to care that the sync pushes before it imports.
   waveWorker.drainQueue.mockResolvedValue(drainSummary());
   waveWorker.countQueuedJobs.mockResolvedValue(0);
+  waveWorker.countDeadJobs.mockResolvedValue(0);
+  waveWorker.requeueDeadJobs.mockResolvedValue({requeued: 0, scanned: 0});
   waveWorker.listOutstandingClientIds.mockResolvedValue(new Set());
 
   // These mocks behave like the real guards, just without touching
@@ -170,6 +173,11 @@ const CALLABLES = [
   {
     name: "waveImportCustomers",
     fn: () => waveImportCustomers,
+    rateLimited: true,
+  },
+  {
+    name: "waveRetryFailedJobs",
+    fn: () => waveRetryFailedJobs,
     rateLimited: true,
   },
 ];
@@ -530,19 +538,35 @@ describe("waveImportCustomers", () => {
 });
 
 describe("waveGetConnection", () => {
-  test("reads the connection for an admin", async () => {
+  test("reads the connection and the outbox depth for an admin", async () => {
     getFirestore.mockReturnValue(fakeFirestore({
       businessId: "biz-1",
       businessName: "Acme",
       importSchedule: "weekly",
     }).db);
+    waveWorker.countQueuedJobs.mockResolvedValue(3);
+    waveWorker.countDeadJobs.mockResolvedValue(1);
 
     expect(await waveGetConnection.run(req(ADMIN_UID, {}))).toEqual({
       connected: true,
       businessId: "biz-1",
       businessName: "Acme",
       importSchedule: "weekly",
+      pendingCount: 3,
+      failedCount: 1,
     });
+  });
+
+  test("a failed count reports null, never 0", async () => {
+    // 0 means "the queue is empty", which is the one thing an admin would act
+    // on by NOT pressing Sync. A broken read must not be able to say that.
+    getFirestore.mockReturnValue(fakeFirestore({businessId: "biz-1"}).db);
+    waveWorker.countQueuedJobs.mockRejectedValue(new Error("unavailable"));
+
+    const out = await waveGetConnection.run(req(ADMIN_UID, {}));
+    expect(out.pendingCount).toBeNull();
+    expect(out.failedCount).toBeNull();
+    expect(out.connected).toBe(true);
   });
 
   test("an absent doc reports disconnected with schedule off", async () => {
@@ -553,7 +577,13 @@ describe("waveGetConnection", () => {
       businessId: "",
       businessName: "",
       importSchedule: "off",
+      pendingCount: null,
+      failedCount: null,
     });
+    // No queue to describe while disconnected, and no reason to pay for the
+    // two aggregate reads.
+    expect(waveWorker.countQueuedJobs).not.toHaveBeenCalled();
+    expect(waveWorker.countDeadJobs).not.toHaveBeenCalled();
   });
 
   test("an unknown stored schedule normalizes to off", async () => {
@@ -644,5 +674,333 @@ describe("selectBusiness", () => {
   test("a non-array / empty list is ambiguous, never a silent pick", () => {
     expect(() => selectBusiness(null, "")).toThrow(HttpsError);
     expect(() => selectBusiness([], "")).toThrow(HttpsError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The event-driven push (2026-08-13). `waveSyncWorker`'s every-5-minute poll
+// was deleted; `waveUpsertCustomer` now pushes each edit as it is made and
+// `waveScheduledImport` is the daily safety net. These two describe blocks
+// pin the properties that replaced the poll — a drain on the enqueue path, a
+// drain that cannot fail its trigger, and a sweep that drains even when the
+// import cadence is `off`.
+// ---------------------------------------------------------------------------
+
+/**
+ * Re-requires the Wave modules against a fresh module registry.
+ *
+ * `readWaveBusinessIdCached` memoizes a found businessId for the life of the
+ * instance, which is exactly what stops a disconnected install paying a
+ * Firestore read on every client edit — and exactly what would leak a
+ * "connected" verdict from one test into the next. Nothing else in this file
+ * touches that cache, so the reset is scoped to these blocks.
+ *
+ * @return {!Object} Freshly-required `{callables, worker, firestore}`.
+ */
+function freshWaveModules() {
+  jest.resetModules();
+  const firestore = require("firebase-admin/firestore");
+  const worker = require("../wave/worker");
+  const customers = require("../wave/customers");
+  worker.drainQueue.mockResolvedValue(drainSummary());
+  worker.countQueuedJobs.mockResolvedValue(0);
+  worker.countDeadJobs.mockResolvedValue(0);
+  worker.listOutstandingClientIds.mockResolvedValue(new Set());
+  worker.shouldEnqueueClientWrite.mockReturnValue(true);
+  worker.enqueueCustomerUpsert.mockResolvedValue("customerUpsert__c1");
+  customers.importCustomers.mockResolvedValue({
+    totalCount: 0, imported: 0, updated: 0, skippedArchived: 0,
+    skippedPending: 0, skippedUnchanged: 0, pages: 1, delta: false,
+  });
+  firestore.FieldValue.serverTimestamp = jest.fn(() => "SERVER_TS");
+  return {
+    callables: require("../wave/callables"),
+    worker,
+    customers,
+    firestore,
+  };
+}
+
+/**
+ * A Firestore double with the `batch()`/`doc()` surface the write trigger
+ * uses, on top of the `wave/connection` read every drain site gates on.
+ * @param {?Object} connection `wave/connection` data, or null for absent.
+ * @return {!Object} `{db, commits}`.
+ */
+function fakeTriggerFirestore(connection) {
+  const commits = [];
+  const batch = {
+    update: jest.fn(),
+    set: jest.fn(),
+    commit: jest.fn(async () => {
+      commits.push(true);
+    }),
+  };
+  const connectionRef = {
+    get: jest.fn(async () => ({
+      exists: connection !== null,
+      data: () => connection,
+    })),
+    update: jest.fn(async () => {}),
+  };
+  const db = {
+    batch: jest.fn(() => batch),
+    doc: jest.fn(() => ({})),
+    collection: jest.fn(() => ({doc: jest.fn(() => connectionRef)})),
+  };
+  return {db, batch, commits, connectionRef};
+}
+
+/**
+ * A `clients/{id}` write event.
+ * @param {?Object} before Prior doc data, or null for a create.
+ * @param {?Object} after New doc data, or null for a delete.
+ * @return {!Object} The onDocumentWritten event.
+ */
+function clientWrite(before, after) {
+  const snap = (d) => ({exists: d !== null, data: () => d});
+  return {
+    data: {before: snap(before), after: snap(after)},
+    params: {clientId: "c1"},
+  };
+}
+
+const CLIENT_DOC = {name: "Acme", phone: "(514) 555-1234", email: "a@b.c"};
+const CONNECTED = {businessId: "biz-1", importSchedule: "off"};
+
+describe("waveUpsertCustomer pushes without a poll", () => {
+  test("drains the outbox right after enqueueing the edit", async () => {
+    const {callables, worker, firestore} = freshWaveModules();
+    const {db} = fakeTriggerFirestore(CONNECTED);
+    firestore.getFirestore.mockReturnValue(db);
+
+    await callables.waveUpsertCustomer.run(clientWrite(null, CLIENT_DOC));
+
+    expect(worker.enqueueCustomerUpsert).toHaveBeenCalled();
+    expect(worker.drainQueue).toHaveBeenCalledTimes(1);
+    // Bounded: this runs per client edit, so it helps with the backlog
+    // without trying to own it.
+    expect(worker.drainQueue.mock.calls[0][0]).toMatchObject({
+      businessId: "biz-1",
+      batchLimit: 5,
+    });
+    expect(typeof worker.drainQueue.mock.calls[0][0].deadlineMs)
+        .toBe("number");
+  });
+
+  test("is paced against Wave's 60-calls/min ceiling", () => {
+    // The deleted waveSyncWorker stayed inside that ceiling via
+    // `maxInstances: 1` — one sequential drain in flight, ever. A trigger
+    // inherits the global cap of 10 instead, so without an explicit cap here
+    // ten concurrent client writes would each run their own drain and burst
+    // roughly ten times over the limit. Both numbers are the pacing; neither
+    // may be raised without re-checking that arithmetic.
+    const {callables} = freshWaveModules();
+    const opts = callables.waveUpsertCustomer.__endpoint ||
+      callables.waveUpsertCustomer;
+
+    expect(opts.maxInstances).toBe(2);
+  });
+
+  test("enqueues BEFORE it drains, so a crash between them loses nothing",
+      async () => {
+        const {callables, worker, firestore} = freshWaveModules();
+        const {db} = fakeTriggerFirestore(CONNECTED);
+        firestore.getFirestore.mockReturnValue(db);
+
+        await callables.waveUpsertCustomer.run(clientWrite(null, CLIENT_DOC));
+
+        expectCalledBefore(worker.enqueueCustomerUpsert, worker.drainQueue);
+      });
+
+  test("a drain failure does NOT fail the trigger", async () => {
+    // The job is already durably queued, so a throw here would only re-run
+    // the handler under retry:true for something the retry cannot fix.
+    const {callables, worker, firestore} = freshWaveModules();
+    const {db} = fakeTriggerFirestore(CONNECTED);
+    firestore.getFirestore.mockReturnValue(db);
+    worker.drainQueue.mockRejectedValue(new Error("Wave is down"));
+
+    await expect(
+        callables.waveUpsertCustomer.run(clientWrite(null, CLIENT_DOC)),
+    ).resolves.toBeUndefined();
+
+    expect(worker.enqueueCustomerUpsert).toHaveBeenCalled();
+  });
+
+  test("queues but does not drain while Wave is not connected", async () => {
+    const {callables, worker, firestore} = freshWaveModules();
+    const {db} = fakeTriggerFirestore(null);
+    firestore.getFirestore.mockReturnValue(db);
+
+    await callables.waveUpsertCustomer.run(clientWrite(null, CLIENT_DOC));
+
+    // The outbox is durable, so the edit is kept for whenever Wave is
+    // connected — but there is nothing to push it to yet.
+    expect(worker.enqueueCustomerUpsert).toHaveBeenCalled();
+    expect(worker.drainQueue).not.toHaveBeenCalled();
+  });
+
+  test("the wave.* write-back neither re-enqueues nor re-drains", async () => {
+    // The loop guard. upsertCustomer writes wave.syncState back onto the
+    // client doc, which re-fires this trigger; mappedFieldsHash is unchanged
+    // by that write, so shouldEnqueueClientWrite returns false and the
+    // handler returns before it can drain itself into a cycle.
+    const {callables, worker, firestore} = freshWaveModules();
+    const {db} = fakeTriggerFirestore(CONNECTED);
+    firestore.getFirestore.mockReturnValue(db);
+    worker.shouldEnqueueClientWrite.mockReturnValue(false);
+
+    await callables.waveUpsertCustomer.run(
+        clientWrite(CLIENT_DOC, {...CLIENT_DOC, wave: {syncState: "synced"}}));
+
+    expect(worker.enqueueCustomerUpsert).not.toHaveBeenCalled();
+    expect(worker.drainQueue).not.toHaveBeenCalled();
+  });
+
+  test("a deleted client neither enqueues nor drains", async () => {
+    const {callables, worker, firestore} = freshWaveModules();
+    const {db} = fakeTriggerFirestore(CONNECTED);
+    firestore.getFirestore.mockReturnValue(db);
+
+    await callables.waveUpsertCustomer.run(clientWrite(CLIENT_DOC, null));
+
+    expect(worker.enqueueCustomerUpsert).not.toHaveBeenCalled();
+    expect(worker.drainQueue).not.toHaveBeenCalled();
+  });
+});
+
+describe("runWaveDaily is the drain safety net", () => {
+  test("drains even when the import cadence is off", async () => {
+    // The whole reason this drain is above the due check: `off` is the
+    // DEFAULT, and it governs the pull. Gating the push on it would mean a
+    // job that failed and backed off is never retried on a default install.
+    const {callables, worker, customers, firestore} = freshWaveModules();
+    const {db} = fakeTriggerFirestore({...CONNECTED, importSchedule: "off"});
+    firestore.getFirestore.mockReturnValue(db);
+
+    await callables.runWaveDaily();
+
+    expect(worker.drainQueue).toHaveBeenCalledTimes(1);
+    expect(worker.drainQueue.mock.calls[0][0])
+        .toMatchObject({businessId: "biz-1"});
+    expect(customers.importCustomers).not.toHaveBeenCalled();
+  });
+
+  test("drains BEFORE importing when the cadence is due", async () => {
+    // Push-before-pull: an import overwrites every mapped field of a linked
+    // client AND stamps lastSyncedHash from Wave's values, so an un-pushed
+    // local edit underneath it is marked synced rather than merely lost.
+    const {callables, worker, customers, firestore} = freshWaveModules();
+    const {db} = fakeTriggerFirestore({
+      businessId: "biz-1", importSchedule: "weekly", lastAutoImportAt: null,
+    });
+    firestore.getFirestore.mockReturnValue(db);
+
+    await callables.runWaveDaily();
+
+    expect(customers.importCustomers).toHaveBeenCalled();
+    expectCalledBefore(worker.drainQueue, customers.importCustomers);
+  });
+
+  test("the protect-list is read AFTER the drain", async () => {
+    // So a job the drain just completed is not protected for nothing, while
+    // anything it could not finish is still shielded from the import.
+    const {callables, worker, firestore} = freshWaveModules();
+    const {db} = fakeTriggerFirestore({
+      businessId: "biz-1", importSchedule: "weekly", lastAutoImportAt: null,
+    });
+    firestore.getFirestore.mockReturnValue(db);
+
+    await callables.runWaveDaily();
+
+    expectCalledBefore(worker.drainQueue, worker.listOutstandingClientIds);
+  });
+
+  test("a drain failure still lets the import run", async () => {
+    const {callables, worker, customers, firestore} = freshWaveModules();
+    const {db} = fakeTriggerFirestore({
+      businessId: "biz-1", importSchedule: "weekly", lastAutoImportAt: null,
+    });
+    firestore.getFirestore.mockReturnValue(db);
+    worker.drainQueue.mockRejectedValue(new Error("Wave is down"));
+
+    await expect(callables.runWaveDaily()).resolves.toBeUndefined();
+
+    // skipClientIds is what protects the un-pushed edits the drain missed.
+    expect(customers.importCustomers).toHaveBeenCalled();
+  });
+
+  test("does nothing at all while Wave is not connected", async () => {
+    const {callables, worker, customers, firestore} = freshWaveModules();
+    const {db} = fakeTriggerFirestore(null);
+    firestore.getFirestore.mockReturnValue(db);
+
+    await callables.runWaveDaily();
+
+    expect(worker.drainQueue).not.toHaveBeenCalled();
+    expect(customers.importCustomers).not.toHaveBeenCalled();
+  });
+});
+
+describe("waveRetryFailedJobs", () => {
+  test("requeues dead jobs and pushes them so the press has an effect",
+      async () => {
+        getFirestore.mockReturnValue(fakeFirestore({businessId: "biz-1"}).db);
+        waveWorker.requeueDeadJobs.mockResolvedValue(
+            {requeued: 2, scanned: 2});
+        waveWorker.drainQueue.mockResolvedValue(drainSummary({done: 2}));
+
+        const out = await waveRetryFailedJobs.run(req(ADMIN_UID, {}));
+
+        expect(out).toEqual({requeued: 2, scanned: 2, pushed: 2});
+        expectCalledBefore(waveWorker.requeueDeadJobs, waveWorker.drainQueue);
+      });
+
+  test("a failed push still reports the requeue, which already committed",
+      async () => {
+        // The requeue is the durable half. Reporting it as a failure because
+        // the optional push behind it broke would tell the admin nothing was
+        // recovered when in fact the jobs are queued and will drain.
+        getFirestore.mockReturnValue(fakeFirestore({businessId: "biz-1"}).db);
+        waveWorker.requeueDeadJobs.mockResolvedValue(
+            {requeued: 3, scanned: 3});
+        waveWorker.drainQueue.mockRejectedValue(new Error("Wave is down"));
+
+        const out = await waveRetryFailedJobs.run(req(ADMIN_UID, {}));
+
+        expect(out).toMatchObject({requeued: 3, scanned: 3, pushed: null});
+      });
+
+  test("nothing to requeue means no drain at all", async () => {
+    getFirestore.mockReturnValue(fakeFirestore({businessId: "biz-1"}).db);
+    waveWorker.requeueDeadJobs.mockResolvedValue({requeued: 0, scanned: 0});
+
+    const out = await waveRetryFailedJobs.run(req(ADMIN_UID, {}));
+
+    expect(out).toEqual({requeued: 0, scanned: 0, pushed: null});
+    expect(waveWorker.drainQueue).not.toHaveBeenCalled();
+  });
+
+  test("refuses while Wave is not connected, without touching the queue",
+      async () => {
+        getFirestore.mockReturnValue(fakeFirestore(null).db);
+
+        const err = await expectThrows(waveRetryFailedJobs, req(ADMIN_UID, {}));
+
+        expect(err.code).toBe("failed-precondition");
+        expect(err.message).toBe("wave/not-connected");
+        expect(waveWorker.requeueDeadJobs).not.toHaveBeenCalled();
+      });
+
+  test("the rate limiter fires before any queue mutation", async () => {
+    getFirestore.mockReturnValue(fakeFirestore({businessId: "biz-1"}).db);
+    security.enforceDurableRateLimit.mockRejectedValueOnce(
+        new HttpsError("resource-exhausted", "too-many-attempts"));
+
+    const err = await expectThrows(waveRetryFailedJobs, req(ADMIN_UID, {}));
+
+    expect(err.code).toBe("resource-exhausted");
+    expect(waveWorker.requeueDeadJobs).not.toHaveBeenCalled();
   });
 });

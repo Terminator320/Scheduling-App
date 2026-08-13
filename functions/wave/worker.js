@@ -82,6 +82,23 @@ const QUEUE_COLLECTION = "waveSyncQueue";
 /** Default maximum dispatch attempts per job before dead-lettering. */
 const DEFAULT_MAX_ATTEMPTS = 5;
 
+/**
+ * Attempt budget for a job whose last failure was Wave RATE-LIMITING us.
+ *
+ * A rate-limit is not the job's fault and says nothing about whether its
+ * payload can ever succeed — it means we asked too fast. Spending the ordinary
+ * 5-attempt budget on it dead-letters a perfectly valid client edit, and a
+ * `dead` job never retries: it is only visible as an error badge on the client
+ * and in `pushedFailed` if an admin happens to press Sync. Bursts are a real
+ * shape here (a bulk backfill enqueues a few hundred jobs, each pushed by its
+ * own `waveUpsertCustomer` invocation), so this budget has to outlast one.
+ *
+ * Still bounded rather than infinite: `defaultBackoffMs` caps at
+ * MAX_BACKOFF_MS (1 h), so 20 attempts is on the order of half a day of
+ * retrying before we admit something is structurally wrong.
+ */
+const RATE_LIMITED_MAX_ATTEMPTS = 20;
+
 /** Default number of jobs to claim per drainQueue invocation (see note above
  * about throughput sizing). */
 const DEFAULT_BATCH_LIMIT = 30;
@@ -181,6 +198,28 @@ function isRetryable(err) {
   }
   // Unexpected / infra errors: retry (bounded).
   return true;
+}
+
+/**
+ * The attempt budget to judge THIS failure against.
+ *
+ * Keyed on the error rather than stored on the job, so it needs no schema
+ * change and no migration: a job that was rate-limited four times and then
+ * hits a genuine error is judged on the ordinary budget for that error, which
+ * is the honest reading — four failures are four failures once one of them is
+ * the job's own fault.
+ *
+ * @param {*} err The caught dispatch error.
+ * @param {number} maxAttempts The configured ordinary budget.
+ * @return {number} The budget this failure is measured against.
+ */
+function attemptBudgetFor(err, maxAttempts) {
+  const rateLimited = err instanceof WaveApiError && err.kind === "rateLimited";
+  // Never BELOW the configured budget: a caller that raised maxAttempts for a
+  // one-off drain must not have it silently lowered by this.
+  return rateLimited ?
+    Math.max(maxAttempts, RATE_LIMITED_MAX_ATTEMPTS) :
+    maxAttempts;
 }
 
 /**
@@ -697,8 +736,13 @@ async function resolveOutcome(ctx, doc, jobData, claimStamp, result) {
   const newAttempts = (typeof jobData.attempts === "number" ?
     jobData.attempts : 0) + 1;
   const sanitized = sanitizeError(dispatchError);
+  // Wave rate-limiting us is not the job's fault, so it gets a far larger
+  // budget than a job that is failing on its own merits — see
+  // RATE_LIMITED_MAX_ATTEMPTS. Without this a burst dead-letters valid client
+  // edits, permanently.
+  const budget = attemptBudgetFor(dispatchError, maxAttempts);
 
-  if (retryable && newAttempts < maxAttempts) {
+  if (retryable && newAttempts < budget) {
     // Back to queued with backoff, using the injected clock so retry time
     // stays testable and consistent with the query's `nowValue`.
     const delayMs = backoffFn(newAttempts - 1);
@@ -882,6 +926,99 @@ async function countQueuedJobs(deps = {}) {
 }
 
 /**
+ * Counts DEAD-LETTERED outbox jobs — client edits that will never reach Wave
+ * on their own.
+ *
+ * This is the number that had nowhere to be shown. A `dead` job is terminal:
+ * no drain ever picks it up again, so the client's data silently diverges from
+ * Wave forever. Its only trace was an `error` badge on that one client's
+ * detail screen and a `pushedFailed` count in the response to a sync the admin
+ * had to think to press. Surfacing it in Settings, next to
+ * [requeueDeadJobs], is what turns it into something recoverable.
+ *
+ * A `count()` aggregate, so it bills one read per 1000 index entries rather
+ * than one per job — Settings reads it on open.
+ *
+ * @param {Object=} deps Injectable dependencies — `db`.
+ * @return {!Promise<number>} Jobs currently in `dead`.
+ */
+async function countDeadJobs(deps = {}) {
+  const db = deps.db || adminFirestore().getFirestore();
+  const snap = await db.collection(QUEUE_COLLECTION)
+      .where("status", "==", "dead").count().get();
+  return snap.data().count;
+}
+
+/**
+ * Returns dead-lettered jobs to the queue for another try.
+ *
+ * Resets `attempts` to 0 and `nextAttemptAt` to now, so a requeued job gets a
+ * full budget and runs on the next drain rather than inheriting the backoff
+ * that killed it. This is an ADMIN-INITIATED action — the admin has presumably
+ * fixed whatever Wave was rejecting, or is retrying after an outage — which is
+ * why it is deliberately not automatic: a job that dead-lettered on a
+ * `WaveValidationError` will simply dead-letter again, and an automatic
+ * requeue would spin on it forever.
+ *
+ * Each job is rewritten in its own transaction, conditioned on the doc still
+ * being `dead`, for the same reason `commitOutcome` is conditional: a
+ * concurrent client edit re-enqueues the same deterministic job id, and
+ * clobbering that fresh job with a reset of the old one would lose the newer
+ * payload hash.
+ *
+ * `wave.syncState` on the client doc is deliberately NOT reset here. The next
+ * successful dispatch writes it, and a failed requeue leaving the badge on is
+ * the honest state — clearing it up front would report success before
+ * anything reached Wave.
+ *
+ * @param {Object=} deps Injectable dependencies — `db`, `limit`, `now`,
+ *   `logger`.
+ * @return {!Promise<{requeued: number, scanned: number}>} How many were
+ *   returned to the queue, and how many dead jobs were examined.
+ */
+async function requeueDeadJobs(deps = {}) {
+  const db = deps.db || adminFirestore().getFirestore();
+  // eslint-disable-next-line global-require
+  const logger = deps.logger || require("firebase-functions/logger");
+  const limit = typeof deps.limit === "number" ? deps.limit : OUTSTANDING_MAX;
+  const nowValue = deps.now ? deps.now() : new Date();
+
+  const snap = await db.collection(QUEUE_COLLECTION)
+      .where("status", "==", "dead")
+      .limit(limit)
+      .get();
+  const docs = snap && Array.isArray(snap.docs) ? snap.docs : [];
+
+  let requeued = 0;
+  for (const doc of docs) {
+    try {
+      const applied = await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(doc.ref);
+        // Re-enqueued by a client edit in the meantime: that job is newer and
+        // carries the current payload hash. Leave it alone.
+        if (!fresh.exists) return false;
+        const data = fresh.data() || {};
+        if (data.status !== "dead") return false;
+        tx.update(doc.ref, {
+          status: "queued",
+          attempts: 0,
+          nextAttemptAt: nowValue,
+          lastError: null,
+        });
+        return true;
+      });
+      if (applied) requeued += 1;
+    } catch (e) {
+      // One stubborn job must not abort the rest of the recovery.
+      logger.warn("WAVE-WORKER requeue failed", {
+        jobId: doc.id, error: String(e),
+      });
+    }
+  }
+  return {requeued, scanned: docs.length};
+}
+
+/**
  * Client ids with an outbox job that has not reached Wave yet.
  *
  * `importCustomers` MUST skip these. The import overwrites every mapped field
@@ -936,6 +1073,9 @@ module.exports = {
   enqueueCustomerUpsert,
   drainQueue,
   countQueuedJobs,
+  countDeadJobs,
+  requeueDeadJobs,
   listOutstandingClientIds,
   shouldEnqueueClientWrite,
+  RATE_LIMITED_MAX_ATTEMPTS,
 };

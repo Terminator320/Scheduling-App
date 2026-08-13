@@ -35,7 +35,7 @@ const {
 
 const {
   DAY_MS,
-  OVERDUE_QUERY_WINDOW_MS,
+  OVERDUE_LOOKBACK_MS,
   OVERDUE_SWEEP_MAX,
   WIDGET_PAYLOAD_MAX_BYTES,
   OPEN_STATUSES,
@@ -526,11 +526,10 @@ async function claimSeriesNotice(deps, opts) {
 }
 
 /**
- * Orchestrates the overdue "job finished?" sweep. It queries by startTime
- * (endTime would need a new index) over OVERDUE_QUERY_WINDOW_MS, then
- * filters to ended-within-24h-but-open in code, and claims each assignee on
- * its own endTime-keyed per-recipient ledger (see [_deliverRecipientOnce]).
- * Injectable deps `{db, messaging, now, logger}`.
+ * Orchestrates the overdue "job finished?" sweep. It queries `endTime` over
+ * OVERDUE_LOOKBACK_MS — the eligibility window itself — and claims each
+ * assignee on its own endTime-keyed per-recipient ledger (see
+ * [_deliverRecipientOnce]). Injectable deps `{db, messaging, now, logger}`.
  * @param {!Object} deps
  * @return {!Promise<{prompted: number}>}
  */
@@ -538,17 +537,27 @@ async function runOverduePromptSweep(deps) {
   const {db, now} = deps;
   const nowDate = now || new Date();
   const nowMs = nowMillis(nowDate);
-  const windowStart = new Date(nowMs - OVERDUE_QUERY_WINDOW_MS);
+  const windowStart = new Date(nowMs - OVERDUE_LOOKBACK_MS);
+  // Bounds mirror selectOverdueCandidates EXACTLY — `> floor`, `<= now` — so
+  // the query is the rule rather than a superset of it. This runs 96x a day;
+  // the old startTime form re-read every open job started in the last ~15 days
+  // on each run to prompt the handful that had just ended.
+  //
   // Ordered newest-first so the cap keeps the jobs most likely to still be
-  // within the eligible 24h window. Without this, Firestore defaults to
-  // oldest-first and spends the cap on jobs that have already aged out —
-  // this uses the existing `(status, startTime DESC)` index.
+  // eligible. Without this, Firestore orders by the inequality field ascending
+  // and spends the cap on the jobs closest to aging out. Needs the
+  // `(status, endTime DESC)` composite index — deploy firestore:indexes with
+  // this, or the sweep fails FAILED_PRECONDITION and prompts nobody.
+  //
+  // A doc with no `endTime` is excluded by this filter, where the startTime
+  // form read it and dropped it in code (`selectOverdueCandidates` requires a
+  // parseable endTime). Same outcome, one less read.
   const snap = await db
       .collection("appointments")
       .where("status", "in", OPEN_STATUSES)
-      .where("startTime", ">=", windowStart)
-      .where("startTime", "<=", nowDate)
-      .orderBy("startTime", "desc")
+      .where("endTime", ">", windowStart)
+      .where("endTime", "<=", nowDate)
+      .orderBy("endTime", "desc")
       .limit(OVERDUE_SWEEP_MAX)
       .get();
   if (snap && snap.size === OVERDUE_SWEEP_MAX && deps.logger) {

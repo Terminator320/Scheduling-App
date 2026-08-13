@@ -43,14 +43,46 @@ function registrationBody(name) {
 }
 
 describe("notifications.js module surface", () => {
-  test("exports exactly the four triggers index.js re-exports", () => {
+  test("exports exactly the three triggers index.js re-exports", () => {
+    // Three, not four: `sendOverdueJobPrompts` was folded into
+    // `sendUpcomingJobReminders` on 2026-08-13 to get the project's timer
+    // count inside Cloud Scheduler's 3-free allowance.
     const mod = require("../notifications");
     expect(Object.keys(mod).sort()).toEqual([
       "notifyAppointmentChanges",
       "sendDailyJobDigest",
-      "sendOverdueJobPrompts",
       "sendUpcomingJobReminders",
     ]);
+  });
+
+  test("only THREE scheduled jobs exist across the whole project", () => {
+    // The cost invariant. Cloud Scheduler bills per job past the first three,
+    // so a fourth timer anywhere in functions/ starts a recurring charge.
+    // Prefer riding an existing schedule (see sendDailyJobDigest's riders)
+    // over adding one.
+    const fs = require("fs");
+    const path = require("path");
+    const root = path.join(__dirname, "..");
+    const files = [];
+    (function walk(dir) {
+      for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+        if (entry.name === "node_modules" || entry.name === "__tests__") {
+          continue;
+        }
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith(".js")) files.push(full);
+      }
+    })(root);
+
+    const scheduled = [];
+    for (const file of files) {
+      const src = fs.readFileSync(file, "utf8");
+      for (const m of src.matchAll(/onSchedule\(/g)) {
+        scheduled.push(`${path.relative(root, file)}@${m.index}`);
+      }
+    }
+    expect(scheduled).toHaveLength(3);
   });
 });
 
@@ -65,15 +97,22 @@ describe("APNs secret binding matches deps construction", () => {
     expect(body).toContain("liveActivityDeps()");
   });
 
-  // These two are Firestore-only. Binding or reading the APNs secrets here
-  // would log a warning on every scheduled run.
-  test.each([
-    "sendDailyJobDigest",
-    "sendOverdueJobPrompts",
-  ])("%s neither binds APNS_SECRETS nor reads them", (name) => {
-    const body = registrationBody(name);
+  // The digest is Firestore-only (plus the Wave rider, which binds its own
+  // secret). Binding or reading the APNs secrets here would log a warning on
+  // every scheduled run.
+  test("sendDailyJobDigest neither binds APNS_SECRETS nor reads them", () => {
+    const body = registrationBody("sendDailyJobDigest");
     expect(body).not.toContain("APNS_SECRETS");
     expect(body).not.toContain("liveActivityDeps()");
     expect(body).toContain("liveDeps()");
+  });
+
+  test("the overdue sweep rides the reminder timer on liveDeps, not " +
+      "liveActivityDeps", () => {
+    // It moved into a function that DOES bind APNS_SECRETS, so the guard that
+    // used to be "does not bind" is now "does not read": the overdue half is
+    // Firestore-only and must keep taking liveDeps().
+    const body = registrationBody("sendUpcomingJobReminders");
+    expect(body).toContain("runOverduePromptSweep(liveDeps())");
   });
 });
