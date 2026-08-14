@@ -3,15 +3,19 @@
 /**
  * @fileoverview The stored/displayed split for a client's name.
  *
- * `clients/{id}.name` carries the client's phone number on the END —
- * "Marc Tremblay (514) 555-1234" — because that field is synced VERBATIM to
- * Wave as the customer name (`toWaveCustomerInput`, `wave/mappers.js`), and
- * the invoicing workflow there identifies customers by number.
+ * `clients/{id}.name` IS THE WAVE CUSTOMER NAME (`toWaveCustomerInput`,
+ * `wave/mappers.js`), and as of 2026-08-14 that means two things:
  *
- * The app never renders that; it strips the number back off for display, and
- * the `clientName` denormalized onto each appointment is the STRIPPED form.
- * `propagateClientEdits` therefore has to strip too, or a client edit would
- * fan the number onto every future appointment card.
+ *   - a PERSON is named by their phone number, "(514) 555-1234", which is what
+ *     the invoicing workflow identifies them by;
+ *   - a BUSINESS keeps its name, "3101-5696 qc inc.", because that name is the
+ *     identity there and a number in its place is unrecognisable.
+ *
+ * The app never renders a person's: `clientDisplayName` reads the first/last
+ * halves or `businessName`, and the `clientName` denormalized onto each
+ * appointment is that display form. `propagateClientEdits` therefore has to
+ * resolve the display name too, or a client edit would fan the phone number
+ * onto every future appointment card.
  *
  * HAND-MIRROR of
  * `lib/features/clients/domain/policies/client_name_policy.dart`.
@@ -110,13 +114,70 @@ function stripPhone(name, opts) {
 }
 
 /**
- * What gets PERSISTED (and what Wave shows): `"<base name> <phone>"`.
+ * Company-name tokens, bounded by non-letters so "Inc." is a business and
+ * "Vincent" is not. Matched against an accent-folded, lowercased name.
  *
- * Stripping first is what makes this idempotent — re-running the backfill, or
- * re-saving a client, never appends a second copy of the number.
+ * Deliberately short. A false positive only leaves a client named the way it
+ * already was; a false NEGATIVE renames a real customer to a phone number on
+ * live Wave invoices.
+ */
+const BUSINESS_TOKEN = new RegExp(
+    "(^|[^a-z])(inc|ltd|ltee|llc|llp|enr|senc|sencrl|cie|corp|corporation|" +
+    "company|holdings|group|groupe|services|solutions|technology|" +
+    "technologies|entreprise|entreprises|immobilier|immeuble|immeubles|" +
+    "gestion|construction|condo|condos|syndicat|copropriete|residence|" +
+    "residences|habitations|logements|appartements)([^a-z]|$)",
+);
+
+/**
+ * ANY digit left in the name once the client's own number is off it —
+ * "1505 Village de Bergerac", "3101-5696 qc inc.", "Condo 706".
+ *
+ * Deliberately blunt and biased. A person's name does not contain digits, so
+ * the only false positives are a person carrying a SECOND, older number in
+ * their name — they simply keep the name they already had, and the backfill
+ * reports it. The opposite mistake renames a real company on live invoices.
+ */
+const ANY_DIGIT = /\d/;
+
+/**
+ * Whether [name] reads as an ORGANIZATION on its face.
+ *
+ * The fallback for docs carrying no `type` — the Wave import sets none, so
+ * every imported business would otherwise read as a person and be renamed to
+ * its phone number.
+ *
+ * @param {*} name Any stored name.
+ * @return {boolean}
+ */
+function looksLikeBusinessName(name) {
+  const value = str(name);
+  if (!value) return false;
+  if (ANY_DIGIT.test(value)) return true;
+  const folded = value.toLowerCase().replace(/[éèê]/g, "e");
+  return BUSINESS_TOKEN.test(folded);
+}
+
+/**
+ * What gets PERSISTED, and what Wave shows as the CUSTOMER name (owner call
+ * 2026-08-14).
+ *
+ * A PERSON is named by their phone number — the invoicing workflow in Wave
+ * identifies people by number, and their real name is in
+ * `firstName`/`lastName`, which is what `clientDisplayName` renders.
+ *
+ * A BUSINESS keeps its name: "3101-5696 qc inc.", "1505 Village de Bergerac".
+ * That name IS the identity in Wave, and unlike a person there is rarely a
+ * first/last to fall back on.
+ *
+ * Both branches are idempotent. `baseName` is also the answer for a person
+ * with no number at all — a blank floats the doc to the top of the
+ * name-ordered client list.
  *
  * @param {{baseName: string, phone: (string|undefined),
- *   mobile: (string|undefined)}} opts The clean name plus the doc's numbers.
+ *   mobile: (string|undefined), type: (string|undefined),
+ *   businessName: (string|undefined)}} opts The clean name, the doc's numbers,
+ *   and what is known about whether this client is a business.
  * @return {string}
  */
 function composeStored(opts) {
@@ -124,13 +185,13 @@ function composeStored(opts) {
   const phone = str(o.phone);
   const mobile = str(o.mobile);
   const base = stripPhone(o.baseName, {phone, mobile});
-  const number = phone || mobile;
-  if (!number) return base;
-  // A client with no name but a number is still better identified by the
-  // number than by a blank, which would float the doc to the top of the
-  // name-ordered client list.
-  if (!base) return number;
-  return `${base} ${number}`;
+
+  if (isBusiness({type: o.type, businessName: o.businessName}) ||
+      looksLikeBusinessName(base)) {
+    return base;
+  }
+
+  return phone || mobile || base;
 }
 
 /**
@@ -210,5 +271,6 @@ module.exports = {
   composeStored,
   digitsOf,
   isBusiness,
+  looksLikeBusinessName,
   stripPhone,
 };

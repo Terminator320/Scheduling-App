@@ -6,13 +6,14 @@
 // for the app, but `name` is synced VERBATIM as the Wave customer name
 // (`toWaveCustomerInput`, `wave/mappers.js`) — so this also renamed every one
 // of those clients IN WAVE, on real invoices, losing the number the
-// invoicing workflow identifies customers by. Owner call 2026-08-14: put the
-// number back on the end of `name` and let the APP show the first/last
-// halves instead (`ClientNamePolicy`, hand-mirrored as `client_name_utils.js`).
+// invoicing workflow identifies customers by. Owner call 2026-08-14: a
+// PERSON's `name` becomes their phone number and nothing else, a BUSINESS
+// keeps its name, and the APP shows the first/last halves or the business
+// name (`ClientNamePolicy`, hand-mirrored as `client_name_utils.js`).
 // Re-running THIS script now would redo that damage against every client it
 // already touched. The replacement is `backfill-client-name-with-phone.js` —
 // read that one, not this one. Full story: the
-// `clients/{id}.name` IS WAVE'S FIELD bullet in the root `CLAUDE.md`.
+// `clients/{id}.name` IS WAVE'S CUSTOMER NAME bullet in the root `CLAUDE.md`.
 // This file is kept only as history; do not "fix" or resurrect it.
 //
 // One-off: lifts a phone number out of a client's `name`/`businessName` and
@@ -62,20 +63,7 @@
 //     own trigger against Wave's 60-calls/min ceiling. Run this when the queue
 //     is quiet and let it settle before the next scheduled import.
 //
-// Usage:
-//   For prod:
-//     $env:GOOGLE_APPLICATION_CREDENTIALS = "C:\path\to\prod-service-account.json"
-//     node functions/scripts/backfill-client-phone-from-name.js --dry-run
-//     node functions/scripts/backfill-client-phone-from-name.js
-//
-//   For the local emulator:
-//     $env:FIRESTORE_EMULATOR_HOST = "localhost:8080"
-//     $env:GCLOUD_PROJECT = "schedulingapp-88727"
-//     node functions/scripts/backfill-client-phone-from-name.js
-//
-// Pass --dry-run to report what it would do, with a sample of the before/after
-// names, without writing. ALWAYS dry-run against prod first and read the
-// sample — a rename is not reversible from here.
+// Usage: NONE. `main()` throws and the write loop is gone (see below).
 //
 // !! THIS ALREADY RAN AGAINST PROD ON 2026-08-08, ON THE BUGGY VERSION. !!
 // Step 1 was split per field later the same day (code review). The version
@@ -91,12 +79,12 @@
 // rule and are stale. Re-run --dry-run and re-read the sample before ever
 // invoking this again.
 
-const {initializeApp, applicationDefault} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
-
-const DRY_RUN = process.argv.includes("--dry-run");
-const BATCH_SIZE = 400;
-const SAMPLE_SIZE = 25;
+// The Firestore write loop was DELETED 2026-08-14, not merely commented out —
+// a refusal at the top of a body that still exists is one edit away from being
+// removed. `extractPhone` and `patchFor` stay because they are the two pure
+// rules, they are jest-tested, and `docs/audits/audit-client-phone-backfill-
+// damage.js` reads `extractPhone` to assess what the 2026-08-08 run did. Git
+// has the loop if it is ever wanted again.
 
 // A run of digits and the separators a person types between them. The `\d` at
 // each end keeps a trailing "(" or "-" out of the match.
@@ -176,87 +164,19 @@ function patchFor(data) {
 
 /**
  * Patches every client doc carrying a phone number in its name.
+ *
+ * REFUSES TO RUN. The header's "DO NOT RUN THIS SCRIPT AGAIN" is turned into a
+ * failure here rather than left as a comment: this file sits one tab-completion
+ * away from the script you actually want (`backfill-client-name-with-phone.js`),
+ * and a run would redo the Wave rename against every client the reversal just
+ * repaired — on real invoices, unrecoverably from the doc.
  * @return {!Promise<void>}
  */
 async function main() {
-  initializeApp({credential: applicationDefault()});
-  const db = getFirestore();
-  const snap = await db.collection("clients").get();
-
-  let patched = 0;
-  let phoneSet = 0;
-  let renamed = 0;
-  let skipped = 0;
-  const sample = [];
-  const ambiguous = [];
-
-  let batch = db.batch();
-  let pending = 0;
-
-  for (const doc of snap.docs) {
-    const data = doc.data();
-    const patch = patchFor(data);
-
-    if (!patch) {
-      skipped += 1;
-      // Worth surfacing BY NAME: a doc that clearly holds digits but produced
-      // no clean 10-digit number needs a human, and a bare count would leave
-      // nobody able to find them.
-      // The !extractPhone half is load-bearing: a doc can also reach here
-      // having ALREADY been fixed by an earlier run, and its businessName may
-      // still legitimately hold the number. Without it, a second run reports
-      // every one of those as needing a human.
-      const raw = `${data.name || ""} ${data.businessName || ""}`.trim();
-      if (!extractPhone(raw) && /\d{7,}/.test(raw.replace(/\D/g, ""))) {
-        ambiguous.push({id: doc.id, raw});
-      }
-      continue;
-    }
-
-    patched += 1;
-    if (patch.phone) phoneSet += 1;
-    if (patch.name) renamed += 1;
-    if (sample.length < SAMPLE_SIZE) {
-      sample.push({
-        id: doc.id,
-        name: data.name || "",
-        businessName: data.businessName || "",
-        to: patch,
-      });
-    }
-
-    if (DRY_RUN) continue;
-    batch.update(doc.ref, patch);
-    pending += 1;
-    if (pending >= BATCH_SIZE) {
-      await batch.commit();
-      batch = db.batch();
-      pending = 0;
-    }
-  }
-  if (!DRY_RUN && pending > 0) await batch.commit();
-
-  const tag = DRY_RUN ? "[dry-run] " : "";
-  if (sample.length) {
-    console.log(`${tag}sample (first ${sample.length}):`);
-    for (const s of sample) {
-      const business = s.businessName ? ` | business: "${s.businessName}"` : "";
-      console.log(`  ${s.id}`);
-      console.log(`    name: "${s.name}"${business}`);
-      console.log(`    ->   ${JSON.stringify(s.to)}`);
-    }
-    console.log("");
-  }
-  console.log(
-      `${tag}clients: ${snap.size} scanned, ${patched} patched ` +
-      `(${phoneSet} phone set, ${renamed} renamed), ${skipped} skipped`);
-
-  if (ambiguous.length > 0) {
-    console.log(
-        `\n${tag}${ambiguous.length} name(s) hold digits but no clean ` +
-        "10-digit number — left alone, these need a human:");
-    for (const a of ambiguous) console.log(`  ${a.id}  "${a.raw}"`);
-  }
+  throw new Error(
+      "SUPERSEDED 2026-08-14 — this script already ran against prod and its " +
+      "effect was deliberately reversed. Running it again renames real Wave " +
+      "customers. Use functions/scripts/backfill-client-name-with-phone.js.");
 }
 
 // Only run when invoked directly, so `extractPhone`/`patchFor` — the two rules

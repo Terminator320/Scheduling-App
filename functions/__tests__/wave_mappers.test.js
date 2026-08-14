@@ -258,6 +258,33 @@ describe("toWaveCustomerInput", () => {
     const result = toWaveCustomerInput({name: "Acme "});
     expect(result.name).toBe("Acme");
   });
+
+  test("sends the stored name VERBATIM, phone number and all", () => {
+    // `clients/{id}.name` carries the client's phone on the end (owner call
+    // 2026-08-14, `ClientNamePolicy`) precisely because Wave's customer list
+    // and its invoices are what the number has to show up on — the app shows
+    // `displayName` instead. Nothing else pins this, so a future "cleanup"
+    // applying the display name here would break invoice identification with
+    // no test failing. It is the reason `clientDisplayName` exists as a
+    // SEPARATE function rather than being folded into the mapper.
+    const result = toWaveCustomerInput({
+      name: "Marc Tremblay (514) 555-1234",
+      firstName: "Marc",
+      lastName: "Tremblay",
+      phone: "(514) 555-1234",
+    });
+    expect(result.name).toBe("Marc Tremblay (514) 555-1234");
+  });
+
+  test("a business name reaches Wave as the business, not its contact", () => {
+    const result = toWaveCustomerInput({
+      name: "Vogas Plumbing (514) 555-1234",
+      firstName: "Marc",
+      lastName: "Tremblay",
+      phone: "(514) 555-1234",
+    });
+    expect(result.name).toBe("Vogas Plumbing (514) 555-1234");
+  });
 });
 
 // ---------------------------------------------------------------------------

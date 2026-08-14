@@ -1,7 +1,7 @@
 ---
 paths:
   - "test/**"
-  - "functions/test/**"
+  - "functions/__tests__/**"
 ---
 
 # Testing

@@ -32,6 +32,59 @@ const COUNTRY_CODE_TO_NAME = {
 // ---------------------------------------------------------------------------
 
 /**
+ * Per-field length caps applied to everything the IMPORT writes, mirroring
+ * `isValidClientData` in `firestore.rules`.
+ *
+ * `importCustomers` runs under the Admin SDK, which BYPASSES rules — so a Wave
+ * customer whose name or address is longer than the app's own cap imports
+ * fine and then makes that client permanently un-editable: every in-app save
+ * re-emits the whole `toMap()` projection, so the over-cap field fails the
+ * rules and takes the address, contacts and billing edits in the same save
+ * with it, as an opaque `permission-denied` the admin cannot repair from the
+ * form (a seeded controller bypasses `LengthLimitingTextInputFormatter`,
+ * which only limits SUBSEQUENT edits).
+ *
+ * `name` is capped at 200, not at its 225 rules cap. The 225 was sized to the
+ * retired "<typed name> <phone>" shape; the cap that matters now is the one
+ * the FORM enforces, `TextLimits.personName` (200), since a business's name
+ * round-trips through that field on every in-app save (`ClientNamePolicy`).
+ * Importing at the rules cap would leave a name the form itself cannot hold.
+ *
+ * The trade is deliberate and worth stating: a truncated name that is later
+ * edited in-app pushes the truncated form BACK to Wave, renaming that
+ * customer. That needs a Wave name over 200 characters, and the alternative
+ * is a client nobody can edit at all. It only bites a BUSINESS — a person's
+ * name is recomposed from their phone number on save and never carries the
+ * imported string forward at all.
+ * @type {!Object<string, number>}
+ */
+const IMPORT_FIELD_CAPS = {
+  name: 200,
+  firstName: 200,
+  lastName: 200,
+  email: 320,
+  phone: 32,
+  mobile: 32,
+  address: 500,
+  city: 128,
+  province: 128,
+  country: 128,
+  postalCode: 32,
+};
+
+/**
+ * `value` truncated to the cap registered for `field`, if any.
+ * @param {string} field Client document field name.
+ * @param {string} value Already-trimmed value.
+ * @return {string}
+ */
+function capped(field, value) {
+  const max = IMPORT_FIELD_CAPS[field];
+  if (typeof max !== "number" || value.length <= max) return value;
+  return value.slice(0, max);
+}
+
+/**
  * Returns the string only if non-empty after trimming, else undefined. Lets
  * callers omit optional Wave fields that are just empty strings.
  * @param {*} v Value to check.
@@ -275,30 +328,36 @@ function fromWaveCustomer(node) {
   const firstName = typeof n.firstName === "string" ? n.firstName : "";
   const lastName = typeof n.lastName === "string" ? n.lastName : "";
   const email = typeof n.email === "string" ? n.email : "";
-  // Derive a non-empty display name — Wave's `name`, else first/last, else
-  // email — since a blank name would float the doc to the top of the
-  // name-ordered client list.
+  // Wave's customer name, mirrored VERBATIM — it is not a display name, and
+  // the app never renders a person's (`ClientNamePolicy`). The fallbacks to
+  // first/last and then email exist only to avoid storing a blank, which
+  // would float the doc to the top of the name-ordered client list. A person
+  // whose Wave name is not yet their phone number is recomposed on the next
+  // in-app save; the import must not pre-empt that, or it would push a rename
+  // to Wave for every customer it read.
   const rawName = typeof n.name === "string" ? n.name.trim() : "";
   const name = rawName ||
     [firstName.trim(), lastName.trim()].filter(Boolean).join(" ") ||
     email.trim();
 
+  // Every mapped field is length-capped on the way in — see IMPORT_FIELD_CAPS.
   return {
     waveCustomerId: typeof n.id === "string" ? n.id : "",
-    name,
-    firstName,
-    lastName,
-    email,
-    phone: typeof n.phone === "string" ? n.phone : "",
-    mobile: typeof n.mobile === "string" ? n.mobile : "",
-    address,
+    name: capped("name", name),
+    firstName: capped("firstName", firstName),
+    lastName: capped("lastName", lastName),
+    email: capped("email", email),
+    phone: capped("phone", typeof n.phone === "string" ? n.phone : ""),
+    mobile: capped("mobile", typeof n.mobile === "string" ? n.mobile : ""),
+    address: capped("address", address),
     addressLine2: line2,
     apt: "",
-    city: typeof addr.city === "string" ? addr.city.trim() : "",
-    province,
-    country,
-    postalCode: typeof addr.postalCode === "string" ?
-      addr.postalCode.trim() : "",
+    city: capped("city",
+        typeof addr.city === "string" ? addr.city.trim() : ""),
+    province: capped("province", province),
+    country: capped("country", country),
+    postalCode: capped("postalCode",
+        typeof addr.postalCode === "string" ? addr.postalCode.trim() : ""),
   };
 }
 

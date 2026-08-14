@@ -1,6 +1,15 @@
 #!/usr/bin/env node
 // READ-ONLY audit. Writes nothing, ever. There is no --apply.
 //
+// !! RUN THIS BEFORE `backfill-client-name-with-phone.js`, NOT AFTER. !!
+// This audit works by comparing a client's current `name` against the names
+// its PAST appointments still carry. That backfill sets a person's `name` to
+// their phone number, at which point every past name differs from the current
+// one and the comparison stops discriminating — a damaged client and an intact
+// one look identical. Docs already in that state are detected and reported in
+// their own bucket rather than being counted as confirmed damage, but the
+// evidence is weaker there: only `businessName` and the history values remain.
+//
 // WHY this exists: `backfill-client-phone-from-name.js` was run against prod on
 // 2026-08-08 while it still searched `name` and `businessName` CONCATENATED and
 // then renamed `name` from first+last whichever field the number came from. A
@@ -33,7 +42,7 @@
 //
 // Usage:
 //   $env:GOOGLE_APPLICATION_CREDENTIALS = "C:\path\to\prod-service.json"
-//   node functions/scripts/audit-client-phone-backfill-damage.js
+//   node docs/audits/audit-client-phone-backfill-damage.js
 //
 // Repair is deliberately manual: there are few enough docs to edit by hand in
 // the app or the console, and a second bulk rewrite over data a first bulk
@@ -42,7 +51,13 @@
 const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 
-const {extractPhone} = require("./backfill-client-phone-from-name");
+// This file lives in docs/audits/; the rule it reuses lives with the scripts.
+// A bare "./" here threw MODULE_NOT_FOUND on the only tool for assessing the
+// 2026-08-08 rename, so it had never actually run from this location.
+const {
+  extractPhone,
+} = require("../../functions/scripts/backfill-client-phone-from-name");
+const {digitsOf} = require("../../functions/client_name_utils");
 
 /** Past appointments to sample per suspect client. */
 const HISTORY_SAMPLE = 20;
@@ -63,6 +78,24 @@ function withoutPhone(text) {
       .replace(/^[\s,;:—-]+|[\s,;:—-]+$/g, "")
       .trim();
   return stripped || raw.trim();
+}
+
+/**
+ * Whether `name` is nothing but this client's OWN stored number — the shape
+ * `backfill-client-name-with-phone.js` leaves behind.
+ *
+ * Once a doc is in that state this audit can no longer tell a damaged client
+ * from an intact one: every past appointment name differs from the current
+ * one, so the "CONFIRMED renamed" list would swallow the whole collection.
+ *
+ * @param {!Object} data The stored client document.
+ * @param {string} name The doc's current trimmed name.
+ * @return {boolean}
+ */
+function isOwnNumber(data, name) {
+  const digits = digitsOf(name);
+  if (!digits) return false;
+  return digits === digitsOf(data.phone) || digits === digitsOf(data.mobile);
 }
 
 /**
@@ -162,9 +195,16 @@ async function main() {
 
   const damaged = [];
   const unchanged = [];
+  const renamed = [];
   for (const s of suspects) {
     const past = await historicalNames(db, s.id);
     const current = String(s.data.name || "").trim();
+    // Its `name` is already just its own number, so this audit's whole
+    // discriminator is gone — see the ordering banner at the top of the file.
+    if (isOwnNumber(s.data, current)) {
+      renamed.push({...s, past});
+      continue;
+    }
     const differing = past.filter((n) => n !== current);
     (differing.length > 0 ? damaged : unchanged).push({...s, past, differing});
   }
@@ -180,6 +220,21 @@ async function main() {
     console.log(`    businessName   "${d.data.businessName}"`);
     console.log(`    → restore to   "${withoutPhone(d.data.businessName)}"  ` +
       "(or the history value above, if they disagree)");
+  }
+
+  if (renamed.length > 0) {
+    console.log(
+        `\n!! ${renamed.length} client(s) fit the shape but their \`name\` is ` +
+        "ALREADY just their phone number, so this audit cannot tell whether " +
+        "they were damaged: every past appointment name differs from a bare " +
+        "number. `backfill-client-name-with-phone.js` has run over these. " +
+        "Recover them from `businessName` and the history values below, by " +
+        "hand:");
+    for (const r of renamed) {
+      const wasList = r.past.map((n) => `"${n}"`).join(", ");
+      console.log(`  ${r.id}  now "${r.data.name}"  ` +
+        `businessName "${r.data.businessName}"  was ${wasList || "(none)"}`);
+    }
   }
 
   if (unchanged.length > 0) {

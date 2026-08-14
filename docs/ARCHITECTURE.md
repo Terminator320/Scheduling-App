@@ -1098,10 +1098,10 @@ rejected.
 - **Mocking**: `mocktail` at system boundaries only (Firebase, repositories). Real implementations everywhere else.
 - **Test harness**: Widgets using `ThemeNotifier.of(context)` must be wrapped in `ThemeNotifier(...)`. For overflow tests, pump the widget at a **small-phone size with 2× text** — set `tester.view.physicalSize` (a 260-wide logical viewport is the usual worst case) and wrap in a `MediaQuery` carrying `textScaler: TextScaler.linear(2)`. Each test file keeps its own local `_harness` helper for this; there is no shared one.
 
-Run: `flutter test` (1906 passing as of 2026-08-11 — that is the runner's count;
-`grep`ing for `test(`/`testWidgets(` gives 1859, since some cases are generated
-inside loops; `functions` adds 900 jest
-tests in `functions/__tests__/` — the parallel `functions/test/` directory was
+Run: `flutter test` (2071 passing as of 2026-08-14 — that is the runner's count;
+`grep`ing for `test(`/`testWidgets(` gives fewer, since some cases are generated
+inside loops; `functions` adds 1077 jest tests across 45 suites in
+`functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0 info
 lints** — see Analysis & Linting below; see
 `analysis_options.yaml` for the lints intentionally disabled (below).

@@ -455,8 +455,10 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
     today from 00:00 onward, so it appeared only under *tomorrow* and then
     vanished. `DaySchedule.nextJob` prefers a timed job, falling back to the
     all-day one, or a midnight block owns "up next" all day.
-  - **Siri snapshot** — schema **v2** (`scheduleSnapshotVersion`, matched by
-    `supportedVersion` in `ScheduleSnapshot.swift`): adds `isAllDay` AND
+  - **Siri snapshot** — **v2 of the schema** (`scheduleSnapshotVersion`, matched
+    by `supportedVersion` in `ScheduleSnapshot.swift`; the CURRENT value is
+    **3** — see the multi-day mirrors bullet below, which bumped it): adds
+    `isAllDay` AND
     `title`, since a personal job has no client and the snapshot previously had
     no title to fall back to, so Siri said "unnamed client". `SiriStrings.who`
     is now the single client→title→placeholder resolver and `timePhrase` speaks
@@ -1162,13 +1164,31 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   the doc forever — invisible, uneditable, still matched by `matchClientDocs`
   (which reads `mobile`) and still in the Wave payload. There is no migration
   script and none is needed; the fleet heals as clients are edited.
-- **`clients/{id}.name` IS WAVE'S FIELD, and it carries the client's phone
-  number on the end** (owner call 2026-08-14): "Marc Tremblay (514) 555-1234".
-  `toWaveCustomerInput` syncs it VERBATIM as the Wave customer name, and the
-  invoicing workflow there identifies customers by number — Wave gets `phone`
-  as its own field too, but the name is what shows on the customer list and on
-  an invoice. **The app never renders it.** Every in-app surface reads
-  `ClientRecord.displayName`, which strips the number off and then branches:
+- **`clients/{id}.name` IS WAVE'S CUSTOMER NAME, and what it holds depends on
+  who the client is** (owner call 2026-08-14). `toWaveCustomerInput` syncs it
+  VERBATIM, and it is what shows on Wave's customer list and on an invoice —
+  Wave gets `phone` as its own field too, but the name is what people read.
+  **A PERSON is named by their phone number** — "(514) 555-1234" — because the
+  invoicing workflow there identifies people by number; their real name is in
+  `firstName`/`lastName`, so nothing is lost. **A BUSINESS keeps its name** —
+  "3101-5696 qc inc.", "1505 Village de Bergerac" — because that name IS its
+  identity in Wave, a number in its place is unrecognisable on an invoice, and
+  unlike a person there is usually no first/last to fall back on.
+  **`ClientNamePolicy.looksLikeBusinessName` is what catches the Wave-imported
+  ones, and it is a HEURISTIC deliberately BIASED toward "business"**: ANY
+  digit left in the name once the client's own number is stripped ("Condo 706",
+  "1505 Village de Bergerac", "3101-5696 qc inc."), or a company/property token
+  like `inc`/`ltée`/`group`/`syndicat`/`copropriété`, matched accent-folded and
+  bounded by non-letters so "Vincent" and "Enrico" stay people. The import sets
+  no `type`, so the name is the only evidence there is, and the two mistakes
+  are not symmetrical: a false positive leaves a client named exactly as it
+  already was, while a false negative renames a real company on live Wave
+  invoices. Expect to ADD tokens as the dry run turns up names it missed — that
+  list is the one part of this rule that can only be learned from the data. A false positive merely leaves a client named as
+  it already was; a false negative renames a real company on live invoices,
+  which is why the backfill lists every doc it matched.
+  **The app never renders a person's `name`.** Every in-app surface reads
+  `ClientRecord.displayName`, which strips any trailing number and branches:
   **a BUSINESS shows its business name, a PERSON shows their `firstName` +
   `lastName`.** That branch is the whole point — those two halves mean
   different things on the two kinds of client (on a person they ARE the client,
@@ -1183,18 +1203,27 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   This REVERSED `backfill-client-phone-from-name.js`, which ran against prod
   2026-08-08: it lifted the number out of `name` into `phone` and renamed
   `name` to "First Last" — correct for the app, but it renamed every one of
-  those customers in Wave too. `backfill-client-name-with-phone.js` puts them
-  back (idempotent, `--dry-run`, `--since` so it skips recently-added clients).
+  those customers in Wave too. `backfill-client-name-with-phone.js` is the
+  data half of the current rule (idempotent, `--dry-run`, `--since` so it
+  skips recently-added clients). **Its dry run prints two lists in FULL and
+  both must be read before going live**: every client it treated as a BUSINESS
+  and therefore left alone (check for a person the heuristic caught), and
+  every client it renamed that has no first/last on file (those end up called
+  by their phone number in the app as well as in Wave).
   The one owner is **`ClientNamePolicy`** (`clients/domain/policies/`),
   hand-mirrored as **`functions/client_name_utils.js`**; their tests share
   worked examples, so a divergence fails a test. Consequences that must stay in
   sync:
-  **`composeStored` and `stripPhone` are inverses over the number and BOTH are
-  idempotent** — that is what lets every ordinary save re-append without
-  stacking a second copy, and what makes the backfill re-runnable. Both client
-  sheets compose on save; the edit sheet seeds its name field from
-  `displayName`, or the next save would hand a name-plus-number back to
-  `composeStored` as if it were the base name.
+  **`composeStored` is idempotent on BOTH branches** — a person's number
+  recomposes to itself, a business's name comes back stripped and unchanged —
+  which is what makes the backfill re-runnable and every ordinary save safe.
+  Both client sheets compose on save, and **both must pass `type` (and the
+  edit sheet the stored `businessName`), or an ordinary save renames a
+  business to its phone number on the invoices it appears on.** The edit sheet
+  seeds its name field from `baseNameFor`, never `displayName`: on anything
+  read as a person the latter returns the first/last halves, and the Wave
+  import sets no `type`, so seeding a contact person and saving would rename
+  the customer in Wave.
   **`propagateClientEdits` must strip too** — it fans `clientName` onto future
   appointments, and the app writes the DISPLAY name at booking, so without
   `clientDisplayName` the two disagree and cards start showing the number.
@@ -1205,10 +1234,12 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   Wave invoices, unrecoverably from the doc. It reaches the first/last halves
   only when the stored name is empty once its own number is stripped — the junk
   case the 2026-08-08 rename was cleaning up.
-  **The rules cap on `name` is 225, not 200** — the stored value is
-  `TextLimits.personName` (200) + a space + `TextLimits.phone` (24), so a cap
-  sized to the typed FIELD rejects every long client save with an opaque
-  `permission-denied`. `text_limits_test.dart` pins the sum against the rules
+  **The rules cap on `name` is 225, not 200** — it was sized to the old
+  "<typed name> <phone>" shape, `TextLimits.personName` (200) + a space +
+  `TextLimits.phone` (24). The current rule can't reach that (a business name
+  caps at 200, a number at 24), but the cap STAYS: docs written under the old
+  shape are still in the collection, and a cap under a stored value makes that
+  doc permanently un-updatable with an opaque `permission-denied`. `text_limits_test.dart` pins the sum against the rules
   text; the two are exactly equal, so a bump on either side breaks it loudly.
   **A number typed or pasted into the NAME field is lifted into the phone
   field** (`liftPhoneFromNameField`, wired to both sheets' name `onChanged`) —

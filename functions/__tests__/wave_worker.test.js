@@ -4,6 +4,7 @@ const {
   enqueueCustomerUpsert,
   drainQueue,
   requeueDeadJobs,
+  listOutstandingClientIds,
   shouldEnqueueClientWrite,
   RATE_LIMITED_MAX_ATTEMPTS,
 } = require("../wave/worker");
@@ -2135,5 +2136,83 @@ describe("requeueDeadJobs", () => {
     const {db} = deadDb([]);
     expect(await requeueDeadJobs({db, now: () => new Date()}))
         .toEqual({requeued: 0, scanned: 0});
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listOutstandingClientIds — the import's protect list
+// ---------------------------------------------------------------------------
+
+describe("listOutstandingClientIds", () => {
+  /**
+   * A fake queue collection that records the status filter it was handed.
+   * @param {!Array<{status: string, clientId: string}>} jobs Queue rows.
+   * @return {{db: !Object, filters: !Array<*>}}
+   */
+  function queueDb(jobs) {
+    const filters = [];
+    const docs = jobs.map((j, i) => ({
+      id: `customerUpsert__${j.clientId}`,
+      data: () => ({
+        type: "customerUpsert",
+        refPath: `clients/${j.clientId}`,
+        status: j.status,
+      }),
+      _i: i,
+    }));
+    const db = {
+      collection: jest.fn(() => ({
+        where: jest.fn((field, op, value) => {
+          filters.push({field, op, value});
+          return {
+            limit: jest.fn(() => ({
+              get: jest.fn(() => Promise.resolve({docs})),
+            })),
+          };
+        }),
+      })),
+    };
+    return {db, filters};
+  }
+
+  test("protects DEAD jobs as well as queued and inflight", async () => {
+    // The load-bearing case. A dead job's edit never reached Wave and nothing
+    // retries it on its own, so letting the import overwrite that client
+    // stamps lastSyncedHash from Wave's pre-edit values — after which
+    // waveRetryFailedJobs requeues it, hashes the clobbered doc, matches, and
+    // returns `noop`. The admin's change is gone with the row reading synced.
+    const {db, filters} = queueDb([
+      {status: "queued", clientId: "c1"},
+      {status: "inflight", clientId: "c2"},
+      {status: "dead", clientId: "c3"},
+    ]);
+
+    const ids = await listOutstandingClientIds({db});
+
+    expect(filters[0]).toEqual({
+      field: "status",
+      op: "in",
+      value: ["queued", "inflight", "dead"],
+    });
+    expect([...ids].sort()).toEqual(["c1", "c2", "c3"]);
+  });
+
+  test("logs an error when the read comes back at the cap", async () => {
+    // Past the cap the import protects a PREFIX and clobbers the rest, so a
+    // silent truncation here is an invisible data loss.
+    const {db} = queueDb([
+      {status: "queued", clientId: "c1"},
+      {status: "dead", clientId: "c2"},
+    ]);
+    const logger = fakeLogger();
+
+    await listOutstandingClientIds({db, limit: 2, logger});
+
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+
+  test("an empty queue protects nothing", async () => {
+    const {db} = queueDb([]);
+    expect((await listOutstandingClientIds({db})).size).toBe(0);
   });
 });

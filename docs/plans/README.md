@@ -140,12 +140,25 @@ card? a countdown to today's window end?) is an unanswered design question.
 
 ### 6. Data and ops
 
-- **The client phone backfill has not been run for real.**
-  `functions/scripts/backfill-client-phone-from-name.js`. The dry run against
-  prod on 2026-08-08 reported 684 scanned / 347 to patch; the 14 ambiguous docs
-  were reviewed and are deliberately left alone. Note it fires
-  `propagateClientEdits` and `waveUpsertCustomer`. Its read-only damage audit
-  from the earlier botched run is `docs/audits/audit-client-phone-backfill-damage.js`.
+- **The client phone backfill RAN against prod on 2026-08-08, and was REVERSED
+  on 2026-08-14. Never run it again.**
+  `functions/scripts/backfill-client-phone-from-name.js` lifted the phone number
+  out of `clients/{id}.name` and renamed `name` to "First Last". That was correct
+  for the app but wrong for Wave: `name` is synced VERBATIM as the Wave customer
+  name (`toWaveCustomerInput`), and the invoicing workflow identifies customers
+  by number — so it renamed every one of those customers on real Wave invoices.
+  Owner call 2026-08-14 reversed it: the number goes back in the stored `name`
+  and the APP strips it for display (`ClientNamePolicy.displayName`).
+  **The live script is now `backfill-client-name-with-phone.js`** (idempotent,
+  `--dry-run`, `--since` defaulting to 2026-08-08 so recently-added clients are
+  skipped). Run it when the Wave queue is quiet — it fires `propagateClientEdits`
+  and `waveUpsertCustomer`, and the latter now drains inline, so a few hundred
+  Wave mutations land within seconds of the last batch against Wave's
+  60-calls/min ceiling.
+  The read-only damage audit for the 2026-08-08 run is
+  `docs/audits/audit-client-phone-backfill-damage.js` (note: its `require` path
+  for the superseded script is stale — it points at the repo root rather than
+  `functions/scripts/`).
 - **The `signupCodes` collection and its TTL policy remain in prod**,
   deliberately — the collection was verified empty and rules now deny all
   access. Never `--force` the policy away.

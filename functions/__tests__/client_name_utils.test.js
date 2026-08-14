@@ -57,20 +57,38 @@ describe("stripPhone", () => {
 });
 
 describe("composeStored", () => {
-  test("appends the phone for Wave", () => {
+  test("names a PERSON by their phone number", () => {
     expect(composeStored({
       baseName: "Marc Tremblay",
       phone: "(514) 555-1234",
-    })).toBe("Marc Tremblay (514) 555-1234");
+    })).toBe("(514) 555-1234");
   });
 
-  test("never appends twice", () => {
+  test("is idempotent", () => {
     // The backfill is re-runnable and every ordinary save goes through this,
     // so a second pass over an already-composed name must be a no-op.
     expect(composeStored({
-      baseName: "Marc Tremblay (514) 555-1234",
+      baseName: "(514) 555-1234",
       phone: "(514) 555-1234",
-    })).toBe("Marc Tremblay (514) 555-1234");
+    })).toBe("(514) 555-1234");
+  });
+
+  test("keeps a BUSINESS name — that is its identity in Wave", () => {
+    expect(composeStored({
+      baseName: "Vogas Plumbing",
+      phone: "(514) 555-1234",
+      type: "commercial",
+    })).toBe("Vogas Plumbing");
+  });
+
+  test("keeps a business recognisable only by its NAME", () => {
+    // The Wave import sets no `type`, so these carry none.
+    for (const name of ["3101-5696 qc inc.", "1505 Village de Bergerac",
+      "Information technology group", "Condo 706",
+      "Syndicat de copropriété du Parc"]) {
+      expect(composeStored({baseName: name, phone: "(514) 555-1234"}))
+          .toBe(name);
+    }
   });
 
   test("leaves the name bare when there is no phone", () => {
