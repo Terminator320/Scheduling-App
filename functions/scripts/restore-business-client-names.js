@@ -37,6 +37,10 @@ const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 
 const {digitsOf} = require("../client_name_utils");
+// Shared so the wrong-project guard reads the same on both scripts: it prints
+// "(unknown)" otherwise, exactly when credentials were supplied the
+// recommended way, since applicationDefault() keeps the project internal.
+const {resolveProjectId} = require("./backfill-client-phone-formatting");
 
 /** Bare switches, matched EXACTLY — a mistyped --dry-run must not go live. */
 const EXACT_FLAGS = ["--dry-run"];
@@ -120,9 +124,7 @@ async function main() {
   const app = initializeApp({credential: applicationDefault()});
   const db = getFirestore();
 
-  const target = (app.options && app.options.projectId) ||
-    process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT ||
-    "(unknown — check your credentials)";
+  const target = resolveProjectId(app);
   console.log(
       `${dryRun ? "[dry-run] " : ""}target: ${target}` +
       `${process.env.FIRESTORE_EMULATOR_HOST ? " via emulator" : " (LIVE)"}\n`);

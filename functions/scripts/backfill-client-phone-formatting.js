@@ -215,6 +215,7 @@ async function main() {
 
   let patched = 0;
   let renamed = 0;
+  let reformatted = 0;
   const sample = [];
 
   let batch = db.batch();
@@ -227,13 +228,23 @@ async function main() {
 
     patched += 1;
     if (patch.name) renamed += 1;
+    if (patch.phone || patch.mobile) reformatted += 1;
     if (sample.length < SAMPLE_SIZE) {
-      sample.push({
-        id: doc.id,
-        from: String(data.phone || data.mobile || "").trim(),
-        to: patch.phone || patch.mobile || "",
-        name: patch.name || "",
-      });
+      // REPORTED PER FIELD, because a patch is not always all three. A
+      // name-only patch (the doc whose phone was already formatted) rendered
+      // as `"(579) 640-1120" -> ""` under a single from/to line, which reads
+      // like the phone is about to be blanked — the opposite of what it does.
+      const lines = [];
+      if (patch.phone) {
+        lines.push(`phone   "${data.phone}" -> "${patch.phone}"`);
+      }
+      if (patch.mobile) {
+        lines.push(`mobile  "${data.mobile}" -> "${patch.mobile}"`);
+      }
+      if (patch.name) {
+        lines.push(`name    "${data.name}" -> "${patch.name}"`);
+      }
+      sample.push({id: doc.id, lines});
     }
 
     if (dryRun) continue;
@@ -252,14 +263,14 @@ async function main() {
     console.log(`${tag}sample (first ${sample.length}):`);
     for (const s of sample) {
       console.log(`  ${s.id}`);
-      console.log(`    "${s.from}" -> "${s.to}"` +
-        `${s.name ? `   (name too)` : ""}`);
+      for (const line of s.lines) console.log(`    ${line}`);
     }
     console.log("");
   }
   console.log(
-      `${tag}clients: ${snap.size} scanned, ${patched} reformatted, ` +
-      `${renamed} of those also had their name re-stated`);
+      `${tag}clients: ${snap.size} scanned, ${patched} patched — ` +
+      `${reformatted} had a number reformatted, ` +
+      `${renamed} had their name re-stated`);
 
   if (!dryRun && patched > 0) {
     console.log(
