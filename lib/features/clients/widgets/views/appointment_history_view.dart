@@ -86,7 +86,7 @@ class _AppointmentHistoryViewState
 
   // Debounce before running a history search, same as the clients list. The
   // loaded-page filter covers the gap in the meantime so it still feels instant.
-  final _searchDebounce = Debouncer(const Duration(milliseconds: 250));
+  final _searchDebounce = Debouncer(ClientSearchPolicy.searchDebounce);
 
   int? _year;
   String? _employeeId;

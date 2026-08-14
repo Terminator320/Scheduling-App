@@ -55,6 +55,14 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
   bool _started = false;
   bool _wasVisible = false;
 
+  /// Held as a field, and assigned EAGERLY in [initState] rather than as a
+  /// lazy `late final` initializer: [dispose] logs through it, and `ref.read`
+  /// throws once the consumer is unmounted (Riverpod 3) — which `dispose`
+  /// always is, so a lazy first touch there would throw exactly where this
+  /// exists to avoid it. Riverpod's own error text prescribes this: "save the
+  /// provider state in a field of your State class."
+  late final AppLogger _logger;
+
   /// True while the tour is actually running, from startShowCase until
   /// onFinish/onDismiss. Gates markSeen so we never mark a tour seen that
   /// didn't actually run.
@@ -109,6 +117,7 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
   @override
   void initState() {
     super.initState();
+    _logger = ref.read(loggerProvider);
     // register() replaces any existing scope with the same name, so this is
     // safe to call again on an identity rebuild.
     ShowcaseView.register(
@@ -128,7 +137,7 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
       try {
         ShowcaseView.getNamed(_scope).dismiss();
       } catch (e, st) {
-        ref.read(loggerProvider).warn('TOUR dispose dismiss failed', e, st);
+        _logger.warn('TOUR dispose dismiss failed', e, st);
       }
     }
     super.dispose();
@@ -158,7 +167,7 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
           ShowcaseView.getNamed(_scope).dismiss();
         } catch (e, st) {
           _tourRunning = false;
-          ref.read(loggerProvider).warn('TOUR dismiss failed', e, st);
+          _logger.warn('TOUR dismiss failed', e, st);
         }
       });
     }
@@ -217,7 +226,7 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
       } catch (e, st) {
         // getNamed throws if the scope's already gone — don't let that crash the tab.
         _tourRunning = false;
-        ref.read(loggerProvider).warn('TOUR start failed', e, st);
+        _logger.warn('TOUR start failed', e, st);
       }
     });
   }

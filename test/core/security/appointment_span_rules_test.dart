@@ -98,6 +98,38 @@ void main() {
       expect(updateBlock, contains('appointmentSpanNotWidened'));
     });
 
+    test('each instant is type-checked on CREATE only', () {
+      // `isValidAppointmentSpan` short-circuits to true when EITHER key is
+      // absent, so a doc carrying only one of them was never type-checked.
+      // A non-timestamp `startTime` is excluded from every
+      // `orderBy('startTime')`, dropping the job out of the travel sweep, the
+      // digest, the mirrors and the Siri snapshot silently.
+      //
+      // Create-only for the same reason the span bound softens on update: such
+      // a doc can already exist via the console, and enforcing it on update
+      // would leave it permanently un-updatable — including by the admin
+      // trying to cancel it.
+      final appointments = rules.substring(
+        rules.indexOf('match /appointments/{appointmentId}'),
+      );
+      final createBlock = RegExp(
+        r'allow create: if isAdmin\(\)(.*?);',
+        dotAll: true,
+      ).firstMatch(appointments)?.group(1);
+      final updateBlock = RegExp(
+        r'allow update: if \(isAdmin\(\)(.*?)\|\| \(isAssignedEmployee',
+        dotAll: true,
+      ).firstMatch(appointments)?.group(1);
+
+      expect(createBlock, contains('hasValidAppointmentInstants'));
+      expect(updateBlock, isNot(contains('hasValidAppointmentInstants')));
+
+      final body = bodyOf('hasValidAppointmentInstants');
+      expect(body, isNotNull, reason: 'the instant type guard was removed');
+      expect(body, contains('d.startTime is timestamp'));
+      expect(body, contains('d.endTime is timestamp'));
+    });
+
     test("an assignee's status flip never reaches the span guard", () {
       // That branch restricts the diff to status + updatedAt, so a corrupt doc
       // can still be marked done from the field.

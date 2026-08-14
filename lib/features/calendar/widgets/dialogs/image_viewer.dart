@@ -139,13 +139,19 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     Future<void> Function() body,
   ) async {
     if (_busy) return;
+    // Resolved before the await — dismissing the viewer while a Save/Share is
+    // in flight unmounts this consumer, and `ref.read` throws there under
+    // Riverpod 3. `body()` itself can genuinely throw (a cache miss raises
+    // StateError), so this catch is a live path, not a defensive one.
+    final logger = ref.read(loggerProvider);
+    final notices = ref.read(noticeServiceProvider);
     setState(() => _busy = true);
     try {
       await body();
     } catch (e, st) {
-      ref.read(loggerProvider).warn('$logTag failed', e, st);
+      logger.warn('$logTag failed', e, st);
       if (!mounted) return;
-      ref.read(noticeServiceProvider).error(errorMessage);
+      notices.error(errorMessage);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

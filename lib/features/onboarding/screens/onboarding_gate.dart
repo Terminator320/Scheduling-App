@@ -24,6 +24,9 @@ class _OnboardingGateState extends ConsumerState<OnboardingGate> {
   }
 
   Future<void> _load() async {
+    // Resolved before the await: this gate is short-lived and a keychain fault
+    // can land after it is torn down, where `ref.read` throws (Riverpod 3).
+    final logger = ref.read(loggerProvider);
     var seen = false;
     try {
       seen = await ref
@@ -34,17 +37,16 @@ class _OnboardingGateState extends ConsumerState<OnboardingGate> {
       // iOS pre-first-unlock — that's environmental, not a bug, so fail safe
       // to "not seen".
       if (isKeychainLockedError(e)) {
-        ref
-            .read(loggerProvider)
-            .warn('ONBOARD-GATE read skipped: keychain locked');
+        logger.warn('ONBOARD-GATE read skipped: keychain locked');
       } else {
-        ref.read(loggerProvider).warn('ONBOARD-GATE read flag failed', e, st);
+        logger.warn('ONBOARD-GATE read flag failed', e, st);
       }
     }
     if (mounted) setState(() => _seen = seen);
   }
 
   Future<void> _finish() async {
+    final logger = ref.read(loggerProvider);
     try {
       await ref
           .read(secureStorageServiceProvider)
@@ -52,7 +54,7 @@ class _OnboardingGateState extends ConsumerState<OnboardingGate> {
     } catch (e, st) {
       // A keystore failure shouldn't block "Done" — proceed for this session;
       // worst case, onboarding just shows again next launch.
-      ref.read(loggerProvider).warn('ONBOARD-GATE write flag failed', e, st);
+      logger.warn('ONBOARD-GATE write flag failed', e, st);
     }
     if (mounted) setState(() => _seen = true);
   }

@@ -77,6 +77,14 @@ class AccountExitListeners {
     if (navContext == null) return;
     _isHandlingAccountExit = true;
 
+    // Both resolved before the three network round-trips below. The host here
+    // is the app shell and normally outlives them, but `ref.read` throws on a
+    // disposed consumer under Riverpod 3, and this catch is the retry signal
+    // for a failed sign-out — the one place it must not be replaced by a
+    // different error.
+    final logger = ref.read(loggerProvider);
+    final authService = ref.read(authServiceProvider);
+
     var exitScheduled = false;
     try {
       final message = selectMessage(AppLocalizations.of(navContext));
@@ -84,7 +92,7 @@ class AccountExitListeners {
       // sign-out. Order lives in `deregisterThisDevice`, shared with both of
       // Settings' exits.
       await deregisterThisDevice(ref);
-      await ref.read(authServiceProvider).signOut();
+      await authService.signOut();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         navigatorKey.currentState?.pushNamedAndRemoveUntil(
@@ -99,7 +107,7 @@ class AccountExitListeners {
       exitScheduled = true;
     } catch (e, st) {
       // Sign-out failed — next signal retries.
-      ref.read(loggerProvider).warn('ACCOUNT-EXIT sign-out failed', e, st);
+      logger.warn('ACCOUNT-EXIT sign-out failed', e, st);
     } finally {
       // Reset on failure to allow retry on next signal. On success the
       // post-frame callback owns the reset, so the guard stays up until the

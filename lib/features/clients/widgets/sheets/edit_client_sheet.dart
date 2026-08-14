@@ -78,11 +78,27 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
 
   void _initControllers() {
     final c = widget.client;
-    // The clean name, not the stored one — `name` carries the phone number on
-    // the end for Wave, and `_save` puts it back. Seeding from the raw field
-    // would show the admin a number they didn't type and, on the next save,
+    // The STORED name with its number stripped — never `displayName`. `name`
+    // carries the phone on the end for Wave and `_save` puts it back, so
+    // seeding from the raw field would show a number the admin didn't type and
     // hand a name-plus-number to `composeStored` as if it were the base name.
-    _nameController = TextEditingController(text: c.displayName);
+    //
+    // But `displayName` is the wrong cure: on anything it reads as a person it
+    // returns the first/last halves and ignores the stored name entirely — and
+    // the Wave import sets no `type`, so EVERY imported business reads as a
+    // person. Seeding the contact person here and saving would rename the
+    // customer on live Wave invoices. `baseNameFor` strips the number without
+    // ever substituting a different name.
+    _nameController = TextEditingController(
+      text: ClientNamePolicy.baseNameFor(
+        name: c.name,
+        phone: c.phone,
+        mobile: c.mobile,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        businessName: c.businessName,
+      ),
+    );
     _firstNameController = TextEditingController(text: c.firstName);
     _lastNameController = TextEditingController(text: c.lastName);
     _phoneController = TextEditingController(text: c.phone);

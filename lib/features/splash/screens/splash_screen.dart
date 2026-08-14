@@ -43,6 +43,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   Future<void> _decideRoute() async {
     // Read the uid, which Firebase.initializeApp restores synchronously, and
     // fire the cache read in parallel with App Check.
+    // Held for the whole boot: both handlers below run after an await, and a
+    // `ref.read` on an unmounted consumer throws under Riverpod 3 — which
+    // would turn a HANDLED cache miss into a StateError rethrown into `_boot`,
+    // on the very first screen.
+    final logger = ref.read(loggerProvider);
     final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
     final cacheFuture = uid == null
         ? null
@@ -50,7 +55,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
             Object e,
             StackTrace st,
           ) {
-            ref.read(loggerProvider).warn('SPLASH auth cache load failed', e, st);
+            logger.warn('SPLASH auth cache load failed', e, st);
             return null;
           });
 
@@ -58,7 +63,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     try {
       await ref.read(firebaseReadyProvider.future);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('SPLASH firebase init failed', e, st);
+      logger.warn('SPLASH firebase init failed', e, st);
     }
     if (!mounted || _navigated) return;
 

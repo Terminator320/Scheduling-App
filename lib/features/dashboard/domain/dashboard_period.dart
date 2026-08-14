@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show immutable;
 
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_aggregator.dart';
 
 /// The span the dashboard's summary numbers are counted over.
@@ -40,7 +41,7 @@ enum DashboardPeriod {
   /// that does NOT fit must widen the history half of the range and never the
   /// live one, or it undoes the 2026-08-08 split.
   DashboardWindow windowFor(DateTime now) {
-    final day = DateTime(now.year, now.month, now.day);
+    final day = now.dateOnly;
     return DashboardWindow(
       start: switch (this) {
         DashboardPeriod.today => day,

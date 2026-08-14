@@ -352,7 +352,7 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
   final normalizedQuery = ClientSearchPolicy.normalize(scan.query);
   final queryDigits = ClientSearchPolicy.digitsOnly(scan.query);
 
-  final scoredClients = <MapEntry<int, ClientRecord>>[];
+  final scoredClients = <({int score, String sortKey, ClientRecord record})>[];
 
   for (final doc in scan.docs) {
     final data = doc.data;
@@ -417,20 +417,26 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
       score = 5;
     }
 
-    scoredClients.add(MapEntry(score, client));
+    // The sort key is computed HERE, once per record, rather than twice per
+    // comparison — `displayName` is an uncached getter that runs `stripPhone`
+    // twice (two regex passes each), and the comparator below runs over the
+    // whole match set before `.take`. Same rule as `fetchClientsByType`.
+    scoredClients.add((
+      score: score,
+      sortKey: client.displayName.toLowerCase(),
+      record: client,
+    ));
   }
 
   scoredClients.sort((a, b) {
-    final scoreCompare = a.key.compareTo(b.key);
+    final scoreCompare = a.score.compareTo(b.score);
     if (scoreCompare != 0) return scoreCompare;
-    return a.value.displayName.toLowerCase().compareTo(
-      b.value.displayName.toLowerCase(),
-    );
+    return a.sortKey.compareTo(b.sortKey);
   });
 
   return scoredClients
       .take(ClientSearchPolicy.resultDisplayLimit)
-      .map((entry) => entry.value)
+      .map((entry) => entry.record)
       .toList();
 }
 

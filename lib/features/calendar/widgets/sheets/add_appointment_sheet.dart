@@ -15,6 +15,7 @@ import 'package:scheduling/features/calendar/widgets/sections/photo_picker_secti
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_host.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -50,7 +51,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     notes: TextEditingController(),
     materials: TextEditingController(),
   );
-  final _clientSearchDebounce = Debouncer(const Duration(milliseconds: 300));
+  final _clientSearchDebounce = Debouncer(ClientSearchPolicy.searchDebounce);
   late final _provider = addEventControllerProvider(widget.initialDate);
 
   // Admin-only surface: this sheet is only reachable from the calendar FAB

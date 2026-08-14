@@ -1,10 +1,10 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:scheduling/core/utils/firestore_parsing.dart';
 
 part 'appointment_image.freezed.dart';
 
 @freezed
 abstract class AppointmentImage with _$AppointmentImage {
-
   const factory AppointmentImage({
     @Default('') String url,
     @Default('') String storagePath,
@@ -20,7 +20,7 @@ abstract class AppointmentImage with _$AppointmentImage {
       url: (data['url'] ?? '').toString(),
       storagePath: (data['storagePath'] ?? '').toString(),
       fileName: data['fileName']?.toString(),
-      uploadedAt: _parseDateTime(data['uploadedAt']),
+      uploadedAt: firestoreDateTime(data['uploadedAt']),
     );
   }
 
@@ -30,15 +30,4 @@ abstract class AppointmentImage with _$AppointmentImage {
     'fileName': fileName,
     'uploadedAt': uploadedAt,
   };
-
-  static DateTime? _parseDateTime(dynamic value) {
-    if (value == null) return null;
-    final type = value.runtimeType.toString();
-    if (type == 'Timestamp') {
-      return (value as dynamic).toDate() as DateTime;
-    }
-    if (value is DateTime) return value;
-    if (value is String) return DateTime.tryParse(value);
-    return null;
-  }
 }

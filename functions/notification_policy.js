@@ -45,6 +45,13 @@ const OVERDUE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
 // timeout. Logs a warning instead of silently truncating if it's ever hit.
 const OVERDUE_SWEEP_MAX = 500;
 
+// The same valve for the nightly digest, which reads a ~15-day window of open
+// jobs business-wide. Larger than OVERDUE_SWEEP_MAX because the window is
+// wider and a truncated digest means a crew is told nothing about tomorrow —
+// a silent omission, unlike an overdue nudge that simply arrives on the next
+// 5-minute run.
+const DIGEST_SWEEP_MAX = 1000;
+
 // FCM's hard cap on a message's data map is 4 KB. This leaves headroom for
 // the other data keys (kind, appointment id, deep link) alongside the payload.
 const WIDGET_PAYLOAD_MAX_BYTES = 3000;
@@ -387,6 +394,7 @@ module.exports = {
   DAY_MS,
   OVERDUE_LOOKBACK_MS,
   OVERDUE_SWEEP_MAX,
+  DIGEST_SWEEP_MAX,
   WIDGET_PAYLOAD_MAX_BYTES,
   OPEN_STATUSES,
   CHANGE_RECIPIENT_ROLES,

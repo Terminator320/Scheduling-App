@@ -45,6 +45,15 @@ const WAVE_IMPORT_RATE_WINDOW_MS = 60 * 60 * 1000;
 // generous enough that an admin toggling the picker never trips it.
 const WAVE_SCHEDULE_RATE_MAX = 20;
 const WAVE_SCHEDULE_RATE_WINDOW_MS = 60 * 60 * 1000;
+
+// waveGetConnection is a read, but not a free one: it runs two count()
+// aggregates on waveSyncQueue, which are billed per 1000 index entries. It was
+// the one admin callable here with no durable cap, on the strength of a
+// comment describing it as reading a single document — true when written, and
+// not since the outbox counts were added. Sized well above the mount-and-
+// refresh pattern Settings actually produces.
+const WAVE_CONN_RATE_MAX = 60;
+const WAVE_CONN_RATE_WINDOW_MS = 60 * 60 * 1000;
 // Caps how many live Wave calls (whoami + listBusinesses) an admin can make.
 // The already-connected short-circuit runs first and isn't rate-limited.
 const WAVE_BOOTSTRAP_RATE_MAX = 10;
@@ -217,6 +226,13 @@ const waveGetConnection = onCall(
       }
       await assertAdmin(req.auth.uid);
       assertPayloadShape(req.data, new Set());
+      // Guard order: auth → assertAdmin → payload → limiter → work.
+      await enforceDurableRateLimit(
+          "wave-connection",
+          req.auth.uid,
+          WAVE_CONN_RATE_MAX,
+          WAVE_CONN_RATE_WINDOW_MS,
+      );
 
       const snap = await getFirestore()
           .collection("wave").doc("connection").get();

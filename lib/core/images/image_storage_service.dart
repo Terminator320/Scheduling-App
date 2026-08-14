@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
 
+import 'package:scheduling/core/images/image_magic.dart';
 import 'package:scheduling/core/images/image_upload_failure.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
@@ -17,11 +18,10 @@ class ImageStorageService {
   Future<bool> _isValidImageFile(File file) async {
     final raf = await file.open();
     try {
-      final bytes = await raf.read(4);
-      if (bytes.length < 3) return false;
-      final isJpeg = bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
-      final isPng = bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E;
-      return isJpeg || isPng;
+      // The signature test itself lives in `hasValidImageMagic` so it can be
+      // tested without a File or a FirebaseStorage instance — and so it reads
+      // as the deliberate mirror of `functions/image_magic.js` that it is.
+      return hasValidImageMagic(await raf.read(4));
     } finally {
       await raf.close();
     }

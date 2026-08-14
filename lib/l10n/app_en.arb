@@ -2222,15 +2222,6 @@
       }
     }
   },
-  "dashboard_newClientsTotal": "{count, plural, =1{1 in the last 8 weeks} other{{count} in the last 8 weeks}}",
-  "@dashboard_newClientsTotal": {
-    "description": "Total line under the new-clients caption, summing the 8 weekly buckets",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "dashboard_busiestWeekday": "Busiest day: {day}",
   "@dashboard_busiestWeekday": {
     "description": "Text row naming the weekday with the most visits over the 8-week window",

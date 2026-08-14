@@ -21,6 +21,7 @@ import 'package:scheduling/features/calendar/widgets/sections/appointment_form_f
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_host.dart';
+import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -46,7 +47,7 @@ class DetailsEditBody extends ConsumerStatefulWidget {
 
 class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     with InlineAddClientHost {
-  final _clientSearchDebounce = Debouncer(const Duration(milliseconds: 300));
+  final _clientSearchDebounce = Debouncer(ClientSearchPolicy.searchDebounce);
 
   @override
   void dispose() {
@@ -209,13 +210,17 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     WidgetRef ref,
     AppointmentRecord appointment,
   ) async {
+    // Both reads happen before the await: this method promises to degrade to
+    // an empty outlook rather than block the edit, and a `ref.read` in the
+    // catch would defeat exactly that once the sheet has been dismissed
+    // mid-fetch (Riverpod 3 throws on an unmounted consumer).
+    final repository = ref.read(appointmentsRepositoryProvider);
+    final logger = ref.read(loggerProvider);
     try {
-      final series = await ref
-          .read(appointmentsRepositoryProvider)
-          .getSeries(appointment.seriesId);
+      final series = await repository.getSeries(appointment.seriesId);
       return seriesOutlook(series, appointment.startTime);
     } on Object catch (e, st) {
-      ref.read(loggerProvider).warn('APPT-SAVE series outlook failed', e, st);
+      logger.warn('APPT-SAVE series outlook failed', e, st);
       return (count: 0, last: null);
     }
   }

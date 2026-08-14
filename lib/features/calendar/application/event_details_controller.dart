@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -22,6 +22,7 @@ import 'package:scheduling/features/calendar/domain/models/appointment_image.dar
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
+import 'package:scheduling/features/calendar/domain/policies/appointment_image_doc_id.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -136,7 +137,9 @@ class EventDetailsController extends Notifier<EventDetailsState>
     try {
       stored = await repo.fetchAppointmentPictures(id);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('APPT-IMG subcollection read failed', e, st);
+      ref
+          .read(loggerProvider)
+          .warn('APPT-IMG subcollection read failed', e, st);
       return;
     }
     if (stored.isEmpty || !ref.mounted) return;
@@ -144,8 +147,47 @@ class EventDetailsController extends Notifier<EventDetailsState>
     // A Storage-backed read is a real window, and the user can have removed a
     // photo inside it — swapping then would silently put it back on screen,
     // and the next Save would act on a list they had already edited.
-    if (!identical(state.existingImages, _seededImages)) return;
-    state = state.copyWith(existingImages: _seededImages = stored);
+    //
+    // Compared BY VALUE, not with `identical`. `existingImages` is a freezed
+    // collection getter that wraps the backing list in a NEW
+    // `EqualUnmodifiableListView` on every access, so an identity test against
+    // the plain list `build()` seeded could never be true and this method
+    // always returned here — the read ran on every sheet open and was thrown
+    // away. Harmless while the array is authoritative; at the CONTRACT step it
+    // would have shown zero photos on every job.
+    final seeded = _seededImages;
+    if (seeded == null || !listEquals(state.existingImages, seeded)) return;
+    final adopted = _mergeStoredPictures(seeded, stored);
+    if (listEquals(adopted, seeded)) return;
+    state = state.copyWith(existingImages: _seededImages = adopted);
+  }
+
+  /// Combines the subcollection read with the array [build] seeded, PREFERRING
+  /// the array's instance wherever the same photo is in both.
+  ///
+  /// Which instance wins matters, and not for display — the two render
+  /// identically. `removeAppointmentPictures` takes the array half out with
+  /// `FieldValue.arrayRemove`, which matches by DEEP EQUALITY of the whole
+  /// map, so it only removes an image that was parsed from the parent
+  /// document. A subcollection row deliberately omits `url` when it has a
+  /// `storagePath`, so adopting it wholesale would leave every later removal
+  /// deleting the subcollection doc while the array kept its copy — the photo
+  /// reappearing on the shipped build, and the Storage bytes orphaning.
+  ///
+  /// Identity is [appointmentImageDocId], the same derivation the subcollection
+  /// keys on, so the two halves agree on what "the same photo" means.
+  static List<AppointmentImage> _mergeStoredPictures(
+    List<AppointmentImage> seeded,
+    List<AppointmentImage> stored,
+  ) {
+    final byId = <String, AppointmentImage>{
+      for (final image in seeded)
+        if (appointmentImageDocId(image).isNotEmpty)
+          appointmentImageDocId(image): image,
+    };
+    return [
+      for (final image in stored) byId[appointmentImageDocId(image)] ?? image,
+    ];
   }
 
   /// Builds placeholder employees from the stored ids and names. They get
