@@ -185,16 +185,28 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
 
 /**
  * Reads an employee's appointments for the widget payload, so the change push
- * can carry a fresh one (served by the existing `(employeeIds CONTAINS,
- * startTime ASC)` index). Never throws — a failed read just yields an empty
+ * can carry a fresh one. Never throws — a failed read just yields an empty
  * window, and the notification still sends.
  *
- * The window is `[today 00:00 Toronto − MAX_APPOINTMENT_SPAN_MS,
- * +WIDGET_LOOKAHEAD_DAYS days)`. The floor reaches back because the query
- * filters on `startTime` alone: a multi-day run that began earlier still WORKS
- * today, and a floor at today's midnight made it invisible to the push-written
- * payload. `buildWidgetPayload` re-scopes to today/tomorrow by day-slice, so
- * the wider read costs nothing beyond the extra docs.
+ * The window is the jobs that OVERLAP `[today 00:00 Toronto,
+ * +WIDGET_LOOKAHEAD_DAYS days)`, asked as an overlap directly:
+ * `endTime >= todayStart AND startTime < end`. Served by the existing
+ * `(employeeIds CONTAINS, endTime ASC, startTime ASC)` composite.
+ *
+ * It used to floor `startTime` at `todayStart − MAX_APPOINTMENT_SPAN_MS` and
+ * let `buildWidgetPayload` drop the rest, because a query on `startTime` alone
+ * cannot see a multi-day run that began earlier but still WORKS today. That
+ * back-scan read a fortnight of this employee's history on every notified
+ * write — ~17 days of documents to render 3 — and it ran once per assignee.
+ * Firestore has supported two inequality fields since 2023, so the overlap is
+ * now expressible as the query rather than approximated by a wider one.
+ *
+ * Two consequences, both fine here. Results arrive ordered by `endTime` (the
+ * first inequality field), not `startTime` — `buildWidgetPayload` sorts every
+ * bucket by window start itself, so it never depended on query order. And a
+ * document missing EITHER instant is absent from a composite index, where the
+ * old form only required `startTime`; such a record has no parseable window,
+ * so `sliceForDay` already dropped it one step later.
  * @param {!Object} db
  * @param {string} employeeDocId
  * @param {(Date|number)} now
@@ -204,12 +216,12 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
 async function fetchEmployeeWidgetWindow(db, employeeDocId, now, logger) {
   try {
     const startMs = torontoDayStartMs(now);
-    const start = new Date(startMs - MAX_APPOINTMENT_SPAN_MS);
+    const start = new Date(startMs);
     const end = new Date(startMs + WIDGET_LOOKAHEAD_DAYS * DAY_MS);
     const snap = await db
         .collection("appointments")
         .where("employeeIds", "array-contains", employeeDocId)
-        .where("startTime", ">=", start)
+        .where("endTime", ">=", start)
         .where("startTime", "<", end)
         .get();
     return ((snap && snap.docs) || []).map(_record);

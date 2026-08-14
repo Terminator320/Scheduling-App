@@ -86,6 +86,18 @@ const MAX_BOOKING_MS = 24 * 60 * MINUTE_MS;
 // lead is already in range when it becomes due.
 const TRAVEL_WINDOW_MS = MAX_LEAD_MINUTES * MINUTE_MS;
 
+// Caps the candidate read, mirroring OVERDUE_SWEEP_MAX on the sweep that runs
+// beside this one. The 90-minute window keeps this small in practice, so the
+// cap is a tail guard, not a steady-state bound: a bulk import or a wide
+// series landing in one window is otherwise an unbounded fan-out that then
+// makes a BILLABLE Routes call per candidate assignee. Ordered `startTime`
+// ASC — which is the order Firestore already returns for this query, since it
+// is the inequality field — so the cap keeps the most imminent departures,
+// i.e. the ones that would be wrong to defer. A deferred candidate self-heals
+// on the next 5-minute run; its ledger claim is what keeps that from
+// double-sending.
+const TRAVEL_SWEEP_MAX = 500;
+
 // A recent cached estimate lets a clearly-not-due pair skip the metered
 // Routes call. This can only DEFER a send, never trigger one — the fire
 // decision always uses a fresh Routes response.
@@ -538,7 +550,14 @@ async function runTravelAwareReminderSweep(deps) {
       .where("status", "in", PENDING_STATUSES)
       .where("startTime", ">", nowDate)
       .where("startTime", "<=", windowEnd)
+      .orderBy("startTime")
+      .limit(TRAVEL_SWEEP_MAX)
       .get();
+  if (snap && snap.size === TRAVEL_SWEEP_MAX && logger) {
+    logger.warn(
+        "runTravelAwareReminderSweep: candidate cap hit; " +
+        "latest departures deferred to a later run", {cap: TRAVEL_SWEEP_MAX});
+  }
   const candidates = selectTravelCandidates(
       (((snap && snap.docs) || [])).map(
           (doc) => ({id: doc.id, ...(doc.data() || {})})),

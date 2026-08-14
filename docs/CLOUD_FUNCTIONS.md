@@ -34,6 +34,14 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 > wrong before — verify against the live list rather than trusting it.
 
 
+- **PENDING (2026-08-13): a three-deletion deploy, net 25 → 25.** Deleting
+  `waveSyncWorker`, `waveScheduledImport` and `sendOverdueJobPrompts`; adding
+  `waveRetryFailedJobs`, `cascadeDeleteAppointmentImages` and
+  `recountAppointmentPictures`. **The count is unchanged, so it proves
+  nothing** — the same trap the 2026-08-11 row below describes. Diff the export
+  LISTS (`comm` against `git show 78d89478:functions/index.js`), and expect the
+  non-interactive deletion abort plus three orphaned Cloud Scheduler jobs to
+  remove by hand. Full sequence: `docs/DEPLOYMENT.md`.
 - **CLEARED 2026-08-11: the 2026-08-08 → 2026-08-11 gap has been deployed.**
   All 25 functions were updated together with `firestore.rules` and
   `storage.rules`, so prod now runs `changeEmployeeEmail`'s non-admin re-auth
@@ -142,11 +150,21 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/callables.js` | any `clients` doc write | `WAVE_FULL_ACCESS_TOKEN` | `retry: true` · 300s · enqueues **and pushes** |
 | `validateUploadedImage` | trigger | `onObjectFinalized` (Storage) | `maintenance.js` | `appointments/*/images/*` upload | — | region `us-east1` |
 | `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | no `retry` (dupe push worse than missed) |
+| `waveRetryFailedJobs` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings, requeue dead outbox jobs) | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable |
+| `cascadeDeleteAppointmentImages` | trigger | `onDocumentDeleted appointments/{id}` | `appointment_images.js` | any appointment delete | — | `retry: true` · **rethrows** |
+| `recountAppointmentPictures` | trigger | `onDocumentWritten appointments/{id}/images/{imageId}` | `appointment_images.js` | any photo doc write | — | `retry: true` · absolute `count()` |
 | `purgeExpiredHistory` | scheduled | `0 3 1 1,4,7,10 *` — quarterly, 1st of Jan/Apr/Jul/Oct 03:00 (Toronto) | `maintenance.js` | quarterly | — | `maxInstances: 1` · 1800s |
-| `waveScheduledImport` | scheduled | `every 24 hours` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 540s · **drains, then imports if due** |
-| `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` + `travel_utils.js` | timer | `GOOGLE_MAP_API_KEY` · `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | `maxInstances: 1` · `timeoutSeconds: 120` · ledger · Routes API |
-| `sendDailyJobDigest` | scheduled | `0 18 * * *` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` |
-| `sendOverdueJobPrompts` | scheduled | `every 15 minutes` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · 300s · ledger |
+| `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` + `travel_utils.js` | timer | `GOOGLE_MAP_API_KEY` · `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | `maxInstances: 1` · ledger · Routes API · **also carries the overdue sweep** |
+| `sendDailyJobDigest` | scheduled | `0 18 * * *` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · **also calls `runWaveDaily()`** |
+
+**Exactly three Cloud Scheduler jobs, and that is deliberate** — only 3 are free
+per billing account. `sendOverdueJobPrompts` (was `every 15 minutes`) is merged
+into `sendUpcomingJobReminders`, `waveScheduledImport` (was `every 24 hours`)
+into `sendDailyJobDigest`, and `waveSyncWorker` (was `every 5 minutes`) is gone
+entirely because the Wave push is event-driven now. **All three still run in
+prod until the pending deploy**, and each leaves an orphaned scheduler entry
+that must be deleted by hand afterwards — see `docs/DEPLOYMENT.md`, "Pending: a
+THREE-deletion deploy". Adding a fourth scheduled function starts costing money.
 
 ## Auth & accounts
 
@@ -641,6 +659,51 @@ throws synchronously on one) → `enforceDurableRateLimit` (20/hr per admin uid)
 work. The pure `performDeleteClient(db, clientId)` is exported for jest.
 Archive — not delete — is the normal way a client leaves the roster.
 **Deployed 2026-08-03** (`1c6a949`), verified ACTIVE.
+
+## Appointment photos → subcollection
+
+Photos are moving from the `pictures` array on each appointment into
+`appointments/{id}/images`. Every appointment read carried the whole array (a
+download URL alone is ~215 of a ~290-byte entry) while only the detail sheet
+ever renders one, and the calendar reads up to 1000 appointments at a time.
+**Phase 1 writes BOTH stores** — the array stays authoritative because the
+shipped build reads it — so neither function below may be treated as the sole
+owner of a photo until the CONTRACT release. See the root `CLAUDE.md`.
+
+### `cascadeDeleteAppointmentImages` — `appointment_images.js`
+`appointments/{id}` **delete** trigger that removes the whole `images`
+subcollection. **This is not cleanup — it is the reason the feature needs a
+server component at all: Firestore does NOT delete a subcollection when its
+parent document is deleted.** Without it every appointment delete leaves photo
+documents orphaned under a parent that no longer exists: invisible in the
+console, unreachable by every query the app makes, and with nothing anywhere
+reporting it. Covers all three delete paths — the client's single delete, its
+series delete, and `purgeExpiredHistory` (Admin SDK deletes fire triggers too).
+Uses `recursiveDelete`, the same Admin-SDK bulk writer `syncUsersByUid` already
+uses for `liveActivityTokens`. **RETHROWS**, deliberately unlike the
+best-effort cleanup elsewhere in this codebase: a swallowed error leaves exactly
+the permanent invisible orphans it exists to prevent, and rethrowing is what
+makes `retry: true` mean anything. `retry: true` is safe because a second pass
+finds nothing. The pure `purgeAppointmentImages(id, {db})` is exported for jest.
+**Not yet deployed.**
+
+### `recountAppointmentPictures` — `appointment_images.js`
+`appointments/{id}/images/{imageId}` write trigger maintaining the denormalized
+`pictureCount` on the parent. Exists because `AppointmentCard` shows a photo
+indicator and renders on every range-query surface, so it cannot afford a
+subcollection read per card; ~15 bytes against ~290 per photo entry. Recomputes
+with a `count()` aggregate and writes **absolutely** — never
+`FieldValue.increment`, same rule and same reason as `recountClientJobs` under
+`retry: true`. Writes with `update()` rather than `set({merge: true})` so an
+appointment deleted in the window is never resurrected as a count-only stub; a
+Firestore `NOT_FOUND` there is the **normal** path, not an error, because
+`cascadeDeleteAppointmentImages` has just removed the photos. `pictureCount` is
+function-owned: `firestore.rules` rejects a client write that touches it and
+`AppointmentRecord.toMap()` must never emit it. **No loop risk** — this triggers
+on the subcollection and writes the parent, a different path. The parent write
+does re-fire `notifyAppointmentChanges`, which produces no events for a
+count-only change and returns before any Firestore work. The pure
+`recountPictures(id, {db})` is exported for jest. **Not yet deployed.**
 
 ## Wave Accounting
 

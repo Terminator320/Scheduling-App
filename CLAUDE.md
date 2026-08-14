@@ -151,6 +151,73 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   the provider list and threw a `RangeError` out of Save/Share. Offset a
   viewer index by the URLs actually handed to the viewer, never by
   `existingImages.length`; `ImageViewer.open` also clamps, as depth.
+- **Photos are MOVING to `appointments/{id}/images`, and phase 1 writes BOTH
+  stores** (2026-08-13). Every appointment document carried its whole photo
+  array — a `url` alone is ~215 of a ~290-byte entry — and the calendar reads
+  up to 1000 appointments at a time while only the detail sheet ever shows a
+  photo. **The `pictures` array is still written and is still authoritative.**
+  The shipped build (1.45.0+72) reads photos off the parent document and knows
+  nothing about the subcollection, so dropping the array now blanks every photo
+  on every phone until it updates; it goes at the CONTRACT step, once no device
+  still runs a build that reads it — the same gate the `#compat-1.37.1` shim
+  waited on. Do not "finish the migration" by deleting the array early.
+  **`appendAppointmentPictures`/`removeAppointmentPictures` write both stores in
+  ONE `WriteBatch`** so they cannot disagree: this path is retried by the
+  offline queue, which has no way to reconcile a half-written state.
+  **The subcollection document id is DERIVED from the photo —
+  `appointmentImageDocId` (`calendar/domain/policies/`), hand-mirrored as
+  `functions/appointment_image_ids.js`.** That is what makes the write
+  idempotent, and it REPLACES the `arrayUnion` dedupe the array form depended
+  on (which worked only because every image serialized its exact `uploadedAt`
+  and `arrayUnion` compares maps by deep equality — one field serialized a hair
+  differently and it silently stopped deduping). It keys on `storagePath`,
+  falling back to `url` for the legacy docs that have no storage path, so those
+  don't all collide on one id. The two implementations share worked examples in
+  their tests; change them together.
+  **The subcollection doc omits `url` when `storagePath` is present** — photos
+  render from `storagePath` so every read re-evaluates `storage.rules`, and a
+  persisted download URL is a permanent rules-free token with no reader here.
+  A LEGACY entry with only a `url` keeps it, or backfilling destroys the one
+  thing that can render it.
+  **Reads are "subcollection first, array fallback", and EMPTY means "use the
+  array", never "this job has no photos"** — a document the backfill hasn't
+  reached yet is exactly that shape. `EventDetailsController._loadStoredPictures`
+  adopts the read only while the list is still what `build()` seeded, so a
+  removal made during the round-trip isn't silently put back.
+  **`pictureCount` is a FUNCTION-OWNED denormalized counter** (`recountAppointmentPictures`,
+  an absolute `count()` aggregate — same discipline as `jobCount`), because
+  `AppointmentCard` renders a photo indicator on every range-query surface and
+  cannot afford a subcollection read each. `toMap()` must never emit it and the
+  rules reject a client write that touches it. The card asks
+  `AppointmentRecord.hasPictures`, which tests BOTH stores — during the
+  migration a doc legitimately has either.
+  **`cascadeDeleteAppointmentImages` is LOAD-BEARING, not cleanup: Firestore
+  does NOT delete a subcollection with its parent.** Without it every
+  appointment delete leaves photo documents orphaned under a parent that no
+  longer exists — invisible in the console, unreachable by every query, with
+  nothing reporting it. It covers all three delete paths (single, series,
+  `purgeExpiredHistory`), rethrows so `retry: true` means something, and is the
+  single reason a subcollection here needs a server component at all.
+  Backfill: `functions/scripts/backfill-appointment-images.js` (copy-only,
+  `--dry-run`, atomic per appointment so the "partially copied" state the read
+  fallback can't detect is unreachable).
+  **THREE THINGS THE ARRAY IS STILL DOING, which the CONTRACT step must replace
+  before it is removed** — each is currently invisible because the array covers
+  it, and each fails silently once it does not:
+  1. **Storage cleanup on delete.** `EventDetailsController.deleteAppointment`
+     enumerates `appointment.pictures` to know which Storage objects to remove.
+     Empty that array and it deletes nothing, and the bytes orphan on every
+     appointment delete — `cascadeDeleteAppointmentImages` removes the
+     Firestore documents only. Either that trigger grows a Storage prefix
+     delete (the way `purgeExpiredHistory` already does it, minding the
+     load-time bucket resolution that forced `maintenance_policy.js` to split)
+     or the client reads the subcollection first.
+  2. **The photo-count bound.** `isValidAppointmentData` caps `pictures` at
+     100; a subcollection has no such ceiling, so that guard goes with the
+     array unless something replaces it.
+  3. **The `AppointmentImage.url` fallback.** `AppointmentImageUrlResolver`
+     still falls back to a stored `url` for legacy entries, and only the
+     backfilled subcollection docs carry one. Keep the fallback.
 - **Offline photo-upload queue:** a failed/incomplete photo batch is persisted
   by `PendingUploadStore` (one JSON list under the SharedPreferences key
   `pending_photo_uploads`, entries pruned after 7 days) so uploads survive
@@ -519,6 +586,20 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `whereIn` over the open statuses would need a third index field and would
   silently drop any status the allowlist doesn't name, and this caption must
   err towards telling the admin to reassign.
+  **It is also `.limit`ed** (`_futureAssignmentScanLimit`, 200, added
+  2026-08-13) — `endTime >= now` still has no upper bound of its own, and a
+  repeat series pre-books up to `RepeatInterval.maxOccurrences` (120)
+  occurrences, so a tech on several series was several hundred documents read
+  to render that caption. This was the LAST unbounded query in the repository;
+  every other one names a ceiling. A `.limit` rather than a horizon bound
+  deliberately: with `endTime` the only inequality, Firestore returns these
+  `endTime` ASC, so the cap keeps the SOONEST-ending jobs — the ones actually
+  needing reassignment — and the number stays EXACT below the cap, so
+  `employees_disableReassignCaption` needs no rewording. Bounding the horizon
+  instead ("12 jobs in the next 90 days") would read less again but changes
+  what the sentence claims; that is a product call, not a performance one. It
+  warns at the cap for the same reason the range streams do: understating this
+  caption tells an admin they have less to reassign than they do.
   **The mirrors are day-scoped too** (Plan 2, 2026-08-10): the widget payload
   (Dart `widget_sync_service.dart` + `functions/widget_payload_utils.js`), the
   Siri snapshot (**schema v3**) and the push date line all fan a run across the
@@ -1773,6 +1854,14 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `_invalidateSearchCache()`, so a new appointment-write method MUST call it too
   or history search serves stale results (including a just-deleted appointment
   that opens a detail view for a doc that no longer exists).
+  **Both scan windows WARN at their cap** (2026-08-13), the same posture
+  `_mapRangeSnapshot` already took for the range streams — they were the two
+  bounded reads that truncated in silence. It matters most on clients: that
+  window is `orderBy('name')`, so at the cap it is the alphabetically FIRST N
+  clients, and everything past that point goes invisible to search, to the
+  type-filter chips and to the Archived chip at once, with no error anywhere.
+  It arrives gradually as the roster grows, which is the kind of failure
+  nobody reports. Never add a bounded read here without the warn.
 - **Client "Job history" section** (`ClientJobHistorySection`, admin-only client
   detail) reads via `fetchClientHistory` (`clientJobHistoryProvider`, an
   `autoDispose.family` that re-fetches on `onLocalWrite`). It orders

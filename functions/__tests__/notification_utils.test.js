@@ -881,6 +881,40 @@ describe("handleAppointmentWrite", () => {
         expect(en.todayJobs[0].startTime).toBe(future(3 * HOUR).toISOString());
       });
 
+  test("the widget window asks for an OVERLAP, not a back-scan", async () => {
+    // This read runs once per notified assignee on every appointment write,
+    // so its width is paid on every save. It used to floor `startTime` at
+    // `todayStart - MAX_APPOINTMENT_SPAN_MS` — a fortnight of this employee's
+    // history — purely so a multi-day run that began earlier but still WORKS
+    // today would be visible, then let buildWidgetPayload drop the rest.
+    // Asking `endTime >= todayStart` says exactly that instead, and returns
+    // only the jobs the payload can actually use.
+    const {db, appointmentQueries} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t-en", locale: "en"}]},
+      appointments: [],
+    });
+    await handleAppointmentWrite(
+        "appt1",
+        null,
+        {employeeIds: ["e1"], startTime: future(3 * HOUR)},
+        {db, messaging: makeMessaging(), now: NOW, logger: silentLogger},
+    );
+
+    const fields = appointmentQueries.map((q) => `${q.field} ${q.op}`);
+    expect(fields).toEqual([
+      "employeeIds array-contains",
+      "endTime >=",
+      "startTime <",
+    ]);
+    // The floor is today's midnight itself, with nothing subtracted — the
+    // regression to guard against is someone re-widening it.
+    const floor = appointmentQueries.find((q) => q.field === "endTime").value;
+    const ceiling =
+      appointmentQueries.find((q) => q.field === "startTime").value;
+    expect(ceiling.getTime() - floor.getTime()).toBe(3 * 24 * HOUR);
+  });
+
   test("cancelling a job yields a widget payload without it", async () => {
     const {db} = makeDb({
       users: {e1: {role: "employee", status: "active"}},

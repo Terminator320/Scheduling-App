@@ -113,7 +113,10 @@ class AppointmentCard extends StatelessWidget {
     final collapsed = collapseWhenClosed && appointment.isClosed;
 
     final timeLabel = _timeLabel(context);
-    final hasPhotos = appointment.pictures.isNotEmpty;
+    // Both stores, via the model — photos are moving to a subcollection and a
+    // doc can legitimately carry either the array or the denormalized count
+    // during the migration. See AppointmentRecord.hasPictures.
+    final hasPhotos = appointment.hasPictures;
 
     // A personal job has no client, so it names itself in that slot rather
     // than leaving the meta line as the crew alone.

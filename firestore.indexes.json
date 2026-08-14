@@ -186,6 +186,18 @@
       "indexes": []
     },
     {
+      "collectionGroup": "images",
+      "fieldPath": "url",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "images",
+      "fieldPath": "fileName",
+      "ttl": false,
+      "indexes": []
+    },
+    {
       "collectionGroup": "clients",
       "fieldPath": "contacts",
       "ttl": false,

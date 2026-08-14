@@ -14,7 +14,9 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$AppointmentImage {
 
- String get url; String get storagePath; String? get fileName; DateTime? get uploadedAt;
+ String get url; String get storagePath;// Round-tripped but never read off an instance: the rendered name comes
+// from storagePath. Kept so an existing doc's field survives a rewrite.
+ String? get fileName; DateTime? get uploadedAt;
 /// Create a copy of AppointmentImage
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -214,6 +216,8 @@ class _AppointmentImage extends AppointmentImage {
 
 @override@JsonKey() final  String url;
 @override@JsonKey() final  String storagePath;
+// Round-tripped but never read off an instance: the rendered name comes
+// from storagePath. Kept so an existing doc's field survives a rewrite.
 @override final  String? fileName;
 @override final  DateTime? uploadedAt;
 

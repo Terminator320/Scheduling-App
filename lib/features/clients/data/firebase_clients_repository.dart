@@ -298,6 +298,19 @@ class FirebaseClientsRepository implements ClientsRepository {
       return null;
     }
 
+    if (snapshot.docs.length >= ClientSearchPolicy.serverReadLimit) {
+      // Ordered by `name`, so at the cap this window is the alphabetically
+      // FIRST N clients — everything past that point is invisible to search,
+      // to the type-filter chips and to the Archived chip, all at once and
+      // with no error anywhere. It arrives gradually as the roster grows,
+      // which is exactly the kind of failure nobody reports. Same posture as
+      // `_mapRangeSnapshot` in the appointments repository.
+      _logger.warn(
+        'CLI-SEARCH scan window hit the ${ClientSearchPolicy.serverReadLimit}'
+        '-doc cap — search and the filters are seeing a prefix of the roster',
+      );
+    }
+
     final window = _CachedClientScanWindow(
       [
         for (final doc in snapshot.docs) (id: doc.id, data: doc.data()),
