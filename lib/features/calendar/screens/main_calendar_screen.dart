@@ -555,6 +555,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                   colorMap: colorMap,
                   isLoading: isLoading,
                   isAdmin: widget.isAdmin,
+                  // Same floating FAB and Today pill as portrait — this pane
+                  // is the one they sit over in the split layout.
+                  bottomClearance: kAgendaFloatingControlsClearance,
                 ),
               ],
             ),
@@ -632,6 +635,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                 colorMap: colorMap,
                 isLoading: isLoading,
                 isAdmin: widget.isAdmin,
+                // The FAB and the Today pill float over this list, so the last
+                // job of the day needs somewhere to scroll clear of them.
+                bottomClearance: kAgendaFloatingControlsClearance,
               ),
             ],
           ),

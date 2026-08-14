@@ -5,6 +5,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/features/clients/data/contact_link_store.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -105,7 +106,15 @@ Future<void> updateLinkedPhoneContact({
 /// Maps a ClientRecord to a flutter_contacts Contact. The display name goes on the
 /// organization field, while first/last name gets its own structured field.
 Contact clientToContact(ClientRecord client) {
-  final displayName = client.name.trim();
+  // The STORED name carries the client's phone number on the end for Wave's
+  // benefit, so it is stripped before it becomes a contact's organization or
+  // name — a contacts entry carries the number in its own phone field, and
+  // "Vogas Plumbing (514) 555-1234" is not a company.
+  final displayName = ClientNamePolicy.stripPhone(
+    client.name,
+    phone: client.phone,
+    mobile: client.mobile,
+  );
   final first = client.firstName.trim();
   final last = client.lastName.trim();
   final phone = client.phone.trim();

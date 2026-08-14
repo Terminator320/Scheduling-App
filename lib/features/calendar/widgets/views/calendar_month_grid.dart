@@ -183,13 +183,19 @@ class CalendarDayCell extends StatelessWidget {
     final isSelected = inMonth && isSameDate(day, selectedDay);
     final isToday = isSameDate(day, today);
 
+    // Today reads as a RING around its number rather than a blue number (owner
+    // call, 2026-08-14): the accent colour was also the picker/field accent, so
+    // "today" and "the value you picked" spoke the same language. The ring is
+    // `onSurface` — white on the dark theme, ink on the light one — so it stays
+    // visible in both; a literal white would vanish on the light surface.
+    // Selection still wins: a filled circle under a ring is noise.
+    final showTodayRing = isToday && inMonth && !isSelected;
+
     final Color numberColor;
     if (!inMonth) {
       numberColor = theme.palette.textFaint;
     } else if (isSelected) {
       numberColor = scheme.onPrimary;
-    } else if (isToday) {
-      numberColor = theme.palette.primaryAccent;
     } else {
       numberColor = scheme.onSurface;
     }
@@ -211,6 +217,9 @@ class CalendarDayCell extends StatelessWidget {
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: isSelected ? scheme.primary : null,
+            border: showTodayRing
+                ? Border.all(color: scheme.onSurface, width: 1.5)
+                : null,
           ),
           child: Text(
             '${day.day}',

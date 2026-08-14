@@ -2,6 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
 
 part 'client_record.freezed.dart';
 
@@ -144,5 +145,20 @@ abstract class ClientRecord with _$ClientRecord {
     'autoInvoice': autoInvoice,
   };
 
-  String get displayName => name;
+  /// The clean name for every in-app surface — the stored [name] carries the
+  /// client's phone number on the end so Wave's customer list shows it, and
+  /// this takes it back off. A business shows its business name, a person
+  /// their first/last halves. See [ClientNamePolicy].
+  ///
+  /// This is also what gets denormalized onto an appointment as `clientName`,
+  /// so a card, a push and the Live Activity all say "Marc Tremblay".
+  String get displayName => ClientNamePolicy.displayFor(
+    name: name,
+    phone: phone,
+    mobile: mobile,
+    firstName: firstName,
+    lastName: lastName,
+    businessName: businessName,
+    type: type,
+  );
 }

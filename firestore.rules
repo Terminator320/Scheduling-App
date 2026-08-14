@@ -630,7 +630,14 @@ service cloud.firestore {
     // This is all client PII, so it's admin-only — employees never need direct
     // access to it.
     function isValidClientData(data) {
-      return (!('name' in data) || (data.name is string && data.name.size() <= 200))
+      // 225, NOT the 200 the name FIELD is capped at. The stored `name` is the
+      // typed name PLUS the client's phone number — that field is synced
+      // verbatim as the Wave customer name (see ClientNamePolicy), so the
+      // widest value a shipped write path can produce is
+      // TextLimits.personName (200) + one space + TextLimits.phone (24).
+      // A cap sized to the typed field alone rejects every long client save
+      // with an opaque `permission-denied`. Pinned by text_limits_test.dart.
+      return (!('name' in data) || (data.name is string && data.name.size() <= 225))
         && (!('businessName' in data) || (data.businessName is string && data.businessName.size() <= 200))
         && (!('firstName' in data) || (data.firstName is string && data.firstName.size() <= 200))
         && (!('lastName' in data) || (data.lastName is string && data.lastName.size() <= 200))

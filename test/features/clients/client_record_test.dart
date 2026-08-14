@@ -32,12 +32,35 @@ void main() {
       expect(original.name, 'Jane'); // immutable
     });
 
-    test('displayName returns name', () {
+    test('displayName falls back to name when there are no halves', () {
       expect(
         const ClientRecord(id: 'c1', name: 'Acme Co').displayName,
         'Acme Co',
       );
       expect(const ClientRecord(id: 'c1', name: 'Jane').displayName, 'Jane');
+    });
+
+    test('displayName prefers the first/last halves and drops the phone', () {
+      // The stored `name` is Wave's field — it carries the phone number on the
+      // end — so the app shows the halves. See ClientNamePolicy.
+      expect(
+        const ClientRecord(
+          id: 'c1',
+          name: 'Marc Tremblay (514) 555-1234',
+          phone: '(514) 555-1234',
+          firstName: 'Marc',
+          lastName: 'Tremblay',
+        ).displayName,
+        'Marc Tremblay',
+      );
+      expect(
+        const ClientRecord(
+          id: 'c1',
+          name: 'Vogas Plumbing (514) 555-1234',
+          phone: '(514) 555-1234',
+        ).displayName,
+        'Vogas Plumbing',
+      );
     });
 
     test('toMap → fromMap roundtrip preserves user-owned data', () {

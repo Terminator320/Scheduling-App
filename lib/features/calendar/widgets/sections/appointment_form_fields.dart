@@ -6,8 +6,10 @@ import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
+import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/utils/appointment_form_error_text.dart';
 import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
+import 'package:scheduling/features/calendar/widgets/fields/appointment_date_rows.dart';
 import 'package:scheduling/features/calendar/widgets/fields/appointment_status_picker.dart';
 import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
@@ -81,8 +83,8 @@ class AppointmentFormCallbacks {
     required this.onSelectClient,
     required this.onClearClient,
     required this.onToggleEmployee,
-    required this.onPickDate,
-    required this.onPickEndDate,
+    required this.onSelectStartDate,
+    required this.onSelectEndDate,
     required this.onPickStartTime,
     required this.onPickEndTime,
     required this.onSelectRepeat,
@@ -93,8 +95,13 @@ class AppointmentFormCallbacks {
   final ValueChanged<ClientRecord> onSelectClient;
   final VoidCallback onClearClient;
   final ValueChanged<EmployeeRecord> onToggleEmployee;
-  final VoidCallback onPickDate;
-  final VoidCallback onPickEndDate;
+
+  /// The dates arrive already picked: the rows drop an inline month calendar
+  /// down beneath themselves rather than opening a modal picker, so there is
+  /// no "cancelled" outcome for a host to handle.
+  final ValueChanged<DateTime> onSelectStartDate;
+  final ValueChanged<DateTime> onSelectEndDate;
+
   final VoidCallback onPickStartTime;
   final VoidCallback onPickEndTime;
   final ValueChanged<RepeatInterval> onSelectRepeat;
@@ -113,6 +120,8 @@ class AppointmentFormFields extends StatelessWidget {
     required this.selectedEmployees,
     required this.repeat,
     required this.useCustomAddress,
+    required this.selectedDate,
+    required this.endDate,
     required this.isPersonal,
     required this.isAllDay,
     required this.onAllDayChanged,
@@ -142,6 +151,12 @@ class AppointmentFormFields extends StatelessWidget {
   final List<EmployeeRecord> selectedEmployees;
   final RepeatInterval repeat;
   final bool useCustomAddress;
+
+  /// The dates behind the two date rows' text. The rows render the
+  /// controllers' formatted strings; these drive the inline month calendar's
+  /// selection and the month it opens on. Null while a field is still empty.
+  final DateTime? selectedDate;
+  final DateTime? endDate;
 
   /// Personal job: time blocked off for the crew rather than a client visit.
   /// Hides the client picker, materials, photos, repeat and the template
@@ -429,7 +444,7 @@ class AppointmentFormFields extends StatelessWidget {
             // the time rows below it exist at all. Offered on every job: a
             // client visit can genuinely run whole days too.
             _AllDaySwitch(value: isAllDay, onChanged: onAllDayChanged),
-            ..._dateRow(context, l10n),
+            _dateRows(context, l10n),
             // An all-day block has no times to show — the date rows are the
             // whole schedule.
             if (!isAllDay) ...timeRows(),
@@ -458,49 +473,28 @@ class AppointmentFormFields extends StatelessWidget {
     ];
   }
 
-  /// Start and end date, laid out as the time pair below them is. A job that
-  /// runs one day just has the same date in both cells — two dates can't
-  /// disagree about the run the way a stored multi-day flag could.
-  List<Widget> _dateRow(BuildContext context, AppLocalizations l10n) {
-    final startRow = SheetFieldRow(
-      label: l10n.calendar_startDate,
-      value: controllers.date.text,
-      placeholder: l10n.calendar_selectDate,
-      accent: true,
-      useMonoValue: true,
-      errorText: _err(context, 'date'),
-      onTap: callbacks.onPickDate,
-      trailing: const Icon(Icons.calendar_today_outlined, size: 18),
-    );
-    final endRow = SheetFieldRow(
-      label: l10n.calendar_endDate,
-      value: controllers.endDate.text,
-      placeholder: l10n.calendar_selectDate,
-      accent: true,
-      useMonoValue: true,
-      errorText: _err(context, 'endDate'),
-      onTap: callbacks.onPickEndDate,
-      // The run length only earns its space once there is a run to describe.
-      trailingLabel: !isMultiDay
-          ? null
-          : (isOvernight
-                ? l10n.calendar_spanNights(spanLength)
-                : l10n.calendar_spanDays(spanLength)),
-    );
-    if (context.isNarrowWidth) return [startRow, endRow];
-    return [
-      IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: startRow),
-            const VerticalDivider(width: 1),
-            Expanded(child: endRow),
-          ],
-        ),
-      ),
-    ];
-  }
+  /// Start and end date, as ONE panel row that drops the month down beneath
+  /// itself. It is a single child of the panel rather than two, because the
+  /// dropdown belongs to the pair — see [AppointmentDateRows], which owns the
+  /// open/closed state and the divider between the two rows.
+  Widget _dateRows(BuildContext context, AppLocalizations l10n) =>
+      AppointmentDateRows(
+        startValue: controllers.date.text,
+        endValue: controllers.endDate.text,
+        startDate: selectedDate,
+        endDate: endDate,
+        firstDate: AppointmentDraftDefaults.datePickerFirstDate,
+        lastDate: AppointmentDraftDefaults.datePickerLastDate,
+        startError: _err(context, 'date'),
+        endError: _err(context, 'endDate'),
+        endTrailingLabel: !isMultiDay
+            ? null
+            : (isOvernight
+                  ? l10n.calendar_spanNights(spanLength)
+                  : l10n.calendar_spanDays(spanLength)),
+        onStartDateSelected: callbacks.onSelectStartDate,
+        onEndDateSelected: callbacks.onSelectEndDate,
+      );
 
   /// Address, notes, materials and the host-supplied photos slot.
   ///

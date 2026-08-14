@@ -7,7 +7,12 @@
  *
  * Semantics (mirrors the app's own rules):
  *   - `clientName` / `clientPhone` are always overwritten with the client's
- *     current values.
+ *     current values. `clientName` is the DISPLAY name — the stored
+ *     `clients/{id}.name` carries the phone number on the end for Wave's
+ *     benefit, and `clientDisplayName` (`client_name_utils.js`) takes it back
+ *     off. Without that strip a client edit would fan "Marc Tremblay
+ *     (514) 555-1234" onto every future appointment card, disagreeing with
+ *     the clean name the app itself writes at booking time.
  *   - `address` follows the client only when the appointment's stored address
  *     still equals the client's previous (non-empty) address — a differing
  *     or empty address is treated as custom/none and left untouched.
@@ -32,6 +37,7 @@
 
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const {MAX_APPOINTMENT_SPAN_MS, hasWorkLeft} = require("./time_utils");
+const {clientDisplayName} = require("./client_name_utils");
 
 /** Firestore WriteBatch hard limit. */
 const BATCH_LIMIT = 500;
@@ -47,19 +53,6 @@ const PAGE_SIZE = BATCH_LIMIT;
 function adminFirestore() {
   // eslint-disable-next-line global-require
   return require("firebase-admin/firestore");
-}
-
-/**
- * Display name for a client doc, mirroring the Flutter model's fallback:
- * `name` when non-blank, else the legacy `businessName`.
- * @param {!Object} data Client document fields.
- * @return {string}
- */
-function clientDisplayName(data) {
-  const d = data || {};
-  const name = typeof d.name === "string" ? d.name.trim() : "";
-  if (name) return name;
-  return typeof d.businessName === "string" ? d.businessName.trim() : "";
 }
 
 /**

@@ -32,6 +32,10 @@ void main() {
     bool isMultiDay = false,
     bool isOvernight = false,
     int spanLength = 1,
+    DateTime? selectedDate,
+    DateTime? endDate,
+    ValueChanged<DateTime>? onSelectStartDate,
+    ValueChanged<DateTime>? onSelectEndDate,
   }) async {
     tester.view.physicalSize = Size(width, 740);
     tester.view.devicePixelRatio = 1.0;
@@ -72,6 +76,8 @@ void main() {
               selectedEmployees: const [],
               repeat: RepeatInterval.none,
               useCustomAddress: useCustomAddress,
+              selectedDate: selectedDate,
+              endDate: endDate,
               isPersonal: isPersonal,
               onPersonalChanged: showPersonalSwitch
                   ? (onPersonalChanged ?? (_) {})
@@ -91,8 +97,8 @@ void main() {
                 onSelectClient: onSelectClient ?? (_) {},
                 onClearClient: () {},
                 onToggleEmployee: (_) {},
-                onPickDate: () {},
-                onPickEndDate: () {},
+                onSelectStartDate: onSelectStartDate ?? (_) {},
+                onSelectEndDate: onSelectEndDate ?? (_) {},
                 onPickStartTime: () {},
                 onPickEndTime: () {},
                 onSelectRepeat: (_) {},
