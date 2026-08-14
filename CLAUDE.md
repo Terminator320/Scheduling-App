@@ -1356,6 +1356,17 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   before building the `tel:` URI, because `Uri` percent-encodes the brackets and
   space into a path some dialers reject; and `ClientSearchPolicy.digitsOnly`
   already normalized on both sides, so phone search is unaffected.
+  **Legacy and Wave-imported docs were NOT formatted**, which stayed invisible
+  until a person's `name` became their phone number verbatim and Wave's
+  customer list started mixing "(514) 234-0818" with "4506220931".
+  `functions/scripts/backfill-client-phone-formatting.js` is the cleanup
+  (idempotent, `--dry-run`). It formats **only** a NANP number — ten digits
+  with no `+`, or eleven beginning with 1, whose leading digit is the `+1`
+  country code and is dropped. Deliberately narrower than `formatPhoneNumber`,
+  whose progressive mask renders the eleven-digit form as "(151) 455-5123 4"
+  (reading the country code as the area code) and would rewrite a half-entered
+  number into a shape claiming to be complete. The `+` bar on the ten-digit
+  branch is load-bearing: "+49 30 123456" is also ten digits.
   **`TextLimits.phone` is 24, and it must stay above the widest string
   `formatPhoneNumber` can emit** — `LabeledTextField` appends the
   `LengthLimitingTextInputFormatter` **after** `PhoneInputFormatter`, so the
