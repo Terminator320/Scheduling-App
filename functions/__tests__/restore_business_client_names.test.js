@@ -35,6 +35,12 @@ describe("RESTORE", () => {
     // this doc's firstName/lastName hold Mathieu Gaudreau, its contact.
     expect(RESTORE["3YCCKXnipIwnfZQcR9z6"]).toBe("Yokohama");
   });
+
+  test("carries the practice the owner confirmed after the audit ran", () => {
+    // The audit can only report "no first/last behind it" — whether the thing
+    // is a company is a call only the owner can make, doc by doc.
+    expect(RESTORE["NMbGQgwv2b8EW0C7XR0E"]).toBe("Dr Peter Liarakos");
+  });
 });
 
 describe("patchFor", () => {

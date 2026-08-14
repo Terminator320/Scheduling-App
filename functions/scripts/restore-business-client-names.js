@@ -44,15 +44,20 @@ const EXACT_FLAGS = ["--dry-run"];
 /**
  * Client doc id -> the business name to restore.
  *
- * Read off the 2026-08-14 run of `audit-renamed-client-names.js`. Two entries
- * the audit surfaced are NOT here on purpose — "Dr Peter Liarakos" and "Elmo
- * Street" — because neither is clearly a company, and leaving a person named
- * by their phone number in Wave is recoverable while renaming a person's
- * customer record to something they are not is confusing on an invoice.
+ * Read off the 2026-08-14 run of `audit-renamed-client-names.js`, and
+ * confirmed by the owner doc by doc — the audit can only say "this had no
+ * first/last behind it", never whether the thing is a company.
+ *
+ * ONE entry the audit surfaced is NOT here: "Elmo Street"
+ * (`6GKdxhkzWH8HWYjwrolZ`), which is not clearly a company. Leaving a person
+ * named by their phone number in Wave is recoverable, while renaming a
+ * person's customer record to something they are not is confusing on an
+ * invoice.
  * @type {!Object<string, string>}
  */
 const RESTORE = {
   "3YCCKXnipIwnfZQcR9z6": "Yokohama",
+  "NMbGQgwv2b8EW0C7XR0E": "Dr Peter Liarakos",
   "afVN59t0X3xbdE5ks2NB": "House of Jazz",
   "HeN9Ybh4t3ysRP5SKgx7": "La scala",
   "zJfcpmciUVXmkgsHsE8Q": "La belle province vimont",
