@@ -161,14 +161,31 @@ function patchFor(data) {
   const mobile = formatNanpNumber(data.mobile);
   if (mobile) patch.mobile = mobile;
 
+  // The value each field ENDS this run with — the reformatted one where it
+  // changed, otherwise whatever was already stored.
+  //
+  // COMPARING AGAINST THE FINAL VALUE, NOT THE PATCH, IS THE POINT. Gating the
+  // name on `phone` having changed missed the doc whose phone was ALREADY
+  // formatted while its name still held raw digits: `formatNanpNumber` returns
+  // null there (that is its idempotence), so the name was never re-stated and
+  // the two fields stayed disagreeing about the same number. Three docs
+  // survived the first prod run that way.
+  const finalPhone = phone || String(data.phone || "").trim();
+  const finalMobile = mobile || String(data.mobile || "").trim();
+
   // `name` moves only when it IS this client's number, which is the shape the
   // 2026-08-14 rename leaves on a PERSON. A business's name is its own and is
   // never touched here.
   const name = String(data.name || "").trim();
   const nameDigits = digitsOf(name);
   if (nameDigits && !/[a-z]/i.test(name)) {
-    if (phone && nameDigits === digitsOf(data.phone)) patch.name = phone;
-    else if (mobile && nameDigits === digitsOf(data.mobile)) patch.name = mobile;
+    let target = "";
+    if (finalPhone && nameDigits === digitsOf(finalPhone)) {
+      target = finalPhone;
+    } else if (finalMobile && nameDigits === digitsOf(finalMobile)) {
+      target = finalMobile;
+    }
+    if (target && target !== name) patch.name = target;
   }
 
   return Object.keys(patch).length > 0 ? patch : null;

@@ -90,6 +90,19 @@ describe("patchFor", () => {
         .toEqual({phone: "(450) 622-0931"});
   });
 
+  test("re-states a raw name when the phone is ALREADY formatted", () => {
+    // The gap the first prod run left behind on three docs: formatNanpNumber
+    // returns null for an already-formatted phone, so gating the name on that
+    // field having CHANGED left the two disagreeing about the same number.
+    expect(patchFor({name: "4388703782", phone: "(438) 870-3782"}))
+        .toEqual({name: "(438) 870-3782"});
+  });
+
+  test("re-states a raw name off an already-formatted mobile", () => {
+    expect(patchFor({name: "5148258887", phone: "", mobile: "(514) 825-8887"}))
+        .toEqual({name: "(514) 825-8887"});
+  });
+
   test("is idempotent — a formatted doc needs no patch", () => {
     expect(patchFor({name: "(450) 622-0931", phone: "(450) 622-0931"}))
         .toBeNull();
