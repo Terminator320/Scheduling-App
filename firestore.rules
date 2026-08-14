@@ -497,8 +497,33 @@ service cloud.firestore {
            <= resource.data.endTime - resource.data.startTime;
     }
 
+    // Each instant type-checked on its OWN, which isValidAppointmentSpan
+    // cannot do: that function short-circuits to true when EITHER key is
+    // absent, so a doc carrying only one of them was never checked at all.
+    //
+    // It matters because the failure is silent. A `startTime` that is not a
+    // timestamp is excluded from every `orderBy('startTime')`, so the job
+    // drops out of the travel sweep, the digest, the day-slice mirrors and the
+    // Siri snapshot at once, with nothing erroring anywhere — the same shape
+    // as a client doc missing `archived`.
+    //
+    // CREATE ONLY, deliberately. Such a doc can already exist (the console and
+    // the Admin SDK bypass rules), and `getAppointmentById` is written to still
+    // reach a legacy row missing an instant — so enforcing this on update
+    // would leave exactly those docs permanently un-updatable, including by the
+    // admin trying to cancel one. Same asymmetry as appointmentSpanNotWidened
+    // and emergencyFieldNotSet: stop a bad value being INTRODUCED, never
+    // strand a doc that already carries one.
+    function hasValidAppointmentInstants(d) {
+      return (!('startTime' in d.keys()) || d.startTime is timestamp)
+        && (!('endTime' in d.keys()) || d.endTime is timestamp);
+    }
+
     function isValidAppointmentData(d) {
       return (!('title' in d.keys()) || isBoundedString(d.title, 200))
+        // The one string `toMap()` emits that had no cap. It is an enum name
+        // client-side, so this is far above anything legitimate.
+        && (!('repeat' in d.keys()) || isBoundedString(d.repeat, 32))
         && (!('address' in d.keys()) || isBoundedString(d.address, 500))
         && (!('notes' in d.keys()) || isBoundedString(d.notes, 4000))
         && (!('materialsNeeded' in d.keys())
@@ -545,7 +570,9 @@ service cloud.firestore {
         && !('pictureCount' in request.resource.data.keys())
         && isValidAppointmentStatus(request.resource.data.status)
         && isValidAppointmentData(request.resource.data)
-        // No existing doc to strand, so the span bound is outright here.
+        // No existing doc to strand, so the span bound and the per-instant
+        // type checks are both outright here.
+        && hasValidAppointmentInstants(request.resource.data)
         && isValidAppointmentSpan(request.resource.data);
 
       // Admins have full access (with the status allowlist still enforced); an

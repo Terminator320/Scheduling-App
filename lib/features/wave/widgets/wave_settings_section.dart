@@ -69,13 +69,20 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
     required void Function({required bool busy}) setBusy,
     required Future<void> Function() action,
   }) async {
+    // Captured before the await so the log genuinely happens BEFORE the
+    // mounted guard, as the docstring promises. It used to sit after it, so a
+    // failure on an unmounted section reached Crashlytics never — and moving
+    // it back above the guard without hoisting the read would instead throw
+    // there, since `ref.read` is unsafe on an unmounted consumer in Riverpod 3.
+    final logger = ref.read(loggerProvider);
+    final notices = ref.read(noticeServiceProvider);
     setBusy(busy: true);
     try {
       await action();
     } on WaveFailure catch (e, st) {
+      logger.warn('WAVE-$tag failed', e, st);
       if (!mounted) return;
-      ref.read(loggerProvider).warn('WAVE-$tag failed', e, st);
-      ref.read(noticeServiceProvider).error(e.toLocalizedMessage(context));
+      notices.error(e.toLocalizedMessage(context));
     } finally {
       if (mounted) setBusy(busy: false);
     }

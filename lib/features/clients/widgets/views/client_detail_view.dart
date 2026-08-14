@@ -184,7 +184,11 @@ class _ProfileCard extends StatelessWidget {
       client.firstName,
       client.lastName,
     ].where((part) => part.trim().isNotEmpty).join(' ').trim();
-    final showPersonName = fullName.isNotEmpty && fullName != client.name;
+    // Compared against what the title actually RENDERS, not the stored `name`
+    // — that one carries the phone number, so it never equals `fullName` and
+    // this line used to repeat the title verbatim on every person client.
+    final showPersonName =
+        fullName.isNotEmpty && fullName != client.displayName;
 
     final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,

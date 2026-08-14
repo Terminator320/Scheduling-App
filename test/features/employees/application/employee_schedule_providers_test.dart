@@ -45,8 +45,14 @@ Future<ProviderContainer> _containerWith(List<AppointmentRecord> jobs) async {
     ..listen(employeeTodayJobsProvider('e1'), (_, _) {});
   // The override is still a Stream, so the reducers read `.value == null`
   // until it emits — await the first frame before asserting.
+  //
+  // The range comes from `todayRangeProvider` rather than being rebuilt here:
+  // that provider deliberately asks for the WIDER `forMirrors` window (so it
+  // shares the listener the Siri snapshot already holds open rather than
+  // forking a second one), and naming a different range here would instantiate
+  // a family member nothing listens to, which then disposes mid-load.
   await container.read(
-    appointmentsInRangeProvider(AppointmentDateRange.forDay(_today)).future,
+    appointmentsInRangeProvider(container.read(todayRangeProvider)).future,
   );
   return container;
 }

@@ -37,6 +37,7 @@ const {
   DAY_MS,
   OVERDUE_LOOKBACK_MS,
   OVERDUE_SWEEP_MAX,
+  DIGEST_SWEEP_MAX,
   WIDGET_PAYLOAD_MAX_BYTES,
   OPEN_STATUSES,
   CHANGE_RECIPIENT_ROLES,
@@ -632,12 +633,31 @@ async function runDailyDigest(deps) {
   // reaches back that far. groupTomorrowsJobsByEmployee then does the real
   // overlap test.
   const queryStart = new Date(start.getTime() - MAX_APPOINTMENT_SPAN_MS);
+  // Bounded like the travel and overdue sweeps beside it — this was the last
+  // one without a ceiling. The 15-day window keeps it small in practice, so
+  // the cap is a tail guard rather than a steady-state bound: a bulk import or
+  // a wide repeat series landing in it is otherwise an unbounded fan-out that
+  // then costs a widget-window read and a send per grouped employee, against a
+  // 60 s timeout.
+  //
+  // `startTime` ASC is already the order Firestore returns for this query (it
+  // is the inequality field), and stating it is what makes the cap safe: the
+  // jobs kept are the ones starting soonest, i.e. the ones tomorrow's digest
+  // is actually about. Served by the existing `(status, startTime ASC)`
+  // composite — no new index.
   const snap = await db
       .collection("appointments")
       .where("status", "in", OPEN_STATUSES)
       .where("startTime", ">=", queryStart)
       .where("startTime", "<", end)
+      .orderBy("startTime")
+      .limit(DIGEST_SWEEP_MAX)
       .get();
+  if (snap && snap.size === DIGEST_SWEEP_MAX && deps.logger) {
+    deps.logger.warn(
+        "runDailyDigest: candidate cap hit; " +
+        "some crews may not receive a digest", {cap: DIGEST_SWEEP_MAX});
+  }
   const grouped = groupTomorrowsJobsByEmployee(
       ((snap && snap.docs) || []).map(_record),
       nowDate,

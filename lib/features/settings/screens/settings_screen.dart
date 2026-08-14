@@ -126,6 +126,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   bool get _isAdmin => widget.role == 'admin';
 
   Future<void> _toggleAppLock({required bool value}) async {
+    // Captured before the first await: `ref.read` throws once this consumer is
+    // unmounted (Riverpod 3), and the catch below deliberately logs before its
+    // mounted guard so the failure still reaches Crashlytics.
+    final logger = ref.read(loggerProvider);
     if (value) {
       final available = await ref
           .read(biometricAuthServiceProvider)
@@ -145,7 +149,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       // pre-first-unlock -25308 window AppLockController._load() documents by
       // name. Uncaught, that reached the zone handler as a FATAL and the
       // switch reverted silently. Same shape as OnboardingGate._finish.
-      ref.read(loggerProvider).warn('APPLOCK setEnabled failed', e, st);
+      logger.warn('APPLOCK setEnabled failed', e, st);
       if (!mounted) return;
       ref
           .read(noticeServiceProvider)
@@ -206,10 +210,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   /// Turning this off unregisters the device, which ends any live card;
   /// turning it back on re-registers. Best effort — it never throws.
   Future<void> _toggleLiveActivity({required bool value}) async {
-    await ref
-        .read(liveActivityEnabledProvider.notifier)
-        .setEnabled(value: value);
+    // Both providers are resolved up front. This runs unawaited from
+    // `Switch.onChanged`, so backing out of Settings mid-flight unmounts the
+    // consumer — and under Riverpod 3 the second `ref.read` would then throw a
+    // StateError into the void. This was the only async handler in this file
+    // with no guard at all.
+    final enabled = ref.read(liveActivityEnabledProvider.notifier);
     final controller = ref.read(liveActivityRegistrationControllerProvider);
+    await enabled.setEnabled(value: value);
     if (value) {
       await controller.sync();
     } else {
@@ -366,16 +374,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   Future<void> _signOut() async {
     if (_isSigningOut) return;
+    // Resolved before the de-registration round-trips: `ref.read` throws on an
+    // unmounted consumer (Riverpod 3), and this catch is what guarantees the
+    // user still reaches login rather than being stranded signed in.
+    final logger = ref.read(loggerProvider);
+    final authService = ref.read(authServiceProvider);
     setState(() => _isSigningOut = true);
     try {
       // Clean up this device's push token, presence, and Live Activity state
       // — best effort, so a failure here doesn't block sign-out. The ORDER is
       // owned by `deregisterThisDevice`; all three exits share it.
       await deregisterThisDevice(ref);
-      await ref.read(authServiceProvider).signOut();
+      await authService.signOut();
     } catch (e, st) {
       // Log but still route to login so the user isn't stuck signed in.
-      ref.read(loggerProvider).warn('ACCT-SIGNOUT signOut failed', e, st);
+      logger.warn('ACCT-SIGNOUT signOut failed', e, st);
     }
     if (!mounted) return;
     await Navigator.pushNamedAndRemoveUntil(

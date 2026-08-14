@@ -56,7 +56,9 @@ class ClientNamePolicy {
   /// "(514) 555-1234", so the 11-digit form sheds its leading 1.
   static String _digits(String value) {
     final digits = value.replaceAll(_nonDigit, '');
-    if (digits.length == 11 && digits.startsWith('1')) return digits.substring(1);
+    if (digits.length == 11 && digits.startsWith('1')) {
+      return digits.substring(1);
+    }
     return digits;
   }
 
@@ -86,7 +88,9 @@ class ClientNamePolicy {
     for (final candidate in [phone.trim(), mobile.trim()]) {
       if (candidate.isEmpty) continue;
       if (base.endsWith(candidate)) {
-        return _trimSeparators(base.substring(0, base.length - candidate.length));
+        return _trimSeparators(
+          base.substring(0, base.length - candidate.length),
+        );
       }
     }
 
@@ -122,6 +126,41 @@ class ClientNamePolicy {
     // name-ordered client list with no initial for its avatar.
     if (base.isEmpty) return number;
     return '$base $number';
+  }
+
+  /// The clean name to hand back to [composeStored] when RE-SAVING a stored
+  /// client — the stored [name] with its number stripped, never [displayFor].
+  ///
+  /// The distinction is the whole point, and getting it wrong renames real
+  /// Wave customers. `clients/{id}.name` IS Wave's customer name, and on a
+  /// business it holds the BUSINESS while `firstName`/`lastName` hold its
+  /// contact person. [displayFor] prefers those halves for anything it reads
+  /// as a person — including every Wave-imported doc, since the import sets no
+  /// `type` — so seeding an edit form from the display name and saving it back
+  /// replaces "Vogas Plumbing" with "Marc Tremblay" on live invoices.
+  ///
+  /// Hand-mirrors `baseNameFor` in
+  /// `functions/scripts/backfill-client-name-with-phone.js`, including the
+  /// fallback order: the first/last halves are reached only when the stored
+  /// name is empty once its own number is stripped, which is the junk case.
+  static String baseNameFor({
+    required String name,
+    String phone = '',
+    String mobile = '',
+    String firstName = '',
+    String lastName = '',
+    String businessName = '',
+  }) {
+    final stored = stripPhone(name, phone: phone, mobile: mobile);
+    if (stored.isNotEmpty) return stored;
+
+    final composed = [
+      firstName.trim(),
+      lastName.trim(),
+    ].where((half) => half.isNotEmpty).join(' ');
+    if (composed.isNotEmpty) return composed;
+
+    return stripPhone(businessName, phone: phone, mobile: mobile);
   }
 
   /// Whether this client is an ORGANIZATION rather than a person — which

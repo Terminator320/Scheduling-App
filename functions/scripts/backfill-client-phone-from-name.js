@@ -1,4 +1,20 @@
 #!/usr/bin/env node
+// !! SUPERSEDED 2026-08-14 — DO NOT RUN THIS SCRIPT AGAIN. !!
+// It already ran against prod (see the "ALREADY RAN AGAINST PROD" note
+// below) and its effect was deliberately REVERSED the same cycle. Stripping
+// the phone out of `name` and renaming clients to "First Last" is correct
+// for the app, but `name` is synced VERBATIM as the Wave customer name
+// (`toWaveCustomerInput`, `wave/mappers.js`) — so this also renamed every one
+// of those clients IN WAVE, on real invoices, losing the number the
+// invoicing workflow identifies customers by. Owner call 2026-08-14: put the
+// number back on the end of `name` and let the APP show the first/last
+// halves instead (`ClientNamePolicy`, hand-mirrored as `client_name_utils.js`).
+// Re-running THIS script now would redo that damage against every client it
+// already touched. The replacement is `backfill-client-name-with-phone.js` —
+// read that one, not this one. Full story: the
+// `clients/{id}.name` IS WAVE'S FIELD bullet in the root `CLAUDE.md`.
+// This file is kept only as history; do not "fix" or resurrect it.
+//
 // One-off: lifts a phone number out of a client's `name`/`businessName` and
 // into the `phone` field, then rebuilds `name` from the first/last halves.
 //

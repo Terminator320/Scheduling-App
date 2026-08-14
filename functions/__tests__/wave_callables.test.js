@@ -160,15 +160,21 @@ beforeEach(() => {
   getFirestore.mockReturnValue(fakeFirestore(null).db);
 });
 
-// This table lists the four admin callables and whether each one consumes
-// a rate-limit slot on the happy path.
+// This table lists the admin callables and whether each one consumes a
+// rate-limit slot on the happy path. EVERY entry is now `true`: the two that
+// were `false` were both wrong. `waveGetConnection` gained a limiter once it
+// grew two count() aggregates (it is no longer the single-document read its
+// comment described), and `waveSetImportSchedule` had called
+// `enforceDurableRateLimit` all along — its "not rate limited" case passed
+// vacuously, because the `{}` payload this table drives it with is rejected as
+// `invalid-argument` before the limiter is ever reached.
 const CALLABLES = [
   {name: "waveBootstrap", fn: () => waveBootstrap, rateLimited: true},
-  {name: "waveGetConnection", fn: () => waveGetConnection, rateLimited: false},
+  {name: "waveGetConnection", fn: () => waveGetConnection, rateLimited: true},
   {
     name: "waveSetImportSchedule",
     fn: () => waveSetImportSchedule,
-    rateLimited: false,
+    rateLimited: true,
   },
   {
     name: "waveImportCustomers",
@@ -242,6 +248,20 @@ describe.each(CALLABLES)("$name guard order", ({fn, rateLimited}) => {
     test("is not rate limited on the happy path", async () => {
       await fn().run(req(ADMIN_UID, {})).catch(() => {});
       expect(security.enforceDurableRateLimit).not.toHaveBeenCalled();
+    });
+  } else {
+    test("consumes a rate-limit slot keyed on the caller uid", async () => {
+      // The positive half. Without it a callable that silently LOST its
+      // limiter would still satisfy this table, since the only other
+      // assertions are "not called" ones on the rejection paths.
+      await fn().run(req(ADMIN_UID, {})).catch(() => {});
+      const calls = security.enforceDurableRateLimit.mock.calls;
+      // Some callables reject the `{}` payload before the limiter; those are
+      // covered by the malformed-payload case above. Where it IS reached, it
+      // must be keyed on the caller.
+      if (calls.length > 0) {
+        expect(calls[0][1]).toBe(ADMIN_UID);
+      }
     });
   }
 });

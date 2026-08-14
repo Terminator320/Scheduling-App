@@ -14,11 +14,13 @@ const {
   tomorrowWindowToronto,
   overduePromptLedgerId,
   isStaleTokenError,
+  deliverRecipientOnce,
   handleAppointmentWrite,
   runDailyDigest,
   runOverduePromptSweep,
   OPEN_STATUSES,
   SERIES_CLAIM_WINDOW_MS,
+  TIMED_RECIPIENT_ROLES,
 } = require("../notification_utils");
 
 // Noon Toronto (EDT -4) on Wed 2026-07-08.
@@ -1167,5 +1169,263 @@ describe("runDailyDigest", () => {
     expect(statusQuery.value).toEqual(expect.arrayContaining(["in_progress"]));
     expect(statusQuery.value).toEqual(OPEN_STATUSES);
     expect(res.digests).toBe(1);
+  });
+});
+
+// ----- deliverRecipientOnce -------------------------------------------------
+
+/**
+ * Wraps `makeDb`'s users/tokens machinery with a ledger collection whose
+ * `.doc()` rejects a slash SYNCHRONOUSLY, the way real Firestore does, and
+ * whose create/delete can be made to fail.
+ * @param {!Object} config `{users, tokens, existing, createThrows,
+ *   deleteThrows}`.
+ * @return {!Object} `{db, created, deleted}`.
+ */
+function makeLedgerDb(config) {
+  const base = makeDb({users: config.users || {}, tokens: config.tokens || {}});
+  const created = [];
+  const deleted = [];
+  const existing = new Set(config.existing || []);
+  const db = {
+    collection(name) {
+      if (name === "users") return base.db.collection(name);
+      return {
+        doc(id) {
+          if (String(id).includes("/")) {
+            throw new Error(`Invalid document reference: ${id}`);
+          }
+          return {
+            create: async (body) => {
+              if (config.createThrows) throw config.createThrows;
+              if (existing.has(id)) {
+                const err = new Error("already exists");
+                err.code = 6;
+                throw err;
+              }
+              existing.add(id);
+              created.push({id, body});
+            },
+            delete: async () => {
+              if (config.deleteThrows) throw config.deleteThrows;
+              deleted.push(id);
+            },
+          };
+        },
+      };
+    },
+  };
+  return {db, created, deleted};
+}
+
+describe("deliverRecipientOnce", () => {
+  // The at-most-once primitive the WHOLE reminder system sits on: the travel
+  // sweep, the overdue "job finished?" nudge, and (via its return value) the
+  // Live Activity card start all hang off this one claim.
+  const ACTIVE = {e1: {role: "employee", status: "active"}};
+  const LEDGER_ID = "appt1_1700000000000_e1";
+
+  const opts = (over) => ({
+    collection: "appointmentReminders",
+    ledgerId: LEDGER_ID,
+    appointmentId: "appt1",
+    employeeDocId: "e1",
+    kind: "leaveNow",
+    buildMsg: () => ({title: "Time to leave", body: "Head to the job"}),
+    nowDate: NOW,
+    label: "reminder",
+    roles: TIMED_RECIPIENT_ROLES,
+    ...over,
+  });
+
+  const run = (db, messaging, over) => deliverRecipientOnce(
+      {db, messaging, now: NOW, logger: silentLogger}, opts(over));
+
+  test("claims, sends, and returns the delivered count", async () => {
+    const {db, created, deleted} = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: [{id: "t1", locale: "en"}, {id: "t2", locale: "fr"}]},
+    });
+    const messaging = makeMessaging();
+
+    expect(await run(db, messaging)).toBe(2);
+    expect(created).toHaveLength(1);
+    // A delivered claim is KEPT — releasing it here would re-notify on the
+    // next 5-minute sweep.
+    expect(deleted).toEqual([]);
+    expect(messaging.sent).toHaveLength(2);
+  });
+
+  test("a second pass for the same recipient sends nothing", async () => {
+    // THE dedupe contract: `create()` fails-if-exists, and an already-exists
+    // error means "someone already delivered this" -> 0, before any send.
+    // The travel sweep runs every 5 minutes over a 90-minute window, so a
+    // reminder would otherwise fire ~18 times.
+    const {db, created, deleted} = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: [{id: "t1", locale: "en"}]},
+    });
+    const messaging = makeMessaging();
+
+    expect(await run(db, messaging)).toBe(1);
+    expect(await run(db, messaging)).toBe(0);
+    expect(created).toHaveLength(1);
+    expect(messaging.sent).toHaveLength(1);
+    // And the replay must NOT release the claim the first pass earned, or
+    // every other sweep would re-deliver.
+    expect(deleted).toEqual([]);
+  });
+
+  test("the string form of already-exists dedupes too", async () => {
+    // The Admin SDK surfaces this as numeric 6 or as "already-exists"
+    // depending on the path; treating only one as a dedupe re-pushes.
+    const err = new Error("already exists");
+    err.code = "already-exists";
+    const {db, deleted} = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: [{id: "t1", locale: "en"}]},
+      createThrows: err,
+    });
+    const messaging = makeMessaging();
+
+    expect(await run(db, messaging)).toBe(0);
+    expect(messaging.sent).toEqual([]);
+    expect(deleted).toEqual([]);
+  });
+
+  test("a ledger id containing a slash returns 0, not a thrown sweep",
+      async () => {
+        // `.doc()` throws SYNCHRONOUSLY on such an id, which is why it is
+        // built INSIDE the try. The rules only length-check `employeeIds`
+        // (CEL cannot iterate a list), so one poisoned element is reachable —
+        // and an escape here would kill every push for the whole sweep.
+        const {db, created} = makeLedgerDb({
+          users: ACTIVE,
+          tokens: {e1: [{id: "t1", locale: "en"}]},
+        });
+        const messaging = makeMessaging();
+
+        expect(await run(db, messaging, {ledgerId: "appt1_1_bad/id"})).toBe(0);
+        expect(created).toEqual([]);
+        expect(messaging.sent).toEqual([]);
+      });
+
+  test("a poisoned recipient does not stop the next one delivering",
+      async () => {
+        // The sweep shape: `Promise.all` over every (job, assignee) pair. One
+        // bad id must cost exactly one push, not all of them.
+        const {db} = makeLedgerDb({
+          users: {...ACTIVE, e2: {role: "employee", status: "active"}},
+          tokens: {
+            e1: [{id: "t1", locale: "en"}],
+            e2: [{id: "t2", locale: "en"}],
+          },
+        });
+        const messaging = makeMessaging();
+        const results = await Promise.all([
+          run(db, messaging, {ledgerId: "a/b", employeeDocId: "e1"}),
+          run(db, messaging, {ledgerId: "ok-e2", employeeDocId: "e2"}),
+        ]);
+
+        expect(results).toEqual([0, 1]);
+        expect(messaging.sent).toHaveLength(1);
+      });
+
+  test("a claim that delivered nothing is released for retry", async () => {
+    // A recipient whose device has not registered a token yet: holding the
+    // claim would suppress that reminder forever once the token arrives.
+    const {db, created, deleted} = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: []},
+    });
+    const messaging = makeMessaging();
+
+    expect(await run(db, messaging)).toBe(0);
+    expect(created).toHaveLength(1);
+    expect(deleted).toEqual([LEDGER_ID]);
+    expect(messaging.sent).toEqual([]);
+  });
+
+  test("a released claim really is retried on the next sweep", async () => {
+    // The point of the release, end to end: the same call after the token
+    // registers must deliver.
+    const {db} = makeLedgerDb({users: ACTIVE, tokens: {e1: []}});
+    expect(await run(db, makeMessaging())).toBe(0);
+
+    const withToken = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: [{id: "t1", locale: "en"}]},
+    });
+    expect(await run(withToken.db, makeMessaging())).toBe(1);
+  });
+
+  test("a throwing send is caught and the claim released", async () => {
+    // A transient FCM failure must not abort the remaining recipients, and
+    // must leave the reminder retryable.
+    const {db, created, deleted} = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: [{id: "t1", locale: "en"}]},
+    });
+    const messaging = {
+      sendEach: async () => {
+        throw new Error("network");
+      },
+    };
+
+    expect(await run(db, messaging)).toBe(0);
+    expect(created).toHaveLength(1);
+    expect(deleted).toHaveLength(1);
+  });
+
+  test("a failed release is swallowed rather than thrown", async () => {
+    // The caller counts return values; throwing here would abort the sweep
+    // over a cleanup failure that the next pass fixes anyway.
+    const {db} = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: []},
+      deleteThrows: new Error("release failed"),
+    });
+
+    await expect(run(db, makeMessaging())).resolves.toBe(0);
+  });
+
+  test("a ledger create failure that is NOT already-exists sends nothing",
+      async () => {
+        // Fail closed: with no claim there is no at-most-once guarantee, so
+        // pushing anyway could deliver the same reminder every 5 minutes.
+        const {db} = makeLedgerDb({
+          users: ACTIVE,
+          tokens: {e1: [{id: "t1", locale: "en"}]},
+          createThrows: new Error("unavailable"),
+        });
+        const messaging = makeMessaging();
+
+        expect(await run(db, messaging)).toBe(0);
+        expect(messaging.sent).toEqual([]);
+      });
+
+  test("an inactive recipient gets nothing and its claim is released",
+      async () => {
+        // The role/active gate lives in sendToEmployee; this pins that a
+        // filtered recipient still releases its claim rather than burning it.
+        const {db, deleted} = makeLedgerDb({
+          users: {e1: {role: "employee", status: "disabled"}},
+          tokens: {e1: [{id: "t1", locale: "en"}]},
+        });
+        const messaging = makeMessaging();
+
+        expect(await run(db, messaging)).toBe(0);
+        expect(messaging.sent).toEqual([]);
+        expect(deleted).toHaveLength(1);
+      });
+
+  test("it works when deps carry no logger", async () => {
+    // Every log call is `if (logger)`-guarded because some call sites pass
+    // deps without one; a bare `logger.warn` would turn a release failure
+    // into a TypeError that escapes the sweep.
+    const {db} = makeLedgerDb({users: ACTIVE, tokens: {e1: []}});
+    const res = await deliverRecipientOnce(
+        {db, messaging: makeMessaging(), now: NOW}, opts());
+    expect(res).toBe(0);
   });
 });

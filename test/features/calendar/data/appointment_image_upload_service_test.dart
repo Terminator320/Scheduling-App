@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:scheduling/core/images/appointment_image_url_resolver.dart';
 import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/core/images/image_upload_failure.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
@@ -16,6 +18,10 @@ class _MockAppointmentsRepository extends Mock
     implements AppointmentsRepository {}
 
 class _MockImageStorageService extends Mock implements ImageStorageService {}
+
+class _MockFirebaseStorage extends Mock implements FirebaseStorage {}
+
+class _MockStorageRef extends Mock implements Reference {}
 
 AppointmentImage _img(String name) => AppointmentImage(
   url: 'https://example.com/$name',
@@ -31,6 +37,7 @@ void main() {
   late _MockImageStorageService storage;
   late PhotoUploadNotifier notifier;
   late PendingUploadStore store;
+  late _MockFirebaseStorage firebaseStorage;
   late Directory tempRoot;
   late Directory sourceDir;
   late Directory stagingDir;
@@ -43,6 +50,14 @@ void main() {
     storage = _MockImageStorageService();
     notifier = PhotoUploadNotifier();
     store = PendingUploadStore();
+    // The queue no longer persists download URLs, so a carried image comes
+    // back with an empty one and the drain re-resolves it from storagePath.
+    firebaseStorage = _MockFirebaseStorage();
+    final storageRef = _MockStorageRef();
+    when(() => firebaseStorage.ref(any())).thenReturn(storageRef);
+    when(storageRef.getDownloadURL).thenAnswer(
+      (_) async => 'https://example.com/resolved.jpg',
+    );
     tempRoot = Directory.systemTemp.createTempSync('img_upload_test');
     sourceDir = Directory('${tempRoot.path}/src')..createSync();
     stagingDir = Directory('${tempRoot.path}/staging')..createSync();
@@ -62,6 +77,7 @@ void main() {
     notifier: notifier,
     storage: storage,
     store: store,
+    urlResolver: AppointmentImageUrlResolver(storage: firebaseStorage),
     stagingDirProvider: () async => stagingDir,
   );
 
@@ -174,6 +190,36 @@ void main() {
       verify(
         () => appointments.appendAppointmentPictures(any(), any()),
       ).called(1);
+    });
+
+    test('a carried image whose url cannot be re-resolved stays queued '
+        'and is not appended', () async {
+      // Appending with a blank url would write a second, broken array entry
+      // beside the one a partially-committed append already left there —
+      // `arrayUnion` matches by deep equality, so it would not dedupe.
+      final storageRef = _MockStorageRef();
+      when(() => firebaseStorage.ref(any())).thenReturn(storageRef);
+      when(storageRef.getDownloadURL).thenThrow(Exception('offline'));
+
+      await store.add(
+        PendingUpload(
+          appointmentId: 'a1',
+          paths: const [],
+          enqueuedAtMs: DateTime.now().millisecondsSinceEpoch,
+          uploaded: [_img('1.jpg')],
+        ),
+      );
+
+      await makeService().drainPending();
+
+      verifyNever(() => appointments.appendAppointmentPictures(any(), any()));
+      final remaining = await store.load();
+      expect(remaining, hasLength(1));
+      expect(remaining.single.uploaded, hasLength(1));
+      expect(
+        remaining.single.uploaded.single.storagePath,
+        'appointments/a1/images/1.jpg',
+      );
     });
 
     test('permanent ImageUploadFailure drops the file and the entry', () async {

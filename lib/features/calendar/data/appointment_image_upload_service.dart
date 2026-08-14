@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'package:scheduling/core/images/appointment_image_url_resolver.dart';
 import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/core/images/image_upload_failure.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -20,12 +21,14 @@ class AppointmentImageUploadService {
     ImageStorageService? storage,
     AppLogger? logger,
     PendingUploadStore? store,
+    AppointmentImageUrlResolver? urlResolver,
     Future<Directory> Function()? stagingDirProvider,
   }) : _appointments = appointments,
        _notifier = notifier,
        _storage = storage ?? ImageStorageService(),
        _logger = logger ?? AppLogger(),
        _store = store ?? PendingUploadStore(),
+       _injectedUrlResolver = urlResolver,
        _stagingDirProvider = stagingDirProvider ?? _defaultStagingDir;
 
   final AppointmentsRepository _appointments;
@@ -33,6 +36,18 @@ class AppointmentImageUploadService {
   final ImageStorageService _storage;
   final AppLogger _logger;
   final PendingUploadStore _store;
+
+  /// Constructed LAZILY, not defaulted in the initializer list: the default
+  /// resolves `FirebaseStorage.instance`, which throws without a Firebase app,
+  /// and this service is otherwise constructible in a plain unit test. The
+  /// carried-url path is the only thing that touches it, and a test exercising
+  /// that path injects one.
+  final AppointmentImageUrlResolver? _injectedUrlResolver;
+  AppointmentImageUrlResolver? _resolvedUrlResolver;
+  AppointmentImageUrlResolver get _urlResolver =>
+      _injectedUrlResolver ??
+      (_resolvedUrlResolver ??= AppointmentImageUrlResolver());
+
   final Future<Directory> Function() _stagingDirProvider;
 
   bool _draining = false;
@@ -103,6 +118,27 @@ class AppointmentImageUploadService {
 
   /// Uploads one queued batch. Files that are permanently rejected are
   /// dropped, files that hit a transient failure get re-queued, and
+  /// Puts the download URL back on a carried image before its re-link.
+  ///
+  /// Returns null when it could not be resolved, which the caller treats as a
+  /// transient failure. An image with no `storagePath` is a legacy entry whose
+  /// `url` the queue still persists, so it is already complete.
+  Future<AppointmentImage?> _resolveCarriedUrl(
+    AppointmentImage image,
+    String appointmentId,
+  ) async {
+    if (image.storagePath.isEmpty) return image;
+    if (image.url.isNotEmpty) return image;
+    final url = await _urlResolver.resolve(image);
+    if (url.isEmpty) {
+      _logger.warn(
+        'IMG-UPLOAD could not re-resolve a carried url for $appointmentId',
+      );
+      return null;
+    }
+    return image.copyWith(url: url);
+  }
+
   /// anything that uploads successfully is removed from the queue.
   Future<void> _attempt(PendingUpload entry) async {
     final files = entry.paths
@@ -116,11 +152,31 @@ class AppointmentImageUploadService {
 
     // Carry forward images uploaded on a prior pass whose doc-link append
     // didn't land, so we re-attempt just the append without re-uploading them.
-    final uploaded = <AppointmentImage>[...entry.uploaded];
     var permanentFailures = 0;
     final tooLargeNames = <String>[];
     var transientFailure = false;
     final survivors = <String>[];
+
+    // The queue deliberately does not persist download URLs (see
+    // `PendingUpload._imageToJson`), so a carried image arrives with an empty
+    // one and it has to be resolved again before the re-link. The token is
+    // stable per object, so this reproduces the map a partially-committed
+    // append already wrote and the `arrayUnion` dedupe still holds.
+    final carried = <AppointmentImage>[];
+    for (final image in entry.uploaded) {
+      final resolved = await _resolveCarriedUrl(image, entry.appointmentId);
+      if (resolved == null) {
+        // Could not re-resolve — appending with a blank url would write a
+        // second, broken array entry beside the one already there. Treat it as
+        // the transient failure it almost always is and keep the image queued.
+        transientFailure = true;
+        carried.add(image);
+        continue;
+      }
+      carried.add(resolved);
+    }
+    final resolveFailed = transientFailure;
+    final uploaded = <AppointmentImage>[...carried];
 
     for (final file in files) {
       try {
@@ -148,8 +204,11 @@ class AppointmentImageUploadService {
       }
     }
 
-    var appendFailed = false;
-    if (uploaded.isNotEmpty) {
+    // Skipped entirely when a carried url could not be re-resolved: appending
+    // then would write a blank-url duplicate beside the entry already in the
+    // array, which is worse than waiting for the next drain.
+    var appendFailed = resolveFailed && uploaded.isNotEmpty;
+    if (uploaded.isNotEmpty && !resolveFailed) {
       try {
         // Use arrayUnion so concurrent edits/retries never clobber existing pictures.
         await _appointments.appendAppointmentPictures(

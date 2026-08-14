@@ -265,11 +265,11 @@ class _NewClientRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.sp8),
         child: Row(
           children: [
-            AppAvatar(name: client.name, size: AvatarSize.sm),
+            AppAvatar(name: client.displayName, size: AvatarSize.sm),
             const SizedBox(width: AppSpacing.sp12),
             Expanded(
               child: Text(
-                client.name,
+                client.displayName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium,

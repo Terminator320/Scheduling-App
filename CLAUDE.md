@@ -1107,15 +1107,19 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   surface that has one** (2026-08-07). Every other client surface is a one-shot
   read — a paginated page, or the repository's cached scan window — and
   `wave.syncState` is function-owned: the `waveUpsertCustomer` trigger stamps
-  `pending` *after* the save has already returned, and the outbox worker flips
-  it to `synced` up to five minutes later. So the record a screen holds always
+  `pending` *after* the save has already returned, and — as of 2026-08-13 —
+  enqueues AND drains that job inline, in the same invocation, so it usually
+  reaches Wave and flips to `synced` within seconds rather than on a poll (the
+  `waveSyncWorker` scheduler that used to own this drain is deleted; see
+  `functions/CLAUDE.md`). So the record a screen holds always
   predates the state the badge is trying to show, and the edit sheet pops back
   a `copyWith` of that same record, which carries the PRE-EDIT sync state
   through by design (it must — `waveSyncState` is not the form's to write).
   The badge therefore could never move in response to an edit: it sat on
   "Synced with Wave" while the push was still queued, and Settings ›
   "Sync with Wave" — correctly — reported nothing left to send, because the
-  5-minute worker had already sent it. `clientStreamProvider`
+  inline drain had already sent it within seconds of the save.
+  `clientStreamProvider`
   (`clients_providers.dart`, an `autoDispose.family` over
   `ClientsRepository.watchClient`) is the fix; the view keeps the handed-in
   record as a **fallback**, so an offline or refused read leaves the detail on
@@ -2064,5 +2068,7 @@ still succeed, making the failure appear collection-specific. Full walkthrough:
   `_scaledHarness`**, despite what older plan docs call the pattern.
 - Harness requirements, mocking rules and device-only caveats: the **Test
   Strategy** section of `docs/ARCHITECTURE.md`. (This used to point at
-  `.claude/rules/testing.md`, which does not exist — `.claude/` is gitignored
-  and was never committed, so that file was never available to anyone.)
+  `.claude/rules/testing.md`, which does exist on a machine that has one and
+  loads via `alwaysApply: true` — but `.claude/` is gitignored and was never
+  committed, so it reaches nobody else. `docs/ARCHITECTURE.md` is the copy a
+  teammate or a fresh clone can actually read; keep the two in step.)

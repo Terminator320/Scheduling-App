@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -289,7 +289,7 @@ class CalendarDayCell extends StatelessWidget {
       excludeSemantics: true,
       child: InkResponse(
         key: cellKey,
-        onTap: () => onTap(DateTime(day.year, day.month, day.day)),
+        onTap: () => onTap(day.dateOnly),
         radius: circleSize,
         child: Center(child: content),
       ),

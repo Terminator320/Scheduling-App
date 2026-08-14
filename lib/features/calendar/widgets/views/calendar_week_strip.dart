@@ -1,8 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
 
 /// Design metrics (`03-screens-schedule.md`). 1.0-scale FLOORS — the real
@@ -125,7 +125,7 @@ class _StripCell extends StatelessWidget {
           '${day.month.toString().padLeft(2, '0')}-'
           '${day.day.toString().padLeft(2, '0')}',
         ),
-        onTap: () => onTap(DateTime(day.year, day.month, day.day)),
+        onTap: () => onTap(day.dateOnly),
         radius: circleSize,
         child: Column(
           mainAxisSize: MainAxisSize.min,

@@ -4,12 +4,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show compute;
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_image_doc_id.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -139,8 +141,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     // `endTime >= now` still has no UPPER bound, and a repeat series pre-books
     // up to `RepeatInterval.maxOccurrences` (120) occurrences out to a 5-year
     // horizon — so a tech on several series was several hundred documents read
-    // to render one caption. This was the last unbounded query in the
-    // repository; every other one names a ceiling.
+    // to render one caption. Every query in this repository now names a
+    // ceiling — `getSeries` was the last one without, and got `_seriesScanLimit`.
     //
     // A `.limit` rather than a horizon bound, deliberately: with `endTime` the
     // only inequality, Firestore returns these in `endTime` ASC order, so the
@@ -199,9 +201,22 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   @override
   Future<List<AppointmentRecord>> getSeries(String seriesId) async {
+    // Bounded like every other read here. `RepeatInterval.maxOccurrences` caps
+    // what the APP can write, but the console and the Admin SDK bypass that,
+    // so the query states its own ceiling. +1 so a series sitting exactly at
+    // the cap doesn't trip the warn.
     final snapshot = await _appointments
         .where('seriesId', isEqualTo: seriesId)
+        .limit(_seriesScanLimit)
         .get();
+    if (snapshot.docs.length >= _seriesScanLimit) {
+      // A truncated series means a "this and all future" edit would silently
+      // skip the siblings past the cap, so this must not pass in silence.
+      _logger.warn(
+        'APPT-LOAD series $seriesId hit the '
+        '$_seriesScanLimit-doc cap — siblings beyond it were not loaded',
+      );
+    }
     return snapshot.docs
         .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
         .toList();
@@ -580,6 +595,13 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   /// not to trim a typical one. See the reasoning at the query.
   static const int _futureAssignmentScanLimit = 200;
 
+  /// Ceiling on [getSeries]. `RepeatInterval.maxOccurrences` (120) is what the
+  /// app will write, and the `+ 1` is what lets the warn distinguish "a full
+  /// legal series" from "more than the app could have created" — the latter
+  /// only being reachable through the console or the Admin SDK, which bypass
+  /// that assertion.
+  static const int _seriesScanLimit = RepeatInterval.maxOccurrences + 1;
+
   @override
   Future<List<AppointmentRecord>> searchHistory(String query) async {
     final q = query.trim();
@@ -704,8 +726,13 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         // stored instants, but the pair is a DAILY window. Without this a
         // multi-day 9-5 run reports its crew busy at 7 pm on every one of its
         // days, and the admin has to force through a phantom clash.
-        final docStart = (data['startTime'] as Timestamp?)?.toDate();
-        final docEnd = (data['endTime'] as Timestamp?)?.toDate();
+        // Through the shared parser, not a raw `as Timestamp?` cast: that form
+        // handled only a real Timestamp, so a legacy or console-written row
+        // holding a string instant parsed as null, skipped the daily-window
+        // narrowing below, and reported the phantom clash this narrowing
+        // exists to prevent.
+        final docStart = firestoreDateTime(data['startTime']);
+        final docEnd = firestoreDateTime(data['endTime']);
         if (docStart != null &&
             docEnd != null &&
             !dailyWindowsOverlap(

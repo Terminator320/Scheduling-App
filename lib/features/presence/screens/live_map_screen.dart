@@ -302,6 +302,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     String signature,
     int token,
   ) async {
+    final logger = ref.read(loggerProvider);
     try {
       // Render every icon in parallel. The renderer caches per key, so
       // repeated or superseded batches are near-free, but one failure aborts
@@ -336,8 +337,11 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
       _lastSignature = signature;
       setState(() => _markers = markers);
     } catch (e, st) {
+      // Logged before the guards, through the logger captured above — a marker
+      // render that fails after the screen is disposed is exactly the case
+      // worth having in Crashlytics, and it was being dropped.
+      logger.warn('LIVEMAP-MARKERS assemble failed', e, st);
       if (!mounted || token != _assembleToken) return;
-      ref.read(loggerProvider).warn('LIVEMAP-MARKERS assemble failed', e, st);
     }
   }
 

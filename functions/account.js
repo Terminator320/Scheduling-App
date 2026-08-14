@@ -6,6 +6,10 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {
   assertPayloadShape,
   enforceDurableRateLimit,
+  assertFreshReauth,
+  // Re-exported below for `__tests__/account.test.js`, which pins the pure
+  // predicate through this module — the guard itself now goes through
+  // `assertFreshReauth`.
   isReauthStale,
 } = require("./security");
 const {runAccountDeletion} = require("./account_policy");
@@ -40,16 +44,14 @@ const deleteAccount = onCall(
       assertPayloadShape(req.data, new Set());
       // Checked before the rate limiter so a stale-auth rejection doesn't
       // burn one of the caller's deletion slots.
-      const authTime = req.auth.token?.auth_time;
-      const nowSec = Math.floor(Date.now() / 1000);
-      if (isReauthStale(authTime, nowSec, REAUTH_MAX_AGE_SECONDS)) {
-        logger.warn("deleteAccount: stale auth_time; reauth required", {
-          uid: req.auth.uid,
-          authTime,
-          ageSec: typeof authTime === "number" ? nowSec - authTime : null,
-        });
-        throw new HttpsError("unauthenticated", "stale-auth");
-      }
+      //
+      // Through the shared `assertFreshReauth`, not a local copy: this was the
+      // helper's whole body hand-inlined — same `isReauthStale` call, same
+      // warn fields, same `stale-auth` code — which is the two-owner shape
+      // this codebase kills everywhere else (`displayStatusAt`, `_who`,
+      // `hasWorkLeft`). The `stale-auth` string in particular is a contract:
+      // the Flutter client branches on it.
+      assertFreshReauth(req.auth, "deleteAccount", REAUTH_MAX_AGE_SECONDS);
       const limiter = await enforceDurableRateLimit(
           "deleteAccount",
           req.auth.uid,

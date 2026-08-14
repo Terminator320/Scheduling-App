@@ -17,6 +17,7 @@ const {
   sliceForDay,
   dayCountOf,
   lastWorkDayMs,
+  clampedLastWorkDayMs,
   calendarDaysBetween,
   isOvernightRecord,
 } = require("../day_slice_utils");
@@ -159,5 +160,77 @@ describe("day_slice_utils", () => {
     expect(calendarDaysBetween(AUG1, AUG3)).toBe(2);
     expect(calendarDaysBetween(AUG3, AUG1)).toBe(-2);
     expect(calendarDaysBetween(dayJob.startTime, AUG1)).toBe(0);
+  });
+});
+
+describe("clampedLastWorkDayMs", () => {
+  // The clamped form for anything that RENDERS the run's tail. `lastWorkDayMs`
+  // is deliberately raw and `sliceForDay`/`dayCountOf` clamp on the way out, so
+  // the push text was the one day-scoping consumer printing a corrupt doc's
+  // real end while the widget, Siri and the card all said "Day n of 14".
+  const AUG14 = at("2026-08-14T04:00:00.000Z");
+
+  test("an in-range run is unclamped and matches the raw last work day", () => {
+    // The normal case must not be perturbed by the cap.
+    expect(clampedLastWorkDayMs(dayJob)).toBe(at("2026-08-05T04:00:00.000Z"));
+    expect(clampedLastWorkDayMs(dayJob)).toBe(lastWorkDayMs(dayJob));
+  });
+
+  test("an over-long run is clamped to the 14-day cap", () => {
+    // Only the console and the Admin SDK can write this — `firestore.rules`
+    // bounds client writes to the same cap.
+    const corrupt = {
+      startTime: at("2026-08-01T13:00:00.000Z"),
+      endTime: at("2026-09-30T21:00:00.000Z"),
+    };
+    expect(lastWorkDayMs(corrupt)).toBe(at("2026-09-30T04:00:00.000Z"));
+    expect(clampedLastWorkDayMs(corrupt)).toBe(AUG14);
+  });
+
+  test("the cap is start + (MAX - 1) days, so day 14 is the LAST day", () => {
+    // The off-by-one that matters: `addDaysMs(startMs, MAX)` would allow a
+    // 15th day, and the push text would then name a day the card's
+    // "Day n of 14" counter cannot reach.
+    const corrupt = {
+      startTime: at("2026-08-01T13:00:00.000Z"),
+      endTime: at("2026-09-30T21:00:00.000Z"),
+    };
+    const clamped = clampedLastWorkDayMs(corrupt);
+    expect(calendarDaysBetween(corrupt.startTime, clamped) + 1)
+        .toBe(MAX_APPOINTMENT_SPAN_DAYS);
+    // And it agrees with the counter every other mirror renders.
+    expect(sliceForDay(corrupt, AUG3).dayCount).toBe(MAX_APPOINTMENT_SPAN_DAYS);
+  });
+
+  test("a run exactly at the cap is returned untouched", () => {
+    // 14 days inclusive is legal — the boundary must not be clipped to 13.
+    const exact = {
+      startTime: at("2026-08-01T13:00:00.000Z"),
+      endTime: at("2026-08-14T21:00:00.000Z"),
+    };
+    expect(dayCountOf(exact)).toBe(MAX_APPOINTMENT_SPAN_DAYS);
+    expect(clampedLastWorkDayMs(exact)).toBe(AUG14);
+    expect(clampedLastWorkDayMs(exact)).toBe(lastWorkDayMs(exact));
+  });
+
+  test("an overnight run still ends on the last day work BEGINS", () => {
+    // The clamp must not undo the night-shift rule: the end date names the
+    // last day the crew starts, never the morning the run finishes.
+    expect(clampedLastWorkDayMs(nightShift)).toBe(AUG3);
+    expect(clampedLastWorkDayMs(nightShift)).toBe(lastWorkDayMs(nightShift));
+  });
+
+  test("a record with no usable start has no clamped last day", () => {
+    // Callers render this into text, so a NaN or 0 here would print an epoch
+    // date rather than omitting the tail.
+    expect(clampedLastWorkDayMs({})).toBeNull();
+    expect(clampedLastWorkDayMs({startTime: null})).toBeNull();
+  });
+
+  test("a record with no endTime collapses onto its own start day", () => {
+    // Legacy/console docs exist without an end; treating it as overnight
+    // would count the run backwards and drop the tail entirely.
+    const noEnd = {startTime: at("2026-08-03T13:00:00.000Z")};
+    expect(clampedLastWorkDayMs(noEnd)).toBe(AUG3);
   });
 });

@@ -11,6 +11,12 @@ import 'package:scheduling/features/wave/domain/wave_error_mapper.dart';
 /// which is sized to leave most of this window to the import half.
 const int kWaveSyncTimeoutSeconds = 120;
 
+/// The deadline on every Wave callable that ISN'T the long-running sync — a
+/// connection read, a cadence write, a dead-letter requeue. Hoisted because it
+/// was written out at three call sites; the sync pair above keeps its own,
+/// much longer, budget.
+const Duration _callableTimeout = Duration(seconds: 20);
+
 class WaveService {
   WaveService({FirebaseFunctions? functions, AppLogger? logger})
     : _functions =
@@ -27,7 +33,7 @@ class WaveService {
       result = await _functions
           .httpsCallable(
             'waveBootstrap',
-            options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+            options: HttpsCallableOptions(timeout: _callableTimeout),
           )
           .call(<String, dynamic>{});
     } catch (e, st) {
@@ -52,7 +58,7 @@ class WaveService {
       result = await _functions
           .httpsCallable(
             'waveGetConnection',
-            options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+            options: HttpsCallableOptions(timeout: _callableTimeout),
           )
           .call(<String, dynamic>{});
     } catch (e, st) {
@@ -161,7 +167,7 @@ class WaveService {
       await _functions
           .httpsCallable(
             'waveSetImportSchedule',
-            options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+            options: HttpsCallableOptions(timeout: _callableTimeout),
           )
           .call<void>(<String, dynamic>{'schedule': schedule.raw});
     } catch (e, st) {

@@ -11,11 +11,22 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 
-/// Today, as a single-day range. Keyed off `currentDayProvider` rather than
-/// `DateTime.now()` so an app left open across midnight rolls over — the same
-/// rule the calendar's today-circle and the off-screen mirrors follow.
+/// The window the today-scoped roster surfaces read. Keyed off
+/// `currentDayProvider` rather than `DateTime.now()` so an app left open across
+/// midnight rolls over — the same rule the calendar's today-circle and the
+/// off-screen mirrors follow.
+///
+/// Deliberately [AppointmentDateRange.forMirrors] and NOT `forDay`, even
+/// though every consumer wants a single day: `appointmentsInRangeProvider` is
+/// keyed by range VALUE, and for an admin the Siri snapshot already holds this
+/// exact range open for the whole session. `forDay`'s result set is a strict
+/// subset of it (same `fetchStart`, narrower `end`), so asking for it forked a
+/// SECOND permanent business-wide listener over documents the first was
+/// already streaming — and the hub keeps the Team tab mounted, so one visit
+/// pinned it for the session. Every consumer below re-scopes with `runsOn`, so
+/// the wider list feeds them unchanged. Same rule as `myDetailsRangeProvider`.
 final todayRangeProvider = Provider<AppointmentDateRange>((ref) {
-  return AppointmentDateRange.forDay(ref.watch(currentDayProvider));
+  return AppointmentDateRange.forMirrors(ref.watch(currentDayProvider));
 });
 
 /// How many jobs each employee is booked for today, keyed by users-doc id.

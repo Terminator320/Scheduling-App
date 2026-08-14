@@ -477,7 +477,6 @@
   "dashboard_completedVsCancelled": "Terminées vs annulées — 8 dernières semaines",
   "dashboard_newClientsEmpty": "Aucun nouveau client depuis 8 semaines",
   "dashboard_newClients": "Nouveaux clients",
-  "dashboard_newClientsTotal": "{count, plural, =1{1 au cours des 8 dernières semaines} other{{count} au cours des 8 dernières semaines}}",
   "dashboard_newClientsWindow": "{weeks, plural, =1{Au cours de la dernière semaine} other{Au cours des {weeks} dernières semaines}}",
   "dashboard_newClientsTrendUp": "{count, plural, =1{1 de plus que les {weeks} semaines précédentes} other{{count} de plus que les {weeks} semaines précédentes}}",
   "dashboard_newClientsTrendDown": "{count, plural, =1{1 de moins que les {weeks} semaines précédentes} other{{count} de moins que les {weeks} semaines précédentes}}",

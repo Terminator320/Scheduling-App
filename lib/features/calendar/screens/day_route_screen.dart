@@ -10,6 +10,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
@@ -268,7 +269,9 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     // The one day-header formatter, memoized per locale — the calendar agenda,
     // history day groups and dashboard hero all render through it too.
     final label = DateUtilsHelper.formatDayHeader(_day);
-    final isToday = _day == DateTime.now().dateOnly;
+    // `currentDayProvider`, never `DateTime.now()` — otherwise the jump-to-today
+    // control below sticks on yesterday in an app left open across midnight.
+    final isToday = _day == ref.watch(currentDayProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sp8,
