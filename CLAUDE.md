@@ -1551,167 +1551,11 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   against a guessed default. `EmployeeRecord.toMap()` deliberately does NOT emit
   it: an admin save must leave it exactly as it was.
 
-- **Calendar (rebuilt in P2, 2026-07-30):** `table_calendar` is **deleted**;
-  the month view is our own `CalendarMonthGrid` + `CalendarMonthPager`. It
-  renders **only the weeks the month actually occupies** — 4, 5 or 6 rows from
-  `monthGridRowCount` (owner call, 2026-07-31: a fixed 6 trailed a week of
-  nothing but off-month cells). A fixed **5** is still wrong the other way and
-  drops the end of months like August 2026, so the row count must stay derived,
-  never a constant. Week start comes from the locale (`weekStartForLocale`,
-  memoized per locale string — it builds a `DateFormat` just to read its
-  symbols, and the grid, pager and week strip all ask on every calendar
-  rebuild). Resolve it from a widget through `CalendarMonthGrid.weekStartOf(context)`
-  rather than re-inlining `weekStartForLocale(Localizations.localeOf(...))`.
-  Because rows vary, `CalendarMonthGrid.heightFor` takes a **required `rows`**
-  (use `rowsFor(context, month)`), the pager animates its viewport to the month
-  in view, and each page is wrapped in `ClipRect` + top-aligned `OverflowBox`
-  so a taller month being dragged in doesn't overflow before the height
-  settles. Off-month cells render a **faint day number AND their
-  crew dots** but stay untappable and out of the semantics tree: the design says
-  "blank, Ink 15, not tappable" while the program spec widened the fetch range
-  precisely so trailing days aren't dotless, and dots-plus-faint-number is what
-  reconciles the two (owner-confirmed). **The crew dots also survive selection**
-  (owner call, 2026-07-31): the selection circle fills the day number only and
-  the dot row sits below it on the plain cell background, so suppressing them
-  there made the day being looked at the one day whose crew was invisible.
-  Every cell that has crew shows it — off-month, selected, today, all of them.
-  **A day's dots count JOBS, not distinct people** (owner call, 2026-08-04, which
-  reversed the P2 rule): `dayJobDotColors` (`calendar/domain/appointment_crew.dart`)
-  emits one entry per job in list order, capped at 3, each carrying that job's
-  first colour-resolvable assignee. The dots answer "how busy is this day", so
-  two jobs for the same person are two dots. It returns `List<Color?>` and a
-  **null entry is load-bearing, not a gap**: a job whose crew resolves to no
-  colour still gets a dot, painted `palette.textFaint` — the same neutral the
-  card's crew bar uses for an unassigned job. The old per-assignee version
-  simply skipped those, so a day holding only unassigned work read as empty.
-  The week strip renders the same list capped at 1, for the same reason.
-  `today` always comes from
-  `currentDayProvider`, never `DateTime.now()`, or the circle sticks on
-  yesterday in an app left open across midnight.
-  **`AppointmentDateRange.visibleMonth` overscans ±7 days** (narrowed from ±14
-  on 2026-08-13). The variable-row grid trails at most 6 off-month days on each
-  side, so ±7 clears the worst case by one — where ±14 was a superset of every
-  grid shape including the fixed-6-row one P2 replaced, and cost a fortnight of
-  documents per month view on top of the fortnight `fetchStart` already adds.
-  That saving buys a coupling: the window is now sized to the row rule, so
-  bringing back a fixed row count leaves the edge cells dotless.
-  **`month_grid_overscan_test.dart` is that coupling made to fail loudly** — it
-  walks every month across a leap cycle at all seven week starts and asserts
-  the fetch window contains every rendered cell. Change the row rule and it
-  breaks there rather than in somebody's empty crew dots.
-  **A single-day window has ONE owner: `AppointmentDateRange.forDay(day)`.**
-  It is **calendar** arithmetic (`DateTime(y, m, d + 1)`), never
-  `add(Duration(days: 1))`, which lands an hour off real midnight on the two
-  DST-shift days. Two costs, not one: it mis-buckets a late-evening job, AND
-  because `appointmentsInRangeProvider` is keyed by range **value**, an hour of
-  drift stops matching the day-range another surface already holds open and
-  forks a second live Firestore query for the same day. That is why
-  `todayRangeProvider`, the drawer's job count, the day route and
-  `forCalendar`'s selected-day leg all resolve through the one factory rather
-  than re-deriving the pair — it was hand-copied at four sites, two of which
-  cited each other as the authority.
-  **Portrait is TWO scroll areas** (owner call, 2026-07-31): the grid is FIXED
-  above the agenda, and the jobs have their own `CustomScrollView`, so reading
-  down the day never moves the calendar. Collapse is a **drag on the divider
-  between them** — `_CollapseHandle`, which is also a tap-toggle and carries the
-  Hide/Show calendar tooltip that the widget tests find it by.
-  `CalendarCollapse` (`domain/collapse_state.dart`) accumulates drag deltas past
-  **24px**, resetting on a direction reversal and on `endDrag` so two half-drags
-  don't add up. Only `onDragDelta` returns a bool (it means "the flag flipped",
-  so the caller rebuilds on a transition and not per gesture frame); `toggle()`
-  is `void` — it always flips, so a bool there would be a constant nobody reads.
-  The agenda's own `ScrollController` is load-bearing for a second reason: an
-  explicitly-controlled scrollable is not the *primary* one, which is what keeps
-  it and the grid off the app-wide `Scrollbar`'s single controller. The old
-  shared-viewport version needed a derived
-  `gridHeight − stripHeight` spacer to hold the extent the grid vacated; with two
-  viewports there is no vacated extent, and the spacer is gone. **The grid does
-  not scroll at all** (owner call, 2026-07-31): it sits in a `Flexible` +
-  `SingleChildScrollView` whose physics are `NeverScrollableScrollPhysics`, so
-  the viewport is pure overflow protection — a short viewport (small phone,
-  large text scale) shrinks the grid instead of running the column past the
-  bottom, and at normal heights it shrink-wraps and is inert. The handle is the
-  ONLY thing that moves the grid; don't restore scrollable physics to "fix" a
-  clipped month.
-  **Collapse is portrait-only** — `_splitCalendar` short-circuits the strip.
-  **Paging selects.** A month swipe (or the month picker) lands on the 1st and
-  SELECTS it, and a swipe on the collapsed week strip pages one week and selects
-  that week's first day — the agenda must always describe the grid above it.
-  That is also why the fetch window is `AppointmentDateRange.forCalendar`
-  (month grid ∪ selected day) rather than the month alone: any path that leaves
-  a selection outside the visible month drops its jobs from the fetch, and the
-  agenda then reports "0 jobs" for a day that has some.
-  The calendar is the **one screen with no `AppTopBar`** (see the frontend rule):
-  `CalendarHeaderBlock` replaces it, and therefore must set the system overlay
-  style itself via `AnnotatedRegion`, choosing icon brightness from the surface
-  colour rather than the theme brightness. Its title and controls **stack under
-  `context.isCompact`**. The month name itself is **measured, not gated**: the
-  screen passes both `monthLabel` and `monthLabelShort` (`DateFormat.MMMM` /
-  `.MMM`) and `_MonthRow` lays out the row, subtracts the year + chevron, and
-  takes the abbreviation when the full name won't fit. Don't "simplify" that
-  back to a text-scale threshold — the in-app XL setting is **exactly 1.4**, so
-  the `isCompact` gate (`> 1.4`) missed it entirely, and the OS scaler, the
-  device width and the locale's month lengths all move independently. The
-  semantics label always speaks the full month. Note the widget test asserts
-  against **viewport width**, not a scale: the test font is far wider per glyph
-  than the shipped one.
-- **The calendar agenda sinks CLOSED jobs to the bottom of the day, and only
-  the calendar does** (2026-08-08). `_agendaOrder` in `appointment_day_slice.dart`
-  gained a first tier — open before closed — above the existing all-day and
-  window-start tiers, which still apply *within* the closed block. It reads the
-  STORED status through **`AppointmentRecord.isClosed`**, never `displayStatus`,
-  so the comparator stays clock-free like the rest of that module; `isClosed` is
-  the model-layer mirror of `AppointmentStatus.isTerminal` and exists precisely
-  so a pure module can ask without pulling Material in through `status_chip.dart`
-  (it is also the one owner of the `done`/`completed`/`cancelled` triple —
-  `displayStatusAt` calls it rather than re-spelling it). Both terminal states
-  sink: a cancelled visit is as done with as a completed one.
-  A closed job then renders in the **collapsed** treatment —
-  `AppointmentCard(collapseWhenClosed: true)`, opt-in and passed ONLY by
-  `AgendaSliverList`: the success tint for `done`, a one-line body putting the
-  time beside the client, and no avatar stack (the crew bar still carries
-  colour, so *who* survives the collapse). **`_kClosedMinHeight` (48) is
-  load-bearing, not belt-and-braces** — the collapsed row lands near 56px, close
-  enough that a small text scale drops it under Material's minimum, and the row
-  is still a full `InkWell` opening the same sheet. The **multi-day counter
-  stays** on a collapsed row (deviating from the approved mockup, deliberately):
-  a closed job renders on every day of its run, so without "Day 3 of 5" those
-  rows are indistinguishable. `AgendaSliverList` emits one `_ClosedRule`
-  (`calendar_closedCount`, which reads **"Done"** — owner call 2026-08-08,
-  reversing the earlier "Closed"; a cancelled visit sinks into the same block
-  and is counted by it, so the label is deliberately looser than the set) at
-  `_firstClosedIndex`, and its `length - index` count is only valid because the
-  sort guarantees the closed jobs are one contiguous tail — don't reorder them
-  at the call site. **The agenda header's count answers the same question and
-  must use the same predicate**: `_jobLabel` (`main_calendar_screen.dart`)
-  appends `· 1 DONE` to `3 JOBS` by counting `isClosed`, not `done` alone, so
-  the header and the rule drawn over that block can never disagree about how
-  much of the day is behind them. Everywhere else (day route, dashboard, employee TODAY panel,
-  client job history) keeps its own sort and the plain full-height card.
-- **`AppointmentCard` is the ONE appointment card** — calendar agenda, day
-  route, client job history, both dashboard sections and the paginated history
-  list (`AppointmentTile` is deleted, along with `colorFromMap` and
-  `resolveAssigneeNames`). It takes `crew: List<AppointmentCrew>` from
-  `crewFor(appointment, colorMap:, nameMap:)`; without a `nameMap` that falls
-  back to the record's denormalized `employeeNames`, which is what the history
-  and client surfaces already showed. **The crew bar bands EVERY assignee**
-  (`_crewBarDecoration`, up to `_kMaxCrewShown` = 4 — the SAME cap the avatar
-  stack uses, deliberately, so the bands and the faces never disagree on how
-  much of the crew the card shows): a flat colour for one,
-  a hard-stopped `LinearGradient` of each crew colour for more (owner call,
-  2026-07-31 — it followed the first assignee alone before that, and the
-  pre-redesign grey-for-multi-crew is doubly wrong: grey reads as
-  *unassigned*). Only a job with no crew at all is `textFaint`. The meta line
-  is an **overlapped avatar stack — one avatar per assignee — followed by the
-  client name** (owner call, 2026-07-31; it was a single avatar plus the text
-  `Theo +1 · Client`, and `calendar_crewAndClient` is deleted). `_CrewAvatars`
-  computes its own width rather than laying out, because of the
-  `IntrinsicHeight` rule below; `_crewLabel`/`calendar_crewPlusOthers` survive
-  only as the fallback text for a record with no client name to show. `alwaysShowChip` is **gone**, not ported
-  (every call site passed `true`); cancelled dims to **0.6**, not 0.75. The card
-  uses `IntrinsicHeight` to stretch the crew bar, so **nothing in its subtree may
-  use `LayoutBuilder`, `AutoSizeText` or `FittedBox`** — they cannot report
-  intrinsics.
+- **Calendar UI rendering rules live in `lib/features/calendar/CLAUDE.md`**
+  (moved 2026-08-14) — the P2 month grid/pager/collapse rules, the
+  `AppointmentCard` contract, and the agenda's closed-job sink. They are pure
+  Flutter with no `functions/` twin, so they load only when working under that
+  directory. Everything with a server-side mirror stayed here.
 - **History carries its date on a LEFT RAIL, under a sticky month bar, and it
   builds its own slivers** (P7 Phase D, 2026-08-11 —
   `docs/plans/2026-08-11-history-restyle.md`). The rail is what leaves
@@ -1793,92 +1637,11 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `_hubRoute` + `HubTabRedirectRoute` survive at three tab routes — they look
   dead but remain the cold-start fallback and are pinned by `hub_shell_test`.
 
-- **Feature tours (`lib/features/feature_tour/`, showcaseview 5.x):** each
-  scope registers its OWN showcaseview scope (`TourScope.storageKey`) — the hub
-  IndexedStack keeps every tab mounted, so a shared scope would mix hidden
-  tabs' targets into the visible tour. `FeatureTourHost` is the only start
-  path.
-  **A tour is keyed on the sealed `TourScope`, not on `AppDestination`**
-  (`domain/tour_scope.dart`, 2026-08-04): `DestinationTour` wraps a screen,
-  `FormTour` wraps one of the three create-flow sheets (`addAppointment`,
-  `addClient`, `invitePerson`) — which is the only reason a walkthrough of
-  "how do I create an appointment" is expressible at all. **`storageKey` is
-  BOTH the showcase scope name and the SharedPreferences entry, and a
-  destination's key is its bare `.name`** — do not prefix it, or every
-  installed device replays every tour it has already seen. Form keys are
-  namespaced `sheet_*` so they cannot collide. `.name` stays load-bearing:
-  renaming a `HubTab`, `PushedDestination` or `TourForm` member replays or
-  orphans that tour.
-  **Its visibility gate is chosen by the scope's sealed type, not
-  by a null `HubShellScope`**: a `HubTab` gates on `HubShellScope.currentOf`;
-  a `PushedDestination` **and a `FormTour`** both gate on
-  `ModalRoute.of(context)?.isCurrent` — one branch, because a
-  `ModalBottomSheetRoute` IS a `ModalRoute`. A null scope is
-  ambiguous — it also describes a hub screen hosted standalone in a test, where
-  "never start" must be preserved. Before this split, Settings and History
-  (now pushed routes) would have had `currentOf == null` and their tours would
-  have silently never started.
-  **A widget test that pumps `AddEventSheet`, `AddClientSheet` or
-  `InvitePersonSheet` MUST call `markFormToursSeen()`**
-  (`test/support/tour_test_support.dart`). A sheet's route is current the
-  instant the test pumps it, so on a fresh-install preferences store the tour
-  starts and showcaseview's repeating tooltip animation makes `pumpAndSettle`
-  time out. Hub tabs are immune (no `HubShellScope` when hosted standalone).
-  **A scrolling tour host passes `autoScroll: true` AND
-  `kTourScrollCacheExtent`** — `isTargetRendered` cannot find a target a lazy
-  list never built, and it drops that step silently rather than failing.
-  **Wrap targets with `TourSteps.stepIf`, not `has(id) ? step(id, ...) : child`**
-  — `step` force-unwraps `keys[id]!`, so an unguarded wrap crashes on a screen
-  whose employee catalog is empty. A list-row step wraps the FIRST row only
-  (the `GlobalKey` must stay unique), injected as a wrap callback so the widget
-  stays reusable untoured — `ClientsListView` is also the booking flow's client
-  picker.
-  Route mode also awaits `_routeTransitionSettled()` so showcase measures a
-  page that has finished sliding in. It
-  awaits `tourSeenProvider.ready` before acting (the optimistic empty default
-  would replay seen tours on cold start), and drops steps whose target isn't
-  rendered via `isTargetRendered` — **never `GlobalKey.currentContext`: the
-  5.x `Showcase` widget does NOT forward its key to the element tree, so
-  currentContext is always null** (zero survivors → mark seen, never
-  crash/retry). The auto-start sets a `_started` guard before its post-frame
-  callback runs; **reset `_started` on the visibility-changed early-return** (the
-  tab was switched away before the callback fired) — a stale `true` there
-  permanently suppresses that tab's tour for the session, so a fast tab-switch
-  during auto-start otherwise wedges it shut. **Data-dependent tabs MUST pass `FeatureTourHost(ready:)` false
-  while their body shows a loading/error placeholder** — the tour's targets
-  don't exist yet, so an ungated start finds zero survivors and permanently
-  marks the tab seen against an empty body (bit LiveMap: its FAB targets live in
-  the map stack, absent during the presence-data load). **A PARTIAL start is
-  the same bug and is easier to miss** — the surviving steps run, the tour
-  finishes, and `markSeen` fires for the WHOLE scope, so the dropped steps are
-  gone for good (Settings › Replay is the only way back). Any scope holding
-  even ONE data-dependent target needs the gate, not just one whose body is
-  entirely a placeholder. Calendar gates on
-  `!isLoading`; LiveMap gates on `_mapTargetsRendered` (the map stack, not the
-  placeholder, is showing); Dashboard and Day route gate on `AsyncData`; Team
-  gates on `allUsersStreamProvider.hasValue`. **Clients and History are
-  paginated, so they have no `AsyncValue` to read** — `ClientsListView` and
-  `AppointmentHistoryView` each expose `onFirstPageSettled`, fired post-frame
-  after the first page resolves (success OR failure — either way the skeleton
-  is gone and no further row arrives on its own), and the screen gates `ready`
-  on it. Wire any new paginated tour host the same way rather than starting
-  against the skeleton.
-  Settings and the three form sheets instead FORCE their below-fold targets to
-  mount via `autoScroll: true` + an inflated `scrollCacheExtent` — a lazy list
-  won't build off-screen rows for `isTargetRendered` to find. Scopes are
-  registered in initState and deliberately NEVER
-  unregistered (register() replaces; unregister in dispose would race the
-  replacement State's initState on a hub identity change), and every
-  dismiss/mark-seen is gated by `_tourRunning` because the package fires
-  onDismiss even when idle. Step catalogs are pure (`tourStepsFor`);
-  Clients/Employees/History/LiveMap/Dashboard and all three form sheets are
-  admin-only, so their employee catalogs are empty and their screens guard
-  wraps on catalog membership. **Calendar, Day route and Settings are the
-  three destinations an employee can reach, and each has an employee tour** —
-  keep that set matching `drawerGroups(isAdmin: false)`.
-  Seen flags are device-local SharedPreferences ONLY (`tour_seen_tabs`);
-  sign-out does not reset them — the Settings "Replay app tour" row is the
-  only reset.
+- **Feature-tour rules live in `lib/features/feature_tour/CLAUDE.md`**
+  (moved 2026-08-14) — `TourScope`, the visibility gates, `isTargetRendered`,
+  the `ready:` gate for data-dependent tabs, and the widget-test caveat.
+  Remember here: an `AppDestination`/`TourForm` member name IS the tour's
+  storage key, so renaming one replays or orphans that tour.
 
 ## Conventions
 
@@ -2067,8 +1830,12 @@ still succeed, making the failure appear collection-specific. Full walkthrough:
   owns a local `_harness` helper for this — **there is no shared
   `_scaledHarness`**, despite what older plan docs call the pattern.
 - Harness requirements, mocking rules and device-only caveats: the **Test
-  Strategy** section of `docs/ARCHITECTURE.md`. (This used to point at
-  `.claude/rules/testing.md`, which does exist on a machine that has one and
-  loads via `alwaysApply: true` — but `.claude/` is gitignored and was never
-  committed, so it reaches nobody else. `docs/ARCHITECTURE.md` is the copy a
-  teammate or a fresh clone can actually read; keep the two in step.)
+  Strategy** section of `docs/ARCHITECTURE.md`, mirrored by
+  `.claude/rules/testing.md` — keep the two in step. **`.claude/` is COMMITTED
+  as of 2026-08-14** (private repo, worked from both a Windows box and the Mac),
+  so the rules, skills, agents, commands and hooks now reach every clone;
+  before that date `.claude/` was gitignored and `docs/ARCHITECTURE.md` was the
+  only copy anyone else could read. Only `.claude/settings.local.json` stays
+  ignored, because it is machine-local. `testing.md` and `frontend.md` are
+  `paths:`-scoped rather than `alwaysApply: true`, so they load only when
+  working under `test/**` / `lib/**`.
