@@ -201,42 +201,147 @@ reverting the cap.
 
 ---
 
-## Pending: the next deploy is a DELETION deploy (25 → 24)
+## Pending: the photo subcollection migration (phase 1 of 3)
 
-`waveSyncWorker` was deleted from the code on 2026-08-13 (owner call: the Wave
-push is event-driven now — `waveUpsertCustomer` enqueues *and* drains, and
-`waveScheduledImport` is the daily retry/stale-lease net). Prod still runs it
-until the next deploy.
+Photos are moving from the `pictures` array on each appointment into
+`appointments/{id}/images`. **Phase 1 is written and un-deployed.** It writes
+BOTH stores; the array stays authoritative and is what the shipped build reads.
+
+The ordering below is the whole safety property — it is an expand/contract
+migration and the steps are not interchangeable:
+
+1. **Deploy backend + rules + indexes.** This adds two exports
+   (`cascadeDeleteAppointmentImages`, `recountAppointmentPictures`), so the
+   count moves **24 → 26** and this is *also* the deletion deploy below — see
+   that section for the non-interactive abort.
+   **The cascade trigger MUST be live before any photo reaches the
+   subcollection.** Firestore does not delete a subcollection with its parent,
+   so an appointment deleted while the trigger is absent orphans its photo
+   documents permanently and invisibly. Deploying the app build first is the
+   one ordering that creates unrecoverable litter.
+2. **Run the backfill**, `--dry-run` first:
+   ```bash
+   node functions/scripts/backfill-appointment-images.js --dry-run
+   node functions/scripts/backfill-appointment-images.js
+   ```
+   Copy-only — it never touches the `pictures` array, and must not be changed
+   to. Idempotent (ids are derived from each photo) and atomic per appointment.
+3. **Ship the app build.** It prefers the subcollection and falls back to the
+   array, so it is correct whether or not step 2 has run — but the card's photo
+   indicator reads the `pictureCount` the backfill stamps.
+
+**Do NOT delete the `pictures` array as part of this.** That is the CONTRACT
+step, a separate release gated on the same condition the `#compat-1.37.1` shim
+waited on: no device still *runs* a build that reads the array. 1.45.0+72 does.
+
+**Rules validation is a REQUIRED pre-flight for this deploy and could not be
+done locally** — the Firestore emulator needs Java, which is not installed on
+this machine. Validate `firestore.rules` before deploying (Firebase MCP
+`firebase_validate_security_rules`, or the emulator on a machine with a JRE).
+The new `match /images/{imageId}` block declares a nested `function` and calls
+`get()` on the parent appointment; a syntax error there fails the whole rules
+release, and a rules release that fails leaves the deploy half-applied.
+
+Note the cost this block adds, since it is the argument against reaching for a
+subcollection casually: `parentAppointment()` is a document `get()` on top of
+the `usersByUid` one every rule already pays, so an employee listing a job's
+photos evaluates **two** rules reads. It is one per query, cached per request,
+and it buys the far larger saving on the range queries — but it is real.
+
+---
+
+## Pending: a THREE-deletion deploy (25 → 22 → 25)
+
+**Verified against `78d89478` (what prod runs) on 2026-08-13, not from this
+doc's own history — an earlier draft of this section said "25 → 24,
+`waveSyncWorker` and nothing else" and was wrong on both counts.** Reproduce
+the check before deploying:
+
+```bash
+git show 78d89478:functions/index.js | grep '^exports\.' \
+  | sed 's/exports\.\([a-zA-Z]*\).*/\1/' | sort > /tmp/prod.txt
+grep '^exports\.' functions/index.js \
+  | sed 's/exports\.\([a-zA-Z]*\).*/\1/' | sort > /tmp/local.txt
+comm -23 /tmp/prod.txt /tmp/local.txt   # deletions
+comm -13 /tmp/prod.txt /tmp/local.txt   # additions
+```
+
+**Deletions (3) — the prompt must name exactly these:**
+
+| Function | Why it can go |
+|---|---|
+| `waveSyncWorker` | The Wave push is event-driven now: `waveUpsertCustomer` enqueues *and* drains. |
+| `waveScheduledImport` | Folded into `sendDailyJobDigest`, which calls `runWaveDaily()` (`wave/callables.js`). Not lost — still the drain safety net for backed-off and stale-`inflight` jobs. |
+| `sendOverdueJobPrompts` | Merged into `sendUpcomingJobReminders`; its per-recipient ledger, not the cadence, is what guaranteed at-most-once. |
+
+**Additions (3):** `waveRetryFailedJobs`, plus the photo migration's
+`cascadeDeleteAppointmentImages` and `recountAppointmentPictures`.
+
+Net 25 → 25, so **the export COUNT tells you nothing here** — read the two
+lists, not the total.
+
+### 1. The deletion abort
 
 Expect the **non-interactive abort** the 2026-08-08 row documents: the CLI
 releases rules/indexes, uploads the source, then stops with "Aborting because
 deletion cannot proceed in non-interactive mode", leaving prod on
-new-rules + old-functions. Close it the way that row did:
+new-rules + old-functions. Close it:
 
 ```bash
-firebase functions:delete waveSyncWorker --region us-central1
-firebase deploy --only functions,firestore:indexes     # never --force
+firebase functions:delete waveSyncWorker waveScheduledImport \
+  sendOverdueJobPrompts --region us-central1
+firebase deploy --only functions,firestore:rules,firestore:indexes  # never --force
 ```
 
 `functions:delete --force` is **not** `deploy --force` — it only skips the y/n
-prompt for the named function and touches no index or TTL policy.
+prompt for the named functions and touches no index or TTL policy.
 
-The deletion prompt must list **`waveSyncWorker` and nothing else**. Two
-follow-ups it does not do for you:
+### 2. Delete THREE orphaned Cloud Scheduler jobs
 
-- **Delete the orphaned Cloud Scheduler job.** Removing the function does not
-  always remove its scheduler entry, and a stale entry keeps billing (only 3
-  jobs are free). Check `gcloud scheduler jobs list --location us-central1`
-  and delete `firebase-schedule-waveSyncWorker-us-central1` if it survives.
-  Getting to 5 jobs is the point of the change.
-- **`firestore:indexes` IS required this time** — the same deploy carries the
-  new `(status, endTime DESC)` and `(clientId, startTime DESC)` composites and
-  23 single-field exemptions. `sendOverdueJobPrompts` fails
-  `FAILED_PRECONDITION` (self-healing on its next 15-min run) until its index
-  reads `READY`, and the app build must not ship until the client-history one
-  does. The CLI will report the `signupCodes` TTL override as unmatched drift
-  and correctly refuse to delete it without `--force`; that is expected and
-  must stay refused.
+Removing a scheduled function does not reliably remove its scheduler entry, and
+**only 3 jobs are free** — leaving these behind bills for three jobs forever and
+silently undoes the consolidation that created them.
+
+Scheduled functions go from **6 to 3** in this deploy (`purgeExpiredHistory`,
+`sendUpcomingJobReminders`, `sendDailyJobDigest` survive):
+
+```bash
+gcloud scheduler jobs list --location us-central1
+# delete any that survive:
+gcloud scheduler jobs delete firebase-schedule-waveSyncWorker-us-central1 \
+  --location us-central1
+gcloud scheduler jobs delete firebase-schedule-waveScheduledImport-us-central1 \
+  --location us-central1
+gcloud scheduler jobs delete firebase-schedule-sendOverdueJobPrompts-us-central1 \
+  --location us-central1
+```
+
+Landing on exactly 3 is the point of the change. Verify the count afterwards.
+
+### 3. `firestore:indexes` and `firestore:rules` are BOTH required
+
+`firestore.indexes.json` carries the new `(status, endTime DESC)` and
+`(clientId, startTime DESC)` composites, the 23 single-field exemptions, and
+the `images` subcollection exemptions. The overdue sweep (now inside
+`sendUpcomingJobReminders`) fails `FAILED_PRECONDITION` until
+`(status, endTime DESC)` reads **Ready**, and the app build must not ship until
+the client-history composite does.
+
+`firestore.rules` carries the photo subcollection's `match /images/{imageId}`
+block and the `pictureCount` guards. **Validate the rules before deploying** —
+they could not be compiled locally (the Firestore emulator needs Java, absent on
+the dev machine), and the new block declares a nested function and calls `get()`
+on the parent. A failed rules release leaves the deploy half-applied.
+
+The CLI will report the `signupCodes` TTL override as unmatched drift and
+correctly refuse to delete it without `--force`; that is expected and must stay
+refused.
+
+### 4. Then the photo migration's own ordering
+
+See "Pending: the photo subcollection migration" above — backend+rules first,
+then the backfill, then the app build. The cascade trigger must be live before
+any photo reaches the subcollection.
 
 ---
 

@@ -17,11 +17,19 @@ const waveCallables = require("./wave/callables");
 const clientPropagation = require("./client_propagation");
 const clientJobCount = require("./client_job_count");
 const clients = require("./clients");
+const appointmentImages = require("./appointment_images");
 const notifications = require("./notifications");
 
 exports.syncUsersByUid = bridge.syncUsersByUid;
 exports.propagateClientEdits = clientPropagation.propagateClientEdits;
 exports.recountClientJobs = clientJobCount.recountClientJobs;
+// Photos moving into appointments/{id}/images. The cascade is load-bearing:
+// Firestore does not delete a subcollection with its parent, so without it
+// every appointment delete leaves permanently orphaned photo documents.
+exports.cascadeDeleteAppointmentImages =
+  appointmentImages.cascadeDeleteAppointmentImages;
+exports.recountAppointmentPictures =
+  appointmentImages.recountAppointmentPictures;
 exports.deleteClient = clients.deleteClient;
 exports.placesAutocomplete = places.placesAutocomplete;
 exports.placesGetDetails = places.placesGetDetails;

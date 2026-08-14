@@ -40,6 +40,20 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     DateTime? createdAt,
     DateTime? updatedAt,
     @Default(<AppointmentImage>[]) List<AppointmentImage> pictures,
+    // How many photos live in `appointments/{id}/images`. FUNCTION-OWNED —
+    // `recountAppointmentPictures` recomputes it absolutely from a count()
+    // aggregate, exactly like `jobCount` on a client, so [toMap] must never
+    // emit it and `firestore.rules` rejects a client write that touches it.
+    //
+    // It exists because moving photos off this document blinds the one thing
+    // that still needs them here: `AppointmentCard` shows a photo indicator,
+    // and it renders on every range-query surface. Reading a subcollection per
+    // card is not an option, so the count is denormalized back. ~15 bytes
+    // against ~290 per photo entry.
+    //
+    // Absent on a doc the trigger has not reached yet, which reads as 0 —
+    // see [hasPictures] for why that is safe during the migration.
+    @Default(0) int pictureCount,
   }) = _AppointmentRecord;
   const AppointmentRecord._();
 
@@ -65,7 +79,29 @@ abstract class AppointmentRecord with _$AppointmentRecord {
       createdAt: firestoreDateTime(data['createdAt']),
       updatedAt: firestoreDateTime(data['updatedAt']),
       pictures: _parseImageList(data['pictures']),
+      pictureCount: _parseCount(data['pictureCount']),
     );
+  }
+
+  /// Whether this job carries photos, for the card's indicator.
+  ///
+  /// Reads BOTH stores on purpose, and must keep doing so until the `pictures`
+  /// array is retired. During the migration a document can legitimately be in
+  /// either state: an older doc still has its array and no `pictureCount` (the
+  /// trigger only fires on a photo write, and the backfill is what stamps the
+  /// count on the rest), while a doc whose photos arrived after the move has
+  /// the count. Testing either one alone makes the indicator vanish for half
+  /// the fleet's data, silently — which is the failure mode this whole
+  /// migration is shaped to avoid.
+  bool get hasPictures => pictureCount > 0 || pictures.isNotEmpty;
+
+  /// A function-owned counter, absent until its trigger or the backfill has
+  /// reached the doc. Anything unparseable reads as 0 rather than throwing:
+  /// this feeds a display affordance, not a decision.
+  static int _parseCount(dynamic value) {
+    if (value is int) return value < 0 ? 0 : value;
+    if (value is num) return value < 0 ? 0 : value.toInt();
+    return 0;
   }
 
   Map<String, dynamic> toMap() => {

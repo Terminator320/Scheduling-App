@@ -49,6 +49,19 @@ abstract class AppointmentsRepository {
     List<AppointmentImage> pictures,
   );
 
+  /// This appointment's photos, read from the `images` subcollection.
+  ///
+  /// Phase 1 of moving photos off the parent document: every appointment read
+  /// carried its whole photo array, and the calendar reads up to 1000
+  /// appointments at a time while only the detail sheet ever shows a photo.
+  ///
+  /// Returns an EMPTY list both for an appointment with no photos and for one
+  /// whose photos have not been backfilled yet, so a caller must treat empty
+  /// as "ask the array" rather than "there are none" until the backfill has
+  /// run everywhere. [AppointmentRecord.pictures] is still populated and is
+  /// still the fallback.
+  Future<List<AppointmentImage>> fetchAppointmentPictures(String id);
+
   Future<void> updateAppointmentStatus({
     required String id,
     required String status,

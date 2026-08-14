@@ -80,9 +80,14 @@ class EventDetailsController extends Notifier<EventDetailsState>
   // Settles when employee enrichment completes, so save() runs on warm data.
   Future<void>? _seedFuture;
 
+  /// The photo list [build] seeded from the record, so the subcollection load
+  /// below can tell "the user has not touched these yet" from "they have".
+  List<AppointmentImage>? _seededImages;
+
   @override
   EventDetailsState build() {
     Future.microtask(() => _loadClientIfNeeded(appointment.clientId));
+    Future.microtask(_loadStoredPictures);
     _seedFuture = Future.microtask(_enrichSelectedEmployees);
     return EventDetailsState(
       selectedDate: appointment.startTime,
@@ -98,8 +103,49 @@ class EventDetailsController extends Notifier<EventDetailsState>
       // Seeded synchronously to avoid a race with the async load below — employee
       // visibility depends on employeeIds being set right away.
       selectedEmployees: _assigneesFromRecord(appointment),
-      existingImages: List.of(appointment.pictures),
+      existingImages: _seededImages = List.of(appointment.pictures),
     );
+  }
+
+  /// Reads this job's photos from `appointments/{id}/images`, falling back to
+  /// the array the record already carries.
+  ///
+  /// Photos are moving off the parent document, and this is the read half.
+  /// "Prefer the subcollection, fall back to the array" is safe at every point
+  /// of the migration, which is why it is written this way rather than as a
+  /// switch to be flipped later:
+  ///
+  /// - a document the backfill has not reached yet returns EMPTY here, and the
+  ///   array — still authoritative, still dual-written — is what renders;
+  /// - a backfilled document returns the same photos the array holds;
+  /// - after the array is retired, the subcollection is the only source and
+  ///   the fallback is dead weight rather than wrong.
+  ///
+  /// Empty therefore means "nothing to add", never "this job has no photos" —
+  /// don't rewrite this to trust the subcollection unconditionally before the
+  /// array is gone.
+  ///
+  /// Failure is swallowed to the seeded array for the same reason: this is an
+  /// optimisation of where the photos are read from, and it must never be the
+  /// thing that empties a photo list the record could have rendered.
+  Future<void> _loadStoredPictures() async {
+    final id = appointment.id;
+    if (id == null || id.isEmpty) return;
+    final repo = ref.read(appointmentsRepositoryProvider);
+    List<AppointmentImage> stored;
+    try {
+      stored = await repo.fetchAppointmentPictures(id);
+    } catch (e, st) {
+      ref.read(loggerProvider).warn('APPT-IMG subcollection read failed', e, st);
+      return;
+    }
+    if (stored.isEmpty || !ref.mounted) return;
+    // Only adopt the read while the list is still exactly what build() seeded.
+    // A Storage-backed read is a real window, and the user can have removed a
+    // photo inside it — swapping then would silently put it back on screen,
+    // and the next Save would act on a list they had already edited.
+    if (!identical(state.existingImages, _seededImages)) return;
+    state = state.copyWith(existingImages: _seededImages = stored);
   }
 
   /// Builds placeholder employees from the stored ids and names. They get

@@ -411,11 +411,14 @@ describe("travelReminderLedgerId", () => {
  * reminder ledger with get/create/delete stubs.
  * @param {!Object} config users/tokens/appointments/context/presence/
  *   ledgerExisting/throwLedgerGetFor fixtures.
- * @return {!Object} `{db, ledgerCreates, ledgerDeletes}`.
+ * @return {!Object} `{db, ledgerCreates, ledgerDeletes, appointmentQueries}`.
  */
 function makeTravelDb(config) {
   const ledgerCreates = [];
   const ledgerDeletes = [];
+  // Every appointments query this run built, so a test can assert the shape
+  // (bounds, ordering, cap) and not just the rows it happened to return.
+  const appointmentQueries = [];
   const existing = new Set(config.ledgerExisting || []);
   const db = {
     getAll: async (...refs) => refs.map((ref) => {
@@ -451,15 +454,19 @@ function makeTravelDb(config) {
       }
       if (name === "appointments") {
         const wheres = [];
+        const shape = {wheres, orderBy: null, limit: null};
+        appointmentQueries.push(shape);
         const q = {
           where(field, op, value) {
             wheres.push({field, op, value});
             return q;
           },
-          orderBy() {
+          orderBy(field) {
+            shape.orderBy = field;
             return q;
           },
-          limit() {
+          limit(n) {
+            shape.limit = n;
             return q;
           },
           get: async () => {
@@ -501,7 +508,7 @@ function makeTravelDb(config) {
       return {doc: () => ({})};
     },
   };
-  return {db, ledgerCreates, ledgerDeletes};
+  return {db, ledgerCreates, ledgerDeletes, appointmentQueries};
 }
 
 /**
@@ -539,6 +546,37 @@ describe("runTravelAwareReminderSweep", () => {
     users: {e1: {role: "employee", status: "active"}},
     tokens: {e1: [{id: "t", locale: "en"}]},
   };
+
+  test("the candidate query is capped and ordered by startTime", async () => {
+    // Every other sweep in this codebase names a ceiling; this one did not.
+    // In practice the 90-minute window keeps it small, so the cap is a tail
+    // guard: a bulk import or a wide series landing in one window is
+    // otherwise an unbounded fan-out that then makes a BILLABLE Routes call
+    // per candidate assignee. The ordering is what makes the cap safe to
+    // have — it keeps the most imminent departures, and anything deferred
+    // self-heals on the next 5-minute run.
+    const {db, appointmentQueries} = makeTravelDb({
+      ...activeE1,
+      appointments: [job],
+      presence: {e1: {lat: 45.5, lng: -73.6, updatedAt: future(-5 * MIN)}},
+    });
+    await runTravelAwareReminderSweep({
+      db, messaging: makeMessaging(), fetchImpl: okFetch(600),
+      apiKey: "k", now: NOW, logger: silentLogger,
+    });
+
+    // The first appointments query of the run is the candidate sweep; the
+    // per-employee context reads follow it.
+    const candidates = appointmentQueries[0];
+    expect(candidates.wheres.map((w) => `${w.field} ${w.op}`)).toEqual([
+      "status in",
+      "startTime >",
+      "startTime <=",
+    ]);
+    expect(candidates.orderBy).toBe("startTime");
+    expect(typeof candidates.limit).toBe("number");
+    expect(candidates.limit).toBeGreaterThan(0);
+  });
 
   test("fresh GPS -> Routes -> due leaveNow push, travel body", async () => {
     const {db, ledgerCreates} = makeTravelDb({

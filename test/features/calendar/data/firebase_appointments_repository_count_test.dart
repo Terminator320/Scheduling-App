@@ -67,6 +67,7 @@ void main() {
         isGreaterThanOrEqualTo: any(named: 'isGreaterThanOrEqualTo'),
       ),
     ).thenReturn(query);
+    when(() => query.limit(any())).thenReturn(query);
     when(() => query.get()).thenAnswer((_) async => snapshot);
     withDocs([]);
   });
@@ -113,7 +114,7 @@ void main() {
       expect(floor.difference(now).abs(), lessThan(const Duration(minutes: 1)));
     });
 
-    test('adds no startTime constraint, so the read has an upper bound',
+    test('adds no startTime floor, so the read is proportional to the answer',
         () async {
       await repo().countFutureAssignments('e1');
 
@@ -129,6 +130,18 @@ void main() {
           isGreaterThanOrEqualTo: any(named: 'isGreaterThanOrEqualTo'),
         ),
       );
+    });
+
+    test('caps the read, so the repeat horizon cannot set its size', () async {
+      // `endTime >= now` has no upper bound, and a repeat series pre-books up
+      // to 120 occurrences five years out — so without a cap the size of this
+      // read is set by how far ahead the business books, not by how much the
+      // caption needs. This was the last unbounded query in the repository.
+      await repo().countFutureAssignments('e1');
+
+      final cap = verify(() => query.limit(captureAny())).captured.single;
+      expect(cap, isA<int>());
+      expect(cap, lessThanOrEqualTo(500));
     });
   });
 

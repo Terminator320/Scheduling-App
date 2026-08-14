@@ -534,7 +534,15 @@ service cloud.firestore {
 
       // Admin only, and rejects any status value the client sends that isn't on
       // the allowlist.
+      //
+      // `pictureCount` is function-owned, the same posture as `jobCount` on a
+      // client and for the same reason: `recountAppointmentPictures` writes it
+      // as an absolute count() aggregate over the `images` subcollection, so a
+      // client write could only ever put it out of step with the photos it
+      // claims to count — and it is what `AppointmentCard`'s photo indicator
+      // reads. `AppointmentRecord.toMap()` must never emit it.
       allow create: if isAdmin()
+        && !('pictureCount' in request.resource.data.keys())
         && isValidAppointmentStatus(request.resource.data.status)
         && isValidAppointmentData(request.resource.data)
         // No existing doc to strand, so the span bound is outright here.
@@ -545,7 +553,14 @@ service cloud.firestore {
       // The shape guard rides the ADMIN branch only: an assigned employee's
       // status flip must keep working on a legacy doc that predates these caps,
       // and that branch already restricts the diff to status + updatedAt.
+      // Diff-based on `pictureCount`, NOT the flat key ban `allow create` uses:
+      // the trigger's own value is present in `request.resource.data` on every
+      // partial update, so a flat ban would reject every ordinary edit of a job
+      // that has photos. Same asymmetry, and same reason, as
+      // `emergencyFieldNotSet` on /users.
       allow update: if (isAdmin()
+            && !request.resource.data.diff(resource.data)
+                 .affectedKeys().hasAny(['pictureCount'])
             && isValidAppointmentStatus(request.resource.data.status)
             && isValidAppointmentData(request.resource.data)
             && (isValidAppointmentSpan(request.resource.data)
@@ -558,6 +573,57 @@ service cloud.firestore {
 
       // Delete: admin only.
       allow delete: if isAdmin();
+
+      // ── appointments/{id}/images ────────────────────────────────────────
+      // Photos are moving off the parent document. Every appointment read
+      // carried its whole photo array, and the calendar reads up to 1000
+      // appointments at a time while only the detail sheet ever shows a photo.
+      //
+      // The grant MIRRORS the parent's exactly — admin, or an assignee of THIS
+      // appointment — by resolving `resource.data` of the parent rather than
+      // restating the condition. Restating it is how the two drift, and a
+      // drift here means a photo readable by someone the job is not.
+      //
+      // NOTE the cost, because it is the reason not to reach for a
+      // subcollection lightly: `parentAppointment()` is a document `get()` on
+      // top of the `usersByUid` one every rule here already pays, so an
+      // employee listing a job's photos evaluates TWO rules reads. It is
+      // bounded (one per query, cached per request) and it buys the far larger
+      // saving on the range queries, but it is a real trade.
+      //
+      // An employee may READ but never write: photos are uploaded by the
+      // admin-only appointment form, and `storage.rules` is the real gate on
+      // the bytes themselves. Keeping the write admin-only here means a
+      // compromised employee session cannot fabricate a photo row pointing at
+      // a storage path belonging to another job.
+      match /images/{imageId} {
+        function parentAppointment() {
+          return get(/databases/$(database)/documents/appointments/$(appointmentId)).data;
+        }
+
+        allow read: if isAdmin() || isAssignedEmployee(parentAppointment());
+
+        // Shape-locked like every other subcollection here. `storagePath` is
+        // what renders and deletes the photo, so it is the one required field;
+        // `url` is optional and present only on backfilled LEGACY rows that
+        // never had a storage path (see AppointmentImageUrlResolver's
+        // fallback) — a new photo must not carry one, since a persisted
+        // download URL is a permanent rules-free token and nothing reads it
+        // here.
+        allow create, update: if isAdmin()
+          && request.resource.data.keys().hasOnly(
+              ['storagePath', 'url', 'fileName', 'uploadedAt'])
+          && isBoundedString(request.resource.data.storagePath, 500)
+          && (!('url' in request.resource.data.keys())
+              || isBoundedString(request.resource.data.url, 1000))
+          && (!('fileName' in request.resource.data.keys())
+              || isBoundedString(request.resource.data.fileName, 300))
+          && (!('uploadedAt' in request.resource.data.keys())
+              || request.resource.data.uploadedAt == null
+              || request.resource.data.uploadedAt is timestamp);
+
+        allow delete: if isAdmin();
+      }
     }
 
     // ── clients ───────────────────────────────────────────────────────────────

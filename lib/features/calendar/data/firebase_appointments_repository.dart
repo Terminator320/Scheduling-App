@@ -10,6 +10,7 @@ import 'package:scheduling/features/calendar/domain/appointment_status_values.da
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/policies/appointment_image_doc_id.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
@@ -26,6 +27,14 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   final CollectionReference<Map<String, dynamic>> _appointments;
   final AppLogger _logger;
+
+  /// The subcollection photos live in, under each appointment.
+  ///
+  /// Hand-mirrored as `IMAGES_SUBCOLLECTION` in
+  /// `functions/appointment_images.js` — the cascade-delete trigger, the
+  /// `pictureCount` trigger and the backfill all name the same path, and
+  /// `firestore.rules` matches on it literally.
+  static const String _imagesSubcollection = 'images';
 
   /// Lets tests inject a fake clock so the search-cache TTL is testable.
   final DateTime Function() _clock;
@@ -126,10 +135,35 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     // fabricated instant, and a run longer than `maxAppointmentSpanDays` (only
     // reachable by a console or Admin-SDK write) is now counted correctly
     // instead of falling out of the floor.
+    //
+    // `endTime >= now` still has no UPPER bound, and a repeat series pre-books
+    // up to `RepeatInterval.maxOccurrences` (120) occurrences out to a 5-year
+    // horizon — so a tech on several series was several hundred documents read
+    // to render one caption. This was the last unbounded query in the
+    // repository; every other one names a ceiling.
+    //
+    // A `.limit` rather than a horizon bound, deliberately: with `endTime` the
+    // only inequality, Firestore returns these in `endTime` ASC order, so the
+    // cap keeps the SOONEST-ending jobs — exactly the ones an admin about to
+    // disable someone needs to reassign. It also keeps the caption's number
+    // EXACT for anyone below the cap, which is everyone in practice, so
+    // `employees_disableReassignCaption` needs no rewording. Bounding the
+    // horizon instead ("12 jobs in the next 90 days") would read fewer
+    // documents again, but it changes what the sentence claims — a product
+    // call, not a performance one.
     final snapshot = await _appointments
         .where('employeeIds', arrayContains: employeeId)
         .where('endTime', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
+        .limit(_futureAssignmentScanLimit)
         .get();
+    if (snapshot.docs.length >= _futureAssignmentScanLimit) {
+      // Understating this caption tells an admin they have less to reassign
+      // than they do, so a truncation must not pass in silence.
+      _logger.warn(
+        'APPT-COUNT future-assignment query hit the '
+        '$_futureAssignmentScanLimit-doc cap — the caption is understating',
+      );
+    }
     return snapshot.docs
         .map((d) => AppointmentRecord.fromMap(d.id, d.data()))
         // Terminal jobs are not "still assigned". Deliberately kept in Dart
@@ -243,19 +277,56 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     _invalidateSearchCache();
   }
 
+  /// `appointments/{id}/images` — the subcollection photos are moving to.
+  CollectionReference<Map<String, dynamic>> _imagesOf(String id) =>
+      _appointments.doc(id).collection(_imagesSubcollection);
+
   @override
   Future<void> appendAppointmentPictures(
     String id,
     List<AppointmentImage> pictures,
   ) async {
     if (pictures.isEmpty) return;
-    // Use arrayUnion so concurrent uploads only append their own photos, never erase.
-    await _appointments.doc(id).update({
+    // PHASE 1 OF THE SUBCOLLECTION MOVE — writes BOTH stores, deliberately.
+    //
+    // The subcollection is the new home; the `pictures` array is kept in step
+    // because the build in the field (1.45.0+72) reads photos off the parent
+    // doc and knows nothing about the subcollection. Dropping the array now
+    // blanks every photo on every phone until it updates. It goes at the
+    // CONTRACT step, once no device still runs a build that reads it — the
+    // same gate the `#compat-1.37.1` shim waited on.
+    //
+    // One batch, so the two stores cannot disagree: a partial write here
+    // would leave a photo visible on one surface and absent on the other,
+    // and this path is retried by the offline queue, which would then see an
+    // inconsistent state it has no way to reconcile.
+    final batch = _appointments.firestore.batch();
+    for (final picture in pictures) {
+      final docId = appointmentImageDocId(picture);
+      // No identity means nothing to render and no legal document id. Skipping
+      // is right: writing it would throw and fail the whole batch, taking the
+      // photos that ARE valid down with it.
+      if (docId.isEmpty) continue;
+      // `set`, not `add`: the id is derived from the photo, so the offline
+      // queue's append-only retry of an already-uploaded image is a no-op
+      // instead of a duplicate. This is what replaces the array's arrayUnion
+      // deep-equality dedupe. `merge: true` so a retry cannot blank a field
+      // the first pass wrote.
+      batch.set(
+        _imagesOf(id).doc(docId),
+        _imageToSubcollectionMap(picture),
+        SetOptions(merge: true),
+      );
+    }
+    // Still arrayUnion, for the same reason it always was: a concurrent edit
+    // or the batch's other half must never clobber photos it never saw.
+    batch.update(_appointments.doc(id), {
       'pictures': FieldValue.arrayUnion(
         pictures.map(_imageToFirestoreMap).toList(),
       ),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    await batch.commit();
     _invalidateSearchCache();
   }
 
@@ -265,13 +336,75 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     List<AppointmentImage> pictures,
   ) async {
     if (pictures.isEmpty) return;
-    await _appointments.doc(id).update({
+    final batch = _appointments.firestore.batch();
+    for (final picture in pictures) {
+      final docId = appointmentImageDocId(picture);
+      if (docId.isEmpty) continue;
+      // Deleting a doc that isn't there is a no-op, so this needs no
+      // existence check — and unlike the arrayRemove below it cannot silently
+      // miss. That asymmetry is worth knowing: `arrayRemove` matches by DEEP
+      // EQUALITY of the whole map, so it only works because the caller hands
+      // back images parsed from this very doc. Change what
+      // `_imageToFirestoreMap` emits and the array half stops removing
+      // anything, with no error — one more reason the array's days are
+      // numbered.
+      batch.delete(_imagesOf(id).doc(docId));
+    }
+    batch.update(_appointments.doc(id), {
       'pictures': FieldValue.arrayRemove(
         pictures.map(_imageToFirestoreMap).toList(),
       ),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+    await batch.commit();
     _invalidateSearchCache();
+  }
+
+  @override
+  Future<List<AppointmentImage>> fetchAppointmentPictures(String id) async {
+    // Ordered so the viewer's index means the same thing on every device —
+    // the subcollection has no inherent order, where the array carried its
+    // own. `uploadedAt` is the field the array was effectively sorted by
+    // (append order), so this preserves what people already see.
+    final snapshot = await _imagesOf(id).orderBy('uploadedAt').get();
+    return [
+      for (final doc in snapshot.docs) AppointmentImage.fromMap(doc.data()),
+    ];
+  }
+
+  /// The subcollection's document shape.
+  ///
+  /// Deliberately NOT `_imageToFirestoreMap`. Two differences, both load-bearing:
+  ///
+  /// `url` is written **only when there is no `storagePath`**. Photos are
+  /// rendered from `storagePath` by `AppointmentImageUrlResolver` so every read
+  /// re-evaluates `storage.rules`; the persisted `url` is a permanent
+  /// rules-free token URL kept only for builds predating the resolver, and
+  /// those builds read the ARRAY, never this. So a new photo's `url` would be
+  /// a credential stored for no reader — while a LEGACY entry that has only a
+  /// url still needs it, or backfilling it here destroys the one thing that
+  /// can render it. Dropping it is also most of the size win: the url is
+  /// ~215 of a ~290-byte entry.
+  ///
+  /// `fileName` is omitted when absent rather than written as null, so the
+  /// document carries no key it has no value for.
+  ///
+  /// **`uploadedAt` is the exception and is always written, as an explicit
+  /// `null` when unknown.** [fetchAppointmentPictures] orders by it, and
+  /// Firestore EXCLUDES a document missing the field it orders by — omitting
+  /// the key the way `fileName` omits its own would drop that photo out of the
+  /// read entirely, with nothing erroring. Same trap as `archived` on clients
+  /// and `expiresAt` on the TTL ledgers. A null sorts first, which is the
+  /// right place for a photo whose upload time was never recorded.
+  Map<String, dynamic> _imageToSubcollectionMap(AppointmentImage image) {
+    return {
+      'storagePath': image.storagePath,
+      if (image.storagePath.isEmpty && image.url.isNotEmpty) 'url': image.url,
+      if (image.fileName != null) 'fileName': image.fileName,
+      'uploadedAt': image.uploadedAt == null
+          ? null
+          : Timestamp.fromDate(image.uploadedAt!),
+    };
   }
 
   // Valid statuses: pending → in_progress → done, plus cancelled.
@@ -442,6 +575,11 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   /// why it warns rather than truncating silently.
   static const int _rangeStreamLimit = 1000;
 
+  /// Ceiling on [countFutureAssignments]. Sized well above any real person's
+  /// open book — it exists so the read cannot scale with the repeat horizon,
+  /// not to trim a typical one. See the reasoning at the query.
+  static const int _futureAssignmentScanLimit = 200;
+
   @override
   Future<List<AppointmentRecord>> searchHistory(String query) async {
     final q = query.trim();
@@ -491,6 +629,17 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     } on FirebaseException catch (e, st) {
       _logger.warn('HIST-SEARCH searchHistory failed', e, st);
       return null;
+    }
+
+    if (snapshot.docs.length >= _historySearchScanLimit) {
+      // Same posture as `_mapRangeSnapshot`: past the cap this window is the
+      // newest N terminal visits, so history search is answering over a PREFIX
+      // and an older match simply never appears. Silent partial results are
+      // worse than loud ones — there is no error anywhere else to notice.
+      _logger.warn(
+        'HIST-SEARCH scan window hit the $_historySearchScanLimit-doc cap — '
+        'search is matching against the newest visits only',
+      );
     }
 
     final window = _CachedHistoryScanWindow(

@@ -72,14 +72,25 @@ void main() {
     });
 
     test('create bounds the span outright and update offers the escape', () {
+      // SCOPED to the appointments block, then matched to the end of the
+      // clause. This test is about WHICH span guard each branch carries, not
+      // the order the conditions are written in, so it must not pin the clause
+      // that follows `isAdmin()` — doing so made it fail when an unrelated
+      // guard (`pictureCount`, added with the photo subcollection) was
+      // inserted between them. Scoping is what the loosened pattern then
+      // needs: `/users` also opens with `allow create: if isAdmin()`, earlier
+      // in the file, and an unscoped match silently reads THAT block instead.
+      final appointments = rules.substring(
+        rules.indexOf('match /appointments/{appointmentId}'),
+      );
       final createBlock = RegExp(
-        r'allow create: if isAdmin\(\)\s*&& isValidAppointmentStatus(.*?);',
+        r'allow create: if isAdmin\(\)(.*?);',
         dotAll: true,
-      ).firstMatch(rules)?.group(1);
+      ).firstMatch(appointments)?.group(1);
       final updateBlock = RegExp(
         r'allow update: if \(isAdmin\(\)(.*?)\|\| \(isAssignedEmployee',
         dotAll: true,
-      ).firstMatch(rules)?.group(1);
+      ).firstMatch(appointments)?.group(1);
 
       expect(createBlock, contains('isValidAppointmentSpan'));
       expect(createBlock, isNot(contains('appointmentSpanNotWidened')));
