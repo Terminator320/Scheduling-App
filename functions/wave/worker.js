@@ -1036,6 +1036,22 @@ async function requeueDeadJobs(deps = {}) {
  * Includes `inflight`: those are being dispatched right now and their doc is
  * every bit as unsafe to overwrite.
  *
+ * Includes `dead`, and that one is the MOST important of the three: a
+ * dead-lettered job's edit never reached Wave and — unlike a queued or backed
+ * off job — nothing will retry it on its own, so the clobber above does not
+ * self-heal. `waveRetryFailedJobs` exists precisely to put these back, and it
+ * short-circuits as `noop` on a matching hash: let the import overwrite the
+ * doc with Wave's pre-edit values first and the requeue then finds nothing to
+ * push, so the admin's change is gone with the row reading "Synced with Wave".
+ * A bulk push (the client-name backfill fires a few hundred mutations against
+ * Wave's 60/min ceiling) is exactly what produces dead jobs.
+ *
+ * The cost of protecting them is that a client with a stuck dead job HOLDS the
+ * import watermark (`skippedPending > 0`), so the delta window keeps being
+ * redone until an admin presses "Retry failed" — the same trade the queued
+ * case already makes, and re-imports are hash-gated. `pushedFailed` on the
+ * sync response is what surfaces the backlog.
+ *
  * @param {Object=} deps Injectable dependencies — `db`, `limit`.
  * @return {!Promise<!Set<string>>} Client ids to leave alone.
  */
@@ -1043,7 +1059,7 @@ async function listOutstandingClientIds(deps = {}) {
   const db = deps.db || adminFirestore().getFirestore();
   const limit = typeof deps.limit === "number" ? deps.limit : OUTSTANDING_MAX;
   const snap = await db.collection(QUEUE_COLLECTION)
-      .where("status", "in", ["queued", "inflight"])
+      .where("status", "in", ["queued", "inflight", "dead"])
       .limit(limit)
       .get();
   const docs = (snap && snap.docs) || [];

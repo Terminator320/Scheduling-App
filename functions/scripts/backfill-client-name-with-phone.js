@@ -1,35 +1,38 @@
 #!/usr/bin/env node
-// One-off: puts each client's phone number back on the end of its `name`, so
-// the Wave customer name reads "Marc Tremblay (514) 555-1234" again.
+// One-off: makes each PERSON's `name` their phone number and nothing else, so
+// the Wave customer reads "(514) 555-1234". A BUSINESS is left alone.
 //
-// WHY this exists: `backfill-client-phone-from-name.js` ran against prod on
-// 2026-08-08. It lifted the phone number out of `name` into the `phone` field
-// and renamed `name` to "First Last" — correct for the app, but `name` is
-// synced VERBATIM as the Wave customer name (`toWaveCustomerInput`,
-// `wave/mappers.js`), so every one of those clients was renamed in Wave too
-// and lost the number the invoicing workflow identifies customers by. Owner
-// call 2026-08-14: the number goes back in the name, and the APP shows the
-// first/last halves instead (`ClientNamePolicy`, hand-mirrored here as
-// `client_name_utils.js`). This is the data half of that change.
+// WHY: `name` is synced VERBATIM as the Wave CUSTOMER name
+// (`toWaveCustomerInput`, `wave/mappers.js`), and the invoicing workflow there
+// identifies people by number. Owner call 2026-08-14. This supersedes both the
+// "<name> <number>" shape this script wrote before and
+// `backfill-client-phone-from-name.js`, which ran against prod on 2026-08-08.
+// The rule lives in `ClientNamePolicy`, hand-mirrored as
+// `client_name_utils.js`; this is the data half of it.
 //
 // THE RULE, per doc:
 //   1. Skip any client created ON OR AFTER --since (default 2026-08-08, the
-//      day the rename ran). "Don't touch the ones that were just added" —
+//      day the first rename ran). "Don't touch the ones that were just added" —
 //      owner call. A doc with NO `createdAt` is treated as OLD and patched:
 //      the field is backfilled lazily, so its absence means legacy, not new.
-//   2. Skip any client with no phone AND no mobile. There is nothing to
-//      append and nothing about the doc is wrong.
-//   3. Otherwise set `name` to `composeStored(name, phone)` — the stored name
-//      with its own trailing number stripped, then the number appended. That
-//      strip is what makes this IDEMPOTENT: a second run finds the number
-//      already there and produces the same string, so nothing is written.
+//   2. Skip any client with no phone AND no mobile. There is no number to be
+//      named after, and nothing about the doc is wrong.
+//   3. SKIP ANY BUSINESS — its name IS its identity in Wave ("3101-5696 qc
+//      inc.", "1505 Village de Bergerac"), a number in its place is
+//      unrecognisable on an invoice, and unlike a person there is usually no
+//      first/last for the app to fall back on.
+//   4. Otherwise set `name` to the phone (or the mobile). Trivially IDEMPOTENT:
+//      a second run computes the same number, finds it already stored, and
+//      writes nothing.
 //
-// THE BASE NAME IS THE STORED `name`, NOT THE DISPLAY NAME. A Wave-imported
-// business carries the business in `name` and a CONTACT PERSON in
-// first/last — writing the display name back would rename "Vogas Plumbing" to
-// "Marc Tremblay" IN WAVE, on real invoices, unrecoverably from the doc. The
-// first/last halves are used only when `name` is empty once stripped, which is
-// the junk case the 2026-08-08 rename was cleaning up in the first place.
+// RULE 3 IS A HEURISTIC AND THE DRY RUN LISTS EVERY DOC IT MATCHED. The Wave
+// import sets no `type`, so an imported business can only be recognised by its
+// NAME — a leading digit, or a company token like "inc"/"ltée"/"enr". Read
+// that list before going live: a PERSON wrongly matched keeps their name (no
+// harm), but a BUSINESS wrongly missed is renamed on live invoices.
+//
+// The clients it DOES rename with no first/last on file are listed too — those
+// end up called by their phone number in the app as well as in Wave.
 //
 // TWO TRIGGERS FIRE ON EVERY PATCHED DOC, both wanted, neither free:
 //   - `propagateClientEdits` fans the name onto that client's FUTURE
@@ -82,7 +85,12 @@
 const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 
-const {composeStored, digitsOf, stripPhone} = require("../client_name_utils");
+const {
+  composeStored,
+  isBusiness,
+  looksLikeBusinessName,
+  stripPhone,
+} = require("../client_name_utils");
 
 const BATCH_SIZE = 400;
 const SAMPLE_SIZE = 25;
@@ -144,43 +152,6 @@ function parseSince(argv) {
 }
 
 /**
- * Any run of digits long enough to be a phone number. Note this deliberately
- * spans separators (a real number contains spaces and brackets), so a string
- * holding two numbers matches as ONE run — which is why `otherNumbersIn`
- * removes the appended number by SUFFIX first rather than trying to tell the
- * runs apart.
- */
-const NUMBER_RUN = /\+?\d[\d\s().+-]{5,}\d/g;
-
-/** Below this many digits a run is a street number, a year or a unit. */
-const MIN_PHONE_DIGITS = 7;
-
-/**
- * The numbers a finished name still holds BESIDES the one just appended.
- *
- * Used only to REPORT. A doc whose name already carried a number that is not
- * the one stored in `phone` (an old line, a second contact) keeps it —
- * `stripPhone` only ever removes THIS client's number — so the result is a
- * Wave customer name with two numbers in it. That is not data loss, and not
- * something a bulk script should silently pick a winner for, but the operator
- * has to see the whole list rather than whichever few land in the sample.
- *
- * @param {string} finalName The composed name.
- * @param {string} appended The number `composeStored` put on the end.
- * @return {!Array<string>} Digits of each leftover number, in order.
- */
-function otherNumbersIn(finalName, appended) {
-  const name = String(finalName || "");
-  const suffix = String(appended || "");
-  const base = suffix && name.endsWith(suffix) ?
-    name.slice(0, name.length - suffix.length) : name;
-
-  return (base.match(NUMBER_RUN) || [])
-      .map(digitsOf)
-      .filter((digits) => digits.length >= MIN_PHONE_DIGITS);
-}
-
-/**
  * Epoch ms for a Firestore Timestamp / Date / number, or null when the doc
  * carries no usable `createdAt`.
  * @param {*} value Stored createdAt.
@@ -195,28 +166,21 @@ function createdAtMs(value) {
 }
 
 /**
- * The clean name to append the number to.
+ * Whether this client is left alone because it is an ORGANIZATION.
  *
- * The stored `name` first — see the header: the display name would rename a
- * business to its contact person in Wave. The halves and the legacy
- * `businessName` are reached only when the stored name is empty once its own
- * number is stripped off.
+ * A business's NAME is its identity in Wave — "3101-5696 qc inc.", "1505
+ * Village de Bergerac" — so replacing it with a phone number makes the
+ * customer unrecognisable on a real invoice, and unlike a person there is
+ * usually no first/last for the app to fall back on. `looksLikeBusinessName`
+ * is what catches the imported ones, which carry no `type` at all.
  *
  * @param {!Object} data Client document fields.
  * @param {{phone: string, mobile: string}} numbers The doc's stored numbers.
- * @return {string} Possibly empty.
+ * @return {boolean}
  */
-function baseNameFor(data, numbers) {
-  const stored = stripPhone(data.name, numbers);
-  if (stored) return stored;
-
-  const composed = [
-    String(data.firstName || "").trim(),
-    String(data.lastName || "").trim(),
-  ].filter(Boolean).join(" ");
-  if (composed) return composed;
-
-  return stripPhone(data.businessName, numbers);
+function isBusinessClient(data, numbers) {
+  return isBusiness(data) ||
+    looksLikeBusinessName(stripPhone(data.name, numbers));
 }
 
 /**
@@ -237,9 +201,11 @@ function patchFor(data, sinceMs) {
   if (!phone && !mobile) return null;
 
   const name = composeStored({
-    baseName: baseNameFor(data, {phone, mobile}),
+    baseName: data.name,
     phone,
     mobile,
+    type: data.type,
+    businessName: data.businessName,
   });
   if (!name || name === String(data.name || "").trim()) return null;
   return {name};
@@ -276,7 +242,8 @@ async function main() {
   let skippedNoPhone = 0;
   let skippedAlreadyDone = 0;
   const sample = [];
-  const multiNumber = [];
+  const nameless = [];
+  const businesses = [];
   let unlinked = 0;
 
   let batch = db.batch();
@@ -290,11 +257,20 @@ async function main() {
       // Re-derived only to report WHY, so the operator can sanity-check the
       // scope from the dry run instead of trusting one number.
       const created = createdAtMs(data.createdAt);
-      const hasNumber = Boolean(String(data.phone || "").trim() ||
-        String(data.mobile || "").trim());
-      if (created !== null && created >= sinceMs) skippedRecent += 1;
-      else if (!hasNumber) skippedNoPhone += 1;
-      else skippedAlreadyDone += 1;
+      const phone = String(data.phone || "").trim();
+      const mobile = String(data.mobile || "").trim();
+      if (created !== null && created >= sinceMs) {
+        skippedRecent += 1;
+      } else if (!phone && !mobile) {
+        skippedNoPhone += 1;
+      } else if (isBusinessClient(data, {phone, mobile})) {
+        // Reported in FULL: this is a HEURISTIC on every doc that carries no
+        // `type`, and the operator is the only one who can tell a real company
+        // from a person the pattern happened to match.
+        businesses.push({id: doc.id, name: String(data.name || "").trim()});
+      } else {
+        skippedAlreadyDone += 1;
+      }
       continue;
     }
 
@@ -302,12 +278,14 @@ async function main() {
     if (sample.length < SAMPLE_SIZE) {
       sample.push({id: doc.id, from: data.name || "", to: patch.name});
     }
-    // Reported in FULL, not sampled — see otherNumbersIn.
-    const appended = String(data.phone || "").trim() ||
-      String(data.mobile || "").trim();
-    if (otherNumbersIn(patch.name, appended).length > 0) {
-      multiNumber.push({id: doc.id, to: patch.name});
-    }
+    // Reported in FULL, not sampled: this doc is about to be called by its
+    // phone number IN THE APP as well as in Wave, because it has no first or
+    // last name to fall back on. Nothing is lost that was not already missing,
+    // but it is the one outcome the operator has to see in full.
+    const hasOtherName = Boolean(
+        String(data.firstName || "").trim() ||
+        String(data.lastName || "").trim());
+    if (!hasOtherName) nameless.push({id: doc.id, to: patch.name});
     // A client Wave has never seen is CREATED by the upsert this write
     // triggers, not patched. That is almost certainly wanted, but it is a
     // different action from renaming an existing customer and the operator
@@ -337,10 +315,20 @@ async function main() {
   }
   console.log(
       `${tag}clients: ${snap.size} scanned, ${patched} renamed, ` +
+      `${businesses.length} skipped (business), ` +
       `${skippedRecent} skipped (created on/after ${
         new Date(sinceMs).toISOString().slice(0, 10)}), ` +
       `${skippedNoPhone} skipped (no phone), ` +
       `${skippedAlreadyDone} skipped (already correct)`);
+
+  if (businesses.length > 0) {
+    console.log(
+        `\n${tag}${businesses.length} client(s) kept their name because they ` +
+        "read as a BUSINESS — its name is what identifies it in Wave. This " +
+        "is a heuristic on any doc with no `type`, so check the list for a " +
+        "PERSON that should have been renamed:");
+    for (const b of businesses) console.log(`  ${b.id}  "${b.name}"`);
+  }
 
   if (unlinked > 0) {
     console.log(
@@ -348,13 +336,13 @@ async function main() {
         "so the upsert will CREATE them in Wave rather than rename one.");
   }
 
-  if (multiNumber.length > 0) {
+  if (nameless.length > 0) {
     console.log(
-        `\n${tag}${multiNumber.length} name(s) will end up holding MORE THAN ` +
-        "ONE phone number — the name already carried a different number from " +
-        "the one in `phone`, and only this client's own number is stripped. " +
-        "Not data loss, but check whether the old number should go:");
-    for (const m of multiNumber) console.log(`  ${m.id}  "${m.to}"`);
+        `\n${tag}${nameless.length} client(s) have NO name anywhere else — no ` +
+        "business name, no first/last — so they will be called by their phone " +
+        "number in the app as well as in Wave. Nothing is lost that was not " +
+        "already missing, but give these a name if any matter:");
+    for (const n of nameless) console.log(`  ${n.id}  "${n.to}"`);
   }
 
   if (!dryRun && patched > 0) {
@@ -375,9 +363,7 @@ if (require.main === module) {
 
 module.exports = {
   assertKnownFlags,
-  baseNameFor,
   createdAtMs,
-  otherNumbersIn,
   parseSince,
   patchFor,
 };

@@ -2,14 +2,15 @@
 
 const {
   assertKnownFlags,
-  baseNameFor,
-  otherNumbersIn,
   parseSince,
   patchFor,
 } = require("../scripts/backfill-client-name-with-phone");
 
 /** 2026-08-08T00:00:00Z — the script's default cutoff. */
 const SINCE = Date.parse("2026-08-08T00:00:00Z");
+
+/** What a renamed person ends up called, in Wave and in this file. */
+const NUMBER = "(514) 555-1234";
 
 /**
  * A Firestore-Timestamp-shaped stub.
@@ -19,13 +20,13 @@ const SINCE = Date.parse("2026-08-08T00:00:00Z");
 const ts = (iso) => ({toMillis: () => Date.parse(iso)});
 
 /**
- * An old-enough client with a phone, unless overridden.
+ * An old-enough person with a phone, unless overridden.
  * @param {!Object=} over Fields to replace.
  * @return {!Object} A client document.
  */
 const client = (over) => ({
   name: "Marc Tremblay",
-  phone: "(514) 555-1234",
+  phone: NUMBER,
   createdAt: ts("2026-01-01T00:00:00Z"),
   ...over,
 });
@@ -53,39 +54,8 @@ describe("assertKnownFlags", () => {
   });
 });
 
-describe("otherNumbersIn", () => {
-  const NUMBER = "(514) 555-1234";
-
-  test("a normal composed name has nothing left over", () => {
-    expect(otherNumbersIn("Marc Tremblay (514) 555-1234", NUMBER)).toEqual([]);
-  });
-
-  test("flags a name that ended up holding a SECOND number", () => {
-    // The doc's name carried an OLD line that is not the number now in
-    // `phone`, so the strip left it and the compose appended beside it.
-    expect(otherNumbersIn(
-        "Marc Tremblay 514-999-8888 (514) 555-1234", NUMBER))
-        .toEqual(["5149998888"]);
-  });
-
-  test("ignores digit runs that are not phone-shaped", () => {
-    // The false positives that would make this report unreadable: a business
-    // named with a number, and a unit number in the name.
-    expect(otherNumbersIn("Depanneur 2000 (514) 555-1234", NUMBER)).toEqual([]);
-    expect(otherNumbersIn("Acme Suite 12345 (514) 555-1234", NUMBER))
-        .toEqual([]);
-  });
-
-  test("does not depend on the appended number being strippable", () => {
-    // Defensive: if the suffix is not found the whole name is scanned, which
-    // over-reports rather than under-reports. This list must never go quiet.
-    expect(otherNumbersIn("Marc Tremblay 514-999-8888", "").length)
-        .toBeGreaterThan(0);
-  });
-});
-
 describe("parseSince", () => {
-  test("defaults to the day the rename ran", () => {
+  test("defaults to the day the first rename ran", () => {
     expect(parseSince([])).toBe(SINCE);
   });
 
@@ -103,21 +73,17 @@ describe("parseSince", () => {
 });
 
 describe("patchFor", () => {
-  test("puts the number back on the end of the name", () => {
-    expect(patchFor(client(), SINCE))
-        .toEqual({name: "Marc Tremblay (514) 555-1234"});
+  test("names a person by their phone number", () => {
+    expect(patchFor(client(), SINCE)).toEqual({name: NUMBER});
   });
 
   test("is idempotent — a second run writes nothing", () => {
-    const already = client({name: "Marc Tremblay (514) 555-1234"});
-    expect(patchFor(already, SINCE)).toBeNull();
+    expect(patchFor(client({name: NUMBER}), SINCE)).toBeNull();
   });
 
-  test("normalizes a legacy number already in the name", () => {
-    // The number is there but in the shape it was typed years ago; the patch
-    // re-states it in the stored form so Wave and the doc agree.
+  test("replaces a legacy name-plus-number outright", () => {
     expect(patchFor(client({name: "Marc Tremblay 514-555-1234"}), SINCE))
-        .toEqual({name: "Marc Tremblay (514) 555-1234"});
+        .toEqual({name: NUMBER});
   });
 
   test("skips a client created on or after the cutoff", () => {
@@ -131,47 +97,64 @@ describe("patchFor", () => {
   test("patches a doc with no createdAt", () => {
     // The field is backfilled lazily, so its absence means legacy, not new.
     expect(patchFor(client({createdAt: undefined}), SINCE))
-        .toEqual({name: "Marc Tremblay (514) 555-1234"});
+        .toEqual({name: NUMBER});
   });
 
-  test("skips a client with no number to append", () => {
+  test("skips a client with no number to be named after", () => {
     expect(patchFor(client({phone: "", mobile: ""}), SINCE)).toBeNull();
   });
 
   test("uses mobile when there is no phone", () => {
     expect(patchFor(client({phone: "", mobile: "(438) 222-3333"}), SINCE))
-        .toEqual({name: "Marc Tremblay (438) 222-3333"});
+        .toEqual({name: "(438) 222-3333"});
   });
 });
 
-describe("baseNameFor", () => {
-  const numbers = {phone: "(514) 555-1234", mobile: ""};
+describe("patchFor leaves a BUSINESS alone", () => {
+  // The load-bearing rule. A business's NAME is what identifies it in Wave, a
+  // number in its place is unrecognisable on an invoice, and unlike a person
+  // there is usually no first/last for the app to fall back on.
 
-  test("keeps a BUSINESS name rather than its contact person", () => {
-    // The load-bearing case. A Wave-imported business carries the business in
-    // `name` and a contact person in first/last; taking the halves here would
-    // rename "Vogas Plumbing" to "Marc Tremblay" on real Wave invoices.
-    expect(baseNameFor({
-      name: "Vogas Plumbing",
-      firstName: "Marc",
-      lastName: "Tremblay",
-    }, numbers)).toBe("Vogas Plumbing");
+  test("by its type", () => {
+    expect(patchFor(client({name: "Vogas Plumbing", type: "commercial"}),
+        SINCE)).toBeNull();
+    expect(patchFor(client({name: "Les Immeubles X", type: "property_mgmt"}),
+        SINCE)).toBeNull();
   });
 
-  test("falls back to the halves when the name is only a number", () => {
-    expect(baseNameFor({
-      name: "(514) 555-1234",
-      firstName: "Marc",
-      lastName: "Tremblay",
-    }, numbers)).toBe("Marc Tremblay");
+  test("by its legacy businessName", () => {
+    expect(patchFor(client({businessName: "Acme Inc"}), SINCE)).toBeNull();
   });
 
-  test("falls back to the legacy businessName last", () => {
-    expect(baseNameFor({name: "", businessName: "Acme Inc"}, numbers))
-        .toBe("Acme Inc");
+  test("by ANY digit left in the name, with no type at all", () => {
+    // The Wave import sets no `type`, so these are recognisable only by name.
+    // The digit is not always leading — "Condo 706" carries it on the end.
+    for (const name of ["1505 Village de Bergerac", "3101-5696 qc inc.",
+      "Condo 706", "Appartement 12"]) {
+      expect(patchFor(client({name}), SINCE)).toBeNull();
+    }
   });
 
-  test("is empty when the doc has no name anywhere", () => {
-    expect(baseNameFor({}, numbers)).toBe("");
+  test("by a property token with no digit at all", () => {
+    for (const name of ["Syndicat de copropriété du Parc",
+      "Les Immeubles Rivière", "Résidence Bellevue"]) {
+      expect(patchFor(client({name}), SINCE)).toBeNull();
+    }
+  });
+
+  test("by a company token, with no type at all", () => {
+    for (const name of ["Plomberie Gagnon inc.", "Gestion Marc Tremblay",
+      "Constructions ABC Ltée", "Rénovations Enr.",
+      "Information technology group", "Groupe Immobilier Nord"]) {
+      expect(patchFor(client({name}), SINCE)).toBeNull();
+    }
+  });
+
+  test("but a person merely CONTAINING those letters is renamed", () => {
+    // The false negative that would rename a real company is the expensive
+    // one, but this is the false positive that would leave people unrenamed.
+    for (const name of ["Vincent Cormier", "Lucie Ledoux", "Marc Enrico"]) {
+      expect(patchFor(client({name}), SINCE)).toEqual({name: NUMBER});
+    }
   });
 });

@@ -94,38 +94,69 @@ void main() {
   });
 
   group('composeStored', () {
-    test('appends the phone for Wave', () {
+    test('names a PERSON by their phone number', () {
       expect(
         ClientNamePolicy.composeStored(
           baseName: 'Marc Tremblay',
           phone: '(514) 555-1234',
         ),
-        'Marc Tremblay (514) 555-1234',
+        '(514) 555-1234',
       );
     });
 
-    test('never appends twice', () {
+    test('is idempotent', () {
       // Every ordinary save runs through this, so a second pass over an
       // already-composed name must be a no-op.
       expect(
         ClientNamePolicy.composeStored(
-          baseName: 'Marc Tremblay (514) 555-1234',
+          baseName: '(514) 555-1234',
           phone: '(514) 555-1234',
         ),
-        'Marc Tremblay (514) 555-1234',
+        '(514) 555-1234',
       );
     });
 
-    test('replaces the old number when the phone was edited', () {
+    test('keeps a BUSINESS name — that is its identity in Wave', () {
       expect(
         ClientNamePolicy.composeStored(
-          baseName: 'Marc Tremblay 514-555-1234',
-          phone: '(438) 222-3333',
+          baseName: 'Vogas Plumbing',
+          phone: '(514) 555-1234',
+          type: ClientType.commercial,
         ),
-        // The old number is not this client's any more, so it stays in the
-        // name — the strip only removes the number the doc currently stores.
-        'Marc Tremblay 514-555-1234 (438) 222-3333',
+        'Vogas Plumbing',
       );
+    });
+
+    test('keeps a business recognisable only by its NAME', () {
+      // The Wave import sets no `type`, so these carry none at all.
+      for (final name in [
+        '3101-5696 qc inc.',
+        '1505 Village de Bergerac',
+        'Information technology group',
+        // The digit is not always leading.
+        'Condo 706',
+        'Syndicat de copropriété du Parc',
+      ]) {
+        expect(
+          ClientNamePolicy.composeStored(
+            baseName: name,
+            phone: '(514) 555-1234',
+          ),
+          name,
+        );
+      }
+    });
+
+    test('renames a person whose name merely contains those letters', () {
+      for (final name in ['Vincent Cormier', 'Marc Enrico']) {
+        expect(
+          ClientNamePolicy.composeStored(
+            baseName: name,
+            phone: '(514) 555-1234',
+          ),
+          '(514) 555-1234',
+        );
+      }
     });
 
     test('leaves the name bare when there is no phone', () {
@@ -243,19 +274,22 @@ void main() {
       );
     });
 
-    test('falls back to the contact person when no company name is on file', () {
-      // Better than rendering the phone number as the client's name.
-      expect(
-        ClientNamePolicy.displayFor(
-          name: '(514) 555-1234',
-          phone: '(514) 555-1234',
-          firstName: 'Marc',
-          lastName: 'Tremblay',
-          type: ClientType.commercial,
-        ),
-        'Marc Tremblay',
-      );
-    });
+    test(
+      'falls back to the contact person when no company name is on file',
+      () {
+        // Better than rendering the phone number as the client's name.
+        expect(
+          ClientNamePolicy.displayFor(
+            name: '(514) 555-1234',
+            phone: '(514) 555-1234',
+            firstName: 'Marc',
+            lastName: 'Tremblay',
+            type: ClientType.commercial,
+          ),
+          'Marc Tremblay',
+        );
+      },
+    );
   });
 
   group('isBusiness', () {

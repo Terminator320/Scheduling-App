@@ -78,12 +78,11 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
 
   void _initControllers() {
     final c = widget.client;
-    // The STORED name with its number stripped — never `displayName`. `name`
-    // carries the phone on the end for Wave and `_save` puts it back, so
-    // seeding from the raw field would show a number the admin didn't type and
-    // hand a name-plus-number to `composeStored` as if it were the base name.
+    // The STORED name with its number stripped — never `displayName`. On a
+    // BUSINESS that field is the business, and it is what Wave shows; on a
+    // person it is now the phone number, and `_save` re-derives it.
     //
-    // But `displayName` is the wrong cure: on anything it reads as a person it
+    // `displayName` is the wrong cure: on anything it reads as a person it
     // returns the first/last halves and ignores the stored name entirely — and
     // the Wave import sets no `type`, so EVERY imported business reads as a
     // person. Seeding the contact person here and saving would rename the
@@ -214,12 +213,15 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
     // (waveCustomerId/waveSyncState/waveSyncError) and the function-owned
     // jobCount — this form never edits any of them.
     final updated = widget.client.copyWith(
-      // Re-appends the phone for Wave. `composeStored` strips first, so a save
-      // never stacks a second copy — including on a doc whose name still holds
-      // a legacy number in a different shape from the stored one.
+      // The Wave CUSTOMER name: the phone number for a person, the typed name
+      // for a business. Both `type` and the stored `businessName` have to be
+      // passed, or re-saving a business renames it to its number on the
+      // invoices it appears on.
       name: ClientNamePolicy.composeStored(
         baseName: _nameController.text,
         phone: resolvedPhone,
+        type: _type,
+        businessName: widget.client.businessName,
       ),
       firstName: _firstNameController.text.trim(),
       lastName: _lastNameController.text.trim(),

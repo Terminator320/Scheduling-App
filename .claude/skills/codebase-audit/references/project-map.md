@@ -1,7 +1,9 @@
 # Project map & load-bearing invariants
 
 ## Layout
-- `lib/features/{auth,calendar,clients,employees,maps,onboarding,settings,splash,wave}/`
+- `lib/features/{auth,calendar,clients,dashboard,employees,feature_tour,
+  home_widget,live_activity,maps,navigation,notifications,onboarding,presence,
+  settings,siri,splash,wave}/`
   — feature-first. Each feature: `domain/` (entities, sealed `*_failure.dart`),
   `data/` (repositories), `presentation`/`screens`/`widgets`, `application`/providers.
 - `lib/core/`, `lib/shared/` — cross-feature code (theme/design tokens, validators,
@@ -32,9 +34,9 @@ see (unused dependencies, orphaned l10n keys).
 Lint baseline is `very_good_analysis` (strict). It already flags `unused_import`,
 `unused_element`, `unused_field`, `unused_local_variable`, `dead_code`,
 `prefer_const_constructors`, and more — so the analyzer IS your primary dead-code
-and mechanical-style detector. `analysis_options.yaml` excludes generated files
-(`*.g.dart`, `*.freezed.dart`, `lib/l10n/generated/**`, `firebase_options.dart`,
-`build/**`) — never report or modify those.
+and mechanical-style detector. `analysis_options.yaml` excludes `**/*.freezed.dart`, `lib/l10n/.gen/**`,
+`lib/firebase_options.dart`, `build/**` and `.dart_tool/**` — never report or
+modify those.
 
 ## "Do not touch" — load-bearing invariants
 
@@ -45,8 +47,11 @@ truth: `CLAUDE.md`, `.claude/rules/*.md`, `firestore.rules`.
 
 **Security / correctness invariants:**
 - `FirebaseAppCheck.instance.activate()` in `main()` — never remove.
-- Appointment status allowlist (`pending`/`confirmed`/`in_progress`/`done`/
-  `cancelled`); new appointments must be created `status: 'pending'`. Enforced in
+- Appointment status allowlist — exactly FOUR values: `pending`/`in_progress`/
+  `done`/`cancelled` (`confirmed` was retired 2026-07-09 and survives only as a
+  legacy-tolerant READ; never re-add it to a write path). `overdue` is
+  display-only and must never be stored. New appointments must be created
+  `status: 'pending'`. Enforced in
   `firestore.rules` (`isValidAppointmentStatus`) AND `_allowedStatuses` in
   `firebase_appointments_repository.dart` — the duplication is deliberate, not DRY-able.
 - Role/`isAdmin` is **always** read from Firestore, never SharedPreferences. Any
@@ -77,9 +82,11 @@ truth: `CLAUDE.md`, `.claude/rules/*.md`, `firestore.rules`.
   because grep shows few hits.
 - **Route names** — `AppRoutes.onGenerateRoute` resolves by string; a route
   constant may be pushed via `Navigator.pushNamed`.
-- **`TODO(pre-ship)` markers** — intentional temporary scaffolding for testing
-  features, kept deliberately until pre-ship cleanup. Not dead code; leave them
-  and their `TODO(pre-ship):` comments intact.
+- **`TODO(pre-ship)` markers** — intentional temporary scaffolding, kept until
+  pre-ship cleanup. Not dead code; leave them and their comments intact.
+  (As of 2026-08-14 there are ZERO such markers in the tree — the last one,
+  `kShowTestingDeleteClient`, went with the client archive/delete work. Verify
+  before reporting a Pre-ship checklist section as non-empty.)
 - Optional injected constructor deps (e.g. `AuthService`, repositories taking
   `auth`/`AppLogger`) exist for testability even if production passes nothing.
 

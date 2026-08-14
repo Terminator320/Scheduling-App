@@ -136,13 +136,13 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
 
   ClientRecord _draft() => ClientRecord(
     id: '',
-    // The STORED name carries the phone number on the end — that field is
-    // synced verbatim as the Wave customer name, and the invoicing workflow
-    // there identifies customers by number. Every in-app surface reads
-    // `displayName`, which strips it back off.
+    // The STORED name is the Wave CUSTOMER name: the phone number for a
+    // person, the typed name for a business. `type` has to be passed or a
+    // business is renamed to its number on the invoices it appears on.
     name: ClientNamePolicy.composeStored(
       baseName: _nameController.text,
       phone: _phoneController.text,
+      type: _type,
     ),
     firstName: _firstNameController.text.trim(),
     lastName: _lastNameController.text.trim(),

@@ -30,9 +30,11 @@ actually enforce, not just client code.
 - Rules are restrictive and deny-by-default; no broad `allow read, write: if
   true` or `if request.auth != null` without an ownership/role check.
 - **Query constraints match rules**: list queries must carry `.where(...)` that
-  satisfies a rule clause (status `active`, own `uid`, own invite) or they fail
-  `permission-denied`. The `users` read rule has four clauses — new queries must
-  satisfy one.
+  satisfies a rule clause or they fail `permission-denied`. The `users` read
+  rule has **three** clauses — admin, `status == 'active'`, or `uid ==
+  request.auth.uid` (own doc). New queries must satisfy one. (The fourth,
+  email-matched invite clause was deleted 2026-08-08 with the `#compat-1.37.1`
+  shim — don't look for it, and don't re-add it.)
 - Client writes to `clients` must not include `waveCustomerId`/`wave`
   (function-owned; rules reject). Confirm `toMap` never emits them.
 - Image uploads validated by magic bytes server-side
@@ -41,8 +43,11 @@ actually enforce, not just client code.
 ## Cloud Functions callables
 - Admin callables (`waveBootstrap`, `waveImportCustomers`, …) enforce App Check
   + `assertAdmin` + `enforceDurableRateLimit`. Auth-sensitive routes
-  (`deleteAccount`, `resolveMyInvite`) are rate-limited (5/15 min via
-  `rateLimits/*`, which clients can't read/write).
+  (`deleteAccount`, `completeEmployeeSetup`) are rate-limited 5/15 min, and
+  `changeEmployeeEmail` 5/hour plus a freshness gate (`assertFreshReauth`,
+  non-admin callers only) — counters in `rateLimits/*`, which clients can't
+  read or write. Guard order: auth → `assertAdmin`/identity → payload →
+  re-auth → rate limit → work.
 - Payloads validated: `assertPayloadShape` (reject non-object, >4 KB, unexpected
   keys) and `requireString`/`readSessionToken` (trim, length cap, control-char
   reject) before use. Flag any callable consuming `data.*` without validation.

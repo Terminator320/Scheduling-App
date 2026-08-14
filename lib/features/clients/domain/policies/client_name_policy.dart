@@ -1,22 +1,30 @@
 /// The stored/displayed split for a client's name.
 ///
-/// `clients/{id}.name` carries the client's phone number on the END —
-/// "Marc Tremblay (514) 555-1234" — because that field is synced VERBATIM to
-/// Wave as the customer name (`toWaveCustomerInput`, `functions/wave/mappers.js`),
-/// and the invoicing workflow there identifies customers by number. Wave gets
-/// `phone` as its own field too, but the name is what shows on the customer
-/// list and on an invoice, so the number has to be in it.
+/// **`clients/{id}.name` IS THE WAVE CUSTOMER NAME**, and as of 2026-08-14
+/// (owner call) that means two different things depending on who the client
+/// is. The field is synced VERBATIM by `toWaveCustomerInput`
+/// (`functions/wave/mappers.js`), and it is what shows on Wave's customer list
+/// and on an invoice.
 ///
-/// **`name` is for Wave. The app shows the first/last halves.** Every in-app
-/// surface reads `ClientRecord.displayName`, which prefers `firstName` +
-/// `lastName` and falls back to the stored name with the number stripped off —
-/// so a card, a search result, an avatar's initials and the `clientName`
-/// denormalized onto an appointment all say "Marc Tremblay".
+/// - **A PERSON is named by their phone number**: "(514) 555-1234". That is
+///   what the invoicing workflow identifies them by. Their real name lives in
+///   `firstName`/`lastName`, so nothing is lost.
+/// - **A BUSINESS keeps its name**: "3101-5696 qc inc.", "1505 Village de
+///   Bergerac". That name is the identity; a number in its place would make
+///   the customer unrecognisable, and there is rarely a first/last to fall
+///   back on. [ClientNamePolicy.looksLikeBusinessName] is what catches the
+///   Wave-imported ones, which carry no `type`.
 ///
-/// [ClientNamePolicy.composeStored] and [ClientNamePolicy.stripPhone] are
-/// inverses over the number, and both are idempotent: composing twice appends
-/// one number, stripping twice removes one. That is what lets the backfill and
-/// every ordinary save re-run safely.
+/// **The app never renders `name` for a person.** Every in-app surface reads
+/// `ClientRecord.displayName` → [ClientNamePolicy.displayFor]: the first/last
+/// halves for a person, the business name for a business — so a card, a search
+/// result, an avatar's initials and the `clientName` denormalized onto an
+/// appointment all say "Marc Tremblay" or "Vogas Plumbing".
+///
+/// [ClientNamePolicy.stripPhone] survives for the legacy shape — a stored name
+/// that still carries `"<name> <number>"` — and is what the edit sheet seeds
+/// from. [ClientNamePolicy.composeStored] is idempotent on both branches,
+/// which is what lets the backfill and every ordinary save re-run safely.
 ///
 /// **Hand-mirrored in `functions/client_name_utils.js`** (which
 /// `propagateClientEdits` and the backfill script both read through). The two
@@ -109,23 +117,89 @@ class ClientNamePolicy {
     return _trimSeparators(base.substring(0, match.start));
   }
 
-  /// What gets PERSISTED (and what Wave shows): `"<base name> <phone>"`.
+  /// What gets PERSISTED, and what Wave shows as the CUSTOMER name (owner call
+  /// 2026-08-14).
   ///
-  /// [baseName] is the clean name the admin typed. Stripping first is what
-  /// makes this idempotent — re-saving a client never appends a second copy.
+  /// **A PERSON is named by their phone number** — "(514) 555-1234" — because
+  /// the invoicing workflow in Wave identifies people by number. Their actual
+  /// name is in `firstName`/`lastName`, which is what [displayFor] renders in
+  /// the app, so nothing is lost.
+  ///
+  /// **A BUSINESS keeps its name**, because that name IS how Wave identifies
+  /// it: "3101-5696 qc inc.", "1505 Village de Bergerac". Replacing it with a
+  /// number would make the customer unrecognisable on a real invoice, and
+  /// unlike a person there is usually no first/last to fall back on.
+  /// [looksLikeBusinessName] is what catches the Wave-imported ones, which
+  /// carry no [type] at all.
+  ///
+  /// Both branches are idempotent, which is what lets the backfill and every
+  /// ordinary save re-run: a person's number recomposes to itself, and a
+  /// business's name is returned stripped and unchanged.
+  ///
+  /// [baseName] is also the answer for a person with no number at all — a Wave
+  /// customer still needs something to be called, and a blank would float the
+  /// doc to the top of the name-ordered client list with no initial for its
+  /// avatar.
   static String composeStored({
     required String baseName,
     required String phone,
     String mobile = '',
+    ClientType type = ClientType.unset,
+    String businessName = '',
   }) {
     final base = stripPhone(baseName, phone: phone, mobile: mobile);
+    if (isBusiness(type: type, businessName: businessName) ||
+        looksLikeBusinessName(base)) {
+      return base;
+    }
+
     final number = phone.trim().isNotEmpty ? phone.trim() : mobile.trim();
-    if (number.isEmpty) return base;
-    // A client with no name but a number is still better identified by the
-    // number than by a blank, which would float the doc to the top of the
-    // name-ordered client list with no initial for its avatar.
-    if (base.isEmpty) return number;
-    return '$base $number';
+    return number.isNotEmpty ? number : base;
+  }
+
+  /// Company-name tokens, bounded by non-letters so "Inc." is a business and
+  /// "Vincent" is not. Matched against an accent-folded, lowercased name, so
+  /// "Ltée" arrives here as "ltee" — a `\b` after "é" would never fire, since
+  /// Dart's word boundary is ASCII-only.
+  ///
+  /// Deliberately short. A false positive only leaves a client named the way
+  /// it already was; a false NEGATIVE renames a real customer to a phone
+  /// number on live Wave invoices.
+  static final _businessToken = RegExp(
+    '(^|[^a-z])(inc|ltd|ltee|llc|llp|enr|senc|sencrl|cie|corp|corporation|'
+    'company|holdings|group|groupe|services|solutions|technology|'
+    'technologies|entreprise|entreprises|immobilier|immeuble|immeubles|'
+    'gestion|construction|condo|condos|syndicat|copropriete|residence|'
+    r'residences|habitations|logements|appartements)([^a-z]|$)',
+  );
+
+  /// ANY digit left in the name once the client's own number is off it —
+  /// "1505 Village de Bergerac", "3101-5696 qc inc.", "Condo 706".
+  ///
+  /// Deliberately blunt, and biased on purpose. A person's name does not
+  /// contain digits, so the only false positives are a person carrying a
+  /// SECOND, older number in their name — and the cost of that is merely that
+  /// they keep the name they already had, which the backfill reports. The
+  /// opposite mistake renames a real company on live Wave invoices.
+  static final _anyDigit = RegExp(r'\d');
+
+  /// Whether [name] reads as an ORGANIZATION on its face.
+  ///
+  /// This is the fallback for the docs that carry no `type`: the Wave import
+  /// sets none, so every imported business would otherwise read as a person
+  /// and be renamed to its phone number. It is a heuristic and it is meant to
+  /// be — the backfill lists everything it matches, and everything it renames,
+  /// so the call can be checked before a single Wave customer is touched.
+  static bool looksLikeBusinessName(String name) {
+    final value = name.trim();
+    if (value.isEmpty) return false;
+    if (_anyDigit.hasMatch(value)) return true;
+    final folded = value
+        .toLowerCase()
+        .replaceAll('é', 'e')
+        .replaceAll('è', 'e')
+        .replaceAll('ê', 'e');
+    return _businessToken.hasMatch(folded);
   }
 
   /// The clean name to hand back to [composeStored] when RE-SAVING a stored

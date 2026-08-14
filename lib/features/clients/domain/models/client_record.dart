@@ -145,10 +145,10 @@ abstract class ClientRecord with _$ClientRecord {
     'autoInvoice': autoInvoice,
   };
 
-  /// The clean name for every in-app surface — the stored [name] carries the
-  /// client's phone number on the end so Wave's customer list shows it, and
-  /// this takes it back off. A business shows its business name, a person
-  /// their first/last halves. See [ClientNamePolicy].
+  /// The clean name for every in-app surface — the stored [name] IS the
+  /// client's phone number, because that is what Wave shows as the customer,
+  /// so nothing renders it. A business shows its business name, a person their
+  /// first/last halves. See [ClientNamePolicy].
   ///
   /// This is also what gets denormalized onto an appointment as `clientName`,
   /// so a card, a push and the Live Activity all say "Marc Tremblay".
