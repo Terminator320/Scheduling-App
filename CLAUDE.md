@@ -1158,6 +1158,61 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   the doc forever — invisible, uneditable, still matched by `matchClientDocs`
   (which reads `mobile`) and still in the Wave payload. There is no migration
   script and none is needed; the fleet heals as clients are edited.
+- **`clients/{id}.name` IS WAVE'S FIELD, and it carries the client's phone
+  number on the end** (owner call 2026-08-14): "Marc Tremblay (514) 555-1234".
+  `toWaveCustomerInput` syncs it VERBATIM as the Wave customer name, and the
+  invoicing workflow there identifies customers by number — Wave gets `phone`
+  as its own field too, but the name is what shows on the customer list and on
+  an invoice. **The app never renders it.** Every in-app surface reads
+  `ClientRecord.displayName`, which strips the number off and then branches:
+  **a BUSINESS shows its business name, a PERSON shows their `firstName` +
+  `lastName`.** That branch is the whole point — those two halves mean
+  different things on the two kinds of client (on a person they ARE the client,
+  on a business they are only its contact person), so preferring them
+  everywhere renders "Vogas Plumbing" as "Marc Tremblay" on the card for a
+  commercial job. `ClientNamePolicy.isBusiness` owns the test: the
+  `commercial`/`propertyManagement` types, **plus any doc carrying the legacy
+  `businessName`** — those predate the `type` field, so they arrive `unset` and
+  would otherwise be read as people. Every branch ends at the same three
+  fallbacks in a different order, so a client missing the field its own branch
+  prefers still renders something.
+  This REVERSED `backfill-client-phone-from-name.js`, which ran against prod
+  2026-08-08: it lifted the number out of `name` into `phone` and renamed
+  `name` to "First Last" — correct for the app, but it renamed every one of
+  those customers in Wave too. `backfill-client-name-with-phone.js` puts them
+  back (idempotent, `--dry-run`, `--since` so it skips recently-added clients).
+  The one owner is **`ClientNamePolicy`** (`clients/domain/policies/`),
+  hand-mirrored as **`functions/client_name_utils.js`**; their tests share
+  worked examples, so a divergence fails a test. Consequences that must stay in
+  sync:
+  **`composeStored` and `stripPhone` are inverses over the number and BOTH are
+  idempotent** — that is what lets every ordinary save re-append without
+  stacking a second copy, and what makes the backfill re-runnable. Both client
+  sheets compose on save; the edit sheet seeds its name field from
+  `displayName`, or the next save would hand a name-plus-number back to
+  `composeStored` as if it were the base name.
+  **`propagateClientEdits` must strip too** — it fans `clientName` onto future
+  appointments, and the app writes the DISPLAY name at booking, so without
+  `clientDisplayName` the two disagree and cards start showing the number.
+  **The backfill's base name is the STORED `name`, never `displayName`** — a
+  business carries the business in `name` and a CONTACT PERSON in first/last,
+  and a doc whose `type` was never picked reads as a person, so writing the
+  display name back would rename "Vogas Plumbing" to "Marc Tremblay" on real
+  Wave invoices, unrecoverably from the doc. It reaches the first/last halves
+  only when the stored name is empty once its own number is stripped — the junk
+  case the 2026-08-08 rename was cleaning up.
+  **The rules cap on `name` is 225, not 200** — the stored value is
+  `TextLimits.personName` (200) + a space + `TextLimits.phone` (24), so a cap
+  sized to the typed FIELD rejects every long client save with an opaque
+  `permission-denied`. `text_limits_test.dart` pins the sum against the rules
+  text; the two are exactly equal, so a bump on either side breaks it loudly.
+  **A number typed or pasted into the NAME field is lifted into the phone
+  field** (`liftPhoneFromNameField`, wired to both sheets' name `onChanged`) —
+  the interactive form of the 2026-08-08 backfill, so the collection cannot
+  drift back into holding undialable numbers. It is quiet unless the phone
+  field is EMPTY and the name holds a clean 10-digit number, and a name that is
+  nothing but the number keeps it (the field is required — emptying it reads as
+  the paste having vanished).
 - **The street + apt precedence rule has ONE owner: `AddressParser.canonicalFrom`.**
   Both client save paths resolve their stored address through it — the explicit
   apt field wins over an apt embedded in the street text, and a blank one keeps

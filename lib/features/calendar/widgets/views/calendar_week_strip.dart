@@ -146,6 +146,12 @@ class _StripCell extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isSelected ? scheme.primary : null,
+                // Today is a ring, not a blue number — the same rule the month
+                // grid's cells follow, so the strip can't describe today
+                // differently from the grid it replaces.
+                border: isToday && !isSelected
+                    ? Border.all(color: scheme.onSurface, width: 1.5)
+                    : null,
               ),
               child: Text(
                 '${day.day}',
@@ -155,11 +161,7 @@ class _StripCell extends StatelessWidget {
                   fontWeight: isSelected || isToday
                       ? FontWeight.w700
                       : FontWeight.w500,
-                  color: isSelected
-                      ? scheme.onPrimary
-                      : isToday
-                      ? theme.palette.primaryAccent
-                      : scheme.onSurface,
+                  color: isSelected ? scheme.onPrimary : scheme.onSurface,
                 ),
               ),
             ),

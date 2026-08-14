@@ -77,16 +77,11 @@ void main() {
     await tester.pumpWidget(_harness(initialDate: DateTime(2026, 8)));
     await tester.pumpAndSettle();
 
+    // The row drops the month down beneath itself rather than opening a modal
+    // picker, so the day is one tap inside the form.
     await tester.tap(find.text('End date'));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.descendant(
-        of: find.byType(DatePickerDialog),
-        matching: find.text('3'),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('OK'));
+    await tester.tap(find.byKey(const ValueKey('inline-date-day-2026-08-03')));
     await tester.pumpAndSettle();
 
     expect(

@@ -610,6 +610,14 @@
   "@calendar_selectDate": {
     "description": "Select date"
   },
+  "calendar_previousMonth": "Previous month",
+  "@calendar_previousMonth": {
+    "description": "Tooltip and screen-reader label of the back chevron on the inline month calendar that drops down under an appointment's date row."
+  },
+  "calendar_nextMonth": "Next month",
+  "@calendar_nextMonth": {
+    "description": "Tooltip and screen-reader label of the forward chevron on the inline month calendar that drops down under an appointment's date row."
+  },
   "calendar_startDate": "Start date",
   "@calendar_startDate": {
     "description": "Label of the first day of a job's run, in the appointment form's schedule panel."
@@ -2158,6 +2166,61 @@
   "dashboard_newClients": "New clients",
   "@dashboard_newClients": {
     "description": "Caption of the new-clients sparkline inside the trends card"
+  },
+  "dashboard_newClientsWindow": "{weeks, plural, =1{In the last week} other{In the last {weeks} weeks}}",
+  "@dashboard_newClientsWindow": {
+    "description": "Caption under the new-clients headline number, naming the window the count and the sparkline cover",
+    "placeholders": {
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_newClientsTrendUp": "{count, plural, =1{1 more than the previous {weeks} weeks} other{{count} more than the previous {weeks} weeks}}",
+  "@dashboard_newClientsTrendUp": {
+    "description": "Screen-reader and tooltip text for the new-clients trend chip when the recent half of the window beat the half before it",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_newClientsTrendDown": "{count, plural, =1{1 fewer than the previous {weeks} weeks} other{{count} fewer than the previous {weeks} weeks}}",
+  "@dashboard_newClientsTrendDown": {
+    "description": "Screen-reader and tooltip text for the new-clients trend chip when the recent half of the window fell behind the half before it",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_newClientsTrendFlat": "Same as the previous {weeks} weeks",
+  "@dashboard_newClientsTrendFlat": {
+    "description": "Screen-reader and tooltip text for the new-clients trend chip when both halves of the window are equal",
+    "placeholders": {
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_newClientsThisWeek": "This week",
+  "@dashboard_newClientsThisWeek": {
+    "description": "Micro label under the last bar of the new-clients sparkline, marking which end is the current week"
+  },
+  "dashboard_newClientsMore": "{count, plural, =1{1 more} other{{count} more}}",
+  "@dashboard_newClientsMore": {
+    "description": "Footer line of the new-clients card when more clients were added than the card lists",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "dashboard_newClientsTotal": "{count, plural, =1{1 in the last 8 weeks} other{{count} in the last 8 weeks}}",
   "@dashboard_newClientsTotal": {

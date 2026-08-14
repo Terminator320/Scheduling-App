@@ -98,16 +98,13 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     _clientSearchDebounce.run(() => _notifier.searchClients(query));
   }
 
-  Future<void> _pickDate() async {
-    final state = ref.read(_provider);
-    final picked = await showAdaptiveDatePicker(
-      context,
-      initialDate: state.selectedDate ?? DateTime.now(),
-      firstDate: AppointmentDraftDefaults.datePickerFirstDate,
-      lastDate: AppointmentDraftDefaults.datePickerLastDate,
-    );
-    if (picked == null || !mounted) return;
-    _controllers.date.text = DateUtilsHelper.formatDate(picked);
+  /// The date rows drop an inline month calendar down beneath themselves, so a
+  /// date arrives already picked — there is no modal to await and no cancelled
+  /// outcome to handle. The bounds the picker enforces live on the row.
+  void _onStartDateSelected(DateTime picked) {
+    setState(() {
+      _controllers.date.text = DateUtilsHelper.formatDate(picked);
+    });
     _notifier.selectDate(picked);
     // selectDate mirrors or shifts the end date, and the end row renders the
     // controller text — so it has to follow, or it goes stale.
@@ -117,20 +114,10 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     }
   }
 
-  Future<void> _pickEndDate() async {
-    final state = ref.read(_provider);
-    final picked = await showAdaptiveDatePicker(
-      context,
-      initialDate: state.endDate ?? state.selectedDate ?? DateTime.now(),
-      // Never offer a date before the start: an end date that precedes it is
-      // unbookable, so it shouldn't be reachable in the picker either.
-      firstDate:
-          state.selectedDate?.dateOnly ??
-          AppointmentDraftDefaults.datePickerFirstDate,
-      lastDate: AppointmentDraftDefaults.datePickerLastDate,
-    );
-    if (picked == null || !mounted) return;
-    _controllers.endDate.text = DateUtilsHelper.formatDate(picked);
+  void _onEndDateSelected(DateTime picked) {
+    setState(() {
+      _controllers.endDate.text = DateUtilsHelper.formatDate(picked);
+    });
     _notifier.selectEndDate(picked);
   }
 
@@ -285,6 +272,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
             selectedEmployees: state.selectedEmployees,
             repeat: state.repeat,
             useCustomAddress: state.useCustomAddress,
+            selectedDate: state.selectedDate,
+            endDate: state.endDate,
             isPersonal: state.isPersonal,
             onPersonalChanged: (value) => _notifier.setPersonal(value: value),
             isAllDay: state.isAllDay,
@@ -303,8 +292,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
               onSelectClient: _notifier.selectClient,
               onClearClient: _notifier.clearClient,
               onToggleEmployee: _notifier.toggleEmployee,
-              onPickDate: _pickDate,
-              onPickEndDate: _pickEndDate,
+              onSelectStartDate: _onStartDateSelected,
+              onSelectEndDate: _onEndDateSelected,
               onPickStartTime: _pickStartTime,
               onPickEndTime: _pickEndTime,
               onSelectRepeat: _notifier.selectRepeat,

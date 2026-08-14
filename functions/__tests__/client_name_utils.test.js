@@ -1,0 +1,189 @@
+"use strict";
+
+const {
+  clientDisplayName,
+  composeStored,
+  isBusiness,
+  stripPhone,
+} = require("../client_name_utils");
+
+/**
+ * These worked examples are DELIBERATELY the same ones
+ * `test/features/clients/domain/client_name_policy_test.dart` uses. That file
+ * and `client_name_utils.js` are hand-mirrors of one rule, so a divergence
+ * between the two implementations has to fail a test rather than ship — the
+ * same discipline `appointment_day_slice` / `day_slice_utils` already uses.
+ */
+describe("stripPhone", () => {
+  test("removes the number this app appended", () => {
+    expect(stripPhone("Marc Tremblay (514) 555-1234",
+        {phone: "(514) 555-1234"})).toBe("Marc Tremblay");
+  });
+
+  test("removes a legacy number typed in another shape", () => {
+    expect(stripPhone("Marc Tremblay 514-555-1234",
+        {phone: "(514) 555-1234"})).toBe("Marc Tremblay");
+  });
+
+  test("matches an 11-digit form against the stored 10-digit one", () => {
+    expect(stripPhone("Marc Tremblay 1-514-555-1234",
+        {phone: "(514) 555-1234"})).toBe("Marc Tremblay");
+  });
+
+  test("falls back to mobile when phone is empty", () => {
+    expect(stripPhone("Marc Tremblay (514) 555-1234",
+        {mobile: "(514) 555-1234"})).toBe("Marc Tremblay");
+  });
+
+  test("leaves a trailing number that is NOT this client's", () => {
+    expect(stripPhone("Depanneur 5148889999",
+        {phone: "(514) 555-1234"})).toBe("Depanneur 5148889999");
+  });
+
+  test("leaves the name alone when the doc has no number at all", () => {
+    expect(stripPhone("Marc Tremblay 514-555-1234"))
+        .toBe("Marc Tremblay 514-555-1234");
+  });
+
+  test("returns empty when the name is nothing but the number", () => {
+    expect(stripPhone("(514) 555-1234", {phone: "(514) 555-1234"})).toBe("");
+  });
+
+  test("is idempotent", () => {
+    const once = stripPhone("Marc Tremblay (514) 555-1234",
+        {phone: "(514) 555-1234"});
+    expect(stripPhone(once, {phone: "(514) 555-1234"})).toBe(once);
+  });
+});
+
+describe("composeStored", () => {
+  test("appends the phone for Wave", () => {
+    expect(composeStored({
+      baseName: "Marc Tremblay",
+      phone: "(514) 555-1234",
+    })).toBe("Marc Tremblay (514) 555-1234");
+  });
+
+  test("never appends twice", () => {
+    // The backfill is re-runnable and every ordinary save goes through this,
+    // so a second pass over an already-composed name must be a no-op.
+    expect(composeStored({
+      baseName: "Marc Tremblay (514) 555-1234",
+      phone: "(514) 555-1234",
+    })).toBe("Marc Tremblay (514) 555-1234");
+  });
+
+  test("leaves the name bare when there is no phone", () => {
+    expect(composeStored({baseName: "Marc Tremblay", phone: ""}))
+        .toBe("Marc Tremblay");
+  });
+
+  test("a nameless client is stored as its number, not as blank", () => {
+    expect(composeStored({baseName: "", phone: "(514) 555-1234"}))
+        .toBe("(514) 555-1234");
+  });
+});
+
+describe("clientDisplayName — a PERSON shows their halves", () => {
+  test("prefers the first/last halves over the stored name", () => {
+    expect(clientDisplayName({
+      name: "Marc Tremblay (514) 555-1234",
+      phone: "(514) 555-1234",
+      firstName: "Marc",
+      lastName: "Tremblay",
+      type: "residential",
+    })).toBe("Marc Tremblay");
+  });
+
+  test("takes a single half on its own", () => {
+    expect(clientDisplayName({
+      name: "Marc (514) 555-1234",
+      phone: "(514) 555-1234",
+      firstName: "Marc",
+    })).toBe("Marc");
+  });
+
+  test("falls back to the stored name with the number stripped", () => {
+    expect(clientDisplayName({
+      name: "Marc Tremblay (514) 555-1234",
+      phone: "(514) 555-1234",
+    })).toBe("Marc Tremblay");
+  });
+
+  test("a bare number beats an empty display name", () => {
+    expect(clientDisplayName({
+      name: "(514) 555-1234",
+      phone: "(514) 555-1234",
+    })).toBe("(514) 555-1234");
+  });
+
+  test("tolerates a missing or non-object doc", () => {
+    expect(clientDisplayName({})).toBe("");
+    expect(clientDisplayName(null)).toBe("");
+  });
+});
+
+describe("clientDisplayName — a BUSINESS shows its business name", () => {
+  test("a commercial client keeps its business name", () => {
+    // The load-bearing case: first/last is the CONTACT PERSON here, so
+    // preferring the halves would fan a person's name onto every appointment
+    // booked for the company.
+    expect(clientDisplayName({
+      name: "Vogas Plumbing (514) 555-1234",
+      phone: "(514) 555-1234",
+      firstName: "Marc",
+      lastName: "Tremblay",
+      type: "commercial",
+    })).toBe("Vogas Plumbing");
+  });
+
+  test("property management counts as a business", () => {
+    expect(clientDisplayName({
+      name: "Gestion Immobiliere ABC",
+      firstName: "Marc",
+      lastName: "Tremblay",
+      type: "property_mgmt",
+    })).toBe("Gestion Immobiliere ABC");
+  });
+
+  test("a legacy businessName doc is a business even with no type", () => {
+    expect(clientDisplayName({
+      name: "Acme Industries",
+      businessName: "Acme Industries",
+      firstName: "Marc",
+      lastName: "Tremblay",
+    })).toBe("Acme Industries");
+  });
+
+  test("falls back to the legacy businessName when name is blank", () => {
+    expect(clientDisplayName({name: "", businessName: "Acme Inc"}))
+        .toBe("Acme Inc");
+  });
+
+  test("falls back to the contact person with no company name on file", () => {
+    expect(clientDisplayName({
+      name: "(514) 555-1234",
+      phone: "(514) 555-1234",
+      firstName: "Marc",
+      lastName: "Tremblay",
+      type: "commercial",
+    })).toBe("Marc Tremblay");
+  });
+});
+
+describe("isBusiness", () => {
+  test("the two organization types", () => {
+    expect(isBusiness({type: "commercial"})).toBe(true);
+    expect(isBusiness({type: "property_mgmt"})).toBe(true);
+  });
+
+  test("a residential or untyped client is a person", () => {
+    expect(isBusiness({type: "residential"})).toBe(false);
+    expect(isBusiness({})).toBe(false);
+    expect(isBusiness(null)).toBe(false);
+  });
+
+  test("a legacy businessName makes it a business regardless of type", () => {
+    expect(isBusiness({businessName: "Acme Inc"})).toBe(true);
+  });
+});

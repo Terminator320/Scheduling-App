@@ -258,7 +258,16 @@ void main() {
 
     expect(find.text('Alice'), findsOneWidget);
     expect(find.text('Bob'), findsNothing);
-    expect(find.text('1 in the last 8 weeks'), findsOneWidget);
+    // The card leads with the figure and captions the window under it. Keyed,
+    // because bare numbers also appear on the KPI tiles and on this card's own
+    // trend chip.
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('new-clients-total')))
+          .data,
+      '1',
+    );
+    expect(find.text('In the last 8 weeks'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

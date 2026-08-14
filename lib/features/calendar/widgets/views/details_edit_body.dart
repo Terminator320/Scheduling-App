@@ -13,7 +13,6 @@ import 'package:scheduling/features/calendar/application/event_details_controlle
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/domain/series_outlook.dart';
-import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
@@ -102,6 +101,8 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           selectedEmployees: state.selectedEmployees,
           repeat: state.repeat,
           useCustomAddress: state.useCustomAddress,
+          selectedDate: state.selectedDate,
+          endDate: state.endDate,
           isPersonal: state.isPersonal,
           isAllDay: state.isAllDay,
           onAllDayChanged: (value) => notifier.setAllDay(value: value),
@@ -128,8 +129,9 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
             onSelectClient: notifier.selectClient,
             onClearClient: notifier.clearClient,
             onToggleEmployee: notifier.toggleEmployee,
-            onPickDate: () => _pickDate(context, state, notifier),
-            onPickEndDate: () => _pickEndDate(context, state, notifier),
+            onSelectStartDate: (picked) =>
+                _onStartDateSelected(notifier, picked),
+            onSelectEndDate: (picked) => _onEndDateSelected(notifier, picked),
             onPickStartTime: () => _pickStartTime(context, state, notifier),
             onPickEndTime: () => _pickEndTime(context, state, notifier),
             onSelectRepeat: notifier.selectRepeat,
@@ -148,19 +150,12 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     );
   }
 
-  Future<void> _pickDate(
-    BuildContext context,
-    EventDetailsState state,
-    EventDetailsController notifier,
-  ) async {
-    final picked = await showAdaptiveDatePicker(
-      context,
-      initialDate: state.selectedDate,
-      firstDate: AppointmentDraftDefaults.datePickerFirstDate,
-      lastDate: AppointmentDraftDefaults.datePickerLastDate,
-    );
-    if (picked == null || !context.mounted) return;
-    widget.controllers.date.text = DateUtilsHelper.formatDate(picked);
+  /// The date rows drop an inline month calendar down beneath themselves, so a
+  /// date arrives already picked — no modal to await, no cancelled outcome.
+  void _onStartDateSelected(EventDetailsController notifier, DateTime picked) {
+    setState(() {
+      widget.controllers.date.text = DateUtilsHelper.formatDate(picked);
+    });
     notifier.selectDate(picked);
     // selectDate shifts the end date to preserve the run's length, and the end
     // row renders the controller text — so it has to follow, or it goes stale.
@@ -172,23 +167,10 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     widget.controllers.endDate.text = DateUtilsHelper.formatDate(shifted);
   }
 
-  Future<void> _pickEndDate(
-    BuildContext context,
-    EventDetailsState state,
-    EventDetailsController notifier,
-  ) async {
-    final picked = await showAdaptiveDatePicker(
-      context,
-      initialDate: state.endDate,
-      // Never offer a date before the start: an end date that precedes it is
-      // unbookable, so it shouldn't be reachable in the picker either. Floored
-      // to midnight — the seeded start carries the record's clock time, which
-      // would otherwise sit after the end date on the run's first day.
-      firstDate: state.selectedDate.dateOnly,
-      lastDate: AppointmentDraftDefaults.datePickerLastDate,
-    );
-    if (picked == null || !context.mounted) return;
-    widget.controllers.endDate.text = DateUtilsHelper.formatDate(picked);
+  void _onEndDateSelected(EventDetailsController notifier, DateTime picked) {
+    setState(() {
+      widget.controllers.endDate.text = DateUtilsHelper.formatDate(picked);
+    });
     notifier.selectEndDate(picked);
   }
 

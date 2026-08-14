@@ -11,8 +11,10 @@ import 'package:scheduling/features/clients/application/client_form_controller.d
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
+import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
 import 'package:scheduling/features/clients/widgets/client_form_state.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
+import 'package:scheduling/features/clients/widgets/fields/client_name_phone_lift.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_type_chips.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -121,9 +123,27 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     apt: _aptController.text,
   );
 
+  /// Pulls a phone number out of the name the admin just typed or pasted. See
+  /// [liftPhoneFromNameField] — quiet unless the phone field is still empty.
+  void _liftPhoneFromName() {
+    if (liftPhoneFromNameField(
+      name: _nameController,
+      phone: _phoneController,
+    )) {
+      setState(() => clearError('phone'));
+    }
+  }
+
   ClientRecord _draft() => ClientRecord(
     id: '',
-    name: _nameController.text.trim(),
+    // The STORED name carries the phone number on the end — that field is
+    // synced verbatim as the Wave customer name, and the invoicing workflow
+    // there identifies customers by number. Every in-app surface reads
+    // `displayName`, which strips it back off.
+    name: ClientNamePolicy.composeStored(
+      baseName: _nameController.text,
+      phone: _phoneController.text,
+    ),
     firstName: _firstNameController.text.trim(),
     lastName: _lastNameController.text.trim(),
     phone: _phoneController.text.trim(),
@@ -247,7 +267,10 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
           // LabeledTextField has no `onCleared` — its built-in ClearTextButton
           // routes through onChanged(''), so clearing the error here covers
           // both typing and the clear "x".
-          onChanged: (_) => clearError('name'),
+          onChanged: (_) {
+            clearError('name');
+            _liftPhoneFromName();
+          },
         ),
       ),
       const SizedBox(height: AppSpacing.sp16),

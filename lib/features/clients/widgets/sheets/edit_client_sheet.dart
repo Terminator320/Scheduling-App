@@ -11,8 +11,10 @@ import 'package:scheduling/features/clients/application/client_form_controller.d
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
+import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
 import 'package:scheduling/features/clients/widgets/client_form_state.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
+import 'package:scheduling/features/clients/widgets/fields/client_name_phone_lift.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_type_chips.dart';
 import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
@@ -76,7 +78,11 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
 
   void _initControllers() {
     final c = widget.client;
-    _nameController = TextEditingController(text: c.name);
+    // The clean name, not the stored one — `name` carries the phone number on
+    // the end for Wave, and `_save` puts it back. Seeding from the raw field
+    // would show the admin a number they didn't type and, on the next save,
+    // hand a name-plus-number to `composeStored` as if it were the base name.
+    _nameController = TextEditingController(text: c.displayName);
     _firstNameController = TextEditingController(text: c.firstName);
     _lastNameController = TextEditingController(text: c.lastName);
     _phoneController = TextEditingController(text: c.phone);
@@ -138,6 +144,17 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
     apt: _aptController.text,
   );
 
+  /// Pulls a phone number out of the name the admin just typed or pasted. See
+  /// [liftPhoneFromNameField] — quiet unless the phone field is still empty.
+  void _liftPhoneFromName() {
+    if (liftPhoneFromNameField(
+      name: _nameController,
+      phone: _phoneController,
+    )) {
+      setState(() => clearError('phone'));
+    }
+  }
+
   List<ClientContact> _buildContacts() => [
     for (final contact in additionalContacts)
       if (!contact.isEmpty) contact.toContact(),
@@ -181,7 +198,13 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
     // (waveCustomerId/waveSyncState/waveSyncError) and the function-owned
     // jobCount — this form never edits any of them.
     final updated = widget.client.copyWith(
-      name: _nameController.text.trim(),
+      // Re-appends the phone for Wave. `composeStored` strips first, so a save
+      // never stacks a second copy — including on a doc whose name still holds
+      // a legacy number in a different shape from the stored one.
+      name: ClientNamePolicy.composeStored(
+        baseName: _nameController.text,
+        phone: resolvedPhone,
+      ),
       firstName: _firstNameController.text.trim(),
       lastName: _lastNameController.text.trim(),
       phone: resolvedPhone,
@@ -264,7 +287,10 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
           textInputAction: TextInputAction.next,
           maxLength: TextLimits.personName,
           errorText: errors['name'],
-          onChanged: (_) => clearError('name'),
+          onChanged: (_) {
+            clearError('name');
+            _liftPhoneFromName();
+          },
         ),
       ),
       const SizedBox(height: AppSpacing.sp16),

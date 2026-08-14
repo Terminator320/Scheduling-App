@@ -107,6 +107,19 @@ void main() {
       );
     });
 
+    test('client name, with the phone number appended for Wave', () {
+      // The stored `clients/{id}.name` is NOT just what the admin typed — it
+      // is `"<typed name> <phone>"`, because that field is synced verbatim as
+      // the Wave customer name (ClientNamePolicy.composeStored). So the value
+      // the rules have to admit is the sum of the two field caps plus the
+      // separating space, and sizing the rule to `personName` alone rejects
+      // every long client save with an opaque `permission-denied`.
+      expect(
+        TextLimits.personName + 1 + TextLimits.phone,
+        lessThanOrEqualTo(rulesCapFor('name')),
+      );
+    });
+
     test('client email', () {
       expect(TextLimits.email, lessThanOrEqualTo(rulesCapFor('email')));
     });

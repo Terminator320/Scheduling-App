@@ -10,6 +10,12 @@ import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/primitives/fade_in_item.dart';
 
+/// Bottom gap a host must leave when it floats controls over this list: the
+/// calendar's 58px FAB and its "Today" pill both sit 16px above the bottom of
+/// the body, so without it the LAST card of the day scrolls to a rest position
+/// underneath them and can neither be read nor tapped.
+const double kAgendaFloatingControlsClearance = 90;
+
 /// The day's agenda rows as slivers — the skeleton, the empty state or the
 /// card list. Sliver-shaped so the portrait calendar can scroll it in one
 /// viewport with the month grid, which is what makes the grid collapse possible
@@ -25,6 +31,7 @@ class AgendaSliverList extends StatelessWidget {
     this.isLoading = false,
     this.onAppointmentTap,
     this.selectedAppointmentId,
+    this.bottomClearance = 0,
   });
 
   /// One entry per day the job runs — a multi-day job appears in the agenda of
@@ -36,6 +43,12 @@ class AgendaSliverList extends StatelessWidget {
   final bool isLoading;
   final void Function(AppointmentRecord appointment)? onAppointmentTap;
   final String? selectedAppointmentId;
+
+  /// Extra scrollable extent below the last card, so a host that floats
+  /// controls over the list can scroll the last job clear of them — pass
+  /// [kAgendaFloatingControlsClearance]. Default 0: a pane with nothing
+  /// floating over it must not grow dead space at the bottom.
+  final double bottomClearance;
 
   @override
   Widget build(BuildContext context) {
@@ -67,7 +80,13 @@ class AgendaSliverList extends StatelessWidget {
           )
         else
           SliverPadding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sp4),
+            // The clearance rides on the LIST branch only: the empty state is
+            // a `SliverFillRemaining` that deliberately doesn't scroll, and
+            // padding it would give it scrollable extent it has no content for.
+            padding: EdgeInsets.only(
+              top: AppSpacing.sp4,
+              bottom: AppSpacing.sp4 + bottomClearance,
+            ),
             sliver: SliverList.builder(
               itemCount: events.length,
               itemBuilder: (context, index) {
