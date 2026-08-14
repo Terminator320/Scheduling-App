@@ -16,10 +16,11 @@
 # Node tooling (root + functions/)
 node_modules/
 
-# Local-only project instructions
-CLAUDE.md
-!ios/CLAUDE.md
-!functions/CLAUDE.md
+# CLAUDE.md files are SHARED across machines (private repo, Windows + Mac) —
+# never ignore them. A bare `CLAUDE.md` pattern matches at EVERY depth, so it
+# silently drops each new nested file. Machine-local notes go in CLAUDE.local.md.
+CLAUDE.local.md
+**/CLAUDE.local.md
 TODO.md
 skills-lock.json
 
@@ -149,9 +150,12 @@ ruvector.db
 *.stackdump
 *.skill
 .playwright-mcp/
-UsersGeorgeVogasAppDataLocalTempvibe-security-skill/
 .agents/
-.claude/
+# .claude/ is SHARED (private repo, Windows + Mac): rules, skills, agents,
+# commands, hooks and settings.json must reach both machines. Only
+# machine-local files stay ignored.
+.claude/settings.local.json
+.claude/*.local.json
 .superpowers/
 superpowers/
 docs/superpowers/

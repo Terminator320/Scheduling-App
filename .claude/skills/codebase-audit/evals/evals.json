@@ -1,0 +1,44 @@
+{
+  "skill_name": "codebase-audit",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Can you go through the whole codebase and clean it up? Find any dead or unused code and remove it, and flag anything that looks like a bug or a security problem.",
+      "expected_output": "Full sweep: runs the static scan, auto-applies safe fixes without touching load-bearing invariants, writes a severity-ranked report (with a Pre-ship checklist surfacing destructive TODO(pre-ship) items), flags unused dependencies, and verifies analyze/tests stay green.",
+      "files": [],
+      "expectations": [
+        "Ran the deterministic static scan (flutter analyze + dart fix --dry-run + functions ESLint) before reasoning about findings",
+        "Report separates security findings from bug findings, each with a severity and a real file:line location",
+        "Distinguishes safe auto-fixes from report-only findings (separate would_fix vs report)",
+        "Did not propose removing/modifying a load-bearing invariant; TODO(pre-ship) and sanctioned exceptions left intact and surfaced (not buried)",
+        "Surfaces unused/dead weight the user asked for — e.g. unused dependencies or dead code"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Audit just the Wave integration for me - lib/features/wave and functions/wave. Is there any unused code, and are there any security or correctness issues I should worry about?",
+      "expected_output": "Scoped audit over the Wave Dart feature + Cloud Functions. Surfaces security findings against the Wave invariants, reports bugs, only auto-fixes genuinely safe cleanups, and treats businessName back-compat + TODO(pre-ship) as report-not-modify.",
+      "files": [],
+      "expectations": [
+        "Scoped the audit to the Wave integration (lib/features/wave + functions/wave)",
+        "Surfaced the App Check pre-ship gate on the Wave callables as a security finding",
+        "Verified Wave invariants intact (Secret-Manager-only token, no client read of wave collection, toMap excludes waveCustomerId/wave) and did not propose modifying them",
+        "Findings carry severity + real file:line and separate security from bugs/correctness",
+        "Did not propose stripping businessName back-compat or TODO(pre-ship) scaffolding"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I want to tidy up the app - just remove dead and unused code so it's cleaner. Don't change any actual behavior or touch anything risky.",
+      "expected_output": "Cleanup-focused pass that auto-removes only analyzer-confirmed dead code after clearing indirect-reference traps (l10n keys, providers, route strings). Risky/behavior-changing items reported, not applied. Orphaned l10n keys + unused deps reported (not deleted).",
+      "files": [],
+      "expectations": [
+        "Based dead-code removal on analyzer-confirmed unused (ran flutter analyze / dart fix) rather than guessing",
+        "Caught at least one 'looks dead but isn't' trap and deferred it (l10n_extensions export / providers / route strings / TODO pre-ship)",
+        "Did NOT list l10n ARB keys as safe-to-remove in a code sweep (deferred them to the report)",
+        "Only genuinely-safe items in the auto-apply list; risky/judgment items routed to report",
+        "Items grounded in real file:line with no invented findings"
+      ]
+    }
+  ]
+}
