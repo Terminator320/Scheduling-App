@@ -31,8 +31,13 @@
 // that list before going live: a PERSON wrongly matched keeps their name (no
 // harm), but a BUSINESS wrongly missed is renamed on live invoices.
 //
-// The clients it DOES rename with no first/last on file are listed too — those
-// end up called by their phone number in the app as well as in Wave.
+// The clients it renames that had NO first/last on file are listed too, and
+// that list needs reading for a different reason: their stored `name` was the
+// only copy of the person's name, so the patch SPLITS it into the two halves
+// in the same write rather than overwriting it away. The split is mechanical
+// — last whitespace token is the surname — so only a human can spot a
+// mis-split. (This used to be silent data loss; docs renamed before that was
+// fixed are repaired by `restore-client-name-halves.js`.)
 //
 // TWO TRIGGERS FIRE ON EVERY PATCHED DOC, both wanted, neither free:
 //   - `propagateClientEdits` fans the name onto that client's FUTURE
@@ -174,9 +179,22 @@ function isBusinessClient(data, numbers) {
 /**
  * The patch for one client doc, or null when it needs no change.
  *
+ * THE PATCH CARRIES THE HALVES when it would otherwise destroy the only copy
+ * of a person's name. On a doc with neither `firstName` nor `lastName`, the
+ * stored `name` IS that copy — `backfill-client-phone-from-name.js`
+ * deliberately left `name` alone for exactly those docs — and overwriting it
+ * with the number loses it for good, since Firestore keeps no history. The
+ * halves are where the app reads a person's name from, so landing it there
+ * costs nothing and changes no Wave identity (Wave carries its own first/last
+ * fields beside the customer name). This mirrors
+ * `ClientNamePolicy.composeSave`, which is the same guarantee on the app's
+ * save paths; `restore-client-name-halves.js` repairs the docs written before
+ * either existed.
+ *
  * @param {!Object} data The stored client document.
  * @param {number} sinceMs Docs created at or after this are skipped.
- * @return {?{name: string}} A field patch, or null to skip the doc.
+ * @return {?{name: string, firstName: (string|undefined),
+ *   lastName: (string|undefined)}} A field patch, or null to skip the doc.
  */
 function patchFor(data, sinceMs) {
   const created = toMillis(data.createdAt);
@@ -196,7 +214,47 @@ function patchFor(data, sinceMs) {
     businessName: data.businessName,
   });
   if (!name || name === String(data.name || "").trim()) return null;
-  return {name};
+
+  // A half already there is a name that survives the rewrite, so there is
+  // nothing to rescue — and on a BUSINESS the halves are the CONTACT PERSON,
+  // which must never be overwritten with the company's name.
+  const hasHalf = Boolean(
+      String(data.firstName || "").trim() ||
+      String(data.lastName || "").trim());
+  const base = stripPhone(data.name, {phone, mobile});
+  // `name === base` means `composeStored` did NOT replace the name — this is a
+  // BUSINESS (typed, legacy `businessName`, or caught by the heuristic), and
+  // the only thing that changed is the trailing number coming off. Nothing was
+  // destroyed, so there is nothing to rescue, and splitting here would invent a
+  // CONTACT PERSON out of the company's own name and push it to Wave
+  // ("Vogas Plumbing" -> first "Vogas", last "Plumbing"). This is the guard
+  // `ClientNamePolicy.composeSave` spells as `stored == base`.
+  if (hasHalf || !base || name === base) return {name};
+
+  return {name, ...splitName(base)};
+}
+
+/**
+ * Splits a person's name into the two stored halves.
+ *
+ * Deliberately dumb — the last whitespace token is the surname and everything
+ * before it is the given name. `restore-client-name-halves.js` IMPORTS this
+ * one rather than copying it — it repairs the docs this script wrote, so two
+ * splits of the same name is the one divergence that matters here.
+ * Hand-mirrored by `ClientNamePolicy.splitPersonName`, which shares its worked
+ * examples.
+ *
+ * @param {string} name A person's name.
+ * @return {{firstName: string, lastName: string}}
+ */
+function splitName(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return {firstName: "", lastName: ""};
+  if (parts.length === 1) return {firstName: parts[0], lastName: ""};
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts[parts.length - 1],
+  };
 }
 
 /**
@@ -266,14 +324,30 @@ async function main() {
     if (sample.length < SAMPLE_SIZE) {
       sample.push({id: doc.id, from: data.name || "", to: patch.name});
     }
-    // Reported in FULL, not sampled: this doc is about to be called by its
-    // phone number IN THE APP as well as in Wave, because it has no first or
-    // last name to fall back on. Nothing is lost that was not already missing,
-    // but it is the one outcome the operator has to see in full.
+    // Reported in FULL, not sampled: this doc had NO first or last name, so
+    // its stored `name` was the only copy of it.
+    //
+    // THIS USED TO BE DATA LOSS, and an earlier version of this comment
+    // claimed it was not ("nothing is lost that was not already missing").
+    // That was wrong for exactly this set: `backfill-client-phone-from-name.js`
+    // deliberately left `name` alone on a doc with NEITHER half, so renaming
+    // it in place destroyed the only copy and Firestore keeps no history.
+    // `patchFor` now splits that name into the halves in the SAME patch, so
+    // nothing is lost — but the split is mechanical (last token is the
+    // surname), so the operator still has to read the list and check it.
+    // Docs renamed BEFORE this changed are repaired from their settled
+    // appointments by `restore-client-name-halves.js`.
     const hasOtherName = Boolean(
         String(data.firstName || "").trim() ||
         String(data.lastName || "").trim());
-    if (!hasOtherName) nameless.push({id: doc.id, to: patch.name});
+    if (!hasOtherName) {
+      nameless.push({
+        id: doc.id,
+        to: patch.name,
+        first: patch.firstName || "",
+        last: patch.lastName || "",
+      });
+    }
     // A client Wave has never seen is CREATED by the upsert this write
     // triggers, not patched. That is almost certainly wanted, but it is a
     // different action from renaming an existing customer and the operator
@@ -326,11 +400,15 @@ async function main() {
 
   if (nameless.length > 0) {
     console.log(
-        `\n${tag}${nameless.length} client(s) have NO name anywhere else — ` +
-        "no business name, no first/last — so they will be called by their " +
-        "phone number in the app as well as in Wave. Nothing is lost that " +
-        "was not already missing, but give these a name if any matter:");
-    for (const n of nameless) console.log(`  ${n.id}  "${n.to}"`);
+        `\n${tag}${nameless.length} client(s) had NO first/last name, so the ` +
+        "typed name was the only copy. It is SPLIT into the halves in the " +
+        "same write rather than destroyed — but the split is mechanical " +
+        "(last token is the surname), so READ THIS LIST: only you can tell a " +
+        "mis-split from a real name:");
+    for (const n of nameless) {
+      console.log(`  ${n.id}  -> name "${n.to}"` +
+        `  first "${n.first}"  last "${n.last}"`);
+    }
   }
 
   if (!dryRun && patched > 0) {
@@ -353,4 +431,5 @@ module.exports = {
   assertKnownFlags,
   parseSince,
   patchFor,
+  splitName,
 };

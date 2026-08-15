@@ -170,6 +170,26 @@ void main() {
     expect(repo.added!.name, '(514) 555-0101');
   });
 
+  testWidgets('a PERSON keeps the typed name in the halves', (tester) async {
+    // Name is required here and both halves are optional, so composing alone
+    // would leave the typed name nowhere — the card would render a bare
+    // number and nothing in the app could recover it.
+    final repo = await pumpSheet(tester);
+
+    await tester.enterText(find.byType(TextField).first, 'Marc Tremblay');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Phone'),
+      '5145550101',
+    );
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added!.firstName, 'Marc');
+    expect(repo.added!.lastName, 'Tremblay');
+  });
+
   testWidgets('a COMMERCIAL client keeps its typed name', (tester) async {
     // The type has to reach `composeStored`, or a real company is booked into
     // Wave under a phone number.

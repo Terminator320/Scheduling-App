@@ -74,7 +74,28 @@ describe("parseSince", () => {
 
 describe("patchFor", () => {
   test("names a person by their phone number", () => {
-    expect(patchFor(client(), SINCE)).toEqual({name: NUMBER});
+    expect(patchFor(client(), SINCE))
+        .toEqual({name: NUMBER, firstName: "Marc", lastName: "Tremblay"});
+  });
+
+  test("carries the name into the halves rather than destroying it", () => {
+    // THE DATA LOSS THIS CLOSES: `backfill-client-phone-from-name.js` left
+    // `name` alone on a doc with neither half, so for those docs `name` held
+    // the ONLY copy and renaming it in place lost it — Firestore keeps no
+    // history. The halves are what the app renders for a person, so the name
+    // survives and no Wave identity changes.
+    const patch = patchFor(client({name: "Jean Paul Belanger"}), SINCE);
+    expect(patch).toEqual({
+      name: NUMBER,
+      firstName: "Jean Paul",
+      lastName: "Belanger",
+    });
+  });
+
+  test("never overwrites a half that already carries a name", () => {
+    // On a BUSINESS these are the CONTACT PERSON, not the client.
+    expect(patchFor(client({firstName: "Marc-Andre"}), SINCE))
+        .toEqual({name: NUMBER});
   });
 
   test("is idempotent — a second run writes nothing", () => {
@@ -83,7 +104,7 @@ describe("patchFor", () => {
 
   test("replaces a legacy name-plus-number outright", () => {
     expect(patchFor(client({name: "Marc Tremblay 514-555-1234"}), SINCE))
-        .toEqual({name: NUMBER});
+        .toEqual({name: NUMBER, firstName: "Marc", lastName: "Tremblay"});
   });
 
   test("skips a client created on or after the cutoff", () => {
@@ -97,7 +118,7 @@ describe("patchFor", () => {
   test("patches a doc with no createdAt", () => {
     // The field is backfilled lazily, so its absence means legacy, not new.
     expect(patchFor(client({createdAt: undefined}), SINCE))
-        .toEqual({name: NUMBER});
+        .toEqual({name: NUMBER, firstName: "Marc", lastName: "Tremblay"});
   });
 
   test("skips a client with no number to be named after", () => {
@@ -106,7 +127,11 @@ describe("patchFor", () => {
 
   test("uses mobile when there is no phone", () => {
     expect(patchFor(client({phone: "", mobile: "(438) 222-3333"}), SINCE))
-        .toEqual({name: "(438) 222-3333"});
+        .toEqual({
+          name: "(438) 222-3333",
+          firstName: "Marc",
+          lastName: "Tremblay",
+        });
   });
 });
 
@@ -150,11 +175,28 @@ describe("patchFor leaves a BUSINESS alone", () => {
     }
   });
 
+  test("and never invents CONTACT halves out of a company's own name", () => {
+    // The stored name still carries the legacy trailing number, so the patch
+    // is real — it strips the number. But `composeStored` did not REPLACE
+    // anything, so nothing was destroyed and there is nothing to rescue:
+    // splitting here would push "first: Vogas, last: Plumbing" to Wave as this
+    // company's contact person. `composeSave` guards this as `stored == base`.
+    for (const data of [
+      {name: `Vogas Plumbing ${NUMBER}`, type: "commercial"},
+      {name: `Vogas Plumbing ${NUMBER}`, businessName: "Vogas Plumbing"},
+      {name: `1505 Village de Bergerac ${NUMBER}`},
+    ]) {
+      const patch = patchFor(client(data), SINCE);
+      expect(patch.firstName).toBeUndefined();
+      expect(patch.lastName).toBeUndefined();
+    }
+  });
+
   test("but a person merely CONTAINING those letters is renamed", () => {
     // The false negative that would rename a real company is the expensive
     // one, but this is the false positive that would leave people unrenamed.
     for (const name of ["Vincent Cormier", "Lucie Ledoux", "Marc Enrico"]) {
-      expect(patchFor(client({name}), SINCE)).toEqual({name: NUMBER});
+      expect(patchFor(client({name}), SINCE)).toMatchObject({name: NUMBER});
     }
   });
 });

@@ -198,22 +198,29 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
     });
     if (errors.values.any((e) => e != null)) return;
 
+    // The Wave CUSTOMER name: the phone number for a person, the typed name
+    // for a business. Both `type` and the stored `businessName` have to be
+    // passed, or re-saving a business renames it to its number on the
+    // invoices it appears on.
+    final composedName = ClientNamePolicy.composeSave(
+      baseName: _nameController.text,
+      phone: resolvedPhone,
+      firstName: _firstNameController.text,
+      lastName: _lastNameController.text,
+      type: _type,
+      businessName: widget.client.businessName,
+    );
+
     // Copying the loaded record preserves the Wave projection fields
     // (waveCustomerId/waveSyncState/waveSyncError) and the function-owned
     // jobCount — this form never edits any of them.
     final updated = widget.client.copyWith(
-      // The Wave CUSTOMER name: the phone number for a person, the typed name
-      // for a business. Both `type` and the stored `businessName` have to be
-      // passed, or re-saving a business renames it to its number on the
-      // invoices it appears on.
-      name: ClientNamePolicy.composeStored(
-        baseName: _nameController.text,
-        phone: resolvedPhone,
-        type: _type,
-        businessName: widget.client.businessName,
-      ),
-      firstName: _firstNameController.text.trim(),
-      lastName: _lastNameController.text.trim(),
+      // `composeSave` rather than `composeStored`: for a person the composed
+      // name IS the phone number, so on a doc with no halves the typed name is
+      // the only copy and saving would destroy it in place.
+      name: composedName.name,
+      firstName: composedName.firstName,
+      lastName: composedName.lastName,
       phone: resolvedPhone,
       mobile: '',
       email: _emailController.text.trim(),

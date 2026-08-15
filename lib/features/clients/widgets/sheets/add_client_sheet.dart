@@ -123,30 +123,38 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     apt: _aptController.text,
   );
 
-  ClientRecord _draft() => ClientRecord(
-    id: '',
+  ClientRecord _draft() {
     // The STORED name is the Wave CUSTOMER name: the phone number for a
     // person, the typed name for a business. `type` has to be passed or a
     // business is renamed to its number on the invoices it appears on.
-    name: ClientNamePolicy.composeStored(
+    // `composeSave`, not `composeStored` — Name is required here while both
+    // halves are optional, so for a person it is routinely the only copy of
+    // the typed name and composing alone would discard it.
+    final composed = ClientNamePolicy.composeSave(
       baseName: _nameController.text,
       phone: _phoneController.text,
+      firstName: _firstNameController.text,
+      lastName: _lastNameController.text,
       type: _type,
-    ),
-    firstName: _firstNameController.text.trim(),
-    lastName: _lastNameController.text.trim(),
-    phone: _phoneController.text.trim(),
-    email: _emailController.text.trim(),
-    address: noFixedAddress ? '' : _buildFullAddress(),
-    apt: noFixedAddress ? '' : _aptController.text.trim(),
-    city: noFixedAddress ? '' : _cityController.text.trim(),
-    province: noFixedAddress ? '' : _provinceController.text.trim(),
-    postalCode: noFixedAddress ? '' : _postalCodeController.text.trim(),
-    country: noFixedAddress ? '' : _countryController.text.trim(),
-    noFixedAddress: noFixedAddress,
-    accessNotes: _accessNotesController.text.trim(),
-    type: _type,
-  );
+    );
+    return ClientRecord(
+      id: '',
+      name: composed.name,
+      firstName: composed.firstName,
+      lastName: composed.lastName,
+      phone: _phoneController.text.trim(),
+      email: _emailController.text.trim(),
+      address: noFixedAddress ? '' : _buildFullAddress(),
+      apt: noFixedAddress ? '' : _aptController.text.trim(),
+      city: noFixedAddress ? '' : _cityController.text.trim(),
+      province: noFixedAddress ? '' : _provinceController.text.trim(),
+      postalCode: noFixedAddress ? '' : _postalCodeController.text.trim(),
+      country: noFixedAddress ? '' : _countryController.text.trim(),
+      noFixedAddress: noFixedAddress,
+      accessNotes: _accessNotesController.text.trim(),
+      type: _type,
+    );
+  }
 
   Future<void> _save({required AddClientNext next}) async {
     // The EXISTING validator, not a fast-capture variant: address is required

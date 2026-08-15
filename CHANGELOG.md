@@ -10,6 +10,49 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.46.1+74] - 2026-08-15
+
+A correctness and privacy pass over the whole codebase. The headline is that a
+client's typed name could be silently replaced by their phone number when you
+saved them.
+
+### Changed
+- **Job photos are checked against your account every time they're shown.**
+  Displaying a photo used to mint a permanent web link for it. That link never
+  expired and needed no sign-in, so a photo someone saw while they worked here
+  kept opening for them long after their account was switched off. Photos now
+  load through your account on every view, and no shareable link is created at
+  all. The cost, and it's a real one: **photos no longer work offline**, and
+  they download once per session instead of being kept on the phone. This does
+  not reach back — a link somebody already saved under an older version of the
+  app still works.
+
+### Fixed
+- **Saving a client could replace their name with their phone number.** The
+  Name field is required while First and Last are optional, so filling in just
+  the name — the ordinary way to add someone — left the number as the only
+  thing stored. The client then showed as a bare number on every card, in
+  search and on their own page, and re-typing the name just did it again. The
+  typed name is now kept. Clients this already happened to are recovered
+  separately, from the names their past visits still carry.
+- **Photos could vanish from a job.** A job whose photos had been moved to the
+  new storage showed only the moved ones and dropped the rest.
+- **A cancelled job could be marked complete.** An assignee could put a
+  cancelled visit back into the schedule as a finished one.
+- **Some saves failed with "something went wrong" and no way to fix it.**
+  Saving an appointment for a client with a long name, or a client with a long
+  street address plus an apartment number, was rejected outright.
+- **One bad record could blank a whole screen.** A client, employee or staff
+  location edited outside the app — in the Firebase console — could stop the
+  list it belonged to from loading at all, and for an employee record it could
+  stop that person signing in.
+- **Reporting a failure could itself crash the app.** The same fault behind the
+  address-lookup crash fixed last release was present in twelve other places,
+  each one turning a handled error into a crash if the screen had already
+  closed.
+- **The photo-upload warning's "Open" button could do nothing** when the job it
+  pointed at had since been deleted.
+
 ## [1.46.0+73] - 2026-08-14
 
 Changes how clients are named — in the app and on your Wave invoices — replaces

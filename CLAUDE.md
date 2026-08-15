@@ -1264,8 +1264,23 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   skips recently-added clients). **Its dry run prints two lists in FULL and
   both must be read before going live**: every client it treated as a BUSINESS
   and therefore left alone (check for a person the heuristic caught), and
-  every client it renamed that has no first/last on file (those end up called
-  by their phone number in the app as well as in Wave).
+  every client it renames that has no first/last on file — for those the
+  stored `name` is the ONLY copy, so `patchFor` splits it into the halves in
+  the same write, and the list is where a mis-split gets caught.
+  **The 2026-08-14 prod run predated that split and DESTROYED those names**
+  (504 renamed). The only surviving copy is `clientName` on the client's
+  SETTLED appointments — `propagateClientEdits` gates on `hasWorkLeft`, so a
+  visit that had already ended still carries the pre-rename name.
+  `restore-client-name-halves.js` writes those back into the halves and
+  **never touches `name`**, which is Wave's customer identity; it reports, and
+  leaves alone, anything reading as a business.
+  `docs/audits/audit-renamed-client-names.js` is its read-only twin and the two
+  are kept deliberately in step — an operator reading one rule's report and
+  running another rule's repair is the failure mode. Both scan the client's
+  appointments **ordered `startTime` DESC on the existing
+  `(clientId, startTime DESC)` composite**: with no `orderBy` the limit takes
+  an ARBITRARY slice, so a busy client's whole window can be future visits and
+  the report calls a recoverable name unrecoverable.
   The one owner is **`ClientNamePolicy`** (`clients/domain/policies/`),
   hand-mirrored as **`functions/client_name_utils.js`**; their tests share
   worked examples, so a divergence fails a test. Consequences that must stay in
@@ -1273,6 +1288,26 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   **`composeStored` is idempotent on BOTH branches** — a person's number
   recomposes to itself, a business's name comes back stripped and unchanged —
   which is what makes the backfill re-runnable and every ordinary save safe.
+  **But NO SAVE PATH MAY CALL `composeStored` DIRECTLY — they compose through
+  `ClientNamePolicy.composeSave`, which returns the stored name AND the two
+  halves** (2026-08-15). For a person `composeStored` REPLACES the typed name
+  with the phone number, so on a doc whose `firstName`/`lastName` are empty
+  that name is the only copy of it and the save destroys it in place, with no
+  Firestore history to recover from. That is not theoretical: the Name field is
+  `required` on both sheets while both halves are `optional`, so the ordinary
+  add-a-client flow reproduced it, the client then rendered as a bare number
+  everywhere, and re-typing the name in the edit sheet did it again —
+  `baseNameFor` returns `''` for such a doc, so the required field opens blank.
+  `composeSave` splits the base name into the halves instead. It passes through
+  untouched in exactly three cases, and each matters: the stored name came back
+  UNCHANGED (a business, or a person with no number — nothing was replaced, so
+  nothing is at risk), a half is ALREADY populated (never clobber a name that
+  is there — and on a business the halves are the CONTACT PERSON, not the
+  client), or there is no base name. `splitPersonName` is the mechanical split
+  (last whitespace token is the surname), hand-mirrored by `splitName` in BOTH
+  `functions/scripts/backfill-client-name-with-phone.js` — whose `patchFor`
+  carries the halves in the same patch for the same reason — and
+  `restore-client-name-halves.js`; the three share worked examples.
   Both client sheets compose on save, and **both must pass `type` (and the
   edit sheet the stored `businessName`), or an ordinary save renames a
   business to its phone number on the invoices it appears on.** The edit sheet
