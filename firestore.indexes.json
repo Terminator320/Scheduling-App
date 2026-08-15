@@ -423,6 +423,15 @@
       ]
     },
     {
+      "collectionGroup": "appointmentRecountClaims",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
       "collectionGroup": "liveActivityTokens",
       "fieldPath": "expiresAt",
       "ttl": true,

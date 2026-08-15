@@ -6,6 +6,7 @@ const {getMessaging} = require("firebase-admin/messaging");
 const {
   assertPayloadShape,
   requireString,
+  requireDocId,
   optionalString,
   assertAdmin,
   enforceDurableRateLimit,
@@ -414,12 +415,7 @@ const changeEmployeeEmail = onCall(APP_CHECK, async (req) => {
   }
   const db = getFirestore();
   assertPayloadShape(req.data, new Set(["docId", "email"]));
-  const docId = requireString(req.data, "docId", 128);
-  // `.doc()` throws synchronously on an id containing a slash, which would
-  // surface as an opaque `internal` instead of a shaped rejection.
-  if (docId.includes("/")) {
-    throw new HttpsError("invalid-argument", "invalid-docId");
-  }
+  const docId = requireDocId(req.data, "docId");
   const email = requireString(req.data, "email", 254).toLowerCase();
   // Guard order: auth → payload → IDENTITY → re-auth freshness → rate limit →
   // work. The payload is validated before a slot is consumed so a burst of
@@ -725,12 +721,7 @@ const deleteEmployeeAccount = onCall(APP_CHECK, async (req) => {
   }
   await assertAdmin(req.auth.uid);
   assertPayloadShape(req.data, new Set(["docId"]));
-  const docId = requireString(req.data, "docId", 128);
-  // `.doc()` throws synchronously on an id containing a slash, which would
-  // surface as an opaque `internal` instead of a shaped rejection.
-  if (docId.includes("/")) {
-    throw new HttpsError("invalid-argument", "invalid-docId");
-  }
+  const docId = requireDocId(req.data, "docId");
   await enforceDurableRateLimit(
       "deleteEmployeeAccount", req.auth.uid, CREATE_RATE_MAX,
       CREATE_RATE_WINDOW_MS);

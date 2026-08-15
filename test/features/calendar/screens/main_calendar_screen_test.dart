@@ -7,7 +7,6 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
-import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -76,6 +75,40 @@ Widget _wrap({
       ),
     ),
   );
+}
+
+/// The en_CA agenda day header, spelled out literally.
+///
+/// These assertions used to call `DateUtilsHelper.formatDayHeader` — the
+/// function that PRODUCES the string on screen — so they passed for any
+/// output, including the French word order (`mercredi, aout 5`) the locale
+/// skeleton exists to prevent. The expectation has to come from somewhere
+/// other than the code under test.
+String _dayHeader(DateTime day) {
+  const weekdays = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+  const months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  return '${weekdays[day.weekday - 1]}, ${months[day.month - 1]} ${day.day}';
 }
 
 Key _dayKey(DateTime day) => ValueKey(
@@ -218,7 +251,7 @@ void main() {
     final now = DateTime.now();
     final next = DateTime(now.year, now.month + 1);
     expect(
-      find.text(DateUtilsHelper.formatDayHeader(next)),
+      find.text(_dayHeader(next)),
       findsOneWidget,
     );
   });
@@ -253,7 +286,7 @@ void main() {
       weekStart: weekStart,
     ).first;
     expect(
-      find.text(DateUtilsHelper.formatDayHeader(expected)),
+      find.text(_dayHeader(expected)),
       findsOneWidget,
     );
   });

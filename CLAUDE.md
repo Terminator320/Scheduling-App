@@ -116,41 +116,86 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   uploads. `ImageCompressService` was removed — don't reintroduce a second
   compression pass. Background dispatch via `AppointmentImageUploadService`
   after appointment save; the picker's temp files are deleted in a `finally`.
-- **Photos are RENDERED from `storagePath`, never from the persisted `url`**
-  (2026-08-08). `getDownloadURL()` mints a permanent `?alt=media&token=…` URL
-  that anyone holding it can read with **no auth and no rules evaluation**, so a
-  URL captured while an employee was active kept working after
-  `deactivateEmployee` disabled their Auth account and revoked their tokens —
-  which is exactly what `storage.rules`' `status == 'active'` gate on
-  appointment images exists to stop. `AppointmentImageUrlResolver`
-  (`core/images/`) resolves at render time so every read re-evaluates the
-  rules, and falls back to the stored `url` only when `storagePath` is empty on
-  a legacy doc — that fallback is why this needed no migration.
-  **A RULES REJECTION MUST NOT FALL BACK** (2026-08-11): the resolver's `catch`
-  used to be unconditional, so the one error it exists to convert into a blank
-  tile — a `permission-denied`/`unauthorized` from the `status == 'active'`
-  gate — was converted straight back into a working, rules-free token URL. It
-  now returns `''` for those two codes and keeps the fallback for everything
-  else (offline, transient Storage failures), which say nothing about
-  entitlement. An empty resolved URL is therefore a REFUSAL, not a pending
-  resolve: `PhotoPickerSection` renders the error tile and keeps it untappable,
-  and `buildImageProviders` substitutes a 1×1 transparent image rather than
-  dropping the entry — the viewer opens at an INDEX, so dropping one would
-  shift every photo beside it.
+- **Photos are RENDERED FROM BYTES held in memory. No renderable URL is ever
+  produced** (owner call, 2026-08-15, which replaced the 2026-08-08
+  render-from-`storagePath` scheme rather than extending it).
+  `getDownloadURL()` mints a `?alt=media&token=…` URL whose
+  `firebaseStorageDownloadTokens` value is **stable per object and never
+  expires**, and fetching it serves the bytes over plain HTTPS with **no auth
+  and no rules evaluation**. The previous scheme re-minted that URL at render
+  time, which put `storage.rules` in front of the MINT — but handed back the
+  same permanent string every time, so a URL rendered while an employee was
+  active sat in the on-disk image cache, was trivially copyable, and kept
+  working indefinitely for anyone holding it after `deactivateEmployee` had
+  revoked the credential and the `status == 'active'` gate had started refusing
+  *new* reads. **`AppointmentImageLoader` (`core/images/`, formerly
+  `AppointmentImageUrlResolver`) calls `ref.getData()` instead** — an
+  authenticated SDK fetch, so `storage.rules` is evaluated on **every fetch**,
+  and there is nothing shareable to capture or to leave in a cache. Be precise
+  about the two halves: it does **not** revoke a URL somebody already captured
+  under the old build (nothing client-side can — that needs a server-side token
+  rotation), and it does **not** stop an entitled person screenshotting or
+  sharing a photo they can legitimately see. What it ends is the app
+  *manufacturing* a permanent rules-free link as a side effect of rendering.
+  **The accepted cost, stated up front by the owner:** this loses
+  `cached_network_image`'s on-disk byte cache, so photos re-download once per
+  session and **do not render offline at all**. `cached_network_image` /
+  `flutter_cache_manager` are no longer imported anywhere in `lib/`.
+  **The session cache holds the BYTES** (`Map<storagePath, Future<Uint8List>>`,
+  the provider is a singleton) — that is what keeps the fetch from being paid
+  per widget State, i.e. on every sheet open AND again on every View→Edit
+  toggle, which is the whole win the URL cache was built for. It is
+  **byte-budgeted** (24 MB, oldest evicted first) because bytes are far heavier
+  than the strings they replaced; a session that opens fifty jobs would
+  otherwise retain every photo of every one of them. `loadAll` keeps its
+  concurrency bound of 4.
+  A doc written before `storagePath` was stored has only its `url`, so **that
+  URL is unavoidably the handle** — but it is turned back into a `Reference`
+  via `refFromURL` and fetched through the SDK like any other, so even the
+  legacy path is rules-evaluated and the token URL never reaches the network
+  stack. That fallback is why this needed no migration; keep it.
+  **A RULES REJECTION MUST NOT FALL BACK** (2026-08-11, still the point): the
+  old `catch` was unconditional, so the one error it existed to convert into a
+  blank tile — a `permission-denied`/`unauthorized` from the `status ==
+  'active'` gate — was converted straight back into a working, rules-free token
+  URL. There is now no URL-shaped fallback at all, for a rejection or for
+  anything else, so **EMPTY BYTES ARE A REFUSAL, not a pending load**:
+  `PhotoPickerSection` renders the error tile and keeps it untappable, and
+  `buildImageProviders` substitutes a 1×1 transparent image rather than dropping
+  the entry — the viewer opens at an INDEX, so dropping one would shift every
+  photo beside it. The rejection/transport branch survives in the loader only to
+  say which happened in the log; **neither result is cached** — entitlement can
+  change mid-session, and the network can come back.
   `ImageStorageService` **still writes `url`**, deliberately: builds that
-  predate the resolver render from it, so dropping the write now would blank
-  photos on any phone that hasn't updated. Retire it once the fleet has moved,
-  the way the 1.37.1 shim was retired.
-  **Resolved URLs are POSITIONAL, so they must be carried with the list they
-  were resolved for** — `PhotoPickerSection` keys them on `_resolvedFor` and
+  predate this render from it, so dropping the write now would blank photos on
+  any phone that hasn't updated. Retire it once the fleet has moved, the way the
+  1.37.1 shim was retired. `ImageStorageService.downloadUrlFor` is the ONE
+  remaining URL mint and is **not** a render path — the offline queue re-links
+  an already-uploaded image whose doc-link append didn't land, and that
+  `pictures` entry still carries a `url` for those older builds. It lives beside
+  the upload write it reproduces so nothing on the render side has a
+  URL-minting method to reach for.
+  **Loaded bytes are POSITIONAL, so they must be carried with the list they
+  were loaded for** — `PhotoPickerSection` keys them on `_resolvedFor` and
   serves `const []` until that matches `existingImages`. A Storage round-trip
   per photo is a real window, not "a frame or two": a partial or stale list
   shifts every index beside it, so removing photo 0 rendered the *deleted*
   photo, an untapped placeholder opened a NEW photo, and the viewer's
-  `initialIndex` (composed as `existingUrls.length + i`) ran past the end of
+  `initialIndex` (composed as `existingBytes.length + i`) ran past the end of
   the provider list and threw a `RangeError` out of Save/Share. Offset a
-  viewer index by the URLs actually handed to the viewer, never by
+  viewer index by the entries actually handed to the viewer, never by
   `existingImages.length`; `ImageViewer.open` also clamps, as depth.
+  **Decode size is now the app's problem, not the network layer's.** The strip
+  decodes through `Image.memory`'s `cacheWidth`/`cacheHeight` and the carousel
+  through `ResizeImage`, so a thumbnail costs ~0.3 MB decoded rather than the
+  ~10 MB a full 1600×1600 frame would; only the full-screen viewer decodes at
+  full size, exactly as it did before. Never render a stored photo through a
+  bare `Image.memory` with no cache bound.
+  **Save/Share spool to a temp file.** `ImageViewer._currentImageFile` used to
+  hand `DefaultCacheManager` a URL; a `MemoryImage` has no file, so its bytes
+  are written to `getTemporaryDirectory()` for the platform channel — and the
+  1×1 refusal stand-in is excluded by identity, or Save/Share would hand over a
+  blank pixel as if it were the job.
 - **Photos are MOVING to `appointments/{id}/images`, and phase 1 writes BOTH
   stores** (2026-08-13). Every appointment document carried its whole photo
   array — a `url` alone is ~215 of a ~290-byte entry — and the calendar reads
@@ -175,10 +220,10 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   don't all collide on one id. The two implementations share worked examples in
   their tests; change them together.
   **The subcollection doc omits `url` when `storagePath` is present** — photos
-  render from `storagePath` so every read re-evaluates `storage.rules`, and a
-  persisted download URL is a permanent rules-free token with no reader here.
-  A LEGACY entry with only a `url` keeps it, or backfilling destroys the one
-  thing that can render it.
+  render from bytes fetched off `storagePath`, so `storage.rules` is evaluated
+  on every fetch and a persisted download URL is a permanent rules-free token
+  with no reader here. A LEGACY entry with only a `url` keeps it, or
+  backfilling destroys the one thing that can render it.
   **Reads are "subcollection first, array fallback", and EMPTY means "use the
   array", never "this job has no photos"** — a document the backfill hasn't
   reached yet is exactly that shape. `EventDetailsController._loadStoredPictures`
@@ -219,9 +264,10 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
      deliberately reusing the array's number rather than inventing a second —
      but a bounded read is not a bounded WRITE, and nothing yet stops a doc
      growing past it.
-  3. **The `AppointmentImage.url` fallback.** `AppointmentImageUrlResolver`
-     still falls back to a stored `url` for legacy entries, and only the
-     backfilled subcollection docs carry one. Keep the fallback.
+  3. **The `AppointmentImage.url` fallback.** `AppointmentImageLoader` still
+     uses a stored `url` as the fetch HANDLE for legacy entries (through
+     `refFromURL`), and only the backfilled subcollection docs carry one. Keep
+     the fallback.
 - **Offline photo-upload queue:** a failed/incomplete photo batch is persisted
   by `PendingUploadStore` (one JSON list under the SharedPreferences key
   `pending_photo_uploads`, entries pruned after 7 days) so uploads survive
@@ -926,7 +972,13 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `uid` and `status` for the same reason** — `uid` is on that denylist and
   `status` belongs to deactivate/reactivate; the repository's field-scoped
   allowlist in `updateEmployee` is the real write path, and `toMap()` exists
-  only to round-trip the editable fields. **The denylist is on `allow create`
+  only to round-trip the editable fields. **`email` is omitted too** (2026-08-15)
+  for a sharper reason: it is a SIGN-IN identity and moves through
+  `changeEmployeeEmail`, which owns Auth and Firestore together, or not at all
+  — a whole-record write carrying it would rewrite the doc while Auth kept the
+  old address, and it is the very key `updateEmployee`'s uniqueness query reads.
+  It was emitted un-normalized, which was latent only because nothing in
+  production calls `toMap()`. **The denylist is on `allow create`
   as well as `allow update`**: without it the same admin session that cannot
   edit `uid` could simply create a doc carrying a forged one, and a second doc
   claiming an existing employee's uid repoints the `usersByUid` bridge every
@@ -1318,11 +1370,16 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   resolves the labels itself precisely so that unrotated rule can't be got wrong
   at a call site — the dashboard's Attention list and My details both report
   availability conflicts and each carried an identical private copy.
-  **The daily-cap picker is shared too: `showMaxJobsPicker` + `kMaxJobsOptions`**,
-  same file. The admin Team sheet and My details offer the same
-  `maxJobsPerDay` field, and a hand-mirrored option list plus `noCap` label rule
-  is exactly the drift the `AvailabilityPanel` extraction had just ended one row
-  over.
+  **The daily-cap picker is shared too: `showMaxJobsPicker` + `kMaxJobsOptions`
+  + `maxJobsLabel`**, same file. The admin Team sheet and My details offer the
+  same `maxJobsPerDay` field, and a hand-mirrored option list plus `noCap` label
+  rule is exactly the drift the `AvailabilityPanel` extraction had just ended
+  one row over. This bullet claimed all three were extracted together while
+  only the option list actually was; `maxJobsLabel` was added 2026-08-15 to make
+  it true, and the ternary it replaced had been re-spelled at three sites.
+  **The read-only detail view deliberately renders NO row for an uncapped
+  person** rather than "No cap" — a read-only body omits empty sections instead
+  of showing a placeholder — so it does not call the helper.
 - **A user-doc rules cap must not be tighter than the widest value a shipped
   write path can produce.** `createEmployeeAccount` accepts `phone` up to 40
   chars while `TextLimits.phone` is 24, so `isValidUserData` caps phone at
@@ -1707,7 +1764,10 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   Promote to `shared/` or `core/` only when reused across features.
 - Services are plain classes; no DI container. `AuthService` accepts optional
   injected deps for testability — mirror this pattern.
-- Normalize emails: `.trim().toLowerCase()` before any Firestore read/write.
+- Normalize emails through `normalizeEmail()`
+  (`core/validators/email_format.dart`) before any Firestore read/write — never
+  a hand-spelled `.trim().toLowerCase()`, which had nine copies and a private
+  `_norm` twin.
 - `initState` must be thin — extract heavy init to `_initStreams()`.
 - **Submit/save reentrancy:** in a controller's submit/save, set the in-flight
   flag (`isSubmitting`/`isSaving`) synchronously BEFORE the first `await` —
@@ -1773,11 +1833,17 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `isOfflineProvider`, pushes the standard offline notice and returns true so
   the caller returns. The block was copy-pasted at six sites. It takes no
   `tag`: notices carry no support code (2026-08-04), so a tag now lives only in
-  the `logger.warn` label at the same site. `AccountSetupScreen` deliberately
-  stays out — it surfaces offline through its own banner (`_bannerError`), not a
-  notice. (This named "the two `accept_invite_*` screens" until 2026-08-11, both
-  of which P4c deleted, so the rule pointed at nothing and the one live
-  carve-out read as drift.) Controller-layer guards (`add_event`,
+  the `logger.warn` label at the same site. **There are exactly TWO carve-outs,
+  and this list is meant to be exact** — a stale entry here is what made the
+  previous version read as drift. `AccountSetupScreen` surfaces offline through
+  its own banner (`_bannerError`) rather than a notice; and
+  `WaveSettingsSection._blockedOffline` surfaces
+  `WaveNetwork().toLocalizedMessage` instead of `composeErrorNotice`, because
+  the typed-`Failure`-branch-first rule gives it a better sentence than the
+  generic cause vocabulary can. (This named "the two `accept_invite_*` screens"
+  until 2026-08-11, both of which P4c deleted, so the rule pointed at nothing;
+  the Wave carve-out was added 2026-08-15 for the same reason — it existed and
+  went unnamed.) Controller-layer guards (`add_event`,
   `event_details`, `client_form`) keep returning a typed failure instead.
 - **`DateFormat` is memoized per locale** (`calendar/domain/month_grid.dart`:
   `longDateFormatFor`, `weekdayAbbrevFormatFor`, `_symbolsFormat`). Constructing

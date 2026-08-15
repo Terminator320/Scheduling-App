@@ -5,6 +5,10 @@ const {getFirestore} = require("firebase-admin/firestore");
 
 const SESSION_TOKEN_MAX_LEN = 64;
 
+// Firestore's own document-id ceiling as the rules state it — hand-mirrored
+// from `isValidDocIdField` in firestore.rules. Raise both together.
+const DOC_ID_MAX_LEN = 128;
+
 // Hard cap on a callable payload once serialized. Every payload here is just
 // a couple of short strings, so anything larger is malformed or abusive.
 const MAX_PAYLOAD_BYTES = 4 * 1024;
@@ -64,6 +68,29 @@ function assertPayloadShape(data, allowedKeys) {
 function requireString(data, key, maxLen) {
   const value = typeof data?.[key] === "string" ? data[key].trim() : "";
   if (!value || value.length > maxLen || hasControlChar(value)) {
+    throw new HttpsError("invalid-argument", `invalid-${key}`);
+  }
+  return value;
+}
+
+/**
+ * Validates and returns a Firestore document id: a required string of at most
+ * `DOC_ID_MAX_LEN` characters that carries no "/".
+ *
+ * The slash check is the load-bearing half, not tidiness. `db.collection(...)
+ * .doc(id)` throws SYNCHRONOUSLY on an id containing one, which surfaces to
+ * the caller as an opaque `internal` instead of a shaped validation failure.
+ * This is the callable-side owner of the same rule `isValidDocIdField` states
+ * in CEL (`firestore.rules`) — it was restated at three call sites, two of
+ * them byte-identical down to the comment. Keep the 128 in step with the
+ * rules copy.
+ * @param {object} data callable request data.
+ * @param {string} key field name.
+ * @return {string}
+ */
+function requireDocId(data, key) {
+  const value = requireString(data, key, DOC_ID_MAX_LEN);
+  if (value.includes("/")) {
     throw new HttpsError("invalid-argument", `invalid-${key}`);
   }
   return value;
@@ -272,6 +299,7 @@ module.exports = {
   hasControlChar,
   assertPayloadShape,
   requireString,
+  requireDocId,
   optionalString,
   requireNumberInRange,
   readSessionToken,

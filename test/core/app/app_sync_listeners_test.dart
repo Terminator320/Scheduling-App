@@ -7,11 +7,18 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/app/app_sync_listeners.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
+import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
+import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
+import 'package:scheduling/features/siri/application/schedule_snapshot_provider.dart';
+import 'package:scheduling/features/siri/application/schedule_snapshot_service.dart';
 
 class _FakePush extends Mock implements PushRegistrationController {}
 
@@ -21,6 +28,10 @@ class _FakeLiveActivity extends Mock
     implements LiveActivityRegistrationController {}
 
 class _FakeUploads extends Mock implements AppointmentImageUploadService {}
+
+class _FakeWidgetSync extends Mock implements WidgetSyncService {}
+
+class _FakeSnapshotSync extends Mock implements ScheduleSnapshotService {}
 
 /// Drives `isOfflineProvider` from the test so the offline→online flip can be
 /// replayed as a real transition (a plain Provider can't change value).
@@ -37,33 +48,74 @@ final _offline = NotifierProvider<_OfflineController, bool>(
   _OfflineController.new,
 );
 
+/// Feeds one of the two off-screen mirrors from the test.
+///
+/// A stream, not a static override: an `AsyncError` and a settled `null` are
+/// the two emissions the rule under test has to tell apart, and only a real
+/// transition produces either — `ref.listen` never fires on an initial value.
+/// Each is re-pointed at a per-test controller in `pump`.
+final _widgetMirror = StreamProvider<Map<String, dynamic>?>(
+  (ref) => const Stream.empty(),
+);
+
+final _snapshotMirror = StreamProvider<Map<String, dynamic>?>(
+  (ref) => const Stream.empty(),
+);
+
 const _account = {'id': 'u1', 'role': 'employee', 'status': 'active'};
+
+const _payload = {
+  'todayJobs': [
+    {'id': 'a1'},
+  ],
+};
 
 void main() {
   late _FakePush push;
   late _FakePresence presence;
   late _FakeLiveActivity liveActivity;
   late _FakeUploads uploads;
+  late _FakeWidgetSync widgetSync;
+  late _FakeSnapshotSync snapshotSync;
   late StreamController<Map<String, dynamic>> accountDocs;
+  late StreamController<Map<String, dynamic>?> widgetPayloads;
+  late StreamController<Map<String, dynamic>?> snapshotPayloads;
 
   setUp(() {
     push = _FakePush();
     presence = _FakePresence();
     liveActivity = _FakeLiveActivity();
     uploads = _FakeUploads();
+    widgetSync = _FakeWidgetSync();
+    snapshotSync = _FakeSnapshotSync();
     accountDocs = StreamController<Map<String, dynamic>>.broadcast();
+    widgetPayloads = StreamController<Map<String, dynamic>?>.broadcast();
+    snapshotPayloads = StreamController<Map<String, dynamic>?>.broadcast();
     when(() => push.sync()).thenAnswer((_) async {});
     when(() => presence.sync()).thenAnswer((_) async {});
     when(() => liveActivity.sync()).thenAnswer((_) async {});
     when(() => uploads.drainPending()).thenAnswer((_) async {});
+    when(() => widgetSync.sync(any())).thenAnswer((_) async {});
+    when(() => widgetSync.clear()).thenAnswer((_) async {});
+    when(() => snapshotSync.writeSnapshot(any())).thenAnswer((_) async {});
+    when(() => snapshotSync.clearSnapshot()).thenAnswer((_) async {});
   });
 
-  tearDown(() => accountDocs.close());
+  setUpAll(() => registerFallbackValue(<String, dynamic>{}));
+
+  tearDown(() {
+    accountDocs.close();
+    widgetPayloads.close();
+    snapshotPayloads.close();
+  });
 
   /// Mounts a bare ConsumerWidget that registers the listeners, so the wiring
   /// gets exercised without needing a full MaterialApp. That's exactly why
   /// AppSyncListeners was pulled out of `_PaulAppState` in the first place.
-  Future<ProviderContainer> pump(WidgetTester tester) async {
+  Future<ProviderContainer> pump(
+    WidgetTester tester, {
+    bool isIos = true,
+  }) async {
     late ProviderContainer container;
     await tester.pumpWidget(
       ProviderScope(
@@ -76,11 +128,23 @@ void main() {
             liveActivity,
           ),
           appointmentImageUploadProvider.overrideWithValue(uploads),
+          _widgetMirror.overrideWith((ref) => widgetPayloads.stream),
+          _snapshotMirror.overrideWith((ref) => snapshotPayloads.stream),
+          widgetPayloadProvider.overrideWith((ref) => ref.watch(_widgetMirror)),
+          scheduleSnapshotProvider.overrideWith(
+            (ref) => ref.watch(_snapshotMirror),
+          ),
+          widgetSyncServiceProvider.overrideWithValue(widgetSync),
+          scheduleSnapshotServiceProvider.overrideWithValue(snapshotSync),
         ],
         child: Consumer(
           builder: (context, ref, _) {
             container = ProviderScope.containerOf(context);
-            AppSyncListeners(ref).registerAll();
+            // The platform gate is injected rather than read off the host:
+            // `flutter test` runs on Windows/macOS, so a bare `Platform.isIOS`
+            // returns before any seam and leaves both mirror listeners — and
+            // the isUnsettled rule they exist to enforce — unreachable.
+            AppSyncListeners(ref, isIosPlatform: () => isIos).registerAll();
             return const SizedBox.shrink();
           },
         ),
@@ -196,6 +260,197 @@ void main() {
       await tester.pump();
 
       verifyNever(() => uploads.drainPending());
+    });
+  });
+
+  group('AppSyncListeners.isUnsettled', () {
+    test('an emission that is still loading says nothing about sign-out', () {
+      expect(
+        AppSyncListeners.isUnsettled(const AsyncValue<int?>.loading()),
+        isTrue,
+      );
+    });
+
+    test('a failed read says nothing about sign-out either', () {
+      expect(
+        AppSyncListeners.isUnsettled(
+          AsyncValue<int?>.error(StateError('denied'), StackTrace.empty),
+        ),
+        isTrue,
+      );
+    });
+
+    test('a settled null IS a sign-out', () {
+      // The one case that must reach `clear()` — and the reason the rule can't
+      // simply be `value == null`, which an error and a loading share.
+      expect(
+        AppSyncListeners.isUnsettled(const AsyncValue<int?>.data(null)),
+        isFalse,
+      );
+    });
+
+    test('settled data is settled', () {
+      expect(
+        AppSyncListeners.isUnsettled(const AsyncValue<int?>.data(7)),
+        isFalse,
+      );
+    });
+  });
+
+  group('home-screen widget mirror', () {
+    testWidgets('a failed read neither syncs nor clears', (tester) async {
+      // The documented past failure: an AsyncError carries a null value, and
+      // null means "signed out, clear the App Group" — so a failed Firestore
+      // read blanked the home-screen widget. It is off-screen, so nothing
+      // reported it. A stale mirror beats a wrongly-empty one.
+      await pump(tester);
+
+      widgetPayloads.addError(StateError('permission-denied'));
+      await tester.pumpAndSettle();
+
+      verifyNever(() => widgetSync.clear());
+      verifyNever(() => widgetSync.sync(any()));
+    });
+
+    testWidgets('a settled null clears the App Group exactly once', (
+      tester,
+    ) async {
+      await pump(tester);
+
+      widgetPayloads.add(null);
+      await tester.pumpAndSettle();
+
+      verify(() => widgetSync.clear()).called(1);
+      verifyNever(() => widgetSync.sync(any()));
+    });
+
+    testWidgets('settled data syncs that payload', (tester) async {
+      await pump(tester);
+
+      widgetPayloads.add(_payload);
+      await tester.pumpAndSettle();
+
+      verify(() => widgetSync.sync(_payload)).called(1);
+      verifyNever(() => widgetSync.clear());
+    });
+
+    testWidgets('the listener never registers off iOS', (tester) async {
+      await pump(tester, isIos: false);
+
+      widgetPayloads.add(_payload);
+      await tester.pumpAndSettle();
+
+      verifyNever(() => widgetSync.sync(any()));
+    });
+  });
+
+  group('Siri snapshot mirror', () {
+    testWidgets('a failed read neither writes nor clears', (tester) async {
+      // Same rule, other surface: a wrongly-cleared snapshot has Siri answer
+      // "no appointments" to someone who has jobs.
+      await pump(tester);
+
+      snapshotPayloads.addError(StateError('permission-denied'));
+      await tester.pumpAndSettle();
+
+      verifyNever(() => snapshotSync.clearSnapshot());
+      verifyNever(() => snapshotSync.writeSnapshot(any()));
+    });
+
+    testWidgets('a settled null clears the snapshot exactly once', (
+      tester,
+    ) async {
+      await pump(tester);
+
+      snapshotPayloads.add(null);
+      await tester.pumpAndSettle();
+
+      verify(() => snapshotSync.clearSnapshot()).called(1);
+      verifyNever(() => snapshotSync.writeSnapshot(any()));
+    });
+
+    testWidgets('settled data writes that payload', (tester) async {
+      await pump(tester);
+
+      snapshotPayloads.add(_payload);
+      await tester.pumpAndSettle();
+
+      verify(() => snapshotSync.writeSnapshot(_payload)).called(1);
+      verifyNever(() => snapshotSync.clearSnapshot());
+    });
+
+    testWidgets('the listener never registers off iOS', (tester) async {
+      await pump(tester, isIos: false);
+
+      snapshotPayloads.add(_payload);
+      await tester.pumpAndSettle();
+
+      verifyNever(() => snapshotSync.writeSnapshot(any()));
+    });
+  });
+
+  group('which stream each mirror opens', () {
+    // An ADMIN already holds a business-wide listener on this exact range for
+    // the Siri snapshot, so the widget must read it too rather than opening a
+    // SECOND permanent Firestore listener over documents the first is already
+    // streaming. A technician must never touch the range query at all: it
+    // constrains `startTime` alone, and a list query is evaluated against its
+    // constraints, so `isAssignedEmployee` rejects the whole thing.
+    final today = DateTime(2026, 8, 10);
+    final job = AppointmentRecord(
+      id: 'a1',
+      title: 'Job',
+      startTime: DateTime(2026, 8, 10, 9),
+      endTime: DateTime(2026, 8, 10, 11),
+      employeeIds: const ['me'],
+    );
+
+    ({ProviderContainer container, List<String> opened}) harness(
+      ActiveUserIdentity identity,
+    ) {
+      final opened = <String>[];
+      final c = ProviderContainer(
+        overrides: [
+          currentDayProvider.overrideWithValue(today),
+          activeUserIdentityProvider.overrideWith((ref) => identity),
+          appointmentsInRangeProvider.overrideWith((ref, range) {
+            opened.add('range');
+            return Stream.value([job]);
+          }),
+          myAppointmentsProvider.overrideWith((ref, key) {
+            opened.add('mine');
+            return Stream.value([job]);
+          }),
+        ],
+      );
+      addTearDown(c.dispose);
+      return (container: c, opened: opened);
+    }
+
+    test('an admin reads the business-wide range stream', () async {
+      final h = harness((role: 'admin', docId: 'me'));
+      h.container.listen(widgetPayloadProvider, (_, _) {});
+      h.container.listen(scheduleSnapshotProvider, (_, _) {});
+      await pumpEventQueue();
+      h.container
+        ..read(widgetPayloadProvider)
+        ..read(scheduleSnapshotProvider);
+
+      expect(h.opened, everyElement('range'));
+      expect(h.opened, isNotEmpty);
+    });
+
+    test('an employee never opens the business-wide range query', () async {
+      final h = harness((role: 'employee', docId: 'me'));
+      h.container.listen(widgetPayloadProvider, (_, _) {});
+      h.container.listen(scheduleSnapshotProvider, (_, _) {});
+      await pumpEventQueue();
+      h.container
+        ..read(widgetPayloadProvider)
+        ..read(scheduleSnapshotProvider);
+
+      expect(h.opened, everyElement('mine'));
+      expect(h.opened, isNotEmpty);
     });
   });
 }

@@ -18,9 +18,9 @@ import 'package:scheduling/features/calendar/domain/models/appointment_image.dar
 ///
 /// **Keyed on `storagePath`, falling back to `url`.** `storagePath` is the
 /// real identity of a photo — it is what renders it (see
-/// `AppointmentImageUrlResolver`) and what deletes it (`_deleteImage`). The
+/// `AppointmentImageLoader`) and what deletes it (`_deleteImage`). The
 /// fallback is for the legacy docs that carry a `url` and no `storagePath`,
-/// the same ones the resolver's fallback exists for; without it every one of
+/// the same ones the loader's fallback exists for; without it every one of
 /// them would collide on a single id and a whole appointment's legacy photos
 /// would collapse into one document.
 ///

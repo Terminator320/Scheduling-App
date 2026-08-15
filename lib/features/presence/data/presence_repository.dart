@@ -90,7 +90,6 @@ class PresenceRepository {
         .limit(_presenceStreamLimit)
         .snapshots()
         .map(_toFixes),
-    retryWhen: isAuthPropagationDenied,
   );
 
   /// One malformed doc must not drop the whole map — skip it and keep going.

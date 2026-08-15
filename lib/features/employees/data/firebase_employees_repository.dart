@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:scheduling/core/utils/retry.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
@@ -38,7 +39,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
                 .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
                 .toList(),
           ),
-      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -56,7 +56,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
                 .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
                 .toList(),
           ),
-      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -72,7 +71,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
                 .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
                 .toList(),
           ),
-      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -97,7 +95,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
             'name': name.trim(),
             'firstName': firstName.trim(),
             'lastName': lastName.trim(),
-            'email': email.trim().toLowerCase(),
+            'email': normalizeEmail(email),
             'phone': phone.trim(),
             'colorValue': colorValue,
             'jobTitle': jobTitle,
@@ -166,7 +164,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     required String docId,
     required EmployeeRecord employee,
   }) async {
-    final normalizedEmail = employee.email.trim().toLowerCase();
+    final normalizedEmail = normalizeEmail(employee.email);
     final ref = _users.doc(docId);
     final stored = (await ref.get()).data();
     final storedEmail = stored?['email'] as String? ?? '';
@@ -325,7 +323,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       () => _emergencyDoc(
         docId,
       ).snapshots().map((snap) => EmergencyContact.fromMap(snap.data())),
-      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -399,7 +396,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
             _cachedUserDocId = snapshot.docs.first.id;
             return snapshot.docs.first.data();
           }),
-      retryWhen: isAuthPropagationDenied,
     );
   }
 }

@@ -42,6 +42,10 @@ class _LoginState extends ConsumerState<Login> {
   }
 
   Future<void> _prefillRememberedEmail() async {
+    // Resolved before the await: `ref` throws once this consumer is disposed,
+    // and the log has to survive that — a failed read here is the
+    // pre-first-unlock keychain case, which must not go unrecorded.
+    final logger = ref.read(loggerProvider);
     try {
       final email = await ref
           .read(secureStorageServiceProvider)
@@ -50,7 +54,7 @@ class _LoginState extends ConsumerState<Login> {
       if (_emailController.text.isNotEmpty) return;
       _emailController.text = email;
     } catch (e, st) {
-      if (mounted) ref.read(loggerProvider).warn('login.prefill_email', e, st);
+      logger.warn('login.prefill_email', e, st);
     }
   }
 

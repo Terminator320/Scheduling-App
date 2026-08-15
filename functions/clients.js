@@ -17,7 +17,7 @@ const {getFirestore} = require("firebase-admin/firestore");
 
 const {
   assertPayloadShape,
-  requireString,
+  requireDocId,
   assertAdmin,
   enforceDurableRateLimit,
 } = require("./security");
@@ -70,12 +70,7 @@ const deleteClient = onCall(APP_CHECK, async (req) => {
   }
   await assertAdmin(req.auth.uid);
   assertPayloadShape(req.data, new Set(["clientId"]));
-  const clientId = requireString(req.data, "clientId", 128);
-  // `.doc()` throws synchronously on an id containing "/", which would surface
-  // as an opaque internal error rather than a validation failure.
-  if (clientId.includes("/")) {
-    throw new HttpsError("invalid-argument", "invalid-clientId");
-  }
+  const clientId = requireDocId(req.data, "clientId");
   await enforceDurableRateLimit(
       "deleteClient", req.auth.uid, DELETE_RATE_MAX, DELETE_RATE_WINDOW_MS);
 

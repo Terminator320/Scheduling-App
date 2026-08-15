@@ -85,10 +85,30 @@
 // rules, they are jest-tested, and `docs/audits/audit-client-phone-backfill-
 // damage.js` reads `extractPhone` to assess what the 2026-08-08 run did. Git
 // has the loop if it is ever wanted again.
+//
+// `assertKnownFlags` stays too, even though `main()` refuses unconditionally
+// below — every sibling script in this directory routes through the shared
+// `_flags.js` rejection rule, and this one is one tab-completion away from
+// being run instead of `backfill-client-name-with-phone.js`.
+
+const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+
+/** Bare switches, matched EXACTLY — see the sibling scripts' header. */
+const EXACT_FLAGS = ["--dry-run"];
+
+/**
+ * Rejects any argument that is not a flag this script knows. The rejection
+ * rule itself lives in the shared `_flags.js` — this wrapper only supplies
+ * this script's flag list.
+ * @param {!Array<string>} argv Arguments after the node + script paths.
+ */
+function assertKnownFlags(argv) {
+  rejectUnknownFlags(argv, {exact: EXACT_FLAGS});
+}
 
 // A run of digits and the separators a person types between them. The `\d` at
 // each end keeps a trailing "(" or "-" out of the match.
-const CANDIDATE = /\+?\d[\d\s().\-]{7,}\d/g;
+const CANDIDATE = /\+?\d[\d\s().-]{7,}\d/g;
 
 /**
  * The first dialable 10-digit number in [text], formatted `(514) 555-1234`.
@@ -116,7 +136,9 @@ function extractPhone(text) {
     if (candidate.includes("+")) continue;
 
     let digits = candidate.replace(/\D/g, "");
-    if (digits.length === 11 && digits.startsWith("1")) digits = digits.slice(1);
+    if (digits.length === 11 && digits.startsWith("1")) {
+      digits = digits.slice(1);
+    }
     if (digits.length !== 10) continue;
 
     return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
@@ -166,13 +188,19 @@ function patchFor(data) {
  * Patches every client doc carrying a phone number in its name.
  *
  * REFUSES TO RUN. The header's "DO NOT RUN THIS SCRIPT AGAIN" is turned into a
- * failure here rather than left as a comment: this file sits one tab-completion
- * away from the script you actually want (`backfill-client-name-with-phone.js`),
- * and a run would redo the Wave rename against every client the reversal just
- * repaired — on real invoices, unrecoverably from the doc.
+ * failure here rather than left as a comment: this file sits one
+ * tab-completion away from the script you actually want
+ * (`backfill-client-name-with-phone.js`), and a run would redo the Wave
+ * rename against every client the reversal just repaired — on real
+ * invoices, unrecoverably from the doc.
  * @return {!Promise<void>}
  */
 async function main() {
+  // Validated even though every outcome below is a refusal: a caller who
+  // passes a genuinely unknown flag should see THAT error, not the
+  // superseded-script one, and it keeps this script's argv handling in the
+  // same shape as every sibling that shares `_flags.js`.
+  assertKnownFlags(process.argv.slice(2));
   throw new Error(
       "SUPERSEDED 2026-08-14 — this script already ran against prod and its " +
       "effect was deliberately reversed. Running it again renames real Wave " +
@@ -189,4 +217,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = {extractPhone, patchFor};
+module.exports = {assertKnownFlags, extractPhone, patchFor};

@@ -53,6 +53,14 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
 
   /// Fail-fast offline guard so the long-running Wave callables don't hang.
   /// Surfaces the network notice and returns true, so the caller can abort.
+  ///
+  /// Deliberately NOT `guardedOffline` (`core/errors/error_cause.dart`), which
+  /// is otherwise the one owner of this shape: it hardcodes
+  /// `composeErrorNotice`, and every other notice this section emits is a
+  /// [WaveFailure]'s own localized message via [_runWaveAction]. Routing this
+  /// one through the composer would make the offline notice the only one here
+  /// speaking a different vocabulary, against the typed-Failure-branch-first
+  /// rule. This is the second carve-out from that docstring's rule.
   bool _blockedOffline() {
     if (!ref.read(isOfflineProvider)) return false;
     ref

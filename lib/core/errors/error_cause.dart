@@ -75,10 +75,13 @@ String composeErrorNotice(
 /// goes through here: the block was copy-pasted at six call sites differing
 /// only in [intro].
 ///
-/// `AccountSetupScreen` deliberately doesn't use this — it surfaces offline
-/// through its own `_bannerError`, not a notice. (This named the two
-/// `accept_invite_*` screens until 2026-08-11; P4c deleted both, so the one
-/// live carve-out read as drift.)
+/// Two surfaces deliberately don't use this, and both keep their own shape for
+/// a reason. `AccountSetupScreen` surfaces offline through its own
+/// `_bannerError`, not a notice. `WaveSettingsSection._blockedOffline` surfaces
+/// `WaveNetwork().toLocalizedMessage` instead, so the offline notice speaks the
+/// same typed-`Failure` vocabulary as every other notice that section emits.
+/// (This named the two `accept_invite_*` screens until 2026-08-11; P4c deleted
+/// both, so a stale carve-out read as drift — keep this list exact.)
 bool guardedOffline(
   BuildContext context,
   WidgetRef ref, {

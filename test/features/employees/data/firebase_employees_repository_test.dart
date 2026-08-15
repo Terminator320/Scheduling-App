@@ -495,6 +495,62 @@ void main() {
       },
     );
 
+    test('runs the callable BEFORE the Firestore write', () async {
+      // The ORDER is the whole fix, and the payload assertion above holds
+      // whichever way round the two run. Auth is the store that owns sign-in
+      // and the only one that can genuinely refuse a duplicate, so it must
+      // never be the one left behind: a Firestore-first change leaves the
+      // person signing in at the old address while every admin surface shows
+      // the new one, and desyncs the two stores `createEmployeeAccount` joins
+      // on. Same shape as `auth_service_test.dart`'s password-then-activate.
+      stubStoredDoc(uid: 'auth-uid', emailAfterCallable: 'new@example.com');
+      final callable = stubCallable('changeEmployeeEmail', data: {'ok': true});
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Alice',
+          email: 'new@example.com',
+          uid: 'auth-uid',
+        ),
+      );
+
+      verifyInOrder([
+        () => callable.call<dynamic>(any<Object?>()),
+        () => transaction.update(docRef, any()),
+      ]);
+    });
+
+    test('a refused callable leaves the users doc untouched', () async {
+      // The half that matters: the Firestore write only ever "re-states what
+      // the server committed", so a callable that threw must leave nothing
+      // behind — otherwise the admin surface shows an address Auth refused.
+      stubStoredDoc(uid: 'auth-uid');
+      stubFailingCallable(
+        'changeEmployeeEmail',
+        FirebaseFunctionsException(
+          message: 'email-exists',
+          code: 'already-exists',
+        ),
+      );
+
+      await expectLater(
+        repo().updateEmployee(
+          docId: 'my-id',
+          employee: const EmployeeRecord(
+            id: 'my-id',
+            name: 'Alice',
+            email: 'taken@example.com',
+            uid: 'auth-uid',
+          ),
+        ),
+        throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
+      );
+
+      verifyNever(() => transaction.update(docRef, any()));
+    });
+
     test('leaves the callable alone when the email is unchanged', () async {
       stubStoredDoc(uid: 'auth-uid');
 

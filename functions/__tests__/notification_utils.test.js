@@ -21,6 +21,7 @@ const {
   OPEN_STATUSES,
   SERIES_CLAIM_WINDOW_MS,
   TIMED_RECIPIENT_ROLES,
+  OVERDUE_LOOKBACK_MS,
 } = require("../notification_utils");
 
 // Noon Toronto (EDT -4) on Wed 2026-07-08.
@@ -213,9 +214,18 @@ describe("selectOverdueCandidates", () => {
         [{id: "noEnd", status: "pending"}], NOW)).toEqual([]);
   });
 
-  test("drops a job that ended more than 24h ago", () => {
+  test("drops a job that ended before the lookback window", () => {
+    // The window was 24 h while this sweep owned an `every 15 minutes` timer.
+    // It rides the 5-minute one now, so 24 h meant re-reading a job left open
+    // — and re-attempting its ledger create — on 287 further sweeps after the
+    // one that actually prompted, every attempt guaranteed to fail
+    // ALREADY_EXISTS. 2 h still gives 24 examinations per job.
     expect(selectOverdueCandidates(
-        [rec("ancient", -25 * HOUR, "pending")], NOW)).toEqual([]);
+        [rec("ancient", -3 * HOUR, "pending")], NOW)).toEqual([]);
+    // Just inside it is still a candidate, so the boundary is the window and
+    // not an off-by-an-hour.
+    expect(selectOverdueCandidates(
+        [rec("recent", -110 * MIN, "pending")], NOW)).toHaveLength(1);
   });
 
   test("drops a personal block — there is no job to finish", () => {
@@ -547,6 +557,11 @@ function makeDb(config) {
   const ledgerCreates = [];
   const ledgerDeletes = [];
   const appointmentQueries = [];
+  // Every users/{id} and users/{id}/fcmTokens read, so a test can assert both
+  // that a recipient is read at most once per pass and that an unreachable
+  // one costs nothing beyond that read.
+  const userReads = [];
+  const tokenReads = [];
   const seriesClaims = new Map(config.seriesClaims || []);
   const existing = new Set(config.ledgerExisting || []);
   const db = {
@@ -555,23 +570,29 @@ function makeDb(config) {
         return {
           doc(id) {
             return {
-              get: async () => ({
-                exists: !!config.users[id],
-                data: () => config.users[id],
-              }),
+              get: async () => {
+                userReads.push(id);
+                return {
+                  exists: !!config.users[id],
+                  data: () => config.users[id],
+                };
+              },
               collection() {
                 return {
-                  get: async () => ({
-                    docs: (config.tokens[id] || []).map((t) => ({
-                      id: t.id,
-                      data: () => ({locale: t.locale}),
-                      ref: {
-                        delete: async () => {
-                          deletedTokens.push(t.id);
+                  get: async () => {
+                    tokenReads.push(id);
+                    return {
+                      docs: (config.tokens[id] || []).map((t) => ({
+                        id: t.id,
+                        data: () => ({locale: t.locale}),
+                        ref: {
+                          delete: async () => {
+                            deletedTokens.push(t.id);
+                          },
                         },
-                      },
-                    })),
-                  }),
+                      })),
+                    };
+                  },
                 };
               },
             };
@@ -647,7 +668,7 @@ function makeDb(config) {
   };
   return {
     db, deletedTokens, ledgerCreates, ledgerDeletes, appointmentQueries,
-    seriesClaims,
+    seriesClaims, userReads, tokenReads,
   };
 }
 
@@ -1010,6 +1031,99 @@ describe("handleAppointmentWrite", () => {
     expect(res.sent).toBe(0);
     expect(messaging.sent).toHaveLength(0);
   });
+
+  test("an unreachable recipient costs no widget-window query", async () => {
+    // The eligibility gate runs BEFORE the work that composes a push. An
+    // admin assignee is refused by CHANGE_RECIPIENT_ROLES no matter what, so
+    // the widget window read that feeds the payload can never be used — and it
+    // is a real Firestore query, run once per assignee on every appointment
+    // write.
+    const {db, appointmentQueries} = makeDb({
+      users: {a1: {role: "admin", status: "active"}},
+      tokens: {a1: [{id: "t", locale: "en"}]},
+    });
+    await handleAppointmentWrite(
+        "appt1",
+        null,
+        {employeeIds: ["a1"], startTime: future(3 * HOUR)},
+        {db, messaging: makeMessaging(), now: NOW, logger: silentLogger},
+    );
+    expect(appointmentQueries).toEqual([]);
+  });
+
+  test("an assignee with no live token composes nothing", async () => {
+    const {db, appointmentQueries} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: []},
+    });
+    const messaging = makeMessaging();
+    const res = await handleAppointmentWrite(
+        "appt1",
+        null,
+        {employeeIds: ["e1"], startTime: future(3 * HOUR)},
+        {db, messaging, now: NOW, logger: silentLogger},
+    );
+    expect(res.sent).toBe(0);
+    expect(appointmentQueries).toEqual([]);
+    expect(messaging.sent).toHaveLength(0);
+  });
+
+  test("an unreachable series assignee burns no claim-ledger write",
+      async () => {
+        // The claim is keyed per (operation, kind, EMPLOYEE), so skipping it
+        // for someone the push can never reach only ever suppresses that same
+        // person's sends — which were already zero.
+        const {db, seriesClaims} = makeDb({
+          users: {a1: {role: "admin", status: "active"}},
+          tokens: {a1: [{id: "t", locale: "en"}]},
+        });
+        await handleAppointmentWrite(
+            "occ-1",
+            {
+              id: "occ-1", seriesId: "series-1", employeeIds: ["a1"],
+              startTime: future(3 * HOUR), status: "pending",
+            },
+            null,
+            {db, messaging: makeMessaging(), now: NOW, logger: silentLogger},
+        );
+        expect(seriesClaims.size).toBe(0);
+      });
+
+  test("two events for one employee read that user once", async () => {
+    // One write can accrue events for the same person more than once across a
+    // batch of ids; the per-write cache is what stops each one paying for the
+    // same user + tokens reads.
+    const {db, userReads, tokenReads} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t", locale: "en"}]},
+    });
+    await handleAppointmentWrite(
+        "appt1",
+        null,
+        {employeeIds: ["e1"], startTime: future(3 * HOUR)},
+        {db, messaging: makeMessaging(), now: NOW, logger: silentLogger},
+    );
+    // The gate reads it; the send that follows reuses that read rather than
+    // repeating it.
+    expect(userReads).toEqual(["e1"]);
+    expect(tokenReads).toEqual(["e1"]);
+  });
+});
+
+describe("notification_policy re-exports", () => {
+  test("notification_utils re-exports every policy symbol by its own name",
+      () => {
+        // functions/CLAUDE.md states this as an invariant ("re-exports every
+        // one of them under its original name") and nothing enforced it — ten
+        // of the twenty-one were missing, which is why one jest suite already
+        // requires notification_policy directly. A new pure rule must be added
+        // to the policy module AND re-exported here.
+        const policy = require("../notification_policy");
+        const utils = require("../notification_utils");
+        const missing = Object.keys(policy)
+            .filter((key) => utils[key] !== policy[key]);
+        expect(missing).toEqual([]);
+      });
 });
 
 describe("runOverduePromptSweep", () => {
@@ -1046,17 +1160,22 @@ describe("runOverduePromptSweep", () => {
     expect(ledgerCreates.map((c) => c.key)).toEqual([overdueKey]);
     expect(ledgerCreates[0].data.expiresAt).toBeInstanceOf(Date);
     expect(ledgerDeletes).toEqual([]);
-    // The query IS the eligibility rule: open statuses, endTime in the last
-    // 24h. Bounding `endTime` rather than `startTime` is what keeps the scan
-    // the width of the rule — the old startTime form had to reach back 24h
-    // PLUS the longest bookable span (14 days) to see a multi-day run that had
-    // just ended, and re-read that whole fortnight every 15 minutes.
+    // The query IS the eligibility rule: open statuses, endTime inside
+    // OVERDUE_LOOKBACK_MS. Bounding `endTime` rather than `startTime` is what
+    // keeps the scan the width of the rule — the old startTime form had to
+    // reach back the lookback PLUS the longest bookable span (14 days) to see
+    // a multi-day run that had just ended, and re-read that whole fortnight
+    // every 15 minutes.
     expect(appointmentQueries).toEqual([
       {field: "status", op: "in",
         value: ["pending", "in_progress", "confirmed"]},
-      {field: "endTime", op: ">", value: future(-24 * HOUR)},
+      {field: "endTime", op: ">", value: future(-OVERDUE_LOOKBACK_MS)},
       {field: "endTime", op: "<=", value: NOW},
     ]);
+    // Sized against the CADENCE, not a day: this rides the 5-minute reminder
+    // timer, so 2 h is 24 examinations of a job left open, where the 24 h it
+    // carried over from the deleted 15-minute scheduler was 288.
+    expect(OVERDUE_LOOKBACK_MS).toBe(2 * HOUR);
     expect(messaging.sent).toHaveLength(1);
     expect(messaging.sent[0].data).toEqual({
       appointmentId: "over",

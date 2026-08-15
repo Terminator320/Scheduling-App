@@ -6,10 +6,36 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
 import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
+
+class _RecordingLogger extends AppLogger {
+  final warnings = <String>[];
+
+  @override
+  void warn(String message, [Object? error, StackTrace? stack]) {
+    warnings.add(message);
+  }
+}
+
+/// A plain fake rather than a `Mock`: the cap test builds a thousand of them,
+/// and only `id` and `data()` are ever read.
+class _FakeDoc extends Fake
+    implements QueryDocumentSnapshot<Map<String, dynamic>> {
+  _FakeDoc(this.id, this._data);
+
+  @override
+  final String id;
+
+  final Map<String, dynamic> _data;
+
+  @override
+  Map<String, dynamic> data() => _data;
+}
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
 
@@ -93,8 +119,15 @@ void main() {
     ).thenAnswer((_) async => _MockCallableResult());
   });
 
-  FirebaseClientsRepository repo({DateTime Function()? clock}) =>
-      FirebaseClientsRepository(firestore, functions: functions, clock: clock);
+  FirebaseClientsRepository repo({
+    DateTime Function()? clock,
+    AppLogger? logger,
+  }) => FirebaseClientsRepository(
+    firestore,
+    functions: functions,
+    clock: clock,
+    logger: logger,
+  );
 
   ClientRecord client({String id = 'c1', String name = 'Test Client'}) =>
       ClientRecord(
@@ -207,6 +240,38 @@ void main() {
         expect(captured, ['', 'c9']);
       },
     );
+  });
+
+  group('the client scan window warns at its cap', () {
+    // This is the quietest truncation in the app. The window is ordered by
+    // `name`, so at the cap it is the alphabetically FIRST 1000 clients —
+    // everything past that point goes invisible to search, to the type-filter
+    // chips and to the Archived chip at once, gradually, as the roster grows,
+    // with no error anywhere. The warn is the entire mitigation.
+    void withClients(int count) => when(() => snapshot.docs).thenReturn([
+      for (var i = 0; i < count; i++)
+        _FakeDoc('c$i', {'name': 'Client ${i.toString().padLeft(4, '0')}'}),
+    ]);
+
+    test('a full window warns', () async {
+      withClients(ClientSearchPolicy.serverReadLimit);
+      final logger = _RecordingLogger();
+
+      await repo(logger: logger).searchClients('client');
+
+      expect(logger.warnings, hasLength(1));
+      expect(logger.warnings.single, startsWith('CLI-SEARCH'));
+      expect(logger.warnings.single, contains('1000'));
+    });
+
+    test('a short window is silent', () async {
+      withClients(ClientSearchPolicy.serverReadLimit - 1);
+      final logger = _RecordingLogger();
+
+      await repo(logger: logger).searchClients('client');
+
+      expect(logger.warnings, isEmpty);
+    });
   });
 
   group('searchClients', () {

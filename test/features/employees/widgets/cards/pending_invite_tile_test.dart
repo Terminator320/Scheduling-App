@@ -7,6 +7,7 @@ import 'package:mocktail/mocktail.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/notices/app_notice.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -237,7 +238,8 @@ void main() {
         lastName: 'Roy',
         email: 'zoe@example.com',
         phone: '(514) 555-1234',
-        colorValue: '4280391411',
+        // `_invited` picked no colour, so this is the record's default.
+        colorValue: '${AppColors.crewDefault.toARGB32()}',
         jobTitle: 'technician',
         isAdmin: false,
       ),

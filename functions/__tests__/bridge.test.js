@@ -282,8 +282,77 @@ describe("syncUsersByUid bridge/presence isolation", () => {
 
     await syncUsersByUid.run(makeEvent("u_doc", before, after));
 
-    expect(batch.commit).toHaveBeenCalledTimes(1);
     expect(db.doc).not.toHaveBeenCalled();
     expect(presenceDelete).not.toHaveBeenCalled();
+  });
+
+  test("an edit that touches nothing the bridge mirrors writes nothing",
+      async () => {
+        // The hot path: My details' availability panel commits per switch with
+        // no debounce, so flipping five working days is five invocations of
+        // this trigger. The bridge body is {role, docId, status} and docId is
+        // the userId in the trigger path, so an identical role/status/uid
+        // means the set() below would rewrite the exact same document.
+        const before = {
+          uid: "auth1", status: "active", role: "employee",
+          workingDays: [false, true, true, true, true, true, false],
+        };
+        const after = {
+          uid: "auth1", status: "active", role: "employee",
+          workingDays: [true, true, true, true, true, true, false],
+        };
+
+        await syncUsersByUid.run(makeEvent("u_doc", before, after));
+
+        expect(batch.set).not.toHaveBeenCalled();
+        expect(batch.commit).not.toHaveBeenCalled();
+      });
+
+  test("a role change still rewrites the bridge", async () => {
+    // Role is exactly what the rules resolve through the bridge, so this one
+    // must never be skipped.
+    const before = {uid: "auth1", status: "active", role: "employee"};
+    const after = {uid: "auth1", status: "active", role: "admin"};
+
+    await syncUsersByUid.run(makeEvent("u_doc", before, after));
+
+    expect(batch.set).toHaveBeenCalledTimes(1);
+    expect(batch.set.mock.calls[0][1])
+        .toEqual({role: "admin", docId: "u_doc", status: "active"});
+    expect(batch.commit).toHaveBeenCalledTimes(1);
+  });
+
+  test("a status change still rewrites the bridge", async () => {
+    const before = {uid: "auth1", status: "disabled", role: "employee"};
+    const after = {uid: "auth1", status: "active", role: "employee"};
+
+    await syncUsersByUid.run(makeEvent("u_doc", before, after));
+
+    expect(batch.set.mock.calls[0][1])
+        .toEqual({role: "employee", docId: "u_doc", status: "active"});
+  });
+
+  test("a uid rotation still deletes the stale bridge doc and writes the new",
+      async () => {
+        const before = {uid: "old", status: "active", role: "employee"};
+        const after = {uid: "new", status: "active", role: "employee"};
+
+        await syncUsersByUid.run(makeEvent("u_doc", before, after));
+
+        // Both halves land in ONE batch, so a crash between them can't leave
+        // two live bridge docs.
+        expect(batch.delete).toHaveBeenCalledTimes(1);
+        expect(batch.set).toHaveBeenCalledTimes(1);
+        expect(batch.commit).toHaveBeenCalledTimes(1);
+      });
+
+  test("a doc creation still writes the bridge", async () => {
+    // No `before` at all, so the no-op guard must not swallow it.
+    const after = {uid: "auth1", status: "active", role: "employee"};
+
+    await syncUsersByUid.run(makeEvent("u_doc", null, after));
+
+    expect(batch.set).toHaveBeenCalledTimes(1);
+    expect(batch.commit).toHaveBeenCalledTimes(1);
   });
 });

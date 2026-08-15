@@ -164,6 +164,29 @@ const syncUsersByUid = onDocumentWritten(
           return;
         }
 
+        // Nothing the bridge MIRRORS has changed, so every branch below would
+        // rewrite the identical {role, docId, status} — `docId` is the trigger
+        // path's own userId, so those three fields are the whole body. This
+        // fires on ANY users write, and the hot writer is My details'
+        // availability panel, which commits per switch with no debounce: five
+        // working days flipped meant five identical bridge writes. Same
+        // discipline as recountClientJobs, which only fires when `clientId`
+        // actually changed.
+        //
+        // Deliberately AFTER the validity checks and BEFORE any write, and
+        // deliberately not folded into shouldPurgePresence/authAccessChange —
+        // those two diff correctly on their own predicates and still run
+        // below. The one thing given up is an incidental self-heal: a bridge
+        // doc deleted out-of-band is no longer rebuilt by an unrelated users
+        // write. `retry: true` covers a failed write, and any role/status/uid
+        // edit still rebuilds it.
+        if (before && after &&
+            before.role === after.role &&
+            before.status === after.status &&
+            beforeUid === afterUid) {
+          return;
+        }
+
         // On a uid rotation, the stale delete and the new set land in ONE
         // WriteBatch, so a crash between them can't leave both bridge docs
         // live. We don't swallow the batch error — retry:true re-runs the

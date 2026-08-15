@@ -21,7 +21,7 @@ const {
   toMillis,
   businessYmd,
   businessMinutesOfDay,
-  businessMidnight,
+  businessDayStartMs,
   businessOffsetMs,
 } = require("./time_utils");
 
@@ -31,8 +31,7 @@ const {
  * @return {number}
  */
 function dayStartMs(msValue) {
-  const [y, m, d] = businessYmd(new Date(msValue));
-  return businessMidnight(y, m, d).getTime();
+  return businessDayStartMs(msValue, 0);
 }
 
 /**
@@ -42,8 +41,7 @@ function dayStartMs(msValue) {
  * @return {number}
  */
 function addDaysMs(msValue, n) {
-  const [y, m, d] = businessYmd(new Date(msValue));
-  return businessMidnight(y, m, d + n).getTime();
+  return businessDayStartMs(msValue, n);
 }
 
 /**

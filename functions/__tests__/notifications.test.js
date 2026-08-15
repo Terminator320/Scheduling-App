@@ -86,6 +86,39 @@ describe("notifications.js module surface", () => {
   });
 });
 
+describe("every scheduler reads the ONE business time zone", () => {
+  // functions/CLAUDE.md: "Never re-inline a local `toMillis` or a bare
+  // `timeZone: \"America/Toronto\"`." These are the only three Cloud Scheduler
+  // jobs in the project, so a hand-written literal here is what would silently
+  // split every scheduled run from every time the app renders if the business
+  // ever moved. The values are identical today — this is drift prevention.
+  const MAINTENANCE = fs.readFileSync(
+      path.join(__dirname, "..", "maintenance.js"),
+      "utf8",
+  );
+
+  test.each([
+    ["notifications.js", SOURCE],
+    // Read as TEXT rather than required: maintenance.js resolves a Storage
+    // bucket at load and throws outside the emulator.
+    ["maintenance.js", MAINTENANCE],
+  ])("%s inlines no bare timeZone literal", (_name, src) => {
+    // Matches the literal as a `timeZone:` VALUE only — the zone name is still
+    // legitimate prose in a comment describing when a job runs.
+    expect(src).not.toMatch(/timeZone:\s*["']/);
+    expect(src).toContain("BUSINESS_TIME_ZONE");
+  });
+
+  test("every onSchedule registration names BUSINESS_TIME_ZONE", () => {
+    const zones = [...SOURCE.matchAll(/timeZone: (\w+)/g)].map((m) => m[1]);
+    const maintenanceZones =
+      [...MAINTENANCE.matchAll(/timeZone: (\w+)/g)].map((m) => m[1]);
+    expect([...zones, ...maintenanceZones])
+        .toEqual(["BUSINESS_TIME_ZONE", "BUSINESS_TIME_ZONE",
+          "BUSINESS_TIME_ZONE"]);
+  });
+});
+
 describe("APNs secret binding matches deps construction", () => {
   // These two push Live Activity cards, so they bind the secrets AND read them.
   test.each([

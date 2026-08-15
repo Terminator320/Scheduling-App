@@ -168,16 +168,17 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 per billing account. `sendOverdueJobPrompts` (was `every 15 minutes`) is merged
 into `sendUpcomingJobReminders`, `waveScheduledImport` (was `every 24 hours`)
 into `sendDailyJobDigest`, and `waveSyncWorker` (was `every 5 minutes`) is gone
-entirely because the Wave push is event-driven now. **All three still run in
-prod until the pending deploy**, and each leaves an orphaned scheduler entry
-that must be deleted by hand afterwards — see `docs/DEPLOYMENT.md`, "Pending: a
-THREE-deletion deploy". Adding a fourth scheduled function starts costing money.
+entirely because the Wave push is event-driven now. **All three were deleted
+from prod by the 2026-08-14 deploy (`d3e22377`)**, and each still leaves an
+orphaned Cloud Scheduler entry that must be deleted by hand — see
+`docs/DEPLOYMENT.md`, "DONE 2026-08-14: a THREE-deletion deploy". Adding a
+fourth scheduled function starts costing money.
 
 ## Auth & accounts
 
 ### `deleteAccount` — `account.js`
-Self-service account deletion (Apple 5.1.1(v) / Google Play account-deletion
-policy). Deletes the caller's `users/{docId}` doc via `recursiveDelete` (the
+Self-service account deletion (Apple App Store Review Guideline 5.1.1(v)).
+Deletes the caller's `users/{docId}` doc via `recursiveDelete` (the
 doc **plus all its subcollections** — today that is `fcmTokens`, `presence`,
 and `liveActivityTokens`) and their Firebase Auth user; the `syncUsersByUid`
 trigger then clears the `usersByUid` bridge. Deliberately
@@ -823,9 +824,9 @@ Writes `createdAt`/`updatedAt` on every client doc it does write (the
 list/search order by `createdAt`, and Firestore excludes docs missing the
 orderBy field). Rate-limited 5/hr; 300s timeout.
 
-**Delta import (2026-08-04).** Introspection against the live API
-(`functions/scripts/wave-introspect-customer-sort.js`) established that
-`business.customers` accepts `modifiedAtAfter: DateTime` /
+**Delta import (2026-08-04).** Introspection against the live API, via a
+one-off script (since deleted — its findings are recorded here) established
+that `business.customers` accepts `modifiedAtAfter: DateTime` /
 `modifiedAtBefore`, and that `CustomerSort` offers `MODIFIED_AT_ASC/DESC`
 alongside `CREATED_AT_*` and `NAME_*`. The filter is the better lever than the
 sort — it runs server-side, so Wave returns only what changed instead of us

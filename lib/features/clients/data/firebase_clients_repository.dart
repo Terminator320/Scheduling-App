@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart' show compute;
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -338,13 +339,11 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   Map<String, dynamic> _normalizedMap(ClientRecord client) {
     final base = Map<String, dynamic>.from(client.toMap());
-    final email = (base['email'] as String? ?? '').trim().toLowerCase();
-    base['email'] = email;
+    base['email'] = normalizeEmail(base['email'] as String? ?? '');
     final contacts = base['contacts'] as List? ?? const [];
     base['contacts'] = contacts.whereType<Map<Object?, Object?>>().map((c) {
       final m = Map<String, dynamic>.from(c);
-      final ce = (m['email'] as String? ?? '').trim().toLowerCase();
-      m['email'] = ce;
+      m['email'] = normalizeEmail(m['email'] as String? ?? '');
       return m;
     }).toList();
     return base;

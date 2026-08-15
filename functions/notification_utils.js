@@ -58,6 +58,62 @@ const {
 } = require("./notification_policy");
 
 /**
+ * Reads (and caches) one recipient's user doc plus their live token docs.
+ *
+ * Split out of [sendToEmployee] so a caller can ask "can this push reach
+ * anyone?" BEFORE paying for the work that composes it — see the gate in
+ * [handleAppointmentWrite]. Both go through the same cache entry, so asking
+ * costs nothing extra: the send that follows reuses the reads made here.
+ *
+ * @param {!Object} deps `{db}`.
+ * @param {string} employeeDocId users doc id.
+ * @param {!Map<string, {user: ?Object, tokenDocs: ?Array<!Object>}>=} cache
+ * @return {!Promise<{user: ?Object, tokenDocs: ?Array<!Object>}>}
+ */
+async function _loadRecipient(deps, employeeDocId, cache) {
+  const {db} = deps;
+  const userRef = db.collection("users").doc(employeeDocId);
+  let entry = cache && cache.get(employeeDocId);
+  if (!entry) {
+    const userSnap = await userRef.get();
+    const user = userSnap.exists ? (userSnap.data() || {}) : null;
+    entry = {user, tokenDocs: null};
+    if (cache) cache.set(employeeDocId, entry);
+  }
+  if (!entry.user) return entry;
+  // Tokens are read lazily and then cached beside the user. A `null` means "not
+  // fetched yet", distinct from `[]` = "fetched, none registered" — which is
+  // what lets a pass that only needed the user doc (the travel sweep's prefs
+  // read) seed this cache without paying for a tokens read it may never use.
+  if (entry.tokenDocs == null) {
+    const tokensSnap = await userRef.collection("fcmTokens").get();
+    entry.tokenDocs = (tokensSnap && tokensSnap.docs) || [];
+  }
+  return entry;
+}
+
+/**
+ * Whether a push of `roles` can actually reach a loaded recipient — the
+ * server-side filter to active accounts of an allowed role that hold at least
+ * one live token. The ONE owner of that test; a caller gating ahead of a send
+ * must ask this rather than restating it, or the gate and the send can drift
+ * on who counts as reachable.
+ *
+ * @param {{user: ?Object, tokenDocs: ?Array<!Object>}} entry From
+ *   [_loadRecipient].
+ * @param {!Set<string>=} roles Allowed recipient roles (default employees
+ *   only).
+ * @return {boolean}
+ */
+function _canReachRecipient(entry, roles) {
+  const {user, tokenDocs} = entry || {};
+  if (!user) return false;
+  const allowed = roles || CHANGE_RECIPIENT_ROLES;
+  if (!allowed.has(user.role) || user.status !== "active") return false;
+  return ((tokenDocs && tokenDocs.length) || 0) > 0;
+}
+
+/**
  * Sends one localized message to every live token of an active employee, then
  * deletes any token docs FCM reports as stale. Returns the count sent.
  * Injectable core (db + messaging + logger).
@@ -83,30 +139,11 @@ const {
  */
 async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
     cache, augmentData) {
-  const {db, messaging, logger} = deps;
-  const userRef = db.collection("users").doc(employeeDocId);
+  const {messaging, logger} = deps;
 
-  let entry = cache && cache.get(employeeDocId);
-  if (!entry) {
-    const userSnap = await userRef.get();
-    const user = userSnap.exists ? (userSnap.data() || {}) : null;
-    entry = {user, tokenDocs: null};
-    if (cache) cache.set(employeeDocId, entry);
-  }
-  if (!entry.user) return 0;
-  // Tokens are read lazily and then cached beside the user. A `null` means "not
-  // fetched yet", distinct from `[]` = "fetched, none registered" — which is
-  // what lets a pass that only needed the user doc (the travel sweep's prefs
-  // read) seed this cache without paying for a tokens read it may never use.
-  if (entry.tokenDocs == null) {
-    const tokensSnap = await userRef.collection("fcmTokens").get();
-    entry.tokenDocs = (tokensSnap && tokensSnap.docs) || [];
-  }
-  const {user, tokenDocs} = entry;
-  // Recipients are filtered server-side to active accounts of an allowed role.
-  const allowed = roles || CHANGE_RECIPIENT_ROLES;
-  if (!allowed.has(user.role) || user.status !== "active") return 0;
-  if (tokenDocs.length === 0) return 0;
+  const entry = await _loadRecipient(deps, employeeDocId, cache);
+  if (!_canReachRecipient(entry, roles)) return 0;
+  const {tokenDocs} = entry;
 
   const messages = tokenDocs.map((doc) => {
     const locale = (doc.data() || {}).locale === "fr" ? "fr" : "en";
@@ -347,6 +384,11 @@ async function handleAppointmentWrite(id, before, after, deps) {
   const freshOpId = after ? String(after.seriesOpId || "") : "";
   // One window read per distinct employee across this write's events.
   const windows = new Map();
+  // One user + tokens read per distinct employee across this write's events —
+  // the same per-sweep cache runOverduePromptSweep and the travel sweep use.
+  // Without it, two events for the same person in one write read that user
+  // twice.
+  const recipients = new Map();
   for (const {employeeDocId, kind} of events) {
     const ctx = _contextFor(kind, before, after);
     // A reschedule refreshes an existing Lock Screen card. Card ends are
@@ -372,6 +414,18 @@ async function handleAppointmentWrite(id, before, after, deps) {
         nowDate: now,
       });
     }
+    // Eligibility FIRST, and deliberately above the series claim as well as
+    // the widget window: change-driven pushes are employees-only
+    // (CHANGE_RECIPIENT_ROLES), so an assigned ADMIN — or anyone with no live
+    // token — used to pay a widget-window query, a users read, a tokens read
+    // and, in a series, a claim-ledger WRITE, for a push `sendToEmployee` then
+    // refused at its role gate. Nothing delivered changes: the claim is keyed
+    // per (operation, kind, EMPLOYEE), so skipping it for a recipient who
+    // cannot be reached can only ever suppress that same recipient's sends,
+    // which were already zero. The reads land in `recipients`, so the send
+    // below reuses them rather than repeating them.
+    const recipient = await _loadRecipient(deps, employeeDocId, recipients);
+    if (!_canReachRecipient(recipient, CHANGE_RECIPIENT_ROLES)) continue;
     if (seriesId !== "") {
       const mine = await claimSeriesNotice(deps, {
         seriesId, seriesOpId: freshOpId, kind, employeeDocId, nowDate: now,
@@ -395,8 +449,8 @@ async function handleAppointmentWrite(id, before, after, deps) {
         employeeDocId,
         data,
         (locale) => buildNotificationMessage(kind, ctx, locale),
-        undefined,
-        undefined,
+        CHANGE_RECIPIENT_ROLES,
+        recipients,
         (locale) => ({
           widgetPayload: JSON.stringify(
               buildWidgetPayload(records, now, locale)),
@@ -571,9 +625,12 @@ async function runOverduePromptSweep(deps) {
   const nowMs = nowMillis(nowDate);
   const windowStart = new Date(nowMs - OVERDUE_LOOKBACK_MS);
   // Bounds mirror selectOverdueCandidates EXACTLY — `> floor`, `<= now` — so
-  // the query is the rule rather than a superset of it. This runs 96x a day;
-  // the old startTime form re-read every open job started in the last ~15 days
-  // on each run to prompt the handful that had just ended.
+  // the query is the rule rather than a superset of it. This rides the
+  // 5-minute reminder timer, so it runs 288x a day (it was 96 under the
+  // deleted `every 15 minutes` scheduler, which is what OVERDUE_LOOKBACK_MS
+  // was originally sized against — see the constant's note). The old startTime
+  // form re-read every open job started in the last ~15 days on each run to
+  // prompt the handful that had just ended.
   //
   // Ordered newest-first so the cap keeps the jobs most likely to still be
   // eligible. Without this, Firestore orders by the inequality field ascending
@@ -773,10 +830,26 @@ async function sendToActiveAdmins(deps, data, buildMsg, opts) {
 }
 
 module.exports = {
+  // Every notification_policy symbol is re-exported here under its original
+  // name, so a call site never has to know which of the two modules a pure
+  // rule ended up in. `notification_utils.test.js` reads both module surfaces
+  // back and fails if a policy export is ever added without its re-export —
+  // ten of these were missing while functions/CLAUDE.md asserted the
+  // invariant held.
+  DAY_MS,
+  OVERDUE_LOOKBACK_MS,
+  OVERDUE_SWEEP_MAX,
+  DIGEST_SWEEP_MAX,
+  WIDGET_PAYLOAD_MAX_BYTES,
   OPEN_STATUSES,
-  SERIES_CLAIM_WINDOW_MS,
+  CHANGE_RECIPIENT_ROLES,
   TIMED_RECIPIENT_ROLES,
   ADMIN_RECIPIENT_ROLES,
+  ledgerBody,
+  isAlreadyExists,
+  recordOf: _record,
+  contextFor: _contextFor,
+  SERIES_CLAIM_WINDOW_MS,
   toMillis,
   nowMillis,
   toIdList,

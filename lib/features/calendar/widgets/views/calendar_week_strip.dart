@@ -44,11 +44,10 @@ class CalendarWeekStrip extends StatelessWidget {
     MediaQuery.textScalerOf(context).scale(14.5) * 2,
   );
 
-  /// Painted height including the leading gap, so the collapse can size its
-  /// spacer against the grid it replaces.
-  static double heightFor(BuildContext context) =>
-      AppSpacing.sp8 + _bodyHeight(context);
-
+  /// The painted body height, excluding the leading gap. Self-sizing on
+  /// purpose: the strip rises inside the header's `AnimatedSwitcher` and the
+  /// two-viewport collapse (P2) has no vacated extent to hold, so nothing
+  /// outside this widget needs to predict how tall it will be.
   static double _bodyHeight(BuildContext context) => math.max(
     _kStripCellMinHeight,
     _circleSize(context) +

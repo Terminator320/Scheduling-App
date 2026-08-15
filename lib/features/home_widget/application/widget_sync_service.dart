@@ -137,13 +137,34 @@ Future<void> writeWidgetPayloadJson(String payloadJson) async {
   }
 }
 
+/// The App Group write itself. A null [payloadJson] wipes the key.
+typedef WidgetPayloadWriter = Future<void> Function(String? payloadJson);
+
+// Declared here rather than imported from `AppSyncListeners` (which already
+// imports this file) so the two don't form a cycle.
+bool _platformIsIos() => Platform.isIOS;
+
+Future<void> _writeToAppGroup(String? payloadJson) async {
+  await HomeWidget.setAppGroupId(widgetAppGroupId);
+  await HomeWidget.saveWidgetData<String>(_payloadKey, payloadJson);
+  await HomeWidget.updateWidget(iOSName: _iosWidgetName);
+}
+
 /// Writes the widget payload into the App Group and refreshes the widget.
-/// iOS-only, and verified on-device rather than with unit tests — the payload
-/// builder above is the part that's actually tested.
+/// iOS-only; the actual App Group write is verified on-device, but the dedup
+/// bookkeeping around it is injectable and covered by tests.
 class WidgetSyncService {
-  WidgetSyncService({AppLogger? logger}) : _logger = logger ?? AppLogger();
+  WidgetSyncService({
+    AppLogger? logger,
+    bool Function()? isIosPlatform,
+    WidgetPayloadWriter? write,
+  }) : _logger = logger ?? AppLogger(),
+       _isIos = isIosPlatform ?? _platformIsIos,
+       _write = write ?? _writeToAppGroup;
 
   final AppLogger _logger;
+  final bool Function() _isIos;
+  final WidgetPayloadWriter _write;
 
   /// Signature of the last successful write, used to dedup repeat syncs.
   /// Null means nothing's been written yet; [_clearedState] means we cleared it.
@@ -151,13 +172,15 @@ class WidgetSyncService {
   String? _lastState;
 
   Future<void> sync(Map<String, dynamic> payload) async {
-    if (!Platform.isIOS) return;
+    if (!_isIos()) return;
     final signature = _signatureOf(payload);
     if (signature == _lastState) return;
     try {
-      await HomeWidget.setAppGroupId(widgetAppGroupId);
-      await HomeWidget.saveWidgetData<String>(_payloadKey, jsonEncode(payload));
-      await HomeWidget.updateWidget(iOSName: _iosWidgetName);
+      await _write(jsonEncode(payload));
+      // Stamped only AFTER the write lands. Set it first and a failed write is
+      // remembered as the current state, so the next identical payload dedupes
+      // away and the home screen is frozen on stale jobs until the schedule
+      // itself changes.
       _lastState = signature;
     } catch (e, st) {
       _logger.warn('WIDGET sync failed', e, st);
@@ -165,12 +188,12 @@ class WidgetSyncService {
   }
 
   Future<void> clear() async {
-    if (!Platform.isIOS) return;
+    if (!_isIos()) return;
     if (_lastState == _clearedState) return;
     try {
-      await HomeWidget.setAppGroupId(widgetAppGroupId);
-      await HomeWidget.saveWidgetData<String>(_payloadKey, null);
-      await HomeWidget.updateWidget(iOSName: _iosWidgetName);
+      await _write(null);
+      // Same ordering rule as [sync]: a failed clear must stay retryable, or a
+      // signed-out user's jobs sit in the App Group until something else writes.
       _lastState = _clearedState;
     } catch (e, st) {
       _logger.warn('WIDGET clear failed', e, st);
@@ -194,29 +217,23 @@ final widgetSyncServiceProvider = Provider<WidgetSyncService>(
   (ref) => WidgetSyncService(logger: ref.watch(loggerProvider)),
 );
 
-/// The signed-in user's doc id, or null when signed out. Both employees and
-/// admins qualify here, since admins can assign themselves to jobs too.
-final widgetEmployeeIdProvider = FutureProvider.autoDispose<String?>(
-  (ref) async => (await ref.watch(activeUserIdentityProvider.future))?.docId,
-);
-
-/// The current widget payload for the signed-in employee, or null when the
-/// widget should be cleared. Watches today plus the lookahead range.
+/// The current widget payload for the signed-in user, or null when the widget
+/// should be cleared. Watches today plus the lookahead range.
 final widgetPayloadProvider =
     Provider.autoDispose<AsyncValue<Map<String, dynamic>?>>((ref) {
-      final empIdAsync = ref.watch(widgetEmployeeIdProvider);
-      if (empIdAsync.isLoading) return const AsyncValue.loading();
+      final identityAsync = ref.watch(activeUserIdentityProvider);
+      if (identityAsync.isLoading) return const AsyncValue.loading();
       // An identity read that FAILED is propagated as an error, never collapsed
       // into a settled null: null means "signed out, clear the widget", and a
-      // Firestore failure is not that. See `AppSyncListeners._isUnsettled`.
-      if (empIdAsync.hasError) {
+      // Firestore failure is not that. See `AppSyncListeners.isUnsettled`.
+      if (identityAsync.hasError) {
         return AsyncValue<Map<String, dynamic>?>.error(
-          empIdAsync.error!,
-          empIdAsync.stackTrace ?? StackTrace.current,
+          identityAsync.error!,
+          identityAsync.stackTrace ?? StackTrace.current,
         );
       }
-      final empId = empIdAsync.value;
-      if (empId == null) {
+      final identity = identityAsync.value;
+      if (identity == null) {
         return const AsyncValue<Map<String, dynamic>?>.data(
           null,
         );
@@ -229,9 +246,29 @@ final widgetPayloadProvider =
       // same range value means one listener for both.
       // `buildWidgetPayload` re-scopes to today/tomorrow in Dart regardless.
       final range = AppointmentDateRange.forMirrors(today);
-      final appts = ref.watch(
-        myAppointmentsProvider((employeeId: empId, range: range)),
-      );
+      // Role-branched the same way the Siri snapshot is, and for the same
+      // reason: an ADMIN already holds a business-wide listener on this exact
+      // range for the snapshot, and their own jobs are a strict subset of it —
+      // asking for `myAppointmentsProvider` as well opened a SECOND permanent
+      // Firestore listener over documents the first was already streaming.
+      // The assignee filter has to happen here: `buildWidgetPayload` day-scopes
+      // but does NOT filter by assignee, so feeding it the business-wide list
+      // would put every colleague's jobs on the admin's home screen.
+      final appts = identity.role == 'admin'
+          ? ref
+                .watch(appointmentsInRangeProvider(range))
+                .whenData(
+                  (list) => [
+                    for (final a in list)
+                      if (a.employeeIds.contains(identity.docId)) a,
+                  ],
+                )
+          : ref.watch(
+              myAppointmentsProvider((
+                employeeId: identity.docId,
+                range: range,
+              )),
+            );
       final locale = AppLanguageController.instance.value == 'fr' ? 'fr' : 'en';
       return appts.whenData(
         (list) => buildWidgetPayload(list, DateTime.now(), locale: locale),

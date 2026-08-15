@@ -8,7 +8,13 @@
  * puts one photo at two ids and it renders twice with nothing erroring.
  * Change a case here, change it there.
  */
-const {appointmentImageDocId} = require("../appointment_image_ids");
+const {
+  appointmentImageDocId,
+  MAX_ID_LENGTH,
+} = require("../appointment_image_ids");
+
+// The `img_` prefix the id carries on top of the sanitized key.
+const PREFIX_LENGTH = "img_".length;
 
 const REAL_PATH =
   "appointments/aBc123XyZ/images/1754835600000_image_picker_A1.jpg";
@@ -96,8 +102,15 @@ describe("Firestore id legality", () => {
     // carry their distinguishing part at the end.
     const long = `appointments/${"x".repeat(500)}/images/UNIQUE_TAIL.jpg`;
     const id = appointmentImageDocId({storagePath: long});
-    expect(id.length).toBeLessThanOrEqual(304); // "img_" + 300
+    expect(id.length).toBeLessThanOrEqual(MAX_ID_LENGTH + PREFIX_LENGTH);
     expect(id.endsWith("UNIQUE_TAIL.jpg")).toBe(true);
+  });
+
+  test("the cap matches the Dart mirror's `maxLength`", () => {
+    // Hand-mirrored from `appointment_image_doc_id.dart`. The cap above is
+    // composed from this constant, so nothing else would notice a change to
+    // it — and a divergence puts the same photo at two ids.
+    expect(MAX_ID_LENGTH).toBe(300);
   });
 
   test("two long paths differing only in their tail do not collide", () => {

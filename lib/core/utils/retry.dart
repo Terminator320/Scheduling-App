@@ -15,16 +15,27 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 bool isAuthPropagationDenied(Object error) =>
     error is FirebaseException && error.code == 'permission-denied';
 
+/// The one delay budget for that race, shared by [retryAsync] and
+/// [retryStream] so a call site can't quietly pick a shorter or longer ladder.
+const kAuthPropagationDelays = <Duration>[
+  Duration(milliseconds: 400),
+  Duration(milliseconds: 1200),
+  Duration(milliseconds: 2500),
+];
+
+/// One-shot sibling of [retryStream] — re-runs [op] on errors accepted by
+/// [retryWhen], to survive the post-sign-in permission-denied race.
 Future<T> retryAsync<T>(
   Future<T> Function() op, {
-  required List<Duration> delays,
+  bool Function(Object error) retryWhen = isAuthPropagationDenied,
+  List<Duration> delays = kAuthPropagationDelays,
   void Function(int attempt, Object error, StackTrace stack)? onRetry,
 }) async {
   for (var attempt = 0; attempt <= delays.length; attempt++) {
     try {
       return await op();
     } catch (e, st) {
-      if (attempt == delays.length) rethrow;
+      if (!retryWhen(e) || attempt == delays.length) rethrow;
       onRetry?.call(attempt + 1, e, st);
       await Future<void>.delayed(delays[attempt]);
     }
@@ -36,12 +47,8 @@ Future<T> retryAsync<T>(
 /// [retryWhen], to survive the post-sign-in permission-denied race.
 Stream<T> retryStream<T>(
   Stream<T> Function() create, {
-  required bool Function(Object error) retryWhen,
-  List<Duration> delays = const [
-    Duration(milliseconds: 400),
-    Duration(milliseconds: 1200),
-    Duration(milliseconds: 2500),
-  ],
+  bool Function(Object error) retryWhen = isAuthPropagationDenied,
+  List<Duration> delays = kAuthPropagationDelays,
   void Function(int attempt, Object error, StackTrace stack)? onRetry,
 }) async* {
   for (var attempt = 0; ; attempt++) {

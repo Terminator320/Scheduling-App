@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:scheduling/core/animations/animated_form_field_wrapper.dart';
 import 'package:scheduling/core/animations/app_animation_constants.dart';
+import 'package:scheduling/core/security/credential_input.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
@@ -448,10 +449,7 @@ class AuthPasswordField extends StatelessWidget {
           controller: controller,
           focusNode: focusNode,
           obscureText: isObscured,
-          // Only `obscureText` implies this, and the Show/Hide link below can
-          // turn it off — at which point a third-party keyboard is free to
-          // retain and cloud-sync the password. Pin it regardless of state.
-          enableIMEPersonalizedLearning: false,
+          enableIMEPersonalizedLearning: kCredentialImePersonalizedLearning,
           textInputAction: textInputAction,
           autofillHints: autofillHints,
           enabled: enabled,

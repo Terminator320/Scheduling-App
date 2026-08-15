@@ -285,6 +285,61 @@ describe("toWaveCustomerInput", () => {
     });
     expect(result.name).toBe("Vogas Plumbing (514) 555-1234");
   });
+
+  // Merged in from the former `mappers.test.js` (2026-08-15): the cases below
+  // were the only ones that suite covered and this one did not.
+
+  test("null/undefined clientFields never throws and yields an empty name",
+      () => {
+        // The trigger hands this whatever the doc snapshot held, so a deleted
+        // or empty doc must degrade rather than take down the enqueue path.
+        expect(toWaveCustomerInput(null)).toEqual({name: "", address: {}});
+        expect(toWaveCustomerInput(undefined))
+            .toEqual({name: "", address: {}});
+      });
+
+  test("a whitespace-only optional field is omitted, not sent as ''", () => {
+    const result = toWaveCustomerInput({name: "Jane Doe", email: "  "});
+    expect(result).toEqual({name: "Jane Doe", address: {}});
+    expect(result).not.toHaveProperty("email");
+  });
+
+  test("legacy businessName-only doc: name stays empty (no fallback)", () => {
+    // Unlike ClientRecord.fromMap (Dart), this mapper does NOT fall back to
+    // businessName — legacy business-only docs reach Wave with an empty name
+    // by design, and `businessName` itself is never part of the payload.
+    const result = toWaveCustomerInput({
+      name: "",
+      businessName: "Acme Plumbing",
+      email: "acme@example.com",
+    });
+    expect(result.name).toBe("");
+    expect(result).not.toHaveProperty("businessName");
+  });
+
+  test("empty address and no apt yields no addressLine1", () => {
+    const result = toWaveCustomerInput({name: "A", address: ""});
+    expect(result.address).not.toHaveProperty("addressLine1");
+  });
+
+  test("apt alone (no street) becomes addressLine1", () => {
+    const result = toWaveCustomerInput({name: "A", address: "", apt: "4"});
+    expect(result.address.addressLine1).toBe("4");
+  });
+
+  test("a full province NAME (unknown format) omits provinceCode", () => {
+    // Only a 2-letter code or an already-prefixed subdivision maps; "Quebec"
+    // is not guessed at, the same way an unknown country is not.
+    expect(toWaveCustomerInput({name: "A", province: "Quebec"}).address)
+        .not.toHaveProperty("provinceCode");
+  });
+
+  test("country name matching is case-insensitive", () => {
+    expect(toWaveCustomerInput({name: "A", country: "CANADA"})
+        .address.countryCode).toBe("CA");
+    expect(toWaveCustomerInput({name: "A", country: "usa"})
+        .address.countryCode).toBe("US");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -528,6 +583,59 @@ describe("fromWaveCustomer", () => {
 
   test("null node → does not throw", () => {
     expect(() => fromWaveCustomer(null)).not.toThrow();
+  });
+
+  // Merged in from the former `mappers.test.js` (2026-08-15).
+
+  test("a null node returns every field as a safe default", () => {
+    // Stronger than the not-throw above: the import writes this patch onto a
+    // client doc, so a missing key would leave a stale value in place rather
+    // than clearing it.
+    expect(fromWaveCustomer(null)).toEqual({
+      waveCustomerId: "",
+      name: "",
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      mobile: "",
+      address: "",
+      addressLine2: "",
+      apt: "",
+      city: "",
+      province: "",
+      country: "",
+      postalCode: "",
+    });
+  });
+
+  test("a plain province code with no subdivision prefix passes through",
+      () => {
+        expect(fromWaveCustomer({address: {province: {code: "QC"}}}).province)
+            .toBe("QC");
+      });
+
+  test("a missing province code yields ''", () => {
+    expect(fromWaveCustomer({address: {province: {}}}).province).toBe("");
+  });
+
+  test("US country code with no name falls back to the code->name lookup",
+      () => {
+        expect(fromWaveCustomer({address: {country: {code: "US"}}}).country)
+            .toBe("United States");
+      });
+
+  test("an unknown country code with no name yields ''", () => {
+    // Never guessed at — an invented country name would round-trip back to
+    // Wave as a real edit.
+    expect(fromWaveCustomer({address: {country: {code: "FR"}}}).country)
+        .toBe("");
+  });
+
+  test("an all-whitespace name falls through to first/last", () => {
+    expect(fromWaveCustomer({
+      name: "   ", firstName: "Jane", lastName: "Doe",
+    }).name).toBe("Jane Doe");
   });
 });
 

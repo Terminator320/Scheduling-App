@@ -88,7 +88,7 @@ class AppColors {
   /// STORED in Firestore as the light-theme ARGB int; dark rendering
   /// resolves through [crewColorOf], never by re-storing a lifted value.
   static const List<Color> crewPalette = [
-    Color(0xFF005CC8), // blue
+    crewDefault, // blue
     Color(0xFF7A3FF2), // violet
     Color(0xFF0E9B6E), // green
     Color(0xFFE08A00), // amber
@@ -99,6 +99,12 @@ class AppColors {
     Color(0xFF8A5A2B), // brown
     Color(0xFF7A8F1F), // olive
   ];
+
+  /// What an employee with no stored `colorValue` renders as. It must stay a
+  /// [crewPalette] member: a hue outside the pool is also outside the
+  /// dark-theme override map, so it takes the generic HSL lift instead of its
+  /// designed dark counterpart, and no picker would ever offer it.
+  static const Color crewDefault = blue;
 }
 
 /// Resolves a STORED employee colour int to the colour this theme renders.

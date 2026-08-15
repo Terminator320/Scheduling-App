@@ -21,6 +21,10 @@ const {
   runOverduePromptSweep,
 } = require("./notification_utils");
 const {runTravelAwareReminderSweep} = require("./travel_utils");
+// The one owner of the business time zone. Never re-inline the literal here:
+// these are the only three Cloud Scheduler jobs left, so a bare string would
+// silently split every scheduled run from every time the app renders.
+const {BUSINESS_TIME_ZONE} = require("./time_utils");
 const {
   pruneExpiredActivityTokens,
   pruneExpiredCardMarkers,
@@ -36,7 +40,7 @@ const {
 // because the Wave module owns it; a secret may only be defined once, so
 // never re-`defineSecret` it here.
 const {WAVE_FULL_ACCESS_TOKEN} = require("./wave/auth");
-const {runWaveDaily} = require("./wave/callables");
+const {runWaveDaily} = require("./wave/triggers");
 
 /**
  * Real injected deps for the orchestration functions. Carries NO APNs
@@ -134,7 +138,7 @@ const notifyAppointmentChanges = onDocumentWritten(
 const sendUpcomingJobReminders = onSchedule(
     {
       schedule: "every 5 minutes",
-      timeZone: "America/Toronto",
+      timeZone: BUSINESS_TIME_ZONE,
       maxInstances: 1,
       secrets: [GOOGLE_MAP_API_KEY, ...APNS_SECRETS],
       // Pairs run concurrently, each with up to one Routes round-trip; the
@@ -194,7 +198,7 @@ const sendUpcomingJobReminders = onSchedule(
 const sendDailyJobDigest = onSchedule(
     {
       schedule: "0 18 * * *",
-      timeZone: "America/Toronto",
+      timeZone: BUSINESS_TIME_ZONE,
       maxInstances: 1,
       secrets: [WAVE_FULL_ACCESS_TOKEN],
       timeoutSeconds: 540,

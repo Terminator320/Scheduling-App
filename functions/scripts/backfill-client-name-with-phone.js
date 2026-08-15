@@ -95,6 +95,7 @@ const {
 // `createdAt` reads as "no usable date" and the doc is SKIPPED by --since
 // rather than renamed. This script rewrites live Wave customers.
 const {toMillis} = require("../time_utils");
+const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
 
 const BATCH_SIZE = 400;
 const SAMPLE_SIZE = 25;
@@ -122,16 +123,13 @@ const PREFIX_FLAGS = ["--since="];
  * names is the worst failure this script has. Refusing unknown arguments
  * converts every one of those typos into an error before a document is read.
  *
+ * The rejection rule itself lives in the shared `_flags.js` — this wrapper
+ * only supplies THIS script's flag list.
+ *
  * @param {!Array<string>} argv Arguments after the node + script paths.
  */
 function assertKnownFlags(argv) {
-  for (const arg of argv) {
-    if (EXACT_FLAGS.includes(arg)) continue;
-    if (PREFIX_FLAGS.some((f) => arg.startsWith(f))) continue;
-    throw new Error(
-        `unknown argument "${arg}" — did you mean --dry-run? Known flags: ` +
-        `${[...EXACT_FLAGS, ...PREFIX_FLAGS].join(", ")}`);
-  }
+  rejectUnknownFlags(argv, {exact: EXACT_FLAGS, prefixes: PREFIX_FLAGS});
 }
 
 /**
@@ -328,10 +326,10 @@ async function main() {
 
   if (nameless.length > 0) {
     console.log(
-        `\n${tag}${nameless.length} client(s) have NO name anywhere else — no ` +
-        "business name, no first/last — so they will be called by their phone " +
-        "number in the app as well as in Wave. Nothing is lost that was not " +
-        "already missing, but give these a name if any matter:");
+        `\n${tag}${nameless.length} client(s) have NO name anywhere else — ` +
+        "no business name, no first/last — so they will be called by their " +
+        "phone number in the app as well as in Wave. Nothing is lost that " +
+        "was not already missing, but give these a name if any matter:");
     for (const n of nameless) console.log(`  ${n.id}  "${n.to}"`);
   }
 

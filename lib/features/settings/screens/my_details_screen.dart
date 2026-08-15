@@ -272,7 +272,16 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
         stackTrace,
       );
       if (!mounted) return;
-      notices.error(failure.toLocalizedMessage(context));
+      // `changeOwnEmail` re-authenticates before it calls, so every
+      // context-sensitive AuthFailure reaching here is from that step — the
+      // address in "no account found with this email" would be the CURRENT
+      // one, not the new one the sheet just took.
+      notices.error(
+        failure.toLocalizedMessageInContext(
+          context,
+          AuthErrorContext.reauthentication,
+        ),
+      );
     } catch (error, stackTrace) {
       logger.warn('ME-EMAIL change failed', error, stackTrace);
       if (!mounted) return;

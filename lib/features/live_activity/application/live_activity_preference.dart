@@ -23,23 +23,25 @@ class LiveActivityPreferenceController extends Notifier<bool> {
   }
 
   Future<void> _load() async {
+    final logger = ref.read(loggerProvider);
     try {
       final prefs = await SharedPreferences.getInstance();
       state = prefs.getBool(_keyLiveActivityEnabled) ?? true;
     } catch (e, st) {
       // Default to enabled, same as a fresh install — an uncaught throw here
       // from the unawaited `ready` future would be fatal.
-      ref.read(loggerProvider).warn('LIVE-ACT read preference failed', e, st);
+      logger.warn('LIVE-ACT read preference failed', e, st);
     }
   }
 
   Future<void> setEnabled({required bool value}) async {
+    final logger = ref.read(loggerProvider);
     state = value;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_keyLiveActivityEnabled, value);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('LIVE-ACT write preference failed', e, st);
+      logger.warn('LIVE-ACT write preference failed', e, st);
     }
   }
 }

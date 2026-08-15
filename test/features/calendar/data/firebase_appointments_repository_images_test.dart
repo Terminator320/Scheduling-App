@@ -133,7 +133,7 @@ void main() {
 
     test('a LEGACY photo with no storagePath keeps its url', () async {
       // That url is the only thing that can render it — the same entries
-      // AppointmentImageUrlResolver's fallback exists for. Dropping it here
+      // AppointmentImageLoader's fallback exists for. Dropping it here
       // would destroy them.
       const legacy = AppointmentImage(
         url: 'https://firebasestorage.googleapis.com/v0/b/x/o/z?alt=media&t=q',

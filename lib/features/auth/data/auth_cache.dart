@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/storage/secure_storage_service.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 /// App-wide [AuthCache], wired to shared secure-storage for testability.
@@ -35,7 +36,9 @@ class AuthCache {
       id: docId,
       uid: uid,
       name: await _storage.read(SecureStorageKeys.cacheName) ?? '',
-      color: Color(int.tryParse(colorValue ?? '') ?? Colors.blue.toARGB32()),
+      color: Color(
+        int.tryParse(colorValue ?? '') ?? AppColors.crewDefault.toARGB32(),
+      ),
       status: 'active',
     );
   }

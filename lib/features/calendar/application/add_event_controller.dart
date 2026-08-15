@@ -245,14 +245,6 @@ class AddEventController extends Notifier<AddEventState>
       return const AddEventFailed(SocketException('offline'));
     }
 
-    final (:start, :end) = appointmentSpan(
-      date: state.selectedDate!,
-      endDate: state.endDate ?? state.selectedDate!,
-      isAllDay: state.isAllDay,
-      startTime: state.selectedStartTime,
-      endTime: state.selectedEndTime,
-    );
-
     final repo = ref.read(appointmentsRepositoryProvider);
     // Resolve these before any awaits, so we don't crash if the notifier gets disposed mid-await (Riverpod 3).
     final logger = ref.read(loggerProvider);
@@ -262,8 +254,22 @@ class AddEventController extends Notifier<AddEventState>
     // Null for a personal job — the validator only demands a client otherwise.
     final client = state.selectedClient;
     final isPersonal = state.isPersonal;
+    // The switch stays live through the conflict check, and the instants below
+    // are DERIVED from this flag — re-reading it after the round trip could
+    // write `isAllDay: true` over a 09:00–17:00 window, which reads as
+    // "All day" on the card while the travel sweep skips it and the crew gets
+    // no "time to leave" push.
+    final isAllDay = state.isAllDay;
     final selectedEmployees = state.selectedEmployees;
     final repeat = state.repeat;
+
+    final (:start, :end) = appointmentSpan(
+      date: state.selectedDate!,
+      endDate: state.endDate ?? state.selectedDate!,
+      isAllDay: isAllDay,
+      startTime: state.selectedStartTime,
+      endTime: state.selectedEndTime,
+    );
 
     // Set the flag before the conflict check, so the Save button disables right away.
     state = state.copyWith(isSubmitting: true);
@@ -300,7 +306,7 @@ class AddEventController extends Notifier<AddEventState>
         // as an optional one, so what saves is what the user can see.
         address: address.trim(),
         isPersonal: isPersonal,
-        isAllDay: state.isAllDay,
+        isAllDay: isAllDay,
         employeeIds: selectedEmployees.map((e) => e.id).toList(),
         employeeNames: selectedEmployees.map((e) => e.name).toList(),
         notes: notes.trim(),

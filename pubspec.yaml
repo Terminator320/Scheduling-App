@@ -41,7 +41,6 @@ dependencies:
 
   # Images
   image_picker: ^1.2.2
-  cached_network_image: ^3.4.1
 
   # Network / external launches
   url_launcher: ^6.3.2
@@ -92,7 +91,6 @@ dependencies:
   firebase_messaging: ^16.4.1
   home_widget: ^0.9.3
   share_plus: ^13.2.0
-  flutter_cache_manager: ^3.4.1
   saver_gallery: ^5.1.0
   showcaseview: ^5.1.0
 
