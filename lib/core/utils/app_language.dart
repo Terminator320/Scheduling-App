@@ -21,10 +21,4 @@ class AppLanguageScope extends InheritedNotifier<AppLanguageController> {
     required super.child,
     super.key,
   }) : super(notifier: controller);
-
-  static AppLanguageController of(BuildContext context) {
-    final scope = context
-        .dependOnInheritedWidgetOfExactType<AppLanguageScope>();
-    return scope?.notifier ?? AppLanguageController.instance;
-  }
 }
