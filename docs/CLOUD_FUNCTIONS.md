@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-11 by auditing the source against the app's call sites and
+refreshed 2026-08-14 by auditing the source against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -34,14 +34,21 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 > wrong before — verify against the live list rather than trusting it.
 
 
-- **PENDING (2026-08-13): a three-deletion deploy, net 25 → 25.** Deleting
-  `waveSyncWorker`, `waveScheduledImport` and `sendOverdueJobPrompts`; adding
-  `waveRetryFailedJobs`, `cascadeDeleteAppointmentImages` and
-  `recountAppointmentPictures`. **The count is unchanged, so it proves
-  nothing** — the same trap the 2026-08-11 row below describes. Diff the export
-  LISTS (`comm` against `git show 78d89478:functions/index.js`), and expect the
-  non-interactive deletion abort plus three orphaned Cloud Scheduler jobs to
-  remove by hand. Full sequence: `docs/DEPLOYMENT.md`.
+- **DEPLOYED 2026-08-14 (`d3e22377`): the three-deletion swap, net 25 → 25.**
+  Deleted `waveSyncWorker`, `waveScheduledImport` and `sendOverdueJobPrompts`;
+  added `waveRetryFailedJobs`, `cascadeDeleteAppointmentImages` and
+  `recountAppointmentPictures`, plus `firestore.rules` and `firestore:indexes`.
+  **The count was unchanged, so it proved nothing** — the same trap the
+  2026-08-11 row below describes; the export LISTS were diffed against live
+  prod first. A **new** abort fired: `firebase deploy` refuses to create a
+  `retry: true` function non-interactively (`Pass the --force option to deploy
+  functions with a failure policy`), which is a *different* and earlier abort
+  than the 2026-08-08 deletion one — nothing was released on that attempt.
+  Resolved by splitting the deploy rather than whole-target `--force`. **Still
+  outstanding:** the 3 orphaned Cloud Scheduler jobs (`gcloud` absent on the
+  Windows box) and the appointment-images backfill; the app build additionally
+  waits on the `(clientId, startTime DESC)` index reaching `READY`. Full
+  sequence and the post-deploy verification: `docs/DEPLOYMENT.md`.
 - **CLEARED 2026-08-11: the 2026-08-08 → 2026-08-11 gap has been deployed.**
   All 25 functions were updated together with `firestore.rules` and
   `storage.rules`, so prod now runs `changeEmployeeEmail`'s non-admin re-auth
@@ -117,7 +124,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   secret change, so the export set stays at 21. `sendUpcomingJobReminders` —
   `selectTravelCandidates` skips `isAllDay` records (a midnight start otherwise
   fell inside the 90-min window at ~23:30 the night before and pushed a "time
-  to leave" for a block with nowhere to leave for); `sendOverdueJobPrompts` —
+  to leave" for a block with nowhere to leave for); the overdue sweep —
   `selectOverdueCandidates` skips `isPersonal` records, the server mirror of
   `AppointmentRecord.displayStatus`; and every push, digest and Live Activity
   card now names a job `clientName → title → generic`, since a personal job has
@@ -564,8 +571,18 @@ employee's send is wrapped individually** — the sends run through one
 `Promise.all`, so before that a single transient token read rejected the whole
 map and cost every *other* employee tomorrow's schedule.
 
-### `sendOverdueJobPrompts` — `notifications.js`
-Every 15 min (Toronto). The "job finished?" nudge: pushes assignees of a job
+### The overdue sweep — `notifications.js` (rides `sendUpcomingJobReminders`)
+**Not its own export.** `sendOverdueJobPrompts` was a standalone `every 15
+minutes` scheduler until 2026-08-13; it is now `runOverduePromptSweep`, called
+from `sendUpcomingJobReminders` in its own `try/catch` after the travel sweep.
+The merge is a **cost** change, not a behaviour change — Cloud Scheduler bills
+per job beyond the first three and this repo had six. Running three times as
+often is free of side effects because the per-recipient ledger below, not the
+cadence, is what guarantees at-most-once delivery. It takes `liveDeps()`, not
+`liveActivityDeps()`: this half is Firestore-only and must not read the APNs
+secrets.
+
+The "job finished?" nudge: pushes assignees of a job
 whose `endTime` passed within the last 24 h while its status is still open
 (`pending`/`in_progress`/legacy `confirmed` — server mirror of the app's
 display-only `overdue` state; nothing is ever stored). Queries `endTime ∈
@@ -590,9 +607,11 @@ element makes an invalid document path, and constructing it outside the `try`
 threw before any per-recipient handler could catch — one malformed id
 permanently killed every overdue prompt for the whole fleet. The scheduler body
 is also wrapped and logged like its two siblings, so a sweep that dies is
-visible instead of silent. Candidates are processed serially, so it carries a **300s
-timeout** (well over the 60s default) to keep a backlog from leaving the newest
-overdue jobs unprompted.
+visible instead of silent. Candidates are processed serially, which is why the
+host function's **420s timeout** takes the larger of the two budgets the
+separate schedulers carried (120 and 300) plus headroom — a backlog here must
+not leave the newest overdue jobs unprompted, and it must not eat the travel
+sweep's budget either.
 
 ## User → uid bridge
 
@@ -762,7 +781,7 @@ from them, so a client edit still in the outbox is not just overwritten — it i
 marked synced, and the pending job then hashes the clobbered doc, matches, and
 no-ops. The drain is bounded and its query only takes jobs already due, so a job
 backed off after a transient Wave error survives it. Both this callable and
-`waveScheduledImport` therefore pass `importCustomers` a `skipClientIds` set
+`runWaveDaily` therefore pass `importCustomers` a `skipClientIds` set
 from `listOutstandingClientIds` (`wave/worker.js`, covering `queued` and
 `inflight`); skipped clients are counted as `skippedPending`.
 
@@ -824,7 +843,7 @@ The watermark lives on `wave/connection` (`customerDeltaSince`,
 `lastFullImportAt`) and `importCustomers` stays stateless about it. The whole
 read → decide → import → advance sequence has **one owner**,
 `importWithWatermark` in `wave/callables.js`, used by both the interactive sync
-and `waveScheduledImport`; the decisions are the pure `resolveImportWindow` /
+and the daily `runWaveDaily`; the decisions are the pure `resolveImportWindow` /
 `watermarkPatch` in `wave/import_schedule.js`, placed beside `isImportDue`
 because the two cadences interact.
 
@@ -898,9 +917,16 @@ day costs zero invocations instead of 288, it frees a Cloud Scheduler slot (only
 up to five minutes. Needs the same `waveSyncQueue` composite indexes the worker
 did: `(status ASC, nextAttemptAt ASC)` and `(status ASC, claimedAt ASC)`.
 
-### `waveScheduledImport` — `wave/callables.js`
-The daily Wave job, **every 24 hours**, single instance, 540 s timeout. It does
-two things, and the first runs unconditionally.
+### `runWaveDaily` — `wave/callables.js` (rides `sendDailyJobDigest`)
+**Not its own export.** `waveScheduledImport` was a standalone `every 24 hours`
+scheduler until 2026-08-13; the daily Wave maintenance is now `runWaveDaily`,
+rider 3 on `sendDailyJobDigest` — in its own `try/catch`, strictly after the
+digest has sent, which is the whole safety argument for merging. Same cost
+reasoning as the overdue sweep: it is one of the two merges that took Cloud
+Scheduler from six jobs to three. The host binds `WAVE_FULL_ACCESS_TOKEN` and
+carries the 540 s timeout this work needs on its own.
+
+It does two things, and the first runs unconditionally.
 
 **1. Drains the outbox (app → Wave), always** — before the cadence check, in its
 own try/catch. This is the safety net under the event-driven push above, and it

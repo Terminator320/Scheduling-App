@@ -37,13 +37,15 @@ const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 
 const {digitsOf} = require("../client_name_utils");
-// Shared so the wrong-project guard reads the same on both scripts: it prints
-// "(unknown)" otherwise, exactly when credentials were supplied the
-// recommended way, since applicationDefault() keeps the project internal.
-const {resolveProjectId} = require("./backfill-client-phone-formatting");
-
-/** Bare switches, matched EXACTLY — a mistyped --dry-run must not go live. */
-const EXACT_FLAGS = ["--dry-run"];
+// Shared with the phone-formatting backfill. `resolveProjectId` prints
+// "(unknown)" otherwise — exactly when credentials were supplied the
+// recommended way, since applicationDefault() keeps the project internal — and
+// `assertKnownFlags` is the same "a typo'd --dry-run must not go live" guard,
+// so both scripts must refuse the same arguments.
+const {
+  assertKnownFlags,
+  resolveProjectId,
+} = require("./backfill-client-phone-formatting");
 
 /**
  * Client doc id -> the business name to restore.
@@ -73,19 +75,6 @@ const RESTORE = {
   "oU8V1KhGMggBUew9t08s": "GC Milonopoulos",
   "tYyHi4I4pJ5hSbu9ZAsL": "Rixton",
 };
-
-/**
- * Rejects any argument that is not a flag this script knows.
- * @param {!Array<string>} argv Arguments after the node + script paths.
- */
-function assertKnownFlags(argv) {
-  for (const arg of argv) {
-    if (EXACT_FLAGS.includes(arg)) continue;
-    throw new Error(
-        `unknown argument "${arg}" — did you mean --dry-run? Known flags: ` +
-        `${EXACT_FLAGS.join(", ")}`);
-  }
-}
 
 /**
  * The patch for one client, or null when it must be left alone.

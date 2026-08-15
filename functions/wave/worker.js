@@ -949,6 +949,9 @@ async function countDeadJobs(deps = {}) {
   return snap.data().count;
 }
 
+/** How many requeue transactions run concurrently. */
+const REQUEUE_CHUNK = 25;
+
 /**
  * Returns dead-lettered jobs to the queue for another try.
  *
@@ -989,10 +992,9 @@ async function requeueDeadJobs(deps = {}) {
       .get();
   const docs = snap && Array.isArray(snap.docs) ? snap.docs : [];
 
-  let requeued = 0;
-  for (const doc of docs) {
+  const requeueOne = async (doc) => {
     try {
-      const applied = await db.runTransaction(async (tx) => {
+      return await db.runTransaction(async (tx) => {
         const fresh = await tx.get(doc.ref);
         // Re-enqueued by a client edit in the meantime: that job is newer and
         // carries the current payload hash. Leave it alone.
@@ -1007,13 +1009,27 @@ async function requeueDeadJobs(deps = {}) {
         });
         return true;
       });
-      if (applied) requeued += 1;
     } catch (e) {
       // One stubborn job must not abort the rest of the recovery.
       logger.warn("WAVE-WORKER requeue failed", {
         jobId: doc.id, error: String(e),
       });
+      return false;
     }
+  };
+
+  // Chunked rather than one-at-a-time. The shape that produces dead jobs is a
+  // bulk backfill — a few hundred of them — and a serial round trip each is
+  // ~25-40 ms, so 500 jobs was 12-20 s of pure latency inside a callable the
+  // app abandons at `kWaveSyncTimeoutSeconds`, before the drain that follows
+  // it has run at all. The transactions touch distinct documents, so there is
+  // no contention to serialize for; the per-job catch above still gives
+  // "one stubborn job must not abort the rest".
+  let requeued = 0;
+  for (let i = 0; i < docs.length; i += REQUEUE_CHUNK) {
+    const chunk = docs.slice(i, i + REQUEUE_CHUNK);
+    const applied = await Promise.all(chunk.map(requeueOne));
+    requeued += applied.filter(Boolean).length;
   }
   return {requeued, scanned: docs.length};
 }

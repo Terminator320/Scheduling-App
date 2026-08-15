@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_day_circle.dart';
 
 /// Design metrics (`03-screens-schedule.md`). 1.0-scale FLOORS — the real
 /// height derives from the scaled day number, exactly like the month grid.
@@ -143,15 +144,10 @@ class _StripCell extends StatelessWidget {
               width: circleSize,
               height: circleSize,
               alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected ? scheme.primary : null,
-                // Today is a ring, not a blue number — the same rule the month
-                // grid's cells follow, so the strip can't describe today
-                // differently from the grid it replaces.
-                border: isToday && !isSelected
-                    ? Border.all(color: scheme.onSurface, width: 1.5)
-                    : null,
+              decoration: calendarDayCircleDecoration(
+                scheme: scheme,
+                isSelected: isSelected,
+                showTodayRing: isToday,
               ),
               child: Text(
                 '${day.day}',

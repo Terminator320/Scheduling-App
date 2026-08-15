@@ -48,14 +48,6 @@ class NewClientsSection extends StatelessWidget {
     final scheme = theme.colorScheme;
     final l10n = context.l10n;
     final trend = newClientTrend(weeklyCounts);
-    // Built once per rebuild, never per row: constructing a DateFormat
-    // verifies the locale and parses a skeleton, and doing that inside an item
-    // builder is what made the calendar build 30-90 of them per frame.
-    final dateFormat = DateFormat.MMMd(
-      Localizations.localeOf(context).toString(),
-    );
-    final overflow = clients.length - rowLimit;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -95,39 +87,70 @@ class NewClientsSection extends StatelessWidget {
                   ),
                 ),
               ],
-              if (clients.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.sp12),
-                  child: Text(
-                    l10n.dashboard_newClientsEmpty,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
-                  ),
-                )
-              else ...[
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: AppSpacing.sp12),
-                  child: Divider(height: 1),
-                ),
-                for (final client in clients.take(rowLimit))
-                  _NewClientRow(client: client, dateFormat: dateFormat),
-                // The rows are a sample, not the set — without this the card
-                // silently reports five when twenty came in.
-                if (overflow > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: AppSpacing.sp8),
-                    child: Text(
-                      l10n.dashboard_newClientsMore(overflow),
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-              ],
+              _ClientRows(clients: clients),
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// The sample of new clients under the sparkline, or the empty line in its
+/// place. Split out to keep [NewClientsSection.build] near the ~60-line
+/// guideline, and it needs nothing but the list.
+class _ClientRows extends StatelessWidget {
+  const _ClientRows({required this.clients});
+
+  final List<ClientRecord> clients;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final l10n = context.l10n;
+
+    if (clients.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.sp12),
+        child: Text(
+          l10n.dashboard_newClientsEmpty,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+
+    // Built once per rebuild, never per row: constructing a DateFormat
+    // verifies the locale and parses a skeleton, and doing that inside an item
+    // builder is what made the calendar build 30-90 of them per frame.
+    final dateFormat = DateFormat.MMMd(
+      Localizations.localeOf(context).toString(),
+    );
+    final overflow = clients.length - NewClientsSection.rowLimit;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: AppSpacing.sp12),
+          child: Divider(height: 1),
+        ),
+        for (final client in clients.take(NewClientsSection.rowLimit))
+          _NewClientRow(client: client, dateFormat: dateFormat),
+        // The rows are a sample, not the set — without this the card silently
+        // reports five when twenty came in.
+        if (overflow > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sp8),
+            child: Text(
+              l10n.dashboard_newClientsMore(overflow),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
+          ),
       ],
     );
   }

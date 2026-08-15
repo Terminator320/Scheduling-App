@@ -159,17 +159,6 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
     apt: _aptController.text,
   );
 
-  /// Pulls a phone number out of the name the admin just typed or pasted. See
-  /// [liftPhoneFromNameField] — quiet unless the phone field is still empty.
-  void _liftPhoneFromName() {
-    if (liftPhoneFromNameField(
-      name: _nameController,
-      phone: _phoneController,
-    )) {
-      setState(() => clearError('phone'));
-    }
-  }
-
   List<ClientContact> _buildContacts() => [
     for (final contact in additionalContacts)
       if (!contact.isEmpty) contact.toContact(),
@@ -307,7 +296,14 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
           errorText: errors['name'],
           onChanged: (_) {
             clearError('name');
-            _liftPhoneFromName();
+            // Pulls a phone number out of what was just typed or pasted —
+            // quiet unless the phone field is still empty.
+            if (liftPhoneFromNameField(
+              name: _nameController,
+              phone: _phoneController,
+            )) {
+              setState(() => clearError('phone'));
+            }
           },
         ),
       ),

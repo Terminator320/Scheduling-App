@@ -15,7 +15,6 @@ import 'package:scheduling/features/calendar/widgets/sections/photo_picker_secti
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_host.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -51,7 +50,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     notes: TextEditingController(),
     materials: TextEditingController(),
   );
-  final _clientSearchDebounce = Debouncer(ClientSearchPolicy.searchDebounce);
+  final _clientSearchDebounce = Debouncer(kSearchDebounce);
   late final _provider = addEventControllerProvider(widget.initialDate);
 
   // Admin-only surface: this sheet is only reachable from the calendar FAB
@@ -103,9 +102,10 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   /// date arrives already picked — there is no modal to await and no cancelled
   /// outcome to handle. The bounds the picker enforces live on the row.
   void _onStartDateSelected(DateTime picked) {
-    setState(() {
-      _controllers.date.text = DateUtilsHelper.formatDate(picked);
-    });
+    // No setState around the controller writes: the body watches the
+    // controller provider and `selectDate` always emits a new state, so the
+    // rebuild is already coming. This matches `_pickStartTime` below.
+    _controllers.date.text = DateUtilsHelper.formatDate(picked);
     _notifier.selectDate(picked);
     // selectDate mirrors or shifts the end date, and the end row renders the
     // controller text — so it has to follow, or it goes stale.
@@ -116,9 +116,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   }
 
   void _onEndDateSelected(DateTime picked) {
-    setState(() {
-      _controllers.endDate.text = DateUtilsHelper.formatDate(picked);
-    });
+    _controllers.endDate.text = DateUtilsHelper.formatDate(picked);
     _notifier.selectEndDate(picked);
   }
 

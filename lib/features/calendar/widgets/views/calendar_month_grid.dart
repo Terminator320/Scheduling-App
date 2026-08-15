@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_day_circle.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 /// Design metrics (`03-screens-schedule.md`). Every one of these is a 1.0-scale
@@ -183,13 +184,9 @@ class CalendarDayCell extends StatelessWidget {
     final isSelected = inMonth && isSameDate(day, selectedDay);
     final isToday = isSameDate(day, today);
 
-    // Today reads as a RING around its number rather than a blue number (owner
-    // call, 2026-08-14): the accent colour was also the picker/field accent, so
-    // "today" and "the value you picked" spoke the same language. The ring is
-    // `onSurface` — white on the dark theme, ink on the light one — so it stays
-    // visible in both; a literal white would vanish on the light surface.
-    // Selection still wins: a filled circle under a ring is noise.
-    final showTodayRing = isToday && inMonth && !isSelected;
+    // Off-month cells never ring: a trailing "today" belongs to the month it
+    // is in, not to the one being read.
+    final showTodayRing = isToday && inMonth;
 
     final Color numberColor;
     if (!inMonth) {
@@ -214,12 +211,10 @@ class CalendarDayCell extends StatelessWidget {
           width: circleSize,
           height: circleSize,
           alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: isSelected ? scheme.primary : null,
-            border: showTodayRing
-                ? Border.all(color: scheme.onSurface, width: 1.5)
-                : null,
+          decoration: calendarDayCircleDecoration(
+            scheme: scheme,
+            isSelected: isSelected,
+            showTodayRing: showTodayRing,
           ),
           child: Text(
             '${day.day}',

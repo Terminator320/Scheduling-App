@@ -213,10 +213,12 @@ class ClientNamePolicy {
   /// `type` — so seeding an edit form from the display name and saving it back
   /// replaces "Vogas Plumbing" with "Marc Tremblay" on live invoices.
   ///
-  /// Hand-mirrors `baseNameFor` in
-  /// `functions/scripts/backfill-client-name-with-phone.js`, including the
-  /// fallback order: the first/last halves are reached only when the stored
-  /// name is empty once its own number is stripped, which is the junk case.
+  /// **Dart-only, deliberately — there is no JS twin.** The backfill hands
+  /// [composeStored] the RAW stored `name` and stops there, so it never needs
+  /// this fallback order; a doc whose name is junk simply composes to its
+  /// number. The halves are reached here only when the stored name is empty
+  /// once its own number is stripped, which is that same junk case seen from
+  /// the edit form, where leaving the field blank is not an option.
   static String baseNameFor({
     required String name,
     String phone = '',
@@ -283,7 +285,6 @@ class ClientNamePolicy {
     ClientType type = ClientType.unset,
   }) {
     final base = stripPhone(name, phone: phone, mobile: mobile);
-    final business = stripPhone(businessName, phone: phone, mobile: mobile);
     final composed = [
       firstName.trim(),
       lastName.trim(),
@@ -294,6 +295,7 @@ class ClientNamePolicy {
       // `businessName` is only reached on a doc whose `name` is blank or was
       // nothing but a phone number.
       if (base.isNotEmpty) return base;
+      final business = stripPhone(businessName, phone: phone, mobile: mobile);
       if (business.isNotEmpty) return business;
       // No company name on file at all — the contact person is better than
       // rendering the phone number.
@@ -301,9 +303,12 @@ class ClientNamePolicy {
       return name.trim();
     }
 
+    // No `businessName` leg here, and that is not an omission: `isBusiness` is
+    // true for ANY non-empty `businessName`, so on this branch it is provably
+    // blank. Resolving it up front cost two regex passes on every read of a
+    // person's name, which is per row on every list and search rebuild.
     if (composed.isNotEmpty) return composed;
     if (base.isNotEmpty) return base;
-    if (business.isNotEmpty) return business;
     return name.trim();
   }
 

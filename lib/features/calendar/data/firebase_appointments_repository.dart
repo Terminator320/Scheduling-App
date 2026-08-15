@@ -381,7 +381,17 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     // the subcollection has no inherent order, where the array carried its
     // own. `uploadedAt` is the field the array was effectively sorted by
     // (append order), so this preserves what people already see.
-    final snapshot = await _imagesOf(id).orderBy('uploadedAt').get();
+    final snapshot = await _imagesOf(id)
+        .orderBy('uploadedAt')
+        .limit(_appointmentImageScanLimit)
+        .get();
+    if (snapshot.docs.length >= _appointmentImageScanLimit) {
+      _logger.warn(
+        'APPT-IMG subcollection read for $id hit the '
+        '$_appointmentImageScanLimit-doc cap — photos beyond it were '
+        'not loaded',
+      );
+    }
     return [
       for (final doc in snapshot.docs) AppointmentImage.fromMap(doc.data()),
     ];
@@ -601,6 +611,12 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   /// only being reachable through the console or the Admin SDK, which bypass
   /// that assertion.
   static const int _seriesScanLimit = RepeatInterval.maxOccurrences + 1;
+
+  /// Ceiling on [fetchAppointmentPictures]. `isValidAppointmentData` caps the
+  /// `pictures` array at 100 and a SUBCOLLECTION has no such ceiling, so this
+  /// is what keeps the read bounded once the array is retired at the CONTRACT
+  /// step — matching the array's cap rather than inventing a second number.
+  static const int _appointmentImageScanLimit = 100;
 
   @override
   Future<List<AppointmentRecord>> searchHistory(String query) async {

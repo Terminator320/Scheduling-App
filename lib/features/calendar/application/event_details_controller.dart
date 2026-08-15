@@ -132,6 +132,19 @@ class EventDetailsController extends Notifier<EventDetailsState>
   Future<void> _loadStoredPictures() async {
     final id = appointment.id;
     if (id == null || id.isEmpty) return;
+    // No photos in EITHER store means there is nothing for this read to find,
+    // and the sheet is the most-opened surface in the app.
+    //
+    // TODO(gvogas): revisit at the photo-subcollection CONTRACT step.
+    // This is safe ONLY while `pictures` is still dual-written: `hasPictures`
+    // is true if the array is non-empty OR `pictureCount > 0`, so today the
+    // array carries the decision. `pictureCount` is function-owned and reads
+    // as 0 on any doc the trigger or the backfill has not reached — so once
+    // the array is retired, a stale or missing count makes this gate skip the
+    // read and render a job's photos as none, silently. That is the same trap
+    // the docstring above names; when the array goes, this must gate on the
+    // counter ONLY if the backfill is known complete, or not gate at all.
+    if (!appointment.hasPictures) return;
     final repo = ref.read(appointmentsRepositoryProvider);
     List<AppointmentImage> stored;
     try {
@@ -180,11 +193,11 @@ class EventDetailsController extends Notifier<EventDetailsState>
     List<AppointmentImage> seeded,
     List<AppointmentImage> stored,
   ) {
-    final byId = <String, AppointmentImage>{
-      for (final image in seeded)
-        if (appointmentImageDocId(image).isNotEmpty)
-          appointmentImageDocId(image): image,
-    };
+    final byId = <String, AppointmentImage>{};
+    for (final image in seeded) {
+      final id = appointmentImageDocId(image);
+      if (id.isNotEmpty) byId[id] = image;
+    }
     return [
       for (final image in stored) byId[appointmentImageDocId(image)] ?? image,
     ];

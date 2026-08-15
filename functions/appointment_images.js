@@ -100,6 +100,24 @@ const cascadeDeleteAppointmentImages = onDocumentDeleted(
 );
 
 // `retry: true` is safe because the write is an absolute count, not a delta.
+//
+// IT DELIBERATELY RECOUNTS ON EVERY WRITE, INCLUDING AN UPDATE THAT CANNOT HAVE
+// MOVED THE COUNT. Strictly, only a create or a delete changes it, and an
+// `if (before.exists && after.exists) return` would skip the two paths that
+// rewrite an existing image doc — the offline queue replaying
+// `set(..., {merge: true})` on the DERIVED doc id, and a backfill re-run.
+// That guard was written and then removed on purpose, because those two paths
+// are the ONLY self-heal this counter has: a recount whose parent `update()`
+// keeps failing exhausts its retry window and leaves `pictureCount` wrong
+// forever, and an idempotent replay is what silently repairs it. The saving is
+// small and lands on rare paths; the durability is not.
+//
+// It buys nothing against the real write amplification either.
+// `appendAppointmentPictures` writes N image docs in ONE batch, so N recounts
+// land on the SAME parent within milliseconds — against Firestore's
+// ~1 write/sec/document guidance — but those are genuine CREATES, which any
+// such guard must let through. Fix that by batching the recount if it ever
+// bites, never by suppressing the replay.
 const recountAppointmentPictures = onDocumentWritten(
     {
       document:

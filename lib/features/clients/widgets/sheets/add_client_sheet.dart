@@ -123,17 +123,6 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     apt: _aptController.text,
   );
 
-  /// Pulls a phone number out of the name the admin just typed or pasted. See
-  /// [liftPhoneFromNameField] — quiet unless the phone field is still empty.
-  void _liftPhoneFromName() {
-    if (liftPhoneFromNameField(
-      name: _nameController,
-      phone: _phoneController,
-    )) {
-      setState(() => clearError('phone'));
-    }
-  }
-
   ClientRecord _draft() => ClientRecord(
     id: '',
     // The STORED name is the Wave CUSTOMER name: the phone number for a
@@ -269,7 +258,14 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
           // both typing and the clear "x".
           onChanged: (_) {
             clearError('name');
-            _liftPhoneFromName();
+            // Pulls a phone number out of what was just typed or pasted —
+            // quiet unless the phone field is still empty.
+            if (liftPhoneFromNameField(
+              name: _nameController,
+              phone: _phoneController,
+            )) {
+              setState(() => clearError('phone'));
+            }
           },
         ),
       ),

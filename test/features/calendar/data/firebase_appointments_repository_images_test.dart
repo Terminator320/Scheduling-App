@@ -193,10 +193,14 @@ void main() {
       // own, so without this the photo viewer's index means something
       // different on every device.
       final query = _MockQuery();
+      final bounded = _MockQuery();
       final snapshot = _MockQuerySnapshot();
       final doc = _MockDocSnap();
       when(() => images.orderBy('uploadedAt')).thenReturn(query);
-      when(query.get).thenAnswer((_) async => snapshot);
+      // Bounded like every other read in this repository — the array's rules
+      // cap is 100 and a subcollection has none of its own.
+      when(() => query.limit(any())).thenReturn(bounded);
+      when(bounded.get).thenAnswer((_) async => snapshot);
       when(() => snapshot.docs).thenReturn([doc]);
       when(doc.data).thenReturn({'storagePath': photo.storagePath});
 
@@ -204,6 +208,7 @@ void main() {
 
       expect(result.single.storagePath, photo.storagePath);
       verify(() => images.orderBy('uploadedAt')).called(1);
+      verify(() => query.limit(100)).called(1);
     });
 
     test('an empty subcollection returns empty, meaning "use the array"',
@@ -212,9 +217,11 @@ void main() {
       // is still authoritative — a doc the backfill has not reached yet is
       // exactly this shape.
       final query = _MockQuery();
+      final bounded = _MockQuery();
       final snapshot = _MockQuerySnapshot();
       when(() => images.orderBy('uploadedAt')).thenReturn(query);
-      when(query.get).thenAnswer((_) async => snapshot);
+      when(() => query.limit(any())).thenReturn(bounded);
+      when(bounded.get).thenAnswer((_) async => snapshot);
       when(() => snapshot.docs).thenReturn([]);
 
       expect(await repo().fetchAppointmentPictures('a1'), isEmpty);

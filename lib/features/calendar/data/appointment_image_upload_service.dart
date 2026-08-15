@@ -116,8 +116,6 @@ class AppointmentImageUploadService {
     }
   }
 
-  /// Uploads one queued batch. Files that are permanently rejected are
-  /// dropped, files that hit a transient failure get re-queued, and
   /// Puts the download URL back on a carried image before its re-link.
   ///
   /// Returns null when it could not be resolved, which the caller treats as a
@@ -139,7 +137,9 @@ class AppointmentImageUploadService {
     return image.copyWith(url: url);
   }
 
-  /// anything that uploads successfully is removed from the queue.
+  /// Uploads one queued batch. Files that are permanently rejected are
+  /// dropped, files that hit a transient failure get re-queued, and anything
+  /// that uploads successfully is removed from the queue.
   Future<void> _attempt(PendingUpload entry) async {
     final files = entry.paths
         .map(File.new)
@@ -150,33 +150,36 @@ class AppointmentImageUploadService {
       return;
     }
 
-    // Carry forward images uploaded on a prior pass whose doc-link append
-    // didn't land, so we re-attempt just the append without re-uploading them.
     var permanentFailures = 0;
     final tooLargeNames = <String>[];
     var transientFailure = false;
     final survivors = <String>[];
 
+    // Images uploaded on a prior pass whose doc-link append didn't land are
+    // carried forward, so we re-attempt just the append without re-uploading
+    // them — their local temp files are already gone.
+    //
     // The queue deliberately does not persist download URLs (see
     // `PendingUpload._imageToJson`), so a carried image arrives with an empty
     // one and it has to be resolved again before the re-link. The token is
     // stable per object, so this reproduces the map a partially-committed
     // append already wrote and the `arrayUnion` dedupe still holds.
-    final carried = <AppointmentImage>[];
-    for (final image in entry.uploaded) {
-      final resolved = await _resolveCarriedUrl(image, entry.appointmentId);
-      if (resolved == null) {
-        // Could not re-resolve — appending with a blank url would write a
-        // second, broken array entry beside the one already there. Treat it as
-        // the transient failure it almost always is and keep the image queued.
-        transientFailure = true;
-        carried.add(image);
-        continue;
-      }
-      carried.add(resolved);
-    }
-    final resolveFailed = transientFailure;
-    final uploaded = <AppointmentImage>[...carried];
+    //
+    // Resolved CONCURRENTLY: each is a Storage round trip, and this runs on
+    // the offline→online flip — exactly when the connection is worst and a
+    // ten-photo batch would otherwise serialise ten of them.
+    final resolved = await Future.wait(
+      entry.uploaded.map((i) => _resolveCarriedUrl(i, entry.appointmentId)),
+    );
+    // A null could not be re-resolved. Appending with a blank url would write
+    // a second, broken array entry beside the one already there, so treat it
+    // as the transient failure it almost always is and keep the image queued.
+    final resolveFailed = resolved.any((i) => i == null);
+    if (resolveFailed) transientFailure = true;
+    final uploaded = <AppointmentImage>[
+      for (var i = 0; i < resolved.length; i++)
+        resolved[i] ?? entry.uploaded[i],
+    ];
 
     for (final file in files) {
       try {

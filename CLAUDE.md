@@ -214,7 +214,11 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
      or the client reads the subcollection first.
   2. **The photo-count bound.** `isValidAppointmentData` caps `pictures` at
      100; a subcollection has no such ceiling, so that guard goes with the
-     array unless something replaces it.
+     array unless something replaces it. The READ is already bounded —
+     `fetchAppointmentPictures` limits to the same 100 and warns at the cap,
+     deliberately reusing the array's number rather than inventing a second —
+     but a bounded read is not a bounded WRITE, and nothing yet stops a doc
+     growing past it.
   3. **The `AppointmentImage.url` fallback.** `AppointmentImageUrlResolver`
      still falls back to a stored `url` for legacy entries, and only the
      backfilled subcollection docs carry one. Keep the fallback.
@@ -1231,9 +1235,14 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   business carries the business in `name` and a CONTACT PERSON in first/last,
   and a doc whose `type` was never picked reads as a person, so writing the
   display name back would rename "Vogas Plumbing" to "Marc Tremblay" on real
-  Wave invoices, unrecoverably from the doc. It reaches the first/last halves
-  only when the stored name is empty once its own number is stripped — the junk
-  case the 2026-08-08 rename was cleaning up.
+  Wave invoices, unrecoverably from the doc. **The backfill stops there** — it
+  hands `composeStored` the raw stored `name` and never consults the halves.
+  The first/last fallback belongs to `ClientNamePolicy.baseNameFor`, which is
+  **Dart-only and has no JS twin**: only the EDIT SHEET needs it, because a
+  form cannot seed a required field with nothing, where the backfill can just
+  compose a doc whose name is junk to its number. (This bullet used to describe
+  the fallback as the backfill's, and `baseNameFor` carried a pointer to a
+  `functions/` function that has never existed.)
   **The rules cap on `name` is 225, not 200** — it was sized to the old
   "<typed name> <phone>" shape, `TextLimits.personName` (200) + a space +
   `TextLimits.phone` (24). The current rule can't reach that (a business name
@@ -1344,6 +1353,13 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   rather than merely written down — four appointment pairs are currently
   EXACTLY equal, so a one-character bump on either side breaks every long save
   with an opaque `permission-denied`.
+  **It reads `functions/wave/mappers.js` back too, for `IMPORT_FIELD_CAPS`** —
+  a THIRD hand-mirror of `isValidClientData`, and the one where the failure is
+  quietest. The Wave import writes with the Admin SDK, which BYPASSES the
+  rules, so a cap above the rules cap does not fail the import: it writes a
+  client doc the APP can never update again, every later save landing as
+  `permission-denied` on a field nobody typed. Add a new capped import field to
+  that map and the test picks it up automatically.
 - **Phone numbers are stored FORMATTED, not as raw digits** (owner call,
   2026-08-02). `PhoneInputFormatter` (`core/validators/phone_format.dart`) masks
   every phone field as it is typed, so `phone`, `emergencyPhone` and each
@@ -1786,8 +1802,13 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   success and by the `finally` only on failure — three listeners can fire for
   one underlying event.
 - Per-keystroke search debounces through `Debouncer` (`lib/core/utils/debouncer.dart`,
-  own one per State, `dispose()` it). `SettingsSaveDebouncer` is the async-action
-  variant — don't add a third raw `Timer`.
+  own one per State, `dispose()` it) at the shared `kSearchDebounce` beside it.
+  That constant is one cost dial, not a per-surface taste, and it lives in
+  `core/` rather than on `ClientSearchPolicy` because its callers span features
+  — the appointment sheets debounce a CLIENT search, History an APPOINTMENT
+  one. `SettingsSaveDebouncer` is the async-action variant — don't add a third
+  raw `Timer`, and don't re-spell the interval at a call site (it had already
+  split 300 ms / 250 ms across four).
 - Localization (`gen_l10n`):
   - Source of truth: `lib/l10n/app_en.arb` (template) + `lib/l10n/app_fr.arb`.
   - Generated `app_localizations*.dart` live in `lib/l10n/.gen/` and are

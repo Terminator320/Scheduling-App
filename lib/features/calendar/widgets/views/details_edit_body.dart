@@ -21,7 +21,6 @@ import 'package:scheduling/features/calendar/widgets/sections/appointment_form_f
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_host.dart';
-import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -47,7 +46,7 @@ class DetailsEditBody extends ConsumerStatefulWidget {
 
 class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     with InlineAddClientHost {
-  final _clientSearchDebounce = Debouncer(ClientSearchPolicy.searchDebounce);
+  final _clientSearchDebounce = Debouncer(kSearchDebounce);
 
   @override
   void dispose() {
@@ -154,9 +153,10 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
   /// The date rows drop an inline month calendar down beneath themselves, so a
   /// date arrives already picked — no modal to await, no cancelled outcome.
   void _onStartDateSelected(EventDetailsController notifier, DateTime picked) {
-    setState(() {
-      widget.controllers.date.text = DateUtilsHelper.formatDate(picked);
-    });
+    // No setState around the controller writes: the body watches the
+    // controller provider and `selectDate` always emits a new state, so the
+    // rebuild is already coming. This matches `_pickStartTime` below.
+    widget.controllers.date.text = DateUtilsHelper.formatDate(picked);
     notifier.selectDate(picked);
     // selectDate shifts the end date to preserve the run's length, and the end
     // row renders the controller text — so it has to follow, or it goes stale.
@@ -169,9 +169,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
   }
 
   void _onEndDateSelected(EventDetailsController notifier, DateTime picked) {
-    setState(() {
-      widget.controllers.endDate.text = DateUtilsHelper.formatDate(picked);
-    });
+    widget.controllers.endDate.text = DateUtilsHelper.formatDate(picked);
     notifier.selectEndDate(picked);
   }
 

@@ -72,22 +72,19 @@ class _AppointmentDateRowsState extends State<AppointmentDateRows> {
   /// tapped the row, so the row you were reading jumped away from where you
   /// left it — and it fought the sheet's own focus scrolling. The month simply
   /// appears where the row is; the form scrolls when the reader scrolls it.
+  ///
+  /// This is the ONLY thing that closes the month: picking a day does not
+  /// (owner call, 2026-08-14). Choosing a date is rarely one tap — you pick
+  /// the 12th, see it lands on a Wednesday, and move it — and a picker that
+  /// shuts on every tap makes each correction cost a reopen. It closes when
+  /// the row is tapped again, or when the other date row takes the panel.
+  ///
+  /// Nothing is left stale by staying open: the selected day comes from the
+  /// widget's `startDate`/`endDate`, so the ring moves as the form updates,
+  /// and `InlineMonthCalendar.didUpdateWidget` follows a date changed from
+  /// outside (the start date shifting the end date) into its month.
   void _toggle(_OpenRow row) =>
       setState(() => _open = _open == row ? null : row);
-
-  // Picking a day does NOT close the month (owner call, 2026-08-14). Choosing
-  // a date is rarely one tap — you pick the 12th, see it lands on a Wednesday,
-  // and move it — and a picker that shuts on every tap makes each correction
-  // cost a reopen. It closes when the row is tapped again, or when the other
-  // date row takes the panel.
-  //
-  // Nothing is left stale by staying open: the selected day comes from the
-  // widget's `startDate`/`endDate`, so the ring moves as the form updates, and
-  // `InlineMonthCalendar.didUpdateWidget` follows a date changed from outside
-  // (the start date shifting the end date) into its month.
-  void _onStartSelected(DateTime day) => widget.onStartDateSelected(day);
-
-  void _onEndSelected(DateTime day) => widget.onEndDateSelected(day);
 
   Widget _trailingIcon(_OpenRow row) {
     final theme = Theme.of(context);
@@ -191,8 +188,8 @@ class _AppointmentDateRowsState extends State<AppointmentDateRows> {
                     ? l10n.calendar_endDate
                     : l10n.calendar_startDate,
                 onDateSelected: _open == _OpenRow.start
-                    ? _onStartSelected
-                    : _onEndSelected,
+                    ? widget.onStartDateSelected
+                    : widget.onEndDateSelected,
               ),
             ],
           ),

@@ -245,13 +245,13 @@ function clientDisplayName(data) {
   const mobile = str(d.mobile);
 
   const base = stripPhone(d.name, {phone, mobile});
-  const business = stripPhone(d.businessName, {phone, mobile});
   const composed = [str(d.firstName), str(d.lastName)]
       .filter(Boolean)
       .join(" ");
 
   if (isBusiness(d)) {
     if (base) return base;
+    const business = stripPhone(d.businessName, {phone, mobile});
     if (business) return business;
     // No company name on file at all — the contact person is better than
     // rendering the phone number.
@@ -259,9 +259,11 @@ function clientDisplayName(data) {
     return str(d.name);
   }
 
+  // No `businessName` leg here, and that is not an omission: `isBusiness` is
+  // true for ANY non-empty `businessName`, so on this branch it is provably
+  // blank.
   if (composed) return composed;
   if (base) return base;
-  if (business) return business;
   // Nothing else to say. The bare number beats an empty string.
   return str(d.name);
 }

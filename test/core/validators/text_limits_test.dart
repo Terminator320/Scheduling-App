@@ -127,6 +127,47 @@ void main() {
     test('phone', () {
       expect(TextLimits.phone, lessThanOrEqualTo(rulesCapFor('phone')));
     });
+
+    test('the Wave import truncates below every rules cap', () {
+      // The import writes client docs with the Admin SDK, which BYPASSES the
+      // rules — so a cap here that exceeds the rules cap does not fail the
+      // import, it writes a doc the APP can never update again (every later
+      // save is an opaque `permission-denied`). `IMPORT_FIELD_CAPS` is a third
+      // hand-mirror of `isValidClientData` and was the only one with nothing
+      // pinning it.
+      final source = File('functions/wave/mappers.js').readAsStringSync();
+      final block = RegExp(
+        r'const IMPORT_FIELD_CAPS = \{([^}]*)\}',
+      ).firstMatch(source);
+      expect(block, isNotNull, reason: 'IMPORT_FIELD_CAPS not found');
+
+      final caps = {
+        for (final m in RegExp(
+          r'(\w+):\s*(\d+)',
+        ).allMatches(block!.group(1)!))
+          m.group(1)!: int.parse(m.group(2)!),
+      };
+      expect(caps, isNotEmpty);
+
+      // `city`/`province`/`country`/`postalCode` are capped inside the rules'
+      // address family rather than by their own bare name, so they have no
+      // `rulesCapFor` entry to compare against.
+      const checked = {
+        'name',
+        'firstName',
+        'lastName',
+        'email',
+        'phone',
+        'mobile',
+      };
+      for (final entry in caps.entries.where((e) => checked.contains(e.key))) {
+        expect(
+          entry.value,
+          lessThanOrEqualTo(rulesCapFor(entry.key)),
+          reason: 'IMPORT_FIELD_CAPS.${entry.key} exceeds its rules cap',
+        );
+      }
+    });
   });
 
   test('an auth email fits what the account callables accept', () {

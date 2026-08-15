@@ -7,7 +7,7 @@
  * integration-heavy and isn't covered here.
  */
 
-const {isReauthStale} = require("../account");
+const {isReauthStale} = require("../security");
 
 // Mirrors REAUTH_MAX_AGE_SECONDS in account.js.
 const MAX = 5 * 60;

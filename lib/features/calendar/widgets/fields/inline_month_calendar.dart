@@ -2,9 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'package:intl/intl.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_day_circle.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_month_grid.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 /// 1.0-scale FLOORS, like the calendar screen's grid — the real sizes derive
@@ -105,12 +108,11 @@ class _InlineMonthCalendarState extends State<InlineMonthCalendar> {
   /// True while the month one step in [direction] still holds a pickable day.
   bool _canPage(int direction) {
     final target = DateTime(_month.year, _month.month + direction);
-    // The month's own extremes: day 0 of the next month is this one's last.
-    final firstOfTarget = target;
+    // `target` is the month's first day; day 0 of the NEXT month is its last.
     final lastOfTarget = DateTime(target.year, target.month + 1, 0);
     return direction < 0
         ? !lastOfTarget.isBefore(widget.firstDate.dateOnly)
-        : !firstOfTarget.isAfter(widget.lastDate.dateOnly);
+        : !target.isAfter(widget.lastDate.dateOnly);
   }
 
   void _page(int direction) {
@@ -139,8 +141,13 @@ class _InlineMonthCalendarState extends State<InlineMonthCalendar> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final locale = Localizations.localeOf(context).toString();
-    final weekStart = weekStartForLocale(locale);
+    final weekStart = CalendarMonthGrid.weekStartOf(context);
     final labels = weekdayLabelsForLocale(locale);
+    // Resolved once for the whole month rather than per cell. The DateFormat
+    // itself is memoized, but 42 cells each re-reading the locale and
+    // formatting a full long date is real work on a panel that rebuilds on
+    // every day tap and on any other form change while it is open.
+    final dayLabelFormat = longDateFormatFor(locale);
     final days = monthGridDays(_month, weekStart: weekStart);
     final rows = days.length ~/ 7;
     final cellHeight = _cellHeight(context);
@@ -196,22 +203,22 @@ class _InlineMonthCalendarState extends State<InlineMonthCalendar> {
                   height: cellHeight,
                   child: Row(
                     children: [
-                      for (var col = 0; col < 7; col++)
+                      for (final day in days.skip(row * 7).take(7))
                         Expanded(
                           child: _PickerDayCell(
-                            day: days[row * 7 + col],
+                            day: day,
                             month: _month,
-                            isSelected: _isSelected(days[row * 7 + col]),
+                            isSelected: _isSelected(day),
                             // Never on the selected day: a solid fill under a
                             // soft one is just a muddier solid fill, and a
                             // one-day job has both ends on it.
                             isCompanion:
-                                !_isSelected(days[row * 7 + col]) &&
-                                _isCompanion(days[row * 7 + col]),
+                                !_isSelected(day) && _isCompanion(day),
                             companionLabel: widget.companionLabel,
-                            isToday: isSameDate(days[row * 7 + col], today),
-                            isEnabled: _isEnabled(days[row * 7 + col]),
+                            isToday: isSameDate(day, today),
+                            isEnabled: _isEnabled(day),
                             circleSize: circleSize,
+                            dayLabelFormat: dayLabelFormat,
                             onTap: _onDayTapped,
                           ),
                         ),
@@ -320,6 +327,7 @@ class _PickerDayCell extends StatelessWidget {
     required this.isToday,
     required this.isEnabled,
     required this.circleSize,
+    required this.dayLabelFormat,
     required this.onTap,
   });
 
@@ -335,6 +343,9 @@ class _PickerDayCell extends StatelessWidget {
   final bool isToday;
   final bool isEnabled;
   final double circleSize;
+
+  /// Resolved once by the month, not per cell — see [InlineMonthCalendar].
+  final DateFormat dayLabelFormat;
   final ValueChanged<DateTime> onTap;
 
   @override
@@ -360,18 +371,13 @@ class _PickerDayCell extends StatelessWidget {
       width: circleSize,
       height: circleSize,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: isSelected
-            ? scheme.primary
-            : isCompanion
-            // A tint of the SAME hue, never a second colour: this is one run
-            // with two ends, not two things to tell apart.
-            ? scheme.primary.withValues(alpha: 0.16)
-            : null,
-        border: isToday && !isSelected
-            ? Border.all(color: scheme.onSurface, width: 1.5)
-            : null,
+      decoration: calendarDayCircleDecoration(
+        scheme: scheme,
+        isSelected: isSelected,
+        showTodayRing: isToday,
+        // A tint of the SAME hue, never a second colour: this is one run with
+        // two ends, not two things to tell apart.
+        fill: isCompanion ? scheme.primary.withValues(alpha: 0.16) : null,
       ),
       child: Text(
         '${day.day}',
@@ -399,9 +405,7 @@ class _PickerDayCell extends StatelessWidget {
       );
     }
 
-    final dateLabel = longDateFormatFor(
-      Localizations.localeOf(context).toString(),
-    ).format(day);
+    final dateLabel = dayLabelFormat.format(day);
 
     return Semantics(
       button: true,

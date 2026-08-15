@@ -14,15 +14,6 @@ class ClientSearchPolicy {
   static const int serverReadLimit = 1000;
   static const int resultDisplayLimit = 25;
 
-  /// How long a search field waits after the last keystroke before it reads.
-  ///
-  /// One owner because it is one cost dial, not a per-surface taste: every
-  /// debounced search in the app spends the same bounded [serverReadLimit]
-  /// window on the same collections. It was written out at four call sites and
-  /// had already split two ways (300 ms on the two appointment sheets, 250 ms
-  /// on Clients and History), which is the drift this constant ends.
-  static const Duration searchDebounce = Duration(milliseconds: 250);
-
   // These are compiled once, since normalize/digitsOnly run per row on every keystroke.
   static final _accentA = RegExp('[\u00E0\u00E1\u00E2\u00E3\u00E4\u00E5]');
   static final _accentE = RegExp('[\u00E8\u00E9\u00EA\u00EB]');
