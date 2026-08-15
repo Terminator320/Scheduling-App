@@ -361,4 +361,14 @@ function fromWaveCustomer(node) {
   };
 }
 
-module.exports = {toWaveCustomerInput, mappedFieldsHash, fromWaveCustomer};
+module.exports = {
+  toWaveCustomerInput,
+  mappedFieldsHash,
+  fromWaveCustomer,
+  // Exported for `test/core/validators/text_limits_test.dart`, which reads
+  // this file back and asserts every cap clears its firestore.rules cap.
+  // Dart, CEL and JS cannot share a constant, so that test is the only thing
+  // stopping a tightened rule from letting the import write client docs the
+  // app can never update again.
+  IMPORT_FIELD_CAPS,
+};

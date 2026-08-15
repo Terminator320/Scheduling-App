@@ -47,6 +47,26 @@ STAYS in the root `CLAUDE.md`, because those are reachable from
   `today` always comes from
   `currentDayProvider`, never `DateTime.now()`, or the circle sticks on
   yesterday in an app left open across midnight.
+  **TODAY IS A RING AND SELECTION IS A FILLED CIRCLE, and that rule has ONE
+  owner: `calendarDayCircleDecoration`** (`widgets/views/calendar_day_circle.dart`,
+  owner call 2026-08-14 — today used to be a blue NUMBER, which was also the
+  picker/field accent, so "today" and "the value you picked" spoke the same
+  language). The ring is `onSurface`, so it survives both themes where a
+  literal white vanishes on the light one; selection wins, since a filled
+  circle under a ring is noise. Three widgets render a day token —
+  `CalendarDayCell`, the week strip and the form's `InlineMonthCalendar` — and
+  the rule had a hand-written copy in each, two carrying a comment asserting
+  they matched the third. They had already drifted on the gate condition.
+  Sizes and the number colour stay per-cell (they legitimately differ, and only
+  the grid has a dot row); pass a `fill` for a tint like the picker's
+  other-end-of-the-run marker.
+  **The form's date picker is `InlineMonthCalendar`, and it renders from the
+  same `month_grid.dart` helpers the calendar screen uses** — so the two can
+  never disagree about where a day sits or where the week starts. It resolves
+  the week start through `CalendarMonthGrid.weekStartOf(context)` like every
+  other widget, and hoists its long-date `DateFormat` out of the 42 cells: the
+  panel rebuilds on every day tap and on any other form change while it is
+  open.
   **`AppointmentDateRange.visibleMonth` overscans ±7 days** (narrowed from ±14
   on 2026-08-13). The variable-row grid trails at most 6 off-month days on each
   side, so ±7 clears the worst case by one — where ±14 was a superset of every

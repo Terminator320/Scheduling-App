@@ -10,6 +10,78 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.46.0+73] - 2026-08-14
+
+Changes how clients are named — in the app and on your Wave invoices — replaces
+the date wheel on the appointment form with a real calendar, and makes edits
+reach Wave in seconds instead of minutes.
+
+### Added
+- **Picking a date now drops a whole month down under the row.** The
+  appointment form had a spinning wheel in a pop-up that showed three days at a
+  time and covered the form behind it. Tapping a date row now opens the month
+  right where the row is, so you can see which day of the week the 12th falls
+  on before you commit. The start and end dates each get their own row, and
+  picking a day doesn't slam the calendar shut — changing your mind costs one
+  more tap, not a reopen. Days you can't book are greyed out and won't take a
+  tap, and the other end of the run is tinted so you can see the whole job at
+  once.
+- **The new-clients card on the dashboard shows the trend, not just the
+  number.** A small bar per week with "this week" marked at the end, and one
+  line telling you whether that's more or fewer than the weeks before it.
+  It names how many more clients came in than the card lists, so five rows
+  never reads as five clients.
+- **Settings › Wave tells you what's still waiting.** It shows how many client
+  edits are queued to reach Wave and how many gave up, and a **Retry failed**
+  button puts the failed ones back in the queue and pushes them straight away —
+  so after a Wave outage you can clear the backlog yourself instead of waiting
+  for the overnight sync.
+
+### Changed
+- **A person is now named by their phone number in Wave, and a business keeps
+  its name.** The invoicing side identifies people by number, so that is what
+  shows on the customer list and on an invoice; the real name is still on the
+  client and is what the app shows you everywhere. A company — "Vogas
+  Plumbing", "1505 Village de Bergerac" — keeps its own name, because a number
+  in its place is unrecognisable on an invoice. In the app nothing reads as a
+  bare number: a person shows their first and last name, a business shows the
+  business.
+- **Phone numbers all read the same way now.** Numbers that came in from Wave
+  or from older records were stored as bare digits, so the customer list mixed
+  "(514) 234-0818" with "4506220931". They're all formatted now.
+- **Typing a phone number into the client's Name field moves it to the phone
+  field.** Only when the phone field is still empty, and it leaves the name
+  alone if the number is all that was typed.
+- **A client edit reaches Wave in seconds.** It used to wait for a sync that
+  ran every five minutes. Saving a client now pushes it immediately.
+- **Today reads as a ring around the date instead of a blue number.** The blue
+  was also the colour of the date you'd picked, so "today" and "your choice"
+  looked the same. This applies to the month grid, the week strip and the new
+  date picker alike.
+
+### Fixed
+- **Editing a client could rename that customer in Wave.** Opening the edit
+  sheet for a business filled the Name field with the contact person's name, so
+  saving anything at all — even a phone number correction — replaced the
+  company's name on its live invoices. The field now shows the name that is
+  actually stored.
+- **Some clients whose name was replaced with their number were companies.**
+  House of Jazz, La Scala, Yokohama and nine others had been renamed on real
+  invoices; their names are restored and they're marked as businesses so it
+  can't happen again.
+- **The dashboard and the client detail showed a client's phone number as part
+  of their name.**
+- **The day route could keep showing yesterday.** It read the clock once
+  instead of following the current day, so an app left open overnight stayed on
+  the previous day's stops.
+- **A failed address lookup could crash the app** if the sheet it belonged to
+  had already been closed.
+- **Signing out could leave this device still registered.** If the first
+  clean-up step failed, the two after it were skipped — including the ones that
+  stop your location showing on the admin map.
+- **A photo that the app accepted could be deleted by the server.** The two
+  checks on what makes a valid image file disagreed by one byte.
+
 ## [1.45.0+72] - 2026-08-11
 
 Gives everyone a place to edit their own details, rebuilds the dashboard and

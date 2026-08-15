@@ -64,7 +64,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
   static const int _pageSize = 50;
   // Debounce before the server search, so we don't fire a read on every keystroke —
   // the local filter covers the gap in the meantime so it still feels immediate.
-  final _searchDebounce = Debouncer(ClientSearchPolicy.searchDebounce);
+  final _searchDebounce = Debouncer(kSearchDebounce);
   String _committedQuery = '';
 
   late final PagingController<int, ClientRecord> _pagingController =

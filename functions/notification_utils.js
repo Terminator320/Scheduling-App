@@ -185,6 +185,14 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
 
 
 /**
+ * Tail guard on the widget window. An 8-day slice of one person's jobs is
+ * small in steady state, but this runs once per assignee on EVERY notified
+ * appointment write, and a bulk import or a wide repeat series landing in the
+ * window is otherwise an unbounded fan-out.
+ */
+const WIDGET_WINDOW_MAX = 200;
+
+/**
  * Reads an employee's appointments for the widget payload, so the change push
  * can carry a fresh one. Never throws — a failed read just yields an empty
  * window, and the notification still sends.
@@ -224,8 +232,19 @@ async function fetchEmployeeWidgetWindow(db, employeeDocId, now, logger) {
         .where("employeeIds", "array-contains", employeeDocId)
         .where("endTime", ">=", start)
         .where("startTime", "<", end)
+        .limit(WIDGET_WINDOW_MAX)
         .get();
-    return ((snap && snap.docs) || []).map(_record);
+    const docs = (snap && snap.docs) || [];
+    if (docs.length >= WIDGET_WINDOW_MAX && logger) {
+      // Same posture as TRAVEL_SWEEP_MAX / OVERDUE_SWEEP_MAX / DIGEST_SWEEP_MAX
+      // beside it: this was the one sweep read left with no ceiling, and a
+      // silent truncation here ships a PARTIAL home-screen widget payload.
+      logger.warn("widget: window hit the scan cap", {
+        employeeDocId,
+        cap: WIDGET_WINDOW_MAX,
+      });
+    }
+    return docs.map(_record);
   } catch (err) {
     if (logger) {
       logger.warn("widget: window query failed", {employeeDocId, err});

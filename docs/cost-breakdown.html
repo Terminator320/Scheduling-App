@@ -385,13 +385,13 @@
   <div class="tiles">
     <div class="tile">
       <p class="label">Est. total / month</p>
-      <div class="value good">~$0.30</div>
-      <p class="sub">Scheduler floor; ceiling ~$5 if storage &amp; reads get busy.</p>
+      <div class="value good">$0</div>
+      <p class="sub">Nothing recurring left; ceiling ~$5 if storage &amp; reads get busy.</p>
     </div>
     <div class="tile">
       <p class="label">Functions platform</p>
       <div class="value good">$0</div>
-      <p class="sub">~27K of 2M free invocations used (1.4%).</p>
+      <p class="sub">~18K of 2M free invocations used (0.9%).</p>
     </div>
     <div class="tile">
       <p class="label">Places API</p>
@@ -411,9 +411,10 @@
       <b>Why compute is free:</b> all 25 functions' invocations pool into a
       single <b>2,000,000/month</b> free allowance, and combined compute
       (~9,000 vCPU-seconds) sits far under the <b>180,000 vCPU-s</b> free tier.
-      You'd need roughly <b>70&times; more traffic</b> to leave the free tier on
-      invocations. The lone recurring charge is Cloud Scheduler: six timer jobs,
-      three free, so <b>~$0.30/month</b>.
+      You'd need roughly <b>110&times; more traffic</b> to leave the free tier on
+      invocations. Cloud Scheduler was the lone recurring charge &mdash; six timer
+      jobs against three free, ~$0.30/month. <b>The three schedules were merged
+      down to three on 2026-08-13</b>, so nothing recurring is left.
     </p>
   </div>
 
@@ -439,14 +440,6 @@
         <tbody>
           <tr>
             <td class="idx">1</td>
-            <td class="fn">waveSyncWorker</td>
-            <td><span class="trig">every 5 min</span></td>
-            <td>Timer drains the Wave outbox queue</td>
-            <td class="num">8,640</td>
-            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
-          </tr>
-          <tr>
-            <td class="idx">2</td>
             <td class="fn">sendUpcomingJobReminders</td>
             <td><span class="trig">every 5 min</span></td>
             <td>Timer; travel-aware "time to leave" &mdash; calls Routes API*, and starts the iOS Live Activity card via APNs (free)</td>
@@ -454,15 +447,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">3</td>
-            <td class="fn">sendOverdueJobPrompts</td>
-            <td><span class="trig">every 15 min</span></td>
-            <td>Timer nudges "job finished?" past end time</td>
-            <td class="num">2,880</td>
-            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
-          </tr>
-          <tr>
-            <td class="idx">4</td>
+            <td class="idx">2</td>
             <td class="fn">placesAutocomplete</td>
             <td><span class="trig">onCall</span></td>
             <td>Admin types an address (per keystroke)</td>
@@ -470,7 +455,7 @@
             <td><span class="pill pill--free">$0 &middot; under cap*</span></td>
           </tr>
           <tr>
-            <td class="idx">5</td>
+            <td class="idx">3</td>
             <td class="fn">notifyAppointmentChanges</td>
             <td><span class="trig">appts write</span></td>
             <td>Appointment assigned / rescheduled / cancelled</td>
@@ -478,7 +463,15 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">6</td>
+            <td class="idx">4</td>
+            <td class="fn">recountAppointmentPictures</td>
+            <td><span class="trig">onWrite images/*</span></td>
+            <td>A photo is added to or removed from a job</td>
+            <td class="num">1,400</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">5</td>
             <td class="fn">validateUploadedImage</td>
             <td><span class="trig">Storage</span></td>
             <td>Employee attaches a job photo</td>
@@ -486,7 +479,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">7</td>
+            <td class="idx">6</td>
             <td class="fn">placesGetDetails</td>
             <td><span class="trig">onCall</span></td>
             <td>Admin picks a suggested address</td>
@@ -494,7 +487,7 @@
             <td><span class="pill pill--free">$0 &middot; under cap*</span></td>
           </tr>
           <tr>
-            <td class="idx">8</td>
+            <td class="idx">7</td>
             <td class="fn">placesReverseGeocode</td>
             <td><span class="trig">onCall</span></td>
             <td>Live map &amp; staff roster resolve each pin's address (~110&nbsp;m geocode cell collapses a moving driver's fixes)</td>
@@ -502,7 +495,7 @@
             <td><span class="pill pill--free">$0 &middot; under cap*</span></td>
           </tr>
           <tr>
-            <td class="idx">9</td>
+            <td class="idx">8</td>
             <td class="fn">waveUpsertCustomer</td>
             <td><span class="trig">clients write</span></td>
             <td>A client is created or edited</td>
@@ -510,7 +503,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">10</td>
+            <td class="idx">9</td>
             <td class="fn">propagateClientEdits</td>
             <td><span class="trig">clients update</span></td>
             <td>Client name / phone / address edited</td>
@@ -518,7 +511,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">11</td>
+            <td class="idx">10</td>
             <td class="fn">recountClientJobs</td>
             <td><span class="trig">appts write</span></td>
             <td>A job&rsquo;s client is set, cleared or reassigned</td>
@@ -526,11 +519,19 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">12</td>
+            <td class="idx">11</td>
             <td class="fn">waveGetConnection</td>
             <td><span class="trig">onCall</span></td>
             <td>Admin opens Settings &rarr; Wave</td>
             <td class="num">60</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">12</td>
+            <td class="fn">cascadeDeleteAppointmentImages</td>
+            <td><span class="trig">onDelete appointment</span></td>
+            <td>A job is deleted &mdash; removes its photo docs</td>
+            <td class="num">50</td>
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
@@ -559,14 +560,6 @@
           </tr>
           <tr>
             <td class="idx">16</td>
-            <td class="fn">waveScheduledImport</td>
-            <td><span class="trig">every 24 h</span></td>
-            <td>Timer re-imports Wave customers when due</td>
-            <td class="num">30</td>
-            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
-          </tr>
-          <tr>
-            <td class="idx">17</td>
             <td class="fn">createEmployeeAccount</td>
             <td><span class="trig">onCall</span></td>
             <td>Admin creates an employee&rsquo;s account (admin-only, 20/hour)</td>
@@ -574,7 +567,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">18</td>
+            <td class="idx">17</td>
             <td class="fn">completeEmployeeSetup</td>
             <td><span class="trig">onCall</span></td>
             <td>New employee activates their own account</td>
@@ -582,7 +575,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">19</td>
+            <td class="idx">18</td>
             <td class="fn">deleteAccount</td>
             <td><span class="trig">onCall</span></td>
             <td>User deletes their own account</td>
@@ -590,7 +583,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">20</td>
+            <td class="idx">19</td>
             <td class="fn">waveSetImportSchedule</td>
             <td><span class="trig">onCall</span></td>
             <td>Admin changes the Wave import cadence</td>
@@ -598,7 +591,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">21</td>
+            <td class="idx">20</td>
             <td class="fn">waveBootstrap</td>
             <td><span class="trig">onCall</span></td>
             <td>One-time Wave connection setup</td>
@@ -606,7 +599,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">22</td>
+            <td class="idx">21</td>
             <td class="fn">waveImportCustomers</td>
             <td><span class="trig">onCall</span></td>
             <td>Admin two-way sync with Wave (push outbox, then pull customers)</td>
@@ -614,7 +607,7 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">23</td>
+            <td class="idx">22</td>
             <td class="fn">deleteEmployeeAccount</td>
             <td><span class="trig">onCall</span></td>
             <td>Admin removes an account that never finished setup (admin-only, 20/hour)</td>
@@ -622,11 +615,19 @@
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
-            <td class="idx">24</td>
+            <td class="idx">23</td>
             <td class="fn">deleteClient</td>
             <td><span class="trig">onCall</span></td>
             <td>Admin removes a junk client; refused when it has any visit (admin-only, 20/hour)</td>
             <td class="num">&lt;5</td>
+            <td><span class="pill pill--free">$0 &middot; free tier</span></td>
+          </tr>
+          <tr>
+            <td class="idx">24</td>
+            <td class="fn">waveRetryFailedJobs</td>
+            <td><span class="trig">onCall</span></td>
+            <td>Admin taps &ldquo;Retry failed&rdquo; in Settings &rsaquo; Wave</td>
+            <td class="num">&lt;1</td>
             <td><span class="pill pill--free">$0 &middot; free tier</span></td>
           </tr>
           <tr>
@@ -641,7 +642,7 @@
         <tfoot>
           <tr>
             <td colspan="4">Total function invocations</td>
-            <td class="num">~28,000</td>
+            <td class="num">~18,000</td>
             <td><span class="pill pill--free">$0</span></td>
           </tr>
         </tfoot>
@@ -757,11 +758,11 @@
           </tr>
           <tr>
             <td class="fn">Cloud Scheduler</td>
-            <td>6 timer jobs (#1, 2, 3, 13&ndash;15)</td>
-            <td class="num">6 jobs</td>
+            <td>3 timer jobs &mdash; the reminder sweep, the daily digest, the quarterly purge</td>
+            <td class="num">3 jobs</td>
             <td class="num">3 jobs</td>
             <td class="num">$0.10 / job</td>
-            <td><span class="pill pill--watch">~$0.30</span></td>
+            <td><span class="pill pill--free">$0</span></td>
           </tr>
           <tr>
             <td class="fn">Egress</td>
@@ -836,10 +837,10 @@
     <ul>
       <li>Pricing: 2025 public Blaze-plan rates, <code>us-central1</code> / North America. Rates change; treat as ballpark.</li>
       <li>Scale modeled: 3 admins / 8 employees, ~700 clients, ~900 appointments/mo, ~50% needing a new address lookup, ~1.5 photos/appointment.</li>
-      <li>Free tiers cited: Functions <b>2M invocations + 180K vCPU-s</b>; Places <b>10K calls per SKU</b>; Firestore <b>50K reads / 20K writes / 20K deletes per day</b>; Storage <b>5 GB</b>; Scheduler <b>3 jobs</b> (six now run, so three bill at $0.10/job); FCM push <b>unlimited &amp; free</b>; Secret Manager <b>6 versions + 10K access</b>.</li>
+      <li>Free tiers cited: Functions <b>2M invocations + 180K vCPU-s</b>; Places <b>10K calls per SKU</b>; Firestore <b>50K reads / 20K writes / 20K deletes per day</b>; Storage <b>5 GB</b>; Scheduler <b>3 jobs</b> (exactly three now run, so none bills); FCM push <b>unlimited &amp; free</b>; Secret Manager <b>6 versions + 10K access</b>.</li>
       <li>Google Places replaced its $200 monthly credit (March 2025) with a per-SKU free monthly cap; session tokens can bill in-session autocomplete as $0.</li>
       <li>Wave Accounting, Firebase Cloud Messaging, and Apple's APNs (which carries the iOS Live Activity card) charge nothing per call &mdash; those functions cost only their (free-tier) Firebase compute.</li>
-      <li>All 25 functions are wired in <code>functions/index.js</code> for <code>schedulingapp-88727</code>; counts reflect the source as of 2026-08-11 and are unchanged at 25 &mdash; the P5 self-service email change, the multi-day day-scoping mirrors and the P7 dashboard all reused existing functions or shipped app-side only, so nothing was added or removed and no cost lever moved (the day-slice work made the widget/push path measurably <em>cheaper</em> by hoisting two <code>Intl.DateTimeFormat</code> constructions out of a hot loop, but that compute was already free-tier). The last count change was 2026-08-08, when the <code>#compat-1.37.1</code> shim was retired and <code>createEmployeeInvite</code> + <code>redeemSignupCode</code> were deleted (27 &rarr; 25). Both had already been billing $0 at 0 invocations, so this removes rows, not cost &mdash; and <code>previewInvite</code>/<code>revokeInvite</code> never existed in code at all. Prod still ran 27 at the time of writing: the deletion is in code only until the next deploy. Before that it was 27 &mdash; the 2026-08-04 two-way Wave sync changed what <code>waveImportCustomers</code> does, not how many functions exist; it is pressed more often now that it is labelled &ldquo;Sync with Wave&rdquo;, but it stays admin-only and rate-limited at 5/hour, and its added Firestore work is one bounded queue drain plus two small reads per press. It got <em>cheaper</em> on 2026-08-04 as well: the import now asks Wave only for customers changed since the last run and skips any whose fields already match, so a steady-state press writes nothing and reads no client docs, where it previously rewrote all ~650 clients and fired ~650 <code>waveUpsertCustomer</code> invocations that each concluded there was nothing to do. P4c added three account callables, client archive/delete added <code>deleteClient</code>, and <code>changeEmployeeEmail</code> landed 2026-08-04. None of them moves a cost lever &mdash; all sit in the free tier at &lt;10 calls/month.</li>
+      <li>All 25 functions are wired in <code>functions/index.js</code> for <code>schedulingapp-88727</code>; counts reflect the source as of 2026-08-14. The count is <em>still</em> 25, and that proves nothing &mdash; 2026-08-13 swapped three out for three. <b>Deleted:</b> <code>waveSyncWorker</code> (a 5-minute outbox poll, 8,640 runs/mo), <code>sendOverdueJobPrompts</code> (every 15 min, 2,880) and <code>waveScheduledImport</code> (every 24 h, 30). The first is gone outright &mdash; <code>waveUpsertCustomer</code> now drains inline, so an idle day costs zero invocations instead of 288 and an edit reaches Wave in seconds rather than up to five minutes. The other two were <em>merged</em> as isolated riders onto <code>sendUpcomingJobReminders</code> and <code>sendDailyJobDigest</code>. That is the single biggest cost move on this page: it took Cloud Scheduler from six timer jobs to three, inside the free allowance, which removes the only recurring charge the project had, and it dropped total invocations from ~28K to ~18K. <b>Added:</b> <code>waveRetryFailedJobs</code> (admin-only, App Check, 10/hr, pressed only after a Wave outage) and the two photo-subcollection triggers, <code>cascadeDeleteAppointmentImages</code> and <code>recountAppointmentPictures</code>. Those two are the cost lever running the other way and are worth stating plainly: photos are moving off the appointment document into <code>appointments/{id}/images</code>, which adds a trigger invocation per photo write and a <code>count()</code> aggregate, in exchange for the far larger saving on the range queries &mdash; the calendar reads up to 1000 appointments at a time and a <code>url</code> alone is ~215 of a ~290-byte photo entry, while only the detail sheet ever shows a photo. Both new triggers are <code>retry: true</code>, and the cascade is load-bearing rather than cleanup: Firestore does not delete a subcollection with its parent. The prior count change was 2026-08-08, when the <code>#compat-1.37.1</code> shim was retired and <code>createEmployeeInvite</code> + <code>redeemSignupCode</code> were deleted (27 &rarr; 25); both had already been billing $0 at 0 invocations. Before that it was 27 &mdash; the 2026-08-04 two-way Wave sync changed what <code>waveImportCustomers</code> does, not how many functions exist. It got <em>cheaper</em> then too: the import asks Wave only for customers changed since the last run and skips any whose fields already match, so a steady-state press writes nothing, where it previously rewrote all ~650 clients and fired ~650 <code>waveUpsertCustomer</code> invocations that each concluded there was nothing to do.</li>
     </ul>
   </div>
 </div>

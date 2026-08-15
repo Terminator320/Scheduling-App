@@ -61,18 +61,16 @@ String appointmentImageDocIdFor({
 /// preserves uniqueness. The cap is far above any real value — a storage path
 /// runs ~50 characters and a download URL ~215 — and exists only so a
 /// pathological name cannot breach Firestore's 1500-byte id limit.
+/// Written as the same one-line replace its JS mirror uses
+/// (`String(key).replace(/[^A-Za-z0-9._-]/g, "_")`), deliberately: the two
+/// implementations must agree exactly or one photo lands at two ids, and a
+/// hand-rolled code-unit walk here could not be checked against the JS by eye.
+/// Dart's `RegExp` matches code units without the unicode flag, like JS
+/// without `/u`, so the two are equivalent character by character.
+final _unsafeIdChars = RegExp('[^A-Za-z0-9._-]');
+
 String _sanitize(String key) {
-  final buffer = StringBuffer();
-  for (final unit in key.codeUnits) {
-    final isDigit = unit >= 0x30 && unit <= 0x39;
-    final isUpper = unit >= 0x41 && unit <= 0x5A;
-    final isLower = unit >= 0x61 && unit <= 0x7A;
-    final isSafePunct = unit == 0x2E || unit == 0x2D || unit == 0x5F;
-    buffer.writeCharCode(
-      isDigit || isUpper || isLower || isSafePunct ? unit : 0x5F,
-    );
-  }
-  final sanitized = buffer.toString();
+  final sanitized = key.replaceAll(_unsafeIdChars, '_');
   const maxLength = 300;
   return sanitized.length <= maxLength
       ? sanitized

@@ -7,10 +7,6 @@ const {
   assertPayloadShape,
   enforceDurableRateLimit,
   assertFreshReauth,
-  // Re-exported below for `__tests__/account.test.js`, which pins the pure
-  // predicate through this module — the guard itself now goes through
-  // `assertFreshReauth`.
-  isReauthStale,
 } = require("./security");
 const {runAccountDeletion} = require("./account_policy");
 
@@ -75,9 +71,4 @@ const deleteAccount = onCall(
     },
 );
 
-module.exports = {
-  deleteAccount,
-  // Re-exported from security.js (its one owner, shared with
-  // changeEmployeeEmail) so the existing unit tests keep their import path.
-  isReauthStale,
-};
+module.exports = {deleteAccount};

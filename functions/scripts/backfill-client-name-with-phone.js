@@ -45,7 +45,7 @@
 //     mutations fire within seconds of the last batch, against Wave's
 //     60-calls/min ceiling. RUN THIS WHEN THE QUEUE IS QUIET and let it settle
 //     before the next import; jobs that get rejected back off and are picked
-//     up by `waveScheduledImport`'s drain, so nothing is lost, but a run in
+//     up by the daily `runWaveDaily` drain, so nothing is lost, but a run in
 //     the middle of a sync will be slow and noisy.
 //
 // Usage:
@@ -91,6 +91,10 @@ const {
   looksLikeBusinessName,
   stripPhone,
 } = require("../client_name_utils");
+// `toMillis` rather than a local parser: it finite-checks, so a NaN/Infinity
+// `createdAt` reads as "no usable date" and the doc is SKIPPED by --since
+// rather than renamed. This script rewrites live Wave customers.
+const {toMillis} = require("../time_utils");
 
 const BATCH_SIZE = 400;
 const SAMPLE_SIZE = 25;
@@ -152,20 +156,6 @@ function parseSince(argv) {
 }
 
 /**
- * Epoch ms for a Firestore Timestamp / Date / number, or null when the doc
- * carries no usable `createdAt`.
- * @param {*} value Stored createdAt.
- * @return {?number}
- */
-function createdAtMs(value) {
-  if (!value) return null;
-  if (typeof value.toMillis === "function") return value.toMillis();
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === "number") return value;
-  return null;
-}
-
-/**
  * Whether this client is left alone because it is an ORGANIZATION.
  *
  * A business's NAME is its identity in Wave — "3101-5696 qc inc.", "1505
@@ -191,7 +181,7 @@ function isBusinessClient(data, numbers) {
  * @return {?{name: string}} A field patch, or null to skip the doc.
  */
 function patchFor(data, sinceMs) {
-  const created = createdAtMs(data.createdAt);
+  const created = toMillis(data.createdAt);
   // A doc with no createdAt is legacy, not new — `createdAt` is backfilled
   // lazily by the Wave import, so plenty of real old docs lack it.
   if (created !== null && created >= sinceMs) return null;
@@ -256,7 +246,7 @@ async function main() {
     if (!patch) {
       // Re-derived only to report WHY, so the operator can sanity-check the
       // scope from the dry run instead of trusting one number.
-      const created = createdAtMs(data.createdAt);
+      const created = toMillis(data.createdAt);
       const phone = String(data.phone || "").trim();
       const mobile = String(data.mobile || "").trim();
       if (created !== null && created >= sinceMs) {
@@ -363,7 +353,6 @@ if (require.main === module) {
 
 module.exports = {
   assertKnownFlags,
-  createdAtMs,
   parseSince,
   patchFor,
 };
