@@ -198,7 +198,6 @@ class AppMotion {
 
   static const Curve emphasized = Cubic(0.2, 0.9, 0.25, 1);
   static const Duration popIn = Duration(milliseconds: 200);
-  static const Duration drawer = Duration(milliseconds: 260);
   static const Duration riseInShort = Duration(milliseconds: 240);
 
   /// Total in-hold-out lifetime of a notice (`06-sheets-and-dialogs.md` §11).
