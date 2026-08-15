@@ -1,5 +1,61 @@
 # Codebase Audit — 2026-08-15
 
+> ## ✅ IMPLEMENTED 2026-08-15 — every finding below is CLOSED
+>
+> All 41 reported findings, all 8 code-quality suggestions and all 4 stale-doc
+> items were implemented in one pass. **Read the findings below as a record of
+> what was wrong, not as a work list.**
+>
+> **Verification at completion:** `flutter analyze` → *No issues found!* ·
+> `flutter test` → **2328** passing (was 2192) · `cd functions && npx jest` →
+> **1160** passing across 47 suites (was 1135) · `npm run lint` → clean,
+> now including `functions/scripts/`, which `.eslintignore` had been excluding.
+>
+> **Owner decisions taken during implementation** (the audit deliberately left
+> these open):
+> - **🔴S1 → option (b).** `AppointmentImageUrlResolver` is now
+>   `AppointmentImageLoader`: photos render from `Uint8List` bytes fetched with
+>   `ref.getData()`, so `storage.rules` is evaluated on **every fetch** and no
+>   shareable URL is ever produced. I3's session cache was kept but holds bytes
+>   instead of URLs (24 MB budget, oldest-first eviction). `cached_network_image`
+>   and `flutter_cache_manager` were dropped from `pubspec.yaml`. **Accepted
+>   cost: no on-disk photo cache, so photos re-download per session and are
+>   unavailable offline.** This cannot revoke a URL captured under an older
+>   build — that still needs server-side token rotation.
+> - **🔵I18 → marker-doc debounce.** Claim released *before* the `count()`
+>   aggregate, so nothing suppressed can be missed and the replay self-heal
+>   survives.
+> - **🔵I25 → deleted.** `AppLanguageScope` removed; locale propagation verified
+>   intact via the `ValueListenableBuilder` and three direct singleton readers.
+> - **`CalendarWeekStrip.heightFor` → deleted (case b).** Investigated: P2 made
+>   portrait two scroll areas, so there is no vacated extent for a spacer to
+>   hold. No layout bug existed. Text-scale coverage kept by measuring the
+>   painted height instead.
+> - **`AuthErrorContext.reauthentication` → wired up**, not deleted. Its
+>   `register` sibling is *not* statically false but its only failure is
+>   runtime-unreachable since P4c — left alone, flagged below.
+> - **EdgeInsets/`AppSpacing` → left alone**, per the audit's own reasoning.
+>
+> **Found during implementation, not in the audit** — un-ignoring
+> `functions/scripts/` from ESLint immediately caught a live defect in
+> `backfill-appointment-images.js`, the script with outstanding production work:
+> it parsed `--dry-run` into a variable it never used, called `backfillOne`
+> unconditionally (which commits its batch), then referenced an **undefined**
+> `DRY_RUN`. A "dry run" would have written every document and then died with a
+> `ReferenceError`. The dry-run machinery inside `backfillOne` was correct all
+> along; `main()` simply never passed the flag. Fixed.
+>
+> Also fixed: `.claude/workflows/wave-ultra-review.mjs` could never load —
+> raw backticks terminated its `REPO_CONTEXT` template literal at line 35.
+>
+> **Still outstanding (ops, not code):** the rules changes (S2, S3, S4, plus a
+> new `appointmentRecountClaims` deny block) and all functions changes are
+> **committed but NOT DEPLOYED**. S2's fix should be emulator-verified first.
+> `appointmentRecountClaims` needs `functions` deployed before
+> `firestore:indexes`, since a TTL policy can only be created for a collection
+> group that already holds documents. Never pass `--force`.
+
+
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 `firestore.indexes.json`, `test/`, `docs/`). Baseline: `a30eb3ef`, working tree
 clean at start.

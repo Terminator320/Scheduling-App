@@ -403,9 +403,22 @@ alerts), Disable account with the reassign-count caption.
 **Invite sheet** restyled (first/last, work email, role chips, colour grid with "N colours left"
 caption, admin toggle off by default, amber invited note); the signup-code flow
 (`createEmployeeInvite` → copy dialog) is unchanged at this stage — P4b then adds the
-pending-invite row lifecycle on top.
+pending-invite row lifecycle on top. (P4b was later **withdrawn** — see its banner below; P4c
+replaced the signup-code flow entirely, and the invite sheet described here now mints a real Auth
+account instead.)
 
 ## P4b — Auth + invites (handoff doc 11, added 2026-07-29)
+
+> ## ⚠️ WITHDRAWN — the signup-code invite lifecycle below was never built
+>
+> P4c (2026-08-02) replaced this section's entire design with admin-minted
+> Auth accounts on a shared starting password, and the signup-code backend
+> (`createEmployeeInvite`, `redeemSignupCode`, `signupCodes/{sha256}`,
+> `app_links` invite branch) was deleted from production on 2026-08-08. Only
+> the restyled sign-in and reset-password surfaces described below survive.
+> Kept as written for history — see
+> `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md` for what actually
+> shipped.
 
 **Scope:** restyle the three auth surfaces, redesign the invite-acceptance flow, and land the
 pending-invite lifecycle on Team. **No email in this program** (see deviations); **no new stored

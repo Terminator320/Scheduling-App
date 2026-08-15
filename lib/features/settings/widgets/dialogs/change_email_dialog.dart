@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import 'package:scheduling/core/security/credential_input.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
@@ -132,15 +134,14 @@ class _ChangeEmailDialogBodyState extends State<ChangeEmailDialogBody> {
 
   /// The callable lowercases anyway, so a case- or whitespace-only difference
   /// is not a typo and must not read as one.
-  String _norm(String value) => value.trim().toLowerCase();
-
-  bool get _matches => _norm(_email.text) == _norm(_confirm.text);
+  bool get _matches =>
+      normalizeEmail(_email.text) == normalizeEmail(_confirm.text);
 
   ChangeEmailDraft? get _draft {
-    final email = _norm(_email.text);
+    final email = normalizeEmail(_email.text);
     if (email.isEmpty ||
         !_matches ||
-        email == _norm(widget.currentEmail) ||
+        email == normalizeEmail(widget.currentEmail) ||
         _password.text.isEmpty) {
       return null;
     }
@@ -217,11 +218,7 @@ class _PasswordField extends StatelessWidget {
       key: const Key('reauthPassword'),
       controller: controller,
       obscureText: obscure,
-      // Unconditional, and set BESIDE obscureText rather than left to it: the
-      // toggle renders this field in plain text on demand, at which point a
-      // third-party keyboard would otherwise be free to retain and cloud-sync
-      // what was typed.
-      enableIMEPersonalizedLearning: false,
+      enableIMEPersonalizedLearning: kCredentialImePersonalizedLearning,
       autofillHints: const [AutofillHints.password],
       decoration: InputDecoration(
         labelText: l10n.common_password,

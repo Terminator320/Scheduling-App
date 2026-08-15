@@ -5,6 +5,7 @@ import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/employees/application/employee_form_controller.dart';
@@ -234,7 +235,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
       name: composedName,
       firstName: _firstNameController.text.trim(),
       lastName: _lastNameController.text.trim(),
-      email: _emailController.text.trim().toLowerCase(),
+      email: normalizeEmail(_emailController.text),
       phone: _phoneController.text.trim(),
       color: Color(_selectedColor),
       role: _isAdmin ? 'admin' : 'employee',
@@ -465,7 +466,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
       // self-service allowlist, so it is a slot rather than part of the patch.
       maxJobsRow: SheetFieldRow(
         label: l10n.employees_maxJobsPerDay,
-        value: _maxJobsPerDay == 0 ? l10n.employees_noCap : '$_maxJobsPerDay',
+        value: maxJobsLabel(l10n, _maxJobsPerDay),
         useMonoValue: true,
         onTap: _pickMaxJobs,
       ),

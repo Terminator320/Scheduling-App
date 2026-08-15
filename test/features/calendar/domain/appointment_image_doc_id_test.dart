@@ -55,7 +55,7 @@ void main() {
 
   group('the legacy url fallback', () {
     // Docs predating storagePath carry a url and nothing else — the same ones
-    // AppointmentImageUrlResolver falls back for. Without this branch every
+    // AppointmentImageLoader falls back for. Without this branch every
     // legacy photo on an appointment keys on '' and they collapse into one.
     test('falls back to url when storagePath is empty', () {
       final id = appointmentImageDocIdFor(storagePath: '', url: realUrl);

@@ -95,6 +95,15 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Admin-SDK-only claim ledger that collapses one photo batch's N recount
+    // triggers into a single parent write — same posture as the ledgers above.
+    // There is no `match /{document=**}` catch-all in this file, so the
+    // collection is default-denied without this block; it is stated anyway so
+    // every server-owned ledger is visible in one place.
+    match /appointmentRecountClaims/{appointmentId} {
+      allow read, write: if false;
+    }
+
     // Admin-SDK-only mapping of each tech to their live-activity appointment, owned
     // entirely by the server — a client write here could redirect another tech's card
     // and leak a client's address.
@@ -591,6 +600,29 @@ service cloud.firestore {
       // partial update, so a flat ban would reject every ordinary edit of a job
       // that has photos. Same asymmetry, and same reason, as
       // `emergencyFieldNotSet` on /users.
+      //
+      // The employee branch also inspects the STORED status, which it did not
+      // until 2026-08-15: it tested only what was being WRITTEN, so an
+      // assignee could put 'done' over 'cancelled' and resurrect a cancelled
+      // visit as a completed one — in History, in the dashboard tallies and in
+      // purgeExpiredHistory's accounting, re-firing notifyAppointmentChanges
+      // and endCardOnTerminal on the way. `DetailsActionBar` hides the button
+      // (`hasStarted && !isDone && !isCancelled`), so rules are the only real
+      // gate and reaching it needed nothing but a modified client.
+      //
+      // Written as `!= 'cancelled'`, NOT as an
+      // `in ['pending', 'in_progress']` allowlist, deliberately: legacy docs
+      // carry `confirmed` and other off-allowlist values (see
+      // `AppointmentStatus.storedRaw`), the action bar offers the button on
+      // them, and an allowlist would refuse that close as an opaque
+      // `permission-denied`. It also keeps a re-tap on an already-`done` job
+      // harmless. Only the one resurrection is refused.
+      //
+      // There is deliberately NO DATE restriction on this branch. An employee
+      // who misses the button before midnight, or who is on day 2+ of a
+      // multi-day run, has no other way to close the job — the edit form's
+      // status picker is admin-only — while the server keeps sending
+      // "job finished?" nudges. Don't add one.
       allow update: if (isAdmin()
             && !request.resource.data.diff(resource.data)
                  .affectedKeys().hasAny(['pictureCount'])
@@ -602,7 +634,8 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data)
                .affectedKeys()
                .hasOnly(['status', 'updatedAt'])
-            && request.resource.data.status == 'done');
+            && request.resource.data.status == 'done'
+            && resource.data.status != 'cancelled');
 
       // Delete: admin only.
       allow delete: if isAdmin();
@@ -681,6 +714,14 @@ service cloud.firestore {
         // which combines the 500-char street field with the 32-char apt field
         // and a separator. Same reasoning as `clientName` on appointments.
         && (!('address' in data) || (data.address is string && data.address.size() <= 533))
+        // Written ONLY by the Wave import, which uses the Admin SDK and so
+        // bypasses these rules — but `ClientRecord.toMap()` neither reads nor
+        // emits it, so it rides along untouched in `request.resource.data` on
+        // every ordinary in-app save and this cap can reject one. 500, the
+        // same as `IMPORT_FIELD_CAPS.addressLine2`: Wave's `addressLine2` is a
+        // peer street line of `addressLine1`, not the app's separate 64-char
+        // `apt` field.
+        && (!('addressLine2' in data) || (data.addressLine2 is string && data.addressLine2.size() <= 500))
         && (!('apt' in data) || (data.apt is string && data.apt.size() <= 64))
         && (!('city' in data) || (data.city is string && data.city.size() <= 128))
         && (!('province' in data) || (data.province is string && data.province.size() <= 128))

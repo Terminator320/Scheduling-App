@@ -317,7 +317,8 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
             IconButton(
               icon: const Icon(Icons.today_outlined),
               tooltip: l10n.calendar_today,
-              onPressed: () => setState(() => _day = DateTime.now().dateOnly),
+              onPressed: () =>
+                  setState(() => _day = ref.read(currentDayProvider)),
             ),
           IconButton(
             icon: const Icon(Icons.chevron_right),

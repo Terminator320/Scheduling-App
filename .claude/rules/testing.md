@@ -43,8 +43,14 @@ paths:
 
 ## Device-only verification
 
-- `ImagePickerService` / `ImageStorageService` have no unit tests — they depend
-  on method-channel plugins. Verify image-related fixes via `flutter run` on a device.
+- `ImagePickerService` has no unit tests — it is a thin wrapper over a
+  method-channel plugin with no logic of its own. Verify picker fixes via
+  `flutter run` on a device. **`ImageStorageService` is NOT in that category**
+  (corrected 2026-08-15): it takes an injected `FirebaseStorage` and `AppLogger`,
+  and its magic-byte rejection, 8 MB cap, `composeFileName` bound, legacy
+  `_pathFromUrl` fallback and `object-not-found` swallow are all covered by
+  `test/core/images/image_storage_service_test.dart`. Only the actual byte
+  transfer (`putFile`) is device-only.
 - The biometric app-lock (`AppLock`) and camera capture are device-only — not
   covered by the harness; verify via `flutter run` on a device.
 - **Widget errors don't reach the console.** `main()` sets

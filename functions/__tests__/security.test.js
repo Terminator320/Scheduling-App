@@ -11,6 +11,7 @@ const {
   hasControlChar,
   assertPayloadShape,
   requireString,
+  requireDocId,
   optionalString,
   readSessionToken,
   requireNumberInRange,
@@ -91,6 +92,47 @@ describe("requireString", () => {
   test("throws when it contains a control character", () => {
     expect(() => requireString({input: `a${NUL}`}, "input", 10)).toThrow(
         "invalid-input",
+    );
+  });
+});
+
+describe("requireDocId", () => {
+  // The callable-side owner of `isValidDocIdField` in firestore.rules. It was
+  // restated at three call sites (deleteClient, changeEmployeeEmail,
+  // deleteEmployeeAccount), two of them byte-identical down to the comment.
+  test("returns the trimmed id", () => {
+    expect(requireDocId({docId: "  abc123  "}, "docId")).toBe("abc123");
+  });
+
+  test("throws when missing", () => {
+    expect(() => requireDocId({}, "docId")).toThrow("invalid-docId");
+  });
+
+  test("the error code carries the caller's own key name", () => {
+    // `deleteClient` surfaces `invalid-clientId`; that must not regress to a
+    // generic code when the guard moved here.
+    expect(() => requireDocId({}, "clientId")).toThrow("invalid-clientId");
+  });
+
+  test("rejects an id containing a slash", () => {
+    // The load-bearing half: `db.collection(...).doc(id)` throws
+    // SYNCHRONOUSLY on a slash, which would reach the caller as an opaque
+    // `internal` rather than a shaped validation failure.
+    expect(() => requireDocId({docId: "users/abc"}, "docId")).toThrow(
+        "invalid-docId",
+    );
+  });
+
+  test("rejects an id over the 128-char rules cap", () => {
+    expect(() => requireDocId({docId: "x".repeat(129)}, "docId")).toThrow(
+        "invalid-docId",
+    );
+    expect(requireDocId({docId: "x".repeat(128)}, "docId")).toHaveLength(128);
+  });
+
+  test("rejects a control character, like requireString", () => {
+    expect(() => requireDocId({docId: `a${NUL}`}, "docId")).toThrow(
+        "invalid-docId",
     );
   });
 });

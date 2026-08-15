@@ -32,8 +32,8 @@ KEY INVARIANTS the change must not break:
   doc.get() IS evaluated against actual data. users read rule has THREE clauses (admin /
   status=='active' / own uid). The fourth email-matched invite clause was deleted 2026-08-08
   with the #compat-1.37.1 shim; do not flag its absence.
-- Appointment status allowlist: pending, in_progress, done, cancelled — FOUR, and `confirmed`
-  was retired 2026-07-09. `overdue` is display-only, never stored, never in the picker. New
+- Appointment status allowlist: pending, in_progress, done, cancelled — FOUR, and \`confirmed\`
+  was retired 2026-07-09. \`overdue\` is display-only, never stored, never in the picker. New
   appts created status:'pending'. Pinned by appointment_status_rules_test.dart.
 - Role/isAdmin ALWAYS from Firestore, never SharedPreferences.
 - Image upload: validate magic bytes (JPEG FF D8 FF / PNG 89 50 4E); extension insufficient.
@@ -49,8 +49,8 @@ KEY INVARIANTS the change must not break:
   sanctioned exceptions only). composeErrorNotice for generic catch sites with a TAG; logger.warn
   label starts with same TAG, called BEFORE any if(!mounted) return. The notice itself carries
   NO support tag (owner call 2026-08-04) — the tag lives only in the logger label. And RESOLVE
-  the provider BEFORE the first await (`final logger = ref.read(loggerProvider);`): under
-  Riverpod 3 `ref.read` on an unmounted consumer THROWS, so a ref.read inside a catch is a bug.
+  the provider BEFORE the first await (\`final logger = ref.read(loggerProvider);\`): under
+  Riverpod 3 \`ref.read\` on an unmounted consumer THROWS, so a ref.read inside a catch is a bug.
 - Frontend tokens: never hardcode color/spacing/radius; map through Theme.of(context).colorScheme;
   never branch on isDark for styling; success surfaces use theme.statusColors (tertiary is amber
   WARNING, not success). const constructors; ListView.builder for lists.
@@ -63,9 +63,16 @@ KEY INVARIANTS the change must not break:
 WAVE CONTEXT: New Wave Accounting integration. No OAuth — a Full Access Token (Secret Manager)
 only; Client ID/Secret unused. App never READS Wave (write-back only). Cloud Functions: GraphQL
 transport client (functions/wave/client.js), auth helper, customer field mapper, customer
-write-back (upsertCustomer) + bulk import, outbox worker (enqueueCustomerUpsert + drainQueue,
-lease-based reaper for stuck inflight jobs). ClientRecord was reshaped to a Wave-aligned model
-(business fields removed). Firestore rules lock down Wave fields/collections.
+write-back (upsertCustomer) + bulk import, and a durable outbox (enqueueCustomerUpsert +
+drainQueue over the waveSyncQueue). THE PUSH IS EVENT-DRIVEN, NOT POLLED: the waveSyncWorker
+scheduler was DELETED 2026-08-13 — the waveUpsertCustomer clients trigger now enqueues AND
+drains in the same invocation (the drain is wrapped so it cannot throw, and sits below the
+shouldEnqueueClientWrite gate so upsertCustomer's own wave.* write-back can't re-enter it).
+runWaveDaily — not its own export; it rides sendDailyJobDigest — drains unconditionally before
+its due check as the safety net for the two states an event-driven push can't catch: a job on
+its nextAttemptAt backoff, and one left inflight by a dead instance (reclaimed by drainQueue's
+lease pass). Don't ask for a polling worker back. ClientRecord was reshaped to a Wave-aligned
+model (business fields removed). Firestore rules lock down Wave fields/collections.
 `.trim()
 
 const FINDINGS_SCHEMA = {

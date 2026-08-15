@@ -17,8 +17,7 @@
 
 const {
   toMillis,
-  businessYmd,
-  businessMidnight,
+  businessDayStartMs,
   businessMinutesOfDay,
   hasWorkLeft,
   isCancelledStatus,
@@ -39,7 +38,21 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // MAX_APPOINTMENT_SPAN_DAYS (only reachable by a console or Admin-SDK write,
 // which bypass the rules' span bound) is now swept on its real end time
 // instead of falling out of the floor.
-const OVERDUE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
+//
+// **The WIDTH is sized against the sweep CADENCE, and the two must be revisited
+// together.** It was 24 h under the standalone `sendOverdueJobPrompts` timer
+// (`every 15 minutes`, 96 runs/day). Folding that sweep into
+// `sendUpcomingJobReminders` on 2026-08-13 tripled the cadence to 288 runs/day
+// and left the width alone, so every job sitting open past its end was re-read
+// and had its ledger `create()` re-attempted on 287 further sweeps — every one
+// of them guaranteed to fail ALREADY_EXISTS. At 2 h the window still gives 24
+// examinations per job at the current cadence (fewer wasted, more than the 8
+// the old cadence gave over the same two hours), and the ledger — never the
+// cadence — is what makes delivery at-most-once. What the extra reach actually
+// bought was the retry after a RELEASED claim (a zero-delivery pass releases it
+// for a later sweep, so an assignee registering a token late is re-tried) and
+// slack across an outage; both now span 2 h rather than a day.
+const OVERDUE_LOOKBACK_MS = 2 * 60 * 60 * 1000;
 
 // Safety valve bounding the candidate set so one run can't blow the function
 // timeout. Logs a warning instead of silently truncating if it's ever hit.
@@ -112,6 +125,15 @@ const ADMIN_RECIPIENT_ROLES = new Set(["admin"]);
  * `db.collection("users").doc(id)`, which throws SYNCHRONOUSLY on a slash —
  * and one poisoned element in one appointment was enough to reject the whole
  * daily-digest batch and silence it for every employee.
+ *
+ * Deliberately NOT `security.requireDocId`, which owns the same rule for the
+ * callables. Two reasons, either alone sufficient: this DROPS a bad element
+ * and keeps the rest, where the callable form throws `HttpsError` — turning a
+ * trigger's one poisoned id into a thrown request is the exact failure this
+ * filter exists to prevent; and this module is the pure-policy half of the
+ * push stack (no `deps`, no db, no messaging), so requiring `security.js`
+ * would drag firebase-functions and a firebase-admin handle into it. Change
+ * the 128 here and in `requireDocId`/`isValidDocIdField` together.
  * @param {*} value
  * @return {!Array<string>}
  */
@@ -233,7 +255,7 @@ function diffAppointmentForNotifications(before, after, now, id) {
 
 /**
  * Filters appointment records to those overdue for a "job finished?" prompt
- * — still open per OPEN_LIKE, with an endTime within OVERDUE_LOOKBACK_MS,
+ * — still open per OPEN_LIKE, with an endTime within OVERDUE_LOOKBACK_MS (2 h),
  * mirroring the app's AppointmentRecord.displayStatus. A status OPEN_LIKE
  * doesn't recognize is never swept. Pure — unit-testable.
  * @param {!Array<!Object>} records Appointment records ({id, status,
@@ -309,11 +331,9 @@ function groupTomorrowsJobsByEmployee(records, now) {
  * @return {{start: !Date, end: !Date}}
  */
 function tomorrowWindowToronto(now) {
-  const date = now instanceof Date ? now : new Date(Number(now));
-  const [y, m, d] = businessYmd(date);
   return {
-    start: businessMidnight(y, m, d + 1),
-    end: businessMidnight(y, m, d + 2),
+    start: new Date(businessDayStartMs(now, 1)),
+    end: new Date(businessDayStartMs(now, 2)),
   };
 }
 

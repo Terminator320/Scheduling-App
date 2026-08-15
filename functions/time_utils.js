@@ -262,6 +262,27 @@ function businessMidnight(year, month, day) {
   return new Date(guess - businessOffsetMs(new Date(guess)));
 }
 
+/**
+ * Business-local midnight `offsetDays` days from the day containing `instant`,
+ * as epoch ms. `offsetDays` 0 is that day, 1 tomorrow, -1 yesterday.
+ *
+ * The one owner of the `businessMidnight(...businessYmd(x), d + n)`
+ * composition, which was spelled out at four sites across `day_slice_utils`,
+ * `widget_payload_utils` and `notification_policy` — the same shape that
+ * produced the documented DST bug, where an offset was applied as elapsed
+ * milliseconds instead of a calendar day. Adding to the day-of-month and
+ * re-resolving the offset is what keeps a shift day exactly 23 or 25 hours
+ * wide; `Date.UTC` normalizes an overflowing day into the next month.
+ * @param {(Date|number)} instant Any instant inside the reference day.
+ * @param {number} [offsetDays] Whole days to move; defaults to 0.
+ * @return {number} Epoch ms of that Toronto midnight.
+ */
+function businessDayStartMs(instant, offsetDays = 0) {
+  const date = instant instanceof Date ? instant : new Date(Number(instant));
+  const [y, m, d] = businessYmd(date);
+  return businessMidnight(y, m, d + offsetDays).getTime();
+}
+
 module.exports = {
   BUSINESS_TIME_ZONE,
   MAX_APPOINTMENT_SPAN_DAYS,
@@ -279,4 +300,5 @@ module.exports = {
   businessYmd,
   businessOffsetMs,
   businessMidnight,
+  businessDayStartMs,
 };

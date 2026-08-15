@@ -66,6 +66,14 @@ const IMPORT_FIELD_CAPS = {
   phone: 32,
   mobile: 32,
   address: 500,
+  // 500, matching `address` and NOT the app's 64-char `apt`: Wave models
+  // `addressLine2` as a peer street line of `addressLine1`, and
+  // `fromWaveCustomer` keeps it in its own field rather than joining it onto
+  // `address`. It also
+  // round-trips straight back out through `toWaveCustomerInput`, so the tighter
+  // cap would push a truncated real address back to Wave (the trade spelled out
+  // for `name` above) on a field the app itself never surfaces or repairs.
+  addressLine2: 500,
   city: 128,
   province: 128,
   country: 128,
@@ -350,7 +358,7 @@ function fromWaveCustomer(node) {
     phone: capped("phone", typeof n.phone === "string" ? n.phone : ""),
     mobile: capped("mobile", typeof n.mobile === "string" ? n.mobile : ""),
     address: capped("address", address),
-    addressLine2: line2,
+    addressLine2: capped("addressLine2", line2),
     apt: "",
     city: capped("city",
         typeof addr.city === "string" ? addr.city.trim() : ""),

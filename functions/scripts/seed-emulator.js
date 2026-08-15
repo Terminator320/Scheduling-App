@@ -12,18 +12,20 @@
 // Re-running this script is safe: it clears all auth users and users docs
 // first, then re-seeds them.
 
-const { initializeApp } = require("firebase-admin/app");
-const { getAuth } = require("firebase-admin/auth");
-const { getFirestore, FieldValue } = require("firebase-admin/firestore");
+const {initializeApp} = require("firebase-admin/app");
+const {getAuth} = require("firebase-admin/auth");
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 
-if (!process.env.FIRESTORE_EMULATOR_HOST || !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+if (!process.env.FIRESTORE_EMULATOR_HOST ||
+    !process.env.FIREBASE_AUTH_EMULATOR_HOST) {
   console.error(
-    "ERROR: set FIRESTORE_EMULATOR_HOST and FIREBASE_AUTH_EMULATOR_HOST before running.",
+      "ERROR: set FIRESTORE_EMULATOR_HOST and " +
+      "FIREBASE_AUTH_EMULATOR_HOST before running.",
   );
   process.exit(1);
 }
 
-initializeApp({ projectId: process.env.GCLOUD_PROJECT || "schedulingapp-88727" });
+initializeApp({projectId: process.env.GCLOUD_PROJECT || "schedulingapp-88727"});
 
 const auth = getAuth();
 const db = getFirestore();
@@ -63,6 +65,10 @@ const SEEDS = [
   },
 ];
 
+/**
+ * Removes every seeded auth user, `users` doc and `usersByUid` bridge row.
+ * @return {!Promise<void>}
+ */
 async function wipe() {
   const list = await auth.listUsers(1000);
   if (list.users.length > 0) {
@@ -76,10 +82,16 @@ async function wipe() {
   bridges.docs.forEach((d) => batch.delete(d.ref));
   if (users.size + bridges.size > 0) {
     await batch.commit();
-    console.log(`  wiped ${users.size} user doc(s), ${bridges.size} bridge doc(s)`);
+    console.log(
+        `  wiped ${users.size} user doc(s), ` +
+        `${bridges.size} bridge doc(s)`);
   }
 }
 
+/**
+ * Wipes then re-seeds the emulator with the fixed `SEEDS` roster.
+ * @return {!Promise<void>}
+ */
 async function main() {
   console.log("Wiping existing seed data…");
   await wipe();

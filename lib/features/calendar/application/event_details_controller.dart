@@ -191,18 +191,32 @@ class EventDetailsController extends Notifier<EventDetailsState>
   ///
   /// Identity is [appointmentImageDocId], the same derivation the subcollection
   /// keys on, so the two halves agree on what "the same photo" means.
+  ///
+  /// It is a UNION, not a replace, and PARTIAL IS THE NORMAL STATE during
+  /// photo phase 1: `appendAppointmentPictures` writes only the NEW photos to
+  /// the subcollection while `arrayUnion`-ing them onto the array, and the
+  /// backfill has not run — so a job with three legacy photos and one added on
+  /// the current build reads back one row here. Iterating [stored] alone
+  /// rendered that job as a single photo, made the other three unremovable and
+  /// stopped them counting toward the photo cap, with nothing logged.
+  ///
+  /// The array's order leads because it is the order the sheet already showed.
   static List<AppointmentImage> _mergeStoredPictures(
     List<AppointmentImage> seeded,
     List<AppointmentImage> stored,
   ) {
-    final byId = <String, AppointmentImage>{};
-    for (final image in seeded) {
+    final seenIds = <String>{
+      for (final image in seeded) appointmentImageDocId(image),
+    };
+    final merged = [...seeded];
+    for (final image in stored) {
       final id = appointmentImageDocId(image);
-      if (id.isNotEmpty) byId[id] = image;
+      // An id-less row carries neither a storage path nor a url, so nothing can
+      // render it and nothing can match it against the array.
+      if (id.isEmpty || !seenIds.add(id)) continue;
+      merged.add(image);
     }
-    return [
-      for (final image in stored) byId[appointmentImageDocId(image)] ?? image,
-    ];
+    return merged;
   }
 
   /// Builds placeholder employees from the stored ids and names. They get
@@ -473,6 +487,13 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
     state = state.copyWith(isSaving: true);
 
+    // Snapshot before the first await. The all-day switch stays live while a
+    // save is in flight, and the instants below are DERIVED from this flag —
+    // re-reading it afterwards could write `isAllDay: true` over a 09:00–17:00
+    // window, which reads as "All day" on the card while the travel sweep skips
+    // it and the crew gets no "time to leave" push.
+    final isAllDay = state.isAllDay;
+
     // Resolve dependencies before the first await, so they survive the sheet
     // being dismissed (Riverpod 3).
     final repo = ref.read(appointmentsRepositoryProvider);
@@ -484,7 +505,11 @@ class EventDetailsController extends Notifier<EventDetailsState>
         ? null
         : ref.read(appointmentImageUploadProvider);
 
-    final invalid = await _settleAndValidate(appointment, title: title);
+    final invalid = await _settleAndValidate(
+      appointment,
+      title: title,
+      isAllDay: isAllDay,
+    );
     if (invalid != null) return invalid;
 
     final id = appointment.id;
@@ -498,7 +523,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     final (:start, :end) = appointmentSpan(
       date: state.selectedDate,
       endDate: state.endDate,
-      isAllDay: state.isAllDay,
+      isAllDay: isAllDay,
       startTime: state.selectedStartTime,
       endTime: state.selectedEndTime,
     );
@@ -545,7 +570,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
         status: state.editingStatus,
         repeat: state.repeat,
         isPersonal: state.isPersonal,
-        isAllDay: state.isAllDay,
+        isAllDay: isAllDay,
       );
 
       final saved = await pipeline.applySeriesChange(
@@ -581,9 +606,13 @@ class EventDetailsController extends Notifier<EventDetailsState>
 
   /// Waits for the seed to settle, then validates the form. Returns a stop
   /// outcome if it's invalid, or null to keep going.
+  /// [isAllDay] is passed rather than re-read: it is the value [save]
+  /// snapshotted, so the form is validated against the same flag the instants
+  /// and the record are built from.
   Future<EventDetailsSaveOutcome?> _settleAndValidate(
     AppointmentRecord appointment, {
     required String title,
+    required bool isAllDay,
   }) async {
     // Wait for enrichment to finish, so assignee resolution reads a warm active-employee list.
     await _seedFuture;
@@ -606,7 +635,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
         client: clientForValidation,
         selectedEmployees: state.selectedEmployees,
         isPersonal: state.isPersonal,
-        isAllDay: state.isAllDay,
+        isAllDay: isAllDay,
       ),
     );
     state = state.copyWith(errors: errors);
@@ -628,6 +657,10 @@ class EventDetailsController extends Notifier<EventDetailsState>
     if (id == null) {
       return StateError('Cannot delete an appointment without an id.');
     }
+    // Reject a double-tap on the delete — same reentrancy guard save() and the
+    // status writes use. Without it a second run pays getSeries, the batch
+    // delete and deleteOrphanedImages all over again.
+    if (state.isSaving) return null;
     state = state.copyWith(isSaving: true);
     // Resolve these before the first await, so they survive the sheet being dismissed.
     final repo = ref.read(appointmentsRepositoryProvider);

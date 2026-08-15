@@ -201,7 +201,7 @@ reverting the cap.
 
 ---
 
-## Pending: the photo subcollection migration (phase 1 of 3)
+## Pending (steps 2–3 of 3): the photo subcollection migration (phase 1)
 
 > **Step 1 (backend + rules + indexes) DEPLOYED 2026-08-14 at `d3e22377`.**
 > `cascadeDeleteAppointmentImages` is live, so the subcollection is now safe to
@@ -210,8 +210,9 @@ reverting the cap.
 > reaching `READY`.
 
 Photos are moving from the `pictures` array on each appointment into
-`appointments/{id}/images`. **Phase 1 is written and un-deployed.** It writes
-BOTH stores; the array stays authoritative and is what the shipped build reads.
+`appointments/{id}/images`. **Phase 1 is written; its backend half (step 1
+above) deployed 2026-08-14.** It writes BOTH stores; the array stays
+authoritative and is what the shipped build reads.
 
 The ordering below is the whole safety property — it is an expand/contract
 migration and the steps are not interchangeable:
@@ -351,9 +352,9 @@ refused.
 
 ### 4. Then the photo migration's own ordering
 
-See "Pending: the photo subcollection migration" above — backend+rules first,
-then the backfill, then the app build. The cascade trigger must be live before
-any photo reaches the subcollection.
+See "Pending (steps 2–3 of 3): the photo subcollection migration" above —
+backend+rules first, then the backfill, then the app build. The cascade
+trigger must be live before any photo reaches the subcollection.
 
 ---
 

@@ -1,10 +1,9 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -119,13 +118,21 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
   }
 
   /// Resolves the on-screen image to an on-disk file for share/save to use.
-  /// Local picks are already files; network images resolve to their cached
-  /// copy, downloading it again if it's been evicted.
+  /// Local picks are already files; a stored photo is held in memory (see
+  /// `AppointmentImageLoader` — there is no URL and no on-disk cache to reach
+  /// for), so its bytes are spooled to a temp file for the platform channel.
   Future<File?> _currentImageFile() async {
     final provider = widget.images[_currentIndex];
     if (provider is FileImage) return provider.file;
-    if (provider is CachedNetworkImageProvider) {
-      return DefaultCacheManager().getSingleFile(provider.url);
+    // The 1×1 stand-in for a refused photo is a placeholder, not the picture —
+    // saving or sharing it would hand over a blank pixel as if it were the job.
+    if (identical(provider, _refusedImage)) return null;
+    if (provider is MemoryImage) {
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/ESPro_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      return file.writeAsBytes(provider.bytes);
     }
     return null;
   }
@@ -380,7 +387,7 @@ class _ViewerOverlay extends StatelessWidget {
   }
 }
 
-/// A 1×1 transparent PNG, stood in for a photo the resolver refused.
+/// A 1×1 transparent PNG, stood in for a photo the loader could not fetch.
 ///
 /// It has to be a provider rather than a dropped entry: the viewer opens at an
 /// INDEX, so removing one would shift every photo beside it.
@@ -399,15 +406,16 @@ final _refusedImage = MemoryImage(
 );
 
 List<ImageProvider> buildImageProviders({
-  required List<String> urls,
+  required List<Uint8List> bytes,
   required List<File> files,
 }) {
   return [
-    // An empty URL is a rules rejection from AppointmentImageUrlResolver, not
-    // a missing one — it deliberately refuses to hand back the token URL.
-    // Handing '' to the network provider would just log a decode failure.
-    ...urls.map<ImageProvider>(
-      (url) => url.isEmpty ? _refusedImage : CachedNetworkImageProvider(url),
+    // Empty bytes are a REFUSAL from AppointmentImageLoader — a rules
+    // rejection or a fetch that failed — never a photo still loading. There is
+    // no URL to fall back to by design, so the slot is substituted, not
+    // dropped.
+    ...bytes.map<ImageProvider>(
+      (b) => b.isEmpty ? _refusedImage : MemoryImage(b),
     ),
     ...files.map<ImageProvider>(FileImage.new),
   ];

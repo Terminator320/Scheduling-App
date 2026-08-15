@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
@@ -16,9 +17,10 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     @Default('') String lastName,
     @Default('') String email,
     @Default('') String phone,
-    // Legacy default (Material blue) for docs predating the color palette —
-    // changing this recolors those employees.
-    @Default(Color(0xFF2196F3)) Color color,
+    // A crewPalette member, not Material blue: an off-palette hue is also
+    // outside the dark-theme override map, so a doc that never picked a colour
+    // rendered unlifted in dark.
+    @Default(AppColors.crewDefault) Color color,
     @Default('employee') String role,
     @Default('') String status,
     @Default('') String uid,
@@ -50,7 +52,7 @@ abstract class EmployeeRecord with _$EmployeeRecord {
   factory EmployeeRecord.fromMap(String id, Map<String, dynamic> data) {
     final colorValue =
         int.tryParse((data['colorValue'] ?? '').toString()) ??
-        Colors.blue.toARGB32();
+        AppColors.crewDefault.toARGB32();
     final storedDays = (data['workingDays'] as List?)
         ?.map((v) => v == true)
         .toList();
@@ -92,11 +94,18 @@ abstract class EmployeeRecord with _$EmployeeRecord {
   /// `/users` update denylist in `firestore.rules`, and `status` belongs to
   /// deactivate/reactivate. Emitting either would make a whole-record write
   /// fail with an opaque `permission-denied`.
+  ///
+  /// `email` is absent for a sharper one: it is the person's SIGN-IN identity,
+  /// and it moves through `changeEmployeeEmail` — which owns Auth and
+  /// Firestore together — or not at all. A whole-record write carrying it
+  /// would rewrite the doc while Auth kept the old address, the exact desync
+  /// that callable exists to end, and it is the key `updateEmployee`'s
+  /// uniqueness query reads. `updateEmployee` writes the normalized address
+  /// itself, after the callable has committed.
   Map<String, dynamic> toMap() => {
     'name': name,
     'firstName': firstName,
     'lastName': lastName,
-    'email': email,
     'phone': phone,
     'colorValue': color.toARGB32().toString(),
     'role': role,

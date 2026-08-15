@@ -151,7 +151,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     // up to `RepeatInterval.maxOccurrences` (120) occurrences out to a 5-year
     // horizon — so a tech on several series was several hundred documents read
     // to render one caption. Every query in this repository now names a
-    // ceiling — `getSeries` was the last one without, and got `_seriesScanLimit`.
+    // ceiling — `findBusyEmployees` was the last one without, and got
+    // `_conflictScanLimit`.
     //
     // A `.limit` rather than a horizon bound, deliberately: with `endTime` the
     // only inequality, Firestore returns these in `endTime` ASC order, so the
@@ -410,10 +411,10 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   /// Deliberately NOT `_imageToFirestoreMap`. Two differences, both load-bearing:
   ///
   /// `url` is written **only when there is no `storagePath`**. Photos are
-  /// rendered from `storagePath` by `AppointmentImageUrlResolver` so every read
-  /// re-evaluates `storage.rules`; the persisted `url` is a permanent
-  /// rules-free token URL kept only for builds predating the resolver, and
-  /// those builds read the ARRAY, never this. So a new photo's `url` would be
+  /// rendered from bytes fetched off `storagePath` by `AppointmentImageLoader`,
+  /// so every read re-evaluates `storage.rules`; the persisted `url` is a
+  /// permanent rules-free token URL kept only for builds predating the loader,
+  /// and those builds read the ARRAY, never this. So a new photo's `url` would be
   /// a credential stored for no reader — while a LEGACY entry that has only a
   /// url still needs it, or backfilling it here destroys the one thing that
   /// can render it. Dropping it is also most of the size win: the url is
@@ -539,7 +540,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       () => _rangeQuery(range).snapshots().map(
         (snapshot) => _mapRangeSnapshot(snapshot, 'APPT-RANGE'),
       ),
-      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -626,6 +626,20 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   /// step — matching the array's cap rather than inventing a second number.
   static const int _appointmentImageScanLimit = 100;
 
+  /// Ceiling on each [findBusyEmployees] chunk.
+  ///
+  /// Same number as [_rangeStreamLimit] and deliberately its own constant: that
+  /// one bounds ~58 days of the whole business, and this one bounds a single
+  /// booking window — at most `maxAppointmentSpanDays` (14) days — for the ≤30
+  /// assignees an `arrayContainsAny` chunk can name. So the business rate the
+  /// calendar's cap already assumes leaves this one roughly 4× headroom, and
+  /// the two can move apart without either inheriting the other's reasoning.
+  ///
+  /// With `endTime`/`startTime` the only inequalities and no `orderBy`,
+  /// Firestore returns these in the composite index's order — `endTime` ASC —
+  /// so a truncated chunk keeps the soonest-ending overlaps.
+  static const int _conflictScanLimit = 1000;
+
   @override
   Future<List<AppointmentRecord>> searchHistory(String query) async {
     final q = query.trim();
@@ -707,7 +721,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       () => _rangeQuery(range, employeeId: employeeId).snapshots().map(
         (snapshot) => _mapRangeSnapshot(snapshot, 'APPT-MYRANGE'),
       ),
-      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -732,12 +745,22 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
             .where('employeeIds', arrayContainsAny: batch)
             .where('startTime', isLessThan: Timestamp.fromDate(end))
             .where('endTime', isGreaterThan: Timestamp.fromDate(start))
+            .limit(_conflictScanLimit)
             .get(),
       );
     }
 
     final busyIds = <String>{};
     for (final snapshot in await Future.wait(queries)) {
+      if (snapshot.docs.length >= _conflictScanLimit) {
+        // Same posture as `_mapRangeSnapshot`, and it matters more here:
+        // truncating this prefilter UNDERSTATES the conflicts, so the admin is
+        // never warned and double-books someone. Nothing else notices.
+        _logger.warn(
+          'APPT-BUSY conflict query hit the $_conflictScanLimit-doc cap — '
+          'clashes beyond it are not reported',
+        );
+      }
       for (final doc in snapshot.docs) {
         // An edit must not collide with the very appointment being edited.
         if (doc.id == excludeAppointmentId) continue;

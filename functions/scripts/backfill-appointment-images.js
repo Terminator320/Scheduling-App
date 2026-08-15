@@ -40,12 +40,29 @@
 //     node functions/scripts/backfill-appointment-images.js
 //
 // Pass --dry-run to report what it would do without writing.
+//
+// AN UNKNOWN ARGUMENT IS A HARD ERROR — see `_flags.js`. `--dryrun` or
+// `--dry_run` would otherwise silently read as false and take this LIVE
+// against `/appointments`.
 
 const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 const {appointmentImageDocId} = require("../appointment_image_ids");
+const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
 
-const DRY_RUN = process.argv.includes("--dry-run");
+/** Bare switches, matched EXACTLY — see `_flags.js`. */
+const EXACT_FLAGS = ["--dry-run"];
+
+/**
+ * Rejects any argument that is not a flag this script knows. The rejection
+ * rule itself lives in the shared `_flags.js` — this wrapper only supplies
+ * this script's flag list.
+ * @param {!Array<string>} argv Arguments after the node + script paths.
+ */
+function assertKnownFlags(argv) {
+  rejectUnknownFlags(argv, {exact: EXACT_FLAGS});
+}
+
 // Each appointment costs (photos + 1) writes in one batch. Firestore's limit is
 // 500 operations, and the rules cap photos at 100 per appointment, so a page of
 // 200 appointments is committed per-appointment rather than merged.
@@ -90,9 +107,10 @@ function imageDoc(picture) {
  * Copies one appointment's photo array into its subcollection.
  * @param {!Object} db
  * @param {!Object} doc An appointments QueryDocumentSnapshot.
+ * @param {boolean=} dryRun Report what would happen without writing.
  * @return {!Promise<{copied: number, skipped: number}>}
  */
-async function backfillOne(db, doc) {
+async function backfillOne(db, doc, dryRun = false) {
   const data = doc.data() || {};
   const pictures = Array.isArray(data.pictures) ? data.pictures : [];
 
@@ -114,7 +132,7 @@ async function backfillOne(db, doc) {
   // array claimed — an identity-less entry is not a photo anyone can see, and
   // the card's indicator must not promise one.
   const count = writes.length;
-  if (DRY_RUN) return {copied: count, skipped};
+  if (dryRun) return {copied: count, skipped};
 
   const batch = db.batch();
   const images = doc.ref.collection("images");
@@ -135,6 +153,10 @@ async function backfillOne(db, doc) {
  * @return {!Promise<void>}
  */
 async function main() {
+  const argv = process.argv.slice(2);
+  assertKnownFlags(argv);
+  const dryRun = argv.includes("--dry-run");
+
   initializeApp({credential: applicationDefault()});
   const db = getFirestore();
 
@@ -162,7 +184,7 @@ async function main() {
       const pictures = Array.isArray(data.pictures) ? data.pictures : [];
       if (pictures.length === 0) continue;
       withPhotos += 1;
-      const result = await backfillOne(db, doc);
+      const result = await backfillOne(db, doc, dryRun);
       copied += result.copied;
       unrenderable += result.skipped;
     }
@@ -171,7 +193,7 @@ async function main() {
     if (snap.size < PAGE_SIZE) break;
   }
 
-  const prefix = DRY_RUN ? "[dry run] would copy" : "copied";
+  const prefix = dryRun ? "[dry run] would copy" : "copied";
   console.log(
       `${prefix} ${copied} photos across ${withPhotos} appointments ` +
       `(${appointments} scanned)`);
@@ -180,7 +202,7 @@ async function main() {
         `skipped ${unrenderable} array entries with no storagePath and no ` +
         `url — these were already unrenderable`);
   }
-  if (DRY_RUN) {
+  if (dryRun) {
     console.log("no writes were made; re-run without --dry-run to apply");
   } else {
     console.log(

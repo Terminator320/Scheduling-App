@@ -17,8 +17,7 @@
  */
 
 const {
-  businessYmd,
-  businessMidnight,
+  businessDayStartMs,
   isTerminalStatus,
   isCancelledStatus,
 } = require("./time_utils");
@@ -95,9 +94,7 @@ function serializeWidgetJob(slice) {
  * @return {number}
  */
 function torontoDayStartOffsetMs(now, n) {
-  const date = now instanceof Date ? now : new Date(Number(now));
-  const [y, m, d] = businessYmd(date);
-  return businessMidnight(y, m, d + n).getTime();
+  return businessDayStartMs(now, n);
 }
 
 // How long after the last job of the day is finished the widget keeps showing

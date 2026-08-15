@@ -2,13 +2,10 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
-import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
@@ -18,9 +15,7 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/security/biometric_auth_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
-import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
-import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
@@ -41,14 +36,13 @@ import 'package:scheduling/features/settings/widgets/cards/legal_settings_card.d
 import 'package:scheduling/features/settings/widgets/cards/notifications_settings_card.dart';
 import 'package:scheduling/features/settings/widgets/cards/security_settings_card.dart';
 import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
-import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
+import 'package:scheduling/features/settings/widgets/views/delete_account_flow.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
 import 'package:scheduling/features/wave/widgets/wave_settings_section.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
-import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 
 enum _SettingsDetail { textSize }
@@ -74,13 +68,15 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen>
-    with WidgetsBindingObserver {
-  late final AccountDeletionService _deletionService =
+    with WidgetsBindingObserver, DeleteAccountFlow<SettingsScreen> {
+  @override
+  late final AccountDeletionService deletionService =
       widget.accountDeletionService ?? ref.read(accountDeletionServiceProvider);
 
+  @override
+  bool get isAdminAccount => _isAdmin;
+
   _SettingsDetail? _selectedDetail;
-  bool _isSigningOut = false;
-  bool _isDeletingAccount = false;
 
   late final _tour = TourSteps(
     const DestinationTour(PushedDestination.settings),
@@ -364,115 +360,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             ),
           ),
           // Blocks the UI during the irreversible account deletion.
-          if (_isDeletingAccount)
+          if (isDeletingAccount)
             _BlockingProgressOverlay(
               label: context.l10n.settings_deletingAccount,
             ),
         ],
       ),
     );
-  }
-
-  Future<void> _signOut() async {
-    if (_isSigningOut) return;
-    // Resolved before the de-registration round-trips: `ref.read` throws on an
-    // unmounted consumer (Riverpod 3), and this catch is what guarantees the
-    // user still reaches login rather than being stranded signed in.
-    final logger = ref.read(loggerProvider);
-    final authService = ref.read(authServiceProvider);
-    setState(() => _isSigningOut = true);
-    try {
-      // Clean up this device's push token, presence, and Live Activity state
-      // — best effort, so a failure here doesn't block sign-out. The ORDER is
-      // owned by `deregisterThisDevice`; all three exits share it.
-      await deregisterThisDevice(ref);
-      await authService.signOut();
-    } catch (e, st) {
-      // Log but still route to login so the user isn't stuck signed in.
-      logger.warn('ACCT-SIGNOUT signOut failed', e, st);
-    }
-    if (!mounted) return;
-    await Navigator.pushNamedAndRemoveUntil(
-      context,
-      AppRoutes.login,
-      (_) => false,
-    );
-  }
-
-  Future<void> _confirmDeleteAccount() async {
-    if (_isDeletingAccount) return;
-    // Bail out early if we're offline — otherwise the call just hangs for ~30s.
-    if (guardedOffline(
-      context,
-      ref,
-      intro: context.l10n.error_introDeleteAccount,
-    )) {
-      return;
-    }
-    final result = await showConfirmDialog(
-      context,
-      title: context.l10n.settings_deleteAccountConfirmTitle,
-      confirmLabel: context.l10n.settings_deletePermanently,
-      content: DeleteAccountWarningContent(isAdmin: _isAdmin),
-    );
-    if (!result || !mounted) return;
-
-    // Match the platform presentation of the adaptive confirm dialog shown before this.
-    final password = context.isCupertino
-        ? await showCupertinoDialog<String>(
-            context: context,
-            builder: (dialogContext) => const DeleteAccountReauthDialog(),
-          )
-        : await showDialog<String>(
-            context: context,
-            builder: (dialogContext) => const DeleteAccountReauthDialog(),
-          );
-    if (password == null || password.isEmpty || !mounted) return;
-
-    await _runDeletion(password);
-  }
-
-  Future<void> _runDeletion(String password) async {
-    setState(() => _isDeletingAccount = true);
-    final notices = ref.read(noticeServiceProvider);
-    final logger = ref.read(loggerProvider);
-    try {
-      await _deletionService.reauthenticateWithPassword(password);
-      // Drop this device's registrations while still authenticated, before
-      // deleteAccount revokes access — same shared order as the other exits.
-      await deregisterThisDevice(ref);
-      await _deletionService.deleteAccount();
-    } on AuthFailure catch (e, st) {
-      // Logged before the mounted guard: this fires AFTER push, presence and
-      // the Live Activity have already de-registered, so a half-torn-down
-      // account must leave a trace. `authFailure` keeps a user-correctable
-      // wrong password a breadcrumb and records the rest.
-      logger.authFailure('ACCT-DEL settings.delete_account', e, e, st);
-      if (!mounted) return;
-      setState(() => _isDeletingAccount = false);
-      notices.error(e.toLocalizedMessage(context));
-      return;
-    } catch (e, st) {
-      logger.warn('ACCT-DEL settings.delete_account', e, st);
-      if (!mounted) return;
-      setState(() => _isDeletingAccount = false);
-      notices.error(
-        composeErrorNotice(
-          context,
-          intro: context.l10n.error_introDeleteAccount,
-          error: e,
-        ),
-      );
-      return;
-    }
-    if (!mounted) return;
-    final message = context.l10n.settings_accountDeleted;
-    await Navigator.pushNamedAndRemoveUntil(
-      context,
-      AppRoutes.login,
-      (_) => false,
-    );
-    notices.success(message);
   }
 
   /// Appearance, account, security, notifications and (admin-only) Wave.
@@ -500,8 +394,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     ),
     const SizedBox(height: AppSpacing.sp12),
     AccountSettingsCard(
-      onSignOut: _signOut,
-      onDeleteAccount: _confirmDeleteAccount,
+      onSignOut: signOut,
+      onDeleteAccount: confirmDeleteAccount,
     ),
     const SizedBox(height: AppSpacing.sp24),
     SettingsSectionHeader(

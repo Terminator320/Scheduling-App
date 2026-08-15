@@ -108,6 +108,9 @@ class EmployeeDetailsView extends ConsumerWidget {
           labels: weekdayAbbreviationsForLocale(locale),
         ),
       ),
+      // No "No cap" row here, unlike the two edit surfaces: this is a
+      // read-only body, which omits empty sections rather than rendering a
+      // placeholder — an uncapped person has no daily cap to report.
       if (employee.maxJobsPerDay > 0)
         KeyValueRow(
           label: l10n.employees_maxPerDayKey,

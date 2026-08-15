@@ -47,4 +47,12 @@ class TextLimits {
   static const int clientBillingTerms = 200;
 
   static const int employeeEmergencyContact = 200;
+
+  /// 300, matching the `fileName` cap the appointment-images subcollection
+  /// rule applies (`isBoundedString(request.resource.data.fileName, 300)`).
+  /// `ImageStorageService` composes `<millis>_<originalName>` with whatever the
+  /// picker hands it, and `appendAppointmentPictures` writes the whole batch in
+  /// ONE `WriteBatch` — so a single over-long basename fails the batch with an
+  /// opaque `permission-denied` and takes every valid photo beside it down too.
+  static const int imageFileName = 300;
 }

@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'package:scheduling/core/images/appointment_image_url_resolver.dart';
 import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/core/images/image_upload_failure.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -21,14 +21,12 @@ class AppointmentImageUploadService {
     ImageStorageService? storage,
     AppLogger? logger,
     PendingUploadStore? store,
-    AppointmentImageUrlResolver? urlResolver,
     Future<Directory> Function()? stagingDirProvider,
   }) : _appointments = appointments,
        _notifier = notifier,
        _storage = storage ?? ImageStorageService(),
        _logger = logger ?? AppLogger(),
        _store = store ?? PendingUploadStore(),
-       _injectedUrlResolver = urlResolver,
        _stagingDirProvider = stagingDirProvider ?? _defaultStagingDir;
 
   final AppointmentsRepository _appointments;
@@ -36,17 +34,6 @@ class AppointmentImageUploadService {
   final ImageStorageService _storage;
   final AppLogger _logger;
   final PendingUploadStore _store;
-
-  /// Constructed LAZILY, not defaulted in the initializer list: the default
-  /// resolves `FirebaseStorage.instance`, which throws without a Firebase app,
-  /// and this service is otherwise constructible in a plain unit test. The
-  /// carried-url path is the only thing that touches it, and a test exercising
-  /// that path injects one.
-  final AppointmentImageUrlResolver? _injectedUrlResolver;
-  AppointmentImageUrlResolver? _resolvedUrlResolver;
-  AppointmentImageUrlResolver get _urlResolver =>
-      _injectedUrlResolver ??
-      (_resolvedUrlResolver ??= AppointmentImageUrlResolver());
 
   final Future<Directory> Function() _stagingDirProvider;
 
@@ -72,10 +59,15 @@ class AppointmentImageUploadService {
   }
 
   Future<void> _stageAndRun(String appointmentId, List<File> images) async {
+    // Held outside the try so a failure part-way through the loop can delete
+    // the files it already MOVED. Their originals are gone and no queue entry
+    // names them yet, so `prune` and `drainPending` — which both walk queue
+    // entries — can never reach them, and they would sit in the staging dir
+    // forever, growing with every occurrence.
+    var staged = <File>[];
     try {
       final dir = await _stagingDirProvider();
       final enqueuedAtMs = DateTime.now().millisecondsSinceEpoch;
-      final staged = <File>[];
       for (var i = 0; i < images.length; i++) {
         staged.add(await _stage(images[i], dir, i, enqueuedAtMs));
       }
@@ -85,10 +77,15 @@ class AppointmentImageUploadService {
         enqueuedAtMs: enqueuedAtMs,
       );
       await _store.add(entry);
+      // Now owned by the queue, so nothing below may delete them.
+      staged = const [];
       // Drain runs serialized so we don't end up uploading the same batch
       // twice under two different sets of staged paths.
       await drainPending();
     } catch (e, st) {
+      for (final file in staged) {
+        await _deleteQuietly(file);
+      }
       _notifier.reportFailure(appointmentId, failedCount: images.length);
       _logger.warn('IMG-UPLOAD staging failed for $appointmentId', e, st);
     }
@@ -127,7 +124,7 @@ class AppointmentImageUploadService {
   ) async {
     if (image.storagePath.isEmpty) return image;
     if (image.url.isNotEmpty) return image;
-    final url = await _urlResolver.resolve(image);
+    final url = await _storage.downloadUrlFor(image.storagePath);
     if (url.isEmpty) {
       _logger.warn(
         'IMG-UPLOAD could not re-resolve a carried url for $appointmentId',
@@ -210,7 +207,7 @@ class AppointmentImageUploadService {
     // Skipped entirely when a carried url could not be re-resolved: appending
     // then would write a blank-url duplicate beside the entry already in the
     // array, which is worse than waiting for the next drain.
-    var appendFailed = resolveFailed && uploaded.isNotEmpty;
+    var appendThrew = false;
     if (uploaded.isNotEmpty && !resolveFailed) {
       try {
         // Use arrayUnion so concurrent edits/retries never clobber existing pictures.
@@ -223,7 +220,7 @@ class AppointmentImageUploadService {
         // already deleted, so re-queue the uploaded images for an append-only
         // retry rather than dropping them — otherwise the bytes sit orphaned
         // in Storage, invisible on the appointment.
-        appendFailed = true;
+        appendThrew = true;
         _logger.warn(
           'IMG-UPLOAD append failed for ${entry.appointmentId}',
           e,
@@ -232,44 +229,42 @@ class AppointmentImageUploadService {
       }
     }
 
-    if (transientFailure || appendFailed) {
+    final outcome = AttemptOutcome.from(
+      permanentFailures: permanentFailures,
+      transientFailure: transientFailure,
+      survivors: survivors,
+      resolveFailed: resolveFailed,
+      appendThrew: appendThrew,
+      uploaded: uploaded,
+    );
+
+    await _store.remove(entry.id);
+    if (outcome.requeue) {
       // Re-queue whatever didn't land — survivor paths to re-upload, plus the
       // already-uploaded images if only their append failed — keeping the
       // original enqueued time so the 7-day pruning still counts from when the
       // batch first showed up.
-      await _store.remove(entry.id);
       await _store.add(
         PendingUpload(
           appointmentId: entry.appointmentId,
           paths: survivors,
           enqueuedAtMs: entry.enqueuedAtMs,
-          uploaded: appendFailed ? uploaded : const [],
+          uploaded: outcome.uploadedToCarry,
         ),
       );
-      // The permanent failures counted in the SAME pass belong here too. A
-      // batch holding one oversized photo and one network blip deletes the
-      // oversized file above, so it can never retry — reporting only the
-      // retryable ones left the person waiting for a retry that cannot happen,
-      // with the one actionable detail ("this file is too large") withheld.
       _notifier.reportFailure(
         entry.appointmentId,
-        failedCount:
-            survivors.length +
-            (appendFailed ? uploaded.length : 0) +
-            permanentFailures,
+        failedCount: outcome.failedCount,
+        tooLargeFileNames: tooLargeNames,
+      );
+    } else if (outcome.failedCount > 0) {
+      _notifier.reportFailure(
+        entry.appointmentId,
+        failedCount: outcome.failedCount,
         tooLargeFileNames: tooLargeNames,
       );
     } else {
-      await _store.remove(entry.id);
-      if (permanentFailures > 0) {
-        _notifier.reportFailure(
-          entry.appointmentId,
-          failedCount: permanentFailures,
-          tooLargeFileNames: tooLargeNames,
-        );
-      } else {
-        _notifier.clearFailure(entry.appointmentId);
-      }
+      _notifier.clearFailure(entry.appointmentId);
     }
   }
 
@@ -316,6 +311,63 @@ class AppointmentImageUploadService {
     final segments = file.uri.pathSegments;
     return segments.isNotEmpty ? segments.last : file.path;
   }
+}
+
+/// What one `_attempt` pass decided to do with its entry, distilled from the
+/// six flags the upload loop accumulates.
+///
+/// Extracted so the interaction between them is testable on its own: it
+/// encodes the rule the queue exists for — an image already uploaded whose
+/// doc-link append didn't land is carried forward for an append-only retry,
+/// never re-uploaded (its local file is gone) and never dropped (the Storage
+/// bytes would orphan invisibly on the job).
+@visibleForTesting
+class AttemptOutcome {
+  const AttemptOutcome({
+    required this.requeue,
+    required this.uploadedToCarry,
+    required this.failedCount,
+  });
+
+  factory AttemptOutcome.from({
+    required int permanentFailures,
+    required bool transientFailure,
+    required List<String> survivors,
+    required bool resolveFailed,
+    required bool appendThrew,
+    required List<AppointmentImage> uploaded,
+  }) {
+    // The append is skipped entirely when a carried url could not be
+    // re-resolved, so that case counts as a failed append too: those images
+    // are still unlinked and must stay queued.
+    final appendFailed = appendThrew || (resolveFailed && uploaded.isNotEmpty);
+    final requeue = transientFailure || appendFailed;
+    return AttemptOutcome(
+      requeue: requeue,
+      uploadedToCarry: appendFailed ? uploaded : const [],
+      // The permanent failures counted in the SAME pass belong here too. A
+      // batch holding one oversized photo and one network blip deletes the
+      // oversized file, so it can never retry — reporting only the retryable
+      // ones left the person waiting for a retry that cannot happen, with the
+      // one actionable detail ("this file is too large") withheld.
+      failedCount: requeue
+          ? survivors.length +
+                (appendFailed ? uploaded.length : 0) +
+                permanentFailures
+          : permanentFailures,
+    );
+  }
+
+  /// Whether the entry goes back on the queue instead of draining away.
+  final bool requeue;
+
+  /// Already-uploaded images to carry on the re-queued entry for an
+  /// append-only retry. Empty when the append landed.
+  final List<AppointmentImage> uploadedToCarry;
+
+  /// How many photos to report as failed. Zero on a clean pass, which is the
+  /// only case that clears a standing failure instead of reporting one.
+  final int failedCount;
 }
 
 final appointmentImageUploadProvider = Provider<AppointmentImageUploadService>((

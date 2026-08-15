@@ -1,22 +1,18 @@
 # Audit follow-ups (manual / device-verified steps)
 
-Two items from the codebase audit can't be completed safely from a headless
-environment — one needs font binaries + on-device rendering verification, the
-other needs GCP billing access. Both are written here ready to apply.
+One item from the codebase audit can't be completed safely from a headless
+environment — it needs GCP billing access. Written here ready to apply.
 
 ---
 
-## 1. Bundle the Inter font (startup latency)
+## 1. Bundle the Inter font (startup latency) — MOOT, superseded by P1
 
-> **✅ DONE (2026-07-02).** Implemented per the plan below, with one addition:
-> the theme also uses `FontWeight.w800` (`displayLarge` in
-> `lib/core/theme/themes.dart`), so **five** static weights are bundled —
-> Regular 400, Medium 500, SemiBold 600, Bold 700, **ExtraBold 800** — under
-> `assets/fonts/` (TTFs fetched from `fonts.gstatic.com`, the same files
-> `google_fonts` would have downloaded at runtime). The `fonts:` section is
-> declared in `pubspec.yaml` and `GoogleFonts.config.allowRuntimeFetching =
-> false;` is set at the top of `main()`. Step 5 (fresh-install, network-off
-> rendering check on a real device) remains the one on-device verification.
+> **Superseded 2026-07-30.** This item was implemented 2026-07-02 (bundled
+> static weights, `allowRuntimeFetching = false`), but P1's brand refresh
+> (2026-07-30) dropped Inter and `google_fonts` entirely — neither the
+> dependency nor `GoogleFonts.*` calls remain in `lib/` or `pubspec.yaml`.
+> There is nothing left to device-verify; the plan below is kept only for
+> history and must not be re-applied.
 
 **Problem.** `lib/core/theme/themes.dart` uses `GoogleFonts.inter*`. With no
 bundled copy, `google_fonts` fetches the Inter TTF from Google's CDN on first

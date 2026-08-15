@@ -14,8 +14,9 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$EmployeeRecord {
 
- String get id; String get name; String get firstName; String get lastName; String get email; String get phone;// Legacy default (Material blue) for docs predating the color palette —
-// changing this recolors those employees.
+ String get id; String get name; String get firstName; String get lastName; String get email; String get phone;// A crewPalette member, not Material blue: an off-palette hue is also
+// outside the dark-theme override map, so a doc that never picked a colour
+// rendered unlifted in dark.
  Color get color; String get role; String get status; String get uid; JobTitle get jobTitle; List<bool> get workingDays; int get workStartMinutes; int get workEndMinutes;// 0 means no cap.
  int get maxJobsPerDay; bool get onCall;// Per-person opt-out for the traffic-aware "time to leave" push. Defaults
 // to TRUE and an absent field reads as true, matching `wantsTravelAlerts`
@@ -239,7 +240,7 @@ return $default(_that.id,_that.name,_that.firstName,_that.lastName,_that.email,_
 
 
 class _EmployeeRecord extends EmployeeRecord {
-  const _EmployeeRecord({required this.id, this.name = '', this.firstName = '', this.lastName = '', this.email = '', this.phone = '', this.color = const Color(0xFF2196F3), this.role = 'employee', this.status = '', this.uid = '', this.jobTitle = JobTitle.unset, final  List<bool> workingDays = kDefaultWorkingDays, this.workStartMinutes = kDefaultWorkStartMinutes, this.workEndMinutes = kDefaultWorkEndMinutes, this.maxJobsPerDay = 0, this.onCall = false, this.travelAlertsEnabled = true, this.createdAt}): _workingDays = workingDays,super._();
+  const _EmployeeRecord({required this.id, this.name = '', this.firstName = '', this.lastName = '', this.email = '', this.phone = '', this.color = AppColors.crewDefault, this.role = 'employee', this.status = '', this.uid = '', this.jobTitle = JobTitle.unset, final  List<bool> workingDays = kDefaultWorkingDays, this.workStartMinutes = kDefaultWorkStartMinutes, this.workEndMinutes = kDefaultWorkEndMinutes, this.maxJobsPerDay = 0, this.onCall = false, this.travelAlertsEnabled = true, this.createdAt}): _workingDays = workingDays,super._();
   
 
 @override final  String id;
@@ -248,8 +249,9 @@ class _EmployeeRecord extends EmployeeRecord {
 @override@JsonKey() final  String lastName;
 @override@JsonKey() final  String email;
 @override@JsonKey() final  String phone;
-// Legacy default (Material blue) for docs predating the color palette —
-// changing this recolors those employees.
+// A crewPalette member, not Material blue: an off-palette hue is also
+// outside the dark-theme override map, so a doc that never picked a colour
+// rendered unlifted in dark.
 @override@JsonKey() final  Color color;
 @override@JsonKey() final  String role;
 @override@JsonKey() final  String status;

@@ -50,6 +50,7 @@ const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 
 const {digitsOf} = require("../client_name_utils");
+const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
 
 const BATCH_SIZE = 400;
 const SAMPLE_SIZE = 25;
@@ -58,16 +59,13 @@ const SAMPLE_SIZE = 25;
 const EXACT_FLAGS = ["--dry-run"];
 
 /**
- * Rejects any argument that is not a flag this script knows.
+ * Rejects any argument that is not a flag this script knows. The rejection
+ * rule itself lives in the shared `_flags.js` — this wrapper only supplies
+ * this script's flag list.
  * @param {!Array<string>} argv Arguments after the node + script paths.
  */
 function assertKnownFlags(argv) {
-  for (const arg of argv) {
-    if (EXACT_FLAGS.includes(arg)) continue;
-    throw new Error(
-        `unknown argument "${arg}" — did you mean --dry-run? Known flags: ` +
-        `${EXACT_FLAGS.join(", ")}`);
-  }
+  rejectUnknownFlags(argv, {exact: EXACT_FLAGS});
 }
 
 /**

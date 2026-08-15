@@ -57,9 +57,11 @@ void main() {
     expect(find.text('Rechercher...'), findsOneWidget);
   });
 
-  testWidgets('AppSearchBar preferredSize height is 60', (tester) async {
+  testWidgets('AppSearchBar preferredSize height is 60 at scale 1', (
+    tester,
+  ) async {
     final bar = AppSearchBar(onChanged: (_) {});
-    expect(bar.preferredSize.height, AppSearchBar.preferredHeight);
+    expect(bar.preferredSize.height, 60);
   });
 
   testWidgets('AppSearchBar preferredSize grows with the text scaler', (

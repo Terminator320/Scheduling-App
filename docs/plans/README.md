@@ -156,9 +156,7 @@ card? a countdown to today's window end?) is an unanswered design question.
   Wave mutations land within seconds of the last batch against Wave's
   60-calls/min ceiling.
   The read-only damage audit for the 2026-08-08 run is
-  `docs/audits/audit-client-phone-backfill-damage.js` (note: its `require` path
-  for the superseded script is stale — it points at the repo root rather than
-  `functions/scripts/`).
+  `docs/audits/audit-client-phone-backfill-damage.js`.
 - **The `signupCodes` collection and its TTL policy remain in prod**,
   deliberately — the collection was verified empty and rules now deny all
   access. Never `--force` the policy away.

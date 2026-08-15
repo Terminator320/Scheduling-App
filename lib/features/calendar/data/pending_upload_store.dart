@@ -65,14 +65,15 @@ class PendingUpload {
   // `url` is DROPPED whenever there is a `storagePath` — the same rule the
   // subcollection document follows, and for the same reason. A `getDownloadURL`
   // result is a permanent `?alt=media&token=…` link readable with **no auth and
-  // no rules evaluation**, which is exactly what `AppointmentImageUrlResolver`
+  // no rules evaluation**, which is exactly what `AppointmentImageLoader`
   // exists to stop handing out; this queue is a plaintext JSON blob in
   // SharedPreferences (an unencrypted plist on iOS, included in device and
   // iCloud backups), so persisting one there put a stronger credential in a
   // weaker store than the Keychain-backed `SecureStorageService` next to it.
-  // `AppointmentImageUploadService` re-resolves it from `storagePath` before
-  // the re-link, which reproduces the identical map — the token is stable per
-  // object — so the `arrayUnion` dedupe is unaffected.
+  // `AppointmentImageUploadService` re-mints it from `storagePath` via
+  // `ImageStorageService.downloadUrlFor` before the re-link, which reproduces
+  // the identical map — the token is stable per object — so the `arrayUnion`
+  // dedupe is unaffected.
   //
   // A LEGACY image with no `storagePath` keeps its `url`: there it is the only
   // identity the entry has, and dropping it would strand the bytes.

@@ -53,6 +53,7 @@ void main() {
     when(
       () => query.where('endTime', isGreaterThan: any(named: 'isGreaterThan')),
     ).thenReturn(query);
+    when(() => query.limit(any())).thenReturn(query);
     when(() => query.get()).thenAnswer((_) async => snapshot);
     when(() => snapshot.docs).thenReturn(const []);
   });
@@ -100,6 +101,25 @@ void main() {
     expect({...batch1, ...batch2}.length, 31, reason: 'no overlap, full cover');
   });
 
+  test(
+    'bounds every chunk, so a wide booking cannot read without a ceiling',
+    () async {
+      // Two inequalities bound this in practice, so it is tail risk rather than
+      // steady state — but a 14-day booking across a large roster reads every
+      // overlapping job for up to 30 assignees per chunk on every Save, and this
+      // was the last query in the repository naming no ceiling at all.
+      await repo().findBusyEmployees(
+        candidates: employees(31),
+        start: start,
+        end: end,
+      );
+
+      final caps = verify(() => query.limit(captureAny())).captured;
+      expect(caps.length, 2, reason: 'one cap per chunk, not one for the lot');
+      expect(caps.toSet().single, isA<int>());
+    },
+  );
+
   test('issues a single query for <=30 candidates', () async {
     await repo().findBusyEmployees(
       candidates: employees(30),
@@ -129,23 +149,26 @@ void main() {
     },
   );
 
-  test('excludes the appointment being edited from its own conflicts', () async {
-    // The only overlapping doc IS the one under edit — editing a job's notes
-    // must not report its own assignees as busy.
-    final ownDoc = doc({
-      'employeeIds': ['e0'],
-    }, id: 'a1');
-    when(() => snapshot.docs).thenReturn([ownDoc]);
+  test(
+    'excludes the appointment being edited from its own conflicts',
+    () async {
+      // The only overlapping doc IS the one under edit — editing a job's notes
+      // must not report its own assignees as busy.
+      final ownDoc = doc({
+        'employeeIds': ['e0'],
+      }, id: 'a1');
+      when(() => snapshot.docs).thenReturn([ownDoc]);
 
-    final result = await repo().findBusyEmployees(
-      candidates: employees(1),
-      start: start,
-      end: end,
-      excludeAppointmentId: 'a1',
-    );
+      final result = await repo().findBusyEmployees(
+        candidates: employees(1),
+        start: start,
+        end: end,
+        excludeAppointmentId: 'a1',
+      );
 
-    expect(result, isEmpty);
-  });
+      expect(result, isEmpty);
+    },
+  );
 
   test('still reports a clash with a different appointment', () async {
     final otherDoc = doc({

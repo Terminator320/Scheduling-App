@@ -8,6 +8,8 @@ const {
   runImageValidation,
   runHistoryPurge,
 } = require("./maintenance_policy");
+// The one owner of the business time zone — never re-inline the literal.
+const {BUSINESS_TIME_ZONE} = require("./time_utils");
 
 /**
  * Reads the first 8 bytes of a Storage object — enough for every magic-byte
@@ -81,7 +83,7 @@ const purgeExpiredHistory = onSchedule(
       // (unix-cron: min hour dom mon dow). That's plenty, since history
       // only grows past the 2-year cutoff slowly.
       schedule: "0 3 1 1,4,7,10 *",
-      timeZone: "America/Toronto",
+      timeZone: BUSINESS_TIME_ZONE,
       maxInstances: 1,
       // 1800s (the max for a scheduled trigger) gives a quarter's worth of
       // newly-expired history room to finish in a single run.

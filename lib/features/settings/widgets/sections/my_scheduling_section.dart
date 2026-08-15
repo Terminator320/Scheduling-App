@@ -45,9 +45,7 @@ class MySchedulingSection extends StatelessWidget {
             SheetFieldRow(
               key: const Key('myMaxJobsPerDay'),
               label: l10n.employees_maxJobsPerDay,
-              value: maxJobsPerDay == 0
-                  ? l10n.employees_noCap
-                  : '$maxJobsPerDay',
+              value: maxJobsLabel(l10n, maxJobsPerDay),
               useMonoValue: true,
               onTap: () => _pick(context),
             ),

@@ -14,11 +14,3 @@ class AppLanguageController extends ValueNotifier<String> {
     value = code;
   }
 }
-
-class AppLanguageScope extends InheritedNotifier<AppLanguageController> {
-  const AppLanguageScope({
-    required AppLanguageController controller,
-    required super.child,
-    super.key,
-  }) : super(notifier: controller);
-}

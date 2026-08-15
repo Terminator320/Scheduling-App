@@ -22,6 +22,7 @@ class TourSeenController extends Notifier<Set<TourScope>> {
   }
 
   Future<void> _load() async {
+    final logger = ref.read(loggerProvider);
     try {
       final prefs = await SharedPreferences.getInstance();
       final keys = prefs.getStringList(_keyTourSeenTabs) ?? const [];
@@ -31,7 +32,7 @@ class TourSeenController extends Notifier<Set<TourScope>> {
     } catch (e, st) {
       // This is unawaited from build(), so on failure we just fall back to
       // treating the device like a fresh install.
-      ref.read(loggerProvider).warn('TOUR read seen flags failed', e, st);
+      logger.warn('TOUR read seen flags failed', e, st);
     }
   }
 
@@ -47,13 +48,14 @@ class TourSeenController extends Notifier<Set<TourScope>> {
 
   /// Saves aren't serialized, but that's fine since writers never overlap.
   Future<void> _save() async {
+    final logger = ref.read(loggerProvider);
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setStringList(_keyTourSeenTabs, [
         for (final scope in state) scope.storageKey,
       ]);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('TOUR write seen flags failed', e, st);
+      logger.warn('TOUR write seen flags failed', e, st);
     }
   }
 }

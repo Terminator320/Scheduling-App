@@ -19,9 +19,11 @@ this one".
 
 ## Executed plans / specs (feature shipped)
 - `INVITED_SIGNUP_REDESIGN.md` / `_PLAN.md` — canonical spec + implementation
-  checklist for the one-time signup-code invite flow (shipped 1.19.4). Both live
-  here now; CLAUDE.md and `docs/CLOUD_FUNCTIONS.md` cite the spec as the flow's
-  reference, so it is the one archived doc still treated as authoritative. The
+  checklist for the one-time signup-code invite flow (shipped 1.19.4, then
+  itself replaced by P4c's admin-invites flow 2026-08-02 and fully retired from
+  the backend 2026-08-08 with the `#compat-1.37.1` shim). Both live here now;
+  neither root `CLAUDE.md` nor `docs/CLOUD_FUNCTIONS.md` cites the spec any
+  more — this is a plain historical record, not an authoritative reference. The
   checklist predates dropping `regenerateSignupCode`.
 - `2026-06-06-error-animation.md` / `-design.md` — field-error shake/animation
   (shipped; now built into `LabeledTextField` / `AnimatedFormFieldWrapper`).

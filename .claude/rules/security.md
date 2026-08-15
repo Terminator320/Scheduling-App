@@ -18,7 +18,11 @@ alwaysApply: true
   tapped the field is plain text at the `true` default. That is exactly how
   `AuthPasswordField` (both P4c setup fields ride it) and both
   `DeleteAccountReauthDialog` variants shipped without it. Set the flag
-  unconditionally, beside `obscureText`.
+  unconditionally, beside `obscureText`, and pass
+  `kCredentialImePersonalizedLearning`
+  (`lib/core/security/credential_input.dart`) rather than a bare `false` — the
+  four sites each carried their own restatement of this paragraph, and the
+  named constant is what makes "every credential field" greppable.
 - All Firestore writes go through service classes. Never call `FirebaseFirestore.instance` from UI.
 - Firestore security rules (`firestore.rules`) are the last line of defense — keep them restrictive.
 - Rate-limit auth-sensitive Cloud Function callables. `deleteAccount/completeEmployeeSetup` use the Firestore-backed `enforceDurableRateLimit` (5 attempts/15 min; counters in `rateLimits/*`, which clients cannot read or write). Firebase Auth already rate-limits sign-in attempts; don't bypass that either. The admin-only `createEmployeeAccount` and `deleteEmployeeAccount` are also durably rate-limited (20/hour per admin uid) — defense-in-depth so a compromised admin session can't mass-create real Firebase Auth accounts or mass-delete pending ones; keep new admin write-callables similarly capped. **Guard order:** auth → `assertAdmin` → `assertPayloadShape`/`requireString` → `enforceDurableRateLimit` → work. Validate the payload BEFORE consuming a rate-limit slot so a burst of malformed submissions can't exhaust a legitimate caller's window; keep the identity guards (`assertAdmin`) above the limiter so non-privileged callers still can't burn slots. `completeEmployeeSetup`'s `email_verified` check is an identity guard too and sits in the same slot.

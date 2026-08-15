@@ -378,14 +378,20 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
     final appointment = widget.appointment;
+    // Busied for the whole dialog, so a second tap can't stack a duplicate —
+    // the same handoff [_resolveSeriesScope] does.
+    final notifier = ref.read(
+      eventDetailsControllerProvider(EventDetailsKey(appointment)).notifier,
+    )..setSaving(busy: true);
     final choice = await showDeleteAppointmentDialog(
       context,
       isSeries: appointment.seriesId.isNotEmpty,
     );
+    // Cleared before the mounted guard (the notifier is context-free, and
+    // bailing while busy would wedge a surviving controller) and before the
+    // call below, which now refuses while the flag is set.
+    notifier.setSaving(busy: false);
     if (choice == null || !context.mounted) return;
-    final notifier = ref.read(
-      eventDetailsControllerProvider(EventDetailsKey(appointment)).notifier,
-    );
     final error = await notifier.deleteAppointment(
       appointment,
       includeFuture: choice == SeriesScopeChoice.thisAndFuture,

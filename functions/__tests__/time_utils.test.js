@@ -16,6 +16,7 @@ const {
   businessYmd,
   businessOffsetMs,
   businessMidnight,
+  businessDayStartMs,
 } = require("../time_utils");
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -220,6 +221,105 @@ describe("businessMidnight", () => {
   test("round-trips with businessYmd", () => {
     for (const [y, m, d] of [[2026, 3, 8], [2026, 11, 1], [2026, 7, 15]]) {
       expect(businessYmd(businessMidnight(y, m, d))).toEqual([y, m, d]);
+    }
+  });
+});
+
+describe("businessDayStartMs", () => {
+  // The one owner of the `businessMidnight(...businessYmd(x), d + n)`
+  // composition that was spelled out at four call sites. Its whole reason for
+  // existing is that the offset must be applied as a CALENDAR day and then
+  // re-resolved against the zone — adding `n * 86400000` instead lands an hour
+  // off on the two DST shift days, which is the documented bug shape.
+  const at = (iso) => new Date(iso).getTime();
+
+  test("offset 0 is that Toronto day's midnight", () => {
+    // 16:00Z on Jul 15 is noon EDT — same Toronto day.
+    expect(businessDayStartMs(at("2026-07-15T16:00:00Z"), 0))
+        .toBe(at("2026-07-15T04:00:00Z"));
+  });
+
+  test("the offset defaults to 0", () => {
+    expect(businessDayStartMs(at("2026-07-15T16:00:00Z")))
+        .toBe(at("2026-07-15T04:00:00Z"));
+  });
+
+  test("a Date and its epoch ms give the same answer", () => {
+    const iso = "2026-01-15T18:30:00Z";
+    expect(businessDayStartMs(new Date(iso), 1))
+        .toBe(businessDayStartMs(at(iso), 1));
+  });
+
+  test("an instant just after local midnight belongs to the new day", () => {
+    // 05:00Z on Jan 1 is exactly 00:00 EST.
+    expect(businessDayStartMs(at("2026-01-01T05:00:00Z"), 0))
+        .toBe(at("2026-01-01T05:00:00Z"));
+    // One minute earlier is still Dec 31.
+    expect(businessDayStartMs(at("2026-01-01T04:59:00Z"), 0))
+        .toBe(at("2025-12-31T05:00:00Z"));
+  });
+
+  test("a positive offset rolls into the next month", () => {
+    expect(businessDayStartMs(at("2026-01-31T20:00:00Z"), 1))
+        .toBe(at("2026-02-01T05:00:00Z"));
+  });
+
+  test("a negative offset walks backwards across a year boundary", () => {
+    expect(businessDayStartMs(at("2026-01-01T12:00:00Z"), -1))
+        .toBe(at("2025-12-31T05:00:00Z"));
+  });
+
+  test("spring-forward: +1 day is 23 hours, not 24", () => {
+    // Mar 8 2026 is the shift day; its midnight is still EST (05:00Z) and the
+    // next midnight is EDT (04:00Z).
+    const shiftDay = at("2026-03-08T12:00:00Z");
+    const start = businessDayStartMs(shiftDay, 0);
+    const next = businessDayStartMs(shiftDay, 1);
+    expect(start).toBe(at("2026-03-08T05:00:00Z"));
+    expect(next).toBe(at("2026-03-09T04:00:00Z"));
+    expect(next - start).toBe(23 * HOUR_MS);
+    // The naive elapsed-ms form would have landed here — the bug this owner
+    // exists to make unrepeatable.
+    expect(next).not.toBe(start + 24 * HOUR_MS);
+  });
+
+  test("fall-back: +1 day is 25 hours, not 24", () => {
+    const shiftDay = at("2026-11-01T12:00:00Z");
+    const start = businessDayStartMs(shiftDay, 0);
+    const next = businessDayStartMs(shiftDay, 1);
+    expect(start).toBe(at("2026-11-01T04:00:00Z"));
+    expect(next).toBe(at("2026-11-02T05:00:00Z"));
+    expect(next - start).toBe(25 * HOUR_MS);
+  });
+
+  test("stepping across a shift day one day at a time lands on midnights",
+      () => {
+        // Every intermediate answer must still be a real Toronto midnight —
+        // an accumulated hour would leave the whole chain an hour out.
+        let cursor = at("2026-03-06T12:00:00Z");
+        for (const expected of [
+          "2026-03-07T05:00:00Z",
+          "2026-03-08T05:00:00Z",
+          "2026-03-09T04:00:00Z",
+          "2026-03-10T04:00:00Z",
+        ]) {
+          cursor = businessDayStartMs(cursor, 1);
+          expect(new Date(cursor).toISOString())
+              .toBe(new Date(at(expected)).toISOString());
+        }
+      });
+
+  test("agrees with the composition it replaced", () => {
+    for (const iso of [
+      "2026-03-08T12:00:00Z",
+      "2026-11-01T12:00:00Z",
+      "2026-07-15T16:00:00Z",
+    ]) {
+      for (const n of [-1, 0, 1, 2, 14]) {
+        const [y, m, d] = businessYmd(new Date(iso));
+        expect(businessDayStartMs(at(iso), n))
+            .toBe(businessMidnight(y, m, d + n).getTime());
+      }
     }
   });
 });

@@ -124,11 +124,19 @@ String joinWeekdayNames(BuildContext context, Set<int> days) {
 /// The daily cap options: no cap, then 1–12, which covers any real crew day.
 const List<int> kMaxJobsOptions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
+/// The daily cap as a label — 0 reads as "No cap", anything else as the number.
+///
+/// The picker's own rows, the admin Team sheet's row and My details' row all
+/// state the same value, so the mapping has one owner. Only the option list was
+/// extracted here originally; the ternary stayed hand-copied at three sites.
+String maxJobsLabel(AppLocalizations l10n, int value) =>
+    value == 0 ? l10n.employees_noCap : '$value';
+
 /// The one daily-cap picker, shared by the admin Team sheet and My details.
 ///
-/// Both offer the same field, so the option list and the `noCap` label rule
-/// have one owner — a hand-mirrored copy let a change to either land on one
-/// screen only. Resolves to null when the sheet was dismissed.
+/// Both offer the same field, so the option list and the label rule have one
+/// owner — a hand-mirrored copy let a change to either land on one screen only.
+/// Resolves to null when the sheet was dismissed.
 Future<int?> showMaxJobsPicker(BuildContext context) {
   final l10n = context.l10n;
   return showAdaptiveActionSheet<int>(
@@ -136,10 +144,7 @@ Future<int?> showMaxJobsPicker(BuildContext context) {
     title: l10n.employees_maxJobsPerDay,
     actions: [
       for (final option in kMaxJobsOptions)
-        AdaptiveSheetAction(
-          label: option == 0 ? l10n.employees_noCap : '$option',
-          value: option,
-        ),
+        AdaptiveSheetAction(label: maxJobsLabel(l10n, option), value: option),
     ],
   );
 }
