@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-14 by auditing the source against the app's call sites and
+refreshed 2026-08-15 by auditing the source against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -23,7 +23,13 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   `enforceDurableRateLimit`, `assertAdmin`) live in `security.js` — put a new
   one there, never back in a feature module (`optionalString` was a private copy
   in the retired `invites.js` and was carried verbatim into
-  `employee_accounts.js` before being hoisted).
+  `employee_accounts.js` before being hoisted). The Wave stack is split four
+  ways as of 2026-08-15: `wave/callables.js` (the admin callables only),
+  `wave/triggers.js` (`waveUpsertCustomer` + the `runWaveDaily` rider — neither
+  is a callable, which is why they no longer live in the file named for them),
+  `wave/sync_run.js` (the one owner of `importWithWatermark` / `drainForSync` /
+  `readWaveBusinessIdCached`) and the pure, `deps`-free `wave/retry_policy.js`
+  (the dead-letter taxonomy). Export NAMES are unchanged by that split.
 - **Deploy:** `firebase deploy --only functions,firestore:rules,firestore:indexes,storage`
   (run `cd functions && npm run lint` first).
 
@@ -34,6 +40,21 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 > wrong before — verify against the live list rather than trusting it.
 
 
+- **DEPLOYED 2026-08-15 (`6d41dd3c`): the 2026-08-15 audit, 25 → 25 with no
+  export change.** `waveUpsertCustomer` and `runWaveDaily` MOVED module
+  (`wave/callables.js` → the new `wave/triggers.js`) while keeping their export
+  names, so both deployed as UPDATES and neither known abort fired — the
+  `retry: true` failure-policy abort only triggers on a newly *created*
+  function. `wave/sync_run.js` (the one owner of `importWithWatermark` /
+  `drainForSync`) and the pure `wave/retry_policy.js` were split out at the
+  same time. Rules carried two WIDENINGS that fix live rejections (appointment
+  `clientName` 200 → 401, client `address` 500 → 533), one tightening no
+  shipped build can reach (an assignee can no longer put `done` over
+  `cancelled`), and a new `clients.addressLine2` cap that is **an accepted
+  risk** — the already-deployed import wrote that field uncapped, so a prod doc
+  over 500 chars would now be un-updatable from the app. If an opaque
+  `permission-denied` appears on an ordinary client save, check that field
+  first. Full record: `docs/DEPLOYMENT.md`.
 - **DEPLOYED 2026-08-14 (`d3e22377`): the three-deletion swap, net 25 → 25.**
   Deleted `waveSyncWorker`, `waveScheduledImport` and `sendOverdueJobPrompts`;
   added `waveRetryFailedJobs`, `cascadeDeleteAppointmentImages` and
@@ -62,7 +83,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   looked clean for three days while prod ran older bodies — check the deploy
   log, not the count.
 - **25 functions defined** in code and **25 deployed**, verified against
-  `functions_list_functions` on 2026-08-08 — an exact match, no orphans and no
+  `functions_list_functions` on 2026-08-15 — an exact match, no orphans and no
   extras. The retirement deploy has now RUN. P4c added `createEmployeeAccount`,
   `completeEmployeeSetup` and `deleteEmployeeAccount` and kept
   `createEmployeeInvite` / `redeemSignupCode` as the `#compat-1.37.1` shim;
@@ -154,7 +175,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `syncUsersByUid` | trigger | `onDocumentWritten users/{id}` | `bridge.js` | any `users` doc write | — | `retry: true` |
 | `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` |
 | `recountClientJobs` | trigger | `onDocumentWritten appointments/{id}` | `client_job_count.js` | a write that changes `clientId` | — | `retry: true` |
-| `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/callables.js` | any `clients` doc write | `WAVE_FULL_ACCESS_TOKEN` | `retry: true` · 300s · enqueues **and pushes** |
+| `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/triggers.js` | any `clients` doc write | `WAVE_FULL_ACCESS_TOKEN` | `retry: true` · 300s · enqueues **and pushes** |
 | `validateUploadedImage` | trigger | `onObjectFinalized` (Storage) | `maintenance.js` | `appointments/*/images/*` upload | — | region `us-east1` |
 | `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | no `retry` (dupe push worse than missed) |
 | `waveRetryFailedJobs` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings, requeue dead outbox jobs) | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable |
@@ -843,7 +864,7 @@ variables; Wave refuses inline `String` arguments (see `functions/CLAUDE.md`).
 The watermark lives on `wave/connection` (`customerDeltaSince`,
 `lastFullImportAt`) and `importCustomers` stays stateless about it. The whole
 read → decide → import → advance sequence has **one owner**,
-`importWithWatermark` in `wave/callables.js`, used by both the interactive sync
+`importWithWatermark` in `wave/sync_run.js`, used by both the interactive sync
 and the daily `runWaveDaily`; the decisions are the pure `resolveImportWindow` /
 `watermarkPatch` in `wave/import_schedule.js`, placed beside `isImportDue`
 because the two cadences interact.
@@ -888,7 +909,7 @@ ids would avoid that, and is the remaining optimisation here.
 of changed customers, not the roster size. Don't render it as "you have N
 clients".
 
-### `waveUpsertCustomer` — `wave/callables.js`
+### `waveUpsertCustomer` — `wave/triggers.js`
 `clients/{id}` write trigger. When a client's Wave-mapped fields change, marks
 the doc `wave.syncState: pending` and enqueues a `customerUpsert` job on the
 `waveSyncQueue` outbox (deterministic job id → burst edits collapse to one job).
@@ -947,7 +968,7 @@ Related: `listOutstandingClientIds` (`wave/worker.js`) protects `queued`,
 dead job's edit is the one *most* at risk, because unlike the other two it will
 not self-heal without this callable.
 
-### `runWaveDaily` — `wave/callables.js` (rides `sendDailyJobDigest`)
+### `runWaveDaily` — `wave/triggers.js` (rides `sendDailyJobDigest`)
 **Not its own export.** `waveScheduledImport` was a standalone `every 24 hours`
 scheduler until 2026-08-13; the daily Wave maintenance is now `runWaveDaily`,
 rider 3 on `sendDailyJobDigest` — in its own `try/catch`, strictly after the

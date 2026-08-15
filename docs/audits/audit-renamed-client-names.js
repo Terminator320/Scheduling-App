@@ -44,9 +44,16 @@ const {
   digitsOf,
   looksLikeBusinessName,
 } = require("../../functions/client_name_utils");
+const {toMillis} = require("../../functions/time_utils");
 
-/** Past appointments to read per candidate client. */
-const HISTORY_SCAN = 200;
+/**
+ * Past appointments to read per candidate client.
+ *
+ * Small because the scan is ORDERED newest-first — it takes the latest settled
+ * visits rather than an arbitrary slice. Matches
+ * `functions/scripts/restore-client-name-halves.js`.
+ */
+const HISTORY_SCAN = 25;
 
 /**
  * Whether `name` is nothing but this client's OWN stored number — the shape
@@ -87,35 +94,40 @@ function composedName(data) {
  * @return {!Promise<!Array<string>>} Distinct historical names.
  */
 async function historicalNames(db, clientId) {
-  // clientId-only query so the automatic single-field index serves it (the
-  // same reason fetchClientHistory used to have no orderBy).
+  // ORDERED, and the orderBy is what makes the limit mean anything: without it
+  // Firestore falls back to __name__ order, so a busy client's slice can be
+  // entirely future visits and the report claims a recoverable name is gone.
+  // The (clientId ASC, startTime DESC) composite already exists.
+  const now = Date.now();
   const snap = await db.collection("appointments")
       .where("clientId", "==", clientId)
+      .where("startTime", "<", new Date(now))
+      .orderBy("startTime", "desc")
       .limit(HISTORY_SCAN)
       .get();
 
-  const now = Date.now();
-  const seen = new Map();
+  // A Set, not a Map: the query already returns newest-first, so insertion
+  // order IS the answer and there is no timestamp left to sort by.
+  const seen = new Set();
   for (const doc of snap.docs) {
     const d = doc.data() || {};
-    const end = d.endTime && d.endTime.toMillis ?
-      d.endTime.toMillis() :
-      (d.startTime && d.startTime.toMillis ? d.startTime.toMillis() : 0);
+    const end = toMillis(d.endTime) || toMillis(d.startTime) || 0;
     // Only settled visits: anything still live was rewritten by
     // propagateClientEdits when the rename saved, so it echoes the NEW name.
     if (!end || end >= now) continue;
     const clientName = String(d.clientName || "").trim();
     if (!clientName) continue;
-    // A name that is itself just the number remembers nothing useful.
-    if (digitsOf(clientName) === digitsOf(d.clientPhone || clientName)) {
-      if (!/[a-z]/i.test(clientName)) continue;
-    }
-    if (!seen.has(clientName)) seen.set(clientName, end);
+    // A remembered value with no letters in it is another phone number and
+    // remembers nothing usable. Kept deliberately identical to
+    // restore-client-name-halves.js: this file REPORTS what that one WRITES,
+    // and the two rules disagreeing is how an operator reads one set and
+    // repairs another.
+    if (!/[a-z]/i.test(clientName)) continue;
+    // Newest first already, so the first sighting of a name IS its latest.
+    seen.add(clientName);
   }
 
-  return [...seen.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([n]) => n);
+  return [...seen];
 }
 
 /**

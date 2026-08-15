@@ -470,4 +470,117 @@ void main() {
       );
     });
   });
+
+  group('splitPersonName', () {
+    test('takes the last token as the surname', () {
+      final split = ClientNamePolicy.splitPersonName('Marc Tremblay');
+      expect(split.firstName, 'Marc');
+      expect(split.lastName, 'Tremblay');
+    });
+
+    test('keeps every earlier token in the given name', () {
+      final split = ClientNamePolicy.splitPersonName('Jean Paul Belanger');
+      expect(split.firstName, 'Jean Paul');
+      expect(split.lastName, 'Belanger');
+    });
+
+    test('leaves a one-token name with no surname', () {
+      final split = ClientNamePolicy.splitPersonName('  Cher  ');
+      expect(split.firstName, 'Cher');
+      expect(split.lastName, '');
+    });
+
+    test('yields nothing for an empty name', () {
+      final split = ClientNamePolicy.splitPersonName('   ');
+      expect(split.firstName, '');
+      expect(split.lastName, '');
+    });
+  });
+
+  group('composeSave', () {
+    test('rescues a person typed name into the halves', () {
+      // THE BUG THIS EXISTS FOR: Name is required on both sheets while the two
+      // halves are optional, so the composed name replacing the typed one with
+      // the phone number destroyed the only copy of it.
+      final saved = ClientNamePolicy.composeSave(
+        baseName: 'Marc Tremblay',
+        phone: '(514) 555-1234',
+      );
+      expect(saved.name, '(514) 555-1234');
+      expect(saved.firstName, 'Marc');
+      expect(saved.lastName, 'Tremblay');
+    });
+
+    test('never clobbers a half that is already there', () {
+      // Also what makes an ordinary re-save idempotent.
+      final saved = ClientNamePolicy.composeSave(
+        baseName: 'Marc Tremblay',
+        phone: '(514) 555-1234',
+        firstName: 'Marc-Andre',
+      );
+      expect(saved.name, '(514) 555-1234');
+      expect(saved.firstName, 'Marc-Andre');
+      expect(saved.lastName, '');
+    });
+
+    test('leaves a business name and its CONTACT halves alone', () {
+      // On a business the halves are the contact person, not the client —
+      // overwriting them renders the company as its contact.
+      final saved = ClientNamePolicy.composeSave(
+        baseName: 'Vogas Plumbing',
+        phone: '(514) 555-1234',
+        type: ClientType.commercial,
+      );
+      expect(saved.name, 'Vogas Plumbing');
+      expect(saved.firstName, '');
+      expect(saved.lastName, '');
+    });
+
+    test('leaves a legacy business carrying businessName alone', () {
+      final saved = ClientNamePolicy.composeSave(
+        baseName: 'Vogas Plumbing',
+        phone: '(514) 555-1234',
+        businessName: 'Vogas Plumbing',
+      );
+      expect(saved.name, 'Vogas Plumbing');
+      expect(saved.firstName, '');
+    });
+
+    test('leaves a name the heuristic reads as a business alone', () {
+      final saved = ClientNamePolicy.composeSave(
+        baseName: '1505 Village de Bergerac',
+        phone: '(514) 555-1234',
+      );
+      expect(saved.name, '1505 Village de Bergerac');
+      expect(saved.firstName, '');
+    });
+
+    test('rescues nothing when the name was not replaced', () {
+      // No number on file, so `composeStored` returns the base unchanged and
+      // there is nothing at risk.
+      final saved = ClientNamePolicy.composeSave(
+        baseName: 'Marc Tremblay',
+        phone: '',
+      );
+      expect(saved.name, 'Marc Tremblay');
+      expect(saved.firstName, '');
+    });
+
+    test('is idempotent on a doc it already repaired', () {
+      final first = ClientNamePolicy.composeSave(
+        baseName: 'Marc Tremblay',
+        phone: '(514) 555-1234',
+      );
+      // Second save seeds from the stored name, which is now the number.
+      final second = ClientNamePolicy.composeSave(
+        baseName: first.name,
+        phone: '(514) 555-1234',
+        firstName: first.firstName,
+        lastName: first.lastName,
+      );
+      expect(second.name, '(514) 555-1234');
+      expect(second.firstName, 'Marc');
+      expect(second.lastName, 'Tremblay');
+    });
+  });
 }

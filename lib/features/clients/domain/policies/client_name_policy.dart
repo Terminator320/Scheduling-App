@@ -26,6 +26,12 @@
 /// from. [ClientNamePolicy.composeStored] is idempotent on both branches,
 /// which is what lets the backfill and every ordinary save re-run safely.
 ///
+/// **A SAVE PATH composes through [ClientNamePolicy.composeSave], never
+/// [ClientNamePolicy.composeStored] directly** — on a person the composed name
+/// IS the phone number, so a doc with no `firstName`/`lastName` would have the
+/// typed name overwritten with nothing left holding it. `composeSave` lands it
+/// in the halves in the same write.
+///
 /// **Hand-mirrored in `functions/client_name_utils.js`** (which
 /// `propagateClientEdits` and the backfill script both read through). The two
 /// share worked examples in their tests — change them together.
@@ -156,6 +162,82 @@ class ClientNamePolicy {
 
     final number = phone.trim().isNotEmpty ? phone.trim() : mobile.trim();
     return number.isNotEmpty ? number : base;
+  }
+
+  /// The stored name PLUS the halves that have to carry a person's typed name.
+  ///
+  /// **Every save path must compose through this, never [composeStored]
+  /// directly.** [composeStored] replaces a PERSON's name with their phone
+  /// number, so on a doc whose `firstName`/`lastName` are empty the typed name
+  /// is the ONLY copy of it and the save destroys it in place — Firestore
+  /// keeps no history. That is not hypothetical: it is exactly how the corpus
+  /// `functions/scripts/restore-client-name-halves.js` exists to repair was
+  /// created, and the Name field is `required` while both halves are
+  /// `optional`, so the ordinary create flow reproduces it.
+  ///
+  /// Landing the name in the halves loses nothing and changes no Wave
+  /// identity: [displayFor] reads the halves for a person, and Wave carries
+  /// its own first/last fields beside the customer name.
+  ///
+  /// Three cases deliberately pass through untouched:
+  /// - the stored name came back unchanged (a business, or a person with no
+  ///   number on file), so nothing was replaced and nothing is at risk;
+  /// - a half is already populated — never clobber a name that is there, and
+  ///   on a BUSINESS the halves are the CONTACT PERSON, not the client;
+  /// - there is no base name to rescue.
+  static ({String name, String firstName, String lastName}) composeSave({
+    required String baseName,
+    required String phone,
+    String mobile = '',
+    String firstName = '',
+    String lastName = '',
+    ClientType type = ClientType.unset,
+    String businessName = '',
+  }) {
+    final stored = composeStored(
+      baseName: baseName,
+      phone: phone,
+      mobile: mobile,
+      type: type,
+      businessName: businessName,
+    );
+    final first = firstName.trim();
+    final last = lastName.trim();
+    final kept = (name: stored, firstName: first, lastName: last);
+
+    final base = stripPhone(baseName, phone: phone, mobile: mobile);
+    if (stored == base || base.isEmpty) return kept;
+    if (first.isNotEmpty || last.isNotEmpty) return kept;
+
+    final halves = splitPersonName(base);
+    return (
+      name: stored,
+      firstName: halves.firstName,
+      lastName: halves.lastName,
+    );
+  }
+
+  /// Splits a person's name into the two stored halves.
+  ///
+  /// Deliberately dumb — the last whitespace token is the surname and
+  /// everything before it is the given name. "Marc Tremblay" and "Jean Paul
+  /// Belanger" both come out right; a one-token name becomes a first name with
+  /// no last, which [displayFor] renders unchanged. That beats guessing which
+  /// half a lone name is.
+  ///
+  /// Hand-mirrored by `splitName` in
+  /// `functions/scripts/backfill-client-name-with-phone.js` (which
+  /// `restore-client-name-halves.js` imports rather than re-spelling) — the two
+  /// share worked examples.
+  static ({String firstName, String lastName}) splitPersonName(String name) {
+    final parts = name.trim().split(RegExp(r'\s+'))
+      ..removeWhere((part) => part.isEmpty);
+    if (parts.isEmpty) return (firstName: '', lastName: '');
+    if (parts.length == 1) return (firstName: parts.first, lastName: '');
+    return (
+      firstName: parts.sublist(0, parts.length - 1).join(' '),
+      lastName: parts.last,
+    );
   }
 
   /// Company-name tokens, bounded by non-letters so "Inc." is a business and
