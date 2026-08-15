@@ -238,6 +238,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
     final l10n = context.l10n;
     final notices = ref.read(noticeServiceProvider);
+    // Before the await: the catch logs above its `mounted` guard, and
+    // `ref.read` on an unmounted consumer throws under Riverpod 3.
+    final logger = ref.read(loggerProvider);
     if (guardedOffline(context, ref, intro: l10n.error_introSaveTravelAlerts)) {
       return;
     }
@@ -247,9 +250,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           .read(employeesRepositoryProvider)
           .updateSelfDetails(record.copyWith(travelAlertsEnabled: value));
     } catch (error, stackTrace) {
-      ref
-          .read(loggerProvider)
-          .warn('ME-SAVE travel alerts failed', error, stackTrace);
+      logger.warn('ME-SAVE travel alerts failed', error, stackTrace);
       if (!mounted) return;
       notices.error(
         composeErrorNotice(

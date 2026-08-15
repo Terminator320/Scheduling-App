@@ -66,14 +66,18 @@ abstract class EmployeeRecord with _$EmployeeRecord {
       role: (data['role'] ?? 'employee').toString(),
       status: (data['status'] ?? '').toString(),
       uid: (data['uid'] ?? '').toString(),
-      jobTitle: JobTitle.fromRaw(data['jobTitle'] as String?),
+      // Lenient like every other field here, and for a sharper reason: this
+      // factory runs inside three `users` snapshot streams AND on the sign-in
+      // path, so one console-edited doc holding a numeric jobTitle or a string
+      // "480" would throw app-wide — crew picker, day route, live-map roster
+      // and calendar dots at once — and lock that person out of signing in.
+      jobTitle: JobTitle.fromRaw(data['jobTitle']?.toString()),
       workingDays: normalizeWorkingDays(storedDays ?? const []),
       workStartMinutes:
-          (data['workStartMinutes'] as num?)?.toInt() ??
-          kDefaultWorkStartMinutes,
+          firestoreInt(data['workStartMinutes']) ?? kDefaultWorkStartMinutes,
       workEndMinutes:
-          (data['workEndMinutes'] as num?)?.toInt() ?? kDefaultWorkEndMinutes,
-      maxJobsPerDay: (data['maxJobsPerDay'] as num?)?.toInt() ?? 0,
+          firestoreInt(data['workEndMinutes']) ?? kDefaultWorkEndMinutes,
+      maxJobsPerDay: firestoreInt(data['maxJobsPerDay']) ?? 0,
       onCall: data['onCall'] == true,
       // `!= false`, never `== true`: an absent field must read as ON.
       travelAlertsEnabled: data['travelAlertsEnabled'] != false,

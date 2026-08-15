@@ -195,6 +195,9 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   /// the message open.
   Future<void> _sendVerificationEmail() async {
     if (_isSendingVerification) return;
+    // Before the await: the catch logs above its `mounted` guard, and
+    // `ref.read` on an unmounted consumer throws under Riverpod 3.
+    final logger = ref.read(loggerProvider);
     setState(() {
       _isSendingVerification = true;
       _verificationNotice = null;
@@ -210,14 +213,12 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       });
     } catch (error, stackTrace) {
       final failure = AuthErrorMapper.map(error);
-      ref
-          .read(loggerProvider)
-          .authFailure(
-            'AUTH-SETUP sendVerificationEmail failed',
-            failure,
-            error,
-            stackTrace,
-          );
+      logger.authFailure(
+        'AUTH-SETUP sendVerificationEmail failed',
+        failure,
+        error,
+        stackTrace,
+      );
       if (!mounted) return;
       setState(() {
         _isSendingVerification = false;
@@ -236,6 +237,7 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   /// would keep refusing an address the person has already verified.
   Future<void> _checkVerification() async {
     if (_isCheckingVerification) return;
+    final logger = ref.read(loggerProvider);
     setState(() {
       _isCheckingVerification = true;
       _verificationNotice = null;
@@ -253,14 +255,12 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       });
     } catch (error, stackTrace) {
       final failure = AuthErrorMapper.map(error);
-      ref
-          .read(loggerProvider)
-          .authFailure(
-            'AUTH-SETUP refreshEmailVerified failed',
-            failure,
-            error,
-            stackTrace,
-          );
+      logger.authFailure(
+        'AUTH-SETUP refreshEmailVerified failed',
+        failure,
+        error,
+        stackTrace,
+      );
       if (!mounted) return;
       setState(() {
         _isCheckingVerification = false;
@@ -307,6 +307,7 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
 
     setState(() => _isLoading = true);
 
+    final logger = ref.read(loggerProvider);
     try {
       await _authService.completeAccountSetup(
         newPassword: _passwordController.text,
@@ -322,14 +323,12 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       await _routeIntoApp();
     } catch (error, stackTrace) {
       final failure = AuthErrorMapper.map(error);
-      ref
-          .read(loggerProvider)
-          .authFailure(
-            'AUTH-SETUP completeAccountSetup failed',
-            failure,
-            error,
-            stackTrace,
-          );
+      logger.authFailure(
+        'AUTH-SETUP completeAccountSetup failed',
+        failure,
+        error,
+        stackTrace,
+      );
       if (!mounted) return;
       // Already active: the password change that precedes activation DID land,
       // so this person is finished, not stuck. Walk them in rather than

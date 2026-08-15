@@ -158,7 +158,6 @@ class AppRadius {
   static const double rDialog = 22;
   static const double rFab = 20;
   static const double rIcon = 12;
-  static const double rThumb = 9;
   static const double rRow = 13;
 }
 

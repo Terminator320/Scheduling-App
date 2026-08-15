@@ -199,6 +199,7 @@ void main() {
           name: 'Marc (514) 555-1234',
           phone: '(514) 555-1234',
           firstName: 'Marc',
+          type: ClientType.residential,
         ),
         'Marc',
       );
@@ -209,6 +210,7 @@ void main() {
         ClientNamePolicy.displayFor(
           name: 'Marc Tremblay (514) 555-1234',
           phone: '(514) 555-1234',
+          type: ClientType.residential,
         ),
         'Marc Tremblay',
       );
@@ -219,6 +221,7 @@ void main() {
         ClientNamePolicy.displayFor(
           name: '(514) 555-1234',
           phone: '(514) 555-1234',
+          type: ClientType.residential,
         ),
         '(514) 555-1234',
       );
@@ -262,6 +265,9 @@ void main() {
           businessName: 'Acme Industries',
           firstName: 'Marc',
           lastName: 'Tremblay',
+          // No type at all: the legacy businessName is what makes it a
+          // business, which is the branch this asserts.
+          type: ClientType.unset,
         ),
         'Acme Industries',
       );
@@ -269,7 +275,11 @@ void main() {
 
     test('falls back to the legacy businessName when name is blank', () {
       expect(
-        ClientNamePolicy.displayFor(name: '', businessName: 'Acme Inc'),
+        ClientNamePolicy.displayFor(
+          name: '',
+          businessName: 'Acme Inc',
+          type: ClientType.unset,
+        ),
         'Acme Inc',
       );
     });
@@ -290,6 +300,90 @@ void main() {
         );
       },
     );
+  });
+
+  // I2: `baseNameFor` seeds the edit sheet's name field on EVERY client edit,
+  // and its own docstring says getting it wrong renames real Wave customers —
+  // yet it had no Dart coverage at all. It is deliberately Dart-only (the
+  // backfill composes from the raw stored name and never needs the fallback),
+  // so there is no JS twin to lean on either.
+  group('baseNameFor', () {
+    test('returns the stored name with this client’s number stripped', () {
+      expect(
+        ClientNamePolicy.baseNameFor(
+          name: 'Vogas Plumbing (514) 555-1234',
+          phone: '(514) 555-1234',
+        ),
+        'Vogas Plumbing',
+      );
+    });
+
+    test('prefers the STORED name over the halves — never displayFor', () {
+      // The whole point of the split: on a business the stored name holds the
+      // BUSINESS and the halves hold its contact person, so seeding from the
+      // display name and saving would rename the customer in Wave.
+      expect(
+        ClientNamePolicy.baseNameFor(
+          name: 'Vogas Plumbing',
+          firstName: 'Marc',
+          lastName: 'Tremblay',
+        ),
+        'Vogas Plumbing',
+      );
+    });
+
+    test('falls back to the halves when the name is only a number', () {
+      // A person's stored name IS their number, so stripping leaves nothing —
+      // and a required form field cannot be seeded with blank.
+      expect(
+        ClientNamePolicy.baseNameFor(
+          name: '(514) 555-1234',
+          phone: '(514) 555-1234',
+          firstName: 'Marc',
+          lastName: 'Tremblay',
+        ),
+        'Marc Tremblay',
+      );
+    });
+
+    test('takes a single half on its own', () {
+      expect(
+        ClientNamePolicy.baseNameFor(
+          name: '(514) 555-1234',
+          phone: '(514) 555-1234',
+          lastName: 'Tremblay',
+        ),
+        'Tremblay',
+      );
+    });
+
+    test('falls back to the legacy businessName last of all', () {
+      expect(
+        ClientNamePolicy.baseNameFor(name: '', businessName: 'Acme Inc'),
+        'Acme Inc',
+      );
+    });
+
+    test('round-trips through composeStored for a business', () {
+      // The property the edit sheet depends on: seed the field, save it back
+      // unchanged, and the stored name must be byte-identical — otherwise an
+      // ordinary save renames the customer on live invoices.
+      const stored = 'Vogas Plumbing';
+      final seeded = ClientNamePolicy.baseNameFor(
+        name: stored,
+        phone: '(514) 555-1234',
+        businessName: stored,
+      );
+      expect(
+        ClientNamePolicy.composeStored(
+          baseName: seeded,
+          phone: '(514) 555-1234',
+          type: ClientType.commercial,
+          businessName: stored,
+        ),
+        stored,
+      );
+    });
   });
 
   group('isBusiness', () {

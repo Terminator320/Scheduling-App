@@ -179,8 +179,13 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       if (storedUid.isEmpty) {
         // No Auth account behind this doc, so the email is ours to write.
         // Uniqueness isn't atomic here; the transaction below re-checks.
+        // Bounded like every other query in this layer. Two is enough to
+        // answer "does anyone else already hold this address" — the result
+        // set is 0-1 in practice, so this is the missing guardrail rather
+        // than a live cost.
         final existing = await _users
             .where('email', isEqualTo: normalizedEmail)
+            .limit(2)
             .get();
         if (existing.docs.any((doc) => doc.id != docId)) {
           throw const EmployeesFailureEmailAlreadyExists();

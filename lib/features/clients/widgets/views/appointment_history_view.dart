@@ -122,6 +122,10 @@ class _AppointmentHistoryViewState
   }
 
   Future<List<AppointmentRecord>> _fetchPage(int pageKey) async {
+    // Before the await, matching the twin in `clients_list_view.dart`: a page
+    // can settle after the screen is gone, and `ref.read` on an unmounted
+    // consumer throws under Riverpod 3.
+    final logger = ref.read(loggerProvider);
     try {
       final items = _pagingController.value.items;
       final after = (pageKey == 1 || items == null || items.isEmpty)
@@ -131,9 +135,7 @@ class _AppointmentHistoryViewState
           .read(historyPagerProvider)
           .fetchPage(after: after, limit: _pageSize);
     } catch (e, st) {
-      ref
-          .read(loggerProvider)
-          .warn('HIST-LOAD history page fetch error', e, st);
+      logger.warn('HIST-LOAD history page fetch error', e, st);
       rethrow;
     } finally {
       if (pageKey == 1) _notifyFirstPageSettled();

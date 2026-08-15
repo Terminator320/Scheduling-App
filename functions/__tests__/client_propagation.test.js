@@ -79,6 +79,31 @@ describe("relevantClientChange", () => {
     expect(change).toEqual({clientPhone: "222", address: null});
   });
 
+  // The stored `name` IS the Wave customer name — a phone number on a person —
+  // so what propagates onto an appointment must be the DISPLAY name. Without
+  // these two, a "cleanup" dropping the strip would put phone numbers on every
+  // appointment card with nothing failing.
+  test("propagates the DISPLAY name, never the stored number", () => {
+    const change = relevantClientChange(
+        {name: "(514) 555-1234", phone: "(514) 555-1234",
+          firstName: "Marc", lastName: "Tremblay"},
+        {name: "(514) 555-1234", phone: "(514) 555-1234",
+          firstName: "Marc", lastName: "Gagnon"});
+    expect(change).toEqual({clientName: "Marc Gagnon", address: null});
+  });
+
+  test("a phone-only edit produces NO clientName patch", () => {
+    // The number moves, but a person's display name is their halves — so the
+    // denormalized `clientName` on every appointment must stay put.
+    const change = relevantClientChange(
+        {name: "(514) 555-1234", phone: "(514) 555-1234",
+          firstName: "Marc", lastName: "Tremblay"},
+        {name: "(438) 555-9876", phone: "(438) 555-9876",
+          firstName: "Marc", lastName: "Tremblay"});
+    expect(change).toEqual({clientPhone: "(438) 555-9876", address: null});
+    expect(change.clientName).toBeUndefined();
+  });
+
   test("detects a name change via the legacy businessName fallback", () => {
     const change = relevantClientChange(
         {name: "", businessName: "Old Co"},

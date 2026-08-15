@@ -35,6 +35,9 @@ Future<void> saveClientToPhoneContacts(
 ) async {
   final notices = ref.read(noticeServiceProvider);
   final linkStore = ref.read(contactLinkStoreProvider);
+  // Hoisted beside them: the plugin call can outlive the surface that started
+  // it, and `ref.read` on an unmounted consumer throws under Riverpod 3.
+  final logger = ref.read(loggerProvider);
   try {
     if (await _requestContactsPermission()) {
       final insertedId = await FlutterContacts.create(clientToContact(client));
@@ -53,9 +56,7 @@ Future<void> saveClientToPhoneContacts(
   } catch (e, st) {
     // Log this so a contacts-plugin failure still reaches Crashlytics, same as
     // updateLinkedPhoneContact below.
-    ref
-        .read(loggerProvider)
-        .warn('CLI-CONTACT-SAVE saveClientToPhoneContacts failed', e, st);
+    logger.warn('CLI-CONTACT-SAVE saveClientToPhoneContacts failed', e, st);
     if (context.mounted) {
       notices.error(context.l10n.error_couldNotOpenContacts);
     }

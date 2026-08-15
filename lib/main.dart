@@ -165,6 +165,12 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   final _settingsRepository = SharedPrefsSettingsRepository();
   final _settingsSaveDebouncer = SettingsSaveDebouncer();
   final _topRouteObserver = TopRouteObserver();
+
+  // Held so `dispose` can cancel them. Harmless in production — this is the
+  // root widget and only dies with the process — but a widget test pumping
+  // this app stacks a live plugin listener per pump.
+  StreamSubscription<Uri?>? _widgetTapSubscription;
+  StreamSubscription<RemoteMessage>? _pushTapSubscription;
   DeepLinkDispatcher? _deepLinkDispatcher;
   late ThemeMode _themeMode;
   late double _textScale;
@@ -200,7 +206,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     unawaited(() async {
       try {
         await HomeWidget.setAppGroupId(widgetAppGroupId);
-        HomeWidget.widgetClicked.listen(
+        _widgetTapSubscription = HomeWidget.widgetClicked.listen(
           _handleWidgetTap,
           onError: (Object e, StackTrace st) =>
               ref.read(loggerProvider).warn('WIDGET-TAP stream error', e, st),
@@ -237,7 +243,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
                 .warn('PUSH-TAP initial message failed', e, st),
           ),
     );
-    service.onMessageOpenedApp.listen(
+    _pushTapSubscription = service.onMessageOpenedApp.listen(
       _handlePushTap,
       onError: (Object e, StackTrace st) =>
           ref.read(loggerProvider).warn('PUSH-TAP stream error', e, st),
@@ -318,6 +324,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
 
   @override
   void dispose() {
+    unawaited(_widgetTapSubscription?.cancel());
+    unawaited(_pushTapSubscription?.cancel());
     _deepLinkDispatcher?.dispose();
     _settingsSaveDebouncer.dispose();
     super.dispose();

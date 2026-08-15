@@ -1858,6 +1858,10 @@
   "@error_introLoadAppointments": {
     "description": "Error intro for APPT-LOAD"
   },
+  "error_introOpenAppointment": "Couldn't open the appointment",
+  "@error_introOpenAppointment": {
+    "description": "Error intro for APPT-OPEN"
+  },
   "error_introDeleteAccount": "Couldn't delete your account",
   "@error_introDeleteAccount": {
     "description": "Error intro for ACCT-DEL"

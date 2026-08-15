@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/core/validators/text_limits.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
 
 /// S2: `TextLimits` caps must be applied through
 /// `LengthLimitingTextInputFormatter`, which truncates a too-long paste
@@ -117,6 +119,68 @@ void main() {
       expect(
         TextLimits.personName + 1 + TextLimits.phone,
         lessThanOrEqualTo(rulesCapFor('name')),
+      );
+    });
+
+    /// The cap `isValidClientData` puts on `field`.
+    ///
+    /// Scoped to the inline `data.x.size() <= N` form, which only the client
+    /// validator is written with — `rulesCapFor` above takes the MINIMUM
+    /// across every collection, so it cannot express a client cap that is
+    /// deliberately WIDER than the appointment cap on the same field name.
+    int clientRulesCapFor(String field) {
+      final matches = RegExp(
+        r'data\.' + RegExp.escape(field) + r'\.size\(\)\s*<=\s*(\d+)',
+      ).allMatches(rules);
+      expect(
+        matches,
+        isNotEmpty,
+        reason: 'no isValidClientData cap found for "$field"',
+      );
+      return matches
+          .map((m) => int.parse(m.group(1)!))
+          .reduce((a, b) => a < b ? a : b);
+    }
+
+    test('the widest name composeStored can emit fits the client cap', () {
+      // `composeStored` returns the phone number for a person and the stripped
+      // base name for a business, so its widest output is a full-length
+      // business name — never the two joined. A regression to the old
+      // "<name> <number>" shape would push this past the cap and fail every
+      // long client save with an opaque `permission-denied`, so pin the
+      // ACTUAL output rather than the arithmetic.
+      final widestPerson = ClientNamePolicy.composeStored(
+        baseName: 'a' * TextLimits.personName,
+        phone: '0' * TextLimits.phone,
+        mobile: '0' * TextLimits.mobile,
+      );
+      final widestBusiness = ClientNamePolicy.composeStored(
+        baseName: 'a' * TextLimits.personName,
+        phone: '0' * TextLimits.phone,
+        mobile: '0' * TextLimits.mobile,
+        type: ClientType.commercial,
+      );
+      expect(widestPerson.length, lessThanOrEqualTo(rulesCapFor('name')));
+      expect(widestBusiness.length, lessThanOrEqualTo(rulesCapFor('name')));
+    });
+
+    test('a client address carries its apt, so the cap is the SUM', () {
+      // Both client sheets store `AddressParser.canonicalFrom(street, apt)`,
+      // which joins the street field and the apt field with a separator. Sized
+      // to the street field alone, the rule rejects the whole client save.
+      expect(
+        TextLimits.appointmentAddress + 1 + TextLimits.aptUnit,
+        lessThanOrEqualTo(clientRulesCapFor('address')),
+      );
+    });
+
+    test('an appointment clientName is the two client name halves', () {
+      // Denormalized from `ClientRecord.displayName`, which composes
+      // `firstName` + " " + `lastName` on a person — two 200-char fields, not
+      // one. Sized to `personName` the appointment save fails outright.
+      expect(
+        TextLimits.firstName + 1 + TextLimits.lastName,
+        lessThanOrEqualTo(rulesCapFor('clientName')),
       );
     });
 

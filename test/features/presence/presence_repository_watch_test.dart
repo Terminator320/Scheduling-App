@@ -49,8 +49,13 @@ void main() {
     firestore = _MockFirestore();
     query = _MockQuery();
     when(() => firestore.collectionGroup('presence')).thenReturn(query);
-    // The feed is bounded by `.limit(...)` (mirrors the users-stream cap); the
-    // mock chains it back to the same query so `.snapshots()` still resolves.
+    // The feed is bounded by `.limit(...)` (mirrors the users-stream cap) and
+    // ordered by `updatedAt` so the cap keeps the FRESHEST fixes rather than an
+    // arbitrary `__name__` slice; both chain back to the same query so
+    // `.snapshots()` still resolves.
+    when(
+      () => query.orderBy(any<Object>(), descending: any(named: 'descending')),
+    ).thenReturn(query);
     when(() => query.limit(any())).thenReturn(query);
   });
 

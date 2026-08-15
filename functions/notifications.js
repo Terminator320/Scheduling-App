@@ -160,6 +160,9 @@ const sendUpcomingJobReminders = onSchedule(
       try {
         await runOverduePromptSweep(liveDeps());
       } catch (err) {
+        // Deliberately still the DELETED export's name: it is a stable
+        // Crashlytics search tag, and renaming it orphans every prior report
+        // of this failure. The function is gone; the label is the label.
         logger.error("sendOverdueJobPrompts failed", {err});
       }
     },

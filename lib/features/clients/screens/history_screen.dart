@@ -83,8 +83,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
           isAdmin: widget.isAdmin,
           employeeId: widget.employeeId,
         ),
-        // The nav shell is built once; only the history view rebuilds per
-        // keystroke, so typing doesn't rebuild the NavigationRail + chrome.
+        // The screen chrome is built once; only the history view rebuilds per
+        // keystroke, so typing doesn't rebuild the app bar and search field.
         body: PrimaryScrollScope(
           child: ListenableBuilder(
             listenable: _searchController,

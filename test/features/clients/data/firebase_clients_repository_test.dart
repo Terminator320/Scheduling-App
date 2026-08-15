@@ -301,6 +301,44 @@ void main() {
       },
     );
 
+    // I7: `_patchWindow` MERGES the write over the cached doc rather than
+    // substituting it, because `toMap()` emits user-owned fields only. Nothing
+    // asserted that, so a "simplification" back to a plain replace would blank
+    // every function-owned field on every search and type-filter result until
+    // the TTL expired — with no test failing.
+    test(
+      'a local write KEEPS the function-owned fields on the cached doc',
+      () async {
+        // Built before the stub: `doc()` stubs internally, and mocktail
+        // refuses a `when` inside a stub response.
+        final docs = [
+          doc('c1', {
+            'name': 'John Smith',
+            // Function-owned: written by recountClientJobs and the server, and
+            // deliberately absent from ClientRecord.toMap().
+            'jobCount': 7,
+            'waveCustomerId': 'wave-123',
+          }),
+        ];
+        when(() => snapshot.docs).thenReturn(docs);
+
+        final r = repo();
+        expect((await r.searchClients('John')).single.jobCount, 7);
+
+        await r.updateClient(client(name: 'John Smith Jr'));
+
+        final patched = (await r.searchClients('John')).single;
+        expect(patched.name, 'John Smith Jr');
+        expect(
+          patched.jobCount,
+          7,
+          reason: 'jobCount was dropped by the patch',
+        );
+        expect(patched.waveCustomerId, 'wave-123');
+        verify(() => query.get()).called(1);
+      },
+    );
+
     test('ranks exact/prefix matches first, then alphabetical', () async {
       final docs = [
         doc('c1', {'name': 'Aaron Johnson', 'phone': '514-555-0101'}),

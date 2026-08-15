@@ -92,6 +92,10 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
 
     final l10n = context.l10n;
     final notices = ref.read(noticeServiceProvider);
+    // Resolved before the first await: the catch below logs above its `mounted`
+    // guard so the warn survives unmount, and `ref.read` on an unmounted
+    // consumer throws under Riverpod 3.
+    final logger = ref.read(loggerProvider);
 
     // An awaited Firestore write offline only resolves on server ack, so
     // without this Save would spin until the connection returns.
@@ -125,9 +129,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
       setState(() => _storedPhone = edit.phone);
       notices.success(l10n.common_changesSaved);
     } catch (error, stackTrace) {
-      ref
-          .read(loggerProvider)
-          .warn('ME-SAVE identity save failed', error, stackTrace);
+      logger.warn('ME-SAVE identity save failed', error, stackTrace);
       if (!mounted) return;
       notices.error(
         composeErrorNotice(
@@ -156,6 +158,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
   }) async {
     final l10n = context.l10n;
     final notices = ref.read(noticeServiceProvider);
+    final logger = ref.read(loggerProvider);
 
     final previousDays = _workingDays;
     final previousStart = _workStartMinutes;
@@ -200,9 +203,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
             ),
           );
     } catch (error, stackTrace) {
-      ref
-          .read(loggerProvider)
-          .warn('ME-SAVE availability failed', error, stackTrace);
+      logger.warn('ME-SAVE availability failed', error, stackTrace);
       if (!mounted) return;
       rollBack();
       notices.error(
@@ -244,6 +245,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
 
     final l10n = context.l10n;
     final notices = ref.read(noticeServiceProvider);
+    final logger = ref.read(loggerProvider);
 
     if (guardedOffline(context, ref, intro: l10n.error_introChangeEmail)) {
       return;
@@ -263,15 +265,16 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     } on AuthFailure catch (failure, stackTrace) {
       // Typed branch first: a wrong password here is an expected outcome, and
       // authFailure buckets it as a breadcrumb rather than an error record.
-      ref
-          .read(loggerProvider)
-          .authFailure('ME-EMAIL change failed', failure, failure, stackTrace);
+      logger.authFailure(
+        'ME-EMAIL change failed',
+        failure,
+        failure,
+        stackTrace,
+      );
       if (!mounted) return;
       notices.error(failure.toLocalizedMessage(context));
     } catch (error, stackTrace) {
-      ref
-          .read(loggerProvider)
-          .warn('ME-EMAIL change failed', error, stackTrace);
+      logger.warn('ME-EMAIL change failed', error, stackTrace);
       if (!mounted) return;
       notices.error(
         composeErrorNotice(
@@ -296,6 +299,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     if (_isSaving) return;
     final l10n = context.l10n;
     final notices = ref.read(noticeServiceProvider);
+    final logger = ref.read(loggerProvider);
 
     if (guardedOffline(context, ref, intro: l10n.error_introSaveMyDetails)) {
       return;
@@ -312,9 +316,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
       if (!mounted) return;
       notices.success(l10n.common_changesSaved);
     } catch (error, stackTrace) {
-      ref
-          .read(loggerProvider)
-          .warn('ME-SAVE max jobs failed', error, stackTrace);
+      logger.warn('ME-SAVE max jobs failed', error, stackTrace);
       if (!mounted) return;
       notices.error(
         composeErrorNotice(

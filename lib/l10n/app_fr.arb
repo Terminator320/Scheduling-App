@@ -417,6 +417,7 @@
   "error_introUpdateAppointmentStatus": "Impossible de modifier le statut du rendez-vous",
   "error_introDeleteAppointment": "Impossible de supprimer le rendez-vous",
   "error_introLoadAppointments": "Impossible de charger les rendez-vous",
+  "error_introOpenAppointment": "Impossible d’ouvrir le rendez-vous",
   "error_introDeleteAccount": "Impossible de supprimer votre compte",
   "error_introAddClient": "Impossible d’ajouter le client",
   "error_introSaveClient": "Impossible d’enregistrer les modifications du client",

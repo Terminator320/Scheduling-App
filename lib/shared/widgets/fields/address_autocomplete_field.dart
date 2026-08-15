@@ -164,6 +164,10 @@ class _AddressAutocompleteFieldState
   }
 
   Future<void> _selectSuggestion(AddressSuggestion s) async {
+    // Resolved BEFORE the await for the same reason as _fetch above — this is
+    // fired from onTap, so the sheet being dismissed before Places responds is
+    // routine, and `ref.read` on an unmounted consumer throws.
+    final logger = ref.read(loggerProvider);
     // Invalidate any pending debounce/in-flight request so a late response can't resurface suggestions.
     _debounce.cancel();
     _requestId++;
@@ -191,9 +195,7 @@ class _AddressAutocompleteFieldState
       setState(() => _isLoading = false);
       widget.onAddressSelected?.call(widget.controller.text);
     } catch (e, st) {
-      ref
-          .read(loggerProvider)
-          .warn('ADDR-DETAILS getPlaceDetails failed', e, st);
+      logger.warn('ADDR-DETAILS getPlaceDetails failed', e, st);
       if (!mounted) return;
       setState(() {
         _isLoading = false;
