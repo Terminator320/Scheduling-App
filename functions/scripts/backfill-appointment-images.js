@@ -121,8 +121,10 @@ async function backfillOne(db, doc) {
   for (const write of writes) {
     batch.set(images.doc(write.id), write.body, {merge: true});
   }
-  // Stamped even at zero, so a photoless appointment is distinguishable from
-  // one this script has not reached.
+  // Written even at zero, so an array holding nothing but identity-less
+  // entries reads as no photos rather than promising one. A photoless
+  // appointment never reaches here and keeps no count — absent already
+  // parses as 0, and `hasPictures` tests both stores during the migration.
   batch.update(doc.ref, {pictureCount: count});
   await batch.commit();
   return {copied: count, skipped};
@@ -187,7 +189,18 @@ async function main() {
   }
 }
 
-main().then(() => process.exit(0)).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Guarded like `backfill-client-name-with-phone.js`, so `imageDoc` and
+// `backfillOne` can be required by jest without `main()` reaching for
+// application-default credentials at load. The atomicity this script promises
+// is a testable claim; it was the only backfill with no spec.
+if (require.main === module) {
+  main().then(() => process.exit(0)).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  imageDoc,
+  backfillOne,
+};

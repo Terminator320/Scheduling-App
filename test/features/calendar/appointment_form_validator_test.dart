@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -350,6 +351,48 @@ void main() {
         ),
       );
       expect(errors['endDate'], isNull);
+    });
+  });
+
+  // I12: extracted precisely because both form bodies had copied it — and it
+  // shipped with no tests, while its neighbours `allDaySpan`/`appointmentSpan`
+  // are well covered.
+  group('runLengthDays', () {
+    test('a single-day job is 1, not 0', () {
+      expect(runLengthDays(DateTime(2026, 8, 2), DateTime(2026, 8, 2)), 1);
+    });
+
+    test('counts the end date INCLUSIVELY', () {
+      // "The end date names the last day the crew STARTS work" — Aug 2 to
+      // Aug 6 is five work days, which is what the card's "Day 3 of 5" and
+      // the 14-day cap both count.
+      expect(runLengthDays(DateTime(2026, 8, 2), DateTime(2026, 8, 6)), 5);
+    });
+
+    test('a half-filled form reads as a single day', () {
+      expect(runLengthDays(null, DateTime(2026, 8, 6)), 1);
+      expect(runLengthDays(DateTime(2026, 8, 2), null), 1);
+      expect(runLengthDays(null, null), 1);
+    });
+
+    test('a reversed pair floors at 1 rather than going negative', () {
+      // The validator refuses this separately; the floor keeps every caller
+      // that renders a counter from showing "Day 1 of -3".
+      expect(runLengthDays(DateTime(2026, 8, 6), DateTime(2026, 8, 2)), 1);
+    });
+
+    test('counts CALENDAR days across a DST shift', () {
+      // Composed from wall-clock dates, so the hour the clocks move must not
+      // round a day off the count.
+      expect(runLengthDays(DateTime(2026, 11, 7), DateTime(2026, 11, 8)), 2);
+      expect(runLengthDays(DateTime(2026, 3, 8), DateTime(2026, 3, 9)), 2);
+    });
+
+    test('the widest run the form can save is the 14-day cap', () {
+      expect(
+        runLengthDays(DateTime(2026, 8, 2), DateTime(2026, 8, 15)),
+        maxAppointmentSpanDays,
+      );
     });
   });
 }

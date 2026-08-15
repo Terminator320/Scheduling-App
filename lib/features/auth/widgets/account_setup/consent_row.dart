@@ -29,10 +29,10 @@ class ConsentRow extends StatefulWidget {
   final VoidCallback onTapTerms;
 
   @override
-  State<ConsentRow> createState() => ConsentRowState();
+  State<ConsentRow> createState() => _ConsentRowState();
 }
 
-class ConsentRowState extends State<ConsentRow> {
+class _ConsentRowState extends State<ConsentRow> {
   // Reads `widget` at tap time, so it survives a parent rebuild handing down a
   // new callback.
   late final TapGestureRecognizer _termsTap = TapGestureRecognizer()

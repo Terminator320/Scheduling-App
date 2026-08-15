@@ -528,7 +528,13 @@ service cloud.firestore {
         && (!('notes' in d.keys()) || isBoundedString(d.notes, 4000))
         && (!('materialsNeeded' in d.keys())
             || isBoundedString(d.materialsNeeded, 2000))
-        && (!('clientName' in d.keys()) || isBoundedString(d.clientName, 200))
+        // 401, not 200: this is the DENORMALIZED client display name, and
+        // `ClientRecord.displayName` composes it from `firstName` + " " +
+        // `lastName` — two 200-char client fields. Sized to `personName` it
+        // rejected the whole appointment save with an opaque
+        // `permission-denied`. Rules caps mirror the widest value a write path
+        // can produce, never the client cap. Pinned by text_limits_test.dart.
+        && (!('clientName' in d.keys()) || isBoundedString(d.clientName, 401))
         && (!('clientPhone' in d.keys()) || isBoundedString(d.clientPhone, 40))
         && (!('clientId' in d.keys()) || isValidDocIdField(d.clientId))
         && (!('seriesId' in d.keys()) || isValidDocIdField(d.seriesId))
@@ -671,7 +677,10 @@ service cloud.firestore {
         && (!('phone' in data) || (data.phone is string && data.phone.size() <= 32))
         && (!('mobile' in data) || (data.mobile is string && data.mobile.size() <= 32))
         && (!('email' in data) || (data.email is string && data.email.size() <= 320))
-        && (!('address' in data) || (data.address is string && data.address.size() <= 500))
+        // 533, not 500: both client sheets store `AddressParser.canonicalFrom`,
+        // which combines the 500-char street field with the 32-char apt field
+        // and a separator. Same reasoning as `clientName` on appointments.
+        && (!('address' in data) || (data.address is string && data.address.size() <= 533))
         && (!('apt' in data) || (data.apt is string && data.apt.size() <= 64))
         && (!('city' in data) || (data.city is string && data.city.size() <= 128))
         && (!('province' in data) || (data.province is string && data.province.size() <= 128))

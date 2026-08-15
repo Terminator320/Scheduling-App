@@ -44,7 +44,8 @@ class ClientNamePolicy {
   /// match.
   ///
   /// Only ever acted on when it reduces to a clean 10-digit number — see
-  /// [extractPhone].
+  /// [_matchPhone], which is what makes this loose pattern safe against a
+  /// street number, a postal code or a year.
   static final _candidate = RegExp(r'\+?\d[\d\s().\-]{7,}\d');
 
   /// A phone-shaped run anchored to the END of the string, with whatever
@@ -277,12 +278,17 @@ class ClientNamePolicy {
   /// list with no initial for its avatar.
   static String displayFor({
     required String name,
+    // REQUIRED, and deliberately not defaulted: `ClientType.unset` reads as a
+    // PERSON, so a default here made "I forgot to pass the type" and "this
+    // client genuinely has no type" the same call — and dropping the argument
+    // would silently render every commercial client as its contact person on
+    // every card, tile and appointment, with the suite still green.
+    required ClientType type,
     String phone = '',
     String mobile = '',
     String firstName = '',
     String lastName = '',
     String businessName = '',
-    ClientType type = ClientType.unset,
   }) {
     final base = stripPhone(name, phone: phone, mobile: mobile);
     final composed = [
@@ -311,17 +317,6 @@ class ClientNamePolicy {
     if (base.isNotEmpty) return base;
     return name.trim();
   }
-
-  /// The first dialable 10-digit number in [text], formatted `(514) 555-1234`,
-  /// or null when there isn't a clean one.
-  ///
-  /// Deliberately NARROWER than [formatPhoneNumber], which passes an
-  /// international `+` number through untouched and appends digits past the
-  /// tenth verbatim. Those are ambiguities the app tolerates from an admin
-  /// typing into the phone FIELD; pulling a number out of free text must not
-  /// guess at them. The exactly-10 threshold is also what stops this matching
-  /// a street number, a postal code or a year.
-  static String? extractPhone(String text) => _matchPhone(text)?.formatted;
 
   /// Moves a phone number the admin typed or pasted into the NAME field over
   /// into the phone field, and takes it back out of the name.

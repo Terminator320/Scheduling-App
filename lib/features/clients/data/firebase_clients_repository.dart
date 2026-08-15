@@ -82,7 +82,18 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   // Page-boundary doc names keyed by id. The cursor needs the exact Firestore `name`
   // value, not the `businessName` fallback, or we'd end up skipping docs.
+  //
+  // BOUNDED, like `_searchCache` beside it: this repository is a session-long
+  // singleton and this map gains an entry per page fetched, so unbounded it
+  // only ever grows. It is deliberately capped rather than CLEARED on write —
+  // dropping a live boundary is not free, since the fallback `after.name`
+  // carries the `businessName` substitution for a legacy business-only doc and
+  // would page straight past it. The cap is far deeper than any list is
+  // scrolled, and eviction is oldest-first, so a boundary still in use stays.
   final Map<String, String> _pageBoundaryNames = {};
+
+  /// Page boundaries retained — ~`_clientsPageSize` × this many clients deep.
+  static const _pageBoundaryMax = 200;
 
   @override
   Future<List<ClientRecord>> fetchClientsPage({
@@ -114,6 +125,10 @@ class FirebaseClientsRepository implements ClientsRepository {
     final docs = snapshot.docs;
     if (docs.isNotEmpty) {
       final last = docs.last;
+      _pageBoundaryNames.remove(last.id);
+      if (_pageBoundaryNames.length >= _pageBoundaryMax) {
+        _pageBoundaryNames.remove(_pageBoundaryNames.keys.first);
+      }
       _pageBoundaryNames[last.id] = (last.data()['name'] ?? '').toString();
     }
     return docs.map((doc) => ClientRecord.fromMap(doc.id, doc.data())).toList();
@@ -371,7 +386,10 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
         })
         .join(' ');
 
-    final displayName = ClientSearchPolicy.normalize(client.displayName);
+    // Resolved once per record: `displayName` is an uncached getter that runs
+    // `stripPhone` twice, and this loop walks the whole 1000-doc scan window.
+    final rawDisplayName = client.displayName;
+    final displayName = ClientSearchPolicy.normalize(rawDisplayName);
     final personName = ClientSearchPolicy.normalize(
       [
         data['firstName'],
@@ -418,12 +436,11 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
     }
 
     // The sort key is computed HERE, once per record, rather than twice per
-    // comparison — `displayName` is an uncached getter that runs `stripPhone`
-    // twice (two regex passes each), and the comparator below runs over the
-    // whole match set before `.take`. Same rule as `fetchClientsByType`.
+    // comparison — the comparator below runs over the whole match set before
+    // `.take`. Same rule as `fetchClientsByType`.
     scoredClients.add((
       score: score,
-      sortKey: client.displayName.toLowerCase(),
+      sortKey: rawDisplayName.toLowerCase(),
       record: client,
     ));
   }

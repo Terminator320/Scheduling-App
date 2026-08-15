@@ -26,7 +26,9 @@ import 'package:scheduling/features/calendar/widgets/views/calendar_header_block
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_grid.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_week_strip.dart';
+import 'package:scheduling/features/calendar/widgets/views/collapse_handle.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
+import 'package:scheduling/features/calendar/widgets/views/today_pill.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -351,7 +353,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                         Positioned(
                           bottom: AppSpacing.sp16,
                           left: AppSpacing.sp16,
-                          child: _TodayPill(
+                          child: TodayPill(
                             visible: _showTodayButton(data.today),
                             onPressed: () => _goToToday(data.today),
                           ),
@@ -607,7 +609,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         // back. It stays put when collapsed so there is something to pull.
         _tour.step(
           TourStepId.calendarCollapse,
-          child: _CollapseHandle(
+          child: CollapseHandle(
             isCollapsed: _collapse.isCollapsed,
             onDrag: _onCollapseDrag,
             onDragEnd: _collapse.endDrag,
@@ -643,133 +645,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// The divider between the month grid and the day's jobs, doubling as the
-/// grab handle that collapses the grid. Painted as the same hairline the rest
-/// of the screen uses, inside a 20px tall target with a short grip so it reads
-/// as draggable; it is also a button, since a 24px drag is not a gesture
-/// everyone can make.
-class _CollapseHandle extends StatelessWidget {
-  const _CollapseHandle({
-    required this.isCollapsed,
-    required this.onDrag,
-    required this.onDragEnd,
-    required this.onToggle,
-  });
-
-  final bool isCollapsed;
-  final ValueChanged<double> onDrag;
-  final VoidCallback onDragEnd;
-  final VoidCallback onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final label = isCollapsed
-        ? context.l10n.calendar_showCalendar
-        : context.l10n.calendar_hideCalendar;
-    return Semantics(
-      button: true,
-      label: label,
-      excludeSemantics: true,
-      child: Tooltip(
-        message: label,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onVerticalDragUpdate: (details) => onDrag(details.delta.dy),
-          onVerticalDragEnd: (_) => onDragEnd(),
-          onVerticalDragCancel: onDragEnd,
-          onTap: onToggle,
-          child: SizedBox(
-            height: 20,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Divider(
-                    height: 1,
-                    color: theme.colorScheme.outlineVariant,
-                  ),
-                ),
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: theme.palette.textFaint,
-                    borderRadius: BorderRadius.circular(AppRadius.rFull),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The "jump to today" pill. It scales and fades out once today is already in
-/// view, staying mounted so the transition is animated both ways.
-class _TodayPill extends StatelessWidget {
-  const _TodayPill({required this.visible, required this.onPressed});
-
-  final bool visible;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final instant = MediaQuery.disableAnimationsOf(context);
-    final radius = BorderRadius.circular(AppRadius.rFull);
-    return IgnorePointer(
-      ignoring: !visible,
-      child: AnimatedScale(
-        scale: visible ? 1 : 0.85,
-        duration: instant ? Duration.zero : AppMotion.popIn,
-        curve: AppMotion.emphasized,
-        child: AnimatedOpacity(
-          opacity: visible ? 1 : 0,
-          duration: instant ? Duration.zero : AppMotion.popIn,
-          child: Tooltip(
-            message: context.l10n.calendar_today,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                boxShadow: theme.cardStyle.pillShadow,
-              ),
-              child: Material(
-                color: theme.colorScheme.surface,
-                borderRadius: radius,
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: onPressed,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 48),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sp16,
-                        vertical: 11,
-                      ),
-                      child: Center(
-                        child: Text(
-                          context.l10n.calendar_today,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: theme.palette.primaryAccent,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

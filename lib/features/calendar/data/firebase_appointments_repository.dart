@@ -73,7 +73,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   void _invalidateSearchCache() {
     _searchCache.clear();
     _scanWindow = null;
-    _localWrites.add(null);
+    if (!_localWrites.isClosed) _localWrites.add(null);
   }
 
   // Broadcasts whenever a local write happens, so the cache can invalidate itself.
@@ -81,6 +81,15 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   @override
   Stream<void> get onLocalWrite => _localWrites.stream;
+
+  /// Releases the local-write broadcast, from the provider's `onDispose`.
+  ///
+  /// The provider is not `autoDispose`, so in production this fires only with
+  /// the container — but a widget test builds a container per pump, and an
+  /// unclosed controller keeps one alive per test.
+  void dispose() {
+    unawaited(_localWrites.close());
+  }
 
   @override
   String newDocId() => _appointments.doc().id;
@@ -381,10 +390,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     // the subcollection has no inherent order, where the array carried its
     // own. `uploadedAt` is the field the array was effectively sorted by
     // (append order), so this preserves what people already see.
-    final snapshot = await _imagesOf(id)
-        .orderBy('uploadedAt')
-        .limit(_appointmentImageScanLimit)
-        .get();
+    final snapshot = await _imagesOf(
+      id,
+    ).orderBy('uploadedAt').limit(_appointmentImageScanLimit).get();
     if (snapshot.docs.length >= _appointmentImageScanLimit) {
       _logger.warn(
         'APPT-IMG subcollection read for $id hit the '
@@ -759,8 +767,17 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
             )) {
           continue;
         }
-        final empIds = data['employeeIds'] as List<dynamic>? ?? const [];
-        busyIds.addAll(empIds.whereType<String>());
+        // Read the same way `AppointmentRecord._parseStringList` does, for the
+        // same reason the `startTime` cast above was removed: the model
+        // already asserts `employeeIds` can arrive as a bare String, and a
+        // hard `as List` on one such doc throws out of the whole conflict
+        // check — which is the path that decides whether to warn the admin.
+        final rawIds = data['employeeIds'];
+        if (rawIds is List) {
+          busyIds.addAll(rawIds.whereType<String>());
+        } else if (rawIds is String && rawIds.isNotEmpty) {
+          busyIds.add(rawIds);
+        }
       }
     }
 

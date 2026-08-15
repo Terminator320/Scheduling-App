@@ -29,22 +29,28 @@ KEY INVARIANTS the change must not break:
   (Firestore rateLimits/* counters clients can't read/write). Callables require App Check + auth.
 - Firestore rules are the last line of defense. QUERY rules evaluate against query CONSTRAINTS
   not doc data: a list query must add .where(...) matching the rule or it's permission-denied.
-  doc.get() IS evaluated against actual data. users read rule has 4 clauses (admin / active /
-  own uid / own invite).
-- Appointment status allowlist: pending, confirmed, in_progress, done, cancelled. New appts
-  created status:'pending'.
+  doc.get() IS evaluated against actual data. users read rule has THREE clauses (admin /
+  status=='active' / own uid). The fourth email-matched invite clause was deleted 2026-08-08
+  with the #compat-1.37.1 shim; do not flag its absence.
+- Appointment status allowlist: pending, in_progress, done, cancelled — FOUR, and `confirmed`
+  was retired 2026-07-09. `overdue` is display-only, never stored, never in the picker. New
+  appts created status:'pending'. Pinned by appointment_status_rules_test.dart.
 - Role/isAdmin ALWAYS from Firestore, never SharedPreferences.
 - Image upload: validate magic bytes (JPEG FF D8 FF / PNG 89 50 4E); extension insufficient.
-  Two stages ImageCompressService -> ImageStorageService; temp filenames unique under Future.wait
-  (static counter, not bare DateTime.now().millisecondsSinceEpoch).
-- Firebase callable responses on Android return nested objects as Map<dynamic,dynamic>; cast
-  loosely: (v as Map?)?.cast<String,dynamic>(). Direct as Map<String,dynamic>? throws TypeError.
+  ONE stage: ImagePickerService resizes + compresses at pick time, ImageStorageService validates
+  and uploads. ImageCompressService was REMOVED — do not ask for a second compression pass.
+- Cast callable responses loosely: (v as Map?)?.cast<String,dynamic>(), never
+  as Map<String,dynamic>?. Started as an Android-only TypeError; Android is gone, so it can no
+  longer bite, but it stays the convention — same cost, no dependency on a plugin's map type.
 - whereArrayContainsAny hard limit 30; chunk IDs into batches of 30.
 - Typed failures: sealed Failure family per feature; repos throw typed failure; UI surfaces via
   noticeServiceProvider.error(failure.toLocalizedMessage(context)). Don't throw Exception(...).
 - Notices via noticeServiceProvider (top overlay), never ScaffoldMessenger.showSnackBar (3
   sanctioned exceptions only). composeErrorNotice for generic catch sites with a TAG; logger.warn
-  label starts with same TAG, called BEFORE any if(!mounted) return.
+  label starts with same TAG, called BEFORE any if(!mounted) return. The notice itself carries
+  NO support tag (owner call 2026-08-04) — the tag lives only in the logger label. And RESOLVE
+  the provider BEFORE the first await (`final logger = ref.read(loggerProvider);`): under
+  Riverpod 3 `ref.read` on an unmounted consumer THROWS, so a ref.read inside a catch is a bug.
 - Frontend tokens: never hardcode color/spacing/radius; map through Theme.of(context).colorScheme;
   never branch on isDark for styling; success surfaces use theme.statusColors (tertiary is amber
   WARNING, not success). const constructors; ListView.builder for lists.

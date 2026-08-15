@@ -75,8 +75,10 @@ String composeErrorNotice(
 /// goes through here: the block was copy-pasted at six call sites differing
 /// only in [intro].
 ///
-/// The two invite-acceptance screens deliberately don't use this — they surface
-/// offline through their own `AuthBanner`, not a notice.
+/// `AccountSetupScreen` deliberately doesn't use this — it surfaces offline
+/// through its own `_bannerError`, not a notice. (This named the two
+/// `accept_invite_*` screens until 2026-08-11; P4c deleted both, so the one
+/// live carve-out read as drift.)
 bool guardedOffline(
   BuildContext context,
   WidgetRef ref, {

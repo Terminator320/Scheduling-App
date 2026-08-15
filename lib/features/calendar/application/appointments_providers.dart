@@ -10,7 +10,9 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 
 final appointmentsRepositoryProvider = Provider<AppointmentsRepository>((ref) {
   final firestore = ref.watch(firestoreProvider);
-  return FirebaseAppointmentsRepository(firestore);
+  final repository = FirebaseAppointmentsRepository(firestore);
+  ref.onDispose(repository.dispose);
+  return repository;
 });
 
 /// How long an unwatched month keeps its listener warm for reuse on page-back.

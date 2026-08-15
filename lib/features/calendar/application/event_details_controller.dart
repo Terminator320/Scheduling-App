@@ -146,13 +146,15 @@ class EventDetailsController extends Notifier<EventDetailsState>
     // counter ONLY if the backfill is known complete, or not gate at all.
     if (!appointment.hasPictures) return;
     final repo = ref.read(appointmentsRepositoryProvider);
+    // Hoisted with `repo`: the `ref.mounted` check below proves disposal here
+    // is real, and `ref.read` on a disposed notifier throws a StateError over
+    // the failure it is trying to report.
+    final logger = ref.read(loggerProvider);
     List<AppointmentImage> stored;
     try {
       stored = await repo.fetchAppointmentPictures(id);
     } catch (e, st) {
-      ref
-          .read(loggerProvider)
-          .warn('APPT-IMG subcollection read failed', e, st);
+      logger.warn('APPT-IMG subcollection read failed', e, st);
       return;
     }
     if (stored.isEmpty || !ref.mounted) return;

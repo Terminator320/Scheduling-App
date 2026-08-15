@@ -681,10 +681,13 @@ const waveImportCustomers = onCall(
 // `waveSyncWorker` scheduler. Draining here rather than on a 5-minute poll is
 // both cheaper and faster: an idle day costs nothing instead of 288
 // invocations, and an edit reaches Wave in seconds instead of up to five
-// minutes. `waveScheduledImport` is the daily safety net for what an
-// event-driven push structurally cannot catch — a job that failed and backed
-// off, and a lease left stale by a dead instance — since neither produces a
-// new client write to ride on.
+// minutes. The daily safety net for what an event-driven push structurally
+// cannot catch — a job that failed and backed off, and a lease left stale by a
+// dead instance, since neither produces a new client write to ride on — is
+// `runScheduledImport` below, which rides `sendDailyJobDigest`. (It was the
+// standalone `waveScheduledImport` export until 2026-08-13; naming that here
+// in the present tense sent readers grepping for a function that no longer
+// exists.)
 //
 // `timeoutSeconds` is raised off the 60 s default because the drain can sleep
 // on Wave's Retry-After; the drain's own budget is a fraction of it so the

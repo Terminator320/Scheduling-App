@@ -105,14 +105,18 @@ abstract class ClientRecord with _$ClientRecord {
           .whereType<Map<Object?, Object?>>()
           .map((c) => ClientContact.fromMap(Map<String, dynamic>.from(c)))
           .toList(),
-      noFixedAddress: (data['noFixedAddress'] as bool?) ?? false,
-      archived: (data['archived'] as bool?) ?? false,
+      // `== true`, not a cast: this factory maps a live snapshot stream, so
+      // one console-written `"false"` would throw for the whole page rather
+      // than for the field. Same reasoning as `ClientType.fromRaw` below.
+      noFixedAddress: data['noFixedAddress'] == true,
+      archived: data['archived'] == true,
       type: ClientType.fromRaw(data['type']?.toString()),
       accessNotes: (data['accessNotes'] ?? '').toString(),
       onSiteManager: (data['onSiteManager'] ?? '').toString(),
       billingTerms: (data['billingTerms'] ?? '').toString(),
-      autoInvoice: (data['autoInvoice'] as bool?) ?? false,
-      jobCount: (data['jobCount'] as num?)?.toInt(),
+      autoInvoice: data['autoInvoice'] == true,
+      // Function-owned, so the app never writes it — but the console can.
+      jobCount: firestoreInt(data['jobCount']),
       createdAt: firestoreDateTime(data['createdAt']),
       waveCustomerId: data['waveCustomerId']?.toString(),
       waveSyncState: (wave?['syncState'] ?? '').toString(),

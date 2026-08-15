@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
@@ -60,6 +63,12 @@ class _PhotoUploadFailureListenerState
     if (failure == null || !mounted) return;
     final appointmentId = failure.appointmentId;
     final scheme = Theme.of(context).colorScheme;
+    // Everything the Open action needs is resolved HERE, not inside it. The
+    // bar is hosted by ScaffoldMessenger and can outlive this State, so a
+    // `ref.read` in the callback throws once the host is gone.
+    final repository = ref.read(appointmentsRepositoryProvider);
+    final logger = ref.read(loggerProvider);
+    final notices = ref.read(noticeServiceProvider);
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       errorSnackBar(
         context,
@@ -68,15 +77,30 @@ class _PhotoUploadFailureListenerState
           label: context.l10n.calendar_open,
           textColor: scheme.onErrorContainer,
           onPressed: () async {
-            final appointment = await ref
-                .read(appointmentsRepositoryProvider)
-                .getAppointmentById(appointmentId);
-            if (!mounted || appointment == null) return;
-            await showEventDetails(
-              context,
-              appointment,
-              showActions: widget.showActions,
-            );
+            // Guarded: `getAppointmentById` rethrows, and this is an unawaited
+            // async callback — offline or a rules rejection would otherwise
+            // escape to the zone handler as a FATAL, with no feedback at all.
+            try {
+              final appointment = await repository.getAppointmentById(
+                appointmentId,
+              );
+              if (!mounted || appointment == null) return;
+              await showEventDetails(
+                context,
+                appointment,
+                showActions: widget.showActions,
+              );
+            } catch (error, stackTrace) {
+              logger.warn('APPT-OPEN photo failure reopen', error, stackTrace);
+              if (!mounted) return;
+              notices.error(
+                composeErrorNotice(
+                  context,
+                  intro: context.l10n.error_introOpenAppointment,
+                  error: error,
+                ),
+              );
+            }
           },
         ),
       ),

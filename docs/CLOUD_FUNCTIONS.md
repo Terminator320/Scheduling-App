@@ -917,6 +917,35 @@ day costs zero invocations instead of 288, it frees a Cloud Scheduler slot (only
 up to five minutes. Needs the same `waveSyncQueue` composite indexes the worker
 did: `(status ASC, nextAttemptAt ASC)` and `(status ASC, claimedAt ASC)`.
 
+### `waveRetryFailedJobs` — `wave/callables.js`
+
+Admin-only recovery for **dead-lettered** outbox jobs, called from Settings
+(`wave_service.dart`). A `dead` job is terminal — no drain picks it up again —
+so without this the client's data diverges from Wave permanently, and the only
+way back was editing the client again to mint a fresh job, which an admin would
+have to know to do and would only think to do if they noticed the error badge.
+
+**Deliberately explicit, never an automatic requeue on a timer.** A job that
+died on a `WaveValidationError` will die again, so a timer would spin forever
+re-reporting the same failure. The admin presses this once they have fixed the
+data or the outage has passed.
+
+Guard order is the standard one — auth → `assertAdmin` → `assertPayloadShape`
+(empty key set; it takes no payload) → `enforceDurableRateLimit`
+(`wave-retry`, **10/hour per admin uid**) → work. Refuses with
+`failed-precondition / wave/not-connected` when no business id is stored.
+
+`requeueDeadJobs()` is the durable part; the `drainQueue` that follows is
+**best-effort and must not fail the call**, so the press has a visible effect
+without the requeue being reported as a failure when only the push behind it
+broke. Returns `{requeued, scanned, pushed}` — `pushed` is null when nothing
+was requeued or the drain threw.
+
+Related: `listOutstandingClientIds` (`wave/worker.js`) protects `queued`,
+`inflight` **and `dead`** client ids from being overwritten by an import — a
+dead job's edit is the one *most* at risk, because unlike the other two it will
+not self-heal without this callable.
+
 ### `runWaveDaily` — `wave/callables.js` (rides `sendDailyJobDigest`)
 **Not its own export.** `waveScheduledImport` was a standalone `every 24 hours`
 scheduler until 2026-08-13; the daily Wave maintenance is now `runWaveDaily`,
