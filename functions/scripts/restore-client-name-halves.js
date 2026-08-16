@@ -111,6 +111,9 @@ const {
 // would leave the collection holding two different splits of the same name.
 const {splitName} = require("./backfill-client-name-with-phone");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+// The batched-write loop, shared so `--dry-run` cannot be forgotten at a
+// call site — see `_batch.js`.
+const {commitInBatches} = require("./_batch");
 
 const BATCH_SIZE = 200;
 
@@ -300,8 +303,7 @@ async function main() {
   const noEvidence = [];
   const skipped = {notRenamed: 0, hasName: 0};
 
-  let batch = db.batch();
-  let pending = 0;
+  const writer = commitInBatches(db, {dryRun, batchSize: BATCH_SIZE});
   // Counted rather than read off `snap.size`: `--max` BREAKS the loop, so on a
   // staged run the collection size would tell the operator the whole roster was
   // examined when a tail of it was never looked at — and every tally below is a
@@ -343,16 +345,9 @@ async function main() {
     const halves = splitName(remembered);
     restored.push({id: doc.id, remembered, ...halves, past});
 
-    if (dryRun) continue;
-    batch.update(doc.ref, halves);
-    pending += 1;
-    if (pending >= BATCH_SIZE) {
-      await batch.commit();
-      batch = db.batch();
-      pending = 0;
-    }
+    await writer.stage(doc.ref, halves);
   }
-  if (!dryRun && pending > 0) await batch.commit();
+  await writer.flush();
 
   const tag = dryRun ? "[dry-run] " : "";
 

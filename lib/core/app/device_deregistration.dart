@@ -1,12 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/images/appointment_image_loader.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 
 /// Drops every server-side registration this DEVICE holds, in the one order
-/// that works.
+/// that works — and then forgets the session's local photo cache.
 ///
 /// Push token, then presence, then the Live Activity tokens — and all three
 /// before whatever revokes the credential (`signOut`, `deleteAccount`, or the
@@ -49,6 +50,14 @@ Future<void> deregisterThisDevice(WidgetRef ref) async {
   final push = ref.read(pushRegistrationControllerProvider);
   final presence = ref.read(presenceSyncControllerProvider);
   final liveActivity = ref.read(liveActivityRegistrationControllerProvider);
+  // Hoisted for the same reason, even though it is USED last: the read is
+  // what throws, not the call. Left at the bottom it sat after three network
+  // round-trips and outside `step`'s catch, so on the account-deleted path —
+  // where the tree is being torn down during exactly those awaits — it threw
+  // out of this function and `AccountExitListeners` never reached `signOut()`,
+  // leaving a deleted account signed in and the cache it exists to clear
+  // uncleared.
+  final imageLoader = ref.read(appointmentImageLoaderProvider);
 
   Future<void> step(String label, Future<void> Function() run) async {
     try {
@@ -61,4 +70,16 @@ Future<void> deregisterThisDevice(WidgetRef ref) async {
   await step('push', push.unregisterCurrentDevice);
   await step('presence', presence.unregister);
   await step('liveActivity', liveActivity.unregister);
+
+  // LOCAL, and deliberately last: nothing above depends on it, and clearing a
+  // map cannot fail (the READ that can is hoisted above).
+  // `appointmentImageLoaderProvider` is a plain `Provider`, so its byte cache
+  // lives for the whole process — up to 24 MB of this user's job photos would
+  // otherwise stay resident in the heap across sign-out and into the next
+  // user's session on a shared device. It is not a rules bypass (serving them
+  // still needs the next reader to be entitled to the same `storagePath`),
+  // which is why it sits here rather than above the credential-dependent
+  // steps — but this is the single owner of "forget this session", and it was
+  // the one thing it did not forget.
+  imageLoader.clear();
 }

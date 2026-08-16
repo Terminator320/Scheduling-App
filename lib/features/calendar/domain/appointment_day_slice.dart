@@ -128,7 +128,7 @@ int _clampedDayCount(DateTime start, DateTime end) =>
 /// and it must do it through here rather than by comparing `startTime` at the
 /// call site, which silently reads a fortnight of history as "today".
 bool runsOn(AppointmentRecord appointment, DateTime day) =>
-    sliceFor(appointment, day) != null;
+    _dayIndexOn(appointment, day) != null;
 
 /// True when [appointment] works on at least one day in `[start, end)`.
 ///
@@ -154,11 +154,39 @@ bool runsInRange(AppointmentRecord appointment, DateTime start, DateTime end) {
 /// corrupt length, giving a drawer badge that read "1 job today" every day for
 /// a year and a card counter reading "Day 400 of 900".
 AppointmentDaySlice? sliceFor(AppointmentRecord appointment, DateTime day) {
+  final index = _dayIndexOn(appointment, day);
+  if (index == null) return null;
+  return _sliceAt(
+    appointment,
+    day: day.dateOnly,
+    index: index.dayIndex,
+    count: index.dayCount,
+  );
+}
+
+/// [day]'s 1-based position within [appointment]'s run, or null when it does
+/// not run that day.
+///
+/// Split out of [sliceFor] because [runsOn] only needs the null test, and it
+/// is the MANDATED re-scoping call on every superset consumer — the drawer
+/// badge over the whole range list on every drawer build,
+/// `employeeJobsTodayProvider`, `employeeTodayJobsProvider`, the dashboard's
+/// day reducer. Building the whole slice to answer it meant two `DateTime`
+/// allocations per record that `runsOn` then discarded, ~2000 of them per
+/// pass at the 1000-record stream limit.
+///
+/// `_clampedDayCount` deliberately stays inside: it is the correctness guard
+/// that contains a console-written run past [maxAppointmentSpanDays], not an
+/// optimisation to hoist out.
+({int dayIndex, int dayCount})? _dayIndexOn(
+  AppointmentRecord appointment,
+  DateTime day,
+) {
   final count = _clampedDayCount(appointment.startTime, appointment.endTime);
   if (count < 1) return null;
   final index = calendarDaysBetween(appointment.startTime.dateOnly, day) + 1;
   if (index < 1 || index > count) return null;
-  return _sliceAt(appointment, day: day.dateOnly, index: index, count: count);
+  return (dayIndex: index, dayCount: count);
 }
 
 AppointmentDaySlice _sliceAt(

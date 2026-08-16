@@ -163,6 +163,15 @@ class FirebaseClientsRepository implements ClientsRepository {
         .orderBy('createdAt', descending: true)
         .limit(ClientSearchPolicy.serverReadLimit)
         .get();
+    if (snapshot.docs.length == ClientSearchPolicy.serverReadLimit) {
+      // Same posture as every other capped read here. At the cap the
+      // dashboard's 8-week new-client trend under-reports its OLDEST weeks —
+      // gradually, as the roster grows, with no error anywhere.
+      _logger.warn(
+        'CLI-LIST fetchClientsCreatedSince hit the scan cap; '
+        'the oldest weeks of the trend are understated',
+      );
+    }
     return snapshot.docs
         .map((doc) => ClientRecord.fromMap(doc.id, doc.data()))
         .toList();

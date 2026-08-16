@@ -9,7 +9,9 @@ import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
-import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
+import 'package:scheduling/features/auth/widgets/auth_fields.dart';
+import 'package:scheduling/features/auth/widgets/auth_scaffold.dart';
+import 'package:scheduling/features/auth/widgets/auth_text.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 

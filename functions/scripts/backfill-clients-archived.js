@@ -33,6 +33,9 @@
 const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+// The batched-write loop, shared so `--dry-run` cannot be forgotten at a
+// call site — see `_batch.js`.
+const {commitInBatches} = require("./_batch");
 
 /** Bare switches, matched EXACTLY — see `_flags.js`. */
 const EXACT_FLAGS = ["--dry-run"];
@@ -50,6 +53,22 @@ function assertKnownFlags(argv) {
 const BATCH_SIZE = 400;
 
 /**
+ * True when a client doc still needs the `archived` field written.
+ *
+ * The test is on the TYPE, not on truthiness: `archived: false` is the
+ * overwhelmingly common stored value, so `!data.archived` would rewrite
+ * every un-archived client on every run — and `archived: true` must never be
+ * reset to false by a re-run. Pure so the one decision this script makes is
+ * testable without prod credentials.
+ *
+ * @param {?Object} data The stored client document.
+ * @return {boolean}
+ */
+function needsArchivedField(data) {
+  return typeof (data || {}).archived !== "boolean";
+}
+
+/**
  * Patches every client doc missing `archived`.
  * @return {!Promise<void>}
  */
@@ -64,25 +83,17 @@ async function main() {
 
   let patched = 0;
   let skipped = 0;
-  let batch = db.batch();
-  let pending = 0;
+  const writer = commitInBatches(db, {dryRun, batchSize: BATCH_SIZE});
 
   for (const doc of snap.docs) {
-    if (typeof doc.data().archived === "boolean") {
+    if (!needsArchivedField(doc.data())) {
       skipped += 1;
       continue;
     }
     patched += 1;
-    if (dryRun) continue;
-    batch.update(doc.ref, {archived: false});
-    pending += 1;
-    if (pending >= BATCH_SIZE) {
-      await batch.commit();
-      batch = db.batch();
-      pending = 0;
-    }
+    await writer.stage(doc.ref, {archived: false});
   }
-  if (!dryRun && pending > 0) await batch.commit();
+  await writer.flush();
 
   console.log(
       `${dryRun ? "[dry-run] " : ""}clients: ${patched} patched, ` +
@@ -98,4 +109,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = {assertKnownFlags};
+module.exports = {assertKnownFlags, needsArchivedField};

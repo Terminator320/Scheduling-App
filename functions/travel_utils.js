@@ -103,6 +103,13 @@ const TRAVEL_SWEEP_MAX = 500;
 // decision always uses a fresh Routes response.
 const ESTIMATE_TTL_MS = 10 * MINUTE_MS;
 const SKIP_MARGIN_MS = 15 * MINUTE_MS;
+
+// On-site flips run at once. Sized like `PRUNE_CHUNK` in
+// `live_activity_registry.js`, against the same `PRUNE_MAX` (400) ceiling on
+// the marker list — each flip is a read + a token query + an APNs push, so
+// the flat fan-out this replaced was the heaviest one in the push stack.
+const ON_SITE_FLIP_CHUNK = 25;
+
 const _estimateCache = new Map();
 
 /**
@@ -807,8 +814,19 @@ async function runOnSiteFlipPass(deps) {
   const {db, now, logger} = deps;
   const nowDate = now || new Date();
   const markers = await listCardsDueForOnSite(deps);
-  let flipped = 0;
-  for (const marker of markers) {
+  // Concurrent, like the candidate loop above and for the same reason: each
+  // marker is an independent chain of a `doc.get()`, a token query and a
+  // direct APNs push, ~300 ms of round-trips that share nothing. Serialised,
+  // `PRUNE_MAX` (400) markers is up to ~120 s of the 420 s budget this
+  // function shares with the billable travel half — every 5 minutes.
+  //
+  // CHUNKED rather than one flat `Promise.all`, matching `PRUNE_CHUNK` in
+  // `live_activity_registry.js`: this list is bounded by that same 400, and
+  // each entry here is heavier than a delete — a read, a query and an APNs
+  // push apiece, so a flat fan-out is ~1200 concurrent requests out of one
+  // invocation. The per-marker try/catch stays either way: one failing card
+  // must not stop the pass.
+  const flip = async (marker) => {
     try {
       const snap = await db
           .collection("appointments").doc(marker.appointmentId).get();
@@ -825,9 +843,9 @@ async function runOnSiteFlipPass(deps) {
           nowDate,
         });
         await clearCardMarker(deps, {employeeDocId: marker.employeeDocId});
-        continue;
+        return 0;
       }
-      flipped += await updateLiveActivity(deps, {
+      return await updateLiveActivity(deps, {
         appointmentId: String(marker.appointmentId),
         employeeDocId: marker.employeeDocId,
         ctx: liveActivityCtx(record),
@@ -839,7 +857,15 @@ async function runOnSiteFlipPass(deps) {
         logger.warn("liveActivity: on-site flip failed",
             {employeeDocId: marker.employeeDocId, err});
       }
+      return 0;
     }
+  };
+
+  let flipped = 0;
+  for (let i = 0; i < markers.length; i += ON_SITE_FLIP_CHUNK) {
+    const done = await Promise.all(
+        markers.slice(i, i + ON_SITE_FLIP_CHUNK).map(flip));
+    flipped += done.reduce((sum, n) => sum + n, 0);
   }
   return flipped;
 }

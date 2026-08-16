@@ -101,6 +101,9 @@ const {
 // rather than renamed. This script rewrites live Wave customers.
 const {toMillis} = require("../time_utils");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+// The batched-write loop, shared so `--dry-run` cannot be forgotten at a
+// call site — see `_batch.js`.
+const {commitInBatches} = require("./_batch");
 
 const BATCH_SIZE = 400;
 const SAMPLE_SIZE = 25;
@@ -292,8 +295,7 @@ async function main() {
   const businesses = [];
   let unlinked = 0;
 
-  let batch = db.batch();
-  let pending = 0;
+  const writer = commitInBatches(db, {dryRun, batchSize: BATCH_SIZE});
 
   for (const doc of snap.docs) {
     const data = doc.data();
@@ -354,16 +356,9 @@ async function main() {
     // should know the count before it happens.
     if (!data.waveCustomerId) unlinked += 1;
 
-    if (dryRun) continue;
-    batch.update(doc.ref, patch);
-    pending += 1;
-    if (pending >= BATCH_SIZE) {
-      await batch.commit();
-      batch = db.batch();
-      pending = 0;
-    }
+    await writer.stage(doc.ref, patch);
   }
-  if (!dryRun && pending > 0) await batch.commit();
+  await writer.flush();
 
   const tag = dryRun ? "[dry-run] " : "";
   if (sample.length) {

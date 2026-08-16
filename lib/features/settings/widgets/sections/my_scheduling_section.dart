@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
+import 'package:scheduling/features/employees/widgets/fields/work_schedule_pickers.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 import 'package:scheduling/shared/widgets/fields/sheet_field_row.dart';

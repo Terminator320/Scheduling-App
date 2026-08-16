@@ -21,7 +21,7 @@ import 'package:scheduling/features/clients/widgets/sections/history_month_bar.d
 /// are not a contiguous run of days and month bars over scattered results would
 /// be noise. In that mode the list renders flat and the rail picks up the month
 /// instead — see [HistoryDateRail].
-class HistorySliverList extends StatelessWidget {
+class HistorySliverList extends StatefulWidget {
   const HistorySliverList({
     required this.rows,
     required this.colorMap,
@@ -60,7 +60,30 @@ class HistorySliverList extends StatelessWidget {
   final Widget Function(Widget child)? firstRowTourWrap;
 
   @override
+  State<HistorySliverList> createState() => _HistorySliverListState();
+}
+
+class _HistorySliverListState extends State<HistorySliverList> {
+  /// `monthSectionsOf` is O(N) and N grows with scroll depth (25 a page,
+  /// unbounded pages), while `build` re-runs on a page load, a filter
+  /// `setState`, and every `employeeColorMapProvider` / `currentDayProvider`
+  /// emission. Memoized on the identity of the rows list — the same discipline
+  /// `_filterOptionsPages` and the search index use in the host view.
+  List<AppointmentRecord>? _sectionedRows;
+  List<HistoryMonthSection> _sections = const [];
+
+  List<HistoryMonthSection> _sectionsFor(List<AppointmentRecord> rows) {
+    if (!identical(rows, _sectionedRows)) {
+      _sectionedRows = rows;
+      _sections = monthSectionsOf(rows);
+    }
+    return _sections;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final rows = widget.rows;
+    final inSearch = widget.inSearch;
     // Resolved once here rather than per row: `DateFormat` construction parses
     // a skeleton, and this used to sit one frame away from an item builder.
     final monthFormat = monthYearFormatFor(
@@ -75,7 +98,7 @@ class HistorySliverList extends StatelessWidget {
           if (inSearch)
             SliverList.builder(itemCount: rows.length, itemBuilder: _item)
           else
-            for (final section in monthSectionsOf(rows))
+            for (final section in _sectionsFor(rows))
               // The group is what makes the bar STICKY rather than STACKING: a
               // pinned header is bounded by its group's scroll extent, so July's
               // bar pushes August's out on the way past instead of parking a
@@ -102,7 +125,7 @@ class HistorySliverList extends StatelessWidget {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.sp12),
-              child: footer ?? const SizedBox.shrink(),
+              child: widget.footer ?? const SizedBox.shrink(),
             ),
           ),
         ],
@@ -113,13 +136,14 @@ class HistorySliverList extends StatelessWidget {
   /// Every row goes through here, so the first-row tour wrap and the pager's
   /// prefetch both key off ONE global index rather than a per-section one.
   Widget _item(BuildContext context, int index) {
-    onRowBuilt?.call(index);
+    widget.onRowBuilt?.call(index);
     final row = _row(context, index);
-    final wrap = firstRowTourWrap;
+    final wrap = widget.firstRowTourWrap;
     return index == 0 && wrap != null ? wrap(row) : row;
   }
 
   Widget _row(BuildContext context, int index) {
+    final rows = widget.rows;
     final app = rows[index];
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sp8),
@@ -133,8 +157,8 @@ class HistorySliverList extends StatelessWidget {
             child: HistoryDateRail(
               day: DateUtils.dateOnly(app.startTime),
               showDate: startsDay(rows, index),
-              inSearch: inSearch,
-              currentYear: currentYear,
+              inSearch: widget.inSearch,
+              currentYear: widget.currentYear,
             ),
           ),
           Expanded(
@@ -142,7 +166,7 @@ class HistorySliverList extends StatelessWidget {
               appointment: app,
               // No live name map here — crewFor falls back to the record's
               // denormalized employeeNames.
-              crew: crewFor(app, colorMap: colorMap),
+              crew: crewFor(app, colorMap: widget.colorMap),
               // Dims a cancelled visit to 0.6 and strikes its title through.
               // History keeps the plain full-height card otherwise: the
               // agenda's collapsed green treatment exists to sink closed work
@@ -152,7 +176,8 @@ class HistorySliverList extends StatelessWidget {
               // Carries the caller's role rather than a hardcoded false: an
               // admin needs to reach a finished job's Edit button from here,
               // which is where finished jobs actually live.
-              onTap: () => showEventDetails(context, app, showActions: isAdmin),
+              onTap: () =>
+                  showEventDetails(context, app, showActions: widget.isAdmin),
             ),
           ),
         ],

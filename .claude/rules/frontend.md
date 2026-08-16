@@ -104,11 +104,13 @@ Material Design 3 (Flat / Elevation). Use `ColorScheme`, `TextTheme`, and `Theme
   address. Don't route a multi-stop run through `AddressMapLauncher`.
 - `AppAvatar` (sizes `xs/sm/md/lg`) resolves its background through `crewColorOf` and its foreground through `avatarForegroundFor` (design_tokens) — do not hand-roll initials-on-color circles or the black/white contrast ternary. `contrastingForegroundFor` survives as the light-path primitive inside `avatarForegroundFor`. A caller that must lay avatars out by hand (the appointment card's overlapped crew stack, which can't use `LayoutBuilder` under `IntrinsicHeight`) reads `AvatarSize.<x>.diameter` — never a local copy of the number, which drifts silently with no compile error.
 - `BrandMark` (`shared/widgets/branding/brand_logo.dart`) is the app logo
-  (`assets/images/icon.png`) — never hand-roll an `Image`/`Icon` for branding.
+  (`assets/images/brand_mark.png`, the 512px derivative — the 1254px
+  `icon.png` master is deliberately NOT bundled; see `assets/images/README.md`)
+  — never hand-roll an `Image`/`Icon` for branding.
   Pass `decorative: true` where a visible `brandName` wordmark sits beside it
   (splash, onboarding bar) so a screen reader doesn't read the name twice; leave
   it on where the mark is the only brand cue (auth header). Auth screens get the
-  mark from the hero header in `auth_form_widgets.dart` (P4b — `AuthBrandHeader`
+  mark from the hero header in `auth_scaffold.dart` (P4b — `AuthBrandHeader`
   is deleted, along with the `EntityFormHeader` the retired edit forms used);
   `brandName` is a proper noun — never localize it.
 - `WarningNote` (`shared/widgets/feedback/`) is the amber "heads up, but nothing

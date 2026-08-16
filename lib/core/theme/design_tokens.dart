@@ -105,6 +105,28 @@ class AppColors {
   /// dark-theme override map, so it takes the generic HSL lift instead of its
   /// designed dark counterpart, and no picker would ever offer it.
   static const Color crewDefault = blue;
+
+  /// The eight nav-drawer row hues, one per `AppDestination`.
+  ///
+  /// A SEPARATE palette from [crewPalette], deliberately, even though every
+  /// entry matches one of its hues exactly: that list is the pool employee
+  /// colours are ASSIGNED from, so reordering it — a normal change for staff
+  /// colours — would silently repaint the whole nav drawer. Same hues, no
+  /// coupling.
+  ///
+  /// They live here rather than as literals in `drawer_catalog.dart` because
+  /// a token beside seven raw `Color(0xFF…)` values is worse than either
+  /// extreme; this is the all-or-nothing half. Rendered through `crewColorOf`
+  /// at the call site for the dark lift, like any crew hue — never painted
+  /// raw.
+  static const Color navCalendar = Color(0xFF005CC8);
+  static const Color navDayRoute = Color(0xFFD61F3A);
+  static const Color navLiveMap = Color(0xFF00A5C4);
+  static const Color navTeam = Color(0xFF0E9B6E);
+  static const Color navClients = Color(0xFF7A3FF2);
+  static const Color navDashboard = Color(0xFFE08A00);
+  static const Color navHistory = Color(0xFFC43F8E);
+  static const Color navSettings = Color(0xFF5A6B85);
 }
 
 /// Resolves a STORED employee colour int to the colour this theme renders.

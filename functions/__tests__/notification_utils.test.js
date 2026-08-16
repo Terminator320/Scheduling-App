@@ -42,6 +42,31 @@ describe("diffAppointmentForNotifications", () => {
     expect(kinds(evs)).toEqual(["e1:assigned", "e2:assigned"]);
   });
 
+  test("a pictures-only rewrite emits nothing", () => {
+    // Load-bearing for COST, not just correctness. `rotateAssignedImageTokens`
+    // rewrites `pictures[].url` on up to 500 appointments in one deactivation,
+    // and every one of those parent writes fires `notifyAppointmentChanges`.
+    // That fan-out is only acceptable because each invocation is a genuine
+    // no-op: no events here means `handleAppointmentWrite` returns before any
+    // Firestore read, so 500 writes cost 500 empty invocations rather than
+    // 500 recipient lookups and widget-window queries. (The recount trigger
+    // is on the images SUBcollection, so it is not fired by these writes at
+    // all.) Make the differ sensitive to `pictures` and that stops being
+    // true — which is what this pins.
+    const base = {
+      employeeIds: ["e1"],
+      startTime: future(3 * HOUR),
+      status: "pending",
+    };
+    const evs = diffAppointmentForNotifications(
+        {...base, pictures: [{url: "old", storagePath: "p"}]},
+        {...base, pictures: [{url: "new", storagePath: "p"}]},
+        NOW,
+        "a1",
+    );
+    expect(evs).toEqual([]);
+  });
+
   test("created already cancelled emits nothing", () => {
     const evs = diffAppointmentForNotifications(
         null,
@@ -557,6 +582,7 @@ function makeDb(config) {
   const ledgerCreates = [];
   const ledgerDeletes = [];
   const appointmentQueries = [];
+  const appointmentOrders = [];
   // Every users/{id} and users/{id}/fcmTokens read, so a test can assert both
   // that a recipient is read at most once per pass and that an unreachable
   // one costs nothing beyond that read.
@@ -605,7 +631,8 @@ function makeDb(config) {
             appointmentQueries.push({field, op, value});
             return q;
           },
-          orderBy() {
+          orderBy(field, direction) {
+            appointmentOrders.push({field, direction});
             return q;
           },
           limit() {
@@ -668,6 +695,7 @@ function makeDb(config) {
   };
   return {
     db, deletedTokens, ledgerCreates, ledgerDeletes, appointmentQueries,
+    appointmentOrders,
     seriesClaims, userReads, tokenReads,
   };
 }
@@ -1199,9 +1227,12 @@ describe("runOverduePromptSweep", () => {
     expect(messaging.sent).toHaveLength(0);
   });
 
-  test("a zero-delivery claim is released for a later retry", async () => {
+  test("a zero-delivery assignee burns no claim", async () => {
     // The assignee is active but has no fcmTokens yet, as if on a fresh
-    // install.
+    // install. Reachability is now checked BEFORE the claim, so nothing is
+    // written at all — "no ledger" and "written then released" are
+    // indistinguishable to the next sweep, which is what keeps the late-token
+    // retry below working.
     const {db, ledgerCreates, ledgerDeletes} = makeDb({
       users: {e1: {role: "employee", status: "active"}},
       tokens: {},
@@ -1212,8 +1243,8 @@ describe("runOverduePromptSweep", () => {
         {db, messaging, now: NOW, logger: silentLogger},
     );
     expect(res.prompted).toBe(0);
-    expect(ledgerCreates.map((c) => c.key)).toEqual([overdueKey]);
-    expect(ledgerDeletes).toEqual([overdueKey]);
+    expect(ledgerCreates).toEqual([]);
+    expect(ledgerDeletes).toEqual([]);
   });
 
   test("a thrown send releases the claim and continues", async () => {
@@ -1288,6 +1319,52 @@ describe("runDailyDigest", () => {
     expect(statusQuery.value).toEqual(expect.arrayContaining(["in_progress"]));
     expect(statusQuery.value).toEqual(OPEN_STATUSES);
     expect(res.digests).toBe(1);
+  });
+
+  test("orders startTime DESC so the cap keeps tomorrow, not a stale tail",
+      async () => {
+        // The query floor is 15 days in the PAST (a run that began earlier can
+        // still be on site tomorrow), so ASCENDING made DIGEST_SWEEP_MAX keep
+        // the OLDEST open jobs and discard tomorrow's — every crew would get
+        // no digest at all once the stale tail exceeded the cap.
+        const {db, appointmentOrders} = makeDb({
+          users: {e1: {role: "employee", status: "active"}},
+          tokens: {e1: [{id: "t1", locale: "en"}]},
+          appointments: [
+            {id: "j1", status: "pending", employeeIds: ["e1"],
+              startTime: new Date("2026-07-09T13:00:00Z")},
+          ],
+        });
+
+        await runDailyDigest({db, messaging: makeMessaging(), now: NOW,
+          logger: silentLogger});
+
+        expect(appointmentOrders).toContainEqual(
+            {field: "startTime", direction: "desc"});
+      });
+
+  test("an unreachable employee costs no widget-window read", async () => {
+    // Reachability is asked before `fetchEmployeeWidgetWindow`, the order
+    // handleAppointmentWrite already establishes: otherwise a tokenless
+    // active employee costs a 200-doc read and a payload build every day for
+    // a send that returns 0.
+    const {db, tokenReads, appointmentQueries} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: []},
+      appointments: [
+        {id: "j1", status: "pending", employeeIds: ["e1"],
+          startTime: new Date("2026-07-09T13:00:00Z")},
+      ],
+    });
+
+    const res = await runDailyDigest({db, messaging: makeMessaging(), now: NOW,
+      logger: silentLogger});
+
+    expect(res.digests).toBe(0);
+    expect(tokenReads).toEqual(["e1"]);
+    // The candidate sweep's own query only — no per-employee widget window.
+    expect(appointmentQueries.filter(
+        (q) => q.field === "employeeIds")).toEqual([]);
   });
 });
 
@@ -1450,9 +1527,11 @@ describe("deliverRecipientOnce", () => {
         expect(messaging.sent).toHaveLength(1);
       });
 
-  test("a claim that delivered nothing is released for retry", async () => {
+  test("a recipient with no live token burns no claim", async () => {
     // A recipient whose device has not registered a token yet: holding the
     // claim would suppress that reminder forever once the token arrives.
+    // Checked before the claim, so it costs no ledger write either — the
+    // retry below is what actually matters and is unchanged.
     const {db, created, deleted} = makeLedgerDb({
       users: ACTIVE,
       tokens: {e1: []},
@@ -1460,8 +1539,8 @@ describe("deliverRecipientOnce", () => {
     const messaging = makeMessaging();
 
     expect(await run(db, messaging)).toBe(0);
-    expect(created).toHaveLength(1);
-    expect(deleted).toEqual([LEDGER_ID]);
+    expect(created).toEqual([]);
+    expect(deleted).toEqual([]);
     expect(messaging.sent).toEqual([]);
   });
 
@@ -1523,11 +1602,12 @@ describe("deliverRecipientOnce", () => {
         expect(messaging.sent).toEqual([]);
       });
 
-  test("an inactive recipient gets nothing and its claim is released",
+  test("an inactive recipient gets nothing and costs no ledger write",
       async () => {
-        // The role/active gate lives in sendToEmployee; this pins that a
-        // filtered recipient still releases its claim rather than burning it.
-        const {db, deleted} = makeLedgerDb({
+        // `_canReachRecipient` is asked before the claim, so a filtered
+        // recipient no longer pays 2 writes + 2 reads on every one of the 24
+        // sweep runs its overdue window spans.
+        const {db, created, deleted} = makeLedgerDb({
           users: {e1: {role: "employee", status: "disabled"}},
           tokens: {e1: [{id: "t1", locale: "en"}]},
         });
@@ -1535,7 +1615,8 @@ describe("deliverRecipientOnce", () => {
 
         expect(await run(db, messaging)).toBe(0);
         expect(messaging.sent).toEqual([]);
-        expect(deleted).toHaveLength(1);
+        expect(created).toEqual([]);
+        expect(deleted).toEqual([]);
       });
 
   test("it works when deps carry no logger", async () => {

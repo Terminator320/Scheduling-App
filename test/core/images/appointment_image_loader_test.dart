@@ -9,6 +9,7 @@
 // storage.rules is evaluated every time, and nothing shareable is produced.
 // The legacy fallback is what keeps that from being a migration.
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:firebase_storage/firebase_storage.dart';
@@ -144,6 +145,46 @@ void main() {
     expect(loaded, [_bytes('p/1'), _bytes('p/2'), _bytes('p/3')]);
   });
 
+  test('loadAll never has more than 4 fetches in flight', () async {
+    // The bound itself, not just the ordering it survives: opening a job with
+    // a long strip must not fire the whole batch at Storage in one burst.
+    // Nothing asserted this, so `_maxConcurrentLoads` could be raised or
+    // removed with every existing test still green.
+    var inFlight = 0;
+    var peak = 0;
+    final gates = <String, Completer<Uint8List>>{};
+    final paths = [for (var i = 0; i < 9; i++) 'p/$i'];
+    for (final p in paths) {
+      final r = _MockRef();
+      when(() => storage.ref(p)).thenReturn(r);
+      when(() => r.getData(any())).thenAnswer((_) {
+        inFlight += 1;
+        if (inFlight > peak) peak = inFlight;
+        final gate = Completer<Uint8List>();
+        gates[p] = gate;
+        return gate.future;
+      });
+    }
+
+    final pending = loader.loadAll([
+      for (final p in paths) AppointmentImage(storagePath: p),
+    ]);
+
+    // Drain a batch at a time, re-checking the peak between each.
+    while (gates.isNotEmpty) {
+      final open = gates.keys.toList();
+      expect(open.length, lessThanOrEqualTo(4));
+      for (final p in open) {
+        inFlight -= 1;
+        gates.remove(p)!.complete(_bytes(p));
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+
+    expect(await pending, [for (final p in paths) _bytes(p)]);
+    expect(peak, 4);
+  });
+
   test('loadAll keeps list order past the concurrency bound', () async {
     // loadAll fetches in batches, so the order guarantee has to survive being
     // reassembled across more than one batch.
@@ -216,7 +257,8 @@ void main() {
       () async {
         // Two legacy docs share the empty storagePath, so keying on it would
         // serve the first doc's bytes for the second — the positional-mixup
-        // shape this whole area has been bitten by.
+        // shape this whole area has been bitten by. Keying on the URL keeps
+        // them apart AND keeps them cached.
         for (final url in const ['legacy-a', 'legacy-b']) {
           final r = _MockRef();
           when(() => storage.refFromURL(url)).thenReturn(r);
@@ -233,6 +275,37 @@ void main() {
         );
       },
     );
+
+    test('a LEGACY doc is cached too, keyed on its url', () async {
+      // The `url` fallback is documented as permanent, so a legacy photo
+      // bypassing the cache re-fetched from Storage on every widget State —
+      // every sheet open and again on every View->Edit toggle, which is
+      // exactly the cost this cache exists to remove.
+      when(() => storage.refFromURL(stored)).thenReturn(ref);
+      whenGetData(ref, () async => photo);
+      const image = AppointmentImage(url: stored);
+
+      expect(await loader.load(image), photo);
+      expect(await loader.load(image), photo);
+
+      verify(() => ref.getData(any())).called(1);
+    });
+
+    test('clear() forgets everything, so bytes do not outlive a session',
+        () async {
+      // The provider is a process-lifetime singleton, so without this up to
+      // 24 MB of one user's job photos stays resident across sign-out into
+      // the next user's session on a shared device.
+      when(() => storage.ref(path)).thenReturn(ref);
+      whenGetData(ref, () async => photo);
+      const image = AppointmentImage(url: stored, storagePath: path);
+
+      expect(await loader.load(image), photo);
+      loader.clear();
+      expect(await loader.load(image), photo);
+
+      verify(() => ref.getData(any())).called(2);
+    });
 
     test(
       'the cache is bounded, so a long session cannot retain every photo',

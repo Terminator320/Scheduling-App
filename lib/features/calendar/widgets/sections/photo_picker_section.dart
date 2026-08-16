@@ -189,25 +189,43 @@ class _EditablePhotoStrip extends StatelessWidget {
     );
     final thumbCache = (90 * MediaQuery.devicePixelRatioOf(context)).round();
 
+    // `.builder`, not `ListView(children:)`: the strip is capped at 100 photos
+    // and rebuilds on any edit-sheet form change, so eagerly materialising a
+    // subtree per photo was ~600 widget allocations per rebuild for the few
+    // thumbnails actually on screen. (Decode was never the issue —
+    // `cacheWidth`/`cacheHeight` bound that below.)
+    // Section boundaries, named once. This strip has a history of index bugs
+    // — an offset composed from the wrong length opened the wrong photo and
+    // ran the viewer's `initialIndex` off the end — so each boundary is
+    // derived from the one before it rather than re-added at each test.
+    final newStart = existingImages.length;
+    final failedStart = newStart + newImages.length;
+    final addButtonIndex = failedStart + failedCount;
+
     return SizedBox(
       height: 90,
-      child: ListView(
+      child: ListView.builder(
         scrollDirection: Axis.horizontal,
-        children: [
-          ...existingImages.asMap().entries.map(
-            (entry) => _existingThumb(context, entry, thumbCache),
-          ),
-          ...newImages.asMap().entries.map(
-            (entry) => _newThumb(context, entry, thumbCache),
-          ),
-          ...List.generate(
-            failedCount,
-            (_) => const Padding(
+        itemCount: addButtonIndex + 1,
+        itemBuilder: (context, index) {
+          if (index < newStart) {
+            return _existingThumb(
+              context,
+              MapEntry(index, existingImages[index]),
+              thumbCache,
+            );
+          }
+          if (index < failedStart) {
+            final i = index - newStart;
+            return _newThumb(context, MapEntry(i, newImages[i]), thumbCache);
+          }
+          if (index < addButtonIndex) {
+            return const Padding(
               padding: EdgeInsets.only(right: AppSpacing.sp8),
               child: _FailedPhotoThumb(),
-            ),
-          ),
-          Material(
+            );
+          }
+          return Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: onPickImages,
@@ -231,8 +249,8 @@ class _EditablePhotoStrip extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

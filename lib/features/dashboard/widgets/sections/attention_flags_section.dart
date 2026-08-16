@@ -8,7 +8,7 @@ import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart
 import 'package:scheduling/features/dashboard/application/dashboard_providers.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
+import 'package:scheduling/features/employees/widgets/fields/work_schedule_pickers.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 

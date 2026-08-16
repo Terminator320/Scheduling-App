@@ -5,7 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/dashboard/widgets/charts/daily_load_chart.dart';
-import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
+import 'package:scheduling/features/employees/widgets/fields/work_schedule_pickers.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 /// Monday 2026-07-06 through Sunday 2026-07-12 — one whole week, so every

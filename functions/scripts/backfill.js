@@ -48,9 +48,18 @@
 const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
-
-const VALID_ROLES = new Set(["admin", "employee"]);
-const VALID_BRIDGE_STATUS = new Set(["active", "disabled"]);
+// The bridge's pure rules, shared with the `syncUsersByUid` trigger that
+// maintains the same collection — see `../bridge_policy.js`.
+const {
+  shouldHaveBridge,
+  bridgeBody,
+  bridgeMatches,
+  classifyBridgeRow,
+} = require("../bridge_policy");
+// The batched-write loop, shared so `--dry-run` cannot be forgotten at a call
+// site — including on the orphan DELETE below, which is the one irreversible
+// write in this directory. See `_batch.js`.
+const {commitInBatches} = require("./_batch");
 
 /** Bare switches, matched EXACTLY — see `_flags.js`. */
 const EXACT_FLAGS = ["--dry-run", "--prune-orphans"];
@@ -63,45 +72,6 @@ const EXACT_FLAGS = ["--dry-run", "--prune-orphans"];
  */
 function assertKnownFlags(argv) {
   rejectUnknownFlags(argv, {exact: EXACT_FLAGS});
-}
-
-// This deliberately duplicates the shared ../bridge.js helper rather than
-// importing it, since folding the role check in up front lets us skip
-// malformed docs outright.
-/**
- * True when this users doc should have a bridge row.
- * @param {?Object} data The stored users document.
- * @return {boolean}
- */
-function shouldHaveBridge(data) {
-  if (!data) return false;
-  if (typeof data.uid !== "string" || data.uid === "") return false;
-  if (!VALID_BRIDGE_STATUS.has(data.status)) return false;
-  if (!VALID_ROLES.has(data.role)) return false;
-  return true;
-}
-
-/**
- * The three fields the bridge mirrors — the whole document body.
- * @param {string} docId Firestore doc id of the users doc.
- * @param {!Object} data The stored users document.
- * @return {{role: string, docId: string, status: string}}
- */
-function bridgeBody(docId, data) {
-  return {role: data.role, docId, status: data.status};
-}
-
-/**
- * True when the stored bridge row already says exactly what we would write.
- * @param {?Object} stored The bridge doc's current fields, or undefined.
- * @param {{role: string, docId: string, status: string}} body The target body.
- * @return {boolean}
- */
-function bridgeMatches(stored, body) {
-  if (!stored) return false;
-  return stored.role === body.role &&
-      stored.docId === body.docId &&
-      stored.status === body.status;
 }
 
 /**
@@ -137,6 +107,14 @@ async function main() {
   }
 
   const db = getFirestore();
+  // `batchSize: 1`, deliberately. This repairs the collection every
+  // `firestore.rules` gate resolves a role through, so PARTIAL PROGRESS IS
+  // STRICTLY BETTER THAN NONE: each row used to commit on its own, and
+  // accumulating them into a 500-op batch meant one rejected commit discarded
+  // up to 499 repairs that had already been decided. The writer is still what
+  // owns `--dry-run` — that is why this goes through it rather than back to a
+  // bare `set`/`delete` with a hand-written guard.
+  const writer = commitInBatches(db, {dryRun, batchSize: 1});
 
   // Read the bridge FIRST so a dry run can report what would actually change
   // rather than counting every eligible doc as a write.
@@ -197,16 +175,17 @@ async function main() {
     } else {
       stats.created += 1;
     }
-    if (dryRun) continue;
-    await db.collection("usersByUid").doc(uid).set(body);
+    await writer.stageSet(db.collection("usersByUid").doc(uid), body);
   }
 
   for (const doc of bridgeSnap.docs) {
-    if (expectedUids.has(doc.id)) continue;
+    // The three-way decision guarding this script's only destructive write
+    // lives in `../bridge_policy.js` so it can be unit-tested — see
+    // `classifyBridgeRow` for why "retained" is not "orphan".
+    const verdict = classifyBridgeRow(doc.id, {expectedUids, claimedUids});
+    if (verdict === "current") continue;
 
-    // Claimed by a users doc this run skipped. syncUsersByUid owns what that
-    // row should say; this script must not decide it is stale.
-    if (claimedUids.has(doc.id)) {
+    if (verdict === "retained") {
       stats.bridgesRetained += 1;
       console.warn(
           `  ${tag}bridge retained: usersByUid/${doc.id} — a skipped users ` +
@@ -221,15 +200,20 @@ async function main() {
           "--prune-orphans to delete it");
       continue;
     }
-    if (dryRun) {
-      console.warn(`  ${tag}orphan bridge would be removed: ` +
-          `usersByUid/${doc.id}`);
-      continue;
-    }
-    await doc.ref.delete();
+    // The writer no-ops under `--dry-run`, so the decision to delete is made
+    // in exactly one place and the count reports what the run would do —
+    // the same convention `backfill-clients-archived.js` follows. The WORDING
+    // still has to stay conditional: this is the one irreversible script here,
+    // and an operator reading "removed" plus a non-zero `orphansDeleted` out
+    // of a dry run would reasonably conclude the rows were gone.
+    await writer.stageDelete(doc.ref);
     stats.orphansDeleted += 1;
-    console.warn(`  orphan bridge removed: usersByUid/${doc.id}`);
+    console.warn(dryRun ?
+        `  ${tag}orphan bridge would be removed: usersByUid/${doc.id}` :
+        `  orphan bridge removed: usersByUid/${doc.id}`);
   }
+
+  await writer.flush();
 
   console.log(`\n${tag}Backfill complete:`);
   console.log(JSON.stringify(stats, null, 2));
@@ -251,7 +235,10 @@ if (require.main === module) {
 
 module.exports = {
   assertKnownFlags,
+  // Re-exported so the script's own surface stays requirable by jest without
+  // prod credentials; the bodies live in `../bridge_policy.js`.
   bridgeBody,
   bridgeMatches,
   shouldHaveBridge,
+  classifyBridgeRow,
 };
