@@ -960,8 +960,19 @@ Guard order is the standard one — auth → `assertAdmin` → `assertPayloadSha
 `requeueDeadJobs()` is the durable part; the `drainQueue` that follows is
 **best-effort and must not fail the call**, so the press has a visible effect
 without the requeue being reported as a failure when only the push behind it
-broke. Returns `{requeued, scanned, pushed}` — `pushed` is null when nothing
-was requeued or the drain threw.
+broke. Returns `{requeued, scanned, pushed, failed}` — `pushed` and `failed`
+are both null when nothing was requeued or the drain threw.
+
+**`failed` (`drained.dead`) is what keeps the press honest, and it is the same
+class of omission `pushedFailed` fixed on the sync response.** The reason this
+callable is deliberately manual — a job that died on a `WaveValidationError`
+dies again — is exactly what makes the drain behind the requeue dead-letter it
+a second time *inside this call*: the queue's dead count is unchanged, the
+Settings row still reads "1 client failed to sync", and an app that sees only
+`requeued` announces "1 client queued for Wave again" as a success over it. The
+count was right; the sentence over it was the lie. `waveRetryNotice`
+(`wave_sync_notice.dart`) composes from both counts and the section surfaces it
+with `notices.error` when `failed > 0`.
 
 Related: `listOutstandingClientIds` (`wave/worker.js`) protects `queued`,
 `inflight` **and `dead`** client ids from being overwritten by an import — a

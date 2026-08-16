@@ -131,6 +131,11 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
       action: () async {
         final summary = await ref.read(waveServiceProvider).syncCustomers();
         if (!mounted) return;
+        // Re-read the outbox counts: this sync drained the queue, so the
+        // pending and failed rows above the button are now describing a state
+        // that no longer exists.
+        setState(() => _connection = null);
+        ref.invalidate(waveConnectionProvider);
         ref
             .read(noticeServiceProvider)
             .success(waveSyncNotice(context.l10n, summary));
@@ -141,10 +146,12 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
   /// Returns dead-lettered client edits to the queue and pushes them.
   ///
   /// The counter this acts on is the only trace a dead-lettered job leaves
-  /// outside one client's detail screen, so the notice has to distinguish all
-  /// three outcomes: nothing was left to requeue, jobs were requeued AND
-  /// pushed, or they were requeued but the push behind it failed. The last one
-  /// is still a success — the requeue is the durable half.
+  /// outside one client's detail screen, so the notice has to distinguish
+  /// every outcome — including the one that made this press look broken: a job
+  /// dies on something Wave will reject again, so the push behind the requeue
+  /// dead-letters it inside the same call and the failed row does not move.
+  /// `waveRetryNotice` owns that wording; the tone is picked here, because a
+  /// notice claiming success over an unchanged failure row is the whole bug.
   Future<void> _retryFailed() async {
     if (_blockedOffline()) return;
     await _runWaveAction(
@@ -157,18 +164,13 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
         // moved `pending` too, and a concurrent edit may have added to it.
         setState(() => _connection = null);
         ref.invalidate(waveConnectionProvider);
-        final l10n = context.l10n;
+        final message = waveRetryNotice(context.l10n, result);
         final notices = ref.read(noticeServiceProvider);
-        if (result.requeued == 0) {
-          notices.success(l10n.wave_retryNoneRecovered);
-          return;
+        if (result.hasFailed) {
+          notices.error(message);
+        } else {
+          notices.success(message);
         }
-        final pushed = result.pushed;
-        notices.success(
-          pushed == null || pushed == 0
-              ? l10n.wave_retryQueued(result.requeued)
-              : l10n.wave_retryPushed(pushed),
-        );
       },
     );
   }

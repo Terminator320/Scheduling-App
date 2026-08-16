@@ -3310,5 +3310,14 @@
         "type": "int"
       }
     }
+  },
+  "wave_retryStillFailed": "{count, plural, =1{1 client still couldn't be sent — open it to see the error} other{{count} clients still couldn't be sent — open them to see the error}}",
+  "@wave_retryStillFailed": {
+    "description": "Settings > Wave: notice naming how many requeued client edits failed again on the push right after Retry failed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

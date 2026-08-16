@@ -27,6 +27,57 @@ const COUNTRY_CODE_TO_NAME = {
   "US": "United States",
 };
 
+/**
+ * ISO-3166-1 alpha-2, the vocabulary of Wave's `CountryCode` enum.
+ *
+ * This is a MEMBERSHIP TEST, and it is the difference between one field being
+ * dropped and a client never reaching Wave again. `countryCode` is an ENUM, so
+ * an unrecognised value is not an `inputErrors` entry the worker can report
+ * against the field — GraphQL refuses to coerce the whole `$input` variable
+ * and answers with a top-level error, which arrives here as a
+ * `WaveApiError(graphql)`. That is non-retryable by design, so the job
+ * dead-letters, and no amount of pressing "Retry failed" can ever move it: the
+ * same value is sent and rejected the same way.
+ *
+ * The old test was `/^[A-Z]{2}$/`, which passes any two letters — a `country`
+ * of "ON" or "QC" (a province typed into the country box) sailed through as a
+ * country code and killed that client's sync permanently, for one stray field
+ * on one address.
+ */
+const ISO_COUNTRY_CODES = new Set((
+  "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI " +
+  "BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN " +
+  "CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK " +
+  "FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM " +
+  "HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN " +
+  "KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK " +
+  "ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP " +
+  "NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW " +
+  "SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF " +
+  "TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI " +
+  "VN VU WF WS YE YT ZA ZM ZW"
+).split(" "));
+
+/**
+ * ISO-3166-2 subdivisions, by country, for the two countries this integration
+ * speaks — the vocabulary of Wave's `ProvinceCode` enum.
+ *
+ * Same enum-coercion stakes as [ISO_COUNTRY_CODES], plus a second bug the old
+ * code had on its own: a plain two-letter province was prefixed `CA-`
+ * UNCONDITIONALLY, so a US client in "NY" was sent as `CA-NY` — a code that
+ * exists in no country — and dead-lettered forever. The prefix now follows the
+ * client's resolved country, and the result has to be a real subdivision of it
+ * or the field is dropped.
+ */
+const SUBDIVISION_CODES = {
+  CA: new Set("AB BC MB NB NL NS NT NU ON PE QC SK YT".split(" ")),
+  US: new Set((
+    "AK AL AR AZ CA CO CT DC DE FL GA HI IA ID IL IN KS KY LA MA MD ME MI " +
+    "MN MO MS MT NC ND NE NH NJ NM NV NY OH OK OR PA RI SC SD TN TX UT VA " +
+    "VT WA WI WV WY AS GU MP PR UM VI"
+  ).split(" ")),
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -105,27 +156,52 @@ function presence(v) {
 }
 
 /**
- * Converts a stored province value to a Wave `provinceCode` (e.g. `CA-QC`).
- * Passes an already-coded value straight through, prefixes a plain 2-letter
- * code with `CA-`, and omits the field entirely when it's empty.
+ * Converts a stored province value to a Wave `provinceCode` (e.g. `CA-QC`),
+ * or omits it when the result would not be a real subdivision.
+ *
+ * **Omitting is the whole job here.** `provinceCode` is a GraphQL ENUM, so a
+ * value outside its vocabulary is not a per-field `inputErrors` entry — it
+ * fails variable coercion and Wave answers with a top-level GraphQL error,
+ * which the worker classifies non-retryable and dead-letters. One typo in one
+ * address field then costs that client every future sync, permanently and
+ * silently. A dropped province costs the Wave address one line.
+ *
+ * The country matters because the prefix does: a plain "NY" is `US-NY` for a
+ * US client and nothing at all for a Canadian one. It used to be `CA-` in
+ * every case, which is how a US client became the non-existent `CA-NY`.
+ *
  * @param {*} province Stored province field.
+ * @param {string=} countryCode Resolved ISO-2 country for this client, if
+ *   known. Defaults to `CA` — this business's own country, and the only
+ *   sensible reading of a bare "QC".
  * @return {string|undefined}
  */
-function toProvinceCode(province) {
+function toProvinceCode(province, countryCode) {
   if (!province || typeof province !== "string") return undefined;
   const p = province.trim().toUpperCase();
   if (!p) return undefined;
-  // Already in subdivision-code form (e.g. CA-QC, US-NY).
-  if (/^[A-Z]{2}-[A-Z]{2,3}$/.test(p)) return p;
-  // Plain 2-letter province abbreviation → prepend CA-.
-  if (/^[A-Z]{2}$/.test(p)) return `CA-${p}`;
-  return undefined;
+  // Already in subdivision-code form (e.g. CA-QC, US-NY) — honoured only if
+  // that subdivision actually exists.
+  const coded = p.match(/^([A-Z]{2})-([A-Z0-9]{1,3})$/);
+  if (coded) {
+    const set = SUBDIVISION_CODES[coded[1]];
+    return set && set.has(coded[2]) ? p : undefined;
+  }
+  if (!/^[A-Z]{2}$/.test(p)) return undefined;
+  // Plain abbreviation → qualify it with the client's own country.
+  const country = SUBDIVISION_CODES[countryCode] ? countryCode : "CA";
+  return SUBDIVISION_CODES[country].has(p) ? `${country}-${p}` : undefined;
 }
 
 /**
- * Converts a stored country value to a Wave `countryCode` (ISO-2). Passes an
- * existing code straight through, maps a known country name, and otherwise
- * omits the field rather than guessing.
+ * Converts a stored country value to a Wave `countryCode` (ISO-2), or omits it
+ * when the value is not one.
+ *
+ * Same enum-coercion stakes as [toProvinceCode]: this doc block always claimed
+ * it "omits the field rather than guessing", but the code accepted ANY two
+ * letters, so a province typed into the country box ("ON", "QC") became a
+ * country code and dead-lettered that client's sync forever.
+ *
  * @param {*} country Stored country field.
  * @return {string|undefined}
  */
@@ -133,8 +209,8 @@ function toCountryCode(country) {
   if (!country || typeof country !== "string") return undefined;
   const c = country.trim();
   if (!c) return undefined;
-  // Already a 2-letter ISO code.
-  if (/^[A-Z]{2}$/.test(c.toUpperCase())) return c.toUpperCase();
+  const upper = c.toUpperCase();
+  if (ISO_COUNTRY_CODES.has(upper)) return upper;
   // Look up by name (case-insensitive).
   return COUNTRY_NAME_TO_CODE[c.toLowerCase()] || undefined;
 }
@@ -243,10 +319,12 @@ function toWaveCustomerInput(clientFields) {
   if (addressLine2) addr.addressLine2 = addressLine2;
   const city = presence(f.city);
   if (city) addr.city = city;
-  const provinceCode = toProvinceCode(f.province);
-  if (provinceCode) addr.provinceCode = provinceCode;
+  // Country first: it decides which country's subdivisions a bare "NY" or
+  // "QC" is read against.
   const countryCode = toCountryCode(f.country);
   if (countryCode) addr.countryCode = countryCode;
+  const provinceCode = toProvinceCode(f.province, countryCode);
+  if (provinceCode) addr.provinceCode = provinceCode;
   const postalCode = presence(f.postalCode);
   if (postalCode) addr.postalCode = postalCode;
 

@@ -74,6 +74,7 @@ const {
   isRetryable,
   attemptBudgetFor,
   sanitizeError,
+  describeWaveError,
 } = require("./retry_policy");
 
 // ---------------------------------------------------------------------------
@@ -649,12 +650,18 @@ async function resolveOutcome(ctx, doc, jobData, claimStamp, result) {
     logger.info("WAVE-WORKER outcome superseded (dead skipped)", {jobId});
     return;
   }
+  // `errorDetail` is the only place the REASON survives — `sanitized` (which
+  // is what the job and the client doc keep) flattens every transport failure
+  // to "WaveApiError(graphql)", so without this a permanently-dead client edit
+  // is undiagnosable and "Retry failed" just re-sends the same payload into
+  // the same refusal. PII-free by construction; see `describeWaveError`.
   logger.error("WAVE-WORKER dead-lettering job", {
     jobId,
     clientId: clientIdFromRefPath(jobData.refPath),
     errorClass: dispatchError.constructor ?
       dispatchError.constructor.name : "Error",
     errorKind: errKind,
+    errorDetail: describeWaveError(dispatchError),
     attempts: newAttempts,
     retryable,
   });

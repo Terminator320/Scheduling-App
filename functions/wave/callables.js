@@ -290,7 +290,17 @@ const waveRetryFailedJobs = onCall(
       // waiting for their next client edit or the daily sweep. Best-effort:
       // the requeue already committed, and reporting it as a failure would be
       // wrong.
+      //
+      // `failed` is the whole reason this press can look broken. The shape
+      // that dead-letters a job is usually non-retryable (Wave rejected the
+      // customer's data), so the drain behind the requeue dead-letters it
+      // AGAIN within the same call — the queue's dead count is unchanged and
+      // the Settings row still reads "1 client failed to sync" while the app,
+      // seeing only `requeued`, announced a success. Same null-is-unknown
+      // contract as `pushed`: null means the drain threw or never ran, and the
+      // app must not render that as "nothing failed".
       let pushed = null;
+      let failed = null;
       if (requeued > 0) {
         try {
           const drained = await drainQueue({
@@ -299,13 +309,14 @@ const waveRetryFailedJobs = onCall(
             deadlineMs: Date.now() + SYNC_PUSH_BUDGET_MS,
           });
           pushed = drained.done;
+          failed = drained.dead;
         } catch (e) {
           logger.warn("WAVE-RETRY drain after requeue failed",
               {uid: req.auth.uid, error: String(e)});
         }
       }
 
-      return {requeued, scanned, pushed};
+      return {requeued, scanned, pushed, failed};
     },
 );
 

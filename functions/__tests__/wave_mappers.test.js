@@ -191,6 +191,57 @@ describe("toWaveCustomerInput", () => {
     expect(result.address).not.toHaveProperty("countryCode");
   });
 
+  // These are enum fields. A value outside the vocabulary is not an
+  // `inputErrors` entry the worker can report against the field — GraphQL
+  // refuses to coerce the whole `$input` and answers with a top-level error,
+  // which is non-retryable, so the job dead-letters and no "Retry failed"
+  // press can ever move it. Dropping one address line is the cheap outcome.
+  test("a province typed into the country box is dropped, not sent", () => {
+    const result = toWaveCustomerInput({name: "T", country: "ON"});
+    expect(result.address).not.toHaveProperty("countryCode");
+  });
+
+  test("a two-letter non-country is dropped, not sent", () => {
+    const result = toWaveCustomerInput({name: "T", country: "XX"});
+    expect(result.address).not.toHaveProperty("countryCode");
+  });
+
+  test("a real foreign country code still passes through", () => {
+    const result = toWaveCustomerInput({name: "T", country: "fr"});
+    expect(result.address.countryCode).toBe("FR");
+  });
+
+  test("a US client's plain province is prefixed US-, never CA-", () => {
+    // `CA-NY` is a subdivision of nowhere. It used to be what a New York
+    // client was sent as, which killed that client's sync permanently.
+    const result = toWaveCustomerInput({
+      name: "T",
+      province: "NY",
+      country: "US",
+    });
+    expect(result.address.provinceCode).toBe("US-NY");
+  });
+
+  test("a province that is not one of its country's is dropped", () => {
+    const result = toWaveCustomerInput({
+      name: "T",
+      province: "QC",
+      country: "US",
+    });
+    expect(result.address).not.toHaveProperty("provinceCode");
+    expect(result.address.countryCode).toBe("US");
+  });
+
+  test("an already-coded province that exists nowhere is dropped", () => {
+    const result = toWaveCustomerInput({name: "T", province: "CA-NY"});
+    expect(result.address).not.toHaveProperty("provinceCode");
+  });
+
+  test("a bare province still reads as Canadian, the business's own", () => {
+    const result = toWaveCustomerInput({name: "T", province: "ON"});
+    expect(result.address.provinceCode).toBe("CA-ON");
+  });
+
   test("name-only minimal client → valid input with empty address", () => {
     const result = toWaveCustomerInput({name: "Solo"});
     expect(result.name).toBe("Solo");

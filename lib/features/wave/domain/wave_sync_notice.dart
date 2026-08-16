@@ -35,3 +35,29 @@ String waveSyncNotice(AppLocalizations l10n, WaveSyncSummary summary) {
   if (parts.isEmpty) return l10n.wave_syncUpToDate;
   return l10n.wave_syncResult(parts.join(', '));
 }
+
+/// Composes the notice for one "Retry failed" press.
+///
+/// The press has four outcomes and only three of them are good news, which is
+/// what this exists to keep straight. A dead-lettered job usually died on
+/// something non-retryable, so the drain that follows the requeue kills it
+/// again in the same call — the outbox row still reads "1 client failed to
+/// sync" while the old branch, which knew only [WaveRetryResult.requeued],
+/// reported "1 client queued for Wave again" as a success. The count was
+/// right; the sentence over it was the lie.
+///
+/// Surface it with `notices.error` when [WaveRetryResult.hasFailed], so the
+/// tone matches the row that did not clear.
+String waveRetryNotice(AppLocalizations l10n, WaveRetryResult result) {
+  if (result.requeued == 0) return l10n.wave_retryNoneRecovered;
+  final pushed = result.pushed ?? 0;
+  final failed = result.failed ?? 0;
+  final parts = <String>[
+    if (pushed > 0) l10n.wave_retryPushed(pushed),
+    if (failed > 0) l10n.wave_retryStillFailed(failed),
+  ];
+  // Nothing landed and nothing died: the push failed or was bounded, and the
+  // requeue — the durable half — is still worth reporting.
+  if (parts.isEmpty) return l10n.wave_retryQueued(result.requeued);
+  return parts.join(', ');
+}

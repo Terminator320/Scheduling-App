@@ -102,4 +102,92 @@ void main() {
       );
     });
   });
+
+  group('waveRetryNotice', () {
+    test('a requeue that reached Wave names what landed', () {
+      expect(
+        waveRetryNotice(
+          en,
+          const WaveRetryResult(
+            requeued: 2,
+            scanned: 2,
+            pushed: 2,
+            failed: 0,
+          ),
+        ),
+        '2 clients sent to Wave',
+      );
+    });
+
+    test('a job that died again is never reported as a clean retry', () {
+      // The whole bug: the push behind the requeue dead-letters a
+      // non-retryable job inside the same call, so the outbox row still reads
+      // "1 client failed to sync" — and the old branch, seeing only
+      // `requeued`, announced "1 client queued for Wave again" as a success.
+      final notice = waveRetryNotice(
+        en,
+        const WaveRetryResult(requeued: 1, scanned: 1, pushed: 0, failed: 1),
+      );
+      expect(notice, isNot(contains('queued for Wave again')));
+      expect(notice, contains("1 client still couldn't be sent"));
+    });
+
+    test('a partial recovery reports both halves', () {
+      expect(
+        waveRetryNotice(
+          en,
+          const WaveRetryResult(
+            requeued: 3,
+            scanned: 3,
+            pushed: 2,
+            failed: 1,
+          ),
+        ),
+        "2 clients sent to Wave, 1 client still couldn't be sent — open it to "
+        'see the error',
+      );
+    });
+
+    test('a requeue whose push never ran still reports the durable half', () {
+      // Those jobs ARE back in the queue and will drain, so this stays the
+      // success it was — null means "not known", not "nothing failed".
+      expect(
+        waveRetryNotice(
+          en,
+          const WaveRetryResult(
+            requeued: 3,
+            scanned: 3,
+            pushed: null,
+            failed: null,
+          ),
+        ),
+        '3 clients queued for Wave again',
+      );
+    });
+
+    test('nothing left to requeue says so', () {
+      expect(
+        waveRetryNotice(
+          en,
+          const WaveRetryResult(
+            requeued: 0,
+            scanned: 1,
+            pushed: 0,
+            failed: 0,
+          ),
+        ),
+        en.wave_retryNoneRecovered,
+      );
+    });
+
+    test('composes in French too', () {
+      expect(
+        waveRetryNotice(
+          fr,
+          const WaveRetryResult(requeued: 1, scanned: 1, pushed: 0, failed: 1),
+        ),
+        contains('n’a toujours pas pu être envoyé'),
+      );
+    });
+  });
 }
