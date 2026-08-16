@@ -1,7 +1,10 @@
 # App Store Submission — ES Pro
 
-`net.vogas.scheduling` · team **H5XWLU87AX** · v**1.45.0+72** · branch
-`redesgin` · launch scope **App Store only** (iPhone + iPad).
+`net.vogas.scheduling` · team **H5XWLU87AX** · branch `redesgin` · scope
+**App Store only** (iPhone + iPad). **The version lives in `pubspec.yaml`, not
+here** — it was pinned at 1.45.0+72 in this line until 2026-08-15 and had gone
+two releases stale (1.46.0+73, then 1.46.1+74); read `pubspec.yaml` and
+`CHANGELOG.md` for what is cut.
 
 > ## ⚠️ THE APP IS LIVE — this is no longer a launch runbook
 >

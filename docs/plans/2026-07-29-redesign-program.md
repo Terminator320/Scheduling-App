@@ -1,6 +1,12 @@
 # Navigation redesign — program design
 
-**Date:** 2026-07-29 · **Branch:** `redesgin` · **Status:** approved design, pre-implementation
+**Date:** 2026-07-29 · **Branch:** `redesgin` · **Status:** **P1–P5 and P7 are
+SHIPPED** (P4b withdrawn, replaced by P4c). What this spec still owes is **P6
+Time off** — deferred by owner call 2026-08-10 and skippable — and **P7b**, the
+Wave invoice read path, which is what unblocks P7's six money sections and the
+dashboard's dropped Year period. Its original status line read "approved design,
+pre-implementation" until 2026-08-15; the build record for each project is in
+`redesign-subdocs/`, and the current behaviour is `CLAUDE.md`, never this file.
 
 Source handoff: `C:\Users\GeorgeVogas\Downloads\Scheduling app navigation redesign\design_handoff_scheduling_app\`
 (docs `01`–`11`, clickable prototype `design/Scheduling App.dc.html`, screenshots partially stale —
