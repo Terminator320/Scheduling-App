@@ -1,8 +1,9 @@
 # Active plans — index and outstanding work
 
-Swept 2026-08-11. Everything left in this directory is either **live work** or a
+Swept 2026-08-11; **re-swept 2026-08-15** against what the code and the deploy
+log actually say. Everything left in this directory is either **live work** or a
 reference a live plan depends on; ten documents whose work has shipped moved to
-`docs/archive/` in that sweep (see its README for what and why). Dated audit
+`docs/archive/` in the first sweep (see its README for what and why). Dated audit
 snapshots live in `docs/audits/` until they are superseded, then they move to
 the archive too.
 
@@ -24,29 +25,25 @@ at the top of each file, not its boxes.
 | `2026-07-10-siri-app-intents-design.md` | Design, 6 phases. Phases 5–6 unscoped. |
 | `2026-07-19-siri-app-intents-implementation.md` | Phases 1–3 built; **no device pass ever run**. |
 | `2026-07-20-siri-phase4-write-actions.md` | **NOT STARTED.** Mac + Apple-portal session. |
-| `APP_STORE_SUBMISSION.md` | **The live release runbook.** 26 items open. |
+| `APP_STORE_SUBMISSION.md` | **The live release runbook**, now for updates rather than a launch — the app shipped. Its unticked boxes have never been reconciled against four shipped submissions, so read one as *unknown*, not *outstanding* (§7). |
 
 ---
 
 ## What has not been done
 
-### 1. ~~The backend deploy~~ — DONE 2026-08-11, and it was the biggest item here
+### 1. ~~The backend deploy~~ — DONE, and five more have gone out since
 
-Deployed at `70579d22` (release 1.45.0+72), targets **functions, rules,
-storage**, 25 functions live — no export change, so no deletion prompt and none
-of the 2026-08-08 abort. The full row is in `docs/DEPLOYMENT.md`, which is the
-only reliable record of what production runs; read it rather than this
-paragraph. What went live: P5's `changeEmployeeEmail` self branch with its
-`assertFreshReauth` gate and 20/h → 5/h budget, the
-`isSelf() && isAvailabilityOnlyChange()` clause on `/users`,
-`isValidAppointmentSpan` with its +2h DST allowance, the multi-day Live Activity
-skip, and the `day_slice_utils.js` day-scoping behind the widget payload and
-push text. `firestore:indexes` was deliberately omitted, which is also what
-leaves the surviving `signupCodes` TTL policy alone — never `--force` it away.
+The P5/multi-day deploy this section was written for landed 2026-08-11 at
+`70579d22` (release 1.45.0+72), which unblocked the P5 device block in §4 and
+shipping an app build carrying the P5 UI — the ordering hazard was that the
+rules clause had to be live first, or every self save fails `permission-denied`.
 
-**What this unblocks:** the P5 device block in §4, and shipping an app build
-carrying the P5 UI (which was the ordering hazard — the rules clause had to be
-live first, or every self save fails `permission-denied`).
+**Nothing about deploy state should be read from this file.** Five further
+deploys have gone out since (`78d89478`, then `d3e22377` on 2026-08-14, then
+`6d41dd3c`, `e84a66fd` and `6b3fcf7c` on 2026-08-15), carrying the three-deletion
+scheduler swap, the photo subcollection's phase 1, the 2026-08-15 audit and two
+Wave fixes. **`docs/DEPLOYMENT.md` is the only reliable record of what
+production runs** — read its log rather than any paragraph here.
 
 ### 2. Redesign — P6 and P7b remain
 
@@ -140,34 +137,57 @@ card? a countdown to today's window end?) is an unanswered design question.
 
 ### 6. Data and ops
 
-- **The client phone backfill RAN against prod on 2026-08-08, and was REVERSED
-  on 2026-08-14. Never run it again.**
-  `functions/scripts/backfill-client-phone-from-name.js` lifted the phone number
-  out of `clients/{id}.name` and renamed `name` to "First Last". That was correct
-  for the app but wrong for Wave: `name` is synced VERBATIM as the Wave customer
-  name (`toWaveCustomerInput`), and the invoicing workflow identifies customers
-  by number — so it renamed every one of those customers on real Wave invoices.
-  Owner call 2026-08-14 reversed it: the number goes back in the stored `name`
-  and the APP strips it for display (`ClientNamePolicy.displayName`).
-  **The live script is now `backfill-client-name-with-phone.js`** (idempotent,
-  `--dry-run`, `--since` defaulting to 2026-08-08 so recently-added clients are
-  skipped). Run it when the Wave queue is quiet — it fires `propagateClientEdits`
-  and `waveUpsertCustomer`, and the latter now drains inline, so a few hundred
-  Wave mutations land within seconds of the last batch against Wave's
-  60-calls/min ceiling.
-  The read-only damage audit for the 2026-08-08 run is
-  `docs/audits/audit-client-phone-backfill-damage.js`.
+**Every backfill named here has now RUN against prod. None of them is a work
+item; each is listed so nobody re-runs one.**
+
+- **The client name/phone rewrite — ran, reversed, re-ran, and destroyed data on
+  the way through.** `backfill-client-phone-from-name.js` ran 2026-08-08: it
+  lifted the phone number out of `clients/{id}.name` and renamed `name` to
+  "First Last". Correct for the app, wrong for Wave — `name` is synced VERBATIM
+  as the Wave customer name (`toWaveCustomerInput`) and the invoicing workflow
+  identifies customers by number, so it renamed those customers on real Wave
+  invoices. **Never run it again.** Owner call 2026-08-14 reversed the rule: the
+  number goes back in the stored `name` and the APP strips it for display
+  (`ClientNamePolicy.displayName`). `backfill-client-name-with-phone.js` ran
+  against prod the same day (**504 renamed**), and
+  `backfill-client-phone-formatting.js` with it (**142 reformatted**).
+- **That 2026-08-14 run predated the first/last split and DESTROYED the stored
+  name on docs that had no `firstName`/`lastName`** — those clients render as a
+  bare number. The only surviving copy is `clientName` on the client's SETTLED
+  appointments. `restore-client-name-halves.js` writes those back into the two
+  halves and never touches `name` (Wave's identity);
+  `docs/audits/audit-renamed-client-names.js` is its read-only twin, and the two
+  are kept deliberately in step — reading one rule's report and running another
+  rule's repair is the failure mode. `restore-business-client-names.js` covers
+  the businesses the heuristic caught. The read-only damage audit for the
+  2026-08-08 run is `docs/audits/audit-client-phone-backfill-damage.js`.
+- **The appointment-images backfill RAN 2026-08-15** —
+  `copied 13 photos across 10 appointments (41 scanned)`. Copy-only and
+  idempotent; `pictures` is untouched. The app build is the only step of that
+  migration still outstanding (`docs/DEPLOYMENT.md`).
+- **Three orphaned Cloud Scheduler jobs are still live** for the scheduled
+  functions deleted 2026-08-14. `gcloud` is not installed on this Windows box,
+  so this one genuinely cannot be done from here. Scheduled functions must land
+  on exactly 3 — the free tier — so this costs money until it is cleaned up.
 - **The `signupCodes` collection and its TTL policy remain in prod**,
   deliberately — the collection was verified empty and rules now deny all
   access. Never `--force` the policy away.
+- **One accepted risk is live in the rules:** the 500-char cap added to
+  `clients.addressLine2` on 2026-08-15 sits over docs the already-deployed Wave
+  import wrote uncapped, and prod could not be inspected (this box's clock skew
+  breaks the Firebase MCP's Firestore reads). If an opaque `permission-denied`
+  ever appears on an ordinary client save, check that field first.
 - **A hard budget cap for Google Maps Platform is still unset** —
   `docs/audits/AUDIT_FOLLOWUPS.md` §2, the one item in that file still open. It
   needs GCP billing access, so it cannot be done from here.
 
 ### 7. App Store — SHIPPED. The runbook is now a release checklist, not a launch one
 
-**ES Pro was accepted by Apple and is live**; 1.45.0+72 is the **4th update**
-(owner-reported 2026-08-11). `APP_STORE_SUBMISSION.md` still reads in places
+**ES Pro was accepted by Apple and is live**; 1.45.0+72 was the **4th update**
+(owner-reported 2026-08-11). The repo has moved on twice since — 1.46.0+73
+(2026-08-14) and 1.46.1+74 (2026-08-15) are cut in `CHANGELOG.md`, and nothing
+here records whether either has been submitted; the photo migration's step 3 is
+waiting on an app build either way. `APP_STORE_SUBMISSION.md` still reads in places
 like a pre-launch document and **its unticked boxes have never been reconciled
 against four shipped submissions** — the app record, pricing, the FR
 localization, screenshots and "attach the build and submit" were evidently done

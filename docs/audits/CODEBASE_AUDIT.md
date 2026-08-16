@@ -48,12 +48,15 @@
 > Also fixed: `.claude/workflows/wave-ultra-review.mjs` could never load —
 > raw backticks terminated its `REPO_CONTEXT` template literal at line 35.
 >
-> **Still outstanding (ops, not code):** the rules changes (S2, S3, S4, plus a
-> new `appointmentRecountClaims` deny block) and all functions changes are
-> **committed but NOT DEPLOYED**. S2's fix should be emulator-verified first.
-> `appointmentRecountClaims` needs `functions` deployed before
-> `firestore:indexes`, since a TTL policy can only be created for a collection
-> group that already holds documents. Never pass `--force`.
+> **DEPLOYED 2026-08-15 at `6d41dd3c`** — functions, rules and indexes, 25 → 25
+> with no export change, so neither known abort fired. The rules changes (S2,
+> S3, S4 and the `appointmentRecountClaims` deny block) and every functions
+> change are live; `firestore.rules` was validated through the Firebase MCP
+> rather than the emulator, which needs a JRE this box does not have. Two later
+> Wave deploys the same day (`e84a66fd`, then `6b3fcf7c`) sit on top of it. The
+> full record, including the ONE accepted risk — the new `clients.addressLine2`
+> cap over docs the already-deployed import wrote uncapped — is in
+> `docs/DEPLOYMENT.md`.
 
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
@@ -985,9 +988,13 @@ describes a Wave "outbox worker / lease-based reaper", deleted 2026-08-14.
   exists but contains **no `MAPS_API_KEY` line**. No action needed; flagged only so it
   isn't mistaken for a resurrection.
 - **Operational items outstanding** (ops, not code — from the 2026-08-14 deploy):
-  orphaned Cloud Scheduler entries for the three deleted scheduled functions; the
-  appointment-images backfill; the app build. 🟠B1 is materially worse until that
-  backfill runs, and 🟠B3 makes the backfill script itself risky to run — do B3 first.
+  **as written, this listed the orphaned Cloud Scheduler entries, the
+  appointment-images backfill and the app build. Two of the three have since
+  closed** — the backfill ran on 2026-08-15 (13 photos across 10 appointments)
+  once 🟠B3 had repaired its fake `--dry-run`, which is exactly the ordering this
+  note asked for, and both gating indexes are `READY`. What is left is the three
+  orphaned Cloud Scheduler entries and the app build. 🟠B1 was materially worse
+  until that backfill ran.
 - `functions/appointment_image_ids.js` has **zero production inbound requires** (only
   the backfill script and its jest suite). Consistent with the design, but it means
   the hand-mirror invariant is pinned by tests alone and never exercised by a deployed

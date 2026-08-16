@@ -2,10 +2,16 @@
 
 Completed plans/specs and superseded audit snapshots — kept for history, not
 maintained against the current code. Started 2026-07-10; last updated
-**2026-08-11**, when the docs sweep moved thirteen documents in: six plans whose
-work had shipped (the multi-day trio, the closed-jobs agenda, the photo cue, the
-History restyle), six superseded audit snapshots, and the pre-redesign
-`WORKFLOW.md`.
+**2026-08-15**, when the docs sweep added the three audit snapshots this index
+had been missing — the 2026-08-11 second pass (on disk but unlisted) and the two
+2026-08-14 passes, which had been **overwritten in place** by the next sweep and
+were restored from git history. The 2026-08-11 sweep before it moved thirteen
+documents in: six plans whose work had shipped (the multi-day trio, the
+closed-jobs agenda, the photo cue, the History restyle), six superseded audit
+snapshots, and the pre-redesign `WORKFLOW.md`.
+
+**Overwriting the rolling `docs/audits/CODEBASE_AUDIT.md` with the next sweep is
+how a snapshot goes missing.** Copy the outgoing one here first.
 
 **Do not treat these as accurate references.** For current state see
 `docs/ARCHITECTURE.md`, `docs/CLOUD_FUNCTIONS.md`, and the active plans in
@@ -143,10 +149,12 @@ this one".
 ## Superseded audit snapshots
 Point-in-time whole-repo audits; each run's findings were implemented at the
 time. Superseded by later audits — **the active one is
-`docs/audits/CODEBASE_AUDIT.md`, the 2026-08-11 second pass**, which is the only
-audit still being worked. `docs/audits/` also keeps
-`SECURITY_ASSESSMENT_2026-08-04.md` and `AUDIT_FOLLOWUPS.md` (one item, §2,
-still open).
+`docs/audits/CODEBASE_AUDIT.md`, the 2026-08-15 sweep**, whose 41 findings are
+all closed and deployed, so it too is now a record rather than a work list.
+`docs/audits/` also keeps `SECURITY_ASSESSMENT_2026-08-04.md` and
+`AUDIT_FOLLOWUPS.md` (one item, §2, still open), plus two read-only repair-audit
+scripts for the client-rename damage (`audit-renamed-client-names.js` and the
+earlier `audit-client-phone-backfill-damage.js`).
 - `CODEBASE_AUDIT_2026-06-26.md`
 - `CODEBASE_AUDIT_2026-07-01.md`
 - `CODEBASE_AUDIT_2026-07-04.md`
@@ -162,8 +170,19 @@ still open).
   result at `46154b1`, not a re-run of the first pass's checks; it found a
   distinct set.
 - `CODEBASE_AUDIT_2026-08-11-first-pass.md` — 20 findings at `8bf07c6e`, all
-  actioned in `a90474cc`. Superseded the same day by the second pass, which is
-  the live `docs/audits/CODEBASE_AUDIT.md`.
+  actioned in `a90474cc`. Superseded the same day by the second pass below.
+- `CODEBASE_AUDIT_2026-08-11-second-pass.md` — 31 findings at `55ea3cb3`, closed
+  in `ef698365` + `78d89478`. It caught the rules span bound that DST would have
+  made reject legal saves, before that bound deployed.
+- `CODEBASE_AUDIT_2026-08-14-first-pass.md` — 30 findings at `bf316828`,
+  implemented the same day in `4b500e84`; it found the edit sheet renaming real
+  Wave customers. Its ⚠️ pre-deploy item (deleting three live Cloud Functions)
+  ran in the 2026-08-14 deploy.
+- `CODEBASE_AUDIT_2026-08-14-pre-deploy.md` — a fresh sweep run immediately
+  before that deploy and before the Wave client-name/phone backfills, weighted
+  toward what breaks once deployed. 27 findings, all closed at `a30eb3ef`.
+  **Both 2026-08-14 snapshots were restored from git history on 2026-08-15** —
+  each had been overwritten in place by the sweep that followed it.
 - `MOBILE_AUDIT_2026-07-13.md` — a mobile-optimization-lens pass (perf, memory,
   battery, network, mobile UX) rather than a general audit. Nothing mechanical
   to fix; its verdict was that the hot paths already implement the mitigations

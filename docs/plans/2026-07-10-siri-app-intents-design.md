@@ -1,10 +1,12 @@
 # Siri App Intents — "How many appointments do I have today?"
 
 **Status: design approved 2026-07-10; scope expanded 2026-07-19 to fold in the
-former out-of-scope surfaces. Implementation plan written and Phase 1 built —
-see [`2026-07-19-siri-app-intents-implementation.md`](./2026-07-19-siri-app-intents-implementation.md)
-for current state. Phases 2–6 remain open, which is why this doc is still
-active rather than archived.**
+former out-of-scope surfaces. Phases 1–3 are BUILT and none has had a device
+pass — see [`2026-07-19-siri-app-intents-implementation.md`](./2026-07-19-siri-app-intents-implementation.md)
+for current state. Phase 4 is specified but not started
+([`2026-07-20-siri-phase4-write-actions.md`](./2026-07-20-siri-phase4-write-actions.md)),
+and phases 5–6 are unscoped — which is why this doc is still active rather than
+archived.**
 
 Let users ask Siri about their schedule — and act on it — instead of opening the
 app. Approved decisions: both roles (role-aware answers), iOS deployment target

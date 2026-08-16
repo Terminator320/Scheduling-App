@@ -19,8 +19,9 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   (`setGlobalOptions` in `index.js`)
 - **Wiring:** `index.js` is a thin re-export surface; implementations live in
   domain modules. Shared callable guards (`assertPayloadShape`, `requireString`,
-  `optionalString`, `requireNumberInRange`, `readSessionToken`,
-  `enforceDurableRateLimit`, `assertAdmin`) live in `security.js` — put a new
+  `optionalString`, `requireDocId`, `requireNumberInRange`, `readSessionToken`,
+  `enforceDurableRateLimit`, `assertAdmin`, `assertFreshReauth`) live in
+  `security.js` — put a new
   one there, never back in a feature module (`optionalString` was a private copy
   in the retired `invites.js` and was carried verbatim into
   `employee_accounts.js` before being hoisted). The Wave stack is split four
@@ -30,6 +31,19 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   `wave/sync_run.js` (the one owner of `importWithWatermark` / `drainForSync` /
   `readWaveBusinessIdCached`) and the pure, `deps`-free `wave/retry_policy.js`
   (the dead-letter taxonomy). Export NAMES are unchanged by that split.
+- **Three internal modules exist only to be HAND-MIRRORS of a Dart rule**, and
+  are worth knowing about because a divergence is silent in production and is
+  caught only by tests that share worked examples: `appointment_image_ids.js`
+  (↔ `appointmentImageDocId`, the derived subcollection doc id — it has zero
+  production inbound requires, being used by the backfill script and its jest
+  suite alone, so the invariant is pinned by tests and never exercised by a
+  deployed path), `client_name_utils.js` (↔ `ClientNamePolicy`, which decides
+  whether a client's stored `name` is a phone number or a business name — the
+  value Wave syncs verbatim as its customer name), and `image_magic.js`
+  (↔ `hasValidImageMagic`; these two had drifted 3 bytes vs 4, so a file the
+  client accepted was deleted server-side). `day_slice_utils.js` is a fourth,
+  documented with the multi-day work below. Change either side of a pair and
+  the other in the same commit.
 - **Deploy:** `firebase deploy --only functions,firestore:rules,firestore:indexes,storage`
   (run `cd functions && npm run lint` first).
 
@@ -40,6 +54,25 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 > wrong before — verify against the live list rather than trusting it.
 
 
+- **DEPLOYED 2026-08-15 (`6b3fcf7c`, merged as `be56f118`): the Wave stale-link
+  relink — the second Wave deploy of that day and the one that actually
+  unblocked the two dead-lettered upserts.** A `waveCustomerId` pointing at a
+  customer DELETED in Wave came back as a top-level `NOT_FOUND`, which is
+  correctly non-retryable, so every retry re-sent the same missing id;
+  `upsertCustomer` now routes that shape into the create path with the identity
+  search forced on, and `writeSyncSuccess`'s `replacesLink` carve-out lets the
+  healed link persist onto an already-linked doc. `functions/wave/customers.js`
+  only; no export, rules, index or payload change.
+- **DEPLOYED 2026-08-15 (`e84a66fd`): the Wave enum-coercion fix.** `wave/` only,
+  25 → 25. `toCountryCode`/`toProvinceCode` could emit values outside Wave's
+  GraphQL ENUM vocabulary (a province typed into the country box; a US state
+  prefixed `CA-`), which fails variable coercion and dead-letters the job
+  permanently; both are membership tests now and an unrecognised subdivision is
+  omitted. Also: transient-looking `graphql` errors are retryable, a
+  rate-limited job gets a 20-attempt budget, the dead-letter log gains a
+  PII-free `errorDetail`, and `waveRetryFailedJobs`' response gains a `failed`
+  key. **A real but different bug from the relink above** — it was not what the
+  two dead-lettered jobs were dying of.
 - **DEPLOYED 2026-08-15 (`6d41dd3c`): the 2026-08-15 audit, 25 → 25 with no
   export change.** `waveUpsertCustomer` and `runWaveDaily` MOVED module
   (`wave/callables.js` → the new `wave/triggers.js`) while keeping their export
@@ -66,9 +99,10 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   functions with a failure policy`), which is a *different* and earlier abort
   than the 2026-08-08 deletion one — nothing was released on that attempt.
   Resolved by splitting the deploy rather than whole-target `--force`. **Still
-  outstanding:** the 3 orphaned Cloud Scheduler jobs (`gcloud` absent on the
-  Windows box) and the appointment-images backfill; the app build additionally
-  waits on the `(clientId, startTime DESC)` index reaching `READY`. Full
+  outstanding from this deploy:** only the 3 orphaned Cloud Scheduler jobs
+  (`gcloud` absent on the Windows box). The appointment-images backfill RAN on
+  2026-08-15 (13 photos across 10 appointments) and both gating indexes reached
+  `READY` the same day, so the app build is no longer blocked on either. Full
   sequence and the post-deploy verification: `docs/DEPLOYMENT.md`.
 - **CLEARED 2026-08-11: the 2026-08-08 → 2026-08-11 gap has been deployed.**
   All 25 functions were updated together with `firestore.rules` and
@@ -107,10 +141,18 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   TTL was extended to `liveActivityTokens`, `rateLimits`, and `signupCodes` on
   2026-07-20. **The `signupCodes` `fieldOverride` was removed from
   `firestore.indexes.json` on 2026-08-08** with the rest of the
-  `#compat-1.37.1` shim, so the next `firestore:indexes` deploy DROPS that live
-  TTL policy — which is intended here, and only safe because the collection was
-  verified **empty in prod** first (a TTL policy is the only reaper for those
-  docs; dropping it over a non-empty collection strands them forever). A
+  `#compat-1.37.1` shim. That was expected to drop the live TTL policy on the
+  next `firestore:indexes` deploy — **it has not, and by now three such deploys
+  have gone by** (2026-08-08, 2026-08-14, 2026-08-15). Each time the CLI reported
+  the override as unmatched drift and **correctly refused to delete it without
+  `--force`**, so the policy is still live. That is a safe resting state (the
+  collection was verified **empty in prod** first, and rules deny all access),
+  and it must never be "resolved" by passing `--force` — that flag deleted all
+  five live TTL policies once already. A TTL policy is the only reaper for those
+  docs, so dropping one over a non-empty collection strands them forever.
+  **`appointmentRecountClaims.expiresAt` joined the list 2026-08-15** — the
+  debounce marker behind `recountAppointmentPictures`, with a matching
+  `allow read, write: if false` block in `firestore.rules`. A
   `fieldOverride` for the `appointmentSeriesNotices` claim
   ledger was added to `firestore.indexes.json` on 2026-07-21 (that ledger has no
   in-code reaper, so the TTL is its only cleanup). Every policy's **expiration
