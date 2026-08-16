@@ -92,12 +92,14 @@ class WaveRetryResult {
     required this.requeued,
     required this.scanned,
     required this.pushed,
+    required this.failed,
   });
 
   factory WaveRetryResult.fromMap(Map<String, dynamic> map) => WaveRetryResult(
     requeued: (map['requeued'] as num?)?.toInt() ?? 0,
     scanned: (map['scanned'] as num?)?.toInt() ?? 0,
     pushed: (map['pushed'] as num?)?.toInt(),
+    failed: (map['failed'] as num?)?.toInt(),
   );
 
   /// Jobs returned to the queue. This is the durable part of the action.
@@ -111,6 +113,20 @@ class WaveRetryResult {
   /// that push failed or was skipped. Null is NOT zero: the requeue still
   /// committed, so the jobs are queued and will drain.
   final int? pushed;
+
+  /// How many dead-lettered AGAIN on that same push, or null when it failed or
+  /// was skipped (same null-is-unknown contract as [pushed]).
+  ///
+  /// This is what keeps the press honest. A job usually dies on something
+  /// non-retryable — Wave rejecting the customer's data — so the drain behind
+  /// the requeue kills it again inside the same call: the outbox's failed
+  /// count is unchanged, and without this the app announces a success over a
+  /// row that still reads "1 client failed to sync".
+  final int? failed;
+
+  /// Whether any requeued job died again on the push that followed. Null reads
+  /// as "not known", never as "nothing failed".
+  bool get hasFailed => (failed ?? 0) > 0;
 }
 
 /// What one "Sync with Wave" run moved, in both directions.

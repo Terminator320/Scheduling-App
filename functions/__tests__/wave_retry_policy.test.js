@@ -21,6 +21,7 @@ const {
   isRetryable,
   attemptBudgetFor,
   sanitizeError,
+  describeWaveError,
 } = require("../wave/retry_policy");
 const {WaveApiError} = require("../wave/client");
 const {WaveValidationError} = require("../wave/customers");
@@ -240,5 +241,67 @@ describe("sanitizeError", () => {
         .toBe("Error: unexpected error");
     expect(sanitizeError({name: "CustomThing", secret: "x"}))
         .toBe("CustomThing: unexpected error");
+  });
+});
+
+describe("describeWaveError", () => {
+  // sanitizeError flattens every transport failure to "WaveApiError(graphql)"
+  // and that is what the job and the client doc keep, so before this the
+  // REASON survived nowhere: an undiagnosable permanent failure whose only
+  // recovery action re-sent the same payload into the same refusal.
+
+  it("names the field and code a coerced enum failed on", () => {
+    const err = new WaveApiError(
+        "graphql",
+        "Wave GraphQL errors: Variable \"$input\" got invalid value " +
+        "\"ON\" at \"input.address.countryCode\"; Expected type CountryCode.",
+        [{
+          message: "Variable \"$input\" got invalid value \"ON\" at " +
+            "\"input.address.countryCode\"; Expected type CountryCode.",
+          extensions: {code: "GRAPHQL_VALIDATION_FAILED"},
+        }],
+    );
+    const out = describeWaveError(err);
+    expect(out).toContain("codes=[GRAPHQL_VALIDATION_FAILED]");
+    expect(out).toContain("fields=[input.address.countryCode]");
+    expect(out).toContain("expected=[CountryCode]");
+  });
+
+  it("never carries the offending VALUE, which the same message quotes", () => {
+    // The value is customer data. Only the run following `at` is captured.
+    const err = new WaveApiError(
+        "graphql",
+        "got invalid value \"jane@example.com\" at \"input.email\"",
+        [{message: "got invalid value \"(514) 555-1234\" at \"input.phone\""}],
+    );
+    const out = describeWaveError(err);
+    expect(out).toContain("input.email");
+    expect(out).toContain("input.phone");
+    expect(out).not.toContain("jane@example.com");
+    expect(out).not.toContain("555-1234");
+  });
+
+  it("reads a structured GraphQL path when there is one", () => {
+    const err = new WaveApiError("graphql", "boom", [
+      {message: "Customer not found", path: ["customerPatch", "customer"]},
+    ]);
+    expect(describeWaveError(err)).toContain(
+        "fields=[customerPatch.customer]");
+  });
+
+  it("says nothing rather than guessing on a non-Wave error", () => {
+    expect(describeWaveError(new TypeError("obj.foo"))).toBe("");
+    expect(describeWaveError(null)).toBe("");
+  });
+
+  it("stays bounded when Wave returns a wall of errors", () => {
+    const details = Array.from({length: 50}, (_, i) => ({
+      message: `at "input.f${i}"`,
+      extensions: {code: `CODE_${i}`},
+    }));
+    const out = describeWaveError(new WaveApiError("graphql", "x", details));
+    expect(out.length).toBeLessThanOrEqual(300);
+    expect(out).toContain("CODE_0");
+    expect(out).not.toContain("CODE_9");
   });
 });

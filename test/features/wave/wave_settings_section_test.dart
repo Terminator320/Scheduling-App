@@ -226,7 +226,12 @@ void main() {
         ),
       );
       when(service.retryFailedJobs).thenAnswer(
-        (_) async => const WaveRetryResult(requeued: 2, scanned: 2, pushed: 2),
+        (_) async => const WaveRetryResult(
+          requeued: 2,
+          scanned: 2,
+          pushed: 2,
+          failed: 0,
+        ),
       );
 
       await tester.pumpWidget(_wrapSection(service, noticeService: notices));
@@ -259,8 +264,12 @@ void main() {
         ),
       );
       when(service.retryFailedJobs).thenAnswer(
-        (_) async =>
-            const WaveRetryResult(requeued: 3, scanned: 3, pushed: null),
+        (_) async => const WaveRetryResult(
+          requeued: 3,
+          scanned: 3,
+          pushed: null,
+          failed: null,
+        ),
       );
 
       await tester.pumpWidget(_wrapSection(service, noticeService: notices));
@@ -270,6 +279,44 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(emitted.last, contains('3 clients queued for Wave again'));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a job that dies again is surfaced as a failure, not success', (
+      tester,
+    ) async {
+      // The press that looked broken: the drain behind the requeue
+      // dead-letters a non-retryable job in the same call, so the failed row
+      // does not move — a success notice over it is an affirmative lie.
+      final service = _mockService();
+      final notices = NoticeService();
+      final emitted = <AppNotice>[];
+      notices.stream.listen(emitted.add);
+
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          failedCount: 1,
+        ),
+      );
+      when(service.retryFailedJobs).thenAnswer(
+        (_) async => const WaveRetryResult(
+          requeued: 1,
+          scanned: 1,
+          pushed: 0,
+          failed: 1,
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Retry failed'));
+      await tester.pumpAndSettle();
+
+      expect(emitted.last.message, contains("still couldn't be sent"));
+      expect(emitted.last, isA<NoticeError>());
       expect(tester.takeException(), isNull);
     });
 
@@ -287,7 +334,12 @@ void main() {
         ),
       );
       when(service.retryFailedJobs).thenAnswer(
-        (_) async => const WaveRetryResult(requeued: 0, scanned: 1, pushed: 0),
+        (_) async => const WaveRetryResult(
+          requeued: 0,
+          scanned: 1,
+          pushed: 0,
+          failed: 0,
+        ),
       );
 
       await tester.pumpWidget(_wrapSection(service, noticeService: notices));
@@ -326,7 +378,7 @@ void main() {
       expect(sync.onPressed, isNull);
 
       gate.complete(
-        const WaveRetryResult(requeued: 1, scanned: 1, pushed: 1),
+        const WaveRetryResult(requeued: 1, scanned: 1, pushed: 1, failed: 0),
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);

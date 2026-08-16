@@ -162,6 +162,90 @@ function sanitizeError(err) {
   return `${name}: unexpected error`;
 }
 
+/** Caps on the diagnostic below, so one pathological error can't flood a log
+ * line: how many distinct items of each kind, and the overall length. */
+const DESCRIBE_MAX_ITEMS = 5;
+const DESCRIBE_MAX_LENGTH = 300;
+
+/**
+ * De-duplicated, capped, joined list of non-empty strings.
+ * @param {!Array<string>} values
+ * @return {string} Comma-joined, or empty when there is nothing to say.
+ */
+function joinCapped(values) {
+  const seen = [];
+  for (const v of values) {
+    if (!v || seen.includes(v)) continue;
+    seen.push(v);
+    if (seen.length >= DESCRIBE_MAX_ITEMS) break;
+  }
+  return seen.join(",");
+}
+
+/**
+ * A PII-free descriptor of WHY Wave refused, for the dead-letter LOG ONLY.
+ *
+ * [sanitizeError] deliberately reduces every transport failure to
+ * `WaveApiError(graphql)`, and that string is what lands in the job's
+ * `lastError` and the client's `wave.syncError`. It is the right thing to
+ * store — those are read by the app — but it left NOWHERE in the system
+ * recording the actual reason: not the log, not the job, not the client badge.
+ * A permanently-dead client edit was, by construction, undiagnosable, and the
+ * only recovery action ("Retry failed") re-sent the identical payload and
+ * dead-lettered it identically.
+ *
+ * What it takes is bounded to schema-level identifiers, never customer data:
+ *   - `extensions.code` — Wave's own error vocabulary
+ *     (e.g. `GRAPHQL_VALIDATION_FAILED`).
+ *   - the error `path`, and any `at "input.address.countryCode"` fragment,
+ *     which names the FIELD at fault. The quoted run captured is only the one
+ *     following `at`; the offending VALUE, which the same message quotes
+ *     right before it, is never taken.
+ *   - `Expected type <T>` — a GraphQL type name.
+ *
+ * Everything else, including Wave's raw message text, stays out.
+ *
+ * @param {*} err The caught error.
+ * @return {string} A short descriptor, or '' when there is nothing safe to
+ *   add beyond what [sanitizeError] already says.
+ */
+function describeWaveError(err) {
+  if (!(err instanceof WaveApiError)) return "";
+  const details = Array.isArray(err.details) ? err.details : [];
+  const codes = [];
+  const fields = [];
+  const types = [];
+  const messages = [];
+  if (typeof err.message === "string") messages.push(err.message);
+
+  for (const d of details) {
+    if (!d) continue;
+    const code = d.extensions && typeof d.extensions.code === "string" ?
+      d.extensions.code : "";
+    if (code) codes.push(code);
+    if (Array.isArray(d.path)) fields.push(d.path.join("."));
+    if (typeof d.message === "string") messages.push(d.message);
+  }
+
+  for (const m of messages) {
+    for (const hit of m.matchAll(/\bat "([A-Za-z0-9_.[\]]+)"/g)) {
+      fields.push(hit[1]);
+    }
+    for (const hit of m.matchAll(/\bExpected type ([A-Za-z0-9_]+)/g)) {
+      types.push(hit[1]);
+    }
+  }
+
+  const parts = [];
+  const codeList = joinCapped(codes);
+  if (codeList) parts.push(`codes=[${codeList}]`);
+  const fieldList = joinCapped(fields);
+  if (fieldList) parts.push(`fields=[${fieldList}]`);
+  const typeList = joinCapped(types);
+  if (typeList) parts.push(`expected=[${typeList}]`);
+  return parts.join(" ").slice(0, DESCRIBE_MAX_LENGTH);
+}
+
 module.exports = {
   DEFAULT_MAX_ATTEMPTS,
   RATE_LIMITED_MAX_ATTEMPTS,
@@ -172,4 +256,5 @@ module.exports = {
   isRetryable,
   attemptBudgetFor,
   sanitizeError,
+  describeWaveError,
 };

@@ -332,7 +332,17 @@ directly. Jest tests live in **`functions/__tests__/` only** — the parallel
   serial round trip each spent 12-20 s of the callable's budget before the
   drain behind it had run at all. The transactions touch distinct documents,
   so there is nothing to serialize for, and the per-job catch still keeps one
-  stubborn job from aborting the recovery), the `waveUpsertCustomer`
+  stubborn job from aborting the recovery.
+  **The response carries `failed` (`drained.dead`) beside `pushed`, and it is
+  not optional** (2026-08-15): the very reason this action is manual — a job
+  that died on a `WaveValidationError` dies again — means the drain behind the
+  requeue routinely dead-letters it a SECOND time inside the same call, leaving
+  the outbox's dead count exactly where it was. Reporting only `requeued` made
+  the app announce "1 client queued for Wave again" as a success over a
+  Settings row still reading "1 client failed to sync", which is the same
+  silence `pushedFailed` was added to the sync response to end. Null-is-unknown
+  like `pushed` — the drain threw, or never ran — and the app must never render
+  that as "nothing failed"), the `waveUpsertCustomer`
   `clients` trigger, and the daily `runWaveDaily` — which is NOT its own
   export: `waveScheduledImport` was deleted 2026-08-13 and this now rides
   `sendDailyJobDigest` as an isolated rider (server-triggered, so no App
@@ -390,6 +400,33 @@ directly. Jest tests live in **`functions/__tests__/` only** — the parallel
   The reclaim pass enforces the same rule with a single read+write transaction
   (it has no Wave call to span), so neither path may ever do an unconditional
   `update`.
+  **Mapper invariant: NEVER send a value outside a Wave ENUM's vocabulary —
+  omit the field instead** (2026-08-15). `provinceCode` and `countryCode` are
+  GraphQL enums, so a value they don't know is NOT an `inputErrors` entry the
+  worker can report against that one field: GraphQL refuses to coerce the whole
+  `$input` variable and answers with a **top-level** error, which arrives as
+  `WaveApiError(graphql)`, is non-retryable by design, and dead-letters the job.
+  Nothing recovers it — "Retry failed" re-sends the identical payload into the
+  identical refusal — so one stray address field costs that client every future
+  sync, permanently and silently. `toProvinceCode`/`toCountryCode`
+  (`wave/mappers.js`) therefore test MEMBERSHIP against `ISO_COUNTRY_CODES` and
+  `SUBDIVISION_CODES` rather than shape: both doc blocks always claimed they
+  "omit rather than guess", but `/^[A-Z]{2}$/` accepts any two letters, so a
+  province typed into the country box ("ON", "QC") shipped as a country code.
+  The province prefix follows the client's **resolved country** too — it was an
+  unconditional `CA-`, so a New York client was sent as `CA-NY`, a subdivision
+  of nowhere. Resolve country BEFORE province in `toWaveCustomerInput`; the
+  province reads against it. Apply the same rule to any new enum-typed field.
+  **And `sanitizeError` is not a diagnostic** — it flattens every transport
+  failure to `WaveApiError(graphql)`, which is correct for the job's
+  `lastError` and the client's `wave.syncError` (the app reads those), but it
+  left the REASON recorded nowhere in the system. `describeWaveError`
+  (`wave/retry_policy.js`) is the log-only companion the dead-letter
+  `logger.error` carries as `errorDetail`: GraphQL `extensions.code`, the error
+  `path` and the `at "input.address.countryCode"` field fragment, plus
+  `Expected type`. It takes **only** the quoted run following `at` — the same
+  message quotes the offending VALUE immediately before it, and that is
+  customer data. Keep new detail extraction on that side of the line.
 
 **Firestore TTL policies are declared in `firestore.indexes.json`**, as
 `fieldOverrides` entries with `"ttl": true` on `expiresAt`. They are NOT

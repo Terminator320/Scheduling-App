@@ -250,6 +250,26 @@ void main() {
       expect(r.requeued, 4);
       expect(r.pushed, isNull);
     });
+
+    test('parses jobs that dead-lettered again on the push', () {
+      final r = WaveRetryResult.fromMap(const {
+        'requeued': 3,
+        'scanned': 3,
+        'pushed': 2,
+        'failed': 1,
+      });
+      expect(r.failed, 1);
+      expect(r.hasFailed, isTrue);
+    });
+
+    test('a missing `failed` is unknown, never "nothing failed"', () {
+      // An older backend does not send it, and a drain that threw cannot know.
+      // Reading either as zero would let the app claim a clean retry over an
+      // outbox row that never moved.
+      final r = WaveRetryResult.fromMap(const {'requeued': 4, 'scanned': 4});
+      expect(r.failed, isNull);
+      expect(r.hasFailed, isFalse);
+    });
   });
 
   // -------------------------------------------------------------------------

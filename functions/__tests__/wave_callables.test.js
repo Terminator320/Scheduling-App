@@ -973,8 +973,28 @@ describe("waveRetryFailedJobs", () => {
 
         const out = await waveRetryFailedJobs.run(req(ADMIN_UID, {}));
 
-        expect(out).toEqual({requeued: 2, scanned: 2, pushed: 2});
+        expect(out).toEqual(
+            {requeued: 2, scanned: 2, pushed: 2, failed: 0});
         expectCalledBefore(waveWorker.requeueDeadJobs, waveWorker.drainQueue);
+      });
+
+  test("reports jobs that dead-lettered again on the push behind it",
+      async () => {
+        // The shape that makes this press look broken: a job usually dies on
+        // something Wave will reject again, so the drain kills it inside the
+        // same call and the outbox's dead count never moves. Without `failed`
+        // the app sees only `requeued` and announces a success over a row
+        // that still reads "1 client failed to sync".
+        getFirestore.mockReturnValue(fakeFirestore({businessId: "biz-1"}).db);
+        waveWorker.requeueDeadJobs.mockResolvedValue(
+            {requeued: 3, scanned: 3});
+        waveWorker.drainQueue.mockResolvedValue(
+            drainSummary({done: 2, dead: 1}));
+
+        const out = await waveRetryFailedJobs.run(req(ADMIN_UID, {}));
+
+        expect(out).toEqual(
+            {requeued: 3, scanned: 3, pushed: 2, failed: 1});
       });
 
   test("a failed push still reports the requeue, which already committed",
@@ -989,7 +1009,8 @@ describe("waveRetryFailedJobs", () => {
 
         const out = await waveRetryFailedJobs.run(req(ADMIN_UID, {}));
 
-        expect(out).toMatchObject({requeued: 3, scanned: 3, pushed: null});
+        expect(out).toMatchObject(
+            {requeued: 3, scanned: 3, pushed: null, failed: null});
       });
 
   test("nothing to requeue means no drain at all", async () => {
@@ -998,7 +1019,7 @@ describe("waveRetryFailedJobs", () => {
 
     const out = await waveRetryFailedJobs.run(req(ADMIN_UID, {}));
 
-    expect(out).toEqual({requeued: 0, scanned: 0, pushed: null});
+    expect(out).toEqual({requeued: 0, scanned: 0, pushed: null, failed: null});
     expect(waveWorker.drainQueue).not.toHaveBeenCalled();
   });
 

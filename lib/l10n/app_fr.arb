@@ -720,5 +720,6 @@
   "wave_retryFailedButton": "Réessayer",
   "wave_retryNoneRecovered": "Rien à réessayer — ces clients étaient déjà de retour dans la file.",
   "wave_retryQueued": "{count, plural, =1{1 client remis en file pour Wave} other{{count} clients remis en file pour Wave}}",
-  "wave_retryPushed": "{count, plural, =1{1 client envoyé à Wave} other{{count} clients envoyés à Wave}}"
+  "wave_retryPushed": "{count, plural, =1{1 client envoyé à Wave} other{{count} clients envoyés à Wave}}",
+  "wave_retryStillFailed": "{count, plural, =1{1 client n’a toujours pas pu être envoyé — ouvrez-le pour voir l’erreur} other{{count} clients n’ont toujours pas pu être envoyés — ouvrez-les pour voir l’erreur}}"
 }
