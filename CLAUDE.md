@@ -80,7 +80,8 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `isAccountDeletionSignal` (`account_status_provider.dart`) fires the runtime
   sign-out only when the current doc is a *settled* empty following a
   previously-populated one — so pass `previous` (the prior emission) from the
-  `ref.listen` in `main.dart`. A first-seen empty doc is a bootstrap window
+  `ref.listen` in `AccountExitListeners._listenForDeletedAccount`
+  (`core/app/account_exit_listeners.dart`), which `main.dart` only registers. A first-seen empty doc is a bootstrap window
   (fresh-sign-in `uid == null` branch, or an invited account signed in before
   `completeEmployeeSetup` activates its doc), NOT a deletion. Never simplify back to
   `doc.isEmpty` alone, or invited employees get wrongly kicked out mid-activation
@@ -131,24 +132,51 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   *new* reads. **`AppointmentImageLoader` (`core/images/`, formerly
   `AppointmentImageUrlResolver`) calls `ref.getData()` instead** — an
   authenticated SDK fetch, so `storage.rules` is evaluated on **every fetch**,
-  and there is nothing shareable to capture or to leave in a cache. Be precise
-  about the two halves: it does **not** revoke a URL somebody already captured
-  under the old build (nothing client-side can — that needs a server-side token
-  rotation), and it does **not** stop an entitled person screenshotting or
-  sharing a photo they can legitimately see. What it ends is the app
-  *manufacturing* a permanent rules-free link as a side effect of rendering.
+  and nothing shareable is produced ON THE RENDER PATH or left in a cache. Be
+  precise about the three halves — the written guarantee used to carry only
+  the first two and was therefore an overstatement: it does **not** revoke a
+  URL somebody already captured under the old build, it does **not** stop an
+  entitled person screenshotting or sharing a photo they can legitimately see,
+  and — the one that was missing — **`ImageStorageService.uploadImage` still
+  mints and persists one such URL per upload**, into `pictures[]`, which every
+  assigned employee's device receives. So the app is still MANUFACTURING a
+  permanent rules-free link per photo; what ended is doing it *as a side
+  effect of rendering*. That write is deliberate (builds predating this render
+  from it) and goes at the CONTRACT step below. Until then the residual is
+  **covered, not closed**, by `functions/appointment_image_tokens.js`
+  (`rotateAssignedImageTokens`, called from `syncUsersByUid`'s deactivation
+  branch): it rewrites `firebaseStorageDownloadTokens` on every photo of every
+  appointment the departing employee was assigned to — newest first, bounded
+  at `ROTATE_APPOINTMENT_MAX` (500) — and mints the replacement URL into
+  `pictures[]` in the same pass, because rotating alone would blank those
+  photos on exactly the old builds the `url` write exists for. It never throws
+  (it sits inside a `retry: true` trigger) and it is defence-in-depth behind
+  the rules' status gate, never the gate itself. Retire it with the `url`
+  write.
   **The accepted cost, stated up front by the owner:** this loses
   `cached_network_image`'s on-disk byte cache, so photos re-download once per
   session and **do not render offline at all**. `cached_network_image` /
   `flutter_cache_manager` are no longer imported anywhere in `lib/`.
-  **The session cache holds the BYTES** (`Map<storagePath, Future<Uint8List>>`,
-  the provider is a singleton) — that is what keeps the fetch from being paid
+  **The session cache holds the BYTES** (`Map<key, Future<Uint8List>>` keyed on
+  `storagePath`, or `'url:<url>'` for a legacy entry that has no storage path —
+  keying THOSE on the shared empty `storagePath` would serve one doc's bytes
+  for another, but the url is already a unique handle, and the legacy branch
+  bypassing the cache entirely meant re-fetching on every widget State for a
+  fallback documented as permanent; the provider is a singleton) — that is what keeps the fetch from being paid
   per widget State, i.e. on every sheet open AND again on every View→Edit
   toggle, which is the whole win the URL cache was built for. It is
   **byte-budgeted** (24 MB, oldest evicted first) because bytes are far heavier
   than the strings they replaced; a session that opens fifty jobs would
   otherwise retain every photo of every one of them. `loadAll` keeps its
-  concurrency bound of 4.
+  concurrency bound of 4, and `appointment_image_loader_test.dart` now asserts
+  that bound rather than only the ordering that survives it. **The cache is
+  cleared by `deregisterThisDevice`** (`core/app/device_deregistration.dart`),
+  the single owner of "forget this session" — the provider is a plain
+  `Provider`, so its bytes otherwise live for the whole process and one user's
+  job photos stay in the heap across sign-out into the next user's session on
+  a shared device. Not a rules bypass (serving them still needs the next
+  reader to be entitled to the same `storagePath`), which is why it sits after
+  the credential-dependent steps rather than before them.
   A doc written before `storagePath` was stored has only its `url`, so **that
   URL is unavoidably the handle** — but it is turned back into a `Reference`
   via `refFromURL` and fetched through the SDK like any other, so even the
@@ -642,8 +670,11 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   2026-08-13) — `endTime >= now` still has no upper bound of its own, and a
   repeat series pre-books up to `RepeatInterval.maxOccurrences` (120)
   occurrences, so a tech on several series was several hundred documents read
-  to render that caption. This was the LAST unbounded query in the repository;
-  every other one names a ceiling. A `.limit` rather than a horizon bound
+  to render that caption. Every query in every repository now names a
+  ceiling — this bullet claimed that was already true here while
+  `deleteTokensOfKind` (`live_activity_token_repository.dart`) still ran an
+  unbounded subcollection query; it now carries `_deviceTokenScanLimit` (50)
+  and the warn-at-cap, so the claim is finally accurate. A `.limit` rather than a horizon bound
   deliberately: with `endTime` the only inequality, Firestore returns these
   `endTime` ASC, so the cap keeps the SOONEST-ending jobs — the ones actually
   needing reassignment — and the number stays EXACT below the cap, so
@@ -680,7 +711,7 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   (`functions/travel_utils.js`), and it was BUILT 2026-08-11: this bullet
   asserted it as fact from 2026-08-10 while no such gate existed anywhere, so
   the card really did carry the run's `endTime` into
-  `Text(timerInterval:countsDown:)`. `docs/plans/2026-08-02-multi-day-appointments.md`
+  `Text(timerInterval:countsDown:)`. `docs/archive/2026-08-02-multi-day-appointments.md`
   §10 deferred it, and the doc was right. Only the CARD is withheld — the
   `leaveNow` push still goes out on day 1, which is the only day with a
   departure time.
@@ -1708,7 +1739,7 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   directory. Everything with a server-side mirror stayed here.
 - **History carries its date on a LEFT RAIL, under a sticky month bar, and it
   builds its own slivers** (P7 Phase D, 2026-08-11 —
-  `docs/plans/2026-08-11-history-restyle.md`). The rail is what leaves
+  `docs/archive/2026-08-11-history-restyle.md`). The rail is what leaves
   `AppointmentCard` untouched: the two rejected layouts both had to restyle the
   one shared card. Consequences, each of which was a real failure:
   **Each month is a `SliverMainAxisGroup`, not a bare
@@ -1752,6 +1783,19 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `statusLabel` ("Complete"/"Cancelled") — don't add history-specific status
   wording beside it. The **bold year separator is deleted**: the month bar
   already carries the year.
+  **Both O(N) passes over the rows — `tallyOf` and `monthSectionsOf` — are
+  memoized on the IDENTITY of the row list, so every list handed down must be
+  a STABLE INSTANCE, and that has one owner: `_RowCache` in
+  `appointment_history_view.dart`.** Memoizing at the consumer alone is a
+  no-op here and silently was one: `PagingState.items` re-flattens every
+  loaded page on each access, and both filter passes build a new list, so the
+  memos compared two freshly-allocated lists and re-ran on every rebuild — per
+  keystroke while searching, and on every `employeeColorMapProvider` /
+  `currentDayProvider` emission, over a history that grows with scroll depth.
+  Cache at the SOURCE, keyed on a record (`List` members compare by identity,
+  which is what tracks a new page or a new search result; the query and chips
+  compare by value). A new row-producing path needs its own cache entry, not a
+  second memo at the far end.
 - **`findBusyEmployees` must exclude the appointment under edit.** Pass
   `excludeAppointmentId` from any edit-flow conflict check or the job collides
   with itself and reports every one of its own assignees as busy. The exclusion

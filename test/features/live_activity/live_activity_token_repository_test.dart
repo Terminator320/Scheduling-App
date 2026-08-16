@@ -167,6 +167,9 @@ void main() {
       when(
         () => tokensCol.where('kind', isEqualTo: 'pushToStart'),
       ).thenReturn(query);
+      // The scan is bounded like every other read in the repositories — this
+      // was the last unbounded query in any of them.
+      when(() => query.limit(any())).thenReturn(query);
       when(() => query.get()).thenAnswer((_) async => querySnap);
     });
 
@@ -193,6 +196,7 @@ void main() {
       );
 
       verify(() => tokensCol.where('kind', isEqualTo: 'pushToStart')).called(1);
+      verify(() => query.limit(any())).called(1);
       verify(refA.delete).called(1);
       verify(refB.delete).called(1);
     });

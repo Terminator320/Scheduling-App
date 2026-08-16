@@ -20,6 +20,7 @@ import 'package:scheduling/features/employees/domain/policies/work_schedule_poli
 import 'package:scheduling/features/employees/widgets/fields/availability_panel.dart';
 import 'package:scheduling/features/employees/widgets/fields/employee_color_grid.dart';
 import 'package:scheduling/features/employees/widgets/fields/job_title_chips.dart';
+import 'package:scheduling/features/employees/widgets/fields/work_schedule_pickers.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/warning_note.dart';

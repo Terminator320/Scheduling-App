@@ -17,7 +17,9 @@ class BrandMark extends StatelessWidget {
     // Cache decode near display size to avoid over-loading.
     final cachePx = (size * MediaQuery.devicePixelRatioOf(context)).round();
     final image = Image.asset(
-      'assets/images/icon.png',
+      // The 512px derivative — see `pubspec.yaml`. `icon.png` is the 1254px
+      // master and is deliberately NOT bundled.
+      'assets/images/brand_mark.png',
       width: size,
       height: size,
       fit: BoxFit.contain,

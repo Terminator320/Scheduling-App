@@ -15,7 +15,8 @@ final appointmentImageLoaderProvider = Provider<AppointmentImageLoader>(
 
 /// Fetches an appointment photo's BYTES from Storage, for rendering in memory.
 ///
-/// **No renderable URL is ever produced, and that is the whole point.**
+/// **No renderable URL is ever produced ON THE RENDER PATH, and that is the
+/// point — but be precise about how far it goes.**
 /// `getDownloadURL()` mints a `?alt=media&token=…` URL whose
 /// `firebaseStorageDownloadTokens` value is stable per object and never
 /// expires; fetching it serves the bytes over plain HTTPS with **no auth and
@@ -25,7 +26,18 @@ final appointmentImageLoaderProvider = Provider<AppointmentImageLoader>(
 /// sat in the on-disk image cache and kept working for anyone holding it long
 /// after `deactivateEmployee` revoked their credential. `getData()` is an
 /// authenticated SDK call: `storage.rules` is evaluated on **every fetch**,
-/// there is nothing shareable to capture, and a refused reader gets nothing.
+/// and a refused reader gets nothing.
+///
+/// What this does NOT yet mean is "there is nothing shareable to capture".
+/// `ImageStorageService.uploadImage` still mints one such URL per upload and
+/// persists it as `AppointmentImage.url`, and the whole `pictures[]` array
+/// reaches every assigned employee's device — so a permanent, rules-free link
+/// per photo is still being manufactured, just not by this class. That write
+/// is deliberate (builds predating this render from it) and goes at the
+/// photo-subcollection CONTRACT step. Until then the residual is covered, not
+/// closed, by `functions/appointment_image_tokens.js`, which rotates those
+/// tokens when an employee is deactivated. Don't build on a guarantee this
+/// class cannot give on its own.
 ///
 /// The cost, accepted by the owner: this loses `cached_network_image`'s
 /// on-disk byte cache, so photos re-download once per session and do not
@@ -39,7 +51,7 @@ final appointmentImageLoaderProvider = Provider<AppointmentImageLoader>(
 /// stack. That fallback is why this is not a migration.
 class AppointmentImageLoader {
   AppointmentImageLoader({FirebaseStorage? storage, AppLogger? logger})
-    : _storage = storage ?? FirebaseStorage.instance,
+    : _injectedStorage = storage,
       _logger = logger ?? AppLogger();
 
   /// Session-scoped, keyed by `storagePath`. The provider is a singleton, so
@@ -69,7 +81,15 @@ class AppointmentImageLoader {
   /// `getData` needs an explicit bound.
   static const int _maxImageBytes = ImageStorageService.maxUploadBytes;
 
-  final FirebaseStorage _storage;
+  /// Resolved LAZILY, on the first fetch.
+  ///
+  /// `FirebaseStorage.instance` throws without an initialized app, and this
+  /// provider is now touched by `deregisterThisDevice` — which every widget
+  /// test covering sign-out builds — purely to [clear] the cache. Constructing
+  /// the singleton there would make forgetting the session require Firebase.
+  FirebaseStorage get _storage => _injectedStorage ?? FirebaseStorage.instance;
+
+  final FirebaseStorage? _injectedStorage;
   final AppLogger _logger;
 
   /// The photo's bytes, or an EMPTY list when there are none to render — a
@@ -77,19 +97,39 @@ class AppointmentImageLoader {
   /// handle. Callers must treat empty as a refusal (error tile, untappable),
   /// never as a pending load.
   Future<Uint8List> load(AppointmentImage image) {
-    final path = image.storagePath;
-    // Two legacy docs share the empty storagePath, so caching under it would
-    // serve the first one's bytes for the second.
-    if (path.isEmpty) return _loadLegacy(image);
+    final key = _cacheKeyFor(image);
+    // Nothing to fetch and nothing to key on.
+    if (key.isEmpty) return Future.value(Uint8List(0));
 
-    final cached = _cache[path];
+    final cached = _cache[key];
     if (cached != null) return cached;
 
-    final pending = _fetch(() => _storage.ref(path), path);
-    _cache[path] = pending;
-    unawaited(pending.then((bytes) => _settle(path, pending, bytes)));
+    final pending = _fetch(() => _refFor(image), key);
+    _cache[key] = pending;
+    unawaited(pending.then((bytes) => _settle(key, pending, bytes)));
     return pending;
   }
+
+  /// The cache key for [image], or `''` when it carries no usable handle.
+  ///
+  /// A legacy (`url`-only) entry is keyed on its URL rather than skipping the
+  /// cache: two such docs share the empty `storagePath`, so keying on THAT
+  /// would serve the first one's bytes for the second — but the URL is
+  /// already a unique handle, and is already what `_fetch` logs against. The
+  /// `url` fallback is documented as permanent, so a legacy photo bypassing
+  /// the cache re-fetched from Storage on every widget State: every sheet
+  /// open, and again on every View→Edit toggle, which is exactly the cost
+  /// this cache exists to remove. The prefix keeps the two key spaces
+  /// disjoint.
+  static String _cacheKeyFor(AppointmentImage image) {
+    if (image.storagePath.isNotEmpty) return image.storagePath;
+    if (image.url.isNotEmpty) return 'url:${image.url}';
+    return '';
+  }
+
+  Reference _refFor(AppointmentImage image) => image.storagePath.isNotEmpty
+      ? _storage.ref(image.storagePath)
+      : _storage.refFromURL(image.url);
 
   /// Fetches in list order so the returned bytes line up index-for-index with
   /// [images] — the viewer opens at a tapped index, so a reordered result
@@ -107,9 +147,20 @@ class AppointmentImageLoader {
     return loaded;
   }
 
-  Future<Uint8List> _loadLegacy(AppointmentImage image) {
-    if (image.url.isEmpty) return Future.value(Uint8List(0));
-    return _fetch(() => _storage.refFromURL(image.url), image.url);
+  /// Forgets every cached photo.
+  ///
+  /// Called from the account-exit teardown, which is the single owner of
+  /// "forget this session". The provider is a process-lifetime singleton, so
+  /// without this up to 24 MB of one user's photo bytes stays resident in the
+  /// heap across sign-out into the next user's session on a shared device.
+  /// That is not a rules bypass — serving them still requires the next user
+  /// to be entitled to the same `storagePath` — but it is memory-forensics
+  /// exposure, and it was the one thing `AccountExitListeners` did not
+  /// tear down.
+  void clear() {
+    _cache.clear();
+    _sizes.clear();
+    _cachedBytes = 0;
   }
 
   /// [refOf] is a thunk because `refFromURL` parses, and therefore throws, on
@@ -148,6 +199,11 @@ class AppointmentImageLoader {
     }
     _sizes[path] = bytes.length;
     _cachedBytes += bytes.length;
+    // Checked BEFORE the key copy, which is the overwhelmingly common path:
+    // the budget only binds once a session has opened a lot of photos, and
+    // `_sizes.keys.toList()` above the test copied the whole key list on every
+    // single photo load to usually evict nothing.
+    if (_cachedBytes <= _maxCachedBytes) return;
     for (final oldest in _sizes.keys.toList()) {
       if (_cachedBytes <= _maxCachedBytes) break;
       _cachedBytes -= _sizes.remove(oldest) ?? 0;

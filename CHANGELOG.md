@@ -10,6 +10,50 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.46.2+75] - 2026-08-16
+
+Two clients had been unable to reach Wave for days, and the evening "tomorrow's
+jobs" notification had a way of going quiet for everyone at once. Both are
+fixed here, along with a photo-sharing hole that outlived switching an account
+off.
+
+### Fixed
+- **A client could get permanently stuck as "failed to sync" with Wave.** If
+  the customer had been deleted on the Wave side, every push — and every press
+  of **Retry failed** — sent it to the same missing record and failed the same
+  way, so the count never came down and there was nothing you could do about
+  it. The client is now reconnected to its Wave customer, or a new one is
+  created, instead. Two real clients were in this state and are recovered.
+- **One typo in an address could stop a client syncing, for good.** Putting a
+  province in the country box, or having a client outside Canada, sent Wave a
+  code it doesn't recognise and killed the whole update — not just that one
+  line. Retrying could never help, because it resent the same thing. Unknown
+  country or province values are now left off instead, and the rest of the
+  client still syncs.
+- **"Retry failed" could report success while nothing had actually gone
+  through.** It told you what it had queued up again, not what Wave accepted —
+  so it read as good news over a row still saying clients had failed. It now
+  reports what landed and what didn't, and what didn't is shown as an error.
+- **The 6 p.m. "tomorrow's jobs" notification could stop reaching everyone.**
+  Once enough finished-but-never-closed jobs built up, the evening summary
+  filled up with old work and found nothing about tomorrow, so nobody's crew
+  got one — with nothing to indicate it had happened.
+- **Job photos could still be opened by someone whose account had been
+  switched off.** Showing a photo used to create a permanent web link for it,
+  and those links kept working for anyone whose phone had already received
+  them. Disabling someone now invalidates the links on every job they were
+  assigned to. Two honest limits: this covers their most recent 500 jobs, and
+  it cannot reach a link that was saved somewhere outside the app.
+- **Photos stayed in the phone's memory after signing out** — worth knowing on
+  a shared device. Signing out now clears them.
+- **A failed address lookup could copy the address being typed into the
+  server's logs.** Only the error code is recorded now.
+
+### Changed
+- **A long job history scrolls and searches more smoothly.** The screen was
+  re-counting and re-grouping the whole loaded history on every keystroke and
+  every redraw, which got heavier the further you scrolled.
+
 ## [1.46.1+74] - 2026-08-15
 
 A correctness and privacy pass over the whole codebase. The headline is that a

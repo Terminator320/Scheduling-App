@@ -101,6 +101,31 @@ class _AppointmentHistoryViewState
   List<HistoryEmployeeOption> _cachedEmployees = const [];
   List<_HistorySearchEntry> _searchIndex = const [];
 
+  /// `tallyOf` is another O(N) pass over the same rows, re-run on every
+  /// rebuild — a page load, a filter `setState`, an `employeeColorMapProvider`
+  /// or `currentDayProvider` emission. Memoized on the rows list identity,
+  /// like the two above it.
+  ///
+  /// That identity is only stable because every list reaching [_countedList]
+  /// comes out of a [_RowCache] — see the note there.
+  List<AppointmentRecord>? _talliedRows;
+  HistoryTally _tally = (total: 0, cancelled: 0);
+
+  HistoryTally _tallyFor(List<AppointmentRecord> rows) {
+    if (!identical(rows, _talliedRows)) {
+      _talliedRows = rows;
+      _tally = tallyOf(rows);
+    }
+    return _tally;
+  }
+
+  /// The three row lists this screen can render, each cached against the
+  /// inputs that produce it: the loaded pages, the chip/text filter over them,
+  /// and the chip filter over a settled server search.
+  final _RowCache _loadedRows = _RowCache();
+  final _RowCache _filteredRows = _RowCache();
+  final _RowCache _searchRows = _RowCache();
+
   late final PagingController<int, AppointmentRecord> _pagingController =
       PagingController<int, AppointmentRecord>(
         getNextPageKey: (state) {
@@ -301,9 +326,17 @@ class _AppointmentHistoryViewState
       child: PagingListener<int, AppointmentRecord>(
         controller: _pagingController,
         builder: (context, state, fetchNextPage) {
-          final loaded = state.items ?? const <AppointmentRecord>[];
-          // PagingState.items rebuilds a fresh list each access, so memoize on
-          // the underlying pages identity, which only changes on a new page.
+          // `PagingState.items` re-flattens every loaded page on each access,
+          // so it hands back a NEW list every rebuild. Resolving it through
+          // the cache is what makes the downstream `identical` memos — the
+          // tally here and the month sections in `HistorySliverList` — able to
+          // hit at all; against the raw getter they compared two fresh lists
+          // and re-ran their O(N) pass on every emission.
+          final loaded = _loadedRows.of(
+            (state.pages,),
+            () => state.items ?? const <AppointmentRecord>[],
+          );
+          // The filter options and search index key on the same page identity.
           if (!identical(state.pages, _filterOptionsPages)) {
             _filterOptionsPages = state.pages;
             _cachedYears = _yearsOf(loaded);
@@ -472,17 +505,25 @@ class _AppointmentHistoryViewState
       );
     }
 
+    // Both filter passes allocate, so they are cached on the inputs that
+    // decide their contents — the search index (which tracks the loaded
+    // pages), the query and the three chips. Without this the list handed
+    // down is fresh every rebuild and the tally/month-section memos never hit.
+    final filterKey = (_searchIndex, query, _year, _employeeId, _status);
+    List<AppointmentRecord> filteredLoaded() =>
+        _filteredRows.of(filterKey, _filterLoaded);
+
     // No text query — chip filters alone operate over the loaded pages, which
     // stay a contiguous run of days and so keep their month bars.
     if (query.isEmpty) {
-      return list(_filterLoaded(), inSearch: false);
+      return list(filteredLoaded(), inSearch: false);
     }
 
     // The local page filter fills the gap until the debounced server search settles.
     // It's computed lazily, so the settled `data` branch — which renders the server
     // results — doesn't end up re-filtering on every rebuild.
     Widget localOr(Widget Function() onEmpty) {
-      final local = _filterLoaded();
+      final local = filteredLoaded();
       return local.isEmpty ? onEmpty() : list(local, inSearch: true);
     }
 
@@ -493,7 +534,15 @@ class _AppointmentHistoryViewState
     return ref
         .watch(historySearchProvider(query))
         .when(
-          data: (results) => list(_applyChips(results), inSearch: true),
+          data: (results) => list(
+            // The provider hands back the same instance until it refetches,
+            // so keying on it plus the chips holds across rebuilds.
+            _searchRows.of(
+              (results, _year, _employeeId, _status),
+              () => _applyChips(results),
+            ),
+            inSearch: true,
+          ),
           loading: () => localOr(_skeleton),
           // A failed search shouldn't read as "no history" — surface an error
           // when the local fallback is also empty, not the empty state.
@@ -537,7 +586,7 @@ class _AppointmentHistoryViewState
   }) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      _HistoryCountLine(tally: tallyOf(rows), inSearch: inSearch),
+      _HistoryCountLine(tally: _tallyFor(rows), inSearch: inSearch),
       Expanded(
         child: HistorySliverList(
           rows: rows,
@@ -574,6 +623,37 @@ class _AppointmentHistoryViewState
       actionLabel: _hasChipFilter ? l10n.clients_clearFilters : null,
       onAction: _hasChipFilter ? _clearFilters : null,
     );
+  }
+}
+
+/// Holds one derived row list against the inputs that produced it.
+///
+/// Every list this screen hands to a consumer must be the SAME INSTANCE while
+/// its inputs are unchanged, because the two passes over it downstream —
+/// `tallyOf` here and `monthSectionsOf` in `HistorySliverList` — memoize on
+/// `identical`. Each source allocates a fresh list on every read
+/// (`PagingState.items` re-flattens the pages, both filter passes build a new
+/// list), so without this the memos compared two fresh lists, never hit, and
+/// re-ran their O(N) pass on every rebuild: per keystroke while searching and
+/// on every `employeeColorMapProvider` / `currentDayProvider` emission, over a
+/// history that grows unbounded with scroll depth.
+///
+/// The key is compared with `==`, so pass a record: its `List` members fall back
+/// to identity (which is what tracks a new page or a new search result), while
+/// the query and chip values compare by value.
+class _RowCache {
+  Object? _key;
+  List<AppointmentRecord> _rows = const [];
+
+  List<AppointmentRecord> of(
+    Object key,
+    List<AppointmentRecord> Function() compute,
+  ) {
+    if (_key != key) {
+      _key = key;
+      _rows = compute();
+    }
+    return _rows;
   }
 }
 

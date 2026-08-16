@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-15 by auditing the source against the app's call sites and
+refreshed 2026-08-16 by auditing the source against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -635,6 +635,27 @@ employee's send is wrapped individually** — the sends run through one
 `Promise.all`, so before that a single transient token read rejected the whole
 map and cost every *other* employee tomorrow's schedule.
 
+**The candidate query orders `startTime` DESC, and the direction is the whole
+point of `DIGEST_SWEEP_MAX` (1000)** — fixed 2026-08-16. The floor is
+`tomorrowStart − MAX_APPOINTMENT_SPAN_MS`, i.e. 15 days in the *past* (a run
+that began days ago can still be on site tomorrow), so ascending made the cap
+keep the OLDEST still-open jobs and discard the newest — tomorrow's, the only
+ones this digest is about. Once >1000 open jobs fell in that window the 18:00
+run read 1000 documents that had all started a week or more ago,
+`groupTomorrowsJobsByEmployee` found no overlap, and **every crew got no digest
+at all** — the exact silent omission the cap exists to prevent, inverted. The
+comment above it justified ascending with reasoning imported from
+`runTravelAwareReminderSweep`, whose window starts at `now`. Served by the
+existing `(status, startTime DESC)` composite — no new index — and the list is
+reversed in memory before grouping so each employee's jobs stay chronological.
+
+**Reachability is checked before the widget-window read.** `_loadRecipient` +
+`_canReachRecipient` run above `fetchEmployeeWidgetWindow`, the order
+`handleAppointmentWrite` already established: otherwise an inactive,
+wrong-role or tokenless employee cost a 200-doc query and a full widget-payload
+build/JSON encode every day for a send that returns 0. Both reads land in the
+same per-run cache, so asking costs nothing extra.
+
 ### The overdue sweep — `notifications.js` (rides `sendUpcomingJobReminders`)
 **Not its own export.** `sendOverdueJobPrompts` was a standalone `every 15
 minutes` scheduler until 2026-08-13; it is now `runOverduePromptSweep`, called
@@ -698,6 +719,46 @@ before the Firestore doc, so the trigger's later revoke is a no-op rather than a
 retry loop. Without this the rules' `status == 'active'` gates would still be
 reachable with a stale credential.
 
+Deactivation additionally **rotates the Storage download tokens** on every photo
+of every appointment the person was assigned to (`rotateAssignedImageTokens`,
+`appointment_image_tokens.js`). `ImageStorageService.uploadImage` still persists
+a `getDownloadURL()` link per photo into `pictures[]`; its
+`firebaseStorageDownloadTokens` value is stable per object and never expires,
+and fetching the URL serves the bytes over plain HTTPS with **no auth and no
+`storage.rules` evaluation** — so revoking the credential does not reach the
+links already on that person's device. Rotating the object metadata is the only
+thing that can invalidate one. It rewrites the stored `url` in the same pass
+(rotating alone would blank those photos on the old builds the `url` write
+exists for, and a deactivated employee can no longer read the document to see
+the replacement), is bounded at `ROTATE_APPOINTMENT_MAX` (500) newest-first on
+the **new `(employeeIds CONTAINS, endTime DESC)` composite** — declared
+explicitly rather than leaning on index reversal, because a missing index fails
+`FAILED_PRECONDITION` straight into this module's swallow, i.e. a security
+control that silently stops running; **deploy `firestore:indexes` with it** —
+with a warn at the cap, resolves the bucket lazily so the module stays
+jest-requirable, and
+**never throws** — a rethrow under `retry: true` would re-run the whole handler
+and re-rotate everything already done. `timeoutSeconds` is raised to 300 for it.
+It runs **LAST in the handler, after the Auth disable + `revokeRefreshTokens`**:
+it is the only step here that can take minutes, so ordered ahead of them the
+revocation waited on 500 appointments' worth of Storage writes, and a timeout at
+that ceiling meant it never ran at all that pass. Its appointment and photo
+concurrency bounds MULTIPLY, so the ceiling on in-flight GCS chains is the
+product of the two — the photo loop is bounded for that reason, not because the
+list is long. A second **unordered backstop pass** picks up any appointment
+with no `endTime`, which the ordered query structurally cannot return; it is
+bounded by the same cap, needs no new index, and dedupes by doc id. The parent
+writes fire up to 500 `notifyAppointmentChanges` invocations, each a verified
+no-op that returns before any Firestore read; `recountAppointmentPictures` is
+not fired at all, since it triggers on the images subcollection rather than the
+parent. Defence-in-depth behind the rules' status gate, never the gate
+itself; retires with the `url` write at the photo-subcollection CONTRACT step.
+
+The bridge's pure rules live in `bridge_policy.js` (`shouldHaveBridge`,
+`bridgeBody`, `bridgeMatches`, `classifyBridgeRow`), shared with
+`scripts/backfill.js` — the only script here that deletes, and until 2026-08-16
+the only one with no test.
+
 ## Client → appointment propagation
 
 ### `propagateClientEdits` — `client_propagation.js`
@@ -707,7 +768,14 @@ left as it was at visit time). `address` follows the client only when the
 appointment's stored address equals the client's *previous* address (a differing
 one is treated as a per-appointment custom address). Requires the composite index
 `(clientId ASC, startTime ASC)` on `appointments`. `retry: true` — writes are
-absolute values. **Deployed** (verified live 2026-07-10).
+absolute values. The page loop runs to **exhaustion on purpose and must not
+gain a total cap** (truncating would leave stale denormalized `clientName` on
+the future visits this trigger exists to keep correct), so instead each
+page's batch commits while the next page is fetched — at most one commit
+outstanding, settled through the same `Promise.all` that awaits the fetch —
+and the success log carries a `pages` count, which is the only signal that a
+client with several live series costs hundreds to low-thousands of reads per
+edit. **Deployed** (verified live 2026-07-10).
 
 ### `recountClientJobs` — `client_job_count.js`
 `appointments/{id}` write trigger that maintains the denormalized `jobCount` on

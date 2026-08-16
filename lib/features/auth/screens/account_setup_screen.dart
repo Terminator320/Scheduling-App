@@ -20,7 +20,8 @@ import 'package:scheduling/features/auth/widgets/account_setup/locked_email_pane
 import 'package:scheduling/features/auth/widgets/account_setup/setup_banner.dart';
 import 'package:scheduling/features/auth/widgets/account_setup/verify_email_panel.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
-import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
+import 'package:scheduling/features/auth/widgets/auth_fields.dart';
+import 'package:scheduling/features/auth/widgets/auth_scaffold.dart';
 import 'package:scheduling/features/auth/widgets/password_requirements_checklist.dart';
 import 'package:scheduling/features/auth/widgets/password_strength_meter.dart';
 import 'package:scheduling/features/employees/domain/policies/starting_password_policy.dart';

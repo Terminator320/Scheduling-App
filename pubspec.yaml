@@ -2,7 +2,7 @@ name: scheduling
 description: "ES Pro — appointment, client, and employee scheduling."
 publish_to: 'none'
 
-version: 1.46.1+74
+version: 1.46.2+75
 
 environment:
   sdk: ^3.10.7
@@ -123,7 +123,13 @@ flutter:
 
   assets:
     - dev/.env
-    - assets/images/icon.png
+    # The 512px derivative, NOT the 1254px master. `BrandMark` renders at
+    # <=156 logical px and the native splash needs 468 at dpr 3, so the master
+    # was ~0.85 MB of a ~1.02 MB asset shipping in the IPA unused. The master
+    # stays on disk for `flutter_launcher_icons` / `flutter_native_splash`,
+    # which read it from the filesystem rather than the bundle — regenerate
+    # this file from it with the one-liner in `assets/images/README.md`.
+    - assets/images/brand_mark.png
 
   fonts:
     - family: InstrumentSans

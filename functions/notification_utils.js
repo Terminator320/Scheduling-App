@@ -477,6 +477,26 @@ async function _deliverRecipientOnce(deps, opts) {
   const {db, logger} = deps;
   const {collection, ledgerId, appointmentId, employeeDocId, kind, buildMsg,
     nowDate, label, roles, cache} = opts;
+  // Reachability BEFORE the claim, the same order [handleAppointmentWrite] and
+  // the digest use. Claiming first cost 2 writes (create + release) and 2
+  // reads per unreachable (job, assignee) pair on EVERY sweep run — ~48 of
+  // each over the overdue window's 2 h at a 5-minute cadence. Semantics are
+  // unchanged: "no ledger written" is indistinguishable from "written then
+  // released", so the late-token retry the release exists for still works.
+  // The reads land in `cache`, so the send below reuses them.
+  try {
+    const recipient = await _loadRecipient(deps, employeeDocId, cache);
+    if (!_canReachRecipient(recipient, roles)) return 0;
+  } catch (err) {
+    // This read used to sit inside `sendToEmployee`, under the catch below, so
+    // a transient failure must still not abort the sweep for the remaining
+    // recipients — and returning 0 unclaimed is what the release branch would
+    // have left behind anyway.
+    if (logger) {
+      logger.warn(`${label}: recipient load failed`, {id: appointmentId, err});
+    }
+    return 0;
+  }
   let ledgerRef;
   try {
     // Built INSIDE the try: .doc() throws synchronously on an id containing
@@ -716,17 +736,22 @@ async function runDailyDigest(deps) {
   // then costs a widget-window read and a send per grouped employee, against a
   // 60 s timeout.
   //
-  // `startTime` ASC is already the order Firestore returns for this query (it
-  // is the inequality field), and stating it is what makes the cap safe: the
-  // jobs kept are the ones starting soonest, i.e. the ones tomorrow's digest
-  // is actually about. Served by the existing `(status, startTime ASC)`
-  // composite — no new index.
+  // `startTime` **DESC**, and the direction is the whole point of the cap.
+  // The floor is 15 days in the PAST (see above), so ascending would make the
+  // limit keep the OLDEST still-open jobs and discard the newest — i.e.
+  // tomorrow's, the only ones this digest is about. Once a stale tail of
+  // unclosed jobs exceeds the cap, every crew silently gets no digest at all.
+  // Descending keeps the window's newest, which is what
+  // `groupTomorrowsJobsByEmployee` then overlap-tests; the sibling sweep with
+  // this shape (`runOverduePromptSweep`) orders `endTime` DESC for the same
+  // reason. Served by the existing `(status, startTime DESC)` composite — no
+  // new index.
   const snap = await db
       .collection("appointments")
       .where("status", "in", OPEN_STATUSES)
       .where("startTime", ">=", queryStart)
       .where("startTime", "<", end)
-      .orderBy("startTime")
+      .orderBy("startTime", "desc")
       .limit(DIGEST_SWEEP_MAX)
       .get();
   if (snap && snap.size === DIGEST_SWEEP_MAX && deps.logger) {
@@ -734,8 +759,10 @@ async function runDailyDigest(deps) {
         "runDailyDigest: candidate cap hit; " +
         "some crews may not receive a digest", {cap: DIGEST_SWEEP_MAX});
   }
+  // Back to ascending before grouping, so the per-employee job lists the
+  // digest text renders stay in chronological order.
   const grouped = groupTomorrowsJobsByEmployee(
-      ((snap && snap.docs) || []).map(_record),
+      ((snap && snap.docs) || []).map(_record).reverse(),
       nowDate,
   );
   const cache = new Map();
@@ -747,6 +774,14 @@ async function runDailyDigest(deps) {
       .map(async (employeeDocId) => {
         const jobs = grouped[employeeDocId];
         try {
+          // Reachability BEFORE the widget-window query, the order
+          // [handleAppointmentWrite] already establishes: an inactive, wrong-
+          // role or tokenless employee costs a 200-doc read and a whole
+          // payload build/JSON encode, every day, for a send that returns 0.
+          // Both reads land in the same `cache` entry, so the send below pays
+          // nothing extra for asking.
+          const recipient = await _loadRecipient(deps, employeeDocId, cache);
+          if (!_canReachRecipient(recipient, TIMED_RECIPIENT_ROLES)) return 0;
           // The 18:00 digest also carries a fresh widget payload (+ content-
           // available) so the home-screen widget rolls forward to tomorrow
           // with the app closed, matching the digest text.
@@ -781,6 +816,14 @@ async function runDailyDigest(deps) {
 }
 
 /**
+ * Ceiling on one admin fan-out, with the warn-at-cap posture the three sweep
+ * ceilings use. Admins are a handful in practice, so this is a tail guard —
+ * but this was the last unbounded collection query in the push stack, and it
+ * is the fan-out P6's time-off requests will build on.
+ */
+const ADMIN_FANOUT_MAX = 100;
+
+/**
  * Pushes one localized message to every ACTIVE ADMIN.
  *
  * Shared fan-out: the self-service email change needs it, and P6's time-off
@@ -811,11 +854,23 @@ async function sendToActiveAdmins(deps, data, buildMsg, opts) {
     const snap = await db.collection("users")
         .where("role", "==", "admin")
         .where("status", "==", "active")
+        .limit(ADMIN_FANOUT_MAX)
         .get();
+    if (snap && snap.size === ADMIN_FANOUT_MAX && logger) {
+      logger.warn(
+          "sendToActiveAdmins: recipient cap hit; " +
+          "some admins were not notified", {cap: ADMIN_FANOUT_MAX});
+    }
+    // Seeds the recipient cache from the docs just read, so `_loadRecipient`
+    // doesn't re-`get()` a users doc already in hand — that was +1 redundant
+    // read per active admin per notice. `tokenDocs: null` means "not fetched
+    // yet", so the fcmTokens read still happens exactly once per admin.
+    const cache = new Map(snap.docs.map(
+        (doc) => [doc.id, {user: doc.data() || {}, tokenDocs: null}]));
     await Promise.all(snap.docs
         .filter((doc) => doc.id !== options.excludeDocId)
         .map((doc) => send(
-            deps, doc.id, data, buildMsg, ADMIN_RECIPIENT_ROLES,
+            deps, doc.id, data, buildMsg, ADMIN_RECIPIENT_ROLES, cache,
         ).catch((e) => {
           if (logger) {
             logger.warn("sendToActiveAdmins: recipient failed",
@@ -845,6 +900,7 @@ module.exports = {
   CHANGE_RECIPIENT_ROLES,
   TIMED_RECIPIENT_ROLES,
   ADMIN_RECIPIENT_ROLES,
+  ADMIN_FANOUT_MAX,
   ledgerBody,
   isAlreadyExists,
   recordOf: _record,

@@ -51,6 +51,9 @@ const {getFirestore} = require("firebase-admin/firestore");
 
 const {digitsOf} = require("../client_name_utils");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+// The batched-write loop, shared so `--dry-run` cannot be forgotten at a
+// call site — see `_batch.js`.
+const {commitInBatches} = require("./_batch");
 
 const BATCH_SIZE = 400;
 const SAMPLE_SIZE = 25;
@@ -216,8 +219,7 @@ async function main() {
   let reformatted = 0;
   const sample = [];
 
-  let batch = db.batch();
-  let pending = 0;
+  const writer = commitInBatches(db, {dryRun, batchSize: BATCH_SIZE});
 
   for (const doc of snap.docs) {
     const data = doc.data();
@@ -245,16 +247,9 @@ async function main() {
       sample.push({id: doc.id, lines});
     }
 
-    if (dryRun) continue;
-    batch.update(doc.ref, patch);
-    pending += 1;
-    if (pending >= BATCH_SIZE) {
-      await batch.commit();
-      batch = db.batch();
-      pending = 0;
-    }
+    await writer.stage(doc.ref, patch);
   }
-  if (!dryRun && pending > 0) await batch.commit();
+  await writer.flush();
 
   const tag = dryRun ? "[dry-run] " : "";
   if (sample.length) {

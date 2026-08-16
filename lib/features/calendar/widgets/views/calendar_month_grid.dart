@@ -207,59 +207,15 @@ class CalendarDayCell extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Container(
-          width: circleSize,
-          height: circleSize,
-          alignment: Alignment.center,
-          decoration: calendarDayCircleDecoration(
-            scheme: scheme,
-            isSelected: isSelected,
-            showTodayRing: showTodayRing,
-          ),
-          child: Text(
-            '${day.day}',
-            style: TextStyle(
-              fontFamily: kFontSans,
-              fontSize: 14,
-              fontWeight: isSelected || (isToday && inMonth)
-                  ? FontWeight.w700
-                  : FontWeight.w500,
-              color: numberColor,
-            ),
-          ),
+        _DayNumber(
+          day: day.day,
+          size: circleSize,
+          isSelected: isSelected,
+          showTodayRing: showTodayRing,
+          bold: isSelected || (isToday && inMonth),
+          color: numberColor,
         ),
-        SizedBox(
-          height: _kDotRowHeight,
-          // Kept on the selected day too (owner call, 2026-07-31). The
-          // selection circle only fills the number; the dot row sits below it
-          // on the plain cell background, so the crew colours stay legible —
-          // and hiding them made the day you were looking at the one day whose
-          // crew you couldn't see.
-          child: dotColors.isEmpty
-              ? null
-              : Padding(
-                  padding: const EdgeInsets.only(top: _kDotGap),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (final stored in dotColors)
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                          width: _kDotSize,
-                          height: _kDotSize,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            // Same neutral the card's crew bar uses for a job
-                            // with nobody on it.
-                            color: stored == null
-                                ? theme.palette.textFaint
-                                : crewColorOf(theme, stored.toARGB32()),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-        ),
+        _CrewDotRow(dotColors: dotColors),
       ],
     );
 
@@ -288,6 +244,95 @@ class CalendarDayCell extends StatelessWidget {
         radius: circleSize,
         child: Center(child: content),
       ),
+    );
+  }
+}
+
+/// The 32px number token: the selection fill and the today ring live HERE,
+/// not on the cell, so selection reads as a round token rather than a
+/// stretched oval.
+class _DayNumber extends StatelessWidget {
+  const _DayNumber({
+    required this.day,
+    required this.size,
+    required this.isSelected,
+    required this.showTodayRing,
+    required this.bold,
+    required this.color,
+  });
+
+  final int day;
+  final double size;
+  final bool isSelected;
+  final bool showTodayRing;
+  final bool bold;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: size,
+    height: size,
+    alignment: Alignment.center,
+    decoration: calendarDayCircleDecoration(
+      scheme: Theme.of(context).colorScheme,
+      isSelected: isSelected,
+      showTodayRing: showTodayRing,
+    ),
+    child: Text(
+      '$day',
+      style: TextStyle(
+        fontFamily: kFontSans,
+        fontSize: 14,
+        fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+        color: color,
+      ),
+    ),
+  );
+}
+
+/// One dot per job that day, in crew colour.
+///
+/// The row keeps its height whether or not there are dots, so a month of
+/// mixed days does not jitter. It is rendered on the selected day too (owner
+/// call, 2026-07-31): the selection circle only fills the number and the dots
+/// sit below it on the plain cell background, so the crew colours stay
+/// legible — hiding them made the day you were looking at the one day whose
+/// crew you could not see.
+class _CrewDotRow extends StatelessWidget {
+  const _CrewDotRow({required this.dotColors});
+
+  /// One entry per job; null paints the unassigned neutral.
+  final List<Color?> dotColors;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      height: _kDotRowHeight,
+      child: dotColors.isEmpty
+          ? null
+          : Padding(
+              padding: const EdgeInsets.only(top: _kDotGap),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final stored in dotColors)
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                      width: _kDotSize,
+                      height: _kDotSize,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        // Same neutral the card's crew bar uses for a job with
+                        // nobody on it.
+                        color: stored == null
+                            ? theme.palette.textFaint
+                            : crewColorOf(theme, stored.toARGB32()),
+                      ),
+                    ),
+                ],
+              ),
+            ),
     );
   }
 }

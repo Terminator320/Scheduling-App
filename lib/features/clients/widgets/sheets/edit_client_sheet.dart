@@ -164,40 +164,26 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
       if (!contact.isEmpty) contact.toContact(),
   ];
 
-  Future<void> _save() async {
-    // Guards against a double-tap firing two concurrent writes.
-    if (ref.read(clientFormControllerProvider)) return;
+  /// The phone this save will store.
+  ///
+  /// Owner decision 2026-08-01. `mobile` is no longer an editable field, so a
+  /// stored value must not be stranded: promote it when there is no phone,
+  /// drop it when there is. Runs on every save, so the fleet self-heals as
+  /// clients are edited — there is no migration script and none is needed.
+  String get _resolvedPhone {
+    final typed = _phoneController.text.trim();
+    return typed.isNotEmpty ? typed : widget.client.mobile.trim();
+  }
 
-    // Owner decision 2026-08-01. `mobile` is no longer an editable field, so a
-    // stored value must not be stranded: promote it when there is no phone, drop
-    // it when there is. Runs on every save, so the fleet self-heals as clients
-    // are edited — there is no migration script and none is needed.
-    final typedPhone = _phoneController.text.trim();
-    final storedMobile = widget.client.mobile.trim();
-    final resolvedPhone = typedPhone.isNotEmpty ? typedPhone : storedMobile;
-
-    final nextErrors = ClientFormValidator.validate(
-      l10n: context.l10n,
-      name: _nameController.text.trim(),
-      firstName: _firstNameController.text.trim(),
-      lastName: _lastNameController.text.trim(),
-      phone: resolvedPhone,
-      mobile: '',
-      email: _emailController.text.trim(),
-      address: _addressController.text.trim(),
-      additionalContacts: [
-        for (final contact in additionalContacts) contact.toContact(),
-      ],
-      noFixedAddress: noFixedAddress,
-    );
-
-    setState(() {
-      errors
-        ..clear()
-        ..addAll(nextErrors);
-    });
-    if (errors.values.any((e) => e != null)) return;
-
+  /// The record this save will commit.
+  ///
+  /// Mirrors `AddClientSheet._draft`. The two sheets MUST agree on
+  /// `composeSave`'s arguments — passing `type` (and, here, the stored
+  /// `businessName`) is what stops an ordinary save renaming a business to
+  /// its phone number on the live Wave invoices it appears on — and
+  /// divergent structure on a pair that must agree is what makes them drift.
+  ClientRecord _buildUpdatedRecord() {
+    final resolvedPhone = _resolvedPhone;
     // The Wave CUSTOMER name: the phone number for a person, the typed name
     // for a business. Both `type` and the stored `businessName` have to be
     // passed, or re-saving a business renames it to its number on the
@@ -214,7 +200,7 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
     // Copying the loaded record preserves the Wave projection fields
     // (waveCustomerId/waveSyncState/waveSyncError) and the function-owned
     // jobCount — this form never edits any of them.
-    final updated = widget.client.copyWith(
+    return widget.client.copyWith(
       // `composeSave` rather than `composeStored`: for a person the composed
       // name IS the phone number, so on a doc with no halves the typed name is
       // the only copy and saving would destroy it in place.
@@ -238,6 +224,37 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
       billingTerms: _billingTermsController.text.trim(),
       autoInvoice: _autoInvoice,
     );
+  }
+
+  Future<void> _save() async {
+    // Guards against a double-tap firing two concurrent writes.
+    if (ref.read(clientFormControllerProvider)) return;
+
+    final resolvedPhone = _resolvedPhone;
+
+    final nextErrors = ClientFormValidator.validate(
+      l10n: context.l10n,
+      name: _nameController.text.trim(),
+      firstName: _firstNameController.text.trim(),
+      lastName: _lastNameController.text.trim(),
+      phone: resolvedPhone,
+      mobile: '',
+      email: _emailController.text.trim(),
+      address: _addressController.text.trim(),
+      additionalContacts: [
+        for (final contact in additionalContacts) contact.toContact(),
+      ],
+      noFixedAddress: noFixedAddress,
+    );
+
+    setState(() {
+      errors
+        ..clear()
+        ..addAll(nextErrors);
+    });
+    if (errors.values.any((e) => e != null)) return;
+
+    final updated = _buildUpdatedRecord();
 
     final outcome = await ref
         .read(clientFormControllerProvider.notifier)

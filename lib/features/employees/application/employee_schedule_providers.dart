@@ -115,21 +115,31 @@ final employeeTodayJobsProvider = Provider.autoDispose
         ref.watch(appointmentsInRangeProvider(range)),
         'EMP-TODAY today-panel range stream failed',
       );
-      final today = [
-        for (final job in jobs)
-          if (!isCancelledStatusRaw(job.status) &&
-              job.employeeIds.contains(employeeId) &&
-              runsOn(job, range.start))
-            job,
-      ];
-      // Sort by THIS DAY's window start, not the stored instant. The stream
+      // Sorted by THIS DAY's window start, not the stored instant. The stream
       // arrives in `orderBy('startTime')` order, so a run that began days ago
       // sorted ahead of everything — a 5-day 17:00 job listed above today's
       // 08:00 one. `notification_policy.js` sorts by the day's clock time for
       // exactly this reason; this is the Dart mirror of that rule.
-      return today..sort((a, b) {
-        final aStart = sliceFor(a, range.start)?.windowStart ?? a.startTime;
-        final bStart = sliceFor(b, range.start)?.windowStart ?? b.startTime;
-        return aStart.compareTo(bStart);
-      });
+      //
+      // Decorate-sort-undecorate: the key is built ONCE per record, not on
+      // both operands of every comparison — `fetchClientsByType` documents
+      // avoiding the same pattern. Inside the comparator a 20-job day cost
+      // ~170 slice constructions instead of 20, on every stream emission.
+      //
+      // The slice is ALSO the day-scoping test, so it is resolved once and
+      // used for both: a null slice is precisely `!runsOn`, and asking
+      // `runsOn` first and then `sliceFor` re-ran the whole day-index
+      // computation on every surviving record.
+      final keyed = <({AppointmentRecord job, DateTime start})>[];
+      for (final job in jobs) {
+        if (isCancelledStatusRaw(job.status) ||
+            !job.employeeIds.contains(employeeId)) {
+          continue;
+        }
+        final slice = sliceFor(job, range.start);
+        if (slice == null) continue;
+        keyed.add((job: job, start: slice.windowStart));
+      }
+      keyed.sort((a, b) => a.start.compareTo(b.start));
+      return [for (final entry in keyed) entry.job];
     });
