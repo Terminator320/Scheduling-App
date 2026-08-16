@@ -974,6 +974,15 @@ count was right; the sentence over it was the lie. `waveRetryNotice`
 (`wave_sync_notice.dart`) composes from both counts and the section surfaces it
 with `notices.error` when `failed > 0`.
 
+**What it could NOT fix, until 2026-08-15: a dead-letter whose cause is stored
+on the doc.** Both prod cases were a `waveCustomerId` pointing at a customer
+deleted in Wave; `customerPatch` answers `NOT_FOUND`, which is correctly
+non-retryable, so every press re-sent the same missing id and dead-lettered
+again. `upsertCustomer` now relinks instead (see `functions/CLAUDE.md`).
+The general shape to watch for: this callable can only help a job whose failure
+was about the *moment*, never one about the *payload* — anything permanent has
+to be healed at the source or it comes straight back.
+
 Related: `listOutstandingClientIds` (`wave/worker.js`) protects `queued`,
 `inflight` **and `dead`** client ids from being overwritten by an import — a
 dead job's edit is the one *most* at risk, because unlike the other two it will

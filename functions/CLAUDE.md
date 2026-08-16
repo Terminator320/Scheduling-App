@@ -400,6 +400,27 @@ directly. Jest tests live in **`functions/__tests__/` only** — the parallel
   The reclaim pass enforces the same rule with a single read+write transaction
   (it has no Wave call to span), so neither path may ever do an unconditional
   `update`.
+  **A `waveCustomerId` pointing at a customer that no longer exists in Wave
+  must RELINK, never dead-letter** (2026-08-15, found in prod). Wave reports a
+  missing `customerPatch` target as a top-level GraphQL error — so it arrives
+  as `WaveApiError('graphql')`, which the retry taxonomy correctly calls
+  non-retryable — or, equivalently, as a `NOT_FOUND` **inputError**. Both
+  dead-lettered, and both were unrecoverable in a way ordinary dead-lettering
+  is not: **the offending value is STORED on the doc**, so every later push and
+  every "Retry failed" press re-sent the same missing id and failed
+  identically. Two clients sat like that with the Settings row reading
+  "2 clients failed to sync" and no way to clear it. `upsertCustomer` now
+  routes both shapes (`isStaleCustomerLink` / `hasNotFoundInputError`,
+  `wave/customers.js`) into the create path with the identity search FORCED on
+  — the same route a crashed create takes, and the reason a spurious NOT_FOUND
+  relinks rather than minting a duplicate customer. **`writeSyncSuccess` needed
+  the matching exception**: it sets `waveCustomerId` only on a doc that is
+  still unlinked, which is what keeps it idempotent, so the healed link would
+  never have persisted. `replacesLink` is that exception and is conditioned on
+  the stale id still being the one on the doc — a link established concurrently
+  is newer and unproven-dead, so it wins. Keep the predicates narrow
+  (a structured `NOT_FOUND`, never a text match on Wave's message): this is the
+  one path here that REWRITES a client's Wave identity.
   **Mapper invariant: NEVER send a value outside a Wave ENUM's vocabulary —
   omit the field instead** (2026-08-15). `provinceCode` and `countryCode` are
   GraphQL enums, so a value they don't know is NOT an `inputErrors` entry the

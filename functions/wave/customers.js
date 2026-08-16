@@ -13,6 +13,10 @@
 
 const {toWaveCustomerInput, mappedFieldsHash, fromWaveCustomer} =
   require("./mappers");
+// Safe at module scope: `client.js` requires only `./auth`, lazily, so this
+// closes no cycle. `retry_policy.js` and `errors.js` both already require this
+// module AND that one.
+const {WaveApiError} = require("./client");
 
 // ---------------------------------------------------------------------------
 // WaveValidationError
@@ -251,6 +255,53 @@ function readMutationPayload(payload) {
   };
 }
 
+/**
+ * Whether a thrown patch error means the customer this doc is LINKED to no
+ * longer exists in Wave.
+ *
+ * Wave reports a missing `customerPatch` target as a **top-level** GraphQL
+ * error, not an `inputErrors` entry, so it arrives as `WaveApiError('graphql')`
+ * — which the retry taxonomy correctly calls non-retryable and dead-letters.
+ * Correct for a bad payload; wrong for this, because the offending value is
+ * STORED: every later push re-sends the same missing id, so the job cannot
+ * ever drain and "Retry failed" is guaranteed to fail. Observed in prod
+ * 2026-08-15 as `codes=[NOT_FOUND] fields=[customerPatch]`.
+ *
+ * Deliberately narrow — a structured `NOT_FOUND` code, never a text match on
+ * Wave's message. This unlinks a client from its Wave customer, so a loose
+ * predicate would do that on the strength of a reworded error. The only thing
+ * a `customerPatch` can fail to find is the customer, so the code alone is
+ * enough inside that call.
+ *
+ * @param {*} err The error thrown by the patch mutation.
+ * @return {boolean}
+ */
+function isStaleCustomerLink(err) {
+  if (!(err instanceof WaveApiError) || err.kind !== "graphql") return false;
+  const details = Array.isArray(err.details) ? err.details : [];
+  return details.some((d) => d && d.extensions &&
+    d.extensions.code === "NOT_FOUND");
+}
+
+/**
+ * The same conclusion from the OTHER shape Wave can report it in — a
+ * `didSucceed: false` payload carrying a `NOT_FOUND` input error.
+ *
+ * Which shape arrives is Wave's choice, and the consequence of missing one is
+ * identical: the doc keeps a link to a customer that is gone, and the job
+ * dead-letters on it forever. `ERROR_CODE_MESSAGES` has mapped this code to
+ * "The customer no longer exists in Wave." all along — the message was
+ * reachable, the recovery was not. Only consulted for a PATCH, where the sole
+ * entity that can be missing is the customer being patched.
+ *
+ * @param {Array<{code:string}>} inputErrors Wave input errors.
+ * @return {boolean}
+ */
+function hasNotFoundInputError(inputErrors) {
+  const errs = Array.isArray(inputErrors) ? inputErrors : [];
+  return errs.some((e) => e && e.code === "NOT_FOUND");
+}
+
 // ---------------------------------------------------------------------------
 // upsertCustomer
 // ---------------------------------------------------------------------------
@@ -318,25 +369,52 @@ async function upsertCustomer(clientId, deps = {}) {
 
   const businessId = deps.businessId || await readBusinessId(db);
 
+  // Set once the doc's `waveCustomerId` has been PROVED dead — Wave answered
+  // the patch with NOT_FOUND, so that customer is gone from Wave. Carried
+  // through to the create path, which then relinks or recreates.
+  let staleLink = "";
+
   if (waveCustomerId) {
     // Step 4 — patch the existing Wave customer (no businessId on patch).
-    const payload = await runCustomerMutation(
-        graphql, PATCH_CUSTOMER, {id: waveCustomerId, ...mappedFields},
-    );
-    if (!payload.didSucceed) {
-      await writeSyncError(db, ref, now, payload.inputErrors);
-      throw new WaveValidationError(payload.inputErrors);
+    let payload = null;
+    try {
+      payload = await runCustomerMutation(
+          graphql, PATCH_CUSTOMER, {id: waveCustomerId, ...mappedFields},
+      );
+    } catch (err) {
+      if (!isStaleCustomerLink(err)) throw err;
+      // The customer this doc points at no longer exists in Wave (deleted
+      // there, most often). Rethrowing dead-letters the job on an error that
+      // can NEVER clear: the id is stored, so every later push — and every
+      // "Retry failed" press — re-sends the same missing id and fails
+      // identically. Fall through and re-establish the link instead.
+      staleLink = waveCustomerId;
     }
-    await writeSyncSuccess(db, ref, now, {hash, waveCustomerId: null});
-    return {status: "patched", waveCustomerId};
+    if (payload) {
+      if (payload.didSucceed) {
+        await writeSyncSuccess(db, ref, now, {hash, waveCustomerId: null});
+        return {status: "patched", waveCustomerId};
+      }
+      if (hasNotFoundInputError(payload.inputErrors)) {
+        staleLink = waveCustomerId;
+      } else {
+        await writeSyncError(db, ref, now, payload.inputErrors);
+        throw new WaveValidationError(payload.inputErrors);
+      }
+    }
   }
 
   // Step 5 — create a new Wave customer. On a retry (priorAttempts > 0) of
   // an unlinked doc, search Wave by name+email first and link instead of
   // duplicating, in case a crashed previous attempt already created it.
+  //
+  // A stale link takes the same route, deliberately: from here the two are the
+  // same situation — the doc claims a Wave customer we cannot patch — and the
+  // identity search is what stops a spurious NOT_FOUND from minting a second
+  // customer for a client that already has one.
   const priorAttempts =
     typeof deps.priorAttempts === "number" ? deps.priorAttempts : 0;
-  if (priorAttempts > 0) {
+  if (staleLink || priorAttempts > 0) {
     const existing = await findCustomerByIdentity(
         graphql, businessId, mappedFields,
     );
@@ -351,7 +429,8 @@ async function upsertCustomer(clientId, deps = {}) {
         throw new WaveValidationError(payload.inputErrors);
       }
       await writeSyncSuccess(
-          db, ref, now, {hash, waveCustomerId: existing.id},
+          db, ref, now,
+          {hash, waveCustomerId: existing.id, replacesLink: staleLink},
       );
       return {status: "linked", waveCustomerId: existing.id};
     }
@@ -372,7 +451,8 @@ async function upsertCustomer(clientId, deps = {}) {
   const syncedHash = created.phoneDeferred ?
     mappedFieldsHash({...data, phone: "", mobile: ""}) : hash;
   await writeSyncSuccess(
-      db, ref, now, {hash: syncedHash, waveCustomerId: newId},
+      db, ref, now,
+      {hash: syncedHash, waveCustomerId: newId, replacesLink: staleLink},
   );
   return {status: "created", waveCustomerId: newId};
 }
@@ -518,7 +598,17 @@ async function writeSyncSuccess(db, ref, now, result) {
       // keeps this idempotent.
       const existing =
         typeof cur.waveCustomerId === "string" ? cur.waveCustomerId : "";
-      if (!existing) update.waveCustomerId = result.waveCustomerId;
+      if (!existing) {
+        update.waveCustomerId = result.waveCustomerId;
+      } else if (result.replacesLink && existing === result.replacesLink) {
+        // ...with ONE exception: a link we have just PROVED dead (Wave
+        // answered the patch with NOT_FOUND). Refusing to overwrite it is what
+        // made that client unrecoverable — every later push re-sent the same
+        // missing id and dead-lettered on it again. Conditioned on the stale
+        // id still being the one on the doc, so a link established concurrently
+        // (which is newer, and not proven dead) is never clobbered.
+        update.waveCustomerId = result.waveCustomerId;
+      }
     }
     tx.update(ref, update);
   });
@@ -829,4 +919,8 @@ module.exports = {
   // Exported for the sanitizer unit tests in __tests__/wave_customers.test.js,
   // which pin the contract that Wave's raw `message` text never reaches us.
   sanitizeInputErrors,
+  // Exported so the unlink decision can be driven directly — it is the one
+  // predicate here that REWRITES a client's Wave link.
+  isStaleCustomerLink,
+  hasNotFoundInputError,
 };
