@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/images/appointment_image_disk_cache.dart';
 import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
@@ -39,10 +40,20 @@ final appointmentImageLoaderProvider = Provider<AppointmentImageLoader>(
 /// tokens when an employee is deactivated. Don't build on a guarantee this
 /// class cannot give on its own.
 ///
-/// The cost, accepted by the owner: this loses `cached_network_image`'s
-/// on-disk byte cache, so photos re-download once per session and do not
-/// render at all offline. The session cache below is what keeps that from
-/// being paid per widget State.
+/// **Photos render offline again, and that was never in tension with the
+/// above.** `cached_network_image` cached BYTES too; what made it unacceptable
+/// was the handle it cached them against — a permanent, rules-free token URL.
+/// [AppointmentImageDiskCache] keys on `storagePath` instead and stores nothing
+/// shareable, so the on-disk cache is back without the leak. Two caches, two
+/// jobs: the session map below keeps the fetch from being paid per widget
+/// State (every sheet open, and again on every View→Edit toggle), and the disk
+/// cache keeps it from being paid per SESSION — which is what a tech in a
+/// basement or an underground garage actually needs.
+///
+/// Be precise about the residual: a cache HIT of either kind is not
+/// rules-evaluated, so bytes fetched while entitled stay renderable on that
+/// device until they are evicted or [clear] runs. That is the accepted cost,
+/// and it is why [clear] is wired into `deregisterThisDevice`.
 ///
 /// A doc written before `storagePath` was stored has only its `url`, so that
 /// URL is unavoidably the handle — but it is resolved back to a `Reference`
@@ -50,9 +61,13 @@ final appointmentImageLoaderProvider = Provider<AppointmentImageLoader>(
 /// legacy path is rules-evaluated and never hands the token URL to the network
 /// stack. That fallback is why this is not a migration.
 class AppointmentImageLoader {
-  AppointmentImageLoader({FirebaseStorage? storage, AppLogger? logger})
-    : _injectedStorage = storage,
-      _logger = logger ?? AppLogger();
+  AppointmentImageLoader({
+    FirebaseStorage? storage,
+    AppLogger? logger,
+    AppointmentImageDiskCache? diskCache,
+  }) : _injectedStorage = storage,
+       _logger = logger ?? AppLogger(),
+       _disk = diskCache ?? AppointmentImageDiskCache(logger: logger);
 
   /// Session-scoped, keyed by `storagePath`. The provider is a singleton, so
   /// this survives a sheet close — the fetch is otherwise paid per widget
@@ -91,6 +106,7 @@ class AppointmentImageLoader {
 
   final FirebaseStorage? _injectedStorage;
   final AppLogger _logger;
+  final AppointmentImageDiskCache _disk;
 
   /// The photo's bytes, or an EMPTY list when there are none to render — a
   /// rules refusal, a transport failure, or a legacy entry with no usable
@@ -104,10 +120,29 @@ class AppointmentImageLoader {
     final cached = _cache[key];
     if (cached != null) return cached;
 
-    final pending = _fetch(() => _refFor(image), key);
+    final pending = _resolve(image, key);
     _cache[key] = pending;
     unawaited(pending.then((bytes) => _settle(key, pending, bytes)));
     return pending;
+  }
+
+  /// Disk first, then the network — and the network result is written back.
+  ///
+  /// The disk write is deliberately NOT awaited: it is a cache fill, so making
+  /// the photo wait on it would put a file write (and the eviction sweep behind
+  /// it) in front of every first render. [AppointmentImageDiskCache] serializes
+  /// its own mutations and drops a write whose session has already ended, so
+  /// nothing here needs to sequence it.
+  Future<Uint8List> _resolve(AppointmentImage image, String key) async {
+    final onDisk = await _disk.read(key);
+    if (onDisk != null) return onDisk;
+
+    final bytes = await _fetch(() => _refFor(image), key);
+    // An EMPTY result is a refusal or a transport failure. Caching either one
+    // would outlive the thing that caused it — a change of entitlement, or the
+    // network coming back — so neither store keeps it.
+    if (bytes.isNotEmpty) unawaited(_disk.write(key, bytes));
+    return bytes;
   }
 
   /// The cache key for [image], or `''` when it carries no usable handle.
@@ -147,7 +182,7 @@ class AppointmentImageLoader {
     return loaded;
   }
 
-  /// Forgets every cached photo.
+  /// Forgets every cached photo, in memory and on disk.
   ///
   /// Called from the account-exit teardown, which is the single owner of
   /// "forget this session". The provider is a process-lifetime singleton, so
@@ -157,10 +192,17 @@ class AppointmentImageLoader {
   /// to be entitled to the same `storagePath` — but it is memory-forensics
   /// exposure, and it was the one thing `AccountExitListeners` did not
   /// tear down.
-  void clear() {
+  ///
+  /// The DISK half raises the stakes: those bytes outlive the process
+  /// entirely, so a shared handset would otherwise hand the next person every
+  /// job photo the last one opened. The memory clear happens first and
+  /// synchronously — it cannot fail, and the awaited disk delete must not
+  /// delay it.
+  Future<void> clear() async {
     _cache.clear();
     _sizes.clear();
     _cachedBytes = 0;
+    await _disk.clear();
   }
 
   /// [refOf] is a thunk because `refFromURL` parses, and therefore throws, on

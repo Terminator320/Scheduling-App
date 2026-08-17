@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/app/device_deregistration.dart';
+import 'package:scheduling/core/images/appointment_image_loader.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
@@ -14,6 +15,20 @@ class _MockPresence extends Mock implements PresenceSyncController {}
 
 class _MockLiveActivity extends Mock
     implements LiveActivityRegistrationController {}
+
+/// Records the photo-cache clear without reaching the file system.
+///
+/// Subclassed rather than mocked because the real loader's `clear` would
+/// resolve the platform cache directory — a plugin call no widget test can
+/// answer — and the property under test is only that it is CALLED, last.
+class _RecordingLoader extends AppointmentImageLoader {
+  _RecordingLoader(this.calls);
+
+  final List<String> calls;
+
+  @override
+  Future<void> clear() async => calls.add('imageCache');
+}
 
 /// `deregisterThisDevice` drops every server-side registration this device
 /// holds, and it is reached from all three account exits (the runtime
@@ -60,6 +75,9 @@ void main() {
           liveActivityRegistrationControllerProvider.overrideWithValue(
             liveActivity,
           ),
+          appointmentImageLoaderProvider.overrideWithValue(
+            _RecordingLoader(calls),
+          ),
         ],
         child: Consumer(
           builder: (context, ref, _) {
@@ -72,15 +90,18 @@ void main() {
     await deregisterThisDevice(captured);
   }
 
-  testWidgets('tears down push, then presence, then Live Activity', (
-    tester,
-  ) async {
-    // The ORDER is load-bearing: each step needs the credential that sign-out
-    // revokes, and callers run this ahead of the revocation.
-    await run(tester);
+  testWidgets(
+    'tears down push, presence and Live Activity, then the photo cache',
+    (tester) async {
+      // The ORDER is load-bearing: each server-side step needs the credential
+      // that sign-out revokes, and callers run this ahead of the revocation.
+      // The photo cache is purely local, so it goes last — but it must still
+      // GO: its bytes are on disk and outlive the process entirely.
+      await run(tester);
 
-    expect(calls, ['push', 'presence', 'liveActivity']);
-  });
+      expect(calls, ['push', 'presence', 'liveActivity', 'imageCache']);
+    },
+  );
 
   testWidgets('a failing first step does not skip the other two', (
     tester,
@@ -92,7 +113,7 @@ void main() {
 
     await run(tester);
 
-    expect(calls, ['presence', 'liveActivity']);
+    expect(calls, ['presence', 'liveActivity', 'imageCache']);
     verify(presence.unregister).called(1);
     verify(liveActivity.unregister).called(1);
   });
@@ -102,7 +123,7 @@ void main() {
 
     await run(tester);
 
-    expect(calls, ['push', 'liveActivity']);
+    expect(calls, ['push', 'liveActivity', 'imageCache']);
   });
 
   testWidgets('never rethrows, so it cannot block the sign-out behind it', (

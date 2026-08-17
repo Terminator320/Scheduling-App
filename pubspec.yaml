@@ -41,6 +41,9 @@ dependencies:
 
   # Images
   image_picker: ^1.2.2
+  # Names the on-disk photo cache's files. Promoted from transitive because
+  # AppointmentImageDiskCache imports it directly.
+  crypto: ^3.0.6
 
   # Network / external launches
   url_launcher: ^6.3.2

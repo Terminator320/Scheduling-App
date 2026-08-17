@@ -10,12 +10,14 @@
 // The legacy fallback is what keeps that from being a migration.
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/images/appointment_image_disk_cache.dart';
 import 'package:scheduling/core/images/appointment_image_loader.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
@@ -29,12 +31,30 @@ Uint8List _bytes(String tag) => Uint8List.fromList(tag.codeUnits);
 void main() {
   late _MockStorage storage;
   late _MockRef ref;
+  late Directory cacheRoot;
+  late AppointmentImageDiskCache disk;
   late AppointmentImageLoader loader;
 
   setUp(() {
     storage = _MockStorage();
     ref = _MockRef();
-    loader = AppointmentImageLoader(storage: storage, logger: AppLogger());
+    // A REAL cache over a temp directory rather than a fake: the filesystem is
+    // fast in the VM, and the thing under test here is the interaction between
+    // the two caches, which a fake would only restate.
+    cacheRoot = Directory.systemTemp.createTempSync('img_loader_cache');
+    disk = AppointmentImageDiskCache(
+      directory: () async => cacheRoot,
+      logger: AppLogger(),
+    );
+    loader = AppointmentImageLoader(
+      storage: storage,
+      logger: AppLogger(),
+      diskCache: disk,
+    );
+  });
+
+  tearDown(() {
+    if (cacheRoot.existsSync()) cacheRoot.deleteSync(recursive: true);
   });
 
   const path = 'appointments/a1/images/123_photo.jpg';
@@ -170,15 +190,23 @@ void main() {
       for (final p in paths) AppointmentImage(storagePath: p),
     ]);
 
-    // Drain a batch at a time, re-checking the peak between each.
-    while (gates.isNotEmpty) {
+    // Drain a batch at a time, re-checking the peak between each. Each batch
+    // consults the disk cache before it reaches Storage, so a batch takes more
+    // than one microtask turn to open its gates — waiting until they appear
+    // keeps this deterministic rather than pumping a guessed number of turns.
+    var drained = 0;
+    while (drained < paths.length) {
+      for (var turn = 0; turn < 50 && gates.isEmpty; turn++) {
+        await Future<void>.delayed(Duration.zero);
+      }
       final open = gates.keys.toList();
+      expect(open, isNotEmpty);
       expect(open.length, lessThanOrEqualTo(4));
       for (final p in open) {
         inFlight -= 1;
+        drained += 1;
         gates.remove(p)!.complete(_bytes(p));
       }
-      await Future<void>.delayed(Duration.zero);
     }
 
     expect(await pending, [for (final p in paths) _bytes(p)]);
@@ -291,21 +319,23 @@ void main() {
       verify(() => ref.getData(any())).called(1);
     });
 
-    test('clear() forgets everything, so bytes do not outlive a session',
-        () async {
-      // The provider is a process-lifetime singleton, so without this up to
-      // 24 MB of one user's job photos stays resident across sign-out into
-      // the next user's session on a shared device.
-      when(() => storage.ref(path)).thenReturn(ref);
-      whenGetData(ref, () async => photo);
-      const image = AppointmentImage(url: stored, storagePath: path);
+    test(
+      'clear() forgets everything, so bytes do not outlive a session',
+      () async {
+        // The provider is a process-lifetime singleton, so without this up to
+        // 24 MB of one user's job photos stays resident across sign-out into
+        // the next user's session on a shared device.
+        when(() => storage.ref(path)).thenReturn(ref);
+        whenGetData(ref, () async => photo);
+        const image = AppointmentImage(url: stored, storagePath: path);
 
-      expect(await loader.load(image), photo);
-      loader.clear();
-      expect(await loader.load(image), photo);
+        expect(await loader.load(image), photo);
+        await loader.clear();
+        expect(await loader.load(image), photo);
 
-      verify(() => ref.getData(any())).called(2);
-    });
+        verify(() => ref.getData(any())).called(2);
+      },
+    );
 
     test(
       'the cache is bounded, so a long session cannot retain every photo',
@@ -323,16 +353,117 @@ void main() {
           whenGetData(r, () async => big);
         }
 
+        // Isolated from the disk cache ON PURPOSE. With one behind it a memory
+        // eviction is served from disk, which is the right behaviour and is
+        // pinned below — but it also makes the memory budget unobservable
+        // through `load`, so this unit needs the disk out of the way.
+        final memoryOnly = AppointmentImageLoader(
+          storage: storage,
+          logger: AppLogger(),
+          diskCache: AppointmentImageDiskCache(
+            directory: () async => throw const FileSystemException('disabled'),
+            logger: AppLogger(),
+          ),
+        );
+
         for (final p in paths) {
-          await loader.load(AppointmentImage(storagePath: p));
+          await memoryOnly.load(AppointmentImage(storagePath: p));
         }
         // 27 MB is over the 24 MB budget, so the oldest entry was evicted and
         // asking for it again refetches; the newest is still served from memory.
-        await loader.load(AppointmentImage(storagePath: paths.first));
-        await loader.load(AppointmentImage(storagePath: paths.last));
+        await memoryOnly.load(AppointmentImage(storagePath: paths.first));
+        await memoryOnly.load(AppointmentImage(storagePath: paths.last));
 
         verify(() => refs[paths.first]!.getData(any())).called(2);
         verify(() => refs[paths.last]!.getData(any())).called(1);
+      },
+    );
+  });
+
+  group('the disk cache', () {
+    const image = AppointmentImage(url: stored, storagePath: path);
+
+    test('a photo cached on disk renders with no Storage fetch at all', () {
+      // The offline win, stated as the thing it is: a tech in a basement or an
+      // underground garage opens a job they looked at this morning and the
+      // photos are there. `storage.ref` is left unstubbed, so any attempt to
+      // reach Storage fails the test rather than quietly succeeding.
+      return disk.write(path, photo).then((_) async {
+        expect(await loader.load(image), photo);
+        verifyNever(() => storage.ref(any()));
+      });
+    });
+
+    test('a fetched photo is written to disk for the next session', () async {
+      when(() => storage.ref(path)).thenReturn(ref);
+      whenGetData(ref, () async => photo);
+
+      expect(await loader.load(image), photo);
+      await disk.settled;
+
+      expect(await disk.read(path), photo);
+    });
+
+    test('a memory eviction falls back to disk, not to the network', () async {
+      // This is what makes the 24 MB memory budget cheap: past it, a photo
+      // costs a file read rather than a round trip. Driven through the REAL
+      // budget — 27 MB over a 24 MB ceiling — so nothing here depends on a
+      // seam that exists only for the test.
+      final big = Uint8List(9 * 1024 * 1024);
+      final paths = [for (var i = 0; i < 3; i++) 'big/$i'];
+      final refs = <String, _MockRef>{};
+      for (final p in paths) {
+        final r = _MockRef();
+        refs[p] = r;
+        when(() => storage.ref(p)).thenReturn(r);
+        whenGetData(r, () async => big);
+      }
+
+      for (final p in paths) {
+        await loader.load(AppointmentImage(storagePath: p));
+      }
+      await disk.settled;
+
+      // The oldest is gone from memory, but it is on disk — so it comes back
+      // without a second fetch.
+      expect(
+        await loader.load(AppointmentImage(storagePath: paths.first)),
+        big,
+      );
+      verify(() => refs[paths.first]!.getData(any())).called(1);
+    });
+
+    test('a REFUSAL is never written to disk', () async {
+      // Empty is a refusal, and persisting one would outlive the entitlement
+      // change that caused it — for every future session, not just this one.
+      when(() => storage.ref(path)).thenReturn(ref);
+      whenGetData(
+        ref,
+        () async => throw FirebaseException(
+          plugin: 'firebase_storage',
+          code: 'permission-denied',
+        ),
+      );
+
+      expect(await loader.load(image), isEmpty);
+      await disk.settled;
+
+      expect(await disk.read(path), isNull);
+    });
+
+    test(
+      'clear() empties the disk too, so photos do not outlive a session',
+      () async {
+        // Disk bytes outlive the PROCESS, so a shared handset would otherwise
+        // hand the next person every job photo the last one opened.
+        when(() => storage.ref(path)).thenReturn(ref);
+        whenGetData(ref, () async => photo);
+
+        expect(await loader.load(image), photo);
+        await disk.settled;
+        await loader.clear();
+
+        expect(await disk.read(path), isNull);
       },
     );
   });

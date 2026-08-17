@@ -71,15 +71,17 @@ Future<void> deregisterThisDevice(WidgetRef ref) async {
   await step('presence', presence.unregister);
   await step('liveActivity', liveActivity.unregister);
 
-  // LOCAL, and deliberately last: nothing above depends on it, and clearing a
-  // map cannot fail (the READ that can is hoisted above).
+  // LOCAL, and deliberately last: nothing above depends on it.
   // `appointmentImageLoaderProvider` is a plain `Provider`, so its byte cache
   // lives for the whole process — up to 24 MB of this user's job photos would
   // otherwise stay resident in the heap across sign-out and into the next
-  // user's session on a shared device. It is not a rules bypass (serving them
-  // still needs the next reader to be entitled to the same `storagePath`),
-  // which is why it sits here rather than above the credential-dependent
-  // steps — but this is the single owner of "forget this session", and it was
-  // the one thing it did not forget.
-  imageLoader.clear();
+  // user's session on a shared device — and its DISK half outlives the process
+  // entirely, which is what makes this a leak rather than a memory-forensics
+  // footnote. It is not a rules bypass (serving them still needs the next
+  // reader to be entitled to the same `storagePath`), which is why it sits
+  // here rather than above the credential-dependent steps — but this is the
+  // single owner of "forget this session", and it was the one thing it did not
+  // forget. It goes through `step` like the rest now that it touches the file
+  // system and can therefore fail.
+  await step('imageCache', imageLoader.clear);
 }

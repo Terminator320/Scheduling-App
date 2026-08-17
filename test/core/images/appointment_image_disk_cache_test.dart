@@ -1,0 +1,159 @@
+// Pins AppointmentImageDiskCache — the reason job photos render offline again
+// without reintroducing the leak the render-from-bytes change removed.
+//
+// cached_network_image cached BYTES too; what made it unacceptable was the
+// HANDLE it cached them against: a permanent `?alt=media&token=…` URL readable
+// with no auth and no rules evaluation. This cache keys on storagePath and
+// stores nothing shareable, so the offline win comes back and the leak does
+// not.
+//
+// The filesystem is real here rather than mocked — it is fast in the VM, and a
+// fake would test the fake.
+
+import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:scheduling/core/images/appointment_image_disk_cache.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
+
+Uint8List _bytes(String tag) => Uint8List.fromList(tag.codeUnits);
+
+void main() {
+  late Directory root;
+
+  setUp(() => root = Directory.systemTemp.createTempSync('img_disk_cache'));
+  tearDown(() {
+    if (root.existsSync()) root.deleteSync(recursive: true);
+  });
+
+  AppointmentImageDiskCache cacheOver({int? budgetBytes, Directory? dir}) =>
+      AppointmentImageDiskCache(
+        directory: () async => dir ?? root,
+        logger: AppLogger(),
+        budgetBytes: budgetBytes,
+      );
+
+  const key = 'appointments/a1/images/123_photo.jpg';
+
+  test('bytes survive the round trip', () async {
+    final cache = cacheOver();
+    await cache.write(key, _bytes('photo'));
+
+    expect(await cache.read(key), _bytes('photo'));
+  });
+
+  test('a key that was never written is a miss, not a throw', () async {
+    expect(await cacheOver().read(key), isNull);
+  });
+
+  test('bytes outlive the instance that wrote them', () async {
+    // The whole point: a photo fetched in one session renders in the next one
+    // with no network at all.
+    await cacheOver().write(key, _bytes('photo'));
+
+    expect(await cacheOver().read(key), _bytes('photo'));
+  });
+
+  test('two keys never collide, however long or path-like', () async {
+    // Serving one photo's bytes for another is the failure this area keeps
+    // being bitten by, and the keys are neither filesystem-safe nor bounded:
+    // a storagePath carries `/`, and a legacy `url:` key can run past the
+    // 255-character file name limit once escaped.
+    final legacyA =
+        'url:https://firebasestorage.googleapis.com/v0/b/'
+        '${'x' * 300}/o/a.jpg?alt=media&token=aaa';
+    final legacyB =
+        'url:https://firebasestorage.googleapis.com/v0/b/'
+        '${'x' * 300}/o/b.jpg?alt=media&token=bbb';
+    final cache = cacheOver();
+
+    await cache.write(legacyA, _bytes('a'));
+    await cache.write(legacyB, _bytes('b'));
+
+    expect(await cache.read(legacyA), _bytes('a'));
+    expect(await cache.read(legacyB), _bytes('b'));
+  });
+
+  test('an empty result is never written', () async {
+    // Empty is a REFUSAL — a rules rejection or a transport failure — not a
+    // value. Persisting one would outlive the entitlement change or the
+    // network outage that caused it.
+    final cache = cacheOver();
+    await cache.write(key, Uint8List(0));
+
+    expect(await cache.read(key), isNull);
+  });
+
+  test(
+    'clear() removes everything, so photos do not outlive a session',
+    () async {
+      // These bytes outlive the PROCESS, so a shared handset would otherwise
+      // hand the next person every job photo the last one opened.
+      final cache = cacheOver();
+      await cache.write(key, _bytes('photo'));
+
+      await cache.clear();
+
+      expect(await cache.read(key), isNull);
+    },
+  );
+
+  test('a write already in flight when the session ends is dropped', () async {
+    // The loader fills this cache with an unawaited write, so a fetch that
+    // resolves just after sign-out would otherwise re-seed a cache that was
+    // deliberately emptied a moment earlier.
+    final cache = cacheOver();
+    final write = cache.write(key, _bytes('photo'));
+    final cleared = cache.clear();
+    await Future.wait([write, cleared]);
+
+    expect(await cache.read(key), isNull);
+  });
+
+  test('the folder is trimmed oldest-first once it is over budget', () async {
+    final cache = cacheOver(budgetBytes: 300);
+    for (final tag in const ['old', 'mid', 'new']) {
+      await cache.write('key/$tag', Uint8List(200));
+      // Distinct mtimes: the eviction order is what is under test, and a
+      // coarse filesystem timestamp would make it arbitrary.
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+
+    expect(await cache.read('key/old'), isNull);
+    expect(await cache.read('key/new'), isNotNull);
+  });
+
+  test('an unresolvable directory degrades to a miss, never a throw', () async {
+    // A disk failure must cost a network fetch, not a photo that fails to
+    // render.
+    final cache = AppointmentImageDiskCache(
+      directory: () async => throw const FileSystemException('no cache dir'),
+      logger: AppLogger(),
+    );
+
+    await cache.write(key, _bytes('photo'));
+    expect(await cache.read(key), isNull);
+  });
+
+  test('a directory failure is not remembered', () async {
+    // The resolved directory is memoized, and a memoized REJECTION is sticky:
+    // one hiccup while resolving it would otherwise disable offline photos for
+    // the rest of the process, silently.
+    var attempts = 0;
+    final cache = AppointmentImageDiskCache(
+      directory: () async {
+        attempts += 1;
+        if (attempts == 1) throw const FileSystemException('transient');
+        return root;
+      },
+      logger: AppLogger(),
+    );
+
+    expect(await cache.read(key), isNull);
+    await cache.write(key, _bytes('photo'));
+
+    expect(await cache.read(key), _bytes('photo'));
+  });
+}
