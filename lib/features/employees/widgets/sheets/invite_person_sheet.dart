@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/employees/application/employee_form_controller.dart';
@@ -136,7 +137,7 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
             name: composedName,
             firstName: _firstNameController.text.trim(),
             lastName: _lastNameController.text.trim(),
-            email: _emailController.text.trim().toLowerCase(),
+            email: normalizeEmail(_emailController.text),
             phone: _phoneController.text.trim(),
             color: Color(_selectedColor),
             role: _isAdmin ? 'admin' : 'employee',

@@ -43,11 +43,15 @@ void main() {
     when(
       () => collection.where('clientId', isEqualTo: any(named: 'isEqualTo')),
     ).thenReturn(query);
+    when(
+      () => query.orderBy(any(), descending: any(named: 'descending')),
+    ).thenReturn(query);
     when(() => query.limit(any())).thenReturn(query);
     when(() => query.get()).thenAnswer((_) async => snapshot);
 
-    // These are deliberately out of start-time order — the repository is
-    // responsible for sorting them in Dart.
+    // The server orders these now; the mock hands them back in the order it
+    // was given, which is what lets the ordering test below prove the
+    // repository no longer re-sorts.
     final docs = [
       doc('older', {
         'clientId': 'c1',
@@ -70,18 +74,28 @@ void main() {
   FirebaseAppointmentsRepository repo() =>
       FirebaseAppointmentsRepository(firestore);
 
-  test('filters by clientId and applies the limit (no orderBy)', () async {
+  test('filters by clientId and applies the limit', () async {
     await repo().fetchClientHistory(clientId: 'c1', limit: 25);
     verify(() => collection.where('clientId', isEqualTo: 'c1')).called(1);
     verify(() => query.limit(25)).called(1);
-    // There's no composite index, so the query must never add a server-side
-    // orderBy.
-    verifyNever(() => query.orderBy(any()));
   });
 
-  test('sorts most-recent first in Dart regardless of doc order', () async {
+  test(
+    'orders newest-first on the SERVER, so the limit takes the newest',
+    () async {
+      // Without this the query has no orderBy, Firestore falls back to
+      // `__name__`, and a client with more visits than the limit gets an
+      // ARBITRARY slice of its history — which a Dart sort afterwards then
+      // makes look like a correct page. Served by
+      // `(clientId ASC, startTime DESC)`.
+      await repo().fetchClientHistory(clientId: 'c1');
+      verify(() => query.orderBy('startTime', descending: true)).called(1);
+    },
+  );
+
+  test('returns the server order as-is, without re-sorting in Dart', () async {
     final result = await repo().fetchClientHistory(clientId: 'c1');
-    expect(result.map((a) => a.id), ['newer', 'older']);
+    expect(result.map((a) => a.id), ['older', 'newer']);
   });
 
   test('defaults to a bounded limit of 50', () async {

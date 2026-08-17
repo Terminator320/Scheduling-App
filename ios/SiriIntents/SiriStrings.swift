@@ -120,12 +120,21 @@ enum SiriStrings {
         return article ? "an unnamed client" : "unnamed client"
     }
 
-    /// The spoken "when" of a visit — its start time, or the all-day phrase.
+    /// The spoken "when" of a visit — its start time, or the all-day phrase,
+    /// plus which day of a multi-day run this is.
     static func timePhrase(_ appointment: SnapshotAppointment) -> String {
-        if appointment.allDay {
-            return french ? "toute la journée" : "all day"
-        }
-        return time(appointment.start)
+        let base = appointment.allDay
+            ? (french ? "toute la journée" : "all day")
+            : time(appointment.start)
+        guard appointment.isMultiDay,
+              let i = appointment.dayIndex,
+              let n = appointment.dayCount else { return base }
+        // A window crossing midnight counts nights, not days.
+        let unit = (appointment.isOvernight == true)
+            ? (french ? "nuit" : "night")
+            : (french ? "jour" : "day")
+        let of = french ? "sur" : "of"
+        return "\(base), \(unit) \(i) \(of) \(n)"
     }
 
     /// One spoken line per visit — time plus who it's for.

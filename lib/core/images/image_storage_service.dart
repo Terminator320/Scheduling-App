@@ -2,26 +2,44 @@ import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
 
+import 'package:scheduling/core/images/image_magic.dart';
 import 'package:scheduling/core/images/image_upload_failure.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 
 class ImageStorageService {
-  ImageStorageService({AppLogger? logger}) : _logger = logger ?? AppLogger();
+  ImageStorageService({FirebaseStorage? storage, AppLogger? logger})
+    : _storage = storage ?? FirebaseStorage.instance,
+      _logger = logger ?? AppLogger();
 
   static const int maxUploadBytes = 8 * 1024 * 1024;
 
-  final FirebaseStorage _storage = FirebaseStorage.instance;
+  final FirebaseStorage _storage;
   final AppLogger _logger;
+
+  /// `<millis>_<originalName>`, bounded by [TextLimits.imageFileName].
+  ///
+  /// The bound is not cosmetic: the appointment-images subcollection rule caps
+  /// `fileName` at the same 300, and `appendAppointmentPictures` writes a whole
+  /// batch in ONE `WriteBatch` — so one over-long basename fails the batch with
+  /// an opaque `permission-denied` and takes the valid photos with it. The
+  /// millisecond prefix is kept and the basename is what gets trimmed, so the
+  /// truncated name stays as unique as the untruncated one.
+  static String composeFileName(String originalName, DateTime now) {
+    final name = '${now.millisecondsSinceEpoch}_$originalName';
+    return name.length <= TextLimits.imageFileName
+        ? name
+        : name.substring(0, TextLimits.imageFileName);
+  }
 
   Future<bool> _isValidImageFile(File file) async {
     final raf = await file.open();
     try {
-      final bytes = await raf.read(4);
-      if (bytes.length < 3) return false;
-      final isJpeg = bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
-      final isPng = bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E;
-      return isJpeg || isPng;
+      // The signature test itself lives in `hasValidImageMagic` so it can be
+      // tested without a File or a FirebaseStorage instance — and so it reads
+      // as the deliberate mirror of `functions/image_magic.js` that it is.
+      return hasValidImageMagic(await raf.read(4));
     } finally {
       await raf.close();
     }
@@ -38,7 +56,7 @@ class ImageStorageService {
     }
 
     final originalName = file.uri.pathSegments.last;
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}_$originalName';
+    final fileName = composeFileName(originalName, DateTime.now());
     final path = 'appointments/$appointmentId/images/$fileName';
 
     final ref = _storage.ref(path);
@@ -49,11 +67,11 @@ class ImageStorageService {
 
     final snapshot = await ref.putFile(file, metadata);
     // NOTE: nothing in the current build renders from this URL any more —
-    // AppointmentImageUrlResolver resolves storagePath at render time so every
-    // read re-evaluates storage.rules. It is still persisted purely so builds
-    // that predate the resolver keep showing photos uploaded from this one;
-    // drop the write (and the field) once the fleet has moved, the same way
-    // the 1.37.1 shim was retired.
+    // AppointmentImageLoader fetches the bytes from storagePath, so no
+    // renderable URL is produced at all. It is still persisted purely so
+    // builds that predate that change keep showing photos uploaded from this
+    // one; drop the write (and the field) once the fleet has moved, the same
+    // way the 1.37.1 shim was retired.
     final url = await snapshot.ref.getDownloadURL();
 
     return AppointmentImage(
@@ -64,7 +82,27 @@ class ImageStorageService {
     );
   }
 
-  Future<void> deleteImage(AppointmentImage image) async {
+  /// Mints the download URL for an already-uploaded object, or `''` if it
+  /// can't be minted.
+  ///
+  /// This is the ONE place left that produces a URL, and it is not a render
+  /// path: the offline queue carries an already-uploaded image forward when
+  /// its doc-link append didn't land, and the `pictures` array entry it
+  /// re-writes still carries a `url` for builds that predate
+  /// `AppointmentImageLoader`. It lives here beside the [uploadImage] write it
+  /// reproduces, so nothing on the render side has a URL-minting method to
+  /// reach for.
+  Future<String> downloadUrlFor(String storagePath) async {
+    if (storagePath.isEmpty) return '';
+    try {
+      return await _storage.ref(storagePath).getDownloadURL();
+    } catch (e, st) {
+      _logger.warn('IMG-URL downloadUrlFor failed: $storagePath', e, st);
+      return '';
+    }
+  }
+
+  Future<void> _deleteImage(AppointmentImage image) async {
     final path = image.storagePath.isNotEmpty
         ? image.storagePath
         : _pathFromUrl(image.url);
@@ -81,7 +119,7 @@ class ImageStorageService {
     await Future.wait(
       images.map((img) async {
         try {
-          await deleteImage(img);
+          await _deleteImage(img);
         } catch (e, st) {
           _logger.warn(
             'IMG-DEL deleteImage failed (orphaned bytes): ${img.storagePath}',

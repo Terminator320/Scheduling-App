@@ -27,9 +27,121 @@ const COUNTRY_CODE_TO_NAME = {
   "US": "United States",
 };
 
+/**
+ * ISO-3166-1 alpha-2, the vocabulary of Wave's `CountryCode` enum.
+ *
+ * This is a MEMBERSHIP TEST, and it is the difference between one field being
+ * dropped and a client never reaching Wave again. `countryCode` is an ENUM, so
+ * an unrecognised value is not an `inputErrors` entry the worker can report
+ * against the field — GraphQL refuses to coerce the whole `$input` variable
+ * and answers with a top-level error, which arrives here as a
+ * `WaveApiError(graphql)`. That is non-retryable by design, so the job
+ * dead-letters, and no amount of pressing "Retry failed" can ever move it: the
+ * same value is sent and rejected the same way.
+ *
+ * The old test was `/^[A-Z]{2}$/`, which passes any two letters — a `country`
+ * of "ON" or "QC" (a province typed into the country box) sailed through as a
+ * country code and killed that client's sync permanently, for one stray field
+ * on one address.
+ */
+const ISO_COUNTRY_CODES = new Set((
+  "AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI " +
+  "BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN " +
+  "CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK " +
+  "FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM " +
+  "HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN " +
+  "KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK " +
+  "ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP " +
+  "NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW " +
+  "SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF " +
+  "TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI " +
+  "VN VU WF WS YE YT ZA ZM ZW"
+).split(" "));
+
+/**
+ * ISO-3166-2 subdivisions, by country, for the two countries this integration
+ * speaks — the vocabulary of Wave's `ProvinceCode` enum.
+ *
+ * Same enum-coercion stakes as [ISO_COUNTRY_CODES], plus a second bug the old
+ * code had on its own: a plain two-letter province was prefixed `CA-`
+ * UNCONDITIONALLY, so a US client in "NY" was sent as `CA-NY` — a code that
+ * exists in no country — and dead-lettered forever. The prefix now follows the
+ * client's resolved country, and the result has to be a real subdivision of it
+ * or the field is dropped.
+ */
+const SUBDIVISION_CODES = {
+  CA: new Set("AB BC MB NB NL NS NT NU ON PE QC SK YT".split(" ")),
+  US: new Set((
+    "AK AL AR AZ CA CO CT DC DE FL GA HI IA ID IL IN KS KY LA MA MD ME MI " +
+    "MN MO MS MT NC ND NE NH NJ NM NV NY OH OK OR PA RI SC SD TN TX UT VA " +
+    "VT WA WI WV WY AS GU MP PR UM VI"
+  ).split(" ")),
+};
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Per-field length caps applied to everything the IMPORT writes, mirroring
+ * `isValidClientData` in `firestore.rules`.
+ *
+ * `importCustomers` runs under the Admin SDK, which BYPASSES rules — so a Wave
+ * customer whose name or address is longer than the app's own cap imports
+ * fine and then makes that client permanently un-editable: every in-app save
+ * re-emits the whole `toMap()` projection, so the over-cap field fails the
+ * rules and takes the address, contacts and billing edits in the same save
+ * with it, as an opaque `permission-denied` the admin cannot repair from the
+ * form (a seeded controller bypasses `LengthLimitingTextInputFormatter`,
+ * which only limits SUBSEQUENT edits).
+ *
+ * `name` is capped at 200, not at its 225 rules cap. The 225 was sized to the
+ * retired "<typed name> <phone>" shape; the cap that matters now is the one
+ * the FORM enforces, `TextLimits.personName` (200), since a business's name
+ * round-trips through that field on every in-app save (`ClientNamePolicy`).
+ * Importing at the rules cap would leave a name the form itself cannot hold.
+ *
+ * The trade is deliberate and worth stating: a truncated name that is later
+ * edited in-app pushes the truncated form BACK to Wave, renaming that
+ * customer. That needs a Wave name over 200 characters, and the alternative
+ * is a client nobody can edit at all. It only bites a BUSINESS — a person's
+ * name is recomposed from their phone number on save and never carries the
+ * imported string forward at all.
+ * @type {!Object<string, number>}
+ */
+const IMPORT_FIELD_CAPS = {
+  name: 200,
+  firstName: 200,
+  lastName: 200,
+  email: 320,
+  phone: 32,
+  mobile: 32,
+  address: 500,
+  // 500, matching `address` and NOT the app's 64-char `apt`: Wave models
+  // `addressLine2` as a peer street line of `addressLine1`, and
+  // `fromWaveCustomer` keeps it in its own field rather than joining it onto
+  // `address`. It also
+  // round-trips straight back out through `toWaveCustomerInput`, so the tighter
+  // cap would push a truncated real address back to Wave (the trade spelled out
+  // for `name` above) on a field the app itself never surfaces or repairs.
+  addressLine2: 500,
+  city: 128,
+  province: 128,
+  country: 128,
+  postalCode: 32,
+};
+
+/**
+ * `value` truncated to the cap registered for `field`, if any.
+ * @param {string} field Client document field name.
+ * @param {string} value Already-trimmed value.
+ * @return {string}
+ */
+function capped(field, value) {
+  const max = IMPORT_FIELD_CAPS[field];
+  if (typeof max !== "number" || value.length <= max) return value;
+  return value.slice(0, max);
+}
 
 /**
  * Returns the string only if non-empty after trimming, else undefined. Lets
@@ -44,27 +156,52 @@ function presence(v) {
 }
 
 /**
- * Converts a stored province value to a Wave `provinceCode` (e.g. `CA-QC`).
- * Passes an already-coded value straight through, prefixes a plain 2-letter
- * code with `CA-`, and omits the field entirely when it's empty.
+ * Converts a stored province value to a Wave `provinceCode` (e.g. `CA-QC`),
+ * or omits it when the result would not be a real subdivision.
+ *
+ * **Omitting is the whole job here.** `provinceCode` is a GraphQL ENUM, so a
+ * value outside its vocabulary is not a per-field `inputErrors` entry — it
+ * fails variable coercion and Wave answers with a top-level GraphQL error,
+ * which the worker classifies non-retryable and dead-letters. One typo in one
+ * address field then costs that client every future sync, permanently and
+ * silently. A dropped province costs the Wave address one line.
+ *
+ * The country matters because the prefix does: a plain "NY" is `US-NY` for a
+ * US client and nothing at all for a Canadian one. It used to be `CA-` in
+ * every case, which is how a US client became the non-existent `CA-NY`.
+ *
  * @param {*} province Stored province field.
+ * @param {string=} countryCode Resolved ISO-2 country for this client, if
+ *   known. Defaults to `CA` — this business's own country, and the only
+ *   sensible reading of a bare "QC".
  * @return {string|undefined}
  */
-function toProvinceCode(province) {
+function toProvinceCode(province, countryCode) {
   if (!province || typeof province !== "string") return undefined;
   const p = province.trim().toUpperCase();
   if (!p) return undefined;
-  // Already in subdivision-code form (e.g. CA-QC, US-NY).
-  if (/^[A-Z]{2}-[A-Z]{2,3}$/.test(p)) return p;
-  // Plain 2-letter province abbreviation → prepend CA-.
-  if (/^[A-Z]{2}$/.test(p)) return `CA-${p}`;
-  return undefined;
+  // Already in subdivision-code form (e.g. CA-QC, US-NY) — honoured only if
+  // that subdivision actually exists.
+  const coded = p.match(/^([A-Z]{2})-([A-Z0-9]{1,3})$/);
+  if (coded) {
+    const set = SUBDIVISION_CODES[coded[1]];
+    return set && set.has(coded[2]) ? p : undefined;
+  }
+  if (!/^[A-Z]{2}$/.test(p)) return undefined;
+  // Plain abbreviation → qualify it with the client's own country.
+  const country = SUBDIVISION_CODES[countryCode] ? countryCode : "CA";
+  return SUBDIVISION_CODES[country].has(p) ? `${country}-${p}` : undefined;
 }
 
 /**
- * Converts a stored country value to a Wave `countryCode` (ISO-2). Passes an
- * existing code straight through, maps a known country name, and otherwise
- * omits the field rather than guessing.
+ * Converts a stored country value to a Wave `countryCode` (ISO-2), or omits it
+ * when the value is not one.
+ *
+ * Same enum-coercion stakes as [toProvinceCode]: this doc block always claimed
+ * it "omits the field rather than guessing", but the code accepted ANY two
+ * letters, so a province typed into the country box ("ON", "QC") became a
+ * country code and dead-lettered that client's sync forever.
+ *
  * @param {*} country Stored country field.
  * @return {string|undefined}
  */
@@ -72,8 +209,8 @@ function toCountryCode(country) {
   if (!country || typeof country !== "string") return undefined;
   const c = country.trim();
   if (!c) return undefined;
-  // Already a 2-letter ISO code.
-  if (/^[A-Z]{2}$/.test(c.toUpperCase())) return c.toUpperCase();
+  const upper = c.toUpperCase();
+  if (ISO_COUNTRY_CODES.has(upper)) return upper;
   // Look up by name (case-insensitive).
   return COUNTRY_NAME_TO_CODE[c.toLowerCase()] || undefined;
 }
@@ -182,10 +319,12 @@ function toWaveCustomerInput(clientFields) {
   if (addressLine2) addr.addressLine2 = addressLine2;
   const city = presence(f.city);
   if (city) addr.city = city;
-  const provinceCode = toProvinceCode(f.province);
-  if (provinceCode) addr.provinceCode = provinceCode;
+  // Country first: it decides which country's subdivisions a bare "NY" or
+  // "QC" is read against.
   const countryCode = toCountryCode(f.country);
   if (countryCode) addr.countryCode = countryCode;
+  const provinceCode = toProvinceCode(f.province, countryCode);
+  if (provinceCode) addr.provinceCode = provinceCode;
   const postalCode = presence(f.postalCode);
   if (postalCode) addr.postalCode = postalCode;
 
@@ -275,31 +414,47 @@ function fromWaveCustomer(node) {
   const firstName = typeof n.firstName === "string" ? n.firstName : "";
   const lastName = typeof n.lastName === "string" ? n.lastName : "";
   const email = typeof n.email === "string" ? n.email : "";
-  // Derive a non-empty display name — Wave's `name`, else first/last, else
-  // email — since a blank name would float the doc to the top of the
-  // name-ordered client list.
+  // Wave's customer name, mirrored VERBATIM — it is not a display name, and
+  // the app never renders a person's (`ClientNamePolicy`). The fallbacks to
+  // first/last and then email exist only to avoid storing a blank, which
+  // would float the doc to the top of the name-ordered client list. A person
+  // whose Wave name is not yet their phone number is recomposed on the next
+  // in-app save; the import must not pre-empt that, or it would push a rename
+  // to Wave for every customer it read.
   const rawName = typeof n.name === "string" ? n.name.trim() : "";
   const name = rawName ||
     [firstName.trim(), lastName.trim()].filter(Boolean).join(" ") ||
     email.trim();
 
+  // Every mapped field is length-capped on the way in — see IMPORT_FIELD_CAPS.
   return {
     waveCustomerId: typeof n.id === "string" ? n.id : "",
-    name,
-    firstName,
-    lastName,
-    email,
-    phone: typeof n.phone === "string" ? n.phone : "",
-    mobile: typeof n.mobile === "string" ? n.mobile : "",
-    address,
-    addressLine2: line2,
+    name: capped("name", name),
+    firstName: capped("firstName", firstName),
+    lastName: capped("lastName", lastName),
+    email: capped("email", email),
+    phone: capped("phone", typeof n.phone === "string" ? n.phone : ""),
+    mobile: capped("mobile", typeof n.mobile === "string" ? n.mobile : ""),
+    address: capped("address", address),
+    addressLine2: capped("addressLine2", line2),
     apt: "",
-    city: typeof addr.city === "string" ? addr.city.trim() : "",
-    province,
-    country,
-    postalCode: typeof addr.postalCode === "string" ?
-      addr.postalCode.trim() : "",
+    city: capped("city",
+        typeof addr.city === "string" ? addr.city.trim() : ""),
+    province: capped("province", province),
+    country: capped("country", country),
+    postalCode: capped("postalCode",
+        typeof addr.postalCode === "string" ? addr.postalCode.trim() : ""),
   };
 }
 
-module.exports = {toWaveCustomerInput, mappedFieldsHash, fromWaveCustomer};
+module.exports = {
+  toWaveCustomerInput,
+  mappedFieldsHash,
+  fromWaveCustomer,
+  // Exported for `test/core/validators/text_limits_test.dart`, which reads
+  // this file back and asserts every cap clears its firestore.rules cap.
+  // Dart, CEL and JS cannot share a constant, so that test is the only thing
+  // stopping a tightened rule from letting the import write client docs the
+  // app can never update again.
+  IMPORT_FIELD_CAPS,
+};

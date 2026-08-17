@@ -130,6 +130,79 @@ void main() {
     expect(_savedFrom(repo).jobCount, 12);
   });
 
+  // I4: these tests asserted `saved.phone` heavily and never once asserted
+  // `saved.name` — the field that IS the Wave customer name, and the one an
+  // ordinary save can silently rename on live invoices.
+  group('the stored name is the Wave customer name', () {
+    testWidgets('a PERSON is stored as their phone number', (tester) async {
+      await _pump(
+        tester,
+        repo,
+        const ClientRecord(
+          id: 'c1',
+          name: '(514) 555-0101',
+          firstName: 'Marc',
+          lastName: 'Tremblay',
+          phone: '(514) 555-0101',
+          noFixedAddress: true,
+        ),
+      );
+
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(_savedFrom(repo).name, '5145550101');
+    });
+
+    testWidgets('a BUSINESS keeps its name, never its number', (tester) async {
+      // The expensive mistake: the sheet must seed from `baseNameFor` and pass
+      // `type`, or saving renames "Vogas Plumbing" to a phone number in Wave.
+      await _pump(
+        tester,
+        repo,
+        const ClientRecord(
+          id: 'c1',
+          name: 'Vogas Plumbing',
+          firstName: 'Marc',
+          lastName: 'Tremblay',
+          phone: '(514) 555-0101',
+          type: ClientType.commercial,
+          noFixedAddress: true,
+        ),
+      );
+
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(_savedFrom(repo).name, 'Vogas Plumbing');
+    });
+
+    testWidgets('a legacy "<name> <number>" doc does not stack', (
+      tester,
+    ) async {
+      // The idempotence that makes every ordinary save and the backfill safe
+      // to re-run. A doc still in the pre-2026-08-14 shape must come back as
+      // the bare number alone — never "Marc Tremblay (514) 555-0101 …".
+      await _pump(
+        tester,
+        repo,
+        const ClientRecord(
+          id: 'c1',
+          name: 'Marc Tremblay (514) 555-0101',
+          firstName: 'Marc',
+          lastName: 'Tremblay',
+          phone: '(514) 555-0101',
+          noFixedAddress: true,
+        ),
+      );
+
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(_savedFrom(repo).name, '5145550101');
+    });
+  });
+
   group('mobile consolidation', () {
     testWidgets('mobile-only becomes the phone and mobile clears', (
       tester,

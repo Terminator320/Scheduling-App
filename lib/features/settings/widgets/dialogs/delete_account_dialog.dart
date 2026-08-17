@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/adaptive/adaptive.dart';
+import 'package:scheduling/core/security/credential_input.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -67,10 +68,7 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
           CupertinoTextField(
             controller: _controller,
             obscureText: _obscure,
-            // The eye toggle can clear obscureText, and only obscureText
-            // implies this — so a revealed password would otherwise be fair
-            // game for a third-party keyboard to retain.
-            enableIMEPersonalizedLearning: false,
+            enableIMEPersonalizedLearning: kCredentialImePersonalizedLearning,
             autofocus: true,
             placeholder: context.l10n.common_password,
             onSubmitted: (value) => Navigator.of(context).pop(value),
@@ -124,7 +122,7 @@ class _DeleteAccountReauthDialogState extends State<DeleteAccountReauthDialog> {
           TextField(
             controller: _controller,
             obscureText: _obscure,
-            enableIMEPersonalizedLearning: false,
+            enableIMEPersonalizedLearning: kCredentialImePersonalizedLearning,
             autofocus: true,
             decoration: InputDecoration(
               labelText: context.l10n.common_password,

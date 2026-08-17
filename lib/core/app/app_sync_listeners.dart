@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
@@ -13,13 +14,25 @@ import 'package:scheduling/features/presence/application/presence_sync_controlle
 import 'package:scheduling/features/siri/application/schedule_snapshot_provider.dart';
 import 'package:scheduling/features/siri/application/schedule_snapshot_service.dart';
 
+/// Whether this device has the two iOS-only mirror surfaces.
+///
+/// The default for [AppSyncListeners.isIosPlatform] — a seam, not a wrapper for
+/// its own sake: `flutter test` runs on the host, so the bare `Platform.isIOS`
+/// gate this replaced returned before any injectable point and left both mirror
+/// listeners (and the [AppSyncListeners.isUnsettled] rule they exist to
+/// enforce) unreachable from the harness.
+bool defaultIsIosPlatform() => Platform.isIOS;
+
 /// Cross-cutting sync wiring — device registration, mirrors, photo drain — pulled out here for testability. Account-lifecycle listeners stay in main.dart, since registration order matters there.
 ///
 /// [registerAll] must be called from `build`, like any `ref.listen`.
 class AppSyncListeners {
-  const AppSyncListeners(this.ref);
+  const AppSyncListeners(this.ref, {this.isIosPlatform = defaultIsIosPlatform});
 
   final WidgetRef ref;
+
+  /// Injected so the iOS-only mirror listeners can register in a host test.
+  final bool Function() isIosPlatform;
 
   /// Registers every listener, in the same order as the original inline calls.
   void registerAll() {
@@ -66,14 +79,28 @@ class AppSyncListeners {
     });
   }
 
+  /// True when an emission says nothing about whether the person is signed out.
+  ///
+  /// Both mirrors below publish `null` to mean SIGNED OUT and clear the App
+  /// Group. But an `AsyncError` carries a null value too, and so does
+  /// `AsyncLoading` — so keying on `value == null` alone made a failed Firestore
+  /// read (past `retryAsync`) blank the home-screen widget and have Siri answer
+  /// "no appointments" to someone who has jobs. Both surfaces are off-screen,
+  /// so nothing reported it. A stale mirror beats a wrongly-empty one: keeping
+  /// the last good payload is the honest degradation while the read is broken.
+  @visibleForTesting
+  static bool isUnsettled(AsyncValue<Object?> next) =>
+      next.isLoading || next.hasError;
+
   void _widgetSync() {
-    // iOS home-screen widget only. It never wires up on Android, so the
+    // iOS home-screen widget only. It never wires up elsewhere, so the
     // employee-appointments listener it would open never opens.
-    if (!Platform.isIOS) return;
+    if (!isIosPlatform()) return;
     ref.listen<AsyncValue<Map<String, dynamic>?>>(widgetPayloadProvider, (
       prev,
       next,
     ) {
+      if (isUnsettled(next)) return;
       final payload = next.value;
       final service = ref.read(widgetSyncServiceProvider);
       if (payload == null) {
@@ -86,11 +113,12 @@ class AppSyncListeners {
 
   void _snapshotSync() {
     // iOS Siri App Intents extension only — same App Group, separate key.
-    if (!Platform.isIOS) return;
+    if (!isIosPlatform()) return;
     ref.listen<AsyncValue<Map<String, dynamic>?>>(scheduleSnapshotProvider, (
       prev,
       next,
     ) {
+      if (isUnsettled(next)) return;
       final payload = next.value;
       final service = ref.read(scheduleSnapshotServiceProvider);
       if (payload == null) {

@@ -104,6 +104,14 @@ class _AddressAutocompleteFieldState
     // failed fetch will still retry.
     if (query == _lastFetched) return;
     final requestId = ++_requestId;
+    // Resolved BEFORE the await, not inside the catch. `AppLogger` is
+    // context-free and the log must survive unmount — but `ref.read` is not:
+    // under Riverpod 3 it THROWS a StateError once the consumer is unmounted.
+    // This method runs from a Debouncer timer with no error handler, so that
+    // throw escaped to the zone handler as a FATAL — on the most-used field in
+    // the app, whenever a lookup failed after the sheet was dismissed. Holding
+    // the logger keeps both properties.
+    final logger = ref.read(loggerProvider);
     setState(() {
       _isLoading = true;
       _serviceError = null;
@@ -121,8 +129,9 @@ class _AddressAutocompleteFieldState
         _isLoading = false;
       });
     } catch (e, st) {
-      // Logged before the mounted guard so it reaches Crashlytics even if the field is gone by then.
-      ref.read(loggerProvider).warn('ADDR-AUTO autocomplete failed', e, st);
+      // Logged before the mounted guard so it reaches Crashlytics even if the
+      // field is gone by then — through the logger captured above.
+      logger.warn('ADDR-AUTO autocomplete failed', e, st);
       if (!mounted || requestId != _requestId) return;
       setState(() {
         _suggestions = [];
@@ -155,6 +164,10 @@ class _AddressAutocompleteFieldState
   }
 
   Future<void> _selectSuggestion(AddressSuggestion s) async {
+    // Resolved BEFORE the await for the same reason as _fetch above — this is
+    // fired from onTap, so the sheet being dismissed before Places responds is
+    // routine, and `ref.read` on an unmounted consumer throws.
+    final logger = ref.read(loggerProvider);
     // Invalidate any pending debounce/in-flight request so a late response can't resurface suggestions.
     _debounce.cancel();
     _requestId++;
@@ -182,9 +195,7 @@ class _AddressAutocompleteFieldState
       setState(() => _isLoading = false);
       widget.onAddressSelected?.call(widget.controller.text);
     } catch (e, st) {
-      ref
-          .read(loggerProvider)
-          .warn('ADDR-DETAILS getPlaceDetails failed', e, st);
+      logger.warn('ADDR-DETAILS getPlaceDetails failed', e, st);
       if (!mounted) return;
       setState(() {
         _isLoading = false;

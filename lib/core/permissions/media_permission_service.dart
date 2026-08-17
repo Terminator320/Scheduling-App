@@ -20,15 +20,25 @@ class MediaPermissionService {
     return _map(status);
   }
 
-  MediaPermissionResult _map(PermissionStatus status) {
-    if (status.isGranted || status.isLimited) {
-      return MediaPermissionResult.granted;
-    }
-    if (status.isPermanentlyDenied || status.isRestricted) {
-      return MediaPermissionResult.permanentlyDenied;
-    }
-    return MediaPermissionResult.denied;
+  MediaPermissionResult _map(PermissionStatus status) =>
+      mediaPermissionResultOf(status);
+}
+
+/// Buckets a raw [PermissionStatus].
+///
+/// Two of these are easy to get wrong and neither fails loudly: iOS `limited`
+/// (the "selected photos" grant) IS usable and must read as granted, and
+/// `restricted` (parental controls / MDM) cannot be re-prompted, so it belongs
+/// with permanently-denied — asking again would just no-op forever. Pure, so
+/// the mapping is testable without the plugin.
+MediaPermissionResult mediaPermissionResultOf(PermissionStatus status) {
+  if (status.isGranted || status.isLimited) {
+    return MediaPermissionResult.granted;
   }
+  if (status.isPermanentlyDenied || status.isRestricted) {
+    return MediaPermissionResult.permanentlyDenied;
+  }
+  return MediaPermissionResult.denied;
 }
 
 final mediaPermissionServiceProvider = Provider<MediaPermissionService>(

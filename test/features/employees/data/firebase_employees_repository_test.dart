@@ -12,6 +12,7 @@ import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
+import 'package:scheduling/features/employees/domain/policies/self_service_fields.dart';
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
 
@@ -494,6 +495,62 @@ void main() {
       },
     );
 
+    test('runs the callable BEFORE the Firestore write', () async {
+      // The ORDER is the whole fix, and the payload assertion above holds
+      // whichever way round the two run. Auth is the store that owns sign-in
+      // and the only one that can genuinely refuse a duplicate, so it must
+      // never be the one left behind: a Firestore-first change leaves the
+      // person signing in at the old address while every admin surface shows
+      // the new one, and desyncs the two stores `createEmployeeAccount` joins
+      // on. Same shape as `auth_service_test.dart`'s password-then-activate.
+      stubStoredDoc(uid: 'auth-uid', emailAfterCallable: 'new@example.com');
+      final callable = stubCallable('changeEmployeeEmail', data: {'ok': true});
+
+      await repo().updateEmployee(
+        docId: 'my-id',
+        employee: const EmployeeRecord(
+          id: 'my-id',
+          name: 'Alice',
+          email: 'new@example.com',
+          uid: 'auth-uid',
+        ),
+      );
+
+      verifyInOrder([
+        () => callable.call<dynamic>(any<Object?>()),
+        () => transaction.update(docRef, any()),
+      ]);
+    });
+
+    test('a refused callable leaves the users doc untouched', () async {
+      // The half that matters: the Firestore write only ever "re-states what
+      // the server committed", so a callable that threw must leave nothing
+      // behind — otherwise the admin surface shows an address Auth refused.
+      stubStoredDoc(uid: 'auth-uid');
+      stubFailingCallable(
+        'changeEmployeeEmail',
+        FirebaseFunctionsException(
+          message: 'email-exists',
+          code: 'already-exists',
+        ),
+      );
+
+      await expectLater(
+        repo().updateEmployee(
+          docId: 'my-id',
+          employee: const EmployeeRecord(
+            id: 'my-id',
+            name: 'Alice',
+            email: 'taken@example.com',
+            uid: 'auth-uid',
+          ),
+        ),
+        throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
+      );
+
+      verifyNever(() => transaction.update(docRef, any()));
+    });
+
     test('leaves the callable alone when the email is unchanged', () async {
       stubStoredDoc(uid: 'auth-uid');
 
@@ -839,6 +896,107 @@ void main() {
               .cast<String, dynamic>();
       expect(captured['status'], 'active');
       expect(captured.containsKey('updatedAt'), isTrue);
+    });
+  });
+
+  group('updateSelfDetails', () {
+    Future<Map<String, dynamic>> save({
+      String phone = '(514) 555-1234',
+      List<bool> workingDays = const [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+      ],
+      int workStartMinutes = 420,
+      int workEndMinutes = 960,
+      bool onCall = true,
+    }) async {
+      await repo().updateSelfDetails(
+        EmployeeRecord(
+          id: 'u1',
+          name: 'Self',
+          email: 'self@example.com',
+          phone: phone,
+          workingDays: workingDays,
+          workStartMinutes: workStartMinutes,
+          workEndMinutes: workEndMinutes,
+          onCall: onCall,
+        ),
+      );
+      return (verify(() => docRef.update(captureAny())).captured.single as Map)
+          .cast<String, dynamic>();
+    }
+
+    test('writes the self-service values', () async {
+      final captured = await save();
+
+      expect(captured['phone'], '(514) 555-1234');
+      expect(captured['onCall'], isTrue);
+      expect(captured['workStartMinutes'], 420);
+      expect(captured['workEndMinutes'], 960);
+    });
+
+    test('the patch carries no key outside the rules allowlist', () async {
+      // The rules use `hasOnly`, so one stray key rejects the WHOLE write and
+      // reaches the user as an opaque permission-denied. This is the assertion
+      // that matters most in this group.
+      final captured = await save();
+
+      expect(captured.keys, everyElement(isIn(kSelfServiceUserFields)));
+    });
+
+    test('never sends the emergency scrub updateEmployee sends', () async {
+      // updateEmployee deletes the legacy emergency pair on every save. Doing
+      // that here would add two keys the allowlist does not name.
+      final captured = await save();
+
+      expect(captured.containsKey('emergencyContact'), isFalse);
+      expect(captured.containsKey('emergencyPhone'), isFalse);
+    });
+
+    test('never sends an admin-owned field', () async {
+      final captured = await save();
+
+      for (final admin in const ['role', 'status', 'email', 'maxJobsPerDay']) {
+        expect(captured.containsKey(admin), isFalse, reason: admin);
+      }
+    });
+
+    test('normalizes working days to seven flags', () async {
+      final captured = await save(workingDays: const [true, true]);
+
+      expect((captured['workingDays']! as List).length, 7);
+    });
+
+    test('trims the phone', () async {
+      final captured = await save(phone: '  (514) 555-1234  ');
+
+      expect(captured['phone'], '(514) 555-1234');
+    });
+
+    test('stamps updatedAt', () async {
+      final captured = await save();
+
+      expect(captured.containsKey('updatedAt'), isTrue);
+    });
+
+    test('is a plain update, never a transaction', () async {
+      // No concurrent writer to guard against — a person edits their own doc
+      // from one device — and the iOS transaction plugin bug makes a needless
+      // client transaction a real risk, not just overhead.
+      await save();
+
+      verifyNever(
+        () => firestore.runTransaction<void>(
+          any(),
+          timeout: any(named: 'timeout'),
+          maxAttempts: any(named: 'maxAttempts'),
+        ),
+      );
     });
   });
 }

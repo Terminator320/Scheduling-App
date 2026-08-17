@@ -11,6 +11,12 @@ import 'package:scheduling/features/wave/domain/wave_error_mapper.dart';
 /// which is sized to leave most of this window to the import half.
 const int kWaveSyncTimeoutSeconds = 120;
 
+/// The deadline on every Wave callable that ISN'T the long-running sync — a
+/// connection read, a cadence write, a dead-letter requeue. Hoisted because it
+/// was written out at three call sites; the sync pair above keeps its own,
+/// much longer, budget.
+const Duration _callableTimeout = Duration(seconds: 20);
+
 class WaveService {
   WaveService({FirebaseFunctions? functions, AppLogger? logger})
     : _functions =
@@ -27,7 +33,7 @@ class WaveService {
       result = await _functions
           .httpsCallable(
             'waveBootstrap',
-            options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+            options: HttpsCallableOptions(timeout: _callableTimeout),
           )
           .call(<String, dynamic>{});
     } catch (e, st) {
@@ -52,7 +58,7 @@ class WaveService {
       result = await _functions
           .httpsCallable(
             'waveGetConnection',
-            options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+            options: HttpsCallableOptions(timeout: _callableTimeout),
           )
           .call(<String, dynamic>{});
     } catch (e, st) {
@@ -115,13 +121,53 @@ class WaveService {
     }
   }
 
+  /// Returns dead-lettered outbox jobs to the queue and pushes them.
+  ///
+  /// A dead-lettered job is terminal: nothing retries it, so that client's
+  /// data diverges from Wave permanently. This is the only way back, and it is
+  /// deliberately a manual action — a job that died on a validation error will
+  /// die again, so an automatic retry would spin on it forever.
+  ///
+  /// Takes the sync timeout rather than the 20 s the other admin reads use:
+  /// the callable requeues AND then drains, so it is bounded by the same push
+  /// budget "Sync with Wave" is.
+  Future<WaveRetryResult> retryFailedJobs() async {
+    final HttpsCallableResult<dynamic> result;
+    try {
+      result = await _functions
+          .httpsCallable(
+            'waveRetryFailedJobs',
+            options: HttpsCallableOptions(
+              timeout: const Duration(seconds: kWaveSyncTimeoutSeconds),
+            ),
+          )
+          .call(<String, dynamic>{});
+    } catch (e, st) {
+      _logger.warn('WAVE-RETRY waveRetryFailedJobs callable failed', e, st);
+      throw WaveErrorMapper.map(e);
+    }
+
+    try {
+      // NOTE: `as Map?` — Android callables return Map<dynamic, dynamic>.
+      final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
+      return WaveRetryResult.fromMap(data);
+    } catch (e, st) {
+      _logger.warn(
+        'WAVE-RETRY waveRetryFailedJobs response parse failed',
+        e,
+        st,
+      );
+      throw WaveErrorMapper.map(e);
+    }
+  }
+
   /// Set automatic-import cadence.
   Future<void> setImportSchedule(WaveImportSchedule schedule) async {
     try {
       await _functions
           .httpsCallable(
             'waveSetImportSchedule',
-            options: HttpsCallableOptions(timeout: const Duration(seconds: 20)),
+            options: HttpsCallableOptions(timeout: _callableTimeout),
           )
           .call<void>(<String, dynamic>{'schedule': schedule.raw});
     } catch (e, st) {

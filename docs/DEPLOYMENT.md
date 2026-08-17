@@ -39,9 +39,11 @@ cd functions && npm run lint && npx jest
 Then validate the rules without deploying (Firebase MCP
 `firebase_validate_security_rules`, `source_file: firestore.rules`).
 
-**Expected, ignore:** 3 warnings for `isAvailabilityOnlyChange` — one "Unused
-function" and two "Invalid variable name". All three are artifacts of it being
-uncalled and disappear when P5 wires it up.
+**Expect a clean `OK: No errors detected.`** This used to warn 3× on
+`isAvailabilityOnlyChange` (one "Unused function", two "Invalid variable
+name"); those were artifacts of it being uncalled and **are gone as of
+2026-08-15**, since P5 wired it up. A warning here is now worth reading, not
+ignoring.
 
 ## 2. Find out what is ACTUALLY live
 
@@ -125,6 +127,15 @@ firebase deploy --only functions,firestore:rules
   query whose index is missing fails `FAILED_PRECONDITION`, which the
   best-effort callers swallow into a silent no-op — so if you changed a query,
   you must deploy indexes.
+  **An index deploy returns before the index is `READY`.** The deploy only
+  *starts* the build, so a function or app build that needs a new index races
+  it: check the Firestore console's Indexes tab before shipping the app, and
+  expect a scheduled sweep to fail `FAILED_PRECONDITION` (and self-heal on its
+  next run) in the gap. **Index EXEMPTIONS deploy the same way and are the
+  slower direction to undo** — re-adding an override you removed rebuilds the
+  index over the whole collection, so treat "which fields are exempt" as a
+  decision, not a toggle. See the `fieldOverrides` note in `functions/CLAUDE.md`
+  for what is exempt and why.
 - **Never pass `--force`.** It treats any prod field override missing from
   `firestore.indexes.json` as drift and DELETES it — this removed all 5 live TTL
   policies once (2026-07-21).
@@ -192,6 +203,171 @@ reverting the cap.
 
 ---
 
+## Pending (step 3 of 3): the photo subcollection migration (phase 1)
+
+> **Steps 1 and 2 are DONE. Only the app build is left.**
+> Step 1 (backend + rules + indexes) DEPLOYED 2026-08-14 at `d3e22377`, so
+> `cascadeDeleteAppointmentImages` is live and the subcollection is safe to
+> write to. **Step 2 (the backfill) RAN against prod 2026-08-15** —
+> `copied 13 photos across 10 appointments (41 scanned)`, no unrenderable
+> entries — after the audit fixed its fake `--dry-run` (it parsed the flag into
+> an unused variable and committed every batch anyway). It is copy-only and
+> idempotent, so `pictures` is untouched and 1.45.0+72 still renders from it;
+> do not re-run it to "make sure". The index blocker is also cleared: both
+> `(status, endTime DESC)` and `(clientId, startTime DESC)` were `READY` as of
+> 2026-08-15.
+
+Photos are moving from the `pictures` array on each appointment into
+`appointments/{id}/images`. **Phase 1 is written; its backend half (step 1
+above) deployed 2026-08-14.** It writes BOTH stores; the array stays
+authoritative and is what the shipped build reads.
+
+The ordering below is the whole safety property — it is an expand/contract
+migration and the steps are not interchangeable:
+
+1. **Deploy backend + rules + indexes.** This adds two exports
+   (`cascadeDeleteAppointmentImages`, `recountAppointmentPictures`), so the
+   count moves **24 → 26** and this is *also* the deletion deploy below — see
+   that section for the non-interactive abort.
+   **The cascade trigger MUST be live before any photo reaches the
+   subcollection.** Firestore does not delete a subcollection with its parent,
+   so an appointment deleted while the trigger is absent orphans its photo
+   documents permanently and invisibly. Deploying the app build first is the
+   one ordering that creates unrecoverable litter.
+2. **Run the backfill**, `--dry-run` first — **DONE 2026-08-15**:
+   ```bash
+   node functions/scripts/backfill-appointment-images.js --dry-run
+   node functions/scripts/backfill-appointment-images.js
+   ```
+   Copy-only — it never touches the `pictures` array, and must not be changed
+   to. Idempotent (ids are derived from each photo) and atomic per appointment.
+3. **Ship the app build — the one step still outstanding.** It prefers the
+   subcollection and falls back to the array, so it is correct whether or not
+   step 2 has run — but the card's photo indicator reads the `pictureCount` the
+   backfill stamps.
+
+**Do NOT delete the `pictures` array as part of this.** That is the CONTRACT
+step, a separate release gated on the same condition the `#compat-1.37.1` shim
+waited on: no device still *runs* a build that reads the array. 1.45.0+72 does.
+
+**Rules validation is a REQUIRED pre-flight for this deploy and could not be
+done locally** — the Firestore emulator needs Java, which is not installed on
+this machine. Validate `firestore.rules` before deploying (Firebase MCP
+`firebase_validate_security_rules`, or the emulator on a machine with a JRE).
+The new `match /images/{imageId}` block declares a nested `function` and calls
+`get()` on the parent appointment; a syntax error there fails the whole rules
+release, and a rules release that fails leaves the deploy half-applied.
+
+Note the cost this block adds, since it is the argument against reaching for a
+subcollection casually: `parentAppointment()` is a document `get()` on top of
+the `usersByUid` one every rule already pays, so an employee listing a job's
+photos evaluates **two** rules reads. It is one per query, cached per request,
+and it buys the far larger saving on the range queries — but it is real.
+
+---
+
+## DONE 2026-08-14: a THREE-deletion deploy (25 → 22 → 25)
+
+> **Deployed at `d3e22377`** — see the log row. Kept as the worked record of how
+> a deletion deploy is checked. **Step 2 below (the 3 orphaned Cloud Scheduler
+> jobs) was NOT done** and is still outstanding: `gcloud` is not installed on
+> the Windows box. The abort this section predicts did not fire — a *different*
+> one did, on the new `retry: true` functions; both are now in the log row.
+
+**Verified against `78d89478` (what prod runs) on 2026-08-13, not from this
+doc's own history — an earlier draft of this section said "25 → 24,
+`waveSyncWorker` and nothing else" and was wrong on both counts.** Reproduce
+the check before deploying:
+
+```bash
+git show 78d89478:functions/index.js | grep '^exports\.' \
+  | sed 's/exports\.\([a-zA-Z]*\).*/\1/' | sort > /tmp/prod.txt
+grep '^exports\.' functions/index.js \
+  | sed 's/exports\.\([a-zA-Z]*\).*/\1/' | sort > /tmp/local.txt
+comm -23 /tmp/prod.txt /tmp/local.txt   # deletions
+comm -13 /tmp/prod.txt /tmp/local.txt   # additions
+```
+
+**Deletions (3) — the prompt must name exactly these:**
+
+| Function | Why it can go |
+|---|---|
+| `waveSyncWorker` | The Wave push is event-driven now: `waveUpsertCustomer` enqueues *and* drains. |
+| `waveScheduledImport` | Folded into `sendDailyJobDigest`, which calls `runWaveDaily()` (`wave/callables.js`). Not lost — still the drain safety net for backed-off and stale-`inflight` jobs. |
+| `sendOverdueJobPrompts` | Merged into `sendUpcomingJobReminders`; its per-recipient ledger, not the cadence, is what guaranteed at-most-once. |
+
+**Additions (3):** `waveRetryFailedJobs`, plus the photo migration's
+`cascadeDeleteAppointmentImages` and `recountAppointmentPictures`.
+
+Net 25 → 25, so **the export COUNT tells you nothing here** — read the two
+lists, not the total.
+
+### 1. The deletion abort
+
+Expect the **non-interactive abort** the 2026-08-08 row documents: the CLI
+releases rules/indexes, uploads the source, then stops with "Aborting because
+deletion cannot proceed in non-interactive mode", leaving prod on
+new-rules + old-functions. Close it:
+
+```bash
+firebase functions:delete waveSyncWorker waveScheduledImport \
+  sendOverdueJobPrompts --region us-central1
+firebase deploy --only functions,firestore:rules,firestore:indexes  # never --force
+```
+
+`functions:delete --force` is **not** `deploy --force` — it only skips the y/n
+prompt for the named functions and touches no index or TTL policy.
+
+### 2. Delete THREE orphaned Cloud Scheduler jobs
+
+Removing a scheduled function does not reliably remove its scheduler entry, and
+**only 3 jobs are free** — leaving these behind bills for three jobs forever and
+silently undoes the consolidation that created them.
+
+Scheduled functions go from **6 to 3** in this deploy (`purgeExpiredHistory`,
+`sendUpcomingJobReminders`, `sendDailyJobDigest` survive):
+
+```bash
+gcloud scheduler jobs list --location us-central1
+# delete any that survive:
+gcloud scheduler jobs delete firebase-schedule-waveSyncWorker-us-central1 \
+  --location us-central1
+gcloud scheduler jobs delete firebase-schedule-waveScheduledImport-us-central1 \
+  --location us-central1
+gcloud scheduler jobs delete firebase-schedule-sendOverdueJobPrompts-us-central1 \
+  --location us-central1
+```
+
+Landing on exactly 3 is the point of the change. Verify the count afterwards.
+
+### 3. `firestore:indexes` and `firestore:rules` are BOTH required
+
+`firestore.indexes.json` carries the new `(status, endTime DESC)` and
+`(clientId, startTime DESC)` composites, the 23 single-field exemptions, and
+the `images` subcollection exemptions. The overdue sweep (now inside
+`sendUpcomingJobReminders`) fails `FAILED_PRECONDITION` until
+`(status, endTime DESC)` reads **Ready**, and the app build must not ship until
+the client-history composite does.
+
+`firestore.rules` carries the photo subcollection's `match /images/{imageId}`
+block and the `pictureCount` guards. **Validate the rules before deploying** —
+they could not be compiled locally (the Firestore emulator needs Java, absent on
+the dev machine), and the new block declares a nested function and calls `get()`
+on the parent. A failed rules release leaves the deploy half-applied.
+
+The CLI will report the `signupCodes` TTL override as unmatched drift and
+correctly refuse to delete it without `--force`; that is expected and must stay
+refused.
+
+### 4. Then the photo migration's own ordering
+
+See "Pending (step 3 of 3): the photo subcollection migration" above —
+backend+rules first, then the backfill, then the app build. The first two have
+run; the cascade trigger must be live before any photo reaches the
+subcollection, and it is.
+
+---
+
 ## Per-release checklist
 
 Copy this into the release PR / notes:
@@ -233,6 +409,57 @@ what production is running.
 
 | 2026-08-04 | `108b410b` | functions, rules, storage | 27 | **Two-way Wave sync (1.43.0+68). No export change** — 27 → 27, diffed against `functions/index.js` before deploying, so no deletion prompt. `waveImportCustomers` now drains the outbox to Wave (`drainForSync`, bounded 20 jobs / 20 s) BEFORE importing, and returns five additive fields (`pushedCreated`/`pushedUpdated`/`pushedPending`/`pushedFailed`/`pushIncomplete`). **Additive only — 1.37.1 parses the import half by name and ignores the rest**, and its Import button simply also pushes now, which the 5-minute `waveSyncWorker` does anyway. No `assertPayloadShape` allowlist changed (still `new Set()`), no `requireString` cap changed, no rules or index change → `firestore:rules,storage` were re-released byte-identical for completeness. **Two data-loss fixes ride along, both pre-existing:** `importCustomers` now takes a `skipClientIds` protect-list from `listOutstandingClientIds` (an import was overwriting a client whose edit was still queued AND re-stamping `wave.lastSyncedHash`, so the pending push then no-opped and the edit vanished with the row reading "synced"); and the import is hash-gated, skipping any client whose stored hash already matches, which cuts a steady-state run from ~650 writes + ~650 `waveUpsertCustomer` invocations to ~0 and stops the app reporting "650 clients updated" after a sync that changed nothing. **`waveScheduledImport` gets the same protect-list** and needed it more — it runs unattended. Deployed without `--force`. Verified post-deploy: 27 live, exact match against the 27 exports (no orphans, no extras), rules + storage released, and zero ERROR entries on any changed function — the only two errors in the window were `redeemSignupCode` rejecting a non-POST rollout probe (correct behaviour, untouched by this change). The "request was not authenticated" warnings on the scheduled/trigger functions are the usual rollout-probe noise, matching the identical cluster at every prior deploy. **App build 1.43.0+68 can ship now** — this had to land first, since against the old backend the "Sync with Wave" button would have been a pure clobbering import. |
 | 2026-08-08 | (release 1.44.0+70, uncommitted at deploy time) | functions, rules, **indexes** | **25** | **The `#compat-1.37.1` retirement — the repo's FIRST deletion deploy** (27 → 25), plus the 2026-08-08 codebase audit and the 1.43.1 Wave heal. **Deleted: `createEmployeeInvite`, `redeemSignupCode`** — the deletion list named exactly those two and nothing else. Gate was owner confirmation that every device is on 1.40+. `redeemSignupCode` was the last unauthenticated callable in the codebase. **The CLI ABORTS on deletion in non-interactive mode** — it released rules and indexes, uploaded the function source, then stopped with "Aborting because deletion cannot proceed in non-interactive mode", leaving prod on new-rules + old-functions. That half-state is safe (the removed grants are unused by any shipped build) but must be closed. Fix is the CLI's own suggestion, `firebase functions:delete <name> --region us-central1`, then re-run the deploy; **`functions:delete --force` is NOT `deploy --force`** — it only skips the y/n prompt for the named functions and touches no index or TTL policy. Record this: any future deploy that removes an export will hit the same abort. **Rules: removals only** — `allow delete` withdrawn from `/users` and `/clients`, the `/signupCodes` block and the 4th `/users` read clause deleted. No cap changed, nothing added, so no shipped write path can be broken. **`firestore:indexes` included** (the `signupCodes` TTL `fieldOverride` was dropped from the file). The CLI reported "1 field override defined in your project that is not present in your indexes file" and **correctly refused to delete it without `--force`** — so the live `signupCodes` TTL policy REMAINS. Left deliberately: the collection was verified empty in prod before the deploy and rules now deny all access, so it reaps nothing and costs nothing. Never `--force` this away (it deleted all 5 live TTL policies in 2026-07-21). **Compatibility check:** every `assertPayloadShape` allowlist and every `requireString`/`optionalString` cap byte-identical to `108b410b` — no narrowing, no new required field. **`completeEmployeeSetup` gained an `email_verified` identity guard** (above the rate limiter). Prod was queried first: **zero `invited` users**, so nobody could be stranded mid-onboarding. It is still a real forward constraint — **do not create an employee account until app build 1.44.0+70 ships**, because the shipped 1.43.x setup screen has no way to send or confirm a verification email. `storage.rules` unchanged since `108b410b` → target omitted. Deployed without `--force`. **Verified post-deploy:** 25 live, exact match against `index.js`'s 25 exports (no orphans, no extras); a confirming `--only functions` re-run reported all 25 "Skipped (No changes detected)", proving prod's source matches local; clean `STARTUP TCP probe succeeded after 1 attempt` on all 25; zero `unexpected-field` and zero `email-not-verified`. The only ERROR entries are 12 `Invalid request, unable to process.` at 21:14:38-53 — two per callable, the Cloud Run rollout probe hitting `onCall` with a non-callable request, the same benign cluster as every prior deploy. **Zero errors after the deploy window.** |
+| 2026-08-11 | `70579d22` | functions, rules, storage | 25 | **Release 1.45.0+72 — closes the 2026-08-08 → 2026-08-11 gap.** No export change (25 → 25, diffed against `functions/index.js` first), so **no deletion prompt and no abort** — the 2026-08-08 row's warning did not apply. What moved is the code behind the existing 25: `changeEmployeeEmail`'s self branch, its non-admin re-auth freshness gate and its 20/hr → 5/hr budget; `travelAlertsEnabled` read BEFORE the Routes call so an opted-out tech costs no estimate and gets the fixed 30-min lead; the multi-day Live Activity skip and the crew-colour parse in `travel_utils.js`; the new internal `day_slice_utils.js` day-scoping behind the widget payload and push text; the single `TERMINAL_STATUSES` owner in `time_utils.js`; and `notifyAdminsOfSelfEmailChange` on the shared active-admins fan-out. **Rules: two additions** — P5's `isAvailabilityOnlyChange` self-service clause on `/users` `allow update`, and `isValidAppointmentSpan` on appointment create/admin-update. The span bound carries a deliberate **+2h DST allowance**: the app counts calendar days against local wall-clock instants while CEL's `duration.value` is absolute, so a flat 14d would have refused the widest booking the form can save for about two weeks each autumn, as an opaque `permission-denied`. `firestore.indexes.json` unchanged since `1c6a949` → **`firestore:indexes` deliberately omitted**, which also keeps the surviving `signupCodes` TTL policy untouched. `storage.rules` unchanged → the CLI skipped its upload and merely re-released it. Deployed without `--force`. Pre-flight: `npm run lint` clean, **902/902 jest** passing. **Verified post-deploy:** all 25 reported "Successful update operation", `functions_list_functions` returns exactly the 25 exports (no orphans, no extras), rules + storage released. Log check found **zero real errors** — the only ERROR/WARNING entries in the window are the recurring `Request has invalid method. GET` / `Invalid request, unable to process.` pairs, the Cloud Run rollout probe hitting `onCall` endpoints, identical to the benign cluster at every prior deploy; a severity≥ERROR query excluding that one class returned an empty set. |
+| 2026-08-11 | `78d89478` | functions, rules, storage | 25 | **Closes the second 2026-08-11 audit — the only backend change since `70579d22` is `maintenance.js`.** No export change (25 → 25, diffed against `functions/index.js` first), so no deletion prompt. The I6 refactor moves `purgeExpiredHistory`'s image-validation decisions into the pure `maintenance_policy.js` sibling, which is what makes them testable at all — `maintenance.js` resolves a Storage bucket at load and throws on `require()` outside the emulator. Behaviour is unchanged: the status gate (only `done`/`cancelled` are ever purged), the images-before-doc ordering, and the no-progress loop termination are the three rules that destroy data if they regress, and all three are now pinned by the new `image_validation_policy.test.js` (212 lines). **No rules change** — both `firestore.rules` and `storage.rules` were already byte-identical to prod, so the CLI reported "already up to date, skipping upload" and merely re-released them. `firestore:indexes` deliberately omitted again (file unchanged since `1c6a949`), which keeps the surviving `signupCodes` TTL policy untouched. Deployed without `--force`. Pre-flight: `npm run lint` clean, **921/921 jest across 41 suites** passing (up from 902 — the new suite). **Verified post-deploy:** all 25 reported "Successful update operation" and `functions_list_functions` returns exactly the 25 exports (no orphans, no extras). Log check found **zero real errors**: `purgeExpiredHistory` itself logged nothing new — a module-load throw would have failed the deploy outright, not merely logged — and every ERROR entry in the deploy window is the same `Invalid request, unable to process.` CORS/https-layer shape as the benign clusters at the 2026-08-04 and 2026-08-08 deploys, i.e. the Cloud Run rollout probe hitting `onCall` endpoints unauthenticated. |
+| 2026-08-14 | `d3e22377` | functions, rules, **indexes** | 25 | **The three-deletion swap + the photo subcollection migration's phase 1.** Deleted `waveSyncWorker`, `waveScheduledImport`, `sendOverdueJobPrompts`; added `waveRetryFailedJobs`, `cascadeDeleteAppointmentImages`, `recountAppointmentPictures` — net 25 → 25, so the count proves nothing and the two lists were diffed against **live prod** (which matched `78d89478`'s exports exactly) before touching anything. **A NEW failure mode, not in this runbook until now: `firebase deploy` ABORTS with `Error: Pass the --force option to deploy functions with a failure policy`.** The two new photo triggers are the first `retry: true` functions to be *newly created* here, and the CLI wants confirmation of the failure policy non-interactively; the 2026-08-08 deletion abort is a *different* abort and this one fires earlier — nothing at all was released on that first attempt. Resolved by **splitting the deploy** rather than reaching for a whole-target `--force`: `firebase deploy --only firestore:rules,firestore:indexes` (no `--force`, so the surviving `signupCodes` TTL override was reported as drift and **correctly refused** — it remains live), then `firebase functions:delete waveSyncWorker waveScheduledImport sendOverdueJobPrompts --region us-central1 --force` to keep the removal explicit and auditable rather than silently absorbed, then `firebase deploy --only functions --force`. **With no firestore target in scope, `--force` cannot reach an index or TTL policy** — the same scoping that makes `functions:delete --force` safe. Record this: any future deploy that ADDS a `retry: true` function hits the same abort. **Compatibility check:** every `assertPayloadShape` allowlist and every `requireString`/`optionalString` cap byte-identical to `78d89478` — no narrowing, no new required field; the one added allowlist belongs to the new `waveRetryFailedJobs`. All three deleted functions are scheduled/server-only with **zero references in `lib/` or `ios/`**, so no shipped build can hit a `not-found`. **Rules: additive** — the photo subcollection's `match /images/{imageId}` block and the `pictureCount` guards; validated clean via the Firebase MCP `firebase_validate_security_rules` *before* deploying (the emulator needs Java, absent on this box — the MCP tool works without it and closes the gap this doc previously flagged as unverifiable locally). **`firestore:indexes` required** — the file gained 166 lines. Pre-flight: `npm run lint` clean, **1100/1100 jest across 46 suites**. **Verified post-deploy:** 3 creates + 22 updates all "Successful", `functions_list_functions` returns exactly the 25 exports (no orphans, no extras). Log check found **zero real errors** — every ERROR entry in the whole retained window (40, back to 2026-08-04) is the same `Invalid request, unable to process.` CORS-layer shape, the Cloud Run rollout probe hitting `onCall`; today's 8 all sit inside the deploy window. **Two indexes were still `CREATING` at completion — `(status, endTime DESC)` and `(clientId, startTime DESC)`, exactly the two this doc names as gating.** The overdue sweep inside `sendUpcomingJobReminders` fails `FAILED_PRECONDITION` and self-heals on its next run until the first is `READY`; **the app build must not ship until the second is.** **NOT DONE in this deploy, both still outstanding:** the 3 orphaned Cloud Scheduler jobs (`gcloud` is not installed on this Windows box — scheduled functions must land on exactly 3, and only 3 are free), and the appointment-images backfill. The client-name and phone-formatting backfills had already been run against prod earlier the same day (504 renamed, 142 reformatted) and must NOT be re-run. |
+| 2026-08-15 | `6d41dd3c` | functions, rules, **indexes** | 25 | **Closes the 2026-08-15 codebase audit (41 findings).** No export change (25 → 25), diffed against **live prod** before touching anything, so **neither known abort fired** — no deletion prompt and no failure-policy abort. `waveUpsertCustomer` moved module (`wave/callables.js` → the new `wave/triggers.js`) but keeps its export name, so it is an UPDATE, not a create; the `retry: true` abort only fires on newly-created ones. **Compatibility check:** every `assertPayloadShape` allowlist byte-identical to `d3e22377`, no new required field, no narrowed cap. The new `requireDocId` helper in `security.js` replaces three restated call sites (`clients.js`, `employee_accounts.js` ×2) at the SAME 128 cap, adding only a `/` reject — no legitimate document id can contain one. **Rules: two WIDENINGS that fix live rejections, one tightening no shipped build can reach, one new cap.** `clientName` on appointments **200 → 401** (it is the DENORMALIZED display name, composed by `ClientRecord.displayName` from two 200-char halves; sized to `personName` it was rejecting whole appointment saves with an opaque `permission-denied`) and client `address` **500 → 533** (`AddressParser.canonicalFrom` joins the 500-char street with the 32-char apt). The tightening adds `resource.data.status != 'cancelled'` to the employee mark-done branch, closing a hole where an assignee could put `done` over `cancelled` and resurrect a cancelled visit as a completed one — verified safe against the shipped build: **1.45.0+72's `DetailsActionBar` already gates on `hasStarted && !isDone && !isCancelled`**, so it never sends that write. **THE ONE ACCEPTED RISK: a new 500-char cap on `clients.addressLine2`.** The DEPLOYED `d3e22377` import wrote that field **uncapped** (`IMPORT_FIELD_CAPS` had no entry for it; this commit adds one), so any prod client doc over 500 chars is now permanently un-updatable from the app. **Prod could not be inspected to confirm none exists** — every Firebase MCP Firestore read fails `The requested 'read_time' cannot be in the future`, because this Windows box's clock runs ahead of Google's (`firebase deploy` sends no `read_time` and is unaffected). Owner accepted the risk on the reasoning that Wave models `addressLine2` as a short peer street line and that rules roll back instantly and cleanly. **If an opaque `permission-denied` ever appears on an ordinary client save, check this field FIRST.** Also added: a declarative `match /appointmentRecountClaims/{appointmentId}` block (`allow read, write: if false`) — there is no `match /{document=**}` catch-all in this file, so the collection was already default-denied and this changes no behaviour. **`firestore:indexes` required** — it adds the `appointmentRecountClaims.expiresAt` TTL policy and a `presence.updatedAt` override. The surviving `signupCodes` TTL override was again reported as drift and **correctly refused** without `--force`; it remains live. `storage.rules` unchanged since `108b410b` → target omitted. Deployed without `--force`. **Pre-flight:** `npm run lint` clean, **1160/1160 jest across 47 suites**; `firestore.rules` validated clean via the Firebase MCP — note the **3 `isAvailabilityOnlyChange` warnings this doc lists as "expected, ignore" are now GONE**, exactly as predicted once P5 wired the function up. **Verified post-deploy:** all 25 reported "Successful update operation" (0 creates, 0 deletions), `functions_list_functions` returns exactly the 25 exports (no orphans, no extras), rules released. Log scan: **zero `unexpected-field`, zero `permission-denied`**, no `Cannot find module`/`SyntaxError`/startup failures. The only ERROR entries in the deploy window are 2 `Invalid request, unable to process.` on `waveRetryFailedJobs` — the same benign Cloud Run rollout probe hitting `onCall` as at every prior deploy (38 of the 40 retained ERROR entries are that one shape). **TWO REAL FAILURES SURFACED THAT PREDATE THIS DEPLOY BY ~8h AND ARE UNRELATED TO IT:** `WAVE-WORKER dead-lettering job` for clients `GAQJI0Ctadf8ppVHbSOE` (02:29:30Z) and `6GKdxhkzWH8HWYjwrolZ` (04:07:42Z), both `WaveApiError` / `errorKind: graphql` / `retryable: false`, so both customer upserts are sitting dead-lettered and will NOT self-heal — run `waveRetryFailedJobs` or investigate the GraphQL rejection. **Still outstanding, unchanged by this deploy:** the 3 orphaned Cloud Scheduler jobs (`gcloud` is not installed on this box) and the appointment-images backfill. |
+| 2026-08-15 | `e84a66fd` | functions, rules, storage | 25 | **The root-cause fix for the two dead-lettered Wave upserts the previous row flagged as open — `functions/wave/` only.** No export change (25 → 25, diffed against `functions/index.js` and against live prod before touching anything), so **neither known abort fired**: no deletion prompt and no failure-policy abort. `retry_policy.js` is a NEW file but an internal module, not an export, so it creates no function. **What was actually wrong: `toCountryCode`/`toProvinceCode` could emit values outside Wave's GraphQL ENUM vocabulary, and that is a permanent kill, not a dropped field.** An unrecognised enum value fails variable coercion, so Wave answers with a *top-level* GraphQL error rather than a per-field `inputErrors` entry — the worker classifies that non-retryable and dead-letters the job, and a `dead` job never retries on its own. Two ways in, both reachable from one typo in one address: `toCountryCode` accepted any `/^[A-Z]{2}$/`, so a province typed into the country box ("ON", "QC") was sent as a country code; and a plain 2-letter province was prefixed `CA-` **unconditionally**, so a US client in "NY" went as the non-existent `CA-NY`. Both are now membership tests against real ISO-3166-1 / ISO-3166-2 sets, the country is resolved FIRST so it decides which country's subdivisions a bare "QC"/"NY" is read against, and a value that isn't a real subdivision is **omitted** — one missing address line beats a client that can never sync again. Also in: `graphql` errors that look transient (internal/timeout/unavailable, which Wave returns on HTTP 200) are now retryable; a rate-limited job gets a 20-attempt budget instead of the ordinary 5, because a rate-limit says nothing about whether the payload can ever succeed and a bulk backfill enqueues hundreds at once; the dead-letter log gains `errorDetail` (PII-free) because `sanitized` flattens every transport failure to "WaveApiError(graphql)" and without it a dead job is undiagnosable. **`waveRetryFailedJobs`' RESPONSE gains a `failed` key** — same null-is-unknown contract as `pushed` — since the drain behind a requeue usually dead-letters the same job again inside the same call, leaving the queue's dead count unchanged while the app, seeing only `requeued`, announced success. **No request-side change anywhere:** every `assertPayloadShape` allowlist and every `requireString` cap is byte-identical to `6d41dd3c`, so no shipped build can be broken by this; the added response key is ignored by any build that doesn't read it, and backend-first ordering is preserved for the build that will. **No rules and no index change** — `firestore.rules` and `storage.rules` were already byte-identical to prod (`"already up to date, skipping upload"`, merely re-released) and `firestore.indexes.json` is untouched, so `firestore:indexes` was deliberately omitted and the surviving `signupCodes` TTL override was never at risk. Deployed without `--force`; no secret prompt (`WAVE_FULL_ACCESS_TOKEN` v1 still the only binding). **Pre-flight:** `npm run lint` clean, **1209/1209 jest across 48 suites** (up from 1160 — the new `wave_retry_policy.test.js` plus mapper and callable cases). **Verified post-deploy:** all 25 reported "Successful update operation" (0 creates, 0 deletions), `firebase functions:list` returns exactly 25 matching the exports, rules + storage released; the two changed surfaces rolled to `waveupsertcustomer-00044-ciq` and `waveretryfailedjobs-00003-kuj`, both `ACTIVE` with startup TCP probes passing on the first attempt, no `Cannot find module`/`SyntaxError`/startup failure. **ACTION LEFT: the two dead-lettered jobs are still dead and will NOT self-heal** — clients `6GKdxhkzWH8HWYjwrolZ` and `GAQJI0Ctadf8ppVHbSOE`, last re-dead-lettered 16:05Z today, before this deploy. They now stand a real chance of succeeding because the payload changed, which was not true at the previous row: press **Settings › Retry failed** (or invoke `waveRetryFailedJobs`) and read the new `failed` count rather than `requeued` to know whether it worked. If they dead-letter a third time, the new `errorDetail` in the `WAVE-WORKER dead-lettering job` log line names the actual GraphQL refusal. **Still outstanding, unchanged by this deploy:** the 3 orphaned Cloud Scheduler jobs, the appointment-images backfill, and the accepted `clients.addressLine2` cap risk from the previous row. |
+| 2026-08-15 | `6b3fcf7c` (merged as `be56f118`) | functions, rules, storage | 25 | **The SECOND Wave fix of the day, and the one that actually unblocks the two dead-lettered upserts — `functions/wave/customers.js` only.** No export change (25 → 25, `functions/index.js` untouched), so neither known abort fired. **Found because the previous row's deploy made it visible:** `errorDetail` on the dead-letter log line turned "WaveApiError(graphql)" into `codes=[NOT_FOUND] fields=[customerPatch]`, i.e. a `waveCustomerId` pointing at a customer that had been **deleted in Wave**. Note what that means for the previous row's diagnosis — the enum-coercion bug was real and worth fixing, but it was NOT what these two jobs were dying of. **Why this class of dead-letter was unrecoverable in a way ordinary ones are not: the offending value is STORED on the doc.** Wave reports a missing patch target as a top-level GraphQL error (so it arrives as the correctly-non-retryable `WaveApiError('graphql')`) or, equivalently, as a `NOT_FOUND` inputError; either way every later push and every "Retry failed" press re-sent the same missing id and failed identically, so the Settings row read "2 clients failed to sync" with no way to clear it. `upsertCustomer` now routes both shapes (`isStaleCustomerLink` / `hasNotFoundInputError`) into the create path **with the identity search FORCED on** — the same route a crashed create takes, and what stops a spurious `NOT_FOUND` minting a duplicate customer instead of relinking. `writeSyncSuccess` needed the matching exception: it sets `waveCustomerId` only on a doc that is still *unlinked* (that is what keeps it idempotent), so the healed link would never have persisted — `replacesLink` is that carve-out, conditioned on the stale id still being the one on the doc, so a link established concurrently is newer, unproven-dead, and wins. Predicates are deliberately narrow (a structured `NOT_FOUND` code, never a text match on Wave's message): this is the one path that REWRITES a client's Wave identity. **No rules, index, payload or secret change** — both rules files were byte-identical to prod and merely re-released, `firestore:indexes` omitted, every `assertPayloadShape` allowlist and `requireString` cap identical to `e84a66fd`. Deployed without `--force`. **Pre-flight:** `npm run lint` clean, **1215/1215 jest across 48 suites** (up 6 — the stale-link cases). **Verified post-deploy:** all 25 "Successful update operation" (0 creates, 0 deletions), `firebase functions:list` returns 25 matching the exports, rules + storage released, `waveUpsertCustomer` rolled to a new revision at 01:05:20Z with its startup TCP probe passing first attempt. **The log scan mattered more than usual here** — this change adds a **module-scope `require("./client")` to `customers.js`**, and a require cycle would surface exactly as a startup failure; the scan for `Cannot find module` / `SyntaxError` / circular-require / any ERROR in the window came back **empty**. (The cycle is genuinely absent: `client.js` requires only `./auth`, lazily.) **Deployed from a tree that was uncommitted on `redesgin` at the time** (`git status` showed the 4 files staged, HEAD at `f83d67d3`), as the `56cfb5e` row once was. The same 4-file change had in fact been committed in parallel as `6b3fcf7c` "touch up" (21:00:56 EDT, minutes before the deploy finished), so the code hash above is that one; `be56f118` is the merge that brought it together with this file's previous row, and its `functions/` tree is byte-identical to `6b3fcf7c`'s — verified with `git diff 6b3fcf7c HEAD -- functions/`. Nothing was deployed that is not in the history; the two hashes are one change. **ACTION LEFT, now with a real recovery path:** press **Settings › Retry failed** once for clients `6GKdxhkzWH8HWYjwrolZ` and `GAQJI0Ctadf8ppVHbSOE` — they relink or recreate instead of failing, where before this deploy the press was guaranteed to fail. Read the `failed` count, not `requeued`. **RESOLVED 01:08Z** — the press landed and both clients are relinked. The log tells it in three presses: 16:05Z requeued 2 → both dead-lettered (pre-`e84a66fd`, no `errorDetail`); 00:55Z requeued 2 → both dead-lettered *with* `errorDetail: codes=[NOT_FOUND] fields=[customerPatch]`, naming the real cause; **01:08Z requeued 2 → no dead-letter lines at all**, followed at 01:08:41/43 by `waveupsertcustomer` + `propagateclientedits`, i.e. `replacesLink` persisting the healed `waveCustomerId` and the re-fired trigger returning at rule 1 on the unchanged hash. **Verifying a Wave retry without Firestore access: the signal is the ABSENCE of a `WAVE-WORKER dead-lettering job` line after `WAVE-RETRY requeued`** — `npx firebase functions:log --only waveRetryFailedJobs` is enough. **Still outstanding:** the 3 orphaned Cloud Scheduler jobs and the accepted `clients.addressLine2` cap risk; the appointment-images backfill ran later the same day (see the migration section above). |
+| 2026-08-16 | (follow-up audit pass, uncommitted at deploy time; tree = `be8e0441` + the audit diff) | **indexes** (separately, first), then functions, rules, storage | 25 | **Closes the 2026-08-16 follow-up codebase audit (28 findings).** No export change (25 → 25, diffed against **live prod** via `functions_list_functions` before touching anything, not against this repo's docs), so **no deletion prompt and no abort**; all 25 reported `Successful update operation`. `firestore.rules`/`storage.rules` were UNCHANGED and re-published only to confirm prod matches the repo — the CLI duly said "latest version of firestore.rules already up to date, skipping upload". **Indexes were deployed FIRST, in their own command,** because `rotateAssignedImageTokens` (the new S1 control) needs a new `(employeeIds CONTAINS, endTime DESC)` composite and a missing index fails `FAILED_PRECONDITION` straight into that module's swallow — i.e. a security control that silently stops running. Verified `READY` before reporting done. Backend changes: S1 Storage download-token rotation on deactivate (`appointment_image_tokens.js`, called from `syncUsersByUid`, whose `timeoutSeconds` rises to 300); B1 the nightly digest's cap was INVERTED — ascending `startTime` from a floor 15 days in the past kept the OLDEST open jobs and discarded tomorrow's, so past ~1000 stale open jobs every crew would get no digest at all; S3 the Places proxy no longer logs a 200-char upstream body (it echoed the address being typed); I4/I6 reachability is now checked before the work in the digest and in `_deliverRecipientOnce`; I11 `sendToActiveAdmins` bounded + cache-seeded; I8/I16 concurrency; I15/I1 `bridge_policy.js` extracted and tested; I2 `scripts/_batch.js`. **Known benign drift, deliberately NOT cleaned:** the CLI reports "1 field override defined in your project that is not present in your firestore indexes file" — it is the orphaned `signupCodes/expiresAt` TTL policy left over from the 2026-08-08 `#compat-1.37.1` retirement, on a collection nothing writes. **Never pass `--force` to clear it** (that deletes ALL drifting overrides, which is how the 5 live TTL policies were lost in 2026-07-21); delete it in the console if it is ever worth the noise. Post-deploy verification: 25 live and matching `functions/index.js`, zero WARNING/ERROR log entries newer than the deploy, `sendUpcomingJobReminders` on revision `-00038-fod` ACTIVE with a clean startup probe. |
+
+### OUTSTANDING: `functions/` is AHEAD of prod as of 1.46.2+75
+
+The 2026-08-16 row above deployed the follow-up audit. The release pass cut
+straight after it (**1.46.2+75**) then changed `functions/` again, so prod is
+running older bodies than the repo — the same shape as the three-day gap the
+deployment-status note in `docs/CLOUD_FUNCTIONS.md` warns about, and again with
+**no export change (25 → 25)**, so a count check looks clean.
+
+**One of these is a security fix that has never actually run in prod.**
+`rotateAssignedImageTokens` resolved the Storage bucket into a local while
+`rotatePictures` reads it off `deps`, so on the only path production takes the
+bucket arrived `undefined`; every object rotation threw into that module's own
+swallow and the control logged "nothing rotated" while rotating nothing. Every
+test injected a bucket, so the branch was covered nowhere. It is fixed and
+pinned by a new case, but **the download tokens of anyone deactivated since
+2026-08-16 were NOT rotated** — re-running a deactivation (flip the person to
+`active` and back) is what re-fires the trigger for them.
+
+**A second gap in the same control is closed in this release.** The rotation's
+query orders by `endTime`, and Firestore omits documents missing the ordered
+field — so an appointment with no `endTime` (legacy and console-written docs
+reach the server; `day_slice_utils.js` carries its own branch for them) was
+never reached and kept its permanent tokens, with nothing logging it. A second
+**unordered backstop pass** now covers those: same cap, served by the automatic
+`employeeIds` array index, so **still no index change**.
+
+Also pending, all `functions/`-only and behaviour-preserving apart from the
+above: `syncUsersByUid` now runs the rotation **after** the Auth disable +
+`revokeRefreshTokens` rather than before (ordered first, a slow rotation
+delayed — or, on a timeout, skipped — the revocation the branch exists for);
+the rotation's photo loop and `runOnSiteFlipPass` are chunked rather than flat
+`Promise.all`s; `_pruneExpired` uses the `_chunk` helper already in its file.
+`firestore.rules`, `storage.rules` and `firestore.indexes.json` are
+**unchanged** since the 2026-08-16 row, so those targets may be omitted.
+
+**One cost claim was investigated and found overstated — recorded so it is not
+re-litigated.** The rotation's parent writes fire up to 500
+`notifyAppointmentChanges` invocations, but each returns before any Firestore
+read (a `pictures`-only diff yields no events, and `endCardOnTerminal` finds no
+targets in memory), and `recountAppointmentPictures` is **not** fired by them at
+all — it triggers on the images subcollection, not the parent. So the fan-out is
+invocation count only, comfortably inside the free tier. The property that makes
+it cheap is now pinned by a test rather than assumed.
 
 ### The `#compat-1.37.1` shim — RETIRED 2026-08-08
 

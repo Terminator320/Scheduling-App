@@ -7,7 +7,12 @@
  *
  * Semantics (mirrors the app's own rules):
  *   - `clientName` / `clientPhone` are always overwritten with the client's
- *     current values.
+ *     current values. `clientName` is the DISPLAY name — the stored
+ *     `clients/{id}.name` carries the phone number on the end for Wave's
+ *     benefit, and `clientDisplayName` (`client_name_utils.js`) takes it back
+ *     off. Without that strip a client edit would fan "Marc Tremblay
+ *     (514) 555-1234" onto every future appointment card, disagreeing with
+ *     the clean name the app itself writes at booking time.
  *   - `address` follows the client only when the appointment's stored address
  *     still equals the client's previous (non-empty) address — a differing
  *     or empty address is treated as custom/none and left untouched.
@@ -32,6 +37,7 @@
 
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const {MAX_APPOINTMENT_SPAN_MS, hasWorkLeft} = require("./time_utils");
+const {clientDisplayName} = require("./client_name_utils");
 
 /** Firestore WriteBatch hard limit. */
 const BATCH_LIMIT = 500;
@@ -47,19 +53,6 @@ const PAGE_SIZE = BATCH_LIMIT;
 function adminFirestore() {
   // eslint-disable-next-line global-require
   return require("firebase-admin/firestore");
-}
-
-/**
- * Display name for a client doc, mirroring the Flutter model's fallback:
- * `name` when non-blank, else the legacy `businessName`.
- * @param {!Object} data Client document fields.
- * @return {string}
- */
-function clientDisplayName(data) {
-  const d = data || {};
-  const name = typeof d.name === "string" ? d.name.trim() : "";
-  if (name) return name;
-  return typeof d.businessName === "string" ? d.businessName.trim() : "";
 }
 
 /**
@@ -165,8 +158,21 @@ async function propagateClientChange(clientId, before, after, deps = {}) {
   const nowMs = now.getTime();
   const queryFloor = new Date(nowMs - MAX_APPOINTMENT_SPAN_MS);
 
+  // This loop runs to EXHAUSTION on purpose and must NOT gain a total cap: a
+  // repeat series pre-books up to 120 occurrences out to a five-year horizon,
+  // and truncating would leave stale denormalized `clientName`/`clientPhone`
+  // on the future visits this trigger exists to keep correct. What it does
+  // instead is overlap and report — see `pages` in the log line below, which
+  // is what makes a pathological client visible.
   let updated = 0;
+  let pages = 0;
   let cursor = null;
+  // The previous page's commit, deliberately left in flight while the next
+  // page is fetched. The two touch different documents, so there is nothing
+  // to serialise for, and at most one commit is ever outstanding. It is
+  // settled through the same `Promise.all` that awaits the fetch, so a
+  // rejection always has a handler attached in the tick it was created in.
+  let inFlight = null;
   for (;;) {
     let query = db.collection("appointments")
         .where("clientId", "==", clientId)
@@ -174,9 +180,11 @@ async function propagateClientChange(clientId, before, after, deps = {}) {
         .orderBy("startTime")
         .limit(PAGE_SIZE);
     if (cursor) query = query.startAfter(cursor);
-    const snap = await query.get();
+    const [snap] = await Promise.all([query.get(), inFlight]);
+    inFlight = null;
     const docs = snap && Array.isArray(snap.docs) ? snap.docs : [];
     if (docs.length === 0) break;
+    pages += 1;
 
     const batch = db.batch();
     let ops = 0;
@@ -189,17 +197,24 @@ async function propagateClientChange(clientId, before, after, deps = {}) {
       batch.update(doc.ref, patch);
       ops += 1;
     }
-    if (ops > 0) await batch.commit();
-    updated += ops;
+    if (ops > 0) {
+      inFlight = batch.commit();
+      updated += ops;
+    }
 
     if (docs.length < PAGE_SIZE) break;
     cursor = docs[docs.length - 1];
   }
+  await inFlight;
 
   if (updated > 0) {
     logger.info("propagateClientEdits: appointments updated", {
       clientId,
       updated,
+      // One edit on a client carrying several live series reads hundreds to
+      // low-thousands of documents. Uncapped by design, so the page count is
+      // the only signal that says so.
+      pages,
       fields: Object.keys(change).filter((k) =>
         change[k] !== null && change[k] !== undefined),
     });

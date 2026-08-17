@@ -58,10 +58,12 @@ class AppRoutes {
         final args = settings.arguments as DashboardArgs?;
         return AppPageRoute(
           settings: settings,
-          // This is an admin-only screen, so default isAdmin to true if it's
-          // pushed without args.
+          // Defaults CLOSED like every other appointment surface: this flag
+          // becomes the cards' `showActions`, and a `true` default is what
+          // once showed employees Edit/Cancel/Delete affordances the rules
+          // then rejected. An argless push is a caller bug, not a licence.
           builder: (_) => DashboardScreen(
-            isAdmin: args?.isAdmin ?? true,
+            isAdmin: args?.isAdmin ?? false,
             employeeId: args?.employeeId ?? '',
             userName: args?.userName,
             email: args?.email,

@@ -1,12 +1,22 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/presence/domain/live_map_aggregator.dart';
 import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
 
+/// Kept warm on the same grace as the appointment range streams.
+///
+/// Its other consumer is the nav drawer's Live Map badge, and a closed
+/// `DrawerController` doesn't build its child — so without the grace this
+/// `collectionGroup('presence')` listener was established fresh on every
+/// drawer open and torn down on close, purely to render one number.
 final allPresenceStreamProvider = StreamProvider.autoDispose<List<PresenceFix>>(
-  (ref) => ref.watch(presenceRepositoryProvider).watchAllPresence(),
+  (ref) {
+    keepWarmWithGrace(ref);
+    return ref.watch(presenceRepositoryProvider).watchAllPresence();
+  },
 );
 
 final liveMapClockProvider = Provider<DateTime Function()>(

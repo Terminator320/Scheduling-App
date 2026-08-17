@@ -2,6 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
 
 part 'client_record.freezed.dart';
 
@@ -104,14 +105,18 @@ abstract class ClientRecord with _$ClientRecord {
           .whereType<Map<Object?, Object?>>()
           .map((c) => ClientContact.fromMap(Map<String, dynamic>.from(c)))
           .toList(),
-      noFixedAddress: (data['noFixedAddress'] as bool?) ?? false,
-      archived: (data['archived'] as bool?) ?? false,
+      // `== true`, not a cast: this factory maps a live snapshot stream, so
+      // one console-written `"false"` would throw for the whole page rather
+      // than for the field. Same reasoning as `ClientType.fromRaw` below.
+      noFixedAddress: data['noFixedAddress'] == true,
+      archived: data['archived'] == true,
       type: ClientType.fromRaw(data['type']?.toString()),
       accessNotes: (data['accessNotes'] ?? '').toString(),
       onSiteManager: (data['onSiteManager'] ?? '').toString(),
       billingTerms: (data['billingTerms'] ?? '').toString(),
-      autoInvoice: (data['autoInvoice'] as bool?) ?? false,
-      jobCount: (data['jobCount'] as num?)?.toInt(),
+      autoInvoice: data['autoInvoice'] == true,
+      // Function-owned, so the app never writes it — but the console can.
+      jobCount: firestoreInt(data['jobCount']),
       createdAt: firestoreDateTime(data['createdAt']),
       waveCustomerId: data['waveCustomerId']?.toString(),
       waveSyncState: (wave?['syncState'] ?? '').toString(),
@@ -144,5 +149,20 @@ abstract class ClientRecord with _$ClientRecord {
     'autoInvoice': autoInvoice,
   };
 
-  String get displayName => name;
+  /// The clean name for every in-app surface — the stored [name] IS the
+  /// client's phone number, because that is what Wave shows as the customer,
+  /// so nothing renders it. A business shows its business name, a person their
+  /// first/last halves. See [ClientNamePolicy].
+  ///
+  /// This is also what gets denormalized onto an appointment as `clientName`,
+  /// so a card, a push and the Live Activity all say "Marc Tremblay".
+  String get displayName => ClientNamePolicy.displayFor(
+    name: name,
+    phone: phone,
+    mobile: mobile,
+    firstName: firstName,
+    lastName: lastName,
+    businessName: businessName,
+    type: type,
+  );
 }

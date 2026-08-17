@@ -76,7 +76,7 @@ class DashboardHero extends StatelessWidget {
               text: '$total ',
               style: theme.textTheme.headlineLarge?.copyWith(
                 color: scheme.onPrimary,
-                fontWeight: FontWeight.w800,
+                fontWeight: FontWeight.w700,
               ),
               children: [
                 TextSpan(

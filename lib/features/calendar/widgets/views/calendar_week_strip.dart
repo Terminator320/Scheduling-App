@@ -1,9 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
+import 'package:scheduling/features/calendar/widgets/views/calendar_day_circle.dart';
 
 /// Design metrics (`03-screens-schedule.md`). 1.0-scale FLOORS — the real
 /// height derives from the scaled day number, exactly like the month grid.
@@ -43,11 +44,10 @@ class CalendarWeekStrip extends StatelessWidget {
     MediaQuery.textScalerOf(context).scale(14.5) * 2,
   );
 
-  /// Painted height including the leading gap, so the collapse can size its
-  /// spacer against the grid it replaces.
-  static double heightFor(BuildContext context) =>
-      AppSpacing.sp8 + _bodyHeight(context);
-
+  /// The painted body height, excluding the leading gap. Self-sizing on
+  /// purpose: the strip rises inside the header's `AnimatedSwitcher` and the
+  /// two-viewport collapse (P2) has no vacated extent to hold, so nothing
+  /// outside this widget needs to predict how tall it will be.
   static double _bodyHeight(BuildContext context) => math.max(
     _kStripCellMinHeight,
     _circleSize(context) +
@@ -125,7 +125,7 @@ class _StripCell extends StatelessWidget {
           '${day.month.toString().padLeft(2, '0')}-'
           '${day.day.toString().padLeft(2, '0')}',
         ),
-        onTap: () => onTap(DateTime(day.year, day.month, day.day)),
+        onTap: () => onTap(day.dateOnly),
         radius: circleSize,
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -143,9 +143,10 @@ class _StripCell extends StatelessWidget {
               width: circleSize,
               height: circleSize,
               alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected ? scheme.primary : null,
+              decoration: calendarDayCircleDecoration(
+                scheme: scheme,
+                isSelected: isSelected,
+                showTodayRing: isToday,
               ),
               child: Text(
                 '${day.day}',
@@ -155,11 +156,7 @@ class _StripCell extends StatelessWidget {
                   fontWeight: isSelected || isToday
                       ? FontWeight.w700
                       : FontWeight.w500,
-                  color: isSelected
-                      ? scheme.onPrimary
-                      : isToday
-                      ? theme.palette.primaryAccent
-                      : scheme.onSurface,
+                  color: isSelected ? scheme.onPrimary : scheme.onSurface,
                 ),
               ),
             ),

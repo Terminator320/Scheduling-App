@@ -20,8 +20,6 @@ class AppSearchBar extends StatelessWidget implements PreferredSizeWidget {
   /// The field itself (text + content padding + border) at text scale 1.0.
   static const double _fieldHeight = 44;
 
-  static const double preferredHeight = _verticalMargins + _fieldHeight;
-
   final ValueChanged<String>? onChanged;
 
   /// Placeholder shown in the field. Defaults to the localized "Search..." string.

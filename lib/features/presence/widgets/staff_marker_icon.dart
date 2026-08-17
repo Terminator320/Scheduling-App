@@ -14,6 +14,20 @@ import 'package:scheduling/shared/widgets/primitives/name_initials.dart';
 class StaffMarkerIconRenderer {
   StaffMarkerIconRenderer();
 
+  /// LRU bound on [_cache].
+  ///
+  /// Not a leak — the key space is roster × ~4 variants — but unbounded by
+  /// construction, and the renderer is a field of `_LiveMapScreenState` while
+  /// the Live map is a hub `IndexedStack` tab, so it survives the whole
+  /// session. At ~10-15 KB a PNG that is ~3 MB at 50 staff and ~12 MB at the
+  /// 500-doc presence cap. The photo cache one feature over is byte-budgeted
+  /// for exactly this reason; entries here are near enough the same size that
+  /// a count is the simpler equivalent.
+  static const int _maxEntries = 64;
+
+  /// Insertion-ordered, so the oldest key is `_cache.keys.first` — which is
+  /// what makes the eviction below an LRU without a second structure. A cache
+  /// HIT re-inserts, so a marker that is still on screen keeps its place.
   final Map<String, Future<BitmapDescriptor>> _cache = {};
 
   Future<BitmapDescriptor> resolve({
@@ -29,8 +43,13 @@ class StaffMarkerIconRenderer {
         '$initials|${color.toARGB32()}|$selected|'
         '${ringColor.toARGB32()}|'
         '${haloColor.toARGB32()}|${devicePixelRatio.toStringAsFixed(2)}';
-    final cached = _cache[key];
-    if (cached != null) return cached;
+    final cached = _cache.remove(key);
+    if (cached != null) {
+      // Re-inserted at the end so a marker still on screen is never the one
+      // evicted.
+      _cache[key] = cached;
+      return cached;
+    }
 
     final future = _buildDescriptor(
       name: name,
@@ -41,6 +60,9 @@ class StaffMarkerIconRenderer {
       devicePixelRatio: devicePixelRatio,
     );
     _cache[key] = future;
+    while (_cache.length > _maxEntries) {
+      _cache.remove(_cache.keys.first);
+    }
     // Evict a failed render so the next resolve retries, but only if this exact future is still cached.
     unawaited(
       future.then<void>(

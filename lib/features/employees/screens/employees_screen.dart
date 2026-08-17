@@ -274,7 +274,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
       if (next is! AsyncError || previous is AsyncError) return;
       ref
           .read(loggerProvider)
-          .warn('allUsersStreamProvider error', next.error, next.stackTrace);
+          .warn('EMP-LOAD allUsersStreamProvider error', next.error, next.stackTrace);
     });
     final selected = _liveSelectedEmployee();
     return FeatureTourHost(

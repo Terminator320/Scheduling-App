@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
@@ -41,7 +42,7 @@ class AccountDeletionService {
     }
     try {
       final credential = EmailAuthProvider.credential(
-        email: email.trim().toLowerCase(),
+        email: normalizeEmail(email),
         password: password.trim(),
       );
       await user.reauthenticateWithCredential(credential);

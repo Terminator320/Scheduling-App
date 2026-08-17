@@ -228,6 +228,29 @@ describe("upsertCustomer no-op", () => {
     expect(ref.updates).toHaveLength(0);
   });
 
+  test("a doc with no lastSyncedHash is left alone", async () => {
+    // Nothing has demonstrably reached Wave, so there is no evidence the
+    // pending flag is stale — healing here would claim a push that never
+    // happened. Only reachable on a doc linked out-of-band.
+    const data = {
+      ...CLIENT,
+      waveCustomerId: "wave-1",
+      wave: {syncState: "pending"},
+    };
+    const ref = clientRef(data);
+    const result = await upsertCustomer("c1", {
+      db: upsertDb(ref), graphql: graphqlSeq(patchOk("wave-1")),
+      businessId: "biz-1", now,
+    });
+
+    // No hash to match, so this is a real patch rather than a no-op — and the
+    // heal never runs.
+    expect(result).toEqual({status: "patched", waveCustomerId: "wave-1"});
+    expect(ref.updates).not.toContainEqual(
+        {"wave.syncState": "synced", "wave.syncError": null},
+    );
+  });
+
   test("a doc deleted during the no-op is not resurrected", async () => {
     const hash = mappedFieldsHash(CLIENT);
     const data = {
@@ -275,6 +298,150 @@ describe("upsertCustomer patch", () => {
     expect(u["wave.syncError"]).toBeNull();
     expect(u).not.toHaveProperty("waveCustomerId");
   });
+});
+
+// ---------------------------------------------------------------------------
+// upsertCustomer — the linked customer is GONE from Wave
+// ---------------------------------------------------------------------------
+
+// Observed in prod 2026-08-15: two clients whose `waveCustomerId` pointed at a
+// deleted Wave customer. `customerPatch` answers NOT_FOUND, which the retry
+// taxonomy calls non-retryable, so the job dead-lettered — and because the
+// offending id is STORED, every later push and every "Retry failed" press
+// re-sent it and failed identically. Permanently unsyncable, with the Settings
+// row reading "2 clients failed to sync" forever.
+describe("upsertCustomer stale link", () => {
+  const notFoundThrow = () => new WaveApiError(
+      "graphql", "Wave GraphQL errors: not found",
+      [{message: "not found", extensions: {code: "NOT_FOUND"}}],
+  );
+
+  const listOnePage = (nodes) => ({
+    business: {
+      customers: {
+        pageInfo: {currentPage: 1, totalPages: 1, totalCount: nodes.length},
+        edges: nodes.map((node) => ({node})),
+      },
+    },
+  });
+
+  test("a NOT_FOUND patch relinks to the identity match, never duplicates",
+      async () => {
+        const data = {
+          ...CLIENT,
+          waveCustomerId: "wave-gone",
+          wave: {syncState: "error", lastSyncedHash: "stale-hash"},
+        };
+        const ref = clientRef(data);
+        const graphql = graphqlSeq(
+            notFoundThrow(),
+            listOnePage([{
+              id: "wave-real",
+              name: "Acme Corp",
+              email: "jane@acme.com",
+              isArchived: false,
+            }]),
+            patchOk("wave-real"),
+        );
+
+        const result = await upsertCustomer("c1", {
+          db: upsertDb(ref), graphql, businessId: "biz-1", now,
+        });
+
+        expect(result).toEqual({status: "linked", waveCustomerId: "wave-real"});
+        // The identity search is what stops a spurious NOT_FOUND minting a
+        // second customer for a client that already has one.
+        expect(ref.updates[0].waveCustomerId).toBe("wave-real");
+      });
+
+  test("no identity match → creates and REPLACES the dead link", async () => {
+    // The write-back guard exists to keep a create from stomping an existing
+    // link. A link we have just proved dead is the one case that must win, or
+    // the doc keeps the missing id and the next push fails the same way.
+    const data = {
+      ...CLIENT,
+      waveCustomerId: "wave-gone",
+      wave: {syncState: "error", lastSyncedHash: "stale-hash"},
+    };
+    const ref = clientRef(data);
+    const graphql = graphqlSeq(
+        notFoundThrow(), listOnePage([]), createOk("wave-new"),
+    );
+
+    const result = await upsertCustomer("c1", {
+      db: upsertDb(ref), graphql, businessId: "biz-1", now,
+    });
+
+    expect(result).toEqual({status: "created", waveCustomerId: "wave-new"});
+    expect(ref.updates[0].waveCustomerId).toBe("wave-new");
+    expect(ref.updates[0]["wave.syncState"]).toBe("synced");
+  });
+
+  test("a link changed concurrently is left alone, not replaced", async () => {
+    // Only the id we PROVED dead may be overwritten. Another writer's link is
+    // newer and unproven, so it wins.
+    const data = {...CLIENT, waveCustomerId: "wave-gone"};
+    const fresh = {...CLIENT, waveCustomerId: "wave-concurrent"};
+    const ref = clientRef(data, fresh);
+    const graphql = graphqlSeq(
+        notFoundThrow(), listOnePage([]), createOk("wave-new"),
+    );
+
+    await upsertCustomer("c1", {
+      db: upsertDb(ref), graphql, businessId: "biz-1", now,
+    });
+
+    expect(ref.updates[0]).not.toHaveProperty("waveCustomerId");
+  });
+
+  test("the same verdict from an inputError takes the same route", async () => {
+    // Which shape Wave reports it in is Wave's choice; missing one leaves the
+    // client just as stuck.
+    const data = {...CLIENT, waveCustomerId: "wave-gone"};
+    const ref = clientRef(data);
+    const graphql = graphqlSeq(
+        patchFail([{code: "NOT_FOUND", message: "gone", path: ["id"]}]),
+        listOnePage([]),
+        createOk("wave-new"),
+    );
+
+    const result = await upsertCustomer("c1", {
+      db: upsertDb(ref), graphql, businessId: "biz-1", now,
+    });
+
+    expect(result).toEqual({status: "created", waveCustomerId: "wave-new"});
+    expect(ref.updates[0].waveCustomerId).toBe("wave-new");
+  });
+
+  test("an ordinary rejection still dead-letters — no unlink", async () => {
+    // The heal must stay narrow: it rewrites a client's Wave link, so anything
+    // short of a proved-missing customer keeps the old, correct behaviour.
+    const data = {...CLIENT, waveCustomerId: "wave-1"};
+    const ref = clientRef(data);
+    const graphql = graphqlSeq(
+        patchFail([{code: "INVALID_EMAIL", message: "bad", path: ["email"]}]),
+    );
+
+    await expect(upsertCustomer("c1", {
+      db: upsertDb(ref), graphql, businessId: "biz-1", now,
+    })).rejects.toBeInstanceOf(WaveValidationError);
+    expect(graphql).toHaveBeenCalledTimes(1);
+    expect(ref.updates[0]["wave.syncState"]).toBe("error");
+  });
+
+  test("a transport error is rethrown untouched, never read as a dead link",
+      async () => {
+        const data = {...CLIENT, waveCustomerId: "wave-1"};
+        const ref = clientRef(data);
+        const graphql = graphqlSeq(
+            new WaveApiError("network", "socket hang up"),
+        );
+
+        await expect(upsertCustomer("c1", {
+          db: upsertDb(ref), graphql, businessId: "biz-1", now,
+        })).rejects.toBeInstanceOf(WaveApiError);
+        expect(graphql).toHaveBeenCalledTimes(1);
+      });
 });
 
 // ---------------------------------------------------------------------------

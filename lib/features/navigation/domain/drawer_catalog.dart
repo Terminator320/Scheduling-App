@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' show Color, IconData, Icons;
 
 import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 /// One labelled block of drawer rows.
@@ -33,7 +34,9 @@ List<DrawerGroup> drawerGroups({required bool isAdmin}) => [
     ),
   (
     title: (l10n) => l10n.nav_groupAccount,
-    // PushedDestination.myDetails joins here in P5.
+    // My details is NOT a drawer row: P5 landed it inside Settings, which is
+    // where its two grants (own emergency contact, self-service availability)
+    // sit beside the rest of a person's own preferences.
     rows: [PushedDestination.settings],
   ),
 ];
@@ -75,18 +78,15 @@ IconData drawerRowIcon(AppDestination destination) => switch (destination) {
 /// so a call site must resolve them through `crewColorOf` to get the dark
 /// lift — never paint the stored value directly.
 ///
-/// Deliberately literals rather than `AppColors.crewPalette[n]`, even though
-/// each one matches an entry exactly: that list is the pool employee colours
-/// are ASSIGNED from, and indexing it here would mean reordering it (a normal
-/// change for staff colours) silently repaints the whole nav drawer. Same
-/// hues, no coupling.
+/// The eight `nav*` tokens are a SEPARATE palette from `AppColors.crewPalette`
+/// on purpose — see the note beside them in `design_tokens.dart`.
 Color drawerDotColor(AppDestination destination) => switch (destination) {
-  HubTab.calendar => const Color(0xFF005CC8),
-  PushedDestination.dayRoute => const Color(0xFFD61F3A),
-  HubTab.liveMap => const Color(0xFF00A5C4),
-  HubTab.employees => const Color(0xFF0E9B6E),
-  HubTab.clients => const Color(0xFF7A3FF2),
-  PushedDestination.dashboard => const Color(0xFFE08A00),
-  PushedDestination.history => const Color(0xFFC43F8E),
-  PushedDestination.settings => const Color(0xFF5A6B85),
+  HubTab.calendar => AppColors.navCalendar,
+  PushedDestination.dayRoute => AppColors.navDayRoute,
+  HubTab.liveMap => AppColors.navLiveMap,
+  HubTab.employees => AppColors.navTeam,
+  HubTab.clients => AppColors.navClients,
+  PushedDestination.dashboard => AppColors.navDashboard,
+  PushedDestination.history => AppColors.navHistory,
+  PushedDestination.settings => AppColors.navSettings,
 };

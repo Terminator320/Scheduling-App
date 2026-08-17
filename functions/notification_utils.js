@@ -25,6 +25,8 @@ const {liveActivityCtx} = require("./live_activity_utils");
 const {
   toMillis,
   MAX_APPOINTMENT_SPAN_MS,
+  isCancelledStatus,
+  isCompletedStatus,
 } = require("./time_utils");
 const {
   buildNotificationMessage,
@@ -33,12 +35,14 @@ const {
 
 const {
   DAY_MS,
-  OVERDUE_QUERY_WINDOW_MS,
+  OVERDUE_LOOKBACK_MS,
   OVERDUE_SWEEP_MAX,
+  DIGEST_SWEEP_MAX,
   WIDGET_PAYLOAD_MAX_BYTES,
   OPEN_STATUSES,
   CHANGE_RECIPIENT_ROLES,
   TIMED_RECIPIENT_ROLES,
+  ADMIN_RECIPIENT_ROLES,
   ledgerBody,
   toIdList,
   nowMillis,
@@ -52,6 +56,62 @@ const {
   recordOf: _record,
   contextFor: _contextFor,
 } = require("./notification_policy");
+
+/**
+ * Reads (and caches) one recipient's user doc plus their live token docs.
+ *
+ * Split out of [sendToEmployee] so a caller can ask "can this push reach
+ * anyone?" BEFORE paying for the work that composes it — see the gate in
+ * [handleAppointmentWrite]. Both go through the same cache entry, so asking
+ * costs nothing extra: the send that follows reuses the reads made here.
+ *
+ * @param {!Object} deps `{db}`.
+ * @param {string} employeeDocId users doc id.
+ * @param {!Map<string, {user: ?Object, tokenDocs: ?Array<!Object>}>=} cache
+ * @return {!Promise<{user: ?Object, tokenDocs: ?Array<!Object>}>}
+ */
+async function _loadRecipient(deps, employeeDocId, cache) {
+  const {db} = deps;
+  const userRef = db.collection("users").doc(employeeDocId);
+  let entry = cache && cache.get(employeeDocId);
+  if (!entry) {
+    const userSnap = await userRef.get();
+    const user = userSnap.exists ? (userSnap.data() || {}) : null;
+    entry = {user, tokenDocs: null};
+    if (cache) cache.set(employeeDocId, entry);
+  }
+  if (!entry.user) return entry;
+  // Tokens are read lazily and then cached beside the user. A `null` means "not
+  // fetched yet", distinct from `[]` = "fetched, none registered" — which is
+  // what lets a pass that only needed the user doc (the travel sweep's prefs
+  // read) seed this cache without paying for a tokens read it may never use.
+  if (entry.tokenDocs == null) {
+    const tokensSnap = await userRef.collection("fcmTokens").get();
+    entry.tokenDocs = (tokensSnap && tokensSnap.docs) || [];
+  }
+  return entry;
+}
+
+/**
+ * Whether a push of `roles` can actually reach a loaded recipient — the
+ * server-side filter to active accounts of an allowed role that hold at least
+ * one live token. The ONE owner of that test; a caller gating ahead of a send
+ * must ask this rather than restating it, or the gate and the send can drift
+ * on who counts as reachable.
+ *
+ * @param {{user: ?Object, tokenDocs: ?Array<!Object>}} entry From
+ *   [_loadRecipient].
+ * @param {!Set<string>=} roles Allowed recipient roles (default employees
+ *   only).
+ * @return {boolean}
+ */
+function _canReachRecipient(entry, roles) {
+  const {user, tokenDocs} = entry || {};
+  if (!user) return false;
+  const allowed = roles || CHANGE_RECIPIENT_ROLES;
+  if (!allowed.has(user.role) || user.status !== "active") return false;
+  return ((tokenDocs && tokenDocs.length) || 0) > 0;
+}
 
 /**
  * Sends one localized message to every live token of an active employee, then
@@ -79,24 +139,11 @@ const {
  */
 async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
     cache, augmentData) {
-  const {db, messaging, logger} = deps;
-  const userRef = db.collection("users").doc(employeeDocId);
+  const {messaging, logger} = deps;
 
-  let entry = cache && cache.get(employeeDocId);
-  if (!entry) {
-    const userSnap = await userRef.get();
-    const user = userSnap.exists ? (userSnap.data() || {}) : null;
-    const tokensSnap = user ?
-      await userRef.collection("fcmTokens").get() : null;
-    entry = {user, tokenDocs: (tokensSnap && tokensSnap.docs) || []};
-    if (cache) cache.set(employeeDocId, entry);
-  }
-  const {user, tokenDocs} = entry;
-  if (!user) return 0;
-  // Recipients are filtered server-side to active accounts of an allowed role.
-  const allowed = roles || CHANGE_RECIPIENT_ROLES;
-  if (!allowed.has(user.role) || user.status !== "active") return 0;
-  if (tokenDocs.length === 0) return 0;
+  const entry = await _loadRecipient(deps, employeeDocId, cache);
+  if (!_canReachRecipient(entry, roles)) return 0;
+  const {tokenDocs} = entry;
 
   const messages = tokenDocs.map((doc) => {
     const locale = (doc.data() || {}).locale === "fr" ? "fr" : "en";
@@ -175,11 +222,37 @@ async function sendToEmployee(deps, employeeDocId, data, buildMsg, roles,
 
 
 /**
- * Reads an employee's appointments in the widget lookahead window
- * ([today 00:00 Toronto, +WIDGET_LOOKAHEAD_DAYS days)), so the change push
- * can carry a fresh widget payload (served by the existing `(employeeIds
- * CONTAINS, startTime ASC)` index). Never throws — a failed read just
- * yields an empty window, and the notification still sends.
+ * Tail guard on the widget window. An 8-day slice of one person's jobs is
+ * small in steady state, but this runs once per assignee on EVERY notified
+ * appointment write, and a bulk import or a wide repeat series landing in the
+ * window is otherwise an unbounded fan-out.
+ */
+const WIDGET_WINDOW_MAX = 200;
+
+/**
+ * Reads an employee's appointments for the widget payload, so the change push
+ * can carry a fresh one. Never throws — a failed read just yields an empty
+ * window, and the notification still sends.
+ *
+ * The window is the jobs that OVERLAP `[today 00:00 Toronto,
+ * +WIDGET_LOOKAHEAD_DAYS days)`, asked as an overlap directly:
+ * `endTime >= todayStart AND startTime < end`. Served by the existing
+ * `(employeeIds CONTAINS, endTime ASC, startTime ASC)` composite.
+ *
+ * It used to floor `startTime` at `todayStart − MAX_APPOINTMENT_SPAN_MS` and
+ * let `buildWidgetPayload` drop the rest, because a query on `startTime` alone
+ * cannot see a multi-day run that began earlier but still WORKS today. That
+ * back-scan read a fortnight of this employee's history on every notified
+ * write — ~17 days of documents to render 3 — and it ran once per assignee.
+ * Firestore has supported two inequality fields since 2023, so the overlap is
+ * now expressible as the query rather than approximated by a wider one.
+ *
+ * Two consequences, both fine here. Results arrive ordered by `endTime` (the
+ * first inequality field), not `startTime` — `buildWidgetPayload` sorts every
+ * bucket by window start itself, so it never depended on query order. And a
+ * document missing EITHER instant is absent from a composite index, where the
+ * old form only required `startTime`; such a record has no parseable window,
+ * so `sliceForDay` already dropped it one step later.
  * @param {!Object} db
  * @param {string} employeeDocId
  * @param {(Date|number)} now
@@ -194,10 +267,21 @@ async function fetchEmployeeWidgetWindow(db, employeeDocId, now, logger) {
     const snap = await db
         .collection("appointments")
         .where("employeeIds", "array-contains", employeeDocId)
-        .where("startTime", ">=", start)
+        .where("endTime", ">=", start)
         .where("startTime", "<", end)
+        .limit(WIDGET_WINDOW_MAX)
         .get();
-    return ((snap && snap.docs) || []).map(_record);
+    const docs = (snap && snap.docs) || [];
+    if (docs.length >= WIDGET_WINDOW_MAX && logger) {
+      // Same posture as TRAVEL_SWEEP_MAX / OVERDUE_SWEEP_MAX / DIGEST_SWEEP_MAX
+      // beside it: this was the one sweep read left with no ceiling, and a
+      // silent truncation here ships a PARTIAL home-screen widget payload.
+      logger.warn("widget: window hit the scan cap", {
+        employeeDocId,
+        cap: WIDGET_WINDOW_MAX,
+      });
+    }
+    return docs.map(_record);
   } catch (err) {
     if (logger) {
       logger.warn("widget: window query failed", {employeeDocId, err});
@@ -221,16 +305,19 @@ async function fetchEmployeeWidgetWindow(db, employeeDocId, now, logger) {
  * @return {!Promise<void>}
  */
 async function endCardOnTerminal(id, before, after, deps, now) {
-  const statusOf = (d) => String((d || {}).status || "").toLowerCase();
+  const statusOf = (d) => (d || {}).status;
   const targets = new Set();
   if (before && !after) {
     // Deleted.
     for (const e of toIdList(before.employeeIds)) targets.add(e);
   } else if (before && after) {
-    const becameDone = statusOf(before) !== "done" &&
-        statusOf(after) === "done";
-    const becameCancelled = statusOf(before) !== "cancelled" &&
-        statusOf(after) === "cancelled";
+    // Through the shared owners rather than a literal "done": this tested
+    // `=== "done"` and so left the card running forever on a flip to the legacy
+    // `completed` alias.
+    const becameDone = !isCompletedStatus(statusOf(before)) &&
+        isCompletedStatus(statusOf(after));
+    const becameCancelled = !isCancelledStatus(statusOf(before)) &&
+        isCancelledStatus(statusOf(after));
     if (becameDone || becameCancelled) {
       // Union both sides, since one save can change status and assignees
       // at the same time.
@@ -297,6 +384,11 @@ async function handleAppointmentWrite(id, before, after, deps) {
   const freshOpId = after ? String(after.seriesOpId || "") : "";
   // One window read per distinct employee across this write's events.
   const windows = new Map();
+  // One user + tokens read per distinct employee across this write's events —
+  // the same per-sweep cache runOverduePromptSweep and the travel sweep use.
+  // Without it, two events for the same person in one write read that user
+  // twice.
+  const recipients = new Map();
   for (const {employeeDocId, kind} of events) {
     const ctx = _contextFor(kind, before, after);
     // A reschedule refreshes an existing Lock Screen card. Card ends are
@@ -322,6 +414,18 @@ async function handleAppointmentWrite(id, before, after, deps) {
         nowDate: now,
       });
     }
+    // Eligibility FIRST, and deliberately above the series claim as well as
+    // the widget window: change-driven pushes are employees-only
+    // (CHANGE_RECIPIENT_ROLES), so an assigned ADMIN — or anyone with no live
+    // token — used to pay a widget-window query, a users read, a tokens read
+    // and, in a series, a claim-ledger WRITE, for a push `sendToEmployee` then
+    // refused at its role gate. Nothing delivered changes: the claim is keyed
+    // per (operation, kind, EMPLOYEE), so skipping it for a recipient who
+    // cannot be reached can only ever suppress that same recipient's sends,
+    // which were already zero. The reads land in `recipients`, so the send
+    // below reuses them rather than repeating them.
+    const recipient = await _loadRecipient(deps, employeeDocId, recipients);
+    if (!_canReachRecipient(recipient, CHANGE_RECIPIENT_ROLES)) continue;
     if (seriesId !== "") {
       const mine = await claimSeriesNotice(deps, {
         seriesId, seriesOpId: freshOpId, kind, employeeDocId, nowDate: now,
@@ -345,8 +449,8 @@ async function handleAppointmentWrite(id, before, after, deps) {
         employeeDocId,
         data,
         (locale) => buildNotificationMessage(kind, ctx, locale),
-        undefined,
-        undefined,
+        CHANGE_RECIPIENT_ROLES,
+        recipients,
         (locale) => ({
           widgetPayload: JSON.stringify(
               buildWidgetPayload(records, now, locale)),
@@ -373,6 +477,26 @@ async function _deliverRecipientOnce(deps, opts) {
   const {db, logger} = deps;
   const {collection, ledgerId, appointmentId, employeeDocId, kind, buildMsg,
     nowDate, label, roles, cache} = opts;
+  // Reachability BEFORE the claim, the same order [handleAppointmentWrite] and
+  // the digest use. Claiming first cost 2 writes (create + release) and 2
+  // reads per unreachable (job, assignee) pair on EVERY sweep run — ~48 of
+  // each over the overdue window's 2 h at a 5-minute cadence. Semantics are
+  // unchanged: "no ledger written" is indistinguishable from "written then
+  // released", so the late-token retry the release exists for still works.
+  // The reads land in `cache`, so the send below reuses them.
+  try {
+    const recipient = await _loadRecipient(deps, employeeDocId, cache);
+    if (!_canReachRecipient(recipient, roles)) return 0;
+  } catch (err) {
+    // This read used to sit inside `sendToEmployee`, under the catch below, so
+    // a transient failure must still not abort the sweep for the remaining
+    // recipients — and returning 0 unclaimed is what the release branch would
+    // have left behind anyway.
+    if (logger) {
+      logger.warn(`${label}: recipient load failed`, {id: appointmentId, err});
+    }
+    return 0;
+  }
   let ledgerRef;
   try {
     // Built INSIDE the try: .doc() throws synchronously on an id containing
@@ -508,11 +632,10 @@ async function claimSeriesNotice(deps, opts) {
 }
 
 /**
- * Orchestrates the overdue "job finished?" sweep. It queries by startTime
- * (endTime would need a new index) over OVERDUE_QUERY_WINDOW_MS, then
- * filters to ended-within-24h-but-open in code, and claims each assignee on
- * its own endTime-keyed per-recipient ledger (see [_deliverRecipientOnce]).
- * Injectable deps `{db, messaging, now, logger}`.
+ * Orchestrates the overdue "job finished?" sweep. It queries `endTime` over
+ * OVERDUE_LOOKBACK_MS — the eligibility window itself — and claims each
+ * assignee on its own endTime-keyed per-recipient ledger (see
+ * [_deliverRecipientOnce]). Injectable deps `{db, messaging, now, logger}`.
  * @param {!Object} deps
  * @return {!Promise<{prompted: number}>}
  */
@@ -520,17 +643,30 @@ async function runOverduePromptSweep(deps) {
   const {db, now} = deps;
   const nowDate = now || new Date();
   const nowMs = nowMillis(nowDate);
-  const windowStart = new Date(nowMs - OVERDUE_QUERY_WINDOW_MS);
+  const windowStart = new Date(nowMs - OVERDUE_LOOKBACK_MS);
+  // Bounds mirror selectOverdueCandidates EXACTLY — `> floor`, `<= now` — so
+  // the query is the rule rather than a superset of it. This rides the
+  // 5-minute reminder timer, so it runs 288x a day (it was 96 under the
+  // deleted `every 15 minutes` scheduler, which is what OVERDUE_LOOKBACK_MS
+  // was originally sized against — see the constant's note). The old startTime
+  // form re-read every open job started in the last ~15 days on each run to
+  // prompt the handful that had just ended.
+  //
   // Ordered newest-first so the cap keeps the jobs most likely to still be
-  // within the eligible 24h window. Without this, Firestore defaults to
-  // oldest-first and spends the cap on jobs that have already aged out —
-  // this uses the existing `(status, startTime DESC)` index.
+  // eligible. Without this, Firestore orders by the inequality field ascending
+  // and spends the cap on the jobs closest to aging out. Needs the
+  // `(status, endTime DESC)` composite index — deploy firestore:indexes with
+  // this, or the sweep fails FAILED_PRECONDITION and prompts nobody.
+  //
+  // A doc with no `endTime` is excluded by this filter, where the startTime
+  // form read it and dropped it in code (`selectOverdueCandidates` requires a
+  // parseable endTime). Same outcome, one less read.
   const snap = await db
       .collection("appointments")
       .where("status", "in", OPEN_STATUSES)
-      .where("startTime", ">=", windowStart)
-      .where("startTime", "<=", nowDate)
-      .orderBy("startTime", "desc")
+      .where("endTime", ">", windowStart)
+      .where("endTime", "<=", nowDate)
+      .orderBy("endTime", "desc")
       .limit(OVERDUE_SWEEP_MAX)
       .get();
   if (snap && snap.size === OVERDUE_SWEEP_MAX && deps.logger) {
@@ -593,14 +729,40 @@ async function runDailyDigest(deps) {
   // reaches back that far. groupTomorrowsJobsByEmployee then does the real
   // overlap test.
   const queryStart = new Date(start.getTime() - MAX_APPOINTMENT_SPAN_MS);
+  // Bounded like the travel and overdue sweeps beside it — this was the last
+  // one without a ceiling. The 15-day window keeps it small in practice, so
+  // the cap is a tail guard rather than a steady-state bound: a bulk import or
+  // a wide repeat series landing in it is otherwise an unbounded fan-out that
+  // then costs a widget-window read and a send per grouped employee, against a
+  // 60 s timeout.
+  //
+  // `startTime` **DESC**, and the direction is the whole point of the cap.
+  // The floor is 15 days in the PAST (see above), so ascending would make the
+  // limit keep the OLDEST still-open jobs and discard the newest — i.e.
+  // tomorrow's, the only ones this digest is about. Once a stale tail of
+  // unclosed jobs exceeds the cap, every crew silently gets no digest at all.
+  // Descending keeps the window's newest, which is what
+  // `groupTomorrowsJobsByEmployee` then overlap-tests; the sibling sweep with
+  // this shape (`runOverduePromptSweep`) orders `endTime` DESC for the same
+  // reason. Served by the existing `(status, startTime DESC)` composite — no
+  // new index.
   const snap = await db
       .collection("appointments")
       .where("status", "in", OPEN_STATUSES)
       .where("startTime", ">=", queryStart)
       .where("startTime", "<", end)
+      .orderBy("startTime", "desc")
+      .limit(DIGEST_SWEEP_MAX)
       .get();
+  if (snap && snap.size === DIGEST_SWEEP_MAX && deps.logger) {
+    deps.logger.warn(
+        "runDailyDigest: candidate cap hit; " +
+        "some crews may not receive a digest", {cap: DIGEST_SWEEP_MAX});
+  }
+  // Back to ascending before grouping, so the per-employee job lists the
+  // digest text renders stay in chronological order.
   const grouped = groupTomorrowsJobsByEmployee(
-      ((snap && snap.docs) || []).map(_record),
+      ((snap && snap.docs) || []).map(_record).reverse(),
       nowDate,
   );
   const cache = new Map();
@@ -612,6 +774,14 @@ async function runDailyDigest(deps) {
       .map(async (employeeDocId) => {
         const jobs = grouped[employeeDocId];
         try {
+          // Reachability BEFORE the widget-window query, the order
+          // [handleAppointmentWrite] already establishes: an inactive, wrong-
+          // role or tokenless employee costs a 200-doc read and a whole
+          // payload build/JSON encode, every day, for a send that returns 0.
+          // Both reads land in the same `cache` entry, so the send below pays
+          // nothing extra for asking.
+          const recipient = await _loadRecipient(deps, employeeDocId, cache);
+          if (!_canReachRecipient(recipient, TIMED_RECIPIENT_ROLES)) return 0;
           // The 18:00 digest also carries a fresh widget payload (+ content-
           // available) so the home-screen widget rolls forward to tomorrow
           // with the app closed, matching the digest text.
@@ -645,10 +815,97 @@ async function runDailyDigest(deps) {
   return {digests};
 }
 
+/**
+ * Ceiling on one admin fan-out, with the warn-at-cap posture the three sweep
+ * ceilings use. Admins are a handful in practice, so this is a tail guard —
+ * but this was the last unbounded collection query in the push stack, and it
+ * is the fan-out P6's time-off requests will build on.
+ */
+const ADMIN_FANOUT_MAX = 100;
+
+/**
+ * Pushes one localized message to every ACTIVE ADMIN.
+ *
+ * Shared fan-out: the self-service email change needs it, and P6's time-off
+ * requests will too — built once here rather than inlined at each call site,
+ * beside `sendToEmployee` and for the same reason (one owner for "who has live
+ * tokens, and is this recipient still entitled").
+ *
+ * **Best-effort, and it never throws.** Whatever prompted the notice has
+ * already committed, so a push failure must not surface as a failed operation
+ * — that would hand the caller an error for something that worked. Each
+ * recipient is isolated too, so one bad token cannot suppress the rest.
+ *
+ * @param {!Object} deps `{db, messaging, logger}`.
+ * @param {!Object} data Data payload (string values); `kind` etc.
+ * @param {function(string): {title: string, body: string}} buildMsg Localized
+ *   message builder keyed by 'en'|'fr'.
+ * @param {{excludeDocId: (string|undefined),
+ *          sendToEmployee: (!Function|undefined)}=} opts `excludeDocId` skips
+ *   the person who caused the notice — they do not need telling what they just
+ *   did. `sendToEmployee` is injectable for tests only.
+ * @return {!Promise<void>}
+ */
+async function sendToActiveAdmins(deps, data, buildMsg, opts) {
+  const {db, logger} = deps;
+  const options = opts || {};
+  const send = options.sendToEmployee || sendToEmployee;
+  try {
+    const snap = await db.collection("users")
+        .where("role", "==", "admin")
+        .where("status", "==", "active")
+        .limit(ADMIN_FANOUT_MAX)
+        .get();
+    if (snap && snap.size === ADMIN_FANOUT_MAX && logger) {
+      logger.warn(
+          "sendToActiveAdmins: recipient cap hit; " +
+          "some admins were not notified", {cap: ADMIN_FANOUT_MAX});
+    }
+    // Seeds the recipient cache from the docs just read, so `_loadRecipient`
+    // doesn't re-`get()` a users doc already in hand — that was +1 redundant
+    // read per active admin per notice. `tokenDocs: null` means "not fetched
+    // yet", so the fcmTokens read still happens exactly once per admin.
+    const cache = new Map(snap.docs.map(
+        (doc) => [doc.id, {user: doc.data() || {}, tokenDocs: null}]));
+    await Promise.all(snap.docs
+        .filter((doc) => doc.id !== options.excludeDocId)
+        .map((doc) => send(
+            deps, doc.id, data, buildMsg, ADMIN_RECIPIENT_ROLES, cache,
+        ).catch((e) => {
+          if (logger) {
+            logger.warn("sendToActiveAdmins: recipient failed",
+                {docId: doc.id, err: String(e)});
+          }
+        })));
+  } catch (e) {
+    if (logger) {
+      logger.warn("sendToActiveAdmins: fan-out failed", {err: String(e)});
+    }
+  }
+}
+
 module.exports = {
+  // Every notification_policy symbol is re-exported here under its original
+  // name, so a call site never has to know which of the two modules a pure
+  // rule ended up in. `notification_utils.test.js` reads both module surfaces
+  // back and fails if a policy export is ever added without its re-export —
+  // ten of these were missing while functions/CLAUDE.md asserted the
+  // invariant held.
+  DAY_MS,
+  OVERDUE_LOOKBACK_MS,
+  OVERDUE_SWEEP_MAX,
+  DIGEST_SWEEP_MAX,
+  WIDGET_PAYLOAD_MAX_BYTES,
   OPEN_STATUSES,
-  SERIES_CLAIM_WINDOW_MS,
+  CHANGE_RECIPIENT_ROLES,
   TIMED_RECIPIENT_ROLES,
+  ADMIN_RECIPIENT_ROLES,
+  ADMIN_FANOUT_MAX,
+  ledgerBody,
+  isAlreadyExists,
+  recordOf: _record,
+  contextFor: _contextFor,
+  SERIES_CLAIM_WINDOW_MS,
   toMillis,
   nowMillis,
   toIdList,
@@ -664,6 +921,7 @@ module.exports = {
   // active gate, and stale-token pruning. A new push path calls this rather
   // than re-deriving any of it (changeEmployeeEmail is the first non-job one).
   sendToEmployee,
+  sendToActiveAdmins,
   deliverRecipientOnce: _deliverRecipientOnce,
   handleAppointmentWrite,
   runDailyDigest,

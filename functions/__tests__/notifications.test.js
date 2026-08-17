@@ -43,14 +43,79 @@ function registrationBody(name) {
 }
 
 describe("notifications.js module surface", () => {
-  test("exports exactly the four triggers index.js re-exports", () => {
+  test("exports exactly the three triggers index.js re-exports", () => {
+    // Three, not four: `sendOverdueJobPrompts` was folded into
+    // `sendUpcomingJobReminders` on 2026-08-13 to get the project's timer
+    // count inside Cloud Scheduler's 3-free allowance.
     const mod = require("../notifications");
     expect(Object.keys(mod).sort()).toEqual([
       "notifyAppointmentChanges",
       "sendDailyJobDigest",
-      "sendOverdueJobPrompts",
       "sendUpcomingJobReminders",
     ]);
+  });
+
+  test("only THREE scheduled jobs exist across the whole project", () => {
+    // The cost invariant. Cloud Scheduler bills per job past the first three,
+    // so a fourth timer anywhere in functions/ starts a recurring charge.
+    // Prefer riding an existing schedule (see sendDailyJobDigest's riders)
+    // over adding one.
+    const fs = require("fs");
+    const path = require("path");
+    const root = path.join(__dirname, "..");
+    const files = [];
+    (function walk(dir) {
+      for (const entry of fs.readdirSync(dir, {withFileTypes: true})) {
+        if (entry.name === "node_modules" || entry.name === "__tests__") {
+          continue;
+        }
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (entry.name.endsWith(".js")) files.push(full);
+      }
+    })(root);
+
+    const scheduled = [];
+    for (const file of files) {
+      const src = fs.readFileSync(file, "utf8");
+      for (const m of src.matchAll(/onSchedule\(/g)) {
+        scheduled.push(`${path.relative(root, file)}@${m.index}`);
+      }
+    }
+    expect(scheduled).toHaveLength(3);
+  });
+});
+
+describe("every scheduler reads the ONE business time zone", () => {
+  // functions/CLAUDE.md: "Never re-inline a local `toMillis` or a bare
+  // `timeZone: \"America/Toronto\"`." These are the only three Cloud Scheduler
+  // jobs in the project, so a hand-written literal here is what would silently
+  // split every scheduled run from every time the app renders if the business
+  // ever moved. The values are identical today — this is drift prevention.
+  const MAINTENANCE = fs.readFileSync(
+      path.join(__dirname, "..", "maintenance.js"),
+      "utf8",
+  );
+
+  test.each([
+    ["notifications.js", SOURCE],
+    // Read as TEXT rather than required: maintenance.js resolves a Storage
+    // bucket at load and throws outside the emulator.
+    ["maintenance.js", MAINTENANCE],
+  ])("%s inlines no bare timeZone literal", (_name, src) => {
+    // Matches the literal as a `timeZone:` VALUE only — the zone name is still
+    // legitimate prose in a comment describing when a job runs.
+    expect(src).not.toMatch(/timeZone:\s*["']/);
+    expect(src).toContain("BUSINESS_TIME_ZONE");
+  });
+
+  test("every onSchedule registration names BUSINESS_TIME_ZONE", () => {
+    const zones = [...SOURCE.matchAll(/timeZone: (\w+)/g)].map((m) => m[1]);
+    const maintenanceZones =
+      [...MAINTENANCE.matchAll(/timeZone: (\w+)/g)].map((m) => m[1]);
+    expect([...zones, ...maintenanceZones])
+        .toEqual(["BUSINESS_TIME_ZONE", "BUSINESS_TIME_ZONE",
+          "BUSINESS_TIME_ZONE"]);
   });
 });
 
@@ -65,15 +130,22 @@ describe("APNs secret binding matches deps construction", () => {
     expect(body).toContain("liveActivityDeps()");
   });
 
-  // These two are Firestore-only. Binding or reading the APNs secrets here
-  // would log a warning on every scheduled run.
-  test.each([
-    "sendDailyJobDigest",
-    "sendOverdueJobPrompts",
-  ])("%s neither binds APNS_SECRETS nor reads them", (name) => {
-    const body = registrationBody(name);
+  // The digest is Firestore-only (plus the Wave rider, which binds its own
+  // secret). Binding or reading the APNs secrets here would log a warning on
+  // every scheduled run.
+  test("sendDailyJobDigest neither binds APNS_SECRETS nor reads them", () => {
+    const body = registrationBody("sendDailyJobDigest");
     expect(body).not.toContain("APNS_SECRETS");
     expect(body).not.toContain("liveActivityDeps()");
     expect(body).toContain("liveDeps()");
+  });
+
+  test("the overdue sweep rides the reminder timer on liveDeps, not " +
+      "liveActivityDeps", () => {
+    // It moved into a function that DOES bind APNS_SECRETS, so the guard that
+    // used to be "does not bind" is now "does not read": the overdue half is
+    // Firestore-only and must keep taking liveDeps().
+    const body = registrationBody("sendUpcomingJobReminders");
+    expect(body).toContain("runOverduePromptSweep(liveDeps())");
   });
 });

@@ -5,6 +5,10 @@ const {getFirestore} = require("firebase-admin/firestore");
 
 const SESSION_TOKEN_MAX_LEN = 64;
 
+// Firestore's own document-id ceiling as the rules state it — hand-mirrored
+// from `isValidDocIdField` in firestore.rules. Raise both together.
+const DOC_ID_MAX_LEN = 128;
+
 // Hard cap on a callable payload once serialized. Every payload here is just
 // a couple of short strings, so anything larger is malformed or abusive.
 const MAX_PAYLOAD_BYTES = 4 * 1024;
@@ -64,6 +68,29 @@ function assertPayloadShape(data, allowedKeys) {
 function requireString(data, key, maxLen) {
   const value = typeof data?.[key] === "string" ? data[key].trim() : "";
   if (!value || value.length > maxLen || hasControlChar(value)) {
+    throw new HttpsError("invalid-argument", `invalid-${key}`);
+  }
+  return value;
+}
+
+/**
+ * Validates and returns a Firestore document id: a required string of at most
+ * `DOC_ID_MAX_LEN` characters that carries no "/".
+ *
+ * The slash check is the load-bearing half, not tidiness. `db.collection(...)
+ * .doc(id)` throws SYNCHRONOUSLY on an id containing one, which surfaces to
+ * the caller as an opaque `internal` instead of a shaped validation failure.
+ * This is the callable-side owner of the same rule `isValidDocIdField` states
+ * in CEL (`firestore.rules`) — it was restated at three call sites, two of
+ * them byte-identical down to the comment. Keep the 128 in step with the
+ * rules copy.
+ * @param {object} data callable request data.
+ * @param {string} key field name.
+ * @return {string}
+ */
+function requireDocId(data, key) {
+  const value = requireString(data, key, DOC_ID_MAX_LEN);
+  if (value.includes("/")) {
     throw new HttpsError("invalid-argument", `invalid-${key}`);
   }
   return value;
@@ -225,6 +252,45 @@ async function assertAdmin(uid) {
   }
 }
 
+/**
+ * True when the caller's re-authentication is missing or too old to permit an
+ * irreversible or identity-rewriting action. Pure/testable.
+ *
+ * Fails CLOSED on a missing or non-numeric `auth_time`: a caller that presents
+ * no token claim must not read as "recently re-authenticated".
+ * @param {*} authTime ID-token `auth_time` (epoch seconds) or undefined.
+ * @param {number} nowSec Current time in epoch seconds.
+ * @param {number} maxAgeSeconds Allowed staleness window in seconds.
+ * @return {boolean}
+ */
+function isReauthStale(authTime, nowSec, maxAgeSeconds) {
+  return typeof authTime !== "number" ||
+      nowSec - authTime > maxAgeSeconds;
+}
+
+/**
+ * Rejects a caller whose re-authentication is older than [maxAgeSeconds].
+ *
+ * Belongs ABOVE the rate limiter at every call site, so a stale-auth rejection
+ * doesn't burn one of the caller's slots, and below the identity guards.
+ * @param {!Object} auth The callable's `req.auth`.
+ * @param {string} route Callable name, for the log line.
+ * @param {number} maxAgeSeconds Allowed staleness window in seconds.
+ * @return {void}
+ */
+function assertFreshReauth(auth, route, maxAgeSeconds) {
+  const authTime = auth && auth.token ? auth.token.auth_time : undefined;
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (isReauthStale(authTime, nowSec, maxAgeSeconds)) {
+    logger.warn(`${route}: stale auth_time; reauth required`, {
+      uid: auth ? auth.uid : null,
+      authTime,
+      ageSec: typeof authTime === "number" ? nowSec - authTime : null,
+    });
+    throw new HttpsError("unauthenticated", "stale-auth");
+  }
+}
+
 // Keep guards inline per callable — a shared helper here would close over
 // the real assertAdmin and break the guard-order mocks in
 // __tests__/places_admin_gate.test.js.
@@ -233,9 +299,12 @@ module.exports = {
   hasControlChar,
   assertPayloadShape,
   requireString,
+  requireDocId,
   optionalString,
   requireNumberInRange,
   readSessionToken,
   enforceDurableRateLimit,
   assertAdmin,
+  isReauthStale,
+  assertFreshReauth,
 };

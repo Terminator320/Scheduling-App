@@ -133,21 +133,22 @@ void main() {
   });
 
   group('AppointmentDateRange.visibleMonth', () {
-    test('starts two weeks before the 1st of the month', () {
+    test('starts a week before the 1st of the month', () {
       final focus = DateTime(2026, 5, 9);
       final range = AppointmentDateRange.visibleMonth(focus);
-      expect(range.start, DateTime(2026, 4, 17));
+      expect(range.start, DateTime(2026, 4, 24));
     });
 
-    test('ends two weeks after the 1st of the next month', () {
+    test('ends a week after the 1st of the next month', () {
       final focus = DateTime(2026, 5, 9);
       final range = AppointmentDateRange.visibleMonth(focus);
-      expect(range.end, DateTime(2026, 6, 15));
+      expect(range.end, DateTime(2026, 6, 8));
     });
 
-    test('covers well past the maximum trail the grid can show', () {
-      // The grid renders only the weeks the month occupies, so the real worst
-      // trail is 6 days; the ±14 window is a deliberate superset.
+    test('covers the maximum trail the grid can show', () {
+      // The grid renders only the weeks the month occupies, so the worst trail
+      // is 6 days and the ±7 window clears it by one. `month_grid_overscan_test`
+      // walks every month at every week start to keep that true.
       final range = AppointmentDateRange.visibleMonth(DateTime(2026, 2, 10));
       expect(range.end.isAfter(DateTime(2026, 3, 7)), isTrue);
     });
@@ -183,7 +184,7 @@ void main() {
         selectedDay: DateTime(2026, 5, 20),
       );
       expect(range.start, DateTime(2026, 5, 20));
-      expect(range.end, DateTime(2026, 9, 15));
+      expect(range.end, DateTime(2026, 9, 8));
     });
 
     test('stretches forward to a selection left behind by paging back', () {
@@ -191,7 +192,7 @@ void main() {
         focusedDay: DateTime(2026, 2),
         selectedDay: DateTime(2026, 5, 20),
       );
-      expect(range.start, DateTime(2026, 1, 18));
+      expect(range.start, DateTime(2026, 1, 25));
       expect(range.end, DateTime(2026, 5, 21));
     });
   });

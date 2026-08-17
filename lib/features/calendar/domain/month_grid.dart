@@ -6,11 +6,16 @@ import 'package:intl/intl.dart';
 const int monthGridMaxRows = 6;
 
 /// Dart's [DateTime.weekday] is Monday=1..Sunday=7; the grid works in
-/// Sunday=0..Saturday=6, matching intl's weekday-symbol arrays.
-int _sundayBased(DateTime day) => day.weekday % 7;
+/// Sunday=0..Saturday=6, matching intl's weekday-symbol arrays — and the same
+/// indexing `workingDays` is stored in.
+///
+/// Public because every surface that reads a Sunday-indexed list needs it, and
+/// CLAUDE.md's stated hazard is that "one missed conversion shifts a whole
+/// roster by a day". It had four spellings before; don't add a fifth.
+int sundayIndexOf(DateTime day) => day.weekday % 7;
 
 int _leadFor(DateTime month, int weekStart) =>
-    (_sundayBased(DateTime(month.year, month.month)) - weekStart + 7) % 7;
+    (sundayIndexOf(DateTime(month.year, month.month)) - weekStart + 7) % 7;
 
 /// Days in [month]. `day 0` of the next month is the last day of this one.
 int _daysInMonth(DateTime month) =>
@@ -40,7 +45,7 @@ List<DateTime> monthGridDays(DateTime month, {required int weekStart}) {
 
 /// The seven days of [day]'s week, starting at [weekStart].
 List<DateTime> weekOf(DateTime day, {required int weekStart}) {
-  final lead = (_sundayBased(day) - weekStart + 7) % 7;
+  final lead = (sundayIndexOf(day) - weekStart + 7) % 7;
   return [
     for (var i = 0; i < 7; i++)
       DateTime(day.year, day.month, day.day - lead + i),
@@ -67,6 +72,7 @@ int weekStartForLocale(String locale) => _weekStartCache.putIfAbsent(
 final _symbolsCache = <String, DateFormat>{};
 final _longDateCache = <String, DateFormat>{};
 final _weekdayAbbrevCache = <String, DateFormat>{};
+final _monthAbbrevCache = <String, DateFormat>{};
 
 DateFormat _symbolsFormat(String locale) =>
     _symbolsCache.putIfAbsent(locale, () => DateFormat.yMMMM(locale));
@@ -79,9 +85,21 @@ DateFormat _symbolsFormat(String locale) =>
 DateFormat longDateFormatFor(String locale) =>
     _longDateCache.putIfAbsent(locale, () => DateFormat.yMMMMEEEEd(locale));
 
-/// "Wed" — the collapsed week strip's column heading.
+/// "Wed" — the collapsed week strip's column heading, and the History date
+/// rail's top line.
 DateFormat weekdayAbbrevFormatFor(String locale) =>
     _weekdayAbbrevCache.putIfAbsent(locale, () => DateFormat.E(locale));
+
+/// "August 2026" — History's sticky month bar.
+///
+/// The same skeleton [_symbolsFormat] already builds per locale, exposed rather
+/// than constructed a second time.
+DateFormat monthYearFormatFor(String locale) => _symbolsFormat(locale);
+
+/// "Aug" — the History date rail's top line in search mode, where results are
+/// not a contiguous run of days and a bare weekday says nothing.
+DateFormat monthAbbrevFormatFor(String locale) =>
+    _monthAbbrevCache.putIfAbsent(locale, () => DateFormat.MMM(locale));
 
 /// Narrow weekday labels ordered from the locale's first day. Never hardcode
 /// `S M T W T F S` — it is wrong for fr_CA.

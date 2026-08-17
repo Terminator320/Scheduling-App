@@ -80,4 +80,29 @@ void main() {
       expect(result.text, '(514) 555-123');
     });
   });
+
+  group('bareNumber', () {
+    test('takes the punctuation off a stored number', () {
+      // `clients/{id}.name` is the Wave customer name, and the invoicing
+      // workflow there wants the number unpunctuated.
+      expect(bareNumber('(514) 555-1234'), '5145551234');
+      expect(bareNumber('514-555-1234'), '5145551234');
+    });
+
+    test('keeps a leading + so an international number stays dialable', () {
+      expect(bareNumber('+33 1 42 68 53 00'), '+33142685300');
+    });
+
+    test('keeps a leading country-code 1', () {
+      // Unlike the comparison-only digit normalizer inside ClientNamePolicy,
+      // this produces a value that gets STORED — dropping a digit the admin
+      // typed would change the number.
+      expect(bareNumber('1-514-555-1234'), '15145551234');
+    });
+
+    test('hands back anything it cannot reduce', () {
+      expect(bareNumber('  ext. only  '), 'ext. only');
+      expect(bareNumber(''), '');
+    });
+  });
 }

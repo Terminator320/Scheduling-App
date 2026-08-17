@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart' show compute;
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -82,7 +83,18 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   // Page-boundary doc names keyed by id. The cursor needs the exact Firestore `name`
   // value, not the `businessName` fallback, or we'd end up skipping docs.
+  //
+  // BOUNDED, like `_searchCache` beside it: this repository is a session-long
+  // singleton and this map gains an entry per page fetched, so unbounded it
+  // only ever grows. It is deliberately capped rather than CLEARED on write —
+  // dropping a live boundary is not free, since the fallback `after.name`
+  // carries the `businessName` substitution for a legacy business-only doc and
+  // would page straight past it. The cap is far deeper than any list is
+  // scrolled, and eviction is oldest-first, so a boundary still in use stays.
   final Map<String, String> _pageBoundaryNames = {};
+
+  /// Page boundaries retained — ~`_clientsPageSize` × this many clients deep.
+  static const _pageBoundaryMax = 200;
 
   @override
   Future<List<ClientRecord>> fetchClientsPage({
@@ -114,6 +126,10 @@ class FirebaseClientsRepository implements ClientsRepository {
     final docs = snapshot.docs;
     if (docs.isNotEmpty) {
       final last = docs.last;
+      _pageBoundaryNames.remove(last.id);
+      if (_pageBoundaryNames.length >= _pageBoundaryMax) {
+        _pageBoundaryNames.remove(_pageBoundaryNames.keys.first);
+      }
       _pageBoundaryNames[last.id] = (last.data()['name'] ?? '').toString();
     }
     return docs.map((doc) => ClientRecord.fromMap(doc.id, doc.data())).toList();
@@ -138,11 +154,24 @@ class FirebaseClientsRepository implements ClientsRepository {
   @override
   Future<List<ClientRecord>> fetchClientsCreatedSince(DateTime since) async {
     // Cap this so a windowed read can never turn into an unbounded query.
+    // DESCENDING is load-bearing: the cap truncates the far end, and every
+    // consumer renders newest-first, so ascending would drop the newest
+    // clients — the ones the dashboard exists to show — and keep the oldest.
+    // The same single-field index serves both directions.
     final snapshot = await _clients
         .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
-        .orderBy('createdAt')
+        .orderBy('createdAt', descending: true)
         .limit(ClientSearchPolicy.serverReadLimit)
         .get();
+    if (snapshot.docs.length == ClientSearchPolicy.serverReadLimit) {
+      // Same posture as every other capped read here. At the cap the
+      // dashboard's 8-week new-client trend under-reports its OLDEST weeks —
+      // gradually, as the roster grows, with no error anywhere.
+      _logger.warn(
+        'CLI-LIST fetchClientsCreatedSince hit the scan cap; '
+        'the oldest weeks of the trend are understated',
+      );
+    }
     return snapshot.docs
         .map((doc) => ClientRecord.fromMap(doc.id, doc.data()))
         .toList();
@@ -294,6 +323,19 @@ class FirebaseClientsRepository implements ClientsRepository {
       return null;
     }
 
+    if (snapshot.docs.length >= ClientSearchPolicy.serverReadLimit) {
+      // Ordered by `name`, so at the cap this window is the alphabetically
+      // FIRST N clients — everything past that point is invisible to search,
+      // to the type-filter chips and to the Archived chip, all at once and
+      // with no error anywhere. It arrives gradually as the roster grows,
+      // which is exactly the kind of failure nobody reports. Same posture as
+      // `_mapRangeSnapshot` in the appointments repository.
+      _logger.warn(
+        'CLI-SEARCH scan window hit the ${ClientSearchPolicy.serverReadLimit}'
+        '-doc cap — search and the filters are seeing a prefix of the roster',
+      );
+    }
+
     final window = _CachedClientScanWindow(
       [
         for (final doc in snapshot.docs) (id: doc.id, data: doc.data()),
@@ -306,13 +348,11 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   Map<String, dynamic> _normalizedMap(ClientRecord client) {
     final base = Map<String, dynamic>.from(client.toMap());
-    final email = (base['email'] as String? ?? '').trim().toLowerCase();
-    base['email'] = email;
+    base['email'] = normalizeEmail(base['email'] as String? ?? '');
     final contacts = base['contacts'] as List? ?? const [];
     base['contacts'] = contacts.whereType<Map<Object?, Object?>>().map((c) {
       final m = Map<String, dynamic>.from(c);
-      final ce = (m['email'] as String? ?? '').trim().toLowerCase();
-      m['email'] = ce;
+      m['email'] = normalizeEmail(m['email'] as String? ?? '');
       return m;
     }).toList();
     return base;
@@ -335,7 +375,7 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
   final normalizedQuery = ClientSearchPolicy.normalize(scan.query);
   final queryDigits = ClientSearchPolicy.digitsOnly(scan.query);
 
-  final scoredClients = <MapEntry<int, ClientRecord>>[];
+  final scoredClients = <({int score, String sortKey, ClientRecord record})>[];
 
   for (final doc in scan.docs) {
     final data = doc.data;
@@ -354,7 +394,10 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
         })
         .join(' ');
 
-    final displayName = ClientSearchPolicy.normalize(client.displayName);
+    // Resolved once per record: `displayName` is an uncached getter that runs
+    // `stripPhone` twice, and this loop walks the whole 1000-doc scan window.
+    final rawDisplayName = client.displayName;
+    final displayName = ClientSearchPolicy.normalize(rawDisplayName);
     final personName = ClientSearchPolicy.normalize(
       [
         data['firstName'],
@@ -400,20 +443,25 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
       score = 5;
     }
 
-    scoredClients.add(MapEntry(score, client));
+    // The sort key is computed HERE, once per record, rather than twice per
+    // comparison — the comparator below runs over the whole match set before
+    // `.take`. Same rule as `fetchClientsByType`.
+    scoredClients.add((
+      score: score,
+      sortKey: rawDisplayName.toLowerCase(),
+      record: client,
+    ));
   }
 
   scoredClients.sort((a, b) {
-    final scoreCompare = a.key.compareTo(b.key);
+    final scoreCompare = a.score.compareTo(b.score);
     if (scoreCompare != 0) return scoreCompare;
-    return a.value.displayName.toLowerCase().compareTo(
-      b.value.displayName.toLowerCase(),
-    );
+    return a.sortKey.compareTo(b.sortKey);
   });
 
   return scoredClients
       .take(ClientSearchPolicy.resultDisplayLimit)
-      .map((entry) => entry.value)
+      .map((entry) => entry.record)
       .toList();
 }
 

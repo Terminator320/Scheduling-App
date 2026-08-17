@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-08 by auditing the source against the app's call sites and
+refreshed 2026-08-16 by auditing the source against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -19,11 +19,31 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   (`setGlobalOptions` in `index.js`)
 - **Wiring:** `index.js` is a thin re-export surface; implementations live in
   domain modules. Shared callable guards (`assertPayloadShape`, `requireString`,
-  `optionalString`, `requireNumberInRange`, `readSessionToken`,
-  `enforceDurableRateLimit`, `assertAdmin`) live in `security.js` — put a new
+  `optionalString`, `requireDocId`, `requireNumberInRange`, `readSessionToken`,
+  `enforceDurableRateLimit`, `assertAdmin`, `assertFreshReauth`) live in
+  `security.js` — put a new
   one there, never back in a feature module (`optionalString` was a private copy
   in the retired `invites.js` and was carried verbatim into
-  `employee_accounts.js` before being hoisted).
+  `employee_accounts.js` before being hoisted). The Wave stack is split four
+  ways as of 2026-08-15: `wave/callables.js` (the admin callables only),
+  `wave/triggers.js` (`waveUpsertCustomer` + the `runWaveDaily` rider — neither
+  is a callable, which is why they no longer live in the file named for them),
+  `wave/sync_run.js` (the one owner of `importWithWatermark` / `drainForSync` /
+  `readWaveBusinessIdCached`) and the pure, `deps`-free `wave/retry_policy.js`
+  (the dead-letter taxonomy). Export NAMES are unchanged by that split.
+- **Three internal modules exist only to be HAND-MIRRORS of a Dart rule**, and
+  are worth knowing about because a divergence is silent in production and is
+  caught only by tests that share worked examples: `appointment_image_ids.js`
+  (↔ `appointmentImageDocId`, the derived subcollection doc id — it has zero
+  production inbound requires, being used by the backfill script and its jest
+  suite alone, so the invariant is pinned by tests and never exercised by a
+  deployed path), `client_name_utils.js` (↔ `ClientNamePolicy`, which decides
+  whether a client's stored `name` is a phone number or a business name — the
+  value Wave syncs verbatim as its customer name), and `image_magic.js`
+  (↔ `hasValidImageMagic`; these two had drifted 3 bytes vs 4, so a file the
+  client accepted was deleted server-side). `day_slice_utils.js` is a fourth,
+  documented with the multi-day work below. Change either side of a pair and
+  the other in the same commit.
 - **Deploy:** `firebase deploy --only functions,firestore:rules,firestore:indexes,storage`
   (run `cd functions && npm run lint` first).
 
@@ -34,15 +54,78 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 > wrong before — verify against the live list rather than trusting it.
 
 
+- **DEPLOYED 2026-08-15 (`6b3fcf7c`, merged as `be56f118`): the Wave stale-link
+  relink — the second Wave deploy of that day and the one that actually
+  unblocked the two dead-lettered upserts.** A `waveCustomerId` pointing at a
+  customer DELETED in Wave came back as a top-level `NOT_FOUND`, which is
+  correctly non-retryable, so every retry re-sent the same missing id;
+  `upsertCustomer` now routes that shape into the create path with the identity
+  search forced on, and `writeSyncSuccess`'s `replacesLink` carve-out lets the
+  healed link persist onto an already-linked doc. `functions/wave/customers.js`
+  only; no export, rules, index or payload change.
+- **DEPLOYED 2026-08-15 (`e84a66fd`): the Wave enum-coercion fix.** `wave/` only,
+  25 → 25. `toCountryCode`/`toProvinceCode` could emit values outside Wave's
+  GraphQL ENUM vocabulary (a province typed into the country box; a US state
+  prefixed `CA-`), which fails variable coercion and dead-letters the job
+  permanently; both are membership tests now and an unrecognised subdivision is
+  omitted. Also: transient-looking `graphql` errors are retryable, a
+  rate-limited job gets a 20-attempt budget, the dead-letter log gains a
+  PII-free `errorDetail`, and `waveRetryFailedJobs`' response gains a `failed`
+  key. **A real but different bug from the relink above** — it was not what the
+  two dead-lettered jobs were dying of.
+- **DEPLOYED 2026-08-15 (`6d41dd3c`): the 2026-08-15 audit, 25 → 25 with no
+  export change.** `waveUpsertCustomer` and `runWaveDaily` MOVED module
+  (`wave/callables.js` → the new `wave/triggers.js`) while keeping their export
+  names, so both deployed as UPDATES and neither known abort fired — the
+  `retry: true` failure-policy abort only triggers on a newly *created*
+  function. `wave/sync_run.js` (the one owner of `importWithWatermark` /
+  `drainForSync`) and the pure `wave/retry_policy.js` were split out at the
+  same time. Rules carried two WIDENINGS that fix live rejections (appointment
+  `clientName` 200 → 401, client `address` 500 → 533), one tightening no
+  shipped build can reach (an assignee can no longer put `done` over
+  `cancelled`), and a new `clients.addressLine2` cap that is **an accepted
+  risk** — the already-deployed import wrote that field uncapped, so a prod doc
+  over 500 chars would now be un-updatable from the app. If an opaque
+  `permission-denied` appears on an ordinary client save, check that field
+  first. Full record: `docs/DEPLOYMENT.md`.
+- **DEPLOYED 2026-08-14 (`d3e22377`): the three-deletion swap, net 25 → 25.**
+  Deleted `waveSyncWorker`, `waveScheduledImport` and `sendOverdueJobPrompts`;
+  added `waveRetryFailedJobs`, `cascadeDeleteAppointmentImages` and
+  `recountAppointmentPictures`, plus `firestore.rules` and `firestore:indexes`.
+  **The count was unchanged, so it proved nothing** — the same trap the
+  2026-08-11 row below describes; the export LISTS were diffed against live
+  prod first. A **new** abort fired: `firebase deploy` refuses to create a
+  `retry: true` function non-interactively (`Pass the --force option to deploy
+  functions with a failure policy`), which is a *different* and earlier abort
+  than the 2026-08-08 deletion one — nothing was released on that attempt.
+  Resolved by splitting the deploy rather than whole-target `--force`. **Still
+  outstanding from this deploy:** only the 3 orphaned Cloud Scheduler jobs
+  (`gcloud` absent on the Windows box). The appointment-images backfill RAN on
+  2026-08-15 (13 photos across 10 appointments) and both gating indexes reached
+  `READY` the same day, so the app build is no longer blocked on either. Full
+  sequence and the post-deploy verification: `docs/DEPLOYMENT.md`.
+- **CLEARED 2026-08-11: the 2026-08-08 → 2026-08-11 gap has been deployed.**
+  All 25 functions were updated together with `firestore.rules` and
+  `storage.rules`, so prod now runs `changeEmployeeEmail`'s non-admin re-auth
+  gate and its 20/hr → 5/hr budget, the travel-alert opt-out skipping the
+  Routes call, the multi-day Live Activity skip and the crew-colour parse in
+  `travel_utils.js`, the shared `day_slice_utils.js` day-scoping behind the
+  widget payload and push text, the one `TERMINAL_STATUSES` owner in
+  `time_utils.js`, plus the P5 self-service rules clause and
+  `isValidAppointmentSpan`. Note the trap this gap illustrates: the function
+  *count* never moved (25 throughout, `index.js` untouched), so a count check
+  looked clean for three days while prod ran older bodies — check the deploy
+  log, not the count.
 - **25 functions defined** in code and **25 deployed**, verified against
-  `functions_list_functions` on 2026-08-08 — an exact match, no orphans and no
+  `functions_list_functions` on 2026-08-15 — an exact match, no orphans and no
   extras. The retirement deploy has now RUN. P4c added `createEmployeeAccount`,
   `completeEmployeeSetup` and `deleteEmployeeAccount` and kept
   `createEmployeeInvite` / `redeemSignupCode` as the `#compat-1.37.1` shim;
   `changeEmployeeEmail` landed 2026-08-04 (26 → 27); **the shim was retired
   2026-08-08 (27 → 25)** once every device was on 1.40+, deleting those two
-  callables. `revokeInvite` and `previewInvite` were never deployed and never
-  existed in code. (v2, Node.js 24, 256 MB; `us-central1`
+  callables. `revokeInvite` and `previewInvite` DID exist in code — P4b added
+  them (`461f84ba`) and P4c removed them (`ea375b1b`) — but they were never
+  deployed to prod. (v2, Node.js 24, 256 MB; `us-central1`
   except `validateUploadedImage` in `us-east1`). The 2026-07-18 deploy shipped
   `placesReverseGeocode`, the travel-aware `sendUpcomingJobReminders` rebuild,
   and the codebase-audit fixes (overdue-sweep ordering, bounded travel-context
@@ -58,10 +141,18 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   TTL was extended to `liveActivityTokens`, `rateLimits`, and `signupCodes` on
   2026-07-20. **The `signupCodes` `fieldOverride` was removed from
   `firestore.indexes.json` on 2026-08-08** with the rest of the
-  `#compat-1.37.1` shim, so the next `firestore:indexes` deploy DROPS that live
-  TTL policy — which is intended here, and only safe because the collection was
-  verified **empty in prod** first (a TTL policy is the only reaper for those
-  docs; dropping it over a non-empty collection strands them forever). A
+  `#compat-1.37.1` shim. That was expected to drop the live TTL policy on the
+  next `firestore:indexes` deploy — **it has not, and by now three such deploys
+  have gone by** (2026-08-08, 2026-08-14, 2026-08-15). Each time the CLI reported
+  the override as unmatched drift and **correctly refused to delete it without
+  `--force`**, so the policy is still live. That is a safe resting state (the
+  collection was verified **empty in prod** first, and rules deny all access),
+  and it must never be "resolved" by passing `--force` — that flag deleted all
+  five live TTL policies once already. A TTL policy is the only reaper for those
+  docs, so dropping one over a non-empty collection strands them forever.
+  **`appointmentRecountClaims.expiresAt` joined the list 2026-08-15** — the
+  debounce marker behind `recountAppointmentPictures`, with a matching
+  `allow read, write: if false` block in `firestore.rules`. A
   `fieldOverride` for the `appointmentSeriesNotices` claim
   ledger was added to `firestore.indexes.json` on 2026-07-21 (that ledger has no
   in-code reaper, so the TTL is its only cleanup). Every policy's **expiration
@@ -96,7 +187,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   secret change, so the export set stays at 21. `sendUpcomingJobReminders` —
   `selectTravelCandidates` skips `isAllDay` records (a midnight start otherwise
   fell inside the 90-min window at ~23:30 the night before and pushed a "time
-  to leave" for a block with nowhere to leave for); `sendOverdueJobPrompts` —
+  to leave" for a block with nowhere to leave for); the overdue sweep —
   `selectOverdueCandidates` skips `isPersonal` records, the server mirror of
   `AppointmentRecord.displayStatus`; and every push, digest and Live Activity
   card now names a job `clientName → title → generic`, since a personal job has
@@ -117,7 +208,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `createEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (invite sheet, roster row Reset password) | — | App Check ✓ · admin · durable 20/hr·uid |
 | `completeEmployeeSetup` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` → `auth_service.dart` (account setup screen) | — | App Check ✓ · authed (own doc) · `email_verified` ✓ · durable 5/15min·uid |
 | `deleteEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (pending-account row) | — | App Check ✓ · admin · durable 20/hr·uid |
-| `changeEmployeeEmail` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (inside `updateEmployee`, when the email changed on a doc with a `uid`) | — | App Check ✓ · admin · durable 20/hr·uid |
+| `changeEmployeeEmail` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (inside `updateEmployee`, when the email changed on a doc with a `uid`); `self_email_service.dart` (a person changing their own) | — | App Check ✓ · admin **or self** · non-admin also needs re-auth <5 min · durable 5/hr·uid |
 | `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
 | `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin |
 | `waveSetImportSchedule` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings cadence picker) | — | App Check ✓ · admin · durable 20/hr |
@@ -126,21 +217,31 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `syncUsersByUid` | trigger | `onDocumentWritten users/{id}` | `bridge.js` | any `users` doc write | — | `retry: true` |
 | `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` |
 | `recountClientJobs` | trigger | `onDocumentWritten appointments/{id}` | `client_job_count.js` | a write that changes `clientId` | — | `retry: true` |
-| `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/callables.js` | any `clients` doc write | — | `retry: true` |
+| `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/triggers.js` | any `clients` doc write | `WAVE_FULL_ACCESS_TOKEN` | `retry: true` · 300s · enqueues **and pushes** |
 | `validateUploadedImage` | trigger | `onObjectFinalized` (Storage) | `maintenance.js` | `appointments/*/images/*` upload | — | region `us-east1` |
 | `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | no `retry` (dupe push worse than missed) |
+| `waveRetryFailedJobs` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings, requeue dead outbox jobs) | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable |
+| `cascadeDeleteAppointmentImages` | trigger | `onDocumentDeleted appointments/{id}` | `appointment_images.js` | any appointment delete | — | `retry: true` · **rethrows** |
+| `recountAppointmentPictures` | trigger | `onDocumentWritten appointments/{id}/images/{imageId}` | `appointment_images.js` | any photo doc write | — | `retry: true` · absolute `count()` |
 | `purgeExpiredHistory` | scheduled | `0 3 1 1,4,7,10 *` — quarterly, 1st of Jan/Apr/Jul/Oct 03:00 (Toronto) | `maintenance.js` | quarterly | — | `maxInstances: 1` · 1800s |
-| `waveSyncWorker` | scheduled | `every 5 minutes` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 540s |
-| `waveScheduledImport` | scheduled | `every 24 hours` | `wave/callables.js` | timer | `WAVE_FULL_ACCESS_TOKEN` | `maxInstances: 1` · 300s |
-| `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` + `travel_utils.js` | timer | `GOOGLE_MAP_API_KEY` · `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | `maxInstances: 1` · `timeoutSeconds: 120` · ledger · Routes API |
-| `sendDailyJobDigest` | scheduled | `0 18 * * *` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` |
-| `sendOverdueJobPrompts` | scheduled | `every 15 minutes` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · 300s · ledger |
+| `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` + `travel_utils.js` | timer | `GOOGLE_MAP_API_KEY` · `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | `maxInstances: 1` · ledger · Routes API · **also carries the overdue sweep** |
+| `sendDailyJobDigest` | scheduled | `0 18 * * *` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · **also calls `runWaveDaily()`** |
+
+**Exactly three Cloud Scheduler jobs, and that is deliberate** — only 3 are free
+per billing account. `sendOverdueJobPrompts` (was `every 15 minutes`) is merged
+into `sendUpcomingJobReminders`, `waveScheduledImport` (was `every 24 hours`)
+into `sendDailyJobDigest`, and `waveSyncWorker` (was `every 5 minutes`) is gone
+entirely because the Wave push is event-driven now. **All three were deleted
+from prod by the 2026-08-14 deploy (`d3e22377`)**, and each still leaves an
+orphaned Cloud Scheduler entry that must be deleted by hand — see
+`docs/DEPLOYMENT.md`, "DONE 2026-08-14: a THREE-deletion deploy". Adding a
+fourth scheduled function starts costing money.
 
 ## Auth & accounts
 
 ### `deleteAccount` — `account.js`
-Self-service account deletion (Apple 5.1.1(v) / Google Play account-deletion
-policy). Deletes the caller's `users/{docId}` doc via `recursiveDelete` (the
+Self-service account deletion (Apple App Store Review Guideline 5.1.1(v)).
+Deletes the caller's `users/{docId}` doc via `recursiveDelete` (the
 doc **plus all its subcollections** — today that is `fcmTokens`, `presence`,
 and `liveActivityTokens`) and their Firebase Auth user; the `syncUsersByUid`
 trigger then clears the `usersByUid` bridge. Deliberately
@@ -157,8 +258,9 @@ Rebuilt by **P4c, 2026-08-02**, replacing the one-time signup-code flow in the
 APP — and as of **2026-08-08 the signup-code flow is gone from the backend too**:
 `invites.js`, `signup_code_utils.js`, `createEmployeeInvite` and
 `redeemSignupCode` were deleted with the rest of the `#compat-1.37.1` shim.
-`revokeInvite` and `previewInvite` were never deployed and never existed in
-code. **`redeemSignupCode` was the last unauthenticated callable in the
+`revokeInvite` and `previewInvite` were never deployed, but they DID exist in
+code between P4b (`461f84ba`) and P4c (`ea375b1b`).
+**`redeemSignupCode` was the last unauthenticated callable in the
 codebase**; every remaining one requires auth. All four callables
 below share `APP_CHECK = {enforceAppCheck: true}`. Full design:
 `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.
@@ -267,7 +369,8 @@ see docs/DEPLOYMENT.md. Transactional core exported as `performDeleteAccount`
 for jest.
 
 ### `changeEmployeeEmail` — `employee_accounts.js`
-Admin-only. Moves an employee's **sign-in identity** in Firebase Auth and on
+Admin **or the person themselves** (the `self` branch landed with P5,
+2026-08-10). Moves an employee's **sign-in identity** in Firebase Auth and on
 their `users` doc together. It exists because nothing else joined those two:
 `updateEmployee` writes Firestore alone, so an admin's email edit left the
 person signing in at the old address while every admin surface showed the new
@@ -291,8 +394,48 @@ costs no Auth write plus rollback; `performChangeEmail`'s transaction is the
 authoritative check and re-tests **both** halves — that the doc still holds the
 email we read (`aborted / email-changed` otherwise, which the client surfaces as
 "try again") and that no other doc holds the new one. Guard order is the
-standard one (auth → `assertAdmin` → payload → `enforceDurableRateLimit` 20/hr
-per admin uid → work), with the same `/`-in-docId rejection as the delete.
+standard one (auth → payload → identity → freshness → `enforceDurableRateLimit`
+**5/hr** per caller uid → work), with the same `/`-in-docId rejection as the
+delete. The payload is validated before a slot is consumed so a burst of
+malformed submissions can't exhaust a legitimate caller's window, and the
+identity guard sits above the limiter so a non-entitled caller can't burn one
+either. The budget is the same on both branches — this rewrites a sign-in
+identity, so a compromised session must not be able to walk the roster.
+
+**A NON-ADMIN caller additionally requires a fresh re-auth** —
+`assertFreshReauth` (`security.js`, shared with `deleteAccount`) rejects a
+caller whose `auth_time` is over **5 minutes** old, so a direct call cannot skip
+`SelfEmailService`'s re-authenticate-then-call ordering. **The gate keys on
+`isAdmin`, not on `isSelf`**, and the two are separate fields on
+`resolveEmailChangeCaller`'s result for exactly this reason: an admin editing
+their OWN roster row is `isSelf` but still arrives through `updateEmployee`,
+which has no re-auth step — keyed on self-ness, that save was rejected whole
+(name, phone, colour and availability with it, since `_changeAuthEmail` runs
+before the Firestore write) as an opaque `stale-auth`. `isSelf` routes the
+notification and nothing else. The **admin branch is deliberately not gated**,
+so that residue is real and stated — an unattended admin session can still
+rewrite a colleague's address, bounded by the identity guard and the budget
+above; closing it needs a re-auth prompt on the admin save path first.
+
+**The identity guard is `resolveEmailChangeCaller`, not `assertAdmin`** — it has
+to tell an admin from a person editing their own row. Pure over the caller's
+`usersByUid` bridge data, so it is jest-tested without Firestore. An **active
+admin** may move any doc; an **active employee** may move their OWN; everything
+else is refused `permission-denied / not-admin` — a disabled account (whose Auth
+credential outlives the status flip until `syncUsersByUid` revokes it), an
+invited account mid-setup, an unknown role, a missing bridge doc, or an employee
+naming somebody else's docId. Widening this callable past admins must never
+widen WHICH doc a caller can reach.
+
+**Who gets notified depends on who acted.** `isSelf` reports whether the caller
+IS the target, independent of role, so an admin editing their own row counts as
+self. An admin edit pushes the EMPLOYEE (`notifyEmailChanged`); a self edit
+pushes the ACTIVE ADMINS (`notifyAdminsOfSelfEmailChange` → the shared
+`sendToActiveAdmins` in `notification_utils.js`, excluding the person who made
+the change). **The admin notice carries the NAME, never the address** — it lands
+on every admin's Lock Screen and an email is PII. Both are best-effort and run
+after the commit: the change is already durable in both stores, so a push
+failure must not hand the caller an error for something that worked.
 Transactional core exported as `performChangeEmail` for jest.
 
 On success it pushes the employee a `kind: "emailChanged"` notification naming
@@ -492,15 +635,53 @@ employee's send is wrapped individually** — the sends run through one
 `Promise.all`, so before that a single transient token read rejected the whole
 map and cost every *other* employee tomorrow's schedule.
 
-### `sendOverdueJobPrompts` — `notifications.js`
-Every 15 min (Toronto). The "job finished?" nudge: pushes assignees of a job
+**The candidate query orders `startTime` DESC, and the direction is the whole
+point of `DIGEST_SWEEP_MAX` (1000)** — fixed 2026-08-16. The floor is
+`tomorrowStart − MAX_APPOINTMENT_SPAN_MS`, i.e. 15 days in the *past* (a run
+that began days ago can still be on site tomorrow), so ascending made the cap
+keep the OLDEST still-open jobs and discard the newest — tomorrow's, the only
+ones this digest is about. Once >1000 open jobs fell in that window the 18:00
+run read 1000 documents that had all started a week or more ago,
+`groupTomorrowsJobsByEmployee` found no overlap, and **every crew got no digest
+at all** — the exact silent omission the cap exists to prevent, inverted. The
+comment above it justified ascending with reasoning imported from
+`runTravelAwareReminderSweep`, whose window starts at `now`. Served by the
+existing `(status, startTime DESC)` composite — no new index — and the list is
+reversed in memory before grouping so each employee's jobs stay chronological.
+
+**Reachability is checked before the widget-window read.** `_loadRecipient` +
+`_canReachRecipient` run above `fetchEmployeeWidgetWindow`, the order
+`handleAppointmentWrite` already established: otherwise an inactive,
+wrong-role or tokenless employee cost a 200-doc query and a full widget-payload
+build/JSON encode every day for a send that returns 0. Both reads land in the
+same per-run cache, so asking costs nothing extra.
+
+### The overdue sweep — `notifications.js` (rides `sendUpcomingJobReminders`)
+**Not its own export.** `sendOverdueJobPrompts` was a standalone `every 15
+minutes` scheduler until 2026-08-13; it is now `runOverduePromptSweep`, called
+from `sendUpcomingJobReminders` in its own `try/catch` after the travel sweep.
+The merge is a **cost** change, not a behaviour change — Cloud Scheduler bills
+per job beyond the first three and this repo had six. Running three times as
+often is free of side effects because the per-recipient ledger below, not the
+cadence, is what guarantees at-most-once delivery. It takes `liveDeps()`, not
+`liveActivityDeps()`: this half is Firestore-only and must not read the APNs
+secrets.
+
+The "job finished?" nudge: pushes assignees of a job
 whose `endTime` passed within the last 24 h while its status is still open
 (`pending`/`in_progress`/legacy `confirmed` — server mirror of the app's
-display-only `overdue` state; nothing is ever stored). Queries by `startTime`
-over the last **48 h** (24 h eligibility + the <24 h max booking) **ordered
-`startTime` DESC** (existing `(status, startTime DESC)` index — no new index)
-so the `OVERDUE_SWEEP_MAX` cap keeps the newest-overdue jobs rather than the
-oldest, then filters `endTime ∈ (now-24h, now]` in code. At-most-once
+display-only `overdue` state; nothing is ever stored). Queries `endTime ∈
+(now−24 h, now]` — the eligibility rule itself, so the scan is its width and
+not a superset — **ordered `endTime` DESC** on the `(status, endTime DESC)`
+composite index (**added 2026-08-13; deploy `firestore:indexes` with it or the
+sweep fails `FAILED_PRECONDITION` and prompts nobody**) so the
+`OVERDUE_SWEEP_MAX` cap keeps the newest-overdue jobs rather than the ones
+closest to aging out. It queried `startTime` until then, which needed a floor
+of 24 h **plus the longest bookable span** — ~15 days, since a job that started
+a fortnight ago can still have just ended — and so re-read every open job of
+the past two weeks on each of the 96 daily runs to prompt the handful that had
+actually ended. A doc with no `endTime` is now excluded by the filter rather
+than read and dropped in code. At-most-once
 **per recipient** via the
 `appointmentOverduePrompts/{id}_{endMs}_{employeeDocId}` ledger; a claim that
 delivered **zero** pushes is released (doc deleted) so a later sweep retries
@@ -511,9 +692,11 @@ element makes an invalid document path, and constructing it outside the `try`
 threw before any per-recipient handler could catch — one malformed id
 permanently killed every overdue prompt for the whole fleet. The scheduler body
 is also wrapped and logged like its two siblings, so a sweep that dies is
-visible instead of silent. Candidates are processed serially, so it carries a **300s
-timeout** (well over the 60s default) to keep a backlog from leaving the newest
-overdue jobs unprompted.
+visible instead of silent. Candidates are processed serially, which is why the
+host function's **420s timeout** takes the larger of the two budgets the
+separate schedulers carried (120 and 300) plus headroom — a backlog here must
+not leave the newest overdue jobs unprompted, and it must not eat the travel
+sweep's budget either.
 
 ## User → uid bridge
 
@@ -536,6 +719,46 @@ before the Firestore doc, so the trigger's later revoke is a no-op rather than a
 retry loop. Without this the rules' `status == 'active'` gates would still be
 reachable with a stale credential.
 
+Deactivation additionally **rotates the Storage download tokens** on every photo
+of every appointment the person was assigned to (`rotateAssignedImageTokens`,
+`appointment_image_tokens.js`). `ImageStorageService.uploadImage` still persists
+a `getDownloadURL()` link per photo into `pictures[]`; its
+`firebaseStorageDownloadTokens` value is stable per object and never expires,
+and fetching the URL serves the bytes over plain HTTPS with **no auth and no
+`storage.rules` evaluation** — so revoking the credential does not reach the
+links already on that person's device. Rotating the object metadata is the only
+thing that can invalidate one. It rewrites the stored `url` in the same pass
+(rotating alone would blank those photos on the old builds the `url` write
+exists for, and a deactivated employee can no longer read the document to see
+the replacement), is bounded at `ROTATE_APPOINTMENT_MAX` (500) newest-first on
+the **new `(employeeIds CONTAINS, endTime DESC)` composite** — declared
+explicitly rather than leaning on index reversal, because a missing index fails
+`FAILED_PRECONDITION` straight into this module's swallow, i.e. a security
+control that silently stops running; **deploy `firestore:indexes` with it** —
+with a warn at the cap, resolves the bucket lazily so the module stays
+jest-requirable, and
+**never throws** — a rethrow under `retry: true` would re-run the whole handler
+and re-rotate everything already done. `timeoutSeconds` is raised to 300 for it.
+It runs **LAST in the handler, after the Auth disable + `revokeRefreshTokens`**:
+it is the only step here that can take minutes, so ordered ahead of them the
+revocation waited on 500 appointments' worth of Storage writes, and a timeout at
+that ceiling meant it never ran at all that pass. Its appointment and photo
+concurrency bounds MULTIPLY, so the ceiling on in-flight GCS chains is the
+product of the two — the photo loop is bounded for that reason, not because the
+list is long. A second **unordered backstop pass** picks up any appointment
+with no `endTime`, which the ordered query structurally cannot return; it is
+bounded by the same cap, needs no new index, and dedupes by doc id. The parent
+writes fire up to 500 `notifyAppointmentChanges` invocations, each a verified
+no-op that returns before any Firestore read; `recountAppointmentPictures` is
+not fired at all, since it triggers on the images subcollection rather than the
+parent. Defence-in-depth behind the rules' status gate, never the gate
+itself; retires with the `url` write at the photo-subcollection CONTRACT step.
+
+The bridge's pure rules live in `bridge_policy.js` (`shouldHaveBridge`,
+`bridgeBody`, `bridgeMatches`, `classifyBridgeRow`), shared with
+`scripts/backfill.js` — the only script here that deletes, and until 2026-08-16
+the only one with no test.
+
 ## Client → appointment propagation
 
 ### `propagateClientEdits` — `client_propagation.js`
@@ -545,7 +768,14 @@ left as it was at visit time). `address` follows the client only when the
 appointment's stored address equals the client's *previous* address (a differing
 one is treated as a per-appointment custom address). Requires the composite index
 `(clientId ASC, startTime ASC)` on `appointments`. `retry: true` — writes are
-absolute values. **Deployed** (verified live 2026-07-10).
+absolute values. The page loop runs to **exhaustion on purpose and must not
+gain a total cap** (truncating would leave stale denormalized `clientName` on
+the future visits this trigger exists to keep correct), so instead each
+page's batch commits while the next page is fetched — at most one commit
+outstanding, settled through the same `Promise.all` that awaits the fetch —
+and the success log carries a `pages` count, which is the only signal that a
+client with several live series costs hundreds to low-thousands of reads per
+edit. **Deployed** (verified live 2026-07-10).
 
 ### `recountClientJobs` — `client_job_count.js`
 `appointments/{id}` write trigger that maintains the denormalized `jobCount` on
@@ -580,6 +810,51 @@ throws synchronously on one) → `enforceDurableRateLimit` (20/hr per admin uid)
 work. The pure `performDeleteClient(db, clientId)` is exported for jest.
 Archive — not delete — is the normal way a client leaves the roster.
 **Deployed 2026-08-03** (`1c6a949`), verified ACTIVE.
+
+## Appointment photos → subcollection
+
+Photos are moving from the `pictures` array on each appointment into
+`appointments/{id}/images`. Every appointment read carried the whole array (a
+download URL alone is ~215 of a ~290-byte entry) while only the detail sheet
+ever renders one, and the calendar reads up to 1000 appointments at a time.
+**Phase 1 writes BOTH stores** — the array stays authoritative because the
+shipped build reads it — so neither function below may be treated as the sole
+owner of a photo until the CONTRACT release. See the root `CLAUDE.md`.
+
+### `cascadeDeleteAppointmentImages` — `appointment_images.js`
+`appointments/{id}` **delete** trigger that removes the whole `images`
+subcollection. **This is not cleanup — it is the reason the feature needs a
+server component at all: Firestore does NOT delete a subcollection when its
+parent document is deleted.** Without it every appointment delete leaves photo
+documents orphaned under a parent that no longer exists: invisible in the
+console, unreachable by every query the app makes, and with nothing anywhere
+reporting it. Covers all three delete paths — the client's single delete, its
+series delete, and `purgeExpiredHistory` (Admin SDK deletes fire triggers too).
+Uses `recursiveDelete`, the same Admin-SDK bulk writer `syncUsersByUid` already
+uses for `liveActivityTokens`. **RETHROWS**, deliberately unlike the
+best-effort cleanup elsewhere in this codebase: a swallowed error leaves exactly
+the permanent invisible orphans it exists to prevent, and rethrowing is what
+makes `retry: true` mean anything. `retry: true` is safe because a second pass
+finds nothing. The pure `purgeAppointmentImages(id, {db})` is exported for jest.
+**Not yet deployed.**
+
+### `recountAppointmentPictures` — `appointment_images.js`
+`appointments/{id}/images/{imageId}` write trigger maintaining the denormalized
+`pictureCount` on the parent. Exists because `AppointmentCard` shows a photo
+indicator and renders on every range-query surface, so it cannot afford a
+subcollection read per card; ~15 bytes against ~290 per photo entry. Recomputes
+with a `count()` aggregate and writes **absolutely** — never
+`FieldValue.increment`, same rule and same reason as `recountClientJobs` under
+`retry: true`. Writes with `update()` rather than `set({merge: true})` so an
+appointment deleted in the window is never resurrected as a count-only stub; a
+Firestore `NOT_FOUND` there is the **normal** path, not an error, because
+`cascadeDeleteAppointmentImages` has just removed the photos. `pictureCount` is
+function-owned: `firestore.rules` rejects a client write that touches it and
+`AppointmentRecord.toMap()` must never emit it. **No loop risk** — this triggers
+on the subcollection and writes the parent, a different path. The parent write
+does re-fire `notifyAppointmentChanges`, which produces no events for a
+count-only change and returns before any Firestore work. The pure
+`recountPictures(id, {db})` is exported for jest. **Not yet deployed.**
 
 ## Wave Accounting
 
@@ -638,13 +913,14 @@ from them, so a client edit still in the outbox is not just overwritten — it i
 marked synced, and the pending job then hashes the clobbered doc, matches, and
 no-ops. The drain is bounded and its query only takes jobs already due, so a job
 backed off after a transient Wave error survives it. Both this callable and
-`waveScheduledImport` therefore pass `importCustomers` a `skipClientIds` set
+`runWaveDaily` therefore pass `importCustomers` a `skipClientIds` set
 from `listOutstandingClientIds` (`wave/worker.js`, covering `queued` and
 `inflight`); skipped clients are counted as `skippedPending`.
 
 The push half is **best-effort and bounded** — `SYNC_PUSH_BATCH_LIMIT` (20) and
-`SYNC_PUSH_BUDGET_MS` (20 s), with `waveSyncWorker` mopping up the rest every 5
-minutes — so a drain failure is logged and swallowed rather than failing the
+`SYNC_PUSH_BUDGET_MS` (20 s), with the `waveUpsertCustomer` trigger having
+already pushed each edit as it was made and the daily sweep retrying the rest —
+so a drain failure is logged and swallowed rather than failing the
 import the admin actually pressed the button for. Both bounds are sized against
 the *client's* deadline (`kWaveSyncTimeoutSeconds`, 120 s, in
 `wave_service.dart`), not the 300 s function timeout: a callable can't be
@@ -679,9 +955,9 @@ Writes `createdAt`/`updatedAt` on every client doc it does write (the
 list/search order by `createdAt`, and Firestore excludes docs missing the
 orderBy field). Rate-limited 5/hr; 300s timeout.
 
-**Delta import (2026-08-04).** Introspection against the live API
-(`functions/scripts/wave-introspect-customer-sort.js`) established that
-`business.customers` accepts `modifiedAtAfter: DateTime` /
+**Delta import (2026-08-04).** Introspection against the live API, via a
+one-off script (since deleted — its findings are recorded here) established
+that `business.customers` accepts `modifiedAtAfter: DateTime` /
 `modifiedAtBefore`, and that `CustomerSort` offers `MODIFIED_AT_ASC/DESC`
 alongside `CREATED_AT_*` and `NAME_*`. The filter is the better lever than the
 sort — it runs server-side, so Wave returns only what changed instead of us
@@ -698,8 +974,8 @@ variables; Wave refuses inline `String` arguments (see `functions/CLAUDE.md`).
 The watermark lives on `wave/connection` (`customerDeltaSince`,
 `lastFullImportAt`) and `importCustomers` stays stateless about it. The whole
 read → decide → import → advance sequence has **one owner**,
-`importWithWatermark` in `wave/callables.js`, used by both the interactive sync
-and `waveScheduledImport`; the decisions are the pure `resolveImportWindow` /
+`importWithWatermark` in `wave/sync_run.js`, used by both the interactive sync
+and the daily `runWaveDaily`; the decisions are the pure `resolveImportWindow` /
 `watermarkPatch` in `wave/import_schedule.js`, placed beside `isImportDue`
 because the two cadences interact.
 
@@ -743,32 +1019,115 @@ ids would avoid that, and is the remaining optimisation here.
 of changed customers, not the roster size. Don't render it as "you have N
 clients".
 
-### `waveUpsertCustomer` — `wave/callables.js`
+### `waveUpsertCustomer` — `wave/triggers.js`
 `clients/{id}` write trigger. When a client's Wave-mapped fields change, marks
 the doc `wave.syncState: pending` and enqueues a `customerUpsert` job on the
 `waveSyncQueue` outbox (deterministic job id → burst edits collapse to one job).
-Both writes land in one batch. No secret (only writes to Firestore). `retry:
-true` — idempotent and hash-guarded.
+Both writes land in one batch. `retry: true` — idempotent and hash-guarded.
 
-### `waveSyncWorker` — `wave/callables.js`
-Scheduled outbox drainer, **every 5 minutes**, single instance. Claims queued
-jobs transactionally, dispatches the Wave upsert, and writes the outcome under a
-concurrent-re-enqueue guard; a lease-reaper reclaims jobs stranded by a crashed
-instance. `batchLimit` 30 × 5-min cadence = 6 Wave calls/min (Wave allows 60/min).
-540s timeout with a wall-clock deadline at ~70% so it finishes outcome writes
-cleanly. Skips entirely (cheap cached read) while Wave isn't connected.
-Needs composite indexes `(status ASC, nextAttemptAt ASC)` and
-`(status ASC, claimedAt ASC)` on `waveSyncQueue`.
+**It then PUSHES that job immediately** (2026-08-13), which is what replaced the
+deleted `waveSyncWorker` scheduler. It binds `WAVE_FULL_ACCESS_TOKEN` and runs a
+bounded `drainQueue` (`batchLimit` 20, 180 s budget, 300 s function timeout)
+after the enqueue commits. Two properties are load-bearing:
 
-### `waveScheduledImport` — `wave/callables.js`
-Scheduled Wave → app auto-import, **every 24 hours**, single instance. Reads
-`wave/connection` and re-runs `importCustomers` only when the configured
-`importSchedule` cadence is due (`isImportDue` in `wave/import_schedule.js`, a
-pure jest-testable helper — `off` or any unknown value never runs). Server-
-triggered, so no App Check / rate limit. A due run stamps `lastAutoImportAt`; a
-failed run leaves it unchanged so the next day retries. 300s timeout.
+- **The drain must never throw.** The job is already durably queued, so a drain
+  failure is a delay, not a loss — and throwing would re-run the whole handler
+  under `retry: true` for something a retry cannot fix. It is caught and logged
+  at `warn`.
+- **It cannot loop.** `upsertCustomer` writes `wave.*` back onto the client doc,
+  which re-fires this trigger — but `mappedFieldsHash` is unchanged by that
+  write, so `shouldEnqueueClientWrite` returns false at the top and the re-fire
+  never reaches the drain.
 
-It passes the same `skipClientIds` protect-list as `waveImportCustomers` (see
-that entry) — and needs it more, since it runs unattended: a client edit this
-overwrote before the guard existed was lost with nobody watching. It does not
-push first; `waveSyncWorker` owns that half.
+A disconnected install still enqueues (the outbox is durable) but does not
+drain; the connection gate is the cached `readWaveBusinessIdCached`, which is
+what keeps that case off a Firestore read per client edit.
+
+Draining here rather than on a 5-minute poll is both cheaper and faster: an idle
+day costs zero invocations instead of 288, it frees a Cloud Scheduler slot (only
+3 are free per billing account), and an edit reaches Wave in seconds instead of
+up to five minutes. Needs the same `waveSyncQueue` composite indexes the worker
+did: `(status ASC, nextAttemptAt ASC)` and `(status ASC, claimedAt ASC)`.
+
+### `waveRetryFailedJobs` — `wave/callables.js`
+
+Admin-only recovery for **dead-lettered** outbox jobs, called from Settings
+(`wave_service.dart`). A `dead` job is terminal — no drain picks it up again —
+so without this the client's data diverges from Wave permanently, and the only
+way back was editing the client again to mint a fresh job, which an admin would
+have to know to do and would only think to do if they noticed the error badge.
+
+**Deliberately explicit, never an automatic requeue on a timer.** A job that
+died on a `WaveValidationError` will die again, so a timer would spin forever
+re-reporting the same failure. The admin presses this once they have fixed the
+data or the outage has passed.
+
+Guard order is the standard one — auth → `assertAdmin` → `assertPayloadShape`
+(empty key set; it takes no payload) → `enforceDurableRateLimit`
+(`wave-retry`, **10/hour per admin uid**) → work. Refuses with
+`failed-precondition / wave/not-connected` when no business id is stored.
+
+`requeueDeadJobs()` is the durable part; the `drainQueue` that follows is
+**best-effort and must not fail the call**, so the press has a visible effect
+without the requeue being reported as a failure when only the push behind it
+broke. Returns `{requeued, scanned, pushed, failed}` — `pushed` and `failed`
+are both null when nothing was requeued or the drain threw.
+
+**`failed` (`drained.dead`) is what keeps the press honest, and it is the same
+class of omission `pushedFailed` fixed on the sync response.** The reason this
+callable is deliberately manual — a job that died on a `WaveValidationError`
+dies again — is exactly what makes the drain behind the requeue dead-letter it
+a second time *inside this call*: the queue's dead count is unchanged, the
+Settings row still reads "1 client failed to sync", and an app that sees only
+`requeued` announces "1 client queued for Wave again" as a success over it. The
+count was right; the sentence over it was the lie. `waveRetryNotice`
+(`wave_sync_notice.dart`) composes from both counts and the section surfaces it
+with `notices.error` when `failed > 0`.
+
+**What it could NOT fix, until 2026-08-15: a dead-letter whose cause is stored
+on the doc.** Both prod cases were a `waveCustomerId` pointing at a customer
+deleted in Wave; `customerPatch` answers `NOT_FOUND`, which is correctly
+non-retryable, so every press re-sent the same missing id and dead-lettered
+again. `upsertCustomer` now relinks instead (see `functions/CLAUDE.md`).
+The general shape to watch for: this callable can only help a job whose failure
+was about the *moment*, never one about the *payload* — anything permanent has
+to be healed at the source or it comes straight back.
+
+Related: `listOutstandingClientIds` (`wave/worker.js`) protects `queued`,
+`inflight` **and `dead`** client ids from being overwritten by an import — a
+dead job's edit is the one *most* at risk, because unlike the other two it will
+not self-heal without this callable.
+
+### `runWaveDaily` — `wave/triggers.js` (rides `sendDailyJobDigest`)
+**Not its own export.** `waveScheduledImport` was a standalone `every 24 hours`
+scheduler until 2026-08-13; the daily Wave maintenance is now `runWaveDaily`,
+rider 3 on `sendDailyJobDigest` — in its own `try/catch`, strictly after the
+digest has sent, which is the whole safety argument for merging. Same cost
+reasoning as the overdue sweep: it is one of the two merges that took Cloud
+Scheduler from six jobs to three. The host binds `WAVE_FULL_ACCESS_TOKEN` and
+carries the 540 s timeout this work needs on its own.
+
+It does two things, and the first runs unconditionally.
+
+**1. Drains the outbox (app → Wave), always** — before the cadence check, in its
+own try/catch. This is the safety net under the event-driven push above, and it
+exists because two states cannot produce a client write to ride on: a job that
+failed and is sitting on its `nextAttemptAt` backoff, and a job left `inflight`
+by an instance that died mid-dispatch (reclaimed by `drainQueue`'s lease pass).
+**It runs even when `importSchedule` is `off`** — that setting governs the PULL,
+and `off` is the default, so gating the push on it would mean a default install
+never pushes automatically at all. Bounded to a 180 s slice so the import below
+still has budget.
+
+**2. Pulls (Wave → app), only when the cadence is due** — `isImportDue` in
+`wave/import_schedule.js`, a pure jest-testable helper (`off` or any unknown
+value never runs). Server-triggered, so no App Check / rate limit. A due run
+stamps `lastAutoImportAt`; a failed run leaves it unchanged so the next day
+retries.
+
+The order is also the push-before-pull invariant: an import overwrites every
+mapped field of a linked client AND stamps `wave.lastSyncedHash` from Wave's
+values, so an un-pushed local edit underneath it is not merely overwritten but
+marked *synced* — silently lost. It passes the same `skipClientIds` protect-list
+as `waveImportCustomers`, read AFTER the drain so a job the drain completed is
+not protected for nothing while anything it could not finish still is.

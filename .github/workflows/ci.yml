@@ -2,7 +2,11 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # `redesgin` is the long-lived active branch and carries dozens of commits
+    # between merges, so main-only push triggers meant most work was unverified
+    # until PR time. Both are listed rather than using a wildcard: a wildcard
+    # would double every PR run (once for the push, once for the PR).
+    branches: [main, redesgin]
   pull_request:
 
 jobs:
@@ -34,8 +38,21 @@ jobs:
       - name: Analyze
         run: flutter analyze
 
+      # `--coverage` so an untested unit is visible in the run's artifacts
+      # rather than only discoverable by a manual audit. No threshold is
+      # enforced: a hard gate on a repo with device-only paths (image picker,
+      # biometrics, geolocator) would fail on code that is deliberately
+      # untestable here.
       - name: Test
-        run: flutter test
+        run: flutter test --coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-coverage
+          path: coverage/lcov.info
+          if-no-files-found: warn
 
   functions:
     name: Cloud Functions lint + test
@@ -59,5 +76,17 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # Same reasoning as the Flutter side: report coverage, don't gate on it.
+      # The modules that resolve a Storage bucket at load can't be required by
+      # jest at all, which is why their logic lives in pure `*_policy.js`
+      # siblings — a threshold here would punish that split.
       - name: Test
-        run: npx jest
+        run: npx jest --coverage
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: functions-coverage
+          path: functions/coverage/lcov.info
+          if-no-files-found: warn

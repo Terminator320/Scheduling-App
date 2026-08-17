@@ -17,6 +17,7 @@ class EventList extends StatelessWidget {
     this.isLoading = false,
     this.onAppointmentTap,
     this.selectedAppointmentId,
+    this.bottomClearance = 0,
   });
 
   /// One entry per day the job runs — see [AgendaSliverList.events].
@@ -27,6 +28,10 @@ class EventList extends StatelessWidget {
   final bool isLoading;
   final void Function(AppointmentRecord appointment)? onAppointmentTap;
   final String? selectedAppointmentId;
+
+  /// See [AgendaSliverList.bottomClearance] — forwarded so a host that floats
+  /// a FAB over this pane can clear the last card.
+  final double bottomClearance;
 
   @override
   Widget build(BuildContext context) => Expanded(
@@ -40,6 +45,7 @@ class EventList extends StatelessWidget {
           isLoading: isLoading,
           onAppointmentTap: onAppointmentTap,
           selectedAppointmentId: selectedAppointmentId,
+          bottomClearance: bottomClearance,
         ),
       ],
     ),

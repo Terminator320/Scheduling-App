@@ -1,4 +1,8 @@
-import 'package:flutter/material.dart';
+// Narrowed deliberately: nothing here shows UI. `showMaxJobsPicker` and
+// `joinWeekdayNames` moved to `../../widgets/fields/work_schedule_pickers.dart`
+// — this was the only domain file in the repo that pushed a route, and the
+// precedent that would have landed the next `show*Picker` here too.
+import 'package:flutter/material.dart' show TimeOfDay, immutable;
 
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -103,3 +107,14 @@ String formatWorkingDays(
   }
   return [for (final index in working) labels[index]].join(', ');
 }
+
+/// The daily cap options: no cap, then 1–12, which covers any real crew day.
+const List<int> kMaxJobsOptions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+/// The daily cap as a label — 0 reads as "No cap", anything else as the number.
+///
+/// The picker's own rows, the admin Team sheet's row and My details' row all
+/// state the same value, so the mapping has one owner. Only the option list was
+/// extracted here originally; the ternary stayed hand-copied at three sites.
+String maxJobsLabel(AppLocalizations l10n, int value) =>
+    value == 0 ? l10n.employees_noCap : '$value';

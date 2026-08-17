@@ -43,7 +43,11 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
   @override
   void dispose() {
     _sub?.cancel();
-    _currentEntry?.remove();
+    // `remove()` detaches, `dispose()` releases — an entry removed without
+    // being disposed trips Flutter's leak tracking in widget tests.
+    _currentEntry
+      ?..remove()
+      ..dispose();
     _currentEntry = null;
     super.dispose();
   }
@@ -78,7 +82,9 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
       NoticeSuccess() || NoticeInfo() => HapticFeedback.lightImpact(),
     });
 
-    _currentEntry?.remove();
+    _currentEntry
+      ?..remove()
+      ..dispose();
     _currentEntry = null;
 
     late final OverlayEntry entry;
@@ -87,7 +93,9 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
     void dismiss() {
       if (dismissed) return;
       dismissed = true;
-      entry.remove();
+      entry
+        ..remove()
+        ..dispose();
       if (_currentEntry == entry) _currentEntry = null;
     }
 

@@ -5,14 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/app/app_sync_listeners.dart';
+import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
-import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
-import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
@@ -79,17 +77,22 @@ class AccountExitListeners {
     if (navContext == null) return;
     _isHandlingAccountExit = true;
 
+    // Both resolved before the three network round-trips below. The host here
+    // is the app shell and normally outlives them, but `ref.read` throws on a
+    // disposed consumer under Riverpod 3, and this catch is the retry signal
+    // for a failed sign-out — the one place it must not be replaced by a
+    // different error.
+    final logger = ref.read(loggerProvider);
+    final authService = ref.read(authServiceProvider);
+
     var exitScheduled = false;
     try {
       final message = selectMessage(AppLocalizations.of(navContext));
       // Best-effort de-registration first — a failure here shouldn't block
-      // sign-out.
-      await ref
-          .read(pushRegistrationControllerProvider)
-          .unregisterCurrentDevice();
-      await ref.read(presenceSyncControllerProvider).unregister();
-      await ref.read(liveActivityRegistrationControllerProvider).unregister();
-      await ref.read(authServiceProvider).signOut();
+      // sign-out. Order lives in `deregisterThisDevice`, shared with both of
+      // Settings' exits.
+      await deregisterThisDevice(ref);
+      await authService.signOut();
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         navigatorKey.currentState?.pushNamedAndRemoveUntil(
@@ -104,7 +107,7 @@ class AccountExitListeners {
       exitScheduled = true;
     } catch (e, st) {
       // Sign-out failed — next signal retries.
-      ref.read(loggerProvider).warn('ACCOUNT-EXIT sign-out failed', e, st);
+      logger.warn('ACCOUNT-EXIT sign-out failed', e, st);
     } finally {
       // Reset on failure to allow retry on next signal. On success the
       // post-frame callback owns the reset, so the guard stays up until the

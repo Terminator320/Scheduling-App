@@ -1,0 +1,190 @@
+---
+alwaysApply: true
+---
+
+# Error Handling
+
+- Never swallow errors silently. Log or rethrow with added context about what operation failed.
+- Catch specific Firebase exceptions (`FirebaseAuthException`, `FirebaseException`) and surface meaningful messages to the UI.
+- Never expose raw Firebase error codes or stack traces directly in UI text.
+- Async calls in `initState` / stream subscriptions must have `.catchError` or `try/catch`. Unhandled stream errors crash the app silently.
+- Retry transient Firebase errors (network timeouts) with backoff where appropriate. Fail fast on auth and permission errors — with one sanctioned exception: a Firestore read/stream fired right after sign-in can return `permission-denied` until the freshly minted auth token propagates, so retry *that* case via `lib/core/utils/retry.dart` (`retryAsync` for a one-shot read, `retryStream` for a live query). The appointments stream (`retryStream`) and `sign_in_controller.dart`'s `findUserByUid` read (`retryAsync`) are the reference uses; a new query fired immediately post-sign-in must wrap through one of them or it can spuriously fail the first time. **The `retryWhen` predicate is `isAuthPropagationDenied`, exported from that same file, and it is now the DEFAULT on both helpers** — it was copied byte-identically into three repositories, two of which carried a "keep in sync" comment naming only ONE twin, so neither author knew there were three, and `retryAsync` had no predicate at all, so it retried a genuine rules rejection three times before surfacing it. Never re-declare it locally, and never hand-roll a `catch (FirebaseException)`-then-delay inline — that is exactly what `_retryOnAuthPropagation` was, sitting under a rule that named it as the *reference use* of the shared helper it did not call. **The delay ladder has one owner too, `kAuthPropagationDelays`** (beside the predicate) — it is the default for `delays:` on both helpers, so a call site names it only to be explicit, never to pick a different budget.
+- `FirebaseException` with code `permission-denied` usually means a Firestore rules issue, not a bug — log clearly.
+
+## Cause notices (generic catch sites)
+
+- When no typed `Failure` applies, surface via
+  `composeErrorNotice(context, intro:, error:)`
+  (`lib/core/errors/error_cause.dart`) — renders `"{intro}. {cause}"` from 7
+  sanitized causes (offline / permission-denied / not-found / signed-out /
+  too-many-attempts / invalid-data / unknown).
+  Never `error_somethingWentWrong` directly at new catch sites.
+- **The notice carries NO support tag** (owner call, 2026-08-04, when the app
+  stopped being a testing build). It used to end `. (CLI-DEL)` so a user
+  screenshot mapped to a Crashlytics line; that is developer scaffolding on a
+  screen a customer reads, and it cost the room the message needed to say what
+  to do next. Tags survive **only** as the `logger.warn` label prefix — don't
+  re-add one to a user-facing string, here or anywhere.
+- The site's `logger.warn` label MUST still start with its tag
+  (`'CLI-DEL deleteClient failed'`) — it is now the only place the tag lives, so
+  a Crashlytics search still finds the operation. Call `warn` BEFORE any
+  `if (!mounted) return;` guard — `AppLogger` is context-free, and the log must
+  survive unmount.
+- **But resolve the logger BEFORE the first `await`, never inside the `catch`:
+  `final logger = ref.read(loggerProvider);`.** The two halves of this rule
+  fight each other otherwise, and the loser is a crash. `AppLogger` is
+  context-free, but `ref` is not: under Riverpod 3 `ref.read` on an unmounted
+  consumer **throws a `StateError`** (`flutter_riverpod/lib/src/core/consumer.dart`,
+  `_assertNotDisposed` — an unconditional throw, not a debug assert, and it
+  guards `read`/`watch`/`listen`/`invalidate`/`refresh`). So
+  `ref.read(loggerProvider).warn(...)` above a mounted guard throws exactly in
+  the case the guard exists for. In `address_autocomplete_field.dart` that
+  escaped a `Debouncer` timer callback into the zone handler as a **FATAL**,
+  every time an address lookup failed after its sheet was dismissed. Hoisting
+  the read satisfies both halves: the log still survives unmount, and nothing
+  touches `ref` after the await. The same applies to any other provider a
+  post-await path needs (`noticeServiceProvider`, a repository) — read it up
+  front. `ref.read` inside a `catch` is mechanically greppable; treat a new one
+  as a bug.
+- Typed-Failure branches stay first; the composer is the generic fallback only.
+- New operation ⇒ new log tag + an `error_intro*` key in both ARBs. **The intro
+  is the first sentence of `error_noticeWithCause` (`"{intro}. {cause}"`), so it
+  is CAPITALIZED and carries no trailing punctuation** — every shipped key reads
+  "Couldn't save the employee", "Couldn't load clients". It says WHAT failed and
+  nothing else.
+- **A cause says why AND what to do about it**, in one sentence, joined by an em
+  dash: "You appear to be offline — check your connection and try again." They
+  are full capitalized sentences (they follow the intro's period), not the
+  lowercase fragments they were before. `error_causeUnknown` is deliberately
+  just "Please try again in a moment." — the intro already named the failure, so
+  repeating "something went wrong" there adds nothing. Keep a new cause
+  actionable or don't add it.
+- Never log inside list/item builders (rebuild spam) — e.g. CLI-LIST's
+  first-page error indicator composes without logging.
+- Existing log tags: APPT-CREATE/SAVE/DEL/LOAD/STATUS, CLI-ADD/SAVE/DEL/ARCH/LIST/SEARCH,
+  HIST-LOAD, EMP-SAVE/STATUS/CREATE/DELETE/LOAD/TODAY, ACCT-DEL/SIGNOUT,
+  ADDR-PLACES, SPLASH, ME-SAVE/EMAIL, MYDET. (CLI-ARCH = archive and
+  un-archive, which share one tag because they are one toggle; CLI-DEL's typed
+  `ClientsFailureHasHistory` branch runs FIRST — "archive it instead" is
+  actionable where the generic cause notice is not — and the composer is
+  the fallback. Both live in the shared `ClientActionsHost` mixin, so the list
+  and the detail can't drift on either tag.) (APPT-STATUS =
+  mark-done/cancel; `event_details_controller` status setters return `Object?` —
+  null on success, the caught error otherwise — so the widget composes the
+  notice. EMP-DELETE = removing a pending account, P4c's replacement for the
+  retired EMP-REVOKE; its typed `EmployeesFailureAccountNoLongerPending` branch
+  runs FIRST and the composer is the fallback.) Log-only tags — no notice intro, so no ARB key — additionally
+  include LAUNCH-TEL/MAPS/URL/EMAIL, CLI-CONTACT-SAVE/SYNC, APPLOCK, IMG-UPLOAD,
+  IMG-LOAD,
+  ACCOUNT-EXIT, DEEP-LINK.
+- **A user-visible failure notice is not a substitute for a log.** A `catch` that
+  only pushes a notice (or only returns `false`) is invisible in Crashlytics —
+  every swallowed failure needs a `warn` beside it. The sanctioned exceptions are
+  list/item builders (rebuild spam), the FCM background isolate
+  (`writeWidgetPayloadJson` — no Riverpod container, nowhere to surface), and
+  **`firebaseReadyProvider.future.catchError((Object _) {})`** at the four gate
+  points that await it (`account_status_provider`, `push_registration_controller`,
+  `live_activity_registration_controller`, `presence_sync_controller`):
+  `splash_screen.dart` already logs that shared future's failure once, and Dart
+  delivers the same settled error to every listener, so logging at each gate
+  would file four non-fatals for one event. A
+  fail-closed `catch (_) { return false; }` is the easiest one to miss: it hides
+  a permanently-broken plugin channel behind a feature that just "doesn't work".
+
+## Action outcomes vs. errors
+
+- A controller action whose result has more than two states returns a **sealed
+  outcome**, never a bare `Object?`/`bool`. `EventDetailsController`'s status
+  setters return `EventDetailsActionOutcome` (`Ok` / `Busy` / `Failed(error)`)
+  beside the existing `EventDetailsSaveOutcome`. They previously returned
+  `Object?` with `null` = success, so a write **skipped by the reentrancy
+  guard** was indistinguishable from one that committed — the sheet announced
+  "marked as complete" and closed without having written anything. A sealed
+  family makes the compiler force the third branch at every call site; a
+  sentinel compared with `identical()` does not.
+- **A reentrancy skip is a `Busy` member, never a fabricated exception.**
+  `EmployeeSaveBusy` and `ClientSaveBusy` join `EventDetailsActionBusy` for this.
+  All three save controllers previously returned
+  `XSaveFailed(SocketException('in-flight'))`, and `_classifyError`
+  (`error_cause.dart`) keys on the `SocketException` **type** — so a double-tap
+  rendered "Couldn't save … — you appear to be offline" while perfectly online,
+  with the real save succeeding behind the error. Note the sibling
+  `SocketException('offline')` sentinel in the client controller is correct and
+  stays: there the offline classification is the intended one.
+- A no-op outcome (`Busy`) surfaces **nothing** — neither a success notice nor
+  an error. Only a real failure composes a notice.
+
+## Typed failures
+
+- Each feature defines a sealed `Failure` family at
+  `lib/features/<f>/domain/<f>_failure.dart` (see `AuthFailure`,
+  `EmployeesFailure`, `MapsFailure`); cross-cutting ones live in `core`
+  (e.g. `ImageUploadFailure` in `lib/core/images/`). The base `Failure`
+  (`lib/core/errors/failure.dart`) `implements Exception` so throwing one
+  satisfies `only_throw_errors` — keep that when adding failure families.
+  Repositories throw the typed failure; catch sites surface via
+  `noticeServiceProvider.error(failure.toLocalizedMessage(context))`.
+  Don't reach for `throw Exception(...)` — the string leaks to UI/logs.
+- `AuthErrorMapper.map` passes through `AuthFailure` instances unchanged, maps
+  `FirebaseAuthException` by code, and converts
+  `FirebaseException(code: 'permission-denied')` to `AuthFailurePermissionDenied`;
+  anything else becomes `AuthFailureUnknown` → "Something went wrong." Throw typed
+  `AuthFailure`s directly from services — don't wrap them in another exception.
+  When a rules rejection surfaces in the auth/sign-up flow, check
+  `firestore.rules` first, not Firebase Auth error codes.
+- Failure UX strings already exist — `somethingWentWrong`,
+  `somethingWentWrongPleaseTryAgain`. Reuse before adding new ones. (Most
+  generic catch sites now compose via `composeErrorNotice` instead.)
+
+## Logging & surfacing
+
+- Catch blocks log via `ref.read(loggerProvider).warn('label', e, st)`. For
+  user-visible failures (save/delete/status), also push
+  `noticeServiceProvider.error(<l10n string>)` from the widget layer.
+- Services that log from catch blocks inject `AppLogger` as an optional ctor
+  param (default `AppLogger()`) — never call `FirebaseCrashlytics.instance`
+  directly. `AppLogger.warn` only fires Crashlytics in `kReleaseMode`, so tests
+  pass without Firebase init.
+- One-shot side effects on `AsyncValue` transitions (e.g., stream goes
+  data → error) belong in `ref.listen`, not in `.when`'s error branch.
+  The `.when` error branch fires on every rebuild and would spam the
+  notice surface.
+
+## Crashlytics severity
+
+Not every failure is a defect. Filing routine outcomes as error records buries
+the real ones, so severity is classified in exactly two places — don't
+re-decide it at a call site.
+
+- **Expected auth failures leave a breadcrumb, not an error record.**
+  `AuthFailure.isExpected` (`features/auth/domain/auth_failure.dart`) buckets
+  each variant of the sealed family: user-correctable outcomes (wrong password,
+  bad/expired signup code, offline, rate-limited) are `true`; misconfiguration,
+  a rules rejection, an unmapped error, and a half-created account are `false`
+  and keep recording. Adding a variant forces a bucket at compile time.
+- **Every auth catch site logs through `logger.authFailure(label, failure,
+  error, st)`** (the `AuthFailureLogging` extension on `AppLogger`, beside
+  `isExpected`) — never hand-roll the `if (failure.isExpected)` branch. The
+  sites (`sign_in_controller`, `account_setup_screen`, `forgot_password_screen`,
+  `auth_service`, `my_details_screen`, `settings_screen`) previously double-filed
+  the same failure from two layers. (This said "the four sites" and named
+  `create_account_screen`, which P4c deleted; `settings_screen`'s
+  delete-account branch was the one that had no log at all.) `label` stays the Crashlytics warn tag, and the
+  breadcrumb carries only the label plus `failure.runtimeType` — never the
+  email, password, or code.
+- `AppLogger.breadcrumb` is the no-error-record variant of `warn`: it keeps a
+  trail for whatever crash follows without filing a non-fatal of its own.
+- **An unhandled Firestore `permission-denied` is a non-fatal, not a crash.**
+  `isFatalUnhandledError` (`core/logging/unhandled_error_severity.dart`) gates
+  the `fatal:` flag on both global handlers in `main.dart`
+  (`PlatformDispatcher.onError` + `runZonedGuarded`). That error is the
+  signature of auth teardown racing a live listener — revoking the token
+  (sign-out, account deletion, the signup-code rollback) denies any snapshot
+  stream still attached, and the app keeps running. It is still *recorded*, and
+  the stream that owns the query logs its own tagged `warn`, so a genuine rules
+  rejection surfaces twice. `FlutterError.onError` stays unconditionally fatal —
+  that path is framework/build errors, not this race.
+- **A raw `Stream.listen()` must pass `onError`.** Without it the error escapes
+  to the zone handler and is stamped as an app-level crash from a stream that
+  had a perfectly good place to log it. Use
+  `onError: (e, st) => logger.warn('<TAG>', e, st)`.

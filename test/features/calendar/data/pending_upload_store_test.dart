@@ -54,11 +54,36 @@ void main() {
       expect(loaded, hasLength(1));
       expect(loaded.single.paths, isEmpty);
       final img = loaded.single.uploaded.single;
-      expect(img.url, 'https://example.com/1.jpg');
+      // The download URL is deliberately NOT persisted: it is a permanent,
+      // auth-free `?alt=media&token=…` link and this queue is a plaintext blob
+      // in SharedPreferences. The drain re-resolves it from `storagePath`.
+      expect(img.url, isEmpty);
       expect(img.storagePath, 'appointments/a1/images/1.jpg');
       expect(img.uploadedAt, uploadedAt);
     },
   );
+
+  test('keeps the url of a legacy image that has no storage path', () async {
+    // There the url is the only identity the entry has, so dropping it would
+    // strand the bytes with nothing able to re-resolve them.
+    final store = PendingUploadStore();
+    await store.add(
+      PendingUpload(
+        appointmentId: 'a1',
+        paths: const [],
+        enqueuedAtMs: 1000,
+        uploaded: [
+          AppointmentImage(
+            url: 'https://example.com/legacy.jpg',
+            fileName: 'legacy.jpg',
+            uploadedAt: DateTime.utc(2026, 7, 26, 13, 45, 12),
+          ),
+        ],
+      ),
+    );
+    final loaded = await store.load();
+    expect(loaded.single.uploaded.single.url, 'https://example.com/legacy.jpg');
+  });
 
   test(
     'an entry without uploaded images omits the field and loads empty',

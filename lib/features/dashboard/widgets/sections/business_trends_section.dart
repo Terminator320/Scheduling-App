@@ -8,8 +8,11 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Trends card with a done/cancelled chart, a new-clients sparkline, and a
-/// busiest-weekday row.
+/// Trends card with a done/cancelled chart and a busiest-weekday row.
+///
+/// Its span is named in its own title ("last 8 weeks") and is deliberately NOT
+/// scoped by the dashboard's period control — see `PeriodSummarySection`.
+/// New clients moved to their own section when they gained tappable rows.
 class BusinessTrendsSection extends StatelessWidget {
   const BusinessTrendsSection({
     required this.buckets,
@@ -26,8 +29,6 @@ class BusinessTrendsSection extends StatelessWidget {
     final scheme = theme.colorScheme;
     final statusColors = theme.statusColors;
     final l10n = context.l10n;
-    final newClientValues = [for (final b in buckets) b.newClients];
-    final newClientTotal = newClientValues.fold(0, (sum, v) => sum + v);
     final busiest = busiestWeekday;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,33 +63,6 @@ class BusinessTrendsSection extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.sp12),
-              Divider(height: 1, color: scheme.outlineVariant),
-              const SizedBox(height: AppSpacing.sp12),
-              Text(
-                l10n.dashboard_newClients,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-              Text(
-                l10n.dashboard_newClientsTotal(newClientTotal),
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sp8),
-              Semantics(
-                label:
-                    '${l10n.dashboard_newClients}: '
-                    '${l10n.dashboard_newClientsTotal(newClientTotal)}',
-                child: ExcludeSemantics(
-                  child: _SparklineBars(
-                    values: newClientValues,
-                    color: scheme.primary,
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -120,47 +94,5 @@ class BusinessTrendsSection extends StatelessWidget {
   String _weekdayName(BuildContext context, int weekday) {
     final locale = Localizations.localeOf(context).toString();
     return DateFormat('EEEE', locale).format(DateTime(2024, 1, weekday));
-  }
-}
-
-class _SparklineBars extends StatelessWidget {
-  const _SparklineBars({required this.values, required this.color});
-
-  final List<int> values;
-  final Color color;
-
-  static const double _height = 36;
-
-  @override
-  Widget build(BuildContext context) {
-    var maxValue = 0;
-    for (final v in values) {
-      if (v > maxValue) maxValue = v;
-    }
-    return SizedBox(
-      height: _height,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          for (final v in values)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 1.5),
-                child: SizedBox(
-                  height: maxValue == 0 ? 0 : _height * v / maxValue,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(2),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
   }
 }

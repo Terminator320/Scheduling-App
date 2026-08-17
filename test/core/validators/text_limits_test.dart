@@ -3,7 +3,10 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
 
 /// S2: `TextLimits` caps must be applied through
 /// `LengthLimitingTextInputFormatter`, which truncates a too-long paste
@@ -107,12 +110,151 @@ void main() {
       );
     });
 
+    test('client name, with the phone number appended for Wave', () {
+      // The stored `clients/{id}.name` is NOT just what the admin typed — it
+      // is `"<typed name> <phone>"`, because that field is synced verbatim as
+      // the Wave customer name (ClientNamePolicy.composeStored). So the value
+      // the rules have to admit is the sum of the two field caps plus the
+      // separating space, and sizing the rule to `personName` alone rejects
+      // every long client save with an opaque `permission-denied`.
+      expect(
+        TextLimits.personName + 1 + TextLimits.phone,
+        lessThanOrEqualTo(rulesCapFor('name')),
+      );
+    });
+
+    /// The cap `isValidClientData` puts on `field`.
+    ///
+    /// Scoped to the inline `data.x.size() <= N` form, which only the client
+    /// validator is written with — `rulesCapFor` above takes the MINIMUM
+    /// across every collection, so it cannot express a client cap that is
+    /// deliberately WIDER than the appointment cap on the same field name.
+    int clientRulesCapFor(String field) {
+      final matches = RegExp(
+        r'data\.' + RegExp.escape(field) + r'\.size\(\)\s*<=\s*(\d+)',
+      ).allMatches(rules);
+      expect(
+        matches,
+        isNotEmpty,
+        reason: 'no isValidClientData cap found for "$field"',
+      );
+      return matches
+          .map((m) => int.parse(m.group(1)!))
+          .reduce((a, b) => a < b ? a : b);
+    }
+
+    test('the widest name composeStored can emit fits the client cap', () {
+      // `composeStored` returns the phone number for a person and the stripped
+      // base name for a business, so its widest output is a full-length
+      // business name — never the two joined. A regression to the old
+      // "<name> <number>" shape would push this past the cap and fail every
+      // long client save with an opaque `permission-denied`, so pin the
+      // ACTUAL output rather than the arithmetic.
+      final widestPerson = ClientNamePolicy.composeStored(
+        baseName: 'a' * TextLimits.personName,
+        phone: '0' * TextLimits.phone,
+        mobile: '0' * TextLimits.mobile,
+      );
+      final widestBusiness = ClientNamePolicy.composeStored(
+        baseName: 'a' * TextLimits.personName,
+        phone: '0' * TextLimits.phone,
+        mobile: '0' * TextLimits.mobile,
+        type: ClientType.commercial,
+      );
+      expect(widestPerson.length, lessThanOrEqualTo(rulesCapFor('name')));
+      expect(widestBusiness.length, lessThanOrEqualTo(rulesCapFor('name')));
+    });
+
+    test('a client address carries its apt, so the cap is the SUM', () {
+      // Both client sheets store `AddressParser.canonicalFrom(street, apt)`,
+      // which joins the street field and the apt field with a separator. Sized
+      // to the street field alone, the rule rejects the whole client save.
+      expect(
+        TextLimits.appointmentAddress + 1 + TextLimits.aptUnit,
+        lessThanOrEqualTo(clientRulesCapFor('address')),
+      );
+    });
+
+    test('an appointment clientName is the two client name halves', () {
+      // Denormalized from `ClientRecord.displayName`, which composes
+      // `firstName` + " " + `lastName` on a person — two 200-char fields, not
+      // one. Sized to `personName` the appointment save fails outright.
+      expect(
+        TextLimits.firstName + 1 + TextLimits.lastName,
+        lessThanOrEqualTo(rulesCapFor('clientName')),
+      );
+    });
+
+    test('an appointment photo fileName', () {
+      // Capped by the appointment-images subcollection rule, and
+      // `appendAppointmentPictures` writes a whole photo batch in ONE
+      // WriteBatch — so one over-long basename fails the batch with an opaque
+      // `permission-denied` and takes every valid photo beside it down too.
+      expect(
+        TextLimits.imageFileName,
+        lessThanOrEqualTo(rulesCapFor('fileName')),
+      );
+    });
+
+    test('the widest name composeFileName can emit fits that cap', () {
+      // Pin the ACTUAL output, not the constant: `ImageStorageService` builds
+      // `<millis>_<originalName>` from whatever the picker hands it, so the
+      // millisecond prefix has to be inside the bound too.
+      final widest = ImageStorageService.composeFileName(
+        '${'x' * 5000}.jpg',
+        DateTime.fromMillisecondsSinceEpoch(1700000000000),
+      );
+
+      expect(widest.length, lessThanOrEqualTo(rulesCapFor('fileName')));
+    });
+
     test('client email', () {
       expect(TextLimits.email, lessThanOrEqualTo(rulesCapFor('email')));
     });
 
     test('phone', () {
       expect(TextLimits.phone, lessThanOrEqualTo(rulesCapFor('phone')));
+    });
+
+    test('the Wave import truncates below every rules cap', () {
+      // The import writes client docs with the Admin SDK, which BYPASSES the
+      // rules — so a cap here that exceeds the rules cap does not fail the
+      // import, it writes a doc the APP can never update again (every later
+      // save is an opaque `permission-denied`). `IMPORT_FIELD_CAPS` is a third
+      // hand-mirror of `isValidClientData` and was the only one with nothing
+      // pinning it.
+      final source = File('functions/wave/mappers.js').readAsStringSync();
+      final block = RegExp(
+        r'const IMPORT_FIELD_CAPS = \{([^}]*)\}',
+      ).firstMatch(source);
+      expect(block, isNotNull, reason: 'IMPORT_FIELD_CAPS not found');
+
+      final caps = {
+        for (final m in RegExp(
+          r'(\w+):\s*(\d+)',
+        ).allMatches(block!.group(1)!))
+          m.group(1)!: int.parse(m.group(2)!),
+      };
+      expect(caps, isNotEmpty);
+
+      // `city`/`province`/`country`/`postalCode` are capped inside the rules'
+      // address family rather than by their own bare name, so they have no
+      // `rulesCapFor` entry to compare against.
+      const checked = {
+        'name',
+        'firstName',
+        'lastName',
+        'email',
+        'phone',
+        'mobile',
+      };
+      for (final entry in caps.entries.where((e) => checked.contains(e.key))) {
+        expect(
+          entry.value,
+          lessThanOrEqualTo(rulesCapFor(entry.key)),
+          reason: 'IMPORT_FIELD_CAPS.${entry.key} exceeds its rules cap',
+        );
+      }
     });
   });
 

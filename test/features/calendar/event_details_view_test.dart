@@ -250,16 +250,11 @@ void main() {
       appointment: spanning(DateTime(2026, 8, 1, 9), DateTime(2026, 8, 3, 17)),
     );
 
+    // The row drops the month down beneath itself rather than opening a modal
+    // picker, so the day is one tap inside the form.
     await tester.tap(find.text('Start date'));
     await tester.pumpAndSettle();
-    await tester.tap(
-      find.descendant(
-        of: find.byType(DatePickerDialog),
-        matching: find.text('5'),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('OK'));
+    await tester.tap(find.byKey(const ValueKey('inline-date-day-2026-08-05')));
     await tester.pumpAndSettle();
 
     expect(

@@ -1,14 +1,32 @@
 "use strict";
 
-const {isImportDue, SCHEDULE_VALUES} = require("../wave/import_schedule");
+const {
+  isImportDue,
+  SCHEDULE_VALUES,
+  WEEK_MS,
+  MONTH_MS,
+} = require("../wave/import_schedule");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const WEEK_MS = 7 * DAY_MS;
-const MONTH_MS = 30 * DAY_MS;
 
 describe("SCHEDULE_VALUES", () => {
   test("is the fixed off/weekly/monthly wire list", () => {
     expect(SCHEDULE_VALUES).toEqual(["off", "weekly", "monthly"]);
+  });
+});
+
+describe("cadence constants", () => {
+  // The boundary tests below compose their instants FROM these, so importing
+  // them is what keeps the one owner honest — but it also makes those tests
+  // tautological about the values themselves. This is the pin: the two
+  // cadences are what the Settings copy ("Weekly"/"Monthly") promises, so a
+  // silent change to either has to fail here rather than nowhere.
+  test("a week is 7 days", () => {
+    expect(WEEK_MS).toBe(7 * DAY_MS);
+  });
+
+  test("a month is 30 days", () => {
+    expect(MONTH_MS).toBe(30 * DAY_MS);
   });
 });
 

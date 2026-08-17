@@ -128,4 +128,20 @@ void main() {
       },
     );
   });
+
+  group('maxJobsLabel', () {
+    late AppLocalizations l10n;
+
+    setUp(() async {
+      l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    });
+
+    test('0 is the no-cap wording, everything else is the number', () {
+      // The picker's rows, the Team sheet's row and My details' row all state
+      // this value; a re-spelled ternary let a change land on one screen only.
+      expect(maxJobsLabel(l10n, 0), 'No cap');
+      expect(maxJobsLabel(l10n, 1), '1');
+      expect(maxJobsLabel(l10n, 12), '12');
+    });
+  });
 }

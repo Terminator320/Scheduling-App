@@ -13,7 +13,6 @@ import 'package:scheduling/features/calendar/application/event_details_controlle
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/domain/series_outlook.dart';
-import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
@@ -47,7 +46,7 @@ class DetailsEditBody extends ConsumerStatefulWidget {
 
 class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     with InlineAddClientHost {
-  final _clientSearchDebounce = Debouncer(const Duration(milliseconds: 300));
+  final _clientSearchDebounce = Debouncer(kSearchDebounce);
 
   @override
   void dispose() {
@@ -102,12 +101,14 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           selectedEmployees: state.selectedEmployees,
           repeat: state.repeat,
           useCustomAddress: state.useCustomAddress,
+          selectedDate: state.selectedDate,
+          endDate: state.endDate,
           isPersonal: state.isPersonal,
           isAllDay: state.isAllDay,
           onAllDayChanged: (value) => notifier.setAllDay(value: value),
           // Offered only on a job that was already personal, so an ordinary
           // client visit can't be converted mid-life (which would wipe its
-          // client and address).
+          // client).
           onPersonalChanged: appointment.isPersonal
               ? (value) => notifier.setPersonal(value: value)
               : null,
@@ -117,23 +118,26 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           materialsHint: context.l10n.calendar_eGPipeWrenchTapeCommaSeparated,
           editingStatus: state.editingStatus,
           onStatusChanged: notifier.setStatus,
-          onSearchClients: _onClientSearchChanged,
-          onSelectClient: notifier.selectClient,
-          onClearClient: notifier.clearClient,
           onRequestAddClient: requestAddClient,
-          onToggleEmployee: notifier.toggleEmployee,
-          onPickDate: () => _pickDate(context, state, notifier),
-          onPickEndDate: () => _pickEndDate(context, state, notifier),
           isMultiDay: spanLength > 1,
           isOvernight:
               !state.isAllDay &&
               isOvernightWindow(state.selectedStartTime, state.selectedEndTime),
           spanLength: spanLength,
-          onPickStartTime: () => _pickStartTime(context, state, notifier),
-          onPickEndTime: () => _pickEndTime(context, state, notifier),
-          onSelectRepeat: notifier.selectRepeat,
-          onUseCustomAddress: (value) =>
-              notifier.setUseCustomAddress(value: value),
+          callbacks: AppointmentFormCallbacks(
+            onSearchClients: _onClientSearchChanged,
+            onSelectClient: notifier.selectClient,
+            onClearClient: notifier.clearClient,
+            onToggleEmployee: notifier.toggleEmployee,
+            onSelectStartDate: (picked) =>
+                _onStartDateSelected(notifier, picked),
+            onSelectEndDate: (picked) => _onEndDateSelected(notifier, picked),
+            onPickStartTime: () => _pickStartTime(context, state, notifier),
+            onPickEndTime: () => _pickEndTime(context, state, notifier),
+            onSelectRepeat: notifier.selectRepeat,
+            onUseCustomAddress: (value) =>
+                notifier.setUseCustomAddress(value: value),
+          ),
           photosSection: _EditPhotosSection(appointment: appointment),
         ),
         const SizedBox(height: AppSpacing.sp24),
@@ -146,18 +150,12 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     );
   }
 
-  Future<void> _pickDate(
-    BuildContext context,
-    EventDetailsState state,
-    EventDetailsController notifier,
-  ) async {
-    final picked = await showAdaptiveDatePicker(
-      context,
-      initialDate: state.selectedDate,
-      firstDate: AppointmentDraftDefaults.datePickerFirstDate,
-      lastDate: AppointmentDraftDefaults.datePickerLastDate,
-    );
-    if (picked == null || !context.mounted) return;
+  /// The date rows drop an inline month calendar down beneath themselves, so a
+  /// date arrives already picked — no modal to await, no cancelled outcome.
+  void _onStartDateSelected(EventDetailsController notifier, DateTime picked) {
+    // No setState around the controller writes: the body watches the
+    // controller provider and `selectDate` always emits a new state, so the
+    // rebuild is already coming. This matches `_pickStartTime` below.
     widget.controllers.date.text = DateUtilsHelper.formatDate(picked);
     notifier.selectDate(picked);
     // selectDate shifts the end date to preserve the run's length, and the end
@@ -170,22 +168,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     widget.controllers.endDate.text = DateUtilsHelper.formatDate(shifted);
   }
 
-  Future<void> _pickEndDate(
-    BuildContext context,
-    EventDetailsState state,
-    EventDetailsController notifier,
-  ) async {
-    final picked = await showAdaptiveDatePicker(
-      context,
-      initialDate: state.endDate,
-      // Never offer a date before the start: an end date that precedes it is
-      // unbookable, so it shouldn't be reachable in the picker either. Floored
-      // to midnight — the seeded start carries the record's clock time, which
-      // would otherwise sit after the end date on the run's first day.
-      firstDate: state.selectedDate.dateOnly,
-      lastDate: AppointmentDraftDefaults.datePickerLastDate,
-    );
-    if (picked == null || !context.mounted) return;
+  void _onEndDateSelected(EventDetailsController notifier, DateTime picked) {
     widget.controllers.endDate.text = DateUtilsHelper.formatDate(picked);
     notifier.selectEndDate(picked);
   }
@@ -225,13 +208,17 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     WidgetRef ref,
     AppointmentRecord appointment,
   ) async {
+    // Both reads happen before the await: this method promises to degrade to
+    // an empty outlook rather than block the edit, and a `ref.read` in the
+    // catch would defeat exactly that once the sheet has been dismissed
+    // mid-fetch (Riverpod 3 throws on an unmounted consumer).
+    final repository = ref.read(appointmentsRepositoryProvider);
+    final logger = ref.read(loggerProvider);
     try {
-      final series = await ref
-          .read(appointmentsRepositoryProvider)
-          .getSeries(appointment.seriesId);
+      final series = await repository.getSeries(appointment.seriesId);
       return seriesOutlook(series, appointment.startTime);
     } on Object catch (e, st) {
-      ref.read(loggerProvider).warn('APPT-SAVE series outlook failed', e, st);
+      logger.warn('APPT-SAVE series outlook failed', e, st);
       return (count: 0, last: null);
     }
   }
@@ -391,14 +378,20 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
     final appointment = widget.appointment;
+    // Busied for the whole dialog, so a second tap can't stack a duplicate —
+    // the same handoff [_resolveSeriesScope] does.
+    final notifier = ref.read(
+      eventDetailsControllerProvider(EventDetailsKey(appointment)).notifier,
+    )..setSaving(busy: true);
     final choice = await showDeleteAppointmentDialog(
       context,
       isSeries: appointment.seriesId.isNotEmpty,
     );
+    // Cleared before the mounted guard (the notifier is context-free, and
+    // bailing while busy would wedge a surviving controller) and before the
+    // call below, which now refuses while the flag is set.
+    notifier.setSaving(busy: false);
     if (choice == null || !context.mounted) return;
-    final notifier = ref.read(
-      eventDetailsControllerProvider(EventDetailsKey(appointment)).notifier,
-    );
     final error = await notifier.deleteAppointment(
       appointment,
       includeFuture: choice == SeriesScopeChoice.thisAndFuture,

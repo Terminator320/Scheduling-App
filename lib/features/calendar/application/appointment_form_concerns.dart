@@ -101,7 +101,7 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
         AppointmentFormUpdate(clientResults: results, isSearchingClient: false),
       );
     } catch (e, st) {
-      logger.warn('searchClients failed', e, st);
+      logger.warn('CLI-SEARCH appointment form searchClients failed', e, st);
       if (!ref.mounted || requestId != _searchRequestId) return;
       _apply(const AppointmentFormUpdate(isSearchingClient: false));
     }

@@ -38,6 +38,11 @@ const IN_QUERY_MAX = 30;
 // Safety valve on a single prune pass so one run can't blow the timeout.
 const PRUNE_MAX = 400;
 
+// How many expired rows a prune pass deletes at once. Bounded rather than a
+// flat `Promise.all` over the whole page so a full cap doesn't fire 400
+// concurrent deletes at Firestore.
+const PRUNE_CHUNK = 25;
+
 // How long a registered token stays valid without a refresh. No write path
 // actually uses this — `_pruneExpired` reaps by the device's own
 // `expiresAt` field instead.
@@ -304,11 +309,17 @@ async function _pruneExpired(deps, collection, cap, label) {
     if (logger) logger.warn(`liveActivity: ${label} prune query failed`, {err});
     return {pruned: 0};
   }
+  // Chunked concurrency rather than one round-trip at a time. The expired set
+  // is usually tiny, but the loop is bounded by `cap` (400), not by that
+  // assumption, and this runs TWICE — tokens and card markers — inside the
+  // daily digest invocation, which also carries `runWaveDaily`. The chunk
+  // keeps per-row failure isolation (`deleteActivityToken` never throws) and
+  // stops a full cap firing 400 deletes at Firestore at once.
   let pruned = 0;
-  for (const row of rows) {
-    // Delete these serially — the expired set is tiny, and a failure on one
-    // row must not abort the rest.
-    if (await deleteActivityToken(deps, row)) pruned += 1;
+  for (const chunk of _chunk(rows, PRUNE_CHUNK)) {
+    const done = await Promise.all(
+        chunk.map((row) => deleteActivityToken(deps, row)));
+    pruned += done.filter(Boolean).length;
   }
   if (rows.length === cap && logger) {
     logger.warn(`liveActivity: ${label} prune cap hit; deferred`, {cap});
@@ -352,6 +363,9 @@ module.exports = {
   KIND_PUSH_TO_START,
   KIND_UPDATE,
   CARDS_COLLECTION,
+  // The four below are exported for unit tests, which assert against the
+  // constants rather than restating their literals — same convention as
+  // employee_accounts.js.
   IN_QUERY_MAX,
   PRUNE_MAX,
   TOKEN_TTL_MS,

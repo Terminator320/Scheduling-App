@@ -11,8 +11,10 @@ import 'package:scheduling/features/clients/application/client_form_controller.d
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
+import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
 import 'package:scheduling/features/clients/widgets/client_form_state.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
+import 'package:scheduling/features/clients/widgets/fields/client_name_phone_lift.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_type_chips.dart';
 import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
@@ -76,7 +78,26 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
 
   void _initControllers() {
     final c = widget.client;
-    _nameController = TextEditingController(text: c.name);
+    // The STORED name with its number stripped — never `displayName`. On a
+    // BUSINESS that field is the business, and it is what Wave shows; on a
+    // person it is now the phone number, and `_save` re-derives it.
+    //
+    // `displayName` is the wrong cure: on anything it reads as a person it
+    // returns the first/last halves and ignores the stored name entirely — and
+    // the Wave import sets no `type`, so EVERY imported business reads as a
+    // person. Seeding the contact person here and saving would rename the
+    // customer on live Wave invoices. `baseNameFor` strips the number without
+    // ever substituting a different name.
+    _nameController = TextEditingController(
+      text: ClientNamePolicy.baseNameFor(
+        name: c.name,
+        phone: c.phone,
+        mobile: c.mobile,
+        firstName: c.firstName,
+        lastName: c.lastName,
+        businessName: c.businessName,
+      ),
+    );
     _firstNameController = TextEditingController(text: c.firstName);
     _lastNameController = TextEditingController(text: c.lastName);
     _phoneController = TextEditingController(text: c.phone);
@@ -143,17 +164,73 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
       if (!contact.isEmpty) contact.toContact(),
   ];
 
+  /// The phone this save will store.
+  ///
+  /// Owner decision 2026-08-01. `mobile` is no longer an editable field, so a
+  /// stored value must not be stranded: promote it when there is no phone,
+  /// drop it when there is. Runs on every save, so the fleet self-heals as
+  /// clients are edited — there is no migration script and none is needed.
+  String get _resolvedPhone {
+    final typed = _phoneController.text.trim();
+    return typed.isNotEmpty ? typed : widget.client.mobile.trim();
+  }
+
+  /// The record this save will commit.
+  ///
+  /// Mirrors `AddClientSheet._draft`. The two sheets MUST agree on
+  /// `composeSave`'s arguments — passing `type` (and, here, the stored
+  /// `businessName`) is what stops an ordinary save renaming a business to
+  /// its phone number on the live Wave invoices it appears on — and
+  /// divergent structure on a pair that must agree is what makes them drift.
+  ClientRecord _buildUpdatedRecord() {
+    final resolvedPhone = _resolvedPhone;
+    // The Wave CUSTOMER name: the phone number for a person, the typed name
+    // for a business. Both `type` and the stored `businessName` have to be
+    // passed, or re-saving a business renames it to its number on the
+    // invoices it appears on.
+    final composedName = ClientNamePolicy.composeSave(
+      baseName: _nameController.text,
+      phone: resolvedPhone,
+      firstName: _firstNameController.text,
+      lastName: _lastNameController.text,
+      type: _type,
+      businessName: widget.client.businessName,
+    );
+
+    // Copying the loaded record preserves the Wave projection fields
+    // (waveCustomerId/waveSyncState/waveSyncError) and the function-owned
+    // jobCount — this form never edits any of them.
+    return widget.client.copyWith(
+      // `composeSave` rather than `composeStored`: for a person the composed
+      // name IS the phone number, so on a doc with no halves the typed name is
+      // the only copy and saving would destroy it in place.
+      name: composedName.name,
+      firstName: composedName.firstName,
+      lastName: composedName.lastName,
+      phone: resolvedPhone,
+      mobile: '',
+      email: _emailController.text.trim(),
+      address: noFixedAddress ? '' : _buildFullAddress(),
+      apt: noFixedAddress ? '' : _aptController.text.trim(),
+      city: noFixedAddress ? '' : _cityController.text.trim(),
+      province: noFixedAddress ? '' : _provinceController.text.trim(),
+      country: noFixedAddress ? '' : _countryController.text.trim(),
+      postalCode: noFixedAddress ? '' : _postalCodeController.text.trim(),
+      contacts: _buildContacts(),
+      noFixedAddress: noFixedAddress,
+      type: _type,
+      accessNotes: _accessNotesController.text.trim(),
+      onSiteManager: _onSiteManagerController.text.trim(),
+      billingTerms: _billingTermsController.text.trim(),
+      autoInvoice: _autoInvoice,
+    );
+  }
+
   Future<void> _save() async {
     // Guards against a double-tap firing two concurrent writes.
     if (ref.read(clientFormControllerProvider)) return;
 
-    // Owner decision 2026-08-01. `mobile` is no longer an editable field, so a
-    // stored value must not be stranded: promote it when there is no phone, drop
-    // it when there is. Runs on every save, so the fleet self-heals as clients
-    // are edited — there is no migration script and none is needed.
-    final typedPhone = _phoneController.text.trim();
-    final storedMobile = widget.client.mobile.trim();
-    final resolvedPhone = typedPhone.isNotEmpty ? typedPhone : storedMobile;
+    final resolvedPhone = _resolvedPhone;
 
     final nextErrors = ClientFormValidator.validate(
       l10n: context.l10n,
@@ -177,30 +254,7 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
     });
     if (errors.values.any((e) => e != null)) return;
 
-    // Copying the loaded record preserves the Wave projection fields
-    // (waveCustomerId/waveSyncState/waveSyncError) and the function-owned
-    // jobCount — this form never edits any of them.
-    final updated = widget.client.copyWith(
-      name: _nameController.text.trim(),
-      firstName: _firstNameController.text.trim(),
-      lastName: _lastNameController.text.trim(),
-      phone: resolvedPhone,
-      mobile: '',
-      email: _emailController.text.trim(),
-      address: noFixedAddress ? '' : _buildFullAddress(),
-      apt: noFixedAddress ? '' : _aptController.text.trim(),
-      city: noFixedAddress ? '' : _cityController.text.trim(),
-      province: noFixedAddress ? '' : _provinceController.text.trim(),
-      country: noFixedAddress ? '' : _countryController.text.trim(),
-      postalCode: noFixedAddress ? '' : _postalCodeController.text.trim(),
-      contacts: _buildContacts(),
-      noFixedAddress: noFixedAddress,
-      type: _type,
-      accessNotes: _accessNotesController.text.trim(),
-      onSiteManager: _onSiteManagerController.text.trim(),
-      billingTerms: _billingTermsController.text.trim(),
-      autoInvoice: _autoInvoice,
-    );
+    final updated = _buildUpdatedRecord();
 
     final outcome = await ref
         .read(clientFormControllerProvider.notifier)
@@ -264,7 +318,17 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
           textInputAction: TextInputAction.next,
           maxLength: TextLimits.personName,
           errorText: errors['name'],
-          onChanged: (_) => clearError('name'),
+          onChanged: (_) {
+            clearError('name');
+            // Pulls a phone number out of what was just typed or pasted —
+            // quiet unless the phone field is still empty.
+            if (liftPhoneFromNameField(
+              name: _nameController,
+              phone: _phoneController,
+            )) {
+              setState(() => clearError('phone'));
+            }
+          },
         ),
       ),
       const SizedBox(height: AppSpacing.sp16),

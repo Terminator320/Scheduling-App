@@ -39,19 +39,51 @@ const REVERSE_GEOCODE_RATE_WINDOW_MS = 60 * 60 * 1000;
 const REVERSE_GEOCODE_LOCALES = new Set(["en", "fr"]);
 
 /**
+ * The upstream error CODE carried by a non-200 body, or `""` when there is
+ * none to read.
+ *
+ * Deliberately never the message, and never the body. Places API (New) and
+ * the Geocoding API both echo the offending request field back in prose
+ * (`Invalid value at 'input' ...`), so a rejected autocomplete request
+ * carries the client street address an admin was mid-typing — into Cloud
+ * Logging, where there is no retention control over it. `placesReverseGeocode`
+ * opted out of body logging for exactly that reason while the two Places
+ * callables opted in, which left the two paths inconsistent about the same
+ * class of data.
+ *
+ * The codes themselves are a fixed enum vocabulary (`INVALID_ARGUMENT`,
+ * `PERMISSION_DENIED`, `REQUEST_DENIED`, `RESOURCE_EXHAUSTED`) or a numeric
+ * HTTP status, so they carry no caller data — and the shape test is what
+ * keeps it that way if an upstream ever puts prose in the field.
+ *
+ * @param {string} bodyText Raw response body.
+ * @return {string} An enum-shaped code, or "".
+ */
+function upstreamErrorCode(bodyText) {
+  let parsed;
+  try {
+    parsed = JSON.parse(bodyText);
+  } catch (err) {
+    return "";
+  }
+  const error = (parsed && parsed.error) || {};
+  const raw = error.status || error.code || (parsed && parsed.status) || "";
+  const code = String(raw);
+  return /^[A-Z0-9_]{1,40}$/.test(code) ? code : "";
+}
+
+/**
  * Handles the three things every Places/Geocoding proxy needs to check —
  * transport errors, non-200 responses, and JSON parse failures. Request
  * construction stays at each call site, since it differs per callable.
  * @param {string} url Fully-built request URL.
  * @param {?object} options fetch() options (method, headers, body).
- * @param {{label: string, uid: string, logResponsePreview: boolean}} opts
- *   label: log-message prefix matching the callable name. uid: caller uid,
- *   logged only on transport error. logResponsePreview: when true, logs a
- *   200-char body preview on non-200 (placesReverseGeocode passes false to
- *   keep coordinate/address PII out of its logs).
+ * @param {{label: string, uid: string}} opts label: log-message prefix
+ *   matching the callable name. uid: caller uid, logged only on transport
+ *   error.
  * @return {Promise<object>} parsed JSON body.
  */
-async function fetchPlacesJson(url, options, {label, uid, logResponsePreview}) {
+async function fetchPlacesJson(url, options, {label, uid}) {
   let response;
   try {
     response = await fetch(url, options);
@@ -61,15 +93,17 @@ async function fetchPlacesJson(url, options, {label, uid, logResponsePreview}) {
   }
 
   if (!response.ok) {
-    if (logResponsePreview) {
-      const preview = (await response.text()).slice(0, 200);
-      logger.warn(`${label}: upstream non-200`, {
-        status: response.status,
-        body: preview,
-      });
-    } else {
-      logger.warn(`${label}: upstream non-200`, {status: response.status});
+    // The structured code only, NEVER the body — see [upstreamErrorCode].
+    let body = "";
+    try {
+      body = await response.text();
+    } catch (err) {
+      body = "";
     }
+    logger.warn(`${label}: upstream non-200`, {
+      status: response.status,
+      code: upstreamErrorCode(body),
+    });
     throw new HttpsError("internal", "places-upstream");
   }
 
@@ -160,7 +194,6 @@ const placesAutocomplete = onCall(
           {
             label: "placesAutocomplete",
             uid: req.auth.uid,
-            logResponsePreview: true,
           },
       );
       return {suggestions: Array.isArray(data.suggestions) ?
@@ -213,7 +246,6 @@ const placesGetDetails = onCall(
           {
             label: "placesGetDetails",
             uid: req.auth.uid,
-            logResponsePreview: true,
           },
       );
       return {
@@ -276,7 +308,6 @@ const placesReverseGeocode = onCall(
           {
             label: "placesReverseGeocode",
             uid: req.auth.uid,
-            logResponsePreview: false,
           },
       );
 
@@ -298,4 +329,11 @@ const placesReverseGeocode = onCall(
     },
 );
 
-module.exports = {placesAutocomplete, placesGetDetails, placesReverseGeocode};
+module.exports = {
+  placesAutocomplete,
+  placesGetDetails,
+  placesReverseGeocode,
+  // Exported for jest — it is the one thing standing between a rejected
+  // address lookup and the typed street address landing in Cloud Logging.
+  upstreamErrorCode,
+};

@@ -45,14 +45,10 @@
  * skipped instead of incorrectly stomping the job to `done`.
  *
  * ## Retryability taxonomy
- * - `WaveValidationError` — NOT retryable (bad input; dead-letter immediately).
- * - `WaveApiError` kind `rateLimited`|`network` — retryable (transient).
- * - `WaveApiError` kind `graphql` — retryable ONLY when the GraphQL error
- *   looks like a transient server-side failure (Wave returns e.g. internal /
- *   timeout / unavailable errors on HTTP 200); genuine validation / query
- *   errors stay permanent.
- * - `WaveApiError` kind `auth`|`unknown` — NOT retryable.
- * - Any other (unexpected/infra) error — retryable (bounded by maxAttempts).
+ * Lives in the pure sibling `retry_policy.js` — no db, no logger, no clock —
+ * so the decisions that dead-letter a real client edit are testable without
+ * this module's Firestore-mock harness. `RATE_LIMITED_MAX_ATTEMPTS` is
+ * re-exported from here so downstream callers see no change.
  *
  * ## Required Firestore composite indexes
  * `waveSyncQueue` needs both `(status ASC, nextAttemptAt ASC)` (for
@@ -71,6 +67,15 @@
 const {WaveValidationError, upsertCustomer} = require("./customers");
 const {WaveApiError} = require("./client");
 const {mappedFieldsHash} = require("./mappers");
+const {
+  DEFAULT_MAX_ATTEMPTS,
+  RATE_LIMITED_MAX_ATTEMPTS,
+  defaultBackoffMs,
+  isRetryable,
+  attemptBudgetFor,
+  sanitizeError,
+  describeWaveError,
+} = require("./retry_policy");
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -79,23 +84,15 @@ const {mappedFieldsHash} = require("./mappers");
 /** Firestore collection that holds outbox jobs. */
 const QUEUE_COLLECTION = "waveSyncQueue";
 
-/** Default maximum dispatch attempts per job before dead-lettering. */
-const DEFAULT_MAX_ATTEMPTS = 5;
-
 /** Default number of jobs to claim per drainQueue invocation (see note above
  * about throughput sizing). */
 const DEFAULT_BATCH_LIMIT = 30;
 
 // Cap on the import's protect-list read (see listOutstandingClientIds). Sized
 // well above any realistic backlog; if it is ever hit the import protects a
-// prefix, which is why the callable logs when the set comes back at the cap.
+// prefix, which is why listOutstandingClientIds itself logs an error when the
+// read comes back at the cap.
 const OUTSTANDING_MAX = 2000;
-
-/** Base delay for exponential backoff in milliseconds (60 seconds). */
-const BASE_BACKOFF_MS = 60_000;
-
-/** Maximum backoff delay cap in milliseconds (1 hour). */
-const MAX_BACKOFF_MS = 3_600_000;
 
 /**
  * Default lease duration (10 minutes, comfortably longer than any Cloud
@@ -116,88 +113,6 @@ const DEFAULT_LEASE_MS = 600_000;
 function adminFirestore() {
   // eslint-disable-next-line global-require
   return require("firebase-admin/firestore");
-}
-
-/**
- * Default exponential-backoff-with-jitter:
- * min(BASE * 2^n, MAX) * (0.75 + random 0..0.25) ms.
- * @param {number} attempts The PRE-increment attempt index passed by the
- *   caller (first retry → 0, second → 1, …). It's one less than the
- *   `attempts` value that later gets stored on the job doc.
- * @return {number} Milliseconds to wait before the next attempt.
- */
-function defaultBackoffMs(attempts) {
-  const exp = Math.min(BASE_BACKOFF_MS * Math.pow(2, attempts), MAX_BACKOFF_MS);
-  return Math.floor(exp * (0.75 + Math.random() * 0.25));
-}
-
-/**
- * Treats a `graphql`-kind WaveApiError as transient (retryable) when its
- * message/extensions.code looks like a server-side failure — Wave sometimes
- * reports what are really transient errors as GraphQL errors on an HTTP 200
- * (see client.js), so this is a best-effort heuristic to catch those.
- * @param {!WaveApiError} err A WaveApiError with kind 'graphql'.
- * @return {boolean}
- */
-function isTransientGraphqlError(err) {
-  const texts = [];
-  if (typeof err.message === "string") texts.push(err.message);
-  const details = Array.isArray(err.details) ? err.details : [];
-  for (const d of details) {
-    if (!d) continue;
-    if (typeof d.message === "string") texts.push(d.message);
-    const code = d.extensions && typeof d.extensions.code === "string" ?
-      d.extensions.code : "";
-    if (code) texts.push(code);
-  }
-  const joined = texts.join(" ").toLowerCase();
-  const transientRe = new RegExp(
-      "internal|timeout|timed out|unavailable|temporar|" +
-      "overloaded|service error|try again");
-  return transientRe.test(joined);
-}
-
-/**
- * Returns true when the error is transient and worth retrying.
- *
- * Rules:
- *   - `WaveValidationError` → false (bad input; no retry).
- *   - `WaveApiError` kind `rateLimited`|`network` → true.
- *   - `WaveApiError` kind `graphql` → true only for transient-looking
- *     server-side errors (see `isTransientGraphqlError`); validation/query
- *     errors stay permanent.
- *   - `WaveApiError` kind `auth`|`unknown` → false.
- *   - Everything else (unexpected/infra) → true (bounded by maxAttempts).
- * @param {*} err The caught error.
- * @return {boolean}
- */
-function isRetryable(err) {
-  if (err instanceof WaveValidationError) return false;
-  if (err instanceof WaveApiError) {
-    if (err.kind === "rateLimited" || err.kind === "network") return true;
-    if (err.kind === "graphql") return isTransientGraphqlError(err);
-    return false;
-  }
-  // Unexpected / infra errors: retry (bounded).
-  return true;
-}
-
-/**
- * Extracts a safe, PII-free error summary for `lastError` — only the error
- * class name and (for WaveApiError) its `kind`, never Wave's raw message or
- * customer data.
- * @param {*} err The caught error.
- * @return {string}
- */
-function sanitizeError(err) {
-  if (err instanceof WaveValidationError) {
-    return "WaveValidationError: Wave rejected the customer data.";
-  }
-  if (err instanceof WaveApiError) {
-    return `WaveApiError(${err.kind})`;
-  }
-  const name = (err && err.name) ? String(err.name) : "Error";
-  return `${name}: unexpected error`;
 }
 
 /**
@@ -696,8 +611,13 @@ async function resolveOutcome(ctx, doc, jobData, claimStamp, result) {
   const newAttempts = (typeof jobData.attempts === "number" ?
     jobData.attempts : 0) + 1;
   const sanitized = sanitizeError(dispatchError);
+  // Wave rate-limiting us is not the job's fault, so it gets a far larger
+  // budget than a job that is failing on its own merits — see
+  // RATE_LIMITED_MAX_ATTEMPTS. Without this a burst dead-letters valid client
+  // edits, permanently.
+  const budget = attemptBudgetFor(dispatchError, maxAttempts);
 
-  if (retryable && newAttempts < maxAttempts) {
+  if (retryable && newAttempts < budget) {
     // Back to queued with backoff, using the injected clock so retry time
     // stays testable and consistent with the query's `nowValue`.
     const delayMs = backoffFn(newAttempts - 1);
@@ -730,12 +650,18 @@ async function resolveOutcome(ctx, doc, jobData, claimStamp, result) {
     logger.info("WAVE-WORKER outcome superseded (dead skipped)", {jobId});
     return;
   }
+  // `errorDetail` is the only place the REASON survives — `sanitized` (which
+  // is what the job and the client doc keep) flattens every transport failure
+  // to "WaveApiError(graphql)", so without this a permanently-dead client edit
+  // is undiagnosable and "Retry failed" just re-sends the same payload into
+  // the same refusal. PII-free by construction; see `describeWaveError`.
   logger.error("WAVE-WORKER dead-lettering job", {
     jobId,
     clientId: clientIdFromRefPath(jobData.refPath),
     errorClass: dispatchError.constructor ?
       dispatchError.constructor.name : "Error",
     errorKind: errKind,
+    errorDetail: describeWaveError(dispatchError),
     attempts: newAttempts,
     retryable,
   });
@@ -881,6 +807,115 @@ async function countQueuedJobs(deps = {}) {
 }
 
 /**
+ * Counts DEAD-LETTERED outbox jobs — client edits that will never reach Wave
+ * on their own.
+ *
+ * This is the number that had nowhere to be shown. A `dead` job is terminal:
+ * no drain ever picks it up again, so the client's data silently diverges from
+ * Wave forever. Its only trace was an `error` badge on that one client's
+ * detail screen and a `pushedFailed` count in the response to a sync the admin
+ * had to think to press. Surfacing it in Settings, next to
+ * [requeueDeadJobs], is what turns it into something recoverable.
+ *
+ * A `count()` aggregate, so it bills one read per 1000 index entries rather
+ * than one per job — Settings reads it on open.
+ *
+ * @param {Object=} deps Injectable dependencies — `db`.
+ * @return {!Promise<number>} Jobs currently in `dead`.
+ */
+async function countDeadJobs(deps = {}) {
+  const db = deps.db || adminFirestore().getFirestore();
+  const snap = await db.collection(QUEUE_COLLECTION)
+      .where("status", "==", "dead").count().get();
+  return snap.data().count;
+}
+
+/** How many requeue transactions run concurrently. */
+const REQUEUE_CHUNK = 25;
+
+/**
+ * Returns dead-lettered jobs to the queue for another try.
+ *
+ * Resets `attempts` to 0 and `nextAttemptAt` to now, so a requeued job gets a
+ * full budget and runs on the next drain rather than inheriting the backoff
+ * that killed it. This is an ADMIN-INITIATED action — the admin has presumably
+ * fixed whatever Wave was rejecting, or is retrying after an outage — which is
+ * why it is deliberately not automatic: a job that dead-lettered on a
+ * `WaveValidationError` will simply dead-letter again, and an automatic
+ * requeue would spin on it forever.
+ *
+ * Each job is rewritten in its own transaction, conditioned on the doc still
+ * being `dead`, for the same reason `commitOutcome` is conditional: a
+ * concurrent client edit re-enqueues the same deterministic job id, and
+ * clobbering that fresh job with a reset of the old one would lose the newer
+ * payload hash.
+ *
+ * `wave.syncState` on the client doc is deliberately NOT reset here. The next
+ * successful dispatch writes it, and a failed requeue leaving the badge on is
+ * the honest state — clearing it up front would report success before
+ * anything reached Wave.
+ *
+ * @param {Object=} deps Injectable dependencies — `db`, `limit`, `now`,
+ *   `logger`.
+ * @return {!Promise<{requeued: number, scanned: number}>} How many were
+ *   returned to the queue, and how many dead jobs were examined.
+ */
+async function requeueDeadJobs(deps = {}) {
+  const db = deps.db || adminFirestore().getFirestore();
+  // eslint-disable-next-line global-require
+  const logger = deps.logger || require("firebase-functions/logger");
+  const limit = typeof deps.limit === "number" ? deps.limit : OUTSTANDING_MAX;
+  const nowValue = deps.now ? deps.now() : new Date();
+
+  const snap = await db.collection(QUEUE_COLLECTION)
+      .where("status", "==", "dead")
+      .limit(limit)
+      .get();
+  const docs = snap && Array.isArray(snap.docs) ? snap.docs : [];
+
+  const requeueOne = async (doc) => {
+    try {
+      return await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(doc.ref);
+        // Re-enqueued by a client edit in the meantime: that job is newer and
+        // carries the current payload hash. Leave it alone.
+        if (!fresh.exists) return false;
+        const data = fresh.data() || {};
+        if (data.status !== "dead") return false;
+        tx.update(doc.ref, {
+          status: "queued",
+          attempts: 0,
+          nextAttemptAt: nowValue,
+          lastError: null,
+        });
+        return true;
+      });
+    } catch (e) {
+      // One stubborn job must not abort the rest of the recovery.
+      logger.warn("WAVE-WORKER requeue failed", {
+        jobId: doc.id, error: String(e),
+      });
+      return false;
+    }
+  };
+
+  // Chunked rather than one-at-a-time. The shape that produces dead jobs is a
+  // bulk backfill — a few hundred of them — and a serial round trip each is
+  // ~25-40 ms, so 500 jobs was 12-20 s of pure latency inside a callable the
+  // app abandons at `kWaveSyncTimeoutSeconds`, before the drain that follows
+  // it has run at all. The transactions touch distinct documents, so there is
+  // no contention to serialize for; the per-job catch above still gives
+  // "one stubborn job must not abort the rest".
+  let requeued = 0;
+  for (let i = 0; i < docs.length; i += REQUEUE_CHUNK) {
+    const chunk = docs.slice(i, i + REQUEUE_CHUNK);
+    const applied = await Promise.all(chunk.map(requeueOne));
+    requeued += applied.filter(Boolean).length;
+  }
+  return {requeued, scanned: docs.length};
+}
+
+/**
  * Client ids with an outbox job that has not reached Wave yet.
  *
  * `importCustomers` MUST skip these. The import overwrites every mapped field
@@ -898,6 +933,22 @@ async function countQueuedJobs(deps = {}) {
  * Includes `inflight`: those are being dispatched right now and their doc is
  * every bit as unsafe to overwrite.
  *
+ * Includes `dead`, and that one is the MOST important of the three: a
+ * dead-lettered job's edit never reached Wave and — unlike a queued or backed
+ * off job — nothing will retry it on its own, so the clobber above does not
+ * self-heal. `waveRetryFailedJobs` exists precisely to put these back, and it
+ * short-circuits as `noop` on a matching hash: let the import overwrite the
+ * doc with Wave's pre-edit values first and the requeue then finds nothing to
+ * push, so the admin's change is gone with the row reading "Synced with Wave".
+ * A bulk push (the client-name backfill fires a few hundred mutations against
+ * Wave's 60/min ceiling) is exactly what produces dead jobs.
+ *
+ * The cost of protecting them is that a client with a stuck dead job HOLDS the
+ * import watermark (`skippedPending > 0`), so the delta window keeps being
+ * redone until an admin presses "Retry failed" — the same trade the queued
+ * case already makes, and re-imports are hash-gated. `pushedFailed` on the
+ * sync response is what surfaces the backlog.
+ *
  * @param {Object=} deps Injectable dependencies — `db`, `limit`.
  * @return {!Promise<!Set<string>>} Client ids to leave alone.
  */
@@ -905,13 +956,28 @@ async function listOutstandingClientIds(deps = {}) {
   const db = deps.db || adminFirestore().getFirestore();
   const limit = typeof deps.limit === "number" ? deps.limit : OUTSTANDING_MAX;
   const snap = await db.collection(QUEUE_COLLECTION)
-      .where("status", "in", ["queued", "inflight"])
+      .where("status", "in", ["queued", "inflight", "dead"])
       .limit(limit)
       .get();
+  const docs = (snap && snap.docs) || [];
   const ids = new Set();
-  for (const doc of (snap && snap.docs) || []) {
+  for (const doc of docs) {
     const id = clientIdFromRefPath((doc.data() || {}).refPath);
     if (id) ids.add(id);
+  }
+  // Logged HERE, not at the callers: the header claimed the callable logged at
+  // the cap and none of them did, so the truncation was silent. Past the cap
+  // the import protects a prefix and CLOBBERS the rest with Wave's values —
+  // then stamps `lastSyncedHash` from them, so the queued job hashes the
+  // clobbered doc, matches, returns `noop`, and an accepted edit is gone with
+  // the badge reading "Synced with Wave".
+  if (docs.length >= limit) {
+    const log = deps.logger || require("firebase-functions/logger");
+    log.error("WAVE-WORKER outstanding protect-list hit its cap; the import " +
+        "will protect only a prefix and may overwrite queued client edits", {
+      limit,
+      protectedIds: ids.size,
+    });
   }
   return ids;
 }
@@ -920,6 +986,9 @@ module.exports = {
   enqueueCustomerUpsert,
   drainQueue,
   countQueuedJobs,
+  countDeadJobs,
+  requeueDeadJobs,
   listOutstandingClientIds,
   shouldEnqueueClientWrite,
+  RATE_LIMITED_MAX_ATTEMPTS,
 };

@@ -64,7 +64,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
   static const int _pageSize = 50;
   // Debounce before the server search, so we don't fire a read on every keystroke —
   // the local filter covers the gap in the meantime so it still feels immediate.
-  final _searchDebounce = Debouncer(const Duration(milliseconds: 250));
+  final _searchDebounce = Debouncer(kSearchDebounce);
   String _committedQuery = '';
 
   late final PagingController<int, ClientRecord> _pagingController =
@@ -80,16 +80,19 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
       );
 
   Future<List<ClientRecord>> _fetchPage(int pageKey) async {
+    // Read before the await — switching tabs mid-fetch unmounts this consumer,
+    // and a `ref.read` in the catch would then throw a StateError over the top
+    // of the real failure, losing the CLI-LIST breadcrumb entirely.
+    final repository = ref.read(clientsRepositoryProvider);
+    final logger = ref.read(loggerProvider);
     try {
       final items = _pagingController.value.items;
       final after = (pageKey == 1 || items == null || items.isEmpty)
           ? null
           : items.last;
-      return await ref
-          .read(clientsRepositoryProvider)
-          .fetchClientsPage(after: after, limit: _pageSize);
+      return await repository.fetchClientsPage(after: after, limit: _pageSize);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('CLI-LIST clients page fetch error', e, st);
+      logger.warn('CLI-LIST clients page fetch error', e, st);
       rethrow;
     } finally {
       if (pageKey == 1) _notifyFirstPageSettled();

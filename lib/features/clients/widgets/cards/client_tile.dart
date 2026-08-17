@@ -50,11 +50,16 @@ class ClientTile extends StatelessWidget {
       if (hasType) _TypeChip(type: client.type),
     ];
 
+    // Resolved once: `displayName` is an uncached getter that runs `stripPhone`
+    // (two regex passes), and this rebuilds per row on the paginated list and
+    // per keystroke in the booking-flow picker.
+    final displayName = client.displayName;
+
     // No explicit label needed — ListItemTile's InkWell already exposes button
     // semantics and reads out the visible name and subtitle.
     return ListItemTile(
-      avatarName: client.displayName,
-      title: client.displayName,
+      avatarName: displayName,
+      title: displayName,
       subtitle: subtitle,
       subtitleExtra: badges.isEmpty
           ? null

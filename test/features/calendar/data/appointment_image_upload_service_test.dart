@@ -43,6 +43,11 @@ void main() {
     storage = _MockImageStorageService();
     notifier = PhotoUploadNotifier();
     store = PendingUploadStore();
+    // The queue no longer persists download URLs, so a carried image comes
+    // back with an empty one and the drain re-mints it from storagePath.
+    when(() => storage.downloadUrlFor(any())).thenAnswer(
+      (_) async => 'https://example.com/resolved.jpg',
+    );
     tempRoot = Directory.systemTemp.createTempSync('img_upload_test');
     sourceDir = Directory('${tempRoot.path}/src')..createSync();
     stagingDir = Directory('${tempRoot.path}/staging')..createSync();
@@ -176,6 +181,34 @@ void main() {
       ).called(1);
     });
 
+    test('a carried image whose url cannot be re-minted stays queued '
+        'and is not appended', () async {
+      // Appending with a blank url would write a second, broken array entry
+      // beside the one a partially-committed append already left there —
+      // `arrayUnion` matches by deep equality, so it would not dedupe.
+      when(() => storage.downloadUrlFor(any())).thenAnswer((_) async => '');
+
+      await store.add(
+        PendingUpload(
+          appointmentId: 'a1',
+          paths: const [],
+          enqueuedAtMs: DateTime.now().millisecondsSinceEpoch,
+          uploaded: [_img('1.jpg')],
+        ),
+      );
+
+      await makeService().drainPending();
+
+      verifyNever(() => appointments.appendAppointmentPictures(any(), any()));
+      final remaining = await store.load();
+      expect(remaining, hasLength(1));
+      expect(remaining.single.uploaded, hasLength(1));
+      expect(
+        remaining.single.uploaded.single.storagePath,
+        'appointments/a1/images/1.jpg',
+      );
+    });
+
     test('permanent ImageUploadFailure drops the file and the entry', () async {
       await stageEntry('a1', ['bad.jpg']);
       when(
@@ -248,6 +281,149 @@ void main() {
 
       expect(calls, 1);
     });
+
+    test(
+      'a batch staged mid-drain is coalesced into the in-flight pass',
+      () async {
+        // The guard alone ("if (_draining) return") would leave this batch
+        // queued until the next connectivity flip. CLAUDE.md: coalesce, never
+        // drop — the in-flight pass has to loop again and pick it up.
+        await stageEntry('a1', ['a.jpg']);
+        final gate = Completer<AppointmentImage>();
+        final firstUploadStarted = Completer<void>();
+        var calls = 0;
+        when(() => storage.uploadImage(any(), any())).thenAnswer((
+          invocation,
+        ) async {
+          calls++;
+          final file = invocation.positionalArguments[1] as File;
+          if (file.path.endsWith('a.jpg')) {
+            firstUploadStarted.complete();
+            return gate.future;
+          }
+          return _img('b.jpg');
+        });
+
+        final service = makeService();
+        final first = service.drainPending();
+        await firstUploadStarted
+            .future; // pass 1 is mid-upload on the first batch
+        await stageEntry('a2', ['b.jpg']); // staged while that drain is running
+        await service.drainPending(); // coalesced, not dropped
+        gate.complete(_img('a.jpg'));
+        await first;
+
+        expect(calls, 2);
+        expect(await store.load(), isEmpty);
+      },
+    );
+
+    test('an entry with no paths and no carried uploads is the only one '
+        'that drains away', () async {
+      // Files gone AND nothing carried: genuinely empty, so it is dropped with
+      // no upload and no append. An entry carrying uploaded images is never
+      // empty in this sense, however few paths it has left.
+      await store.add(
+        PendingUpload(
+          appointmentId: 'a1',
+          paths: ['${stagingDir.path}/vanished.jpg'],
+          enqueuedAtMs: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+
+      await makeService().drainPending();
+
+      expect(await store.load(), isEmpty);
+      verifyNever(() => storage.uploadImage(any(), any()));
+      verifyNever(() => appointments.appendAppointmentPictures(any(), any()));
+      expect(notifier.failureFor('a1'), isNull);
+    });
+  });
+
+  group('AttemptOutcome.from', () {
+    AttemptOutcome outcome({
+      int permanentFailures = 0,
+      bool transientFailure = false,
+      List<String> survivors = const [],
+      bool resolveFailed = false,
+      bool appendThrew = false,
+      List<AppointmentImage> uploaded = const [],
+    }) => AttemptOutcome.from(
+      permanentFailures: permanentFailures,
+      transientFailure: transientFailure,
+      survivors: survivors,
+      resolveFailed: resolveFailed,
+      appendThrew: appendThrew,
+      uploaded: uploaded,
+    );
+
+    test('a clean pass drains the entry and clears the failure', () {
+      final result = outcome(uploaded: [_img('1.jpg')]);
+
+      expect(result.requeue, isFalse);
+      expect(result.uploadedToCarry, isEmpty);
+      expect(result.failedCount, 0);
+    });
+
+    test('a failed append carries the uploaded images forward, never '
+        'drops them', () {
+      final images = [_img('1.jpg'), _img('2.jpg')];
+
+      final result = outcome(appendThrew: true, uploaded: images);
+
+      expect(result.requeue, isTrue);
+      expect(result.uploadedToCarry, images);
+      // No survivor paths: their local files are gone, so the retry is
+      // append-only and must never re-upload them.
+      expect(result.failedCount, 2);
+    });
+
+    test('an unresolvable carried url keeps the images queued', () {
+      final images = [_img('1.jpg')];
+
+      final result = outcome(
+        transientFailure: true,
+        resolveFailed: true,
+        uploaded: images,
+      );
+
+      expect(result.requeue, isTrue);
+      expect(result.uploadedToCarry, images);
+      expect(result.failedCount, 1);
+    });
+
+    test('a transient upload failure re-queues the survivors alone', () {
+      final result = outcome(
+        transientFailure: true,
+        survivors: ['/staging/fail.jpg'],
+        uploaded: [_img('ok.jpg')],
+      );
+
+      expect(result.requeue, isTrue);
+      // The append landed, so re-carrying these would re-link them a second
+      // time on the next pass.
+      expect(result.uploadedToCarry, isEmpty);
+      expect(result.failedCount, 1);
+    });
+
+    test('permanent failures alone drain the entry but still report', () {
+      final result = outcome(permanentFailures: 2);
+
+      expect(result.requeue, isFalse);
+      expect(result.uploadedToCarry, isEmpty);
+      expect(result.failedCount, 2);
+    });
+
+    test('a mixed permanent + transient pass counts both', () {
+      final result = outcome(
+        permanentFailures: 1,
+        transientFailure: true,
+        survivors: ['/staging/ok.jpg'],
+      );
+
+      expect(result.requeue, isTrue);
+      expect(result.failedCount, 2);
+    });
   });
 
   group('uploadInBackground', () {
@@ -275,5 +451,29 @@ void main() {
       gate.complete(_img('photo.jpg'));
       await Future<void>.delayed(const Duration(milliseconds: 20));
     });
+
+    test(
+      'a mid-loop staging failure deletes the files it already moved',
+      () async {
+        // Files moved before the throw have no queue entry naming them, so
+        // nothing would ever reach them again — they must not be left behind.
+        final good = makeSource('good.jpg');
+        final missing = File('${sourceDir.path}/never_existed.jpg');
+
+        makeService().uploadInBackground(
+          appointmentId: 'a1',
+          newImages: [good, missing],
+        );
+
+        for (var i = 0; i < 50 && notifier.failureFor('a1') == null; i++) {
+          await Future<void>.delayed(const Duration(milliseconds: 5));
+        }
+
+        expect(notifier.failureFor('a1')?.failedCount, 2);
+        expect(await store.load(), isEmpty);
+        expect(stagingDir.listSync(), isEmpty);
+        verifyNever(() => storage.uploadImage(any(), any()));
+      },
+    );
   });
 }

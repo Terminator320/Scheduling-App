@@ -64,6 +64,12 @@ function buildAttributes({appointmentId, employeeDocId, employeeColorValue}) {
  * The assignee's `colorValue`, which drives the card's colour rail (mirroring
  * `AppointmentCard`). A failed read just yields 0 — the Swift side's amber
  * fallback is fine, so that's never a reason to skip the card.
+ *
+ * `colorValue` is stored as a NUMERIC STRING everywhere — `firestore.rules`
+ * requires `s.matches('^-?[0-9]+$')` and both Dart write paths send
+ * `.toARGB32().toString()` — so parsing is the live path, not the fallback.
+ * Reading only the `number` shape made this return 0 every time, which the
+ * Swift side turns into an orange rail on every push-started card.
  * @param {!Object} deps `{db, logger}`.
  * @param {string} employeeDocId
  * @return {!Promise<number>}
@@ -72,7 +78,9 @@ async function _employeeColorValue(deps, employeeDocId) {
   try {
     const snap = await deps.db.collection("users").doc(employeeDocId).get();
     const value = snap && snap.exists ? (snap.data() || {}).colorValue : null;
-    return typeof value === "number" ? value : 0;
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    const parsed = Number.parseInt(String(value ?? ""), 10);
+    return Number.isFinite(parsed) ? parsed : 0;
   } catch (err) {
     if (deps.logger) {
       deps.logger.warn("liveActivity: colorValue read failed", {err});

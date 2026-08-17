@@ -14,11 +14,14 @@ const {
   tomorrowWindowToronto,
   overduePromptLedgerId,
   isStaleTokenError,
+  deliverRecipientOnce,
   handleAppointmentWrite,
   runDailyDigest,
   runOverduePromptSweep,
   OPEN_STATUSES,
   SERIES_CLAIM_WINDOW_MS,
+  TIMED_RECIPIENT_ROLES,
+  OVERDUE_LOOKBACK_MS,
 } = require("../notification_utils");
 
 // Noon Toronto (EDT -4) on Wed 2026-07-08.
@@ -37,6 +40,31 @@ describe("diffAppointmentForNotifications", () => {
         NOW,
     );
     expect(kinds(evs)).toEqual(["e1:assigned", "e2:assigned"]);
+  });
+
+  test("a pictures-only rewrite emits nothing", () => {
+    // Load-bearing for COST, not just correctness. `rotateAssignedImageTokens`
+    // rewrites `pictures[].url` on up to 500 appointments in one deactivation,
+    // and every one of those parent writes fires `notifyAppointmentChanges`.
+    // That fan-out is only acceptable because each invocation is a genuine
+    // no-op: no events here means `handleAppointmentWrite` returns before any
+    // Firestore read, so 500 writes cost 500 empty invocations rather than
+    // 500 recipient lookups and widget-window queries. (The recount trigger
+    // is on the images SUBcollection, so it is not fired by these writes at
+    // all.) Make the differ sensitive to `pictures` and that stops being
+    // true — which is what this pins.
+    const base = {
+      employeeIds: ["e1"],
+      startTime: future(3 * HOUR),
+      status: "pending",
+    };
+    const evs = diffAppointmentForNotifications(
+        {...base, pictures: [{url: "old", storagePath: "p"}]},
+        {...base, pictures: [{url: "new", storagePath: "p"}]},
+        NOW,
+        "a1",
+    );
+    expect(evs).toEqual([]);
   });
 
   test("created already cancelled emits nothing", () => {
@@ -211,9 +239,18 @@ describe("selectOverdueCandidates", () => {
         [{id: "noEnd", status: "pending"}], NOW)).toEqual([]);
   });
 
-  test("drops a job that ended more than 24h ago", () => {
+  test("drops a job that ended before the lookback window", () => {
+    // The window was 24 h while this sweep owned an `every 15 minutes` timer.
+    // It rides the 5-minute one now, so 24 h meant re-reading a job left open
+    // — and re-attempting its ledger create — on 287 further sweeps after the
+    // one that actually prompted, every attempt guaranteed to fail
+    // ALREADY_EXISTS. 2 h still gives 24 examinations per job.
     expect(selectOverdueCandidates(
-        [rec("ancient", -25 * HOUR, "pending")], NOW)).toEqual([]);
+        [rec("ancient", -3 * HOUR, "pending")], NOW)).toEqual([]);
+    // Just inside it is still a candidate, so the boundary is the window and
+    // not an off-by-an-hour.
+    expect(selectOverdueCandidates(
+        [rec("recent", -110 * MIN, "pending")], NOW)).toHaveLength(1);
   });
 
   test("drops a personal block — there is no job to finish", () => {
@@ -342,6 +379,49 @@ describe("buildNotificationMessage", () => {
         .toContain("2:30");
   });
 
+  test("a multi-day run reads as a date range, not just day one", () => {
+    // Aug 1 09:00 → Aug 5 17:00 Toronto. Naming only the first morning tells a
+    // tech nothing about a job they are on for the rest of the week.
+    const run = {
+      clientName: "Alice",
+      startTime: new Date("2026-08-01T13:00:00Z"),
+      endTime: new Date("2026-08-05T21:00:00Z"),
+    };
+    const en = buildNotificationMessage("assigned", run, "en");
+    expect(en.body).toContain("Sat, Aug 1");
+    expect(en.body).toContain("Wed, Aug 5");
+    const fr = buildNotificationMessage("assigned", run, "fr");
+    expect(fr.body).toContain("5 août");
+  });
+
+  test("a night shift's range ends on the last night, not the morning after",
+      () => {
+        // Aug 1 22:00 → Aug 4 06:00 = three nights, the last starting Aug 3.
+        const nights = {
+          clientName: "Alice",
+          startTime: new Date("2026-08-02T02:00:00Z"),
+          endTime: new Date("2026-08-04T10:00:00Z"),
+        };
+        const en = buildNotificationMessage("assigned", nights, "en");
+        expect(en.body).toContain("Mon, Aug 3");
+        expect(en.body).not.toContain("Aug 4");
+      });
+
+  test("a single-day job keeps its single date", () => {
+    const oneDay = {
+      clientName: "Alice",
+      startTime: new Date("2026-07-08T18:30:00Z"),
+      endTime: new Date("2026-07-08T20:30:00Z"),
+    };
+    expect(buildNotificationMessage("assigned", oneDay, "en").body)
+        .toBe("Alice · Wed, Jul 8, 2:30 p.m.");
+  });
+
+  test("a context with no endTime is unchanged", () => {
+    expect(buildNotificationMessage("assigned", ctx, "en").body)
+        .toBe("Alice · Wed, Jul 8, 2:30 p.m.");
+  });
+
   test("blank client name falls back", () => {
     const en = buildNotificationMessage(
         "assigned",
@@ -399,6 +479,39 @@ describe("buildNotificationMessage", () => {
     const absent = buildNotificationMessage("assigned", ctx, "en");
     expect(withNone.title).toBe("New job assigned");
     expect(absent.title).toBe("New job assigned");
+  });
+
+  test("every repeat interval the app can store has a phrase", () => {
+    // Mirrors RepeatInterval (repeat_interval.dart). A missing case here ships
+    // a job announced as one-off when it repeats.
+    for (const raw of ["four_months", "six_months", "one_year"]) {
+      for (const locale of ["en", "fr"]) {
+        const msg = buildNotificationMessage(
+            "assigned", {...ctx, repeat: raw}, locale);
+        expect(msg.title).toBe(locale === "fr" ?
+          "Nouvelle visite récurrente" : "New repeating job assigned");
+      }
+    }
+    expect(buildNotificationMessage(
+        "assigned", {...ctx, repeat: "four_months"}, "en").body,
+    ).toContain("repeats every 4 months");
+  });
+
+  test("an unknown kind yields empty strings rather than a blank push", () => {
+    // The fan-out treats an empty title/body as nothing to send; a partial
+    // message would reach a Lock Screen looking broken.
+    expect(buildNotificationMessage("nope", ctx, "en"))
+        .toEqual({title: "", body: ""});
+  });
+
+  test("a null context does not throw", () => {
+    expect(buildNotificationMessage("assigned", null, "en").body)
+        .toContain("Client");
+  });
+
+  test("an unknown locale falls back to EN, never to nothing", () => {
+    expect(buildNotificationMessage("assigned", ctx, "es").title)
+        .toBe("New job assigned");
   });
 });
 
@@ -469,6 +582,12 @@ function makeDb(config) {
   const ledgerCreates = [];
   const ledgerDeletes = [];
   const appointmentQueries = [];
+  const appointmentOrders = [];
+  // Every users/{id} and users/{id}/fcmTokens read, so a test can assert both
+  // that a recipient is read at most once per pass and that an unreachable
+  // one costs nothing beyond that read.
+  const userReads = [];
+  const tokenReads = [];
   const seriesClaims = new Map(config.seriesClaims || []);
   const existing = new Set(config.ledgerExisting || []);
   const db = {
@@ -477,23 +596,29 @@ function makeDb(config) {
         return {
           doc(id) {
             return {
-              get: async () => ({
-                exists: !!config.users[id],
-                data: () => config.users[id],
-              }),
+              get: async () => {
+                userReads.push(id);
+                return {
+                  exists: !!config.users[id],
+                  data: () => config.users[id],
+                };
+              },
               collection() {
                 return {
-                  get: async () => ({
-                    docs: (config.tokens[id] || []).map((t) => ({
-                      id: t.id,
-                      data: () => ({locale: t.locale}),
-                      ref: {
-                        delete: async () => {
-                          deletedTokens.push(t.id);
+                  get: async () => {
+                    tokenReads.push(id);
+                    return {
+                      docs: (config.tokens[id] || []).map((t) => ({
+                        id: t.id,
+                        data: () => ({locale: t.locale}),
+                        ref: {
+                          delete: async () => {
+                            deletedTokens.push(t.id);
+                          },
                         },
-                      },
-                    })),
-                  }),
+                      })),
+                    };
+                  },
                 };
               },
             };
@@ -506,7 +631,8 @@ function makeDb(config) {
             appointmentQueries.push({field, op, value});
             return q;
           },
-          orderBy() {
+          orderBy(field, direction) {
+            appointmentOrders.push({field, direction});
             return q;
           },
           limit() {
@@ -569,7 +695,8 @@ function makeDb(config) {
   };
   return {
     db, deletedTokens, ledgerCreates, ledgerDeletes, appointmentQueries,
-    seriesClaims,
+    appointmentOrders,
+    seriesClaims, userReads, tokenReads,
   };
 }
 
@@ -805,6 +932,40 @@ describe("handleAppointmentWrite", () => {
         expect(en.todayJobs[0].startTime).toBe(future(3 * HOUR).toISOString());
       });
 
+  test("the widget window asks for an OVERLAP, not a back-scan", async () => {
+    // This read runs once per notified assignee on every appointment write,
+    // so its width is paid on every save. It used to floor `startTime` at
+    // `todayStart - MAX_APPOINTMENT_SPAN_MS` — a fortnight of this employee's
+    // history — purely so a multi-day run that began earlier but still WORKS
+    // today would be visible, then let buildWidgetPayload drop the rest.
+    // Asking `endTime >= todayStart` says exactly that instead, and returns
+    // only the jobs the payload can actually use.
+    const {db, appointmentQueries} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t-en", locale: "en"}]},
+      appointments: [],
+    });
+    await handleAppointmentWrite(
+        "appt1",
+        null,
+        {employeeIds: ["e1"], startTime: future(3 * HOUR)},
+        {db, messaging: makeMessaging(), now: NOW, logger: silentLogger},
+    );
+
+    const fields = appointmentQueries.map((q) => `${q.field} ${q.op}`);
+    expect(fields).toEqual([
+      "employeeIds array-contains",
+      "endTime >=",
+      "startTime <",
+    ]);
+    // The floor is today's midnight itself, with nothing subtracted — the
+    // regression to guard against is someone re-widening it.
+    const floor = appointmentQueries.find((q) => q.field === "endTime").value;
+    const ceiling =
+      appointmentQueries.find((q) => q.field === "startTime").value;
+    expect(ceiling.getTime() - floor.getTime()).toBe(3 * 24 * HOUR);
+  });
+
   test("cancelling a job yields a widget payload without it", async () => {
     const {db} = makeDb({
       users: {e1: {role: "employee", status: "active"}},
@@ -898,6 +1059,99 @@ describe("handleAppointmentWrite", () => {
     expect(res.sent).toBe(0);
     expect(messaging.sent).toHaveLength(0);
   });
+
+  test("an unreachable recipient costs no widget-window query", async () => {
+    // The eligibility gate runs BEFORE the work that composes a push. An
+    // admin assignee is refused by CHANGE_RECIPIENT_ROLES no matter what, so
+    // the widget window read that feeds the payload can never be used — and it
+    // is a real Firestore query, run once per assignee on every appointment
+    // write.
+    const {db, appointmentQueries} = makeDb({
+      users: {a1: {role: "admin", status: "active"}},
+      tokens: {a1: [{id: "t", locale: "en"}]},
+    });
+    await handleAppointmentWrite(
+        "appt1",
+        null,
+        {employeeIds: ["a1"], startTime: future(3 * HOUR)},
+        {db, messaging: makeMessaging(), now: NOW, logger: silentLogger},
+    );
+    expect(appointmentQueries).toEqual([]);
+  });
+
+  test("an assignee with no live token composes nothing", async () => {
+    const {db, appointmentQueries} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: []},
+    });
+    const messaging = makeMessaging();
+    const res = await handleAppointmentWrite(
+        "appt1",
+        null,
+        {employeeIds: ["e1"], startTime: future(3 * HOUR)},
+        {db, messaging, now: NOW, logger: silentLogger},
+    );
+    expect(res.sent).toBe(0);
+    expect(appointmentQueries).toEqual([]);
+    expect(messaging.sent).toHaveLength(0);
+  });
+
+  test("an unreachable series assignee burns no claim-ledger write",
+      async () => {
+        // The claim is keyed per (operation, kind, EMPLOYEE), so skipping it
+        // for someone the push can never reach only ever suppresses that same
+        // person's sends — which were already zero.
+        const {db, seriesClaims} = makeDb({
+          users: {a1: {role: "admin", status: "active"}},
+          tokens: {a1: [{id: "t", locale: "en"}]},
+        });
+        await handleAppointmentWrite(
+            "occ-1",
+            {
+              id: "occ-1", seriesId: "series-1", employeeIds: ["a1"],
+              startTime: future(3 * HOUR), status: "pending",
+            },
+            null,
+            {db, messaging: makeMessaging(), now: NOW, logger: silentLogger},
+        );
+        expect(seriesClaims.size).toBe(0);
+      });
+
+  test("two events for one employee read that user once", async () => {
+    // One write can accrue events for the same person more than once across a
+    // batch of ids; the per-write cache is what stops each one paying for the
+    // same user + tokens reads.
+    const {db, userReads, tokenReads} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: [{id: "t", locale: "en"}]},
+    });
+    await handleAppointmentWrite(
+        "appt1",
+        null,
+        {employeeIds: ["e1"], startTime: future(3 * HOUR)},
+        {db, messaging: makeMessaging(), now: NOW, logger: silentLogger},
+    );
+    // The gate reads it; the send that follows reuses that read rather than
+    // repeating it.
+    expect(userReads).toEqual(["e1"]);
+    expect(tokenReads).toEqual(["e1"]);
+  });
+});
+
+describe("notification_policy re-exports", () => {
+  test("notification_utils re-exports every policy symbol by its own name",
+      () => {
+        // functions/CLAUDE.md states this as an invariant ("re-exports every
+        // one of them under its original name") and nothing enforced it — ten
+        // of the twenty-one were missing, which is why one jest suite already
+        // requires notification_policy directly. A new pure rule must be added
+        // to the policy module AND re-exported here.
+        const policy = require("../notification_policy");
+        const utils = require("../notification_utils");
+        const missing = Object.keys(policy)
+            .filter((key) => utils[key] !== policy[key]);
+        expect(missing).toEqual([]);
+      });
 });
 
 describe("runOverduePromptSweep", () => {
@@ -934,16 +1188,22 @@ describe("runOverduePromptSweep", () => {
     expect(ledgerCreates.map((c) => c.key)).toEqual([overdueKey]);
     expect(ledgerCreates[0].data.expiresAt).toBeInstanceOf(Date);
     expect(ledgerDeletes).toEqual([]);
-    // The query needs to cover open statuses across a startTime window of
-    // 24h of eligibility PLUS the longest bookable span (14 days). A 48h
-    // floor silently stopped matching any run longer than a day, so those
-    // jobs were never prompted to close.
+    // The query IS the eligibility rule: open statuses, endTime inside
+    // OVERDUE_LOOKBACK_MS. Bounding `endTime` rather than `startTime` is what
+    // keeps the scan the width of the rule — the old startTime form had to
+    // reach back the lookback PLUS the longest bookable span (14 days) to see
+    // a multi-day run that had just ended, and re-read that whole fortnight
+    // every 15 minutes.
     expect(appointmentQueries).toEqual([
       {field: "status", op: "in",
         value: ["pending", "in_progress", "confirmed"]},
-      {field: "startTime", op: ">=", value: future(-(24 + 14 * 24) * HOUR)},
-      {field: "startTime", op: "<=", value: NOW},
+      {field: "endTime", op: ">", value: future(-OVERDUE_LOOKBACK_MS)},
+      {field: "endTime", op: "<=", value: NOW},
     ]);
+    // Sized against the CADENCE, not a day: this rides the 5-minute reminder
+    // timer, so 2 h is 24 examinations of a job left open, where the 24 h it
+    // carried over from the deleted 15-minute scheduler was 288.
+    expect(OVERDUE_LOOKBACK_MS).toBe(2 * HOUR);
     expect(messaging.sent).toHaveLength(1);
     expect(messaging.sent[0].data).toEqual({
       appointmentId: "over",
@@ -967,9 +1227,12 @@ describe("runOverduePromptSweep", () => {
     expect(messaging.sent).toHaveLength(0);
   });
 
-  test("a zero-delivery claim is released for a later retry", async () => {
+  test("a zero-delivery assignee burns no claim", async () => {
     // The assignee is active but has no fcmTokens yet, as if on a fresh
-    // install.
+    // install. Reachability is now checked BEFORE the claim, so nothing is
+    // written at all — "no ledger" and "written then released" are
+    // indistinguishable to the next sweep, which is what keeps the late-token
+    // retry below working.
     const {db, ledgerCreates, ledgerDeletes} = makeDb({
       users: {e1: {role: "employee", status: "active"}},
       tokens: {},
@@ -980,8 +1243,8 @@ describe("runOverduePromptSweep", () => {
         {db, messaging, now: NOW, logger: silentLogger},
     );
     expect(res.prompted).toBe(0);
-    expect(ledgerCreates.map((c) => c.key)).toEqual([overdueKey]);
-    expect(ledgerDeletes).toEqual([overdueKey]);
+    expect(ledgerCreates).toEqual([]);
+    expect(ledgerDeletes).toEqual([]);
   });
 
   test("a thrown send releases the claim and continues", async () => {
@@ -1056,5 +1319,313 @@ describe("runDailyDigest", () => {
     expect(statusQuery.value).toEqual(expect.arrayContaining(["in_progress"]));
     expect(statusQuery.value).toEqual(OPEN_STATUSES);
     expect(res.digests).toBe(1);
+  });
+
+  test("orders startTime DESC so the cap keeps tomorrow, not a stale tail",
+      async () => {
+        // The query floor is 15 days in the PAST (a run that began earlier can
+        // still be on site tomorrow), so ASCENDING made DIGEST_SWEEP_MAX keep
+        // the OLDEST open jobs and discard tomorrow's — every crew would get
+        // no digest at all once the stale tail exceeded the cap.
+        const {db, appointmentOrders} = makeDb({
+          users: {e1: {role: "employee", status: "active"}},
+          tokens: {e1: [{id: "t1", locale: "en"}]},
+          appointments: [
+            {id: "j1", status: "pending", employeeIds: ["e1"],
+              startTime: new Date("2026-07-09T13:00:00Z")},
+          ],
+        });
+
+        await runDailyDigest({db, messaging: makeMessaging(), now: NOW,
+          logger: silentLogger});
+
+        expect(appointmentOrders).toContainEqual(
+            {field: "startTime", direction: "desc"});
+      });
+
+  test("an unreachable employee costs no widget-window read", async () => {
+    // Reachability is asked before `fetchEmployeeWidgetWindow`, the order
+    // handleAppointmentWrite already establishes: otherwise a tokenless
+    // active employee costs a 200-doc read and a payload build every day for
+    // a send that returns 0.
+    const {db, tokenReads, appointmentQueries} = makeDb({
+      users: {e1: {role: "employee", status: "active"}},
+      tokens: {e1: []},
+      appointments: [
+        {id: "j1", status: "pending", employeeIds: ["e1"],
+          startTime: new Date("2026-07-09T13:00:00Z")},
+      ],
+    });
+
+    const res = await runDailyDigest({db, messaging: makeMessaging(), now: NOW,
+      logger: silentLogger});
+
+    expect(res.digests).toBe(0);
+    expect(tokenReads).toEqual(["e1"]);
+    // The candidate sweep's own query only — no per-employee widget window.
+    expect(appointmentQueries.filter(
+        (q) => q.field === "employeeIds")).toEqual([]);
+  });
+});
+
+// ----- deliverRecipientOnce -------------------------------------------------
+
+/**
+ * Wraps `makeDb`'s users/tokens machinery with a ledger collection whose
+ * `.doc()` rejects a slash SYNCHRONOUSLY, the way real Firestore does, and
+ * whose create/delete can be made to fail.
+ * @param {!Object} config `{users, tokens, existing, createThrows,
+ *   deleteThrows}`.
+ * @return {!Object} `{db, created, deleted}`.
+ */
+function makeLedgerDb(config) {
+  const base = makeDb({users: config.users || {}, tokens: config.tokens || {}});
+  const created = [];
+  const deleted = [];
+  const existing = new Set(config.existing || []);
+  const db = {
+    collection(name) {
+      if (name === "users") return base.db.collection(name);
+      return {
+        doc(id) {
+          if (String(id).includes("/")) {
+            throw new Error(`Invalid document reference: ${id}`);
+          }
+          return {
+            create: async (body) => {
+              if (config.createThrows) throw config.createThrows;
+              if (existing.has(id)) {
+                const err = new Error("already exists");
+                err.code = 6;
+                throw err;
+              }
+              existing.add(id);
+              created.push({id, body});
+            },
+            delete: async () => {
+              if (config.deleteThrows) throw config.deleteThrows;
+              deleted.push(id);
+            },
+          };
+        },
+      };
+    },
+  };
+  return {db, created, deleted};
+}
+
+describe("deliverRecipientOnce", () => {
+  // The at-most-once primitive the WHOLE reminder system sits on: the travel
+  // sweep, the overdue "job finished?" nudge, and (via its return value) the
+  // Live Activity card start all hang off this one claim.
+  const ACTIVE = {e1: {role: "employee", status: "active"}};
+  const LEDGER_ID = "appt1_1700000000000_e1";
+
+  const opts = (over) => ({
+    collection: "appointmentReminders",
+    ledgerId: LEDGER_ID,
+    appointmentId: "appt1",
+    employeeDocId: "e1",
+    kind: "leaveNow",
+    buildMsg: () => ({title: "Time to leave", body: "Head to the job"}),
+    nowDate: NOW,
+    label: "reminder",
+    roles: TIMED_RECIPIENT_ROLES,
+    ...over,
+  });
+
+  const run = (db, messaging, over) => deliverRecipientOnce(
+      {db, messaging, now: NOW, logger: silentLogger}, opts(over));
+
+  test("claims, sends, and returns the delivered count", async () => {
+    const {db, created, deleted} = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: [{id: "t1", locale: "en"}, {id: "t2", locale: "fr"}]},
+    });
+    const messaging = makeMessaging();
+
+    expect(await run(db, messaging)).toBe(2);
+    expect(created).toHaveLength(1);
+    // A delivered claim is KEPT — releasing it here would re-notify on the
+    // next 5-minute sweep.
+    expect(deleted).toEqual([]);
+    expect(messaging.sent).toHaveLength(2);
+  });
+
+  test("a second pass for the same recipient sends nothing", async () => {
+    // THE dedupe contract: `create()` fails-if-exists, and an already-exists
+    // error means "someone already delivered this" -> 0, before any send.
+    // The travel sweep runs every 5 minutes over a 90-minute window, so a
+    // reminder would otherwise fire ~18 times.
+    const {db, created, deleted} = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: [{id: "t1", locale: "en"}]},
+    });
+    const messaging = makeMessaging();
+
+    expect(await run(db, messaging)).toBe(1);
+    expect(await run(db, messaging)).toBe(0);
+    expect(created).toHaveLength(1);
+    expect(messaging.sent).toHaveLength(1);
+    // And the replay must NOT release the claim the first pass earned, or
+    // every other sweep would re-deliver.
+    expect(deleted).toEqual([]);
+  });
+
+  test("the string form of already-exists dedupes too", async () => {
+    // The Admin SDK surfaces this as numeric 6 or as "already-exists"
+    // depending on the path; treating only one as a dedupe re-pushes.
+    const err = new Error("already exists");
+    err.code = "already-exists";
+    const {db, deleted} = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: [{id: "t1", locale: "en"}]},
+      createThrows: err,
+    });
+    const messaging = makeMessaging();
+
+    expect(await run(db, messaging)).toBe(0);
+    expect(messaging.sent).toEqual([]);
+    expect(deleted).toEqual([]);
+  });
+
+  test("a ledger id containing a slash returns 0, not a thrown sweep",
+      async () => {
+        // `.doc()` throws SYNCHRONOUSLY on such an id, which is why it is
+        // built INSIDE the try. The rules only length-check `employeeIds`
+        // (CEL cannot iterate a list), so one poisoned element is reachable —
+        // and an escape here would kill every push for the whole sweep.
+        const {db, created} = makeLedgerDb({
+          users: ACTIVE,
+          tokens: {e1: [{id: "t1", locale: "en"}]},
+        });
+        const messaging = makeMessaging();
+
+        expect(await run(db, messaging, {ledgerId: "appt1_1_bad/id"})).toBe(0);
+        expect(created).toEqual([]);
+        expect(messaging.sent).toEqual([]);
+      });
+
+  test("a poisoned recipient does not stop the next one delivering",
+      async () => {
+        // The sweep shape: `Promise.all` over every (job, assignee) pair. One
+        // bad id must cost exactly one push, not all of them.
+        const {db} = makeLedgerDb({
+          users: {...ACTIVE, e2: {role: "employee", status: "active"}},
+          tokens: {
+            e1: [{id: "t1", locale: "en"}],
+            e2: [{id: "t2", locale: "en"}],
+          },
+        });
+        const messaging = makeMessaging();
+        const results = await Promise.all([
+          run(db, messaging, {ledgerId: "a/b", employeeDocId: "e1"}),
+          run(db, messaging, {ledgerId: "ok-e2", employeeDocId: "e2"}),
+        ]);
+
+        expect(results).toEqual([0, 1]);
+        expect(messaging.sent).toHaveLength(1);
+      });
+
+  test("a recipient with no live token burns no claim", async () => {
+    // A recipient whose device has not registered a token yet: holding the
+    // claim would suppress that reminder forever once the token arrives.
+    // Checked before the claim, so it costs no ledger write either — the
+    // retry below is what actually matters and is unchanged.
+    const {db, created, deleted} = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: []},
+    });
+    const messaging = makeMessaging();
+
+    expect(await run(db, messaging)).toBe(0);
+    expect(created).toEqual([]);
+    expect(deleted).toEqual([]);
+    expect(messaging.sent).toEqual([]);
+  });
+
+  test("a released claim really is retried on the next sweep", async () => {
+    // The point of the release, end to end: the same call after the token
+    // registers must deliver.
+    const {db} = makeLedgerDb({users: ACTIVE, tokens: {e1: []}});
+    expect(await run(db, makeMessaging())).toBe(0);
+
+    const withToken = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: [{id: "t1", locale: "en"}]},
+    });
+    expect(await run(withToken.db, makeMessaging())).toBe(1);
+  });
+
+  test("a throwing send is caught and the claim released", async () => {
+    // A transient FCM failure must not abort the remaining recipients, and
+    // must leave the reminder retryable.
+    const {db, created, deleted} = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: [{id: "t1", locale: "en"}]},
+    });
+    const messaging = {
+      sendEach: async () => {
+        throw new Error("network");
+      },
+    };
+
+    expect(await run(db, messaging)).toBe(0);
+    expect(created).toHaveLength(1);
+    expect(deleted).toHaveLength(1);
+  });
+
+  test("a failed release is swallowed rather than thrown", async () => {
+    // The caller counts return values; throwing here would abort the sweep
+    // over a cleanup failure that the next pass fixes anyway.
+    const {db} = makeLedgerDb({
+      users: ACTIVE,
+      tokens: {e1: []},
+      deleteThrows: new Error("release failed"),
+    });
+
+    await expect(run(db, makeMessaging())).resolves.toBe(0);
+  });
+
+  test("a ledger create failure that is NOT already-exists sends nothing",
+      async () => {
+        // Fail closed: with no claim there is no at-most-once guarantee, so
+        // pushing anyway could deliver the same reminder every 5 minutes.
+        const {db} = makeLedgerDb({
+          users: ACTIVE,
+          tokens: {e1: [{id: "t1", locale: "en"}]},
+          createThrows: new Error("unavailable"),
+        });
+        const messaging = makeMessaging();
+
+        expect(await run(db, messaging)).toBe(0);
+        expect(messaging.sent).toEqual([]);
+      });
+
+  test("an inactive recipient gets nothing and costs no ledger write",
+      async () => {
+        // `_canReachRecipient` is asked before the claim, so a filtered
+        // recipient no longer pays 2 writes + 2 reads on every one of the 24
+        // sweep runs its overdue window spans.
+        const {db, created, deleted} = makeLedgerDb({
+          users: {e1: {role: "employee", status: "disabled"}},
+          tokens: {e1: [{id: "t1", locale: "en"}]},
+        });
+        const messaging = makeMessaging();
+
+        expect(await run(db, messaging)).toBe(0);
+        expect(messaging.sent).toEqual([]);
+        expect(created).toEqual([]);
+        expect(deleted).toEqual([]);
+      });
+
+  test("it works when deps carry no logger", async () => {
+    // Every log call is `if (logger)`-guarded because some call sites pass
+    // deps without one; a bare `logger.warn` would turn a release failure
+    // into a TypeError that escapes the sweep.
+    const {db} = makeLedgerDb({users: ACTIVE, tokens: {e1: []}});
+    const res = await deliverRecipientOnce(
+        {db, messaging: makeMessaging(), now: NOW}, opts());
+    expect(res).toBe(0);
   });
 });

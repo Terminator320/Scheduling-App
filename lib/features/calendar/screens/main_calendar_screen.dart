@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:scheduling/core/app/photo_upload_failure_listener.dart';
+import 'package:scheduling/core/app/role_upgrade_listener.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/primary_scroll_scope.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
-import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
-import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/collapse_state.dart';
@@ -26,7 +26,9 @@ import 'package:scheduling/features/calendar/widgets/views/calendar_header_block
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_grid.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_week_strip.dart';
+import 'package:scheduling/features/calendar/widgets/views/collapse_handle.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
+import 'package:scheduling/features/calendar/widgets/views/today_pill.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -35,7 +37,6 @@ import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart'
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
-import 'package:scheduling/shared/widgets/feedback/error_snack_bar.dart';
 
 class MainCalendar extends ConsumerStatefulWidget {
   const MainCalendar({
@@ -58,8 +59,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   late AppointmentDateRange _appointmentRange;
-  PhotoUploadNotifier? _uploadNotifier;
-  bool _upgradingToAdmin = false;
   late DateFormat _monthLabelFormat;
   late DateFormat _monthShortLabelFormat;
   late DateFormat _yearLabelFormat;
@@ -81,17 +80,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       focusedDay: _focusedDay,
       selectedDay: _focusedDay,
     );
-    _initStreams();
-  }
-
-  void _initStreams() {
-    _uploadNotifier = ref.read(photoUploadNotifierProvider);
-    _uploadNotifier?.latestFailure.addListener(_onUploadFailure);
   }
 
   @override
   void dispose() {
-    _uploadNotifier?.latestFailure.removeListener(_onUploadFailure);
     _agendaController.dispose();
     super.dispose();
   }
@@ -103,34 +95,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   void _toggleCollapse() {
     _collapse.toggle();
     setState(() {});
-  }
-
-  void _onUploadFailure() {
-    final failure = _uploadNotifier?.latestFailure.value;
-    if (failure == null || !mounted) return;
-    final appointmentId = failure.appointmentId;
-    final scheme = Theme.of(context).colorScheme;
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      errorSnackBar(
-        context,
-        context.l10n.calendar_photoUploadFailedSnackbar,
-        action: SnackBarAction(
-          label: context.l10n.calendar_open,
-          textColor: scheme.onErrorContainer,
-          onPressed: () async {
-            final appointment = await ref
-                .read(appointmentsRepositoryProvider)
-                .getAppointmentById(appointmentId);
-            if (!mounted || appointment == null) return;
-            await showEventDetails(
-              context,
-              appointment,
-              showActions: widget.isAdmin,
-            );
-          },
-        ),
-      ),
-    );
   }
 
   // Show the "today" control whenever the day on screen isn't today — not just
@@ -249,21 +213,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         );
   }
 
-  // If a non-admin gets upgraded to 'admin', route them to the admin calendar after this frame. The flag just guards against firing more than once.
-  void _upgradeIfAdmin(String? role) {
-    if (role != 'admin' || !mounted || _upgradingToAdmin) return;
-    _upgradingToAdmin = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      navigateToDestination(
-        context,
-        HubTab.calendar,
-        isAdmin: true,
-        employeeId: widget.employeeId,
-      );
-    });
-  }
-
   Future<void> _pickMonth() async {
     final picked = await MonthYearPicker.show(context, _focusedDay);
     if (picked != null && mounted) _setFocusedDay(picked);
@@ -329,73 +278,93 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       monthLabelShort: _monthShortLabelFormat.format(_focusedDay),
       yearLabel: _yearLabelFormat.format(_focusedDay),
       dayTitle: DateUtilsHelper.formatDayHeader(selectedDay),
-      jobLabel: context.l10n.calendar_jobsCount(selectedEvents.length),
+      jobLabel: _jobLabel(context, selectedEvents),
       today: today,
     );
+  }
+
+  /// The agenda header's count: the day's total, plus how much of it is behind
+  /// them once anything is closed — `3 JOBS · 1 DONE`.
+  ///
+  /// Counts `isClosed`, not `done` alone, so the header can't disagree with the
+  /// "Done" rule the agenda draws over the same block below it.
+  static String _jobLabel(
+    BuildContext context,
+    List<AppointmentDaySlice> events,
+  ) {
+    final l10n = context.l10n;
+    final total = l10n.calendar_jobsCount(events.length);
+    final closed = events.where((slice) => slice.appointment.isClosed).length;
+    return closed == 0
+        ? total
+        : '$total · ${l10n.calendar_jobsDoneCount(closed)}';
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen(_appointmentsProvider, _onAppointmentsAsyncChange);
-    if (!widget.isAdmin) {
-      ref.listen<AsyncValue<String>>(
-        userRoleProvider,
-        (_, next) => _upgradeIfAdmin(next.value),
-      );
-      _upgradeIfAdmin(ref.read(userRoleProvider).value);
-    }
 
     final data = _prepareBuild(context);
 
-    return FeatureTourHost(
-      scope: _tour.scope,
+    // Both wrappers are session concerns that merely happen to be hosted here:
+    // a background photo upload fails long after its sheet is gone, and a
+    // role upgrade has to re-route whatever shell the person is standing in.
+    return RoleUpgradeListener(
+      employeeId: widget.employeeId,
       isAdmin: widget.isAdmin,
-      ready: !data.isLoading,
-      stepKeys: _tour.keys,
-      child: Scaffold(
-        floatingActionButton: _addAppointmentFab(context),
-        endDrawer: AppNavDrawer(
+      child: PhotoUploadFailureListener(
+        showActions: widget.isAdmin,
+        child: FeatureTourHost(
+          scope: _tour.scope,
           isAdmin: widget.isAdmin,
-          employeeId: widget.employeeId,
-          userName: data.userName,
-        ),
-        body: Column(
-          children: [
-            CalendarHeaderBlock(
-              monthLabel: data.monthLabel,
-              monthLabelShort: data.monthLabelShort,
-              yearLabel: data.yearLabel,
-              onPickMonth: _pickMonth,
-              routeButton: _dayRouteButton(context),
-              weekStrip: _weekStrip(data.today, data.colorMap),
+          ready: !data.isLoading,
+          stepKeys: _tour.keys,
+          child: Scaffold(
+            floatingActionButton: _addAppointmentFab(context),
+            endDrawer: AppNavDrawer(
+              isAdmin: widget.isAdmin,
+              employeeId: widget.employeeId,
+              userName: data.userName,
             ),
-            Expanded(
-              // The header block reserves the status bar itself.
-              child: SafeArea(
-                top: false,
-                child: Stack(
-                  children: [
-                    _content(
-                      isLoading: data.isLoading,
-                      colorMap: data.colorMap,
-                      nameMap: data.nameMap,
-                      today: data.today,
-                      dayTitle: data.dayTitle,
-                      jobLabel: data.jobLabel,
-                    ),
-                    Positioned(
-                      bottom: AppSpacing.sp16,
-                      left: AppSpacing.sp16,
-                      child: _TodayPill(
-                        visible: _showTodayButton(data.today),
-                        onPressed: () => _goToToday(data.today),
-                      ),
-                    ),
-                  ],
+            body: Column(
+              children: [
+                CalendarHeaderBlock(
+                  monthLabel: data.monthLabel,
+                  monthLabelShort: data.monthLabelShort,
+                  yearLabel: data.yearLabel,
+                  onPickMonth: _pickMonth,
+                  routeButton: _dayRouteButton(context),
+                  weekStrip: _weekStrip(data.today, data.colorMap),
                 ),
-              ),
+                Expanded(
+                  // The header block reserves the status bar itself.
+                  child: SafeArea(
+                    top: false,
+                    child: Stack(
+                      children: [
+                        _content(
+                          isLoading: data.isLoading,
+                          colorMap: data.colorMap,
+                          nameMap: data.nameMap,
+                          today: data.today,
+                          dayTitle: data.dayTitle,
+                          jobLabel: data.jobLabel,
+                        ),
+                        Positioned(
+                          bottom: AppSpacing.sp16,
+                          left: AppSpacing.sp16,
+                          child: TodayPill(
+                            visible: _showTodayButton(data.today),
+                            onPressed: () => _goToToday(data.today),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -588,6 +557,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                   colorMap: colorMap,
                   isLoading: isLoading,
                   isAdmin: widget.isAdmin,
+                  // Same floating FAB and Today pill as portrait — this pane
+                  // is the one they sit over in the split layout.
+                  bottomClearance: kAgendaFloatingControlsClearance,
                 ),
               ],
             ),
@@ -637,7 +609,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         // back. It stays put when collapsed so there is something to pull.
         _tour.step(
           TourStepId.calendarCollapse,
-          child: _CollapseHandle(
+          child: CollapseHandle(
             isCollapsed: _collapse.isCollapsed,
             onDrag: _onCollapseDrag,
             onDragEnd: _collapse.endDrag,
@@ -665,138 +637,14 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                 colorMap: colorMap,
                 isLoading: isLoading,
                 isAdmin: widget.isAdmin,
+                // The FAB and the Today pill float over this list, so the last
+                // job of the day needs somewhere to scroll clear of them.
+                bottomClearance: kAgendaFloatingControlsClearance,
               ),
             ],
           ),
         ),
       ],
-    );
-  }
-}
-
-/// The divider between the month grid and the day's jobs, doubling as the
-/// grab handle that collapses the grid. Painted as the same hairline the rest
-/// of the screen uses, inside a 20px tall target with a short grip so it reads
-/// as draggable; it is also a button, since a 24px drag is not a gesture
-/// everyone can make.
-class _CollapseHandle extends StatelessWidget {
-  const _CollapseHandle({
-    required this.isCollapsed,
-    required this.onDrag,
-    required this.onDragEnd,
-    required this.onToggle,
-  });
-
-  final bool isCollapsed;
-  final ValueChanged<double> onDrag;
-  final VoidCallback onDragEnd;
-  final VoidCallback onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final label = isCollapsed
-        ? context.l10n.calendar_showCalendar
-        : context.l10n.calendar_hideCalendar;
-    return Semantics(
-      button: true,
-      label: label,
-      excludeSemantics: true,
-      child: Tooltip(
-        message: label,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onVerticalDragUpdate: (details) => onDrag(details.delta.dy),
-          onVerticalDragEnd: (_) => onDragEnd(),
-          onVerticalDragCancel: onDragEnd,
-          onTap: onToggle,
-          child: SizedBox(
-            height: 20,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Align(
-                  alignment: Alignment.bottomCenter,
-                  child: Divider(
-                    height: 1,
-                    color: theme.colorScheme.outlineVariant,
-                  ),
-                ),
-                Container(
-                  width: 36,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: theme.palette.textFaint,
-                    borderRadius: BorderRadius.circular(AppRadius.rFull),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The "jump to today" pill. It scales and fades out once today is already in
-/// view, staying mounted so the transition is animated both ways.
-class _TodayPill extends StatelessWidget {
-  const _TodayPill({required this.visible, required this.onPressed});
-
-  final bool visible;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final instant = MediaQuery.disableAnimationsOf(context);
-    final radius = BorderRadius.circular(AppRadius.rFull);
-    return IgnorePointer(
-      ignoring: !visible,
-      child: AnimatedScale(
-        scale: visible ? 1 : 0.85,
-        duration: instant ? Duration.zero : AppMotion.popIn,
-        curve: AppMotion.emphasized,
-        child: AnimatedOpacity(
-          opacity: visible ? 1 : 0,
-          duration: instant ? Duration.zero : AppMotion.popIn,
-          child: Tooltip(
-            message: context.l10n.calendar_today,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: radius,
-                boxShadow: theme.cardStyle.pillShadow,
-              ),
-              child: Material(
-                color: theme.colorScheme.surface,
-                borderRadius: radius,
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                  onTap: onPressed,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 48),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sp16,
-                        vertical: 11,
-                      ),
-                      child: Center(
-                        child: Text(
-                          context.l10n.calendar_today,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: theme.palette.primaryAccent,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

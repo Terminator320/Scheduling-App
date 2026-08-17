@@ -2,6 +2,35 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 
 void main() {
+  // I12: `assigneeNameAt` owns the positional bounds check at six call sites,
+  // and the edit sheet's result flows into `mergeRetainedAssignees` and is
+  // WRITTEN BACK to Firestore — yet it had no direct coverage, only whatever
+  // its callers happened to exercise.
+  group('assigneeNameAt', () {
+    test('returns the name at the paired position', () {
+      expect(assigneeNameAt(const ['Ada', 'Bea'], 0), 'Ada');
+      expect(assigneeNameAt(const ['Ada', 'Bea'], 1), 'Bea');
+    });
+
+    test('returns null past the end — a shorter names list', () {
+      // The real shape: a job assigned before names were denormalized, or a
+      // partially-written doc. Null means "no name here", and each caller
+      // picks its own substitute.
+      expect(assigneeNameAt(const ['Ada'], 1), isNull);
+      expect(assigneeNameAt(const [], 0), isNull);
+    });
+
+    test('returns null for a negative index rather than throwing', () {
+      expect(assigneeNameAt(const ['Ada'], -1), isNull);
+    });
+
+    test('an empty stored name is a NAME, not a gap', () {
+      // Distinct from null on purpose: the caller substitutes only when there
+      // is no entry at all, never when the entry is blank.
+      expect(assigneeNameAt(const [''], 0), '');
+    });
+  });
+
   group('mergeRetainedAssignees', () {
     test('keeps only the selection when every original is active', () {
       final result = mergeRetainedAssignees(

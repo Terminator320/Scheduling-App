@@ -1,9 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:saver_gallery/saver_gallery.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -118,13 +118,21 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
   }
 
   /// Resolves the on-screen image to an on-disk file for share/save to use.
-  /// Local picks are already files; network images resolve to their cached
-  /// copy, downloading it again if it's been evicted.
+  /// Local picks are already files; a stored photo is held in memory (see
+  /// `AppointmentImageLoader` — there is no URL and no on-disk cache to reach
+  /// for), so its bytes are spooled to a temp file for the platform channel.
   Future<File?> _currentImageFile() async {
     final provider = widget.images[_currentIndex];
     if (provider is FileImage) return provider.file;
-    if (provider is CachedNetworkImageProvider) {
-      return DefaultCacheManager().getSingleFile(provider.url);
+    // The 1×1 stand-in for a refused photo is a placeholder, not the picture —
+    // saving or sharing it would hand over a blank pixel as if it were the job.
+    if (identical(provider, _refusedImage)) return null;
+    if (provider is MemoryImage) {
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/ESPro_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      return file.writeAsBytes(provider.bytes);
     }
     return null;
   }
@@ -138,13 +146,19 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     Future<void> Function() body,
   ) async {
     if (_busy) return;
+    // Resolved before the await — dismissing the viewer while a Save/Share is
+    // in flight unmounts this consumer, and `ref.read` throws there under
+    // Riverpod 3. `body()` itself can genuinely throw (a cache miss raises
+    // StateError), so this catch is a live path, not a defensive one.
+    final logger = ref.read(loggerProvider);
+    final notices = ref.read(noticeServiceProvider);
     setState(() => _busy = true);
     try {
       await body();
     } catch (e, st) {
-      ref.read(loggerProvider).warn('$logTag failed', e, st);
+      logger.warn('$logTag failed', e, st);
       if (!mounted) return;
-      ref.read(noticeServiceProvider).error(errorMessage);
+      notices.error(errorMessage);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -373,12 +387,36 @@ class _ViewerOverlay extends StatelessWidget {
   }
 }
 
+/// A 1×1 transparent PNG, stood in for a photo the loader could not fetch.
+///
+/// It has to be a provider rather than a dropped entry: the viewer opens at an
+/// INDEX, so removing one would shift every photo beside it.
+final _refusedImage = MemoryImage(
+  Uint8List.fromList(const [
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, //
+    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+    0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+    0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+    0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+    0x42, 0x60, 0x82,
+  ]),
+);
+
 List<ImageProvider> buildImageProviders({
-  required List<String> urls,
+  required List<Uint8List> bytes,
   required List<File> files,
 }) {
   return [
-    ...urls.map<ImageProvider>(CachedNetworkImageProvider.new),
+    // Empty bytes are a REFUSAL from AppointmentImageLoader — a rules
+    // rejection or a fetch that failed — never a photo still loading. There is
+    // no URL to fall back to by design, so the slot is substituted, not
+    // dropped.
+    ...bytes.map<ImageProvider>(
+      (b) => b.isEmpty ? _refusedImage : MemoryImage(b),
+    ),
     ...files.map<ImageProvider>(FileImage.new),
   ];
 }

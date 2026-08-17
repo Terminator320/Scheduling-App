@@ -6,18 +6,24 @@ const {getMessaging} = require("firebase-admin/messaging");
 const {
   assertPayloadShape,
   requireString,
+  requireDocId,
   optionalString,
   assertAdmin,
   enforceDurableRateLimit,
+  assertFreshReauth,
 } = require("./security");
 // index.js already loads notifications.js in every container, so this costs no
 // extra cold start. sendToEmployee is the one owner of the token fetch, the
 // role + active gate and stale-token pruning — never re-derive them here.
 const {
   sendToEmployee,
+  sendToActiveAdmins,
   TIMED_RECIPIENT_ROLES,
 } = require("./notification_utils");
-const {buildEmailChangedMessage} = require("./notification_messages");
+const {
+  buildEmailChangedMessage,
+  buildSelfEmailChangedMessage,
+} = require("./notification_messages");
 
 /**
  * The shared starting password every new employee account is created with.
@@ -51,6 +57,15 @@ const CREATE_RATE_WINDOW_MS = 60 * 60 * 1000;
 // Setup runs once per person; a handful of retries covers a fumbled password.
 const SETUP_RATE_MAX = 5;
 const SETUP_RATE_WINDOW_MS = 15 * 60 * 1000;
+
+// changeEmployeeEmail rewrites a SIGN-IN IDENTITY, which is the
+// account-takeover primitive an unattended unlocked phone offers — so it is
+// budgeted far tighter than account creation, and it demands a fresh re-auth
+// the same way deleteAccount does. The client re-authenticates before calling
+// (SelfEmailService); this is the server-side half of that guarantee.
+const EMAIL_CHANGE_RATE_MAX = 5;
+const EMAIL_CHANGE_RATE_WINDOW_MS = 60 * 60 * 1000;
+const EMAIL_CHANGE_REAUTH_MAX_AGE_SECONDS = 5 * 60;
 
 // Mirrors JobTitle.raw (lib/features/employees/domain/models/job_title.dart)
 // and the rules' isValidJobTitle allowlist.
@@ -340,6 +355,49 @@ async function performChangeEmail(db, docId, email, previousEmail, opts) {
 }
 
 /**
+ * Decides whether this caller may move [docId]'s email, and how.
+ *
+ * Pure over the caller's `usersByUid` bridge data so the guard is testable
+ * without Firestore. Two ways through and no third: an ACTIVE ADMIN may move
+ * any doc, and an ACTIVE EMPLOYEE may move their OWN. Everything else is
+ * refused — a disabled account (whose Auth credential outlives the status flip
+ * until syncUsersByUid revokes it), an invited account mid-setup, a missing
+ * bridge doc, an unknown role, or an employee naming somebody else's doc.
+ *
+ * Widening this callable past admins must never widen WHICH doc a caller can
+ * reach. That is the failure this function exists to make hard to write.
+ *
+ * `isSelf` reports whether the caller IS the target, independent of role,
+ * because it drives who gets notified — an admin editing their own row is a
+ * self change and must not push "someone changed their email" to themselves.
+ *
+ * `isAdmin` is returned SEPARATELY and is not derivable from `isSelf`: the
+ * re-auth freshness gate keys on the role, never on self-ness. An admin
+ * editing their OWN roster row is `isSelf`, but reaches here through
+ * `updateEmployee`, which has no re-auth step — so gating that call on
+ * freshness rejected the whole save (name, phone, colour, availability) with
+ * an opaque `stale-auth` five minutes after sign-in.
+ *
+ * @param {?Object} bridge The caller's `usersByUid/{uid}` data, or null.
+ * @param {string} docId The users-doc id being changed.
+ * @return {!Promise<{isSelf: boolean, isAdmin: boolean, callerDocId: string}>}
+ */
+async function resolveEmailChangeCaller(bridge, docId) {
+  const data = bridge || null;
+  if (!data || data.status !== "active") {
+    throw new HttpsError("permission-denied", "not-admin");
+  }
+  const callerDocId = data.docId || "";
+  // An empty callerDocId must never match an empty target.
+  const isSelf = callerDocId !== "" && callerDocId === docId;
+  if (data.role === "admin") return {isSelf, isAdmin: true, callerDocId};
+  if (data.role === "employee" && isSelf) {
+    return {isSelf: true, isAdmin: false, callerDocId};
+  }
+  throw new HttpsError("permission-denied", "not-admin");
+}
+
+/**
  * Moves an employee's sign-in email in Firebase Auth AND on their users doc.
  *
  * This exists because nothing else joins those two stores: `updateEmployee`
@@ -355,22 +413,41 @@ const changeEmployeeEmail = onCall(APP_CHECK, async (req) => {
   if (!req.auth || !req.auth.uid) {
     throw new HttpsError("unauthenticated", "auth-required");
   }
-  await assertAdmin(req.auth.uid);
-  assertPayloadShape(req.data, new Set(["docId", "email"]));
-  const docId = requireString(req.data, "docId", 128);
-  // `.doc()` throws synchronously on an id containing a slash, which would
-  // surface as an opaque `internal` instead of a shaped rejection.
-  if (docId.includes("/")) {
-    throw new HttpsError("invalid-argument", "invalid-docId");
-  }
-  const email = requireString(req.data, "email", 254).toLowerCase();
-  // Same per-admin budget as account creation: this rewrites a sign-in
-  // identity, so a compromised session must not be able to walk the roster.
-  await enforceDurableRateLimit(
-      "changeEmployeeEmail", req.auth.uid, CREATE_RATE_MAX,
-      CREATE_RATE_WINDOW_MS);
-
   const db = getFirestore();
+  assertPayloadShape(req.data, new Set(["docId", "email"]));
+  const docId = requireDocId(req.data, "docId");
+  const email = requireString(req.data, "email", 254).toLowerCase();
+  // Guard order: auth → payload → IDENTITY → re-auth freshness → rate limit →
+  // work. The payload is validated before a slot is consumed so a burst of
+  // malformed submissions can't exhaust a legitimate caller's window; the
+  // identity guards sit above the limiter so a non-entitled caller still can't
+  // burn one.
+  const bridgeSnap = await db.collection("usersByUid").doc(req.auth.uid).get();
+  const {isSelf, isAdmin, callerDocId} = await resolveEmailChangeCaller(
+      bridgeSnap.exists ? bridgeSnap.data() : null, docId);
+  // A valid ID token alone must not be enough for an EMPLOYEE to move their
+  // own sign-in address: SelfEmailService re-authenticates first, but that is
+  // a client-side ordering, and anything reaching this callable directly
+  // bypasses it. Same check deleteAccount makes, for the same reason.
+  //
+  // KEYED ON ROLE, NOT ON `isSelf`. Every admin call arrives through
+  // `updateEmployee`, which has no re-auth step to satisfy this — including
+  // when an admin edits their OWN roster row, which is `isSelf`. Gating on
+  // self-ness therefore rejected that save entirely (name, phone, colour and
+  // availability with it) as an opaque `stale-auth`, five minutes after
+  // sign-in. Closing the admin half needs a re-auth prompt on that save path
+  // first; until then an unattended admin session can still rewrite an
+  // address, bounded only by the identity guard and the budget below.
+  if (!isAdmin) {
+    assertFreshReauth(
+        req.auth, "changeEmployeeEmail", EMAIL_CHANGE_REAUTH_MAX_AGE_SECONDS);
+  }
+  // Same per-caller budget either way: this rewrites a sign-in identity, so a
+  // compromised session must not be able to walk the roster.
+  await enforceDurableRateLimit(
+      "changeEmployeeEmail", req.auth.uid, EMAIL_CHANGE_RATE_MAX,
+      EMAIL_CHANGE_RATE_WINDOW_MS);
+
   const auth = getAuth();
 
   const snap = await db.collection("users").doc(docId).get();
@@ -427,8 +504,15 @@ const changeEmployeeEmail = onCall(APP_CHECK, async (req) => {
     throw e;
   }
 
-  await notifyEmailChanged(
-      {db, messaging: getMessaging(), logger}, docId, email);
+  // Who needs telling depends on who did it. An ADMIN edit surprises the
+  // employee, so the employee is told. A SELF edit surprises nobody who made
+  // it — the admins are the ones who need to know a sign-in identity moved.
+  const deps = {db, messaging: getMessaging(), logger};
+  if (isSelf) {
+    await notifyAdminsOfSelfEmailChange(deps, callerDocId, docId);
+  } else {
+    await notifyEmailChanged(deps, docId, email);
+  }
   return {ok: true};
 });
 
@@ -464,6 +548,41 @@ async function notifyEmailChanged(deps, docId, email) {
   } catch (e) {
     // Never the address itself — emails are PII and this is a log line.
     logger.warn("changeEmployeeEmail: notify failed", {docId, err: String(e)});
+  }
+}
+
+/**
+ * Tells the active admins that someone changed their OWN sign-in address.
+ *
+ * `notifyEmailChanged` pushes the person whose address moved, which is right
+ * when an admin made the change and pointless when they made it themselves —
+ * so a self change notifies the managers instead, through the shared
+ * `sendToActiveAdmins` fan-out.
+ *
+ * Deliberately does NOT name the new address: this reaches every admin's Lock
+ * Screen, and an email is PII. Best-effort and after the commit, exactly like
+ * its sibling — the change is already durable in both stores, so a push
+ * failure must not hand the caller an error for something that worked.
+ *
+ * @param {!Object} deps `{db, messaging, logger}`.
+ * @param {string} callerDocId The person who made the change (excluded).
+ * @param {string} docId users doc id whose email moved.
+ * @return {!Promise<void>}
+ */
+async function notifyAdminsOfSelfEmailChange(deps, callerDocId, docId) {
+  try {
+    const snap = await deps.db.collection("users").doc(docId).get();
+    const name = (snap.exists && (snap.data() || {}).name) || "";
+    await sendToActiveAdmins(
+        deps,
+        {kind: "selfEmailChanged", docId},
+        (locale) => buildSelfEmailChangedMessage(name, locale),
+        {excludeDocId: callerDocId},
+    );
+  } catch (e) {
+    // Never the address itself — emails are PII and this is a log line.
+    logger.warn("changeEmployeeEmail: admin notify failed",
+        {docId, err: String(e)});
   }
 }
 
@@ -602,12 +721,7 @@ const deleteEmployeeAccount = onCall(APP_CHECK, async (req) => {
   }
   await assertAdmin(req.auth.uid);
   assertPayloadShape(req.data, new Set(["docId"]));
-  const docId = requireString(req.data, "docId", 128);
-  // `.doc()` throws synchronously on an id containing a slash, which would
-  // surface as an opaque `internal` instead of a shaped rejection.
-  if (docId.includes("/")) {
-    throw new HttpsError("invalid-argument", "invalid-docId");
-  }
+  const docId = requireDocId(req.data, "docId");
   await enforceDurableRateLimit(
       "deleteEmployeeAccount", req.auth.uid, CREATE_RATE_MAX,
       CREATE_RATE_WINDOW_MS);
@@ -652,6 +766,7 @@ module.exports = {
   performCreateAccount,
   performDeleteAccount,
   performChangeEmail,
+  resolveEmailChangeCaller,
   notifyEmailChanged,
   buildActivationPatch,
 };
