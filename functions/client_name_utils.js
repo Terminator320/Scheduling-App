@@ -6,8 +6,9 @@
  * `clients/{id}.name` IS THE WAVE CUSTOMER NAME (`toWaveCustomerInput`,
  * `wave/mappers.js`), and as of 2026-08-14 that means two things:
  *
- *   - a PERSON is named by their phone number, "(514) 555-1234", which is what
- *     the invoicing workflow identifies them by;
+ *   - a PERSON is named by their phone number with the punctuation off,
+ *     "5145551234", which is what the invoicing workflow identifies them by
+ *     (owner call 2026-08-16; the `phone` FIELD stays formatted);
  *   - a BUSINESS keeps its name, "3101-5696 qc inc.", because that name is the
  *     identity there and a number in its place is unrecognisable.
  *
@@ -52,6 +53,30 @@ function digitsOf(value) {
   const digits = String(value == null ? "" : value).replace(/\D/g, "");
   if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
   return digits;
+}
+
+/**
+ * A stored number reduced to its bare form — "(514) 555-1234" becomes
+ * "5145551234" — keeping a leading "+" so an international number survives.
+ *
+ * DISTINCT FROM [digitsOf], which additionally sheds the leading 1 of an
+ * 11-digit NANP number. That is right for COMPARING two spellings of the same
+ * number and wrong for a value that gets stored: it would silently drop a
+ * country code the admin typed. Never swap one for the other.
+ *
+ * Falls back to the trimmed input when there is nothing to strip, so an
+ * extension-only or alphabetic entry is handed on rather than blanked.
+ *
+ * Hand-mirrors `bareNumber` in `lib/core/validators/phone_format.dart`.
+ *
+ * @param {*} value Any stored phone value.
+ * @return {string}
+ */
+function bareNumber(value) {
+  const trimmed = str(value);
+  const digits = trimmed.replace(/\D/g, "");
+  if (!digits) return trimmed;
+  return trimmed.startsWith("+") ? `+${digits}` : digits;
 }
 
 /**
@@ -162,9 +187,15 @@ function looksLikeBusinessName(name) {
  * What gets PERSISTED, and what Wave shows as the CUSTOMER name (owner call
  * 2026-08-14).
  *
- * A PERSON is named by their phone number — the invoicing workflow in Wave
- * identifies people by number, and their real name is in
- * `firstName`/`lastName`, which is what `clientDisplayName` renders.
+ * A PERSON is named by their phone number, BARE — "5145551234", not the
+ * "(514) 555-1234" the `phone` field itself stores (owner call 2026-08-16).
+ * The invoicing workflow in Wave identifies people by number and wants it
+ * unpunctuated; their real name is in `firstName`/`lastName`, which is what
+ * `clientDisplayName` renders.
+ *
+ * `stripPhone` recognises the bare form as this client's own number — it
+ * digit-matches, not just suffix-matches — which is what keeps this branch
+ * idempotent across the formatting change.
  *
  * A BUSINESS keeps its name: "3101-5696 qc inc.", "1505 Village de Bergerac".
  * That name IS the identity in Wave, and unlike a person there is rarely a
@@ -191,7 +222,8 @@ function composeStored(opts) {
     return base;
   }
 
-  return phone || mobile || base;
+  const number = phone || mobile;
+  return number ? bareNumber(number) : base;
 }
 
 /**
@@ -269,6 +301,7 @@ function clientDisplayName(data) {
 }
 
 module.exports = {
+  bareNumber,
   clientDisplayName,
   composeStored,
   digitsOf,

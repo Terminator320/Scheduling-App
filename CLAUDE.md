@@ -1255,9 +1255,30 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   who the client is** (owner call 2026-08-14). `toWaveCustomerInput` syncs it
   VERBATIM, and it is what shows on Wave's customer list and on an invoice —
   Wave gets `phone` as its own field too, but the name is what people read.
-  **A PERSON is named by their phone number** — "(514) 555-1234" — because the
-  invoicing workflow there identifies people by number; their real name is in
-  `firstName`/`lastName`, so nothing is lost. **A BUSINESS keeps its name** —
+  **A PERSON is named by their phone number, BARE** — "5145551234", NOT the
+  "(514) 555-1234" the `phone` field itself stores (owner call 2026-08-16,
+  which narrowed the 2026-08-14 rule) — because the invoicing workflow there
+  identifies people by number and wants it unpunctuated; their real name is in
+  `firstName`/`lastName`, so nothing is lost. **Only the NAME is reduced: the
+  `phone` field stays formatted** and `PhoneInputFormatter` still masks it as
+  it is typed, so nothing about the phone-storage rule below changed. The
+  reduction is the shared **`bareNumber`** (`core/validators/phone_format.dart`,
+  hand-mirrored in `client_name_utils.js`) — digits only, keeping a leading
+  `+` so an international number survives, falling back to the raw text when
+  there is nothing to strip. It is the same primitive `dialableUri` uses, and
+  it is **NOT** `ClientNamePolicy._digits`/`digitsOf`, which additionally sheds
+  the leading 1 of an 11-digit NANP number: that is right for COMPARING two
+  spellings and wrong for a value that gets stored and pushed to Wave. The
+  branch stays idempotent across the change because `stripPhone` digit-matches
+  rather than only suffix-matching, so a name already in either shape reduces
+  to `''`. Data half: `functions/scripts/backfill-client-name-digits.js`
+  (idempotent, `--dry-run`, deliberately **no `--since`** — this is a reformat,
+  not a rename, so age is no reason to leave a doc inconsistent). It patches a
+  doc **only when `stripPhone(name)` comes back EMPTY**, i.e. the name already
+  IS that client's own number and there is no human name in it to lose, which
+  is what makes it structurally incapable of renaming anybody — strictly
+  narrower than re-running `backfill-client-name-with-phone.js`, and it must
+  stay that way. **A BUSINESS keeps its name** —
   "3101-5696 qc inc.", "1505 Village de Bergerac" — because that name IS its
   identity in Wave, a number in its place is unrecognisable on an invoice, and
   unlike a person there is usually no first/last to fall back on.

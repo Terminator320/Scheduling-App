@@ -9,8 +9,11 @@ const {
 /** 2026-08-08T00:00:00Z — the script's default cutoff. */
 const SINCE = Date.parse("2026-08-08T00:00:00Z");
 
-/** What a renamed person ends up called, in Wave and in this file. */
+/** What the `phone` FIELD stores — formatted, and left that way. */
 const NUMBER = "(514) 555-1234";
+
+/** What a renamed person ends up called, in Wave and in this file. */
+const BARE = "5145551234";
 
 /**
  * A Firestore-Timestamp-shaped stub.
@@ -75,7 +78,7 @@ describe("parseSince", () => {
 describe("patchFor", () => {
   test("names a person by their phone number", () => {
     expect(patchFor(client(), SINCE))
-        .toEqual({name: NUMBER, firstName: "Marc", lastName: "Tremblay"});
+        .toEqual({name: BARE, firstName: "Marc", lastName: "Tremblay"});
   });
 
   test("carries the name into the halves rather than destroying it", () => {
@@ -86,7 +89,7 @@ describe("patchFor", () => {
     // survives and no Wave identity changes.
     const patch = patchFor(client({name: "Jean Paul Belanger"}), SINCE);
     expect(patch).toEqual({
-      name: NUMBER,
+      name: BARE,
       firstName: "Jean Paul",
       lastName: "Belanger",
     });
@@ -95,16 +98,20 @@ describe("patchFor", () => {
   test("never overwrites a half that already carries a name", () => {
     // On a BUSINESS these are the CONTACT PERSON, not the client.
     expect(patchFor(client({firstName: "Marc-Andre"}), SINCE))
-        .toEqual({name: NUMBER});
+        .toEqual({name: BARE});
   });
 
   test("is idempotent — a second run writes nothing", () => {
-    expect(patchFor(client({name: NUMBER}), SINCE)).toBeNull();
+    expect(patchFor(client({name: BARE}), SINCE)).toBeNull();
+  });
+
+  test("reduces a name left in the formatted shape by an earlier run", () => {
+    expect(patchFor(client({name: NUMBER}), SINCE)).toEqual({name: BARE});
   });
 
   test("replaces a legacy name-plus-number outright", () => {
     expect(patchFor(client({name: "Marc Tremblay 514-555-1234"}), SINCE))
-        .toEqual({name: NUMBER, firstName: "Marc", lastName: "Tremblay"});
+        .toEqual({name: BARE, firstName: "Marc", lastName: "Tremblay"});
   });
 
   test("skips a client created on or after the cutoff", () => {
@@ -118,7 +125,7 @@ describe("patchFor", () => {
   test("patches a doc with no createdAt", () => {
     // The field is backfilled lazily, so its absence means legacy, not new.
     expect(patchFor(client({createdAt: undefined}), SINCE))
-        .toEqual({name: NUMBER, firstName: "Marc", lastName: "Tremblay"});
+        .toEqual({name: BARE, firstName: "Marc", lastName: "Tremblay"});
   });
 
   test("skips a client with no number to be named after", () => {
@@ -128,7 +135,7 @@ describe("patchFor", () => {
   test("uses mobile when there is no phone", () => {
     expect(patchFor(client({phone: "", mobile: "(438) 222-3333"}), SINCE))
         .toEqual({
-          name: "(438) 222-3333",
+          name: "4382223333",
           firstName: "Marc",
           lastName: "Tremblay",
         });
@@ -196,7 +203,7 @@ describe("patchFor leaves a BUSINESS alone", () => {
     // The false negative that would rename a real company is the expensive
     // one, but this is the false positive that would leave people unrenamed.
     for (const name of ["Vincent Cormier", "Lucie Ledoux", "Marc Enrico"]) {
-      expect(patchFor(client({name}), SINCE)).toMatchObject({name: NUMBER});
+      expect(patchFor(client({name}), SINCE)).toMatchObject({name: BARE});
     }
   });
 });

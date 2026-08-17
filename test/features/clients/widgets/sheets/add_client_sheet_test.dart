@@ -167,7 +167,7 @@ void main() {
     await tester.tap(find.text('Add'));
     await tester.pumpAndSettle();
 
-    expect(repo.added!.name, '(514) 555-0101');
+    expect(repo.added!.name, '5145550101');
   });
 
   testWidgets('a PERSON keeps the typed name in the halves', (tester) async {
