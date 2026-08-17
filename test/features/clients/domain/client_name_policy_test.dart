@@ -94,13 +94,15 @@ void main() {
   });
 
   group('composeStored', () {
-    test('names a PERSON by their phone number', () {
+    test('names a PERSON by their phone number, BARE', () {
+      // The `phone` field keeps its formatting; only the Wave customer name is
+      // reduced (owner call 2026-08-16).
       expect(
         ClientNamePolicy.composeStored(
           baseName: 'Marc Tremblay',
           phone: '(514) 555-1234',
         ),
-        '(514) 555-1234',
+        '5145551234',
       );
     });
 
@@ -109,10 +111,32 @@ void main() {
       // already-composed name must be a no-op.
       expect(
         ClientNamePolicy.composeStored(
+          baseName: '5145551234',
+          phone: '(514) 555-1234',
+        ),
+        '5145551234',
+      );
+    });
+
+    test('reduces a name still stored in the formatted shape', () {
+      // `stripPhone` digit-matches, which is what carries the docs written
+      // before the bare rule over to it.
+      expect(
+        ClientNamePolicy.composeStored(
           baseName: '(514) 555-1234',
           phone: '(514) 555-1234',
         ),
-        '(514) 555-1234',
+        '5145551234',
+      );
+    });
+
+    test('keeps the country code of an international number', () {
+      expect(
+        ClientNamePolicy.composeStored(
+          baseName: 'Amelie Roy',
+          phone: '+33 1 42 68 53 00',
+        ),
+        '+33142685300',
       );
     });
 
@@ -154,7 +178,7 @@ void main() {
             baseName: name,
             phone: '(514) 555-1234',
           ),
-          '(514) 555-1234',
+          '5145551234',
         );
       }
     });
@@ -174,7 +198,7 @@ void main() {
           baseName: '',
           phone: '(514) 555-1234',
         ),
-        '(514) 555-1234',
+        '5145551234',
       );
     });
   });
@@ -506,7 +530,7 @@ void main() {
         baseName: 'Marc Tremblay',
         phone: '(514) 555-1234',
       );
-      expect(saved.name, '(514) 555-1234');
+      expect(saved.name, '5145551234');
       expect(saved.firstName, 'Marc');
       expect(saved.lastName, 'Tremblay');
     });
@@ -518,7 +542,7 @@ void main() {
         phone: '(514) 555-1234',
         firstName: 'Marc-Andre',
       );
-      expect(saved.name, '(514) 555-1234');
+      expect(saved.name, '5145551234');
       expect(saved.firstName, 'Marc-Andre');
       expect(saved.lastName, '');
     });
@@ -578,7 +602,7 @@ void main() {
         firstName: first.firstName,
         lastName: first.lastName,
       );
-      expect(second.name, '(514) 555-1234');
+      expect(second.name, '5145551234');
       expect(second.firstName, 'Marc');
       expect(second.lastName, 'Tremblay');
     });

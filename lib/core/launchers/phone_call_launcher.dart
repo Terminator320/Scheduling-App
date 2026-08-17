@@ -29,10 +29,4 @@ Future<void> launchPhoneCall(
 /// alphabetic entry is still better handed over than dropped).
 ///
 /// Pure so the stripping rule can be pinned without a plugin.
-Uri dialableUri(String phone) {
-  final trimmed = phone.trim();
-  final dialable = trimmed.startsWith('+')
-      ? '+${phoneDigits(trimmed)}'
-      : phoneDigits(trimmed);
-  return Uri(scheme: 'tel', path: dialable.isEmpty ? trimmed : dialable);
-}
+Uri dialableUri(String phone) => Uri(scheme: 'tel', path: bareNumber(phone));

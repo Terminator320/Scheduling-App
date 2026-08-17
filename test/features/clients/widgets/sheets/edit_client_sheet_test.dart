@@ -151,7 +151,7 @@ void main() {
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
-      expect(_savedFrom(repo).name, '(514) 555-0101');
+      expect(_savedFrom(repo).name, '5145550101');
     });
 
     testWidgets('a BUSINESS keeps its name, never its number', (tester) async {
@@ -182,7 +182,7 @@ void main() {
     ) async {
       // The idempotence that makes every ordinary save and the backfill safe
       // to re-run. A doc still in the pre-2026-08-14 shape must come back as
-      // the number alone — never "Marc Tremblay (514) 555-0101 (514) 555-0101".
+      // the bare number alone — never "Marc Tremblay (514) 555-0101 …".
       await _pump(
         tester,
         repo,
@@ -199,7 +199,7 @@ void main() {
       await tester.tap(find.text('Save'));
       await tester.pumpAndSettle();
 
-      expect(_savedFrom(repo).name, '(514) 555-0101');
+      expect(_savedFrom(repo).name, '5145550101');
     });
   });
 

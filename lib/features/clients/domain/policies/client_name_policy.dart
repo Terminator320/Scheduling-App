@@ -6,9 +6,11 @@
 /// (`functions/wave/mappers.js`), and it is what shows on Wave's customer list
 /// and on an invoice.
 ///
-/// - **A PERSON is named by their phone number**: "(514) 555-1234". That is
-///   what the invoicing workflow identifies them by. Their real name lives in
-///   `firstName`/`lastName`, so nothing is lost.
+/// - **A PERSON is named by their phone number, unpunctuated**: "5145551234".
+///   That is what the invoicing workflow identifies them by, and Wave wants it
+///   bare (owner call 2026-08-16 — the `phone` FIELD is still stored formatted
+///   as "(514) 555-1234"). Their real name lives in `firstName`/`lastName`, so
+///   nothing is lost.
 /// - **A BUSINESS keeps its name**: "3101-5696 qc inc.", "1505 Village de
 ///   Bergerac". That name is the identity; a number in its place would make
 ///   the customer unrecognisable, and there is rarely a first/last to fall
@@ -127,10 +129,16 @@ class ClientNamePolicy {
   /// What gets PERSISTED, and what Wave shows as the CUSTOMER name (owner call
   /// 2026-08-14).
   ///
-  /// **A PERSON is named by their phone number** — "(514) 555-1234" — because
-  /// the invoicing workflow in Wave identifies people by number. Their actual
-  /// name is in `firstName`/`lastName`, which is what [displayFor] renders in
-  /// the app, so nothing is lost.
+  /// **A PERSON is named by their phone number, BARE** — "5145551234", not the
+  /// "(514) 555-1234" the field itself stores — because the invoicing workflow
+  /// in Wave identifies people by number and wants it unpunctuated (owner call
+  /// 2026-08-16). `phone` keeps its formatting; only the name is reduced, via
+  /// the shared [bareNumber]. Their actual name is in `firstName`/`lastName`,
+  /// which is what [displayFor] renders in the app, so nothing is lost.
+  ///
+  /// [stripPhone] recognises the bare form as this client's own number (it
+  /// digit-matches, not just suffix-matches), which is what keeps the branch
+  /// idempotent across the formatting change.
   ///
   /// **A BUSINESS keeps its name**, because that name IS how Wave identifies
   /// it: "3101-5696 qc inc.", "1505 Village de Bergerac". Replacing it with a
@@ -161,7 +169,7 @@ class ClientNamePolicy {
     }
 
     final number = phone.trim().isNotEmpty ? phone.trim() : mobile.trim();
-    return number.isNotEmpty ? number : base;
+    return number.isNotEmpty ? bareNumber(number) : base;
   }
 
   /// The stored name PLUS the halves that have to carry a person's typed name.

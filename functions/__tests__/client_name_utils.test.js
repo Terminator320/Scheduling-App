@@ -1,8 +1,10 @@
 "use strict";
 
 const {
+  bareNumber,
   clientDisplayName,
   composeStored,
+  digitsOf,
   isBusiness,
   stripPhone,
 } = require("../client_name_utils");
@@ -57,20 +59,40 @@ describe("stripPhone", () => {
 });
 
 describe("composeStored", () => {
-  test("names a PERSON by their phone number", () => {
+  test("names a PERSON by their phone number, BARE", () => {
+    // The `phone` field keeps its formatting; only the Wave customer name is
+    // reduced (owner call 2026-08-16).
     expect(composeStored({
       baseName: "Marc Tremblay",
       phone: "(514) 555-1234",
-    })).toBe("(514) 555-1234");
+    })).toBe("5145551234");
   });
 
   test("is idempotent", () => {
     // The backfill is re-runnable and every ordinary save goes through this,
     // so a second pass over an already-composed name must be a no-op.
     expect(composeStored({
+      baseName: "5145551234",
+      phone: "(514) 555-1234",
+    })).toBe("5145551234");
+  });
+
+  test("reduces a name still stored in the formatted shape", () => {
+    // `stripPhone` digit-matches, which is what carries the docs written
+    // before the bare rule over to it.
+    expect(composeStored({
       baseName: "(514) 555-1234",
       phone: "(514) 555-1234",
-    })).toBe("(514) 555-1234");
+    })).toBe("5145551234");
+  });
+
+  test("keeps the country code of an international number", () => {
+    // `digitsOf` sheds a leading 1 for COMPARISON; `bareNumber` must not, or a
+    // country code the admin typed is silently dropped from a stored value.
+    expect(composeStored({
+      baseName: "Amelie Roy",
+      phone: "+33 1 42 68 53 00",
+    })).toBe("+33142685300");
   });
 
   test("keeps a BUSINESS name — that is its identity in Wave", () => {
@@ -98,7 +120,31 @@ describe("composeStored", () => {
 
   test("a nameless client is stored as its number, not as blank", () => {
     expect(composeStored({baseName: "", phone: "(514) 555-1234"}))
-        .toBe("(514) 555-1234");
+        .toBe("5145551234");
+  });
+});
+
+describe("bareNumber", () => {
+  test("takes the punctuation off a stored number", () => {
+    expect(bareNumber("(514) 555-1234")).toBe("5145551234");
+    expect(bareNumber("514-555-1234")).toBe("5145551234");
+  });
+
+  test("keeps a leading + so an international number stays dialable", () => {
+    expect(bareNumber("+33 1 42 68 53 00")).toBe("+33142685300");
+  });
+
+  test("KEEPS the leading 1 that digitsOf sheds", () => {
+    // The two are not interchangeable: `digitsOf` normalizes for comparison,
+    // `bareNumber` produces a value that gets STORED and pushed to Wave.
+    expect(bareNumber("1-514-555-1234")).toBe("15145551234");
+    expect(digitsOf("1-514-555-1234")).toBe("5145551234");
+  });
+
+  test("hands back anything it cannot reduce", () => {
+    // Better than blanking an entry the admin can still read.
+    expect(bareNumber("  ext. only  ")).toBe("ext. only");
+    expect(bareNumber("")).toBe("");
   });
 });
 

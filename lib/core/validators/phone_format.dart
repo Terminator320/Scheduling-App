@@ -5,6 +5,23 @@ final RegExp _nonDigit = RegExp(r'\D');
 /// Digits of [value], with every separator dropped.
 String phoneDigits(String value) => value.replaceAll(_nonDigit, '');
 
+/// [phone] reduced to a bare number — `(514) 555-1234` becomes `5145551234` —
+/// keeping a leading `+` so an international number stays dialable.
+///
+/// Falls back to the trimmed input when there is nothing to strip: an
+/// extension-only or alphabetic entry is still better handed on than blanked.
+///
+/// The single owner of that rule. It backs both `dialableUri` (some dialers
+/// reject the percent-encoded brackets) and `ClientNamePolicy.composeStored`
+/// (a person's stored `name` IS the Wave customer name, and Wave shows it
+/// bare).
+String bareNumber(String phone) {
+  final trimmed = phone.trim();
+  final digits = phoneDigits(trimmed);
+  if (digits.isEmpty) return trimmed;
+  return trimmed.startsWith('+') ? '+$digits' : digits;
+}
+
 /// Renders a North-American number as `(514) 555-1234`, formatting
 /// progressively so a half-typed number reads sensibly (`(514) 55`).
 ///
