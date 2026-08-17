@@ -15,12 +15,40 @@
 const BUSINESS_TIME_ZONE = "America/Toronto";
 
 /**
+ * Hoisted because both take CONSTANT options and both sit in a hot loop:
+ * `day_slice_utils.js` reaches them ~18 times per `sliceForDay`, and the widget
+ * payload probes every record against every day. Constructing an
+ * `Intl.DateTimeFormat` costs ~100x a `.format()` on an existing one, so a
+ * 200-job window was paying roughly a second of pure CPU per push. Never move
+ * these back inside the functions.
+ */
+const YMD_FORMAT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const OFFSET_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: BUSINESS_TIME_ZONE,
+  hourCycle: "h23",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
+/**
  * The longest span a job may be booked for, in days.
  *
  * HAND-MIRRORED from `maxAppointmentSpanDays` in
- * `lib/features/calendar/domain/appointment_day_slice.dart` — the cap is
- * enforced client-side only (firestore.rules constrains neither instant), so
- * this copy exists purely to size the backend's query windows. Every sweep
+ * `lib/features/calendar/domain/appointment_day_slice.dart`, which also has a
+ * third copy as the `duration.value(14, 'd')` bound in `firestore.rules`. That
+ * bound governs CLIENT writes only — this module runs on the Admin SDK, which
+ * bypasses rules — so this copy still exists to size the backend's query
+ * windows and to clamp a doc that got past the cap some other way. Every sweep
  * that filters on `startTime` must reach at least this far back, or a job
  * already under way is invisible to it. Raise both together.
  */
@@ -30,6 +58,65 @@ const MAX_APPOINTMENT_SPAN_DAYS = 14;
  * The same cap in milliseconds — the usual form for widening a query floor.
  */
 const MAX_APPOINTMENT_SPAN_MS = MAX_APPOINTMENT_SPAN_DAYS * 24 * 60 * 60 * 1000;
+
+/**
+ * A job in one of these is finished with, so it no longer occupies anyone.
+ *
+ * HAND-MIRRORED from `terminalStatusRawValues` in
+ * `lib/features/calendar/domain/appointment_status_values.dart`. `completed` is
+ * the retired alias of `done` and is the whole reason this needs ONE owner: the
+ * set was spelled at four sites here and two of them had already dropped the
+ * alias, so a legacy `completed` doc was never purged by the retention sweep
+ * and never ended its Live Activity card. The app itself cannot write
+ * `completed`
+ * (`storedRaw` maps it onto the allowlist and the rules reject it), so only a
+ * console or Admin-SDK write reaches those paths — which is exactly why the
+ * divergence went unnoticed. Lives here because this module requires nothing
+ * else, so every payload module can reach it without a cycle.
+ */
+const TERMINAL_STATUSES = new Set(["done", "completed", "cancelled"]);
+
+/**
+ * Lower-cased status of a raw appointment field, or "".
+ * @param {*} status Raw stored value.
+ * @return {string}
+ */
+function normalizedStatus(status) {
+  return String(status || "").toLowerCase();
+}
+
+/**
+ * True when a status means the job is finished with, in either sense.
+ * @param {*} status Raw stored value.
+ * @return {boolean}
+ */
+function isTerminalStatus(status) {
+  return TERMINAL_STATUSES.has(normalizedStatus(status));
+}
+
+/**
+ * True when a status means the visit was called off.
+ *
+ * Case-insensitive on purpose: a console-written "Cancelled" must not read as
+ * live work on one surface and as cancelled on another.
+ * @param {*} status Raw stored value.
+ * @return {boolean}
+ */
+function isCancelledStatus(status) {
+  return normalizedStatus(status) === "cancelled";
+}
+
+/**
+ * True when a status means the job was seen through to the end.
+ *
+ * The complement of {@link isCancelledStatus} within the terminal set, so
+ * `completed` counts alongside `done`.
+ * @param {*} status Raw stored value.
+ * @return {boolean}
+ */
+function isCompletedStatus(status) {
+  return isTerminalStatus(status) && !isCancelledStatus(status);
+}
 
 /**
  * Minutes past business-local midnight for an instant, or null.
@@ -134,12 +221,7 @@ function formatTimeOfDay(locale, value) {
  * @return {!Array<number>} `[year, month, day]` (month is 1-based).
  */
 function businessYmd(date) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: BUSINESS_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  })
+  return YMD_FORMAT
       .format(date)
       .split("-")
       .map(Number);
@@ -152,16 +234,7 @@ function businessYmd(date) {
  * @return {number}
  */
 function businessOffsetMs(date) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: BUSINESS_TIME_ZONE,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(date).reduce((acc, p) => {
+  const parts = OFFSET_FORMAT.formatToParts(date).reduce((acc, p) => {
     acc[p.type] = p.value;
     return acc;
   }, {});
@@ -189,10 +262,36 @@ function businessMidnight(year, month, day) {
   return new Date(guess - businessOffsetMs(new Date(guess)));
 }
 
+/**
+ * Business-local midnight `offsetDays` days from the day containing `instant`,
+ * as epoch ms. `offsetDays` 0 is that day, 1 tomorrow, -1 yesterday.
+ *
+ * The one owner of the `businessMidnight(...businessYmd(x), d + n)`
+ * composition, which was spelled out at four sites across `day_slice_utils`,
+ * `widget_payload_utils` and `notification_policy` — the same shape that
+ * produced the documented DST bug, where an offset was applied as elapsed
+ * milliseconds instead of a calendar day. Adding to the day-of-month and
+ * re-resolving the offset is what keeps a shift day exactly 23 or 25 hours
+ * wide; `Date.UTC` normalizes an overflowing day into the next month.
+ * @param {(Date|number)} instant Any instant inside the reference day.
+ * @param {number} [offsetDays] Whole days to move; defaults to 0.
+ * @return {number} Epoch ms of that Toronto midnight.
+ */
+function businessDayStartMs(instant, offsetDays = 0) {
+  const date = instant instanceof Date ? instant : new Date(Number(instant));
+  const [y, m, d] = businessYmd(date);
+  return businessMidnight(y, m, d + offsetDays).getTime();
+}
+
 module.exports = {
   BUSINESS_TIME_ZONE,
   MAX_APPOINTMENT_SPAN_DAYS,
   MAX_APPOINTMENT_SPAN_MS,
+  TERMINAL_STATUSES,
+  normalizedStatus,
+  isTerminalStatus,
+  isCancelledStatus,
+  isCompletedStatus,
   businessMinutesOfDay,
   toMillis,
   hasWorkLeft,
@@ -201,4 +300,5 @@ module.exports = {
   businessYmd,
   businessOffsetMs,
   businessMidnight,
+  businessDayStartMs,
 };

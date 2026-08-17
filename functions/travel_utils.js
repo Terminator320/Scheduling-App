@@ -30,6 +30,8 @@ const {
   endLiveActivity,
 } = require("./live_activity_dispatch");
 const {liveActivityCtx} = require("./live_activity_utils");
+const {dayCountOf} = require("./day_slice_utils");
+const {isTerminalStatus, isCancelledStatus} = require("./time_utils");
 const {
   listCardsDueForOnSite,
   clearCardMarker,
@@ -73,21 +75,41 @@ const CONTEXT_QUERY_MAX = 50;
 // one-off during an Aug 1-10 run then departs "from" that run's address at
 // 07:00, when they are at home and its window doesn't open until 09:00 —
 // a NEW wrong origin, traded for an old missing one.
-// Scoping that prong needs the daily-window model mirrored into JS, which is
-// owed by Plan 2 (docs/plans/2026-08-02-multi-day-appointments.md §8). Until
-// then a long run stays out of the context, exactly as before multi-day
-// booking existed — a known gap, not a regression.
+// Scoping that prong needs the daily-window model, which Plan 2 has since
+// mirrored into JS (`./day_slice_utils`, 2026-08-10) — so the blocker is now
+// that nobody has applied it here, not that the mirror is missing. Until then
+// a long run stays out of the context, exactly as before multi-day booking
+// existed — a known gap, not a regression.
 const MAX_BOOKING_MS = 24 * 60 * MINUTE_MS;
 
 // Sweep candidate window: MAX_LEAD_MINUTES ahead, so the longest computable
 // lead is already in range when it becomes due.
 const TRAVEL_WINDOW_MS = MAX_LEAD_MINUTES * MINUTE_MS;
 
+// Caps the candidate read, mirroring OVERDUE_SWEEP_MAX on the sweep that runs
+// beside this one. The 90-minute window keeps this small in practice, so the
+// cap is a tail guard, not a steady-state bound: a bulk import or a wide
+// series landing in one window is otherwise an unbounded fan-out that then
+// makes a BILLABLE Routes call per candidate assignee. Ordered `startTime`
+// ASC — which is the order Firestore already returns for this query, since it
+// is the inequality field — so the cap keeps the most imminent departures,
+// i.e. the ones that would be wrong to defer. A deferred candidate self-heals
+// on the next 5-minute run; its ledger claim is what keeps that from
+// double-sending.
+const TRAVEL_SWEEP_MAX = 500;
+
 // A recent cached estimate lets a clearly-not-due pair skip the metered
 // Routes call. This can only DEFER a send, never trigger one — the fire
 // decision always uses a fresh Routes response.
 const ESTIMATE_TTL_MS = 10 * MINUTE_MS;
 const SKIP_MARGIN_MS = 15 * MINUTE_MS;
+
+// On-site flips run at once. Sized like `PRUNE_CHUNK` in
+// `live_activity_registry.js`, against the same `PRUNE_MAX` (400) ceiling on
+// the marker list — each flip is a read + a token query + an APNs push, so
+// the flat fan-out this replaced was the heaviest one in the push stack.
+const ON_SITE_FLIP_CHUNK = 25;
+
 const _estimateCache = new Map();
 
 /**
@@ -143,9 +165,8 @@ const PENDING_LIKE = new Set(["pending", "confirmed"]);
 // `in_progress` has no "time to leave" left to remind about.
 const PENDING_STATUSES = [...PENDING_LIKE];
 
-// A job in one of these no longer occupies the employee. Legacy `completed`
-// is the retired alias of `done`.
-const TERMINAL = new Set(["done", "completed", "cancelled"]);
+// "No longer occupies the employee" comes from `time_utils`' one owner — see
+// isTerminalStatus. This module used to carry its own copy of the set.
 
 /**
  * Trimmed address or "".
@@ -177,7 +198,7 @@ function decideOrigin({presence, employeeAppointments, candidate, now}) {
   let intervening = null;
   for (const r of apps) {
     if (candidate && r.id === candidate.id) continue;
-    if (TERMINAL.has(String(r.status || "").toLowerCase())) continue;
+    if (isTerminalStatus(r.status)) continue;
     const startMs = toMillis(r.startTime);
     const endMs = toMillis(r.endTime);
     if (startMs == null || endMs == null) continue;
@@ -209,7 +230,7 @@ function decideOrigin({presence, employeeAppointments, candidate, now}) {
   const floorMs = nowMs - PREV_APPOINTMENT_LOOKBACK_HOURS * 60 * MINUTE_MS;
   for (const r of apps) {
     if (candidate && r.id === candidate.id) continue;
-    if (String(r.status || "").toLowerCase() === "cancelled") continue;
+    if (isCancelledStatus(r.status)) continue;
     const endMs = toMillis(r.endTime);
     if (endMs == null || endMs > nowMs || endMs <= floorMs) continue;
     if (_address(r) === "") continue;
@@ -398,6 +419,9 @@ async function resolveReminderForAssignee(deps, args) {
   const {db, fetchImpl, apiKey, logger} = deps;
   const {candidate: c, employeeDocId, startMs, nowDate, nowMs,
     presence, employeeAppointments, estimates, cache} = args;
+  // Absent means ON, so an omitted arg (older call site, failed read) keeps
+  // the departure alert rather than silently dropping it.
+  const wantsAlerts = args.wantsAlerts !== false;
   const none = {reminded: 0, started: 0};
 
   const ledgerId = travelReminderLedgerId(
@@ -408,40 +432,53 @@ async function resolveReminderForAssignee(deps, args) {
       .collection("appointmentReminders").doc(ledgerId).get();
   if (existing && existing.exists) return none;
 
-  const origin = decideOrigin({
-    presence,
-    employeeAppointments,
-    candidate: c,
-    now: nowDate,
-  });
-  const destinationAddress = _address(c);
+  // An opted-out assignee degrades to the fixed 30-minute reminder rather than
+  // losing the notification — the same fallback a missing origin or a Routes
+  // failure already takes.
+  //
+  // THE FLAG MUST BE READ HERE, not just where `kind` is chosen below. The
+  // lead time is derived from `travelSeconds`, so gating only the kind still
+  // fired the generic "Upcoming job" push at the TRAVEL-derived instant (up to
+  // MAX_LEAD_MINUTES early on a long drive) instead of at the documented 30
+  // minutes — and still paid Google Routes for an estimate nobody asked for.
   let travelSeconds = null;
-  if (origin && destinationAddress !== "") {
-    // A recent estimate that leaves this pair well short of its leave
-    // instant defers the (billable) Routes call to a later sweep.
-    const key = `${c.id}|${employeeDocId}`;
-    const cached = readEstimate(estimates, key, nowMs);
-    if (canDeferRoutes({
-      seconds: cached, startTimeMillis: startMs, nowMillis: nowMs,
-    })) {
-      return none;
-    }
-    travelSeconds = await computeTravelSeconds({
-      fetchImpl,
-      apiKey,
-      origin,
-      destinationAddress,
+  if (wantsAlerts) {
+    const origin = decideOrigin({
+      presence,
+      employeeAppointments,
+      candidate: c,
       now: nowDate,
-      logger,
     });
-    if (travelSeconds != null) {
-      estimates.set(key, {seconds: travelSeconds, atMs: nowMs});
+    const destinationAddress = _address(c);
+    if (origin && destinationAddress !== "") {
+      // A recent estimate that leaves this pair well short of its leave
+      // instant defers the (billable) Routes call to a later sweep.
+      const key = `${c.id}|${employeeDocId}`;
+      const cached = readEstimate(estimates, key, nowMs);
+      if (canDeferRoutes({
+        seconds: cached, startTimeMillis: startMs, nowMillis: nowMs,
+      })) {
+        return none;
+      }
+      travelSeconds = await computeTravelSeconds({
+        fetchImpl,
+        apiKey,
+        origin,
+        destinationAddress,
+        now: nowDate,
+        logger,
+      });
+      if (travelSeconds != null) {
+        estimates.set(key, {seconds: travelSeconds, atMs: nowMs});
+      }
     }
   }
   const leadMinutes = computeLeadMinutes(travelSeconds);
   if (!isDue({startTimeMillis: startMs, leadMinutes, nowMillis: nowMs})) {
     return none;
   }
+  // `travelSeconds` is already null for an opted-out assignee, by the guard
+  // above — this line reads the consequence, never the flag.
   const kind = travelSeconds == null ? "reminder" : "leaveNow";
   const ctx = {
     clientName: c.clientName,
@@ -467,7 +504,14 @@ async function resolveReminderForAssignee(deps, args) {
     cache,
   });
   let started = 0;
-  if (kind === "leaveNow" && delivered > 0) {
+  // Live Activities deliberately skip multi-day jobs: the card carries the
+  // run's `endTime`, and the on-site flip renders that as a live countdown —
+  // so a five-day run parks a five-day countdown on the Lock Screen. The
+  // leaveNow push itself still goes out; only the card is withheld.
+  // `dayCountOf` is last in the chain on purpose: it resolves a window through
+  // `Intl`, and every reminder-only or undelivered candidate would otherwise
+  // pay for a value it discards.
+  if (kind === "leaveNow" && delivered > 0 && dayCountOf(c) <= 1) {
     // Best-effort — a Live Activity failure must not change `reminded` or
     // abort the sweep. No card just leaves the plain leaveNow push
     // unchanged.
@@ -513,7 +557,14 @@ async function runTravelAwareReminderSweep(deps) {
       .where("status", "in", PENDING_STATUSES)
       .where("startTime", ">", nowDate)
       .where("startTime", "<=", windowEnd)
+      .orderBy("startTime")
+      .limit(TRAVEL_SWEEP_MAX)
       .get();
+  if (snap && snap.size === TRAVEL_SWEEP_MAX && logger) {
+    logger.warn(
+        "runTravelAwareReminderSweep: candidate cap hit; " +
+        "latest departures deferred to a later run", {cap: TRAVEL_SWEEP_MAX});
+  }
   const candidates = selectTravelCandidates(
       (((snap && snap.docs) || [])).map(
           (doc) => ({id: doc.id, ...(doc.data() || {})})),
@@ -535,14 +586,19 @@ async function runTravelAwareReminderSweep(deps) {
   // per distinct employee, reused across all of that employee's candidates.
   const employeeIds = [...new Set(
       candidates.flatMap((c) => toIdList(c.employeeIds)))];
-  const [presenceByEmployee, contextByEmployee] = await Promise.all([
-    loadPresenceByEmployee(deps, employeeIds),
-    loadContextByEmployee(deps, employeeIds, nowMs),
-  ]);
+  // Declared before the prefs read so that read can SEED it: the prefs pass
+  // fetches each candidate's `users` doc, and `sendToEmployee` needs the very
+  // same doc later in this sweep — it used to read it a second time.
+  const cache = new Map();
+  const [presenceByEmployee, contextByEmployee, travelPrefsByEmployee] =
+    await Promise.all([
+      loadPresenceByEmployee(deps, employeeIds),
+      loadContextByEmployee(deps, employeeIds, nowMs),
+      loadTravelPrefsByEmployee(deps, employeeIds, cache),
+    ]);
 
   let reminded = 0;
   let started = 0;
-  const cache = new Map();
   // Warm-instance memo, injectable so tests get a clean map per run.
   const estimates = deps.estimateCache || _estimateCache;
   pruneEstimates(estimates, nowMs);
@@ -574,6 +630,8 @@ async function runTravelAwareReminderSweep(deps) {
             nowMs,
             presence: presenceByEmployee.get(employeeDocId) || null,
             employeeAppointments: contextByEmployee.get(employeeDocId) || [],
+            // Absent means ON — see wantsTravelAlerts.
+            wantsAlerts: travelPrefsByEmployee.get(employeeDocId) !== false,
             estimates,
             cache,
           });
@@ -622,6 +680,66 @@ async function loadPresenceByEmployee(deps, employeeIds) {
     if (logger) logger.warn("travel: presence getAll failed", {err});
   }
   return presenceByEmployee;
+}
+
+/**
+ * Whether this person still wants the "time to leave" push.
+ *
+ * **Defaults to ON.** Every users doc written before this field existed has no
+ * value, so reading `undefined` as off would silence the whole fleet — and the
+ * symptom is a push that does not arrive, which nobody reports. Only an
+ * explicit `false` opts out.
+ *
+ * Scope is deliberately narrow: it gates the ESCALATION to `leaveNow` only.
+ * An opted-out assignee still gets the fixed 30-minute `reminder`, the same
+ * degradation every other travel failure already takes — the toggle turns off
+ * traffic-aware departure alerts, not their reminders.
+ *
+ * @param {?Object} user The users doc data, or null when it could not be read.
+ * @return {boolean}
+ */
+function wantsTravelAlerts(user) {
+  return !user || user.travelAlertsEnabled !== false;
+}
+
+/**
+ * Each candidate assignee's `travelAlertsEnabled` preference.
+ *
+ * One read per distinct assignee per sweep, alongside the presence and context
+ * loads above — the flag has to be known BEFORE the kind is chosen, which is
+ * before `sendToEmployee` needs the same doc. The candidate set is the jobs
+ * inside the 90-minute window, so this is a handful of reads every 5 minutes,
+ * not a roster scan.
+ *
+ * A failed read yields no entry, and `wantsTravelAlerts(null)` is true — the
+ * safe direction, since a transient Firestore error must not silence a
+ * departure alert.
+ *
+ * @param {!Object} deps `{db, logger}`.
+ * @param {!Array<string>} employeeIds Distinct assignee doc ids.
+ * @param {!Map=} cache The sweep's `sendToEmployee` cache, seeded with each
+ *   users doc this pass reads so the delivery pass doesn't read it again.
+ *   Tokens are left `null` (= not fetched) rather than `[]`.
+ * @return {!Promise<!Map<string, boolean>>} keyed by employee doc id.
+ */
+async function loadTravelPrefsByEmployee(deps, employeeIds, cache) {
+  const {db, logger} = deps;
+  const prefs = new Map();
+  if (employeeIds.length === 0) return prefs;
+  await Promise.all(employeeIds.map(async (id) => {
+    try {
+      const snap = await db.collection("users").doc(id).get();
+      const user = snap && snap.exists ? (snap.data() || null) : null;
+      prefs.set(id, wantsTravelAlerts(user));
+      // Seed the sweep's send cache with the doc we just paid for.
+      // `sendToEmployee` fetches `fcmTokens` lazily, so a null there means
+      // "not read yet" rather than "no tokens".
+      if (cache && !cache.has(id)) cache.set(id, {user, tokenDocs: null});
+    } catch (err) {
+      if (logger) logger.warn("travel: prefs read failed", {id, err});
+    }
+  }));
+  return prefs;
 }
 
 /**
@@ -696,8 +814,19 @@ async function runOnSiteFlipPass(deps) {
   const {db, now, logger} = deps;
   const nowDate = now || new Date();
   const markers = await listCardsDueForOnSite(deps);
-  let flipped = 0;
-  for (const marker of markers) {
+  // Concurrent, like the candidate loop above and for the same reason: each
+  // marker is an independent chain of a `doc.get()`, a token query and a
+  // direct APNs push, ~300 ms of round-trips that share nothing. Serialised,
+  // `PRUNE_MAX` (400) markers is up to ~120 s of the 420 s budget this
+  // function shares with the billable travel half — every 5 minutes.
+  //
+  // CHUNKED rather than one flat `Promise.all`, matching `PRUNE_CHUNK` in
+  // `live_activity_registry.js`: this list is bounded by that same 400, and
+  // each entry here is heavier than a delete — a read, a query and an APNs
+  // push apiece, so a flat fan-out is ~1200 concurrent requests out of one
+  // invocation. The per-marker try/catch stays either way: one failing card
+  // must not stop the pass.
+  const flip = async (marker) => {
     try {
       const snap = await db
           .collection("appointments").doc(marker.appointmentId).get();
@@ -706,7 +835,7 @@ async function runOnSiteFlipPass(deps) {
       // the marker, since the Lock Screen card outlives the Firestore doc.
       // We also clear the marker here so this doesn't retry every sweep.
       if (!record ||
-          TERMINAL.has(String(record.status || "").toLowerCase())) {
+          isTerminalStatus(record.status)) {
         await endLiveActivity(deps, {
           appointmentId: String(marker.appointmentId),
           employeeDocId: marker.employeeDocId,
@@ -714,9 +843,9 @@ async function runOnSiteFlipPass(deps) {
           nowDate,
         });
         await clearCardMarker(deps, {employeeDocId: marker.employeeDocId});
-        continue;
+        return 0;
       }
-      flipped += await updateLiveActivity(deps, {
+      return await updateLiveActivity(deps, {
         appointmentId: String(marker.appointmentId),
         employeeDocId: marker.employeeDocId,
         ctx: liveActivityCtx(record),
@@ -728,7 +857,15 @@ async function runOnSiteFlipPass(deps) {
         logger.warn("liveActivity: on-site flip failed",
             {employeeDocId: marker.employeeDocId, err});
       }
+      return 0;
     }
+  };
+
+  let flipped = 0;
+  for (let i = 0; i < markers.length; i += ON_SITE_FLIP_CHUNK) {
+    const done = await Promise.all(
+        markers.slice(i, i + ON_SITE_FLIP_CHUNK).map(flip));
+    flipped += done.reduce((sum, n) => sum + n, 0);
   }
   return flipped;
 }
@@ -738,11 +875,11 @@ module.exports = {
   selectTravelCandidates,
   computeLeadMinutes,
   isDue,
-  canDeferRoutes,
   buildRoutesRequestBody,
   parseRoutesDurationSeconds,
   computeTravelSeconds,
   travelReminderLedgerId,
+  wantsTravelAlerts,
   runTravelAwareReminderSweep,
   runOnSiteFlipPass,
 };

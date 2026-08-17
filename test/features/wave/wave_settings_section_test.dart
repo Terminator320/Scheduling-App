@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/notices/app_notice.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
@@ -142,6 +145,242 @@ void main() {
       // Connect is hidden once connected; only Import remains.
       expect(find.text('Connect to Wave'), findsNothing);
       expect(find.text('Sync with Wave'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('shows the outbox depth once connected', (tester) async {
+      final service = _mockService();
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          pendingCount: 3,
+          failedCount: 2,
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service));
+      await tester.pumpAndSettle();
+
+      expect(find.text('3 clients waiting to sync'), findsOneWidget);
+      expect(find.text('2 clients failed to sync'), findsOneWidget);
+      // A dead-lettered job never retries on its own, so the recovery has to
+      // be offered right beside the count.
+      expect(find.text('Retry failed'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an UNKNOWN count renders nothing, never zero', (tester) async {
+      // null is not 0. Zero means the outbox is empty, which is the one
+      // reading an admin would act on by not pressing Sync — so a count the
+      // server could not take must not be able to claim it.
+      final service = _mockService();
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('waiting to sync'), findsNothing);
+      expect(find.textContaining('failed to sync'), findsNothing);
+      expect(find.text('Retry failed'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('an empty outbox shows no rows', (tester) async {
+      final service = _mockService();
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          pendingCount: 0,
+          failedCount: 0,
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('waiting to sync'), findsNothing);
+      expect(find.text('Retry failed'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Retry failed requeues and reports what reached Wave', (
+      tester,
+    ) async {
+      final service = _mockService();
+      final notices = NoticeService();
+      final emitted = <String>[];
+      notices.stream.listen((n) => emitted.add(n.message));
+
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          failedCount: 2,
+        ),
+      );
+      when(service.retryFailedJobs).thenAnswer(
+        (_) async => const WaveRetryResult(
+          requeued: 2,
+          scanned: 2,
+          pushed: 2,
+          failed: 0,
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Retry failed'));
+      await tester.pumpAndSettle();
+
+      verify(service.retryFailedJobs).called(1);
+      expect(emitted.last, contains('2 clients sent to Wave'));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a requeue whose push failed still reports success', (
+      tester,
+    ) async {
+      // The requeue is the durable half — those jobs ARE back in the queue and
+      // will drain. Reporting an error would tell the admin nothing was
+      // recovered when something was.
+      final service = _mockService();
+      final notices = NoticeService();
+      final emitted = <String>[];
+      notices.stream.listen((n) => emitted.add(n.message));
+
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          failedCount: 3,
+        ),
+      );
+      when(service.retryFailedJobs).thenAnswer(
+        (_) async => const WaveRetryResult(
+          requeued: 3,
+          scanned: 3,
+          pushed: null,
+          failed: null,
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Retry failed'));
+      await tester.pumpAndSettle();
+
+      expect(emitted.last, contains('3 clients queued for Wave again'));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a job that dies again is surfaced as a failure, not success', (
+      tester,
+    ) async {
+      // The press that looked broken: the drain behind the requeue
+      // dead-letters a non-retryable job in the same call, so the failed row
+      // does not move — a success notice over it is an affirmative lie.
+      final service = _mockService();
+      final notices = NoticeService();
+      final emitted = <AppNotice>[];
+      notices.stream.listen(emitted.add);
+
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          failedCount: 1,
+        ),
+      );
+      when(service.retryFailedJobs).thenAnswer(
+        (_) async => const WaveRetryResult(
+          requeued: 1,
+          scanned: 1,
+          pushed: 0,
+          failed: 1,
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Retry failed'));
+      await tester.pumpAndSettle();
+
+      expect(emitted.last.message, contains("still couldn't be sent"));
+      expect(emitted.last, isA<NoticeError>());
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Retry with nothing left to recover says so', (tester) async {
+      final service = _mockService();
+      final notices = NoticeService();
+      final emitted = <String>[];
+      notices.stream.listen((n) => emitted.add(n.message));
+
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          failedCount: 1,
+        ),
+      );
+      when(service.retryFailedJobs).thenAnswer(
+        (_) async => const WaveRetryResult(
+          requeued: 0,
+          scanned: 1,
+          pushed: 0,
+          failed: 0,
+        ),
+      );
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Retry failed'));
+      await tester.pumpAndSettle();
+
+      expect(emitted.last, contains('Nothing to retry'));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Sync is disabled while a Retry is in flight', (tester) async {
+      // Both drain the same queue; two presses at once would have each
+      // reporting the other's work.
+      final service = _mockService();
+      when(service.getConnection).thenAnswer(
+        (_) async => const WaveConnection(
+          businessId: 'biz-1',
+          businessName: 'Persisted Co',
+          failedCount: 1,
+        ),
+      );
+      final gate = Completer<WaveRetryResult>();
+      when(service.retryFailedJobs).thenAnswer((_) => gate.future);
+
+      await tester.pumpWidget(_wrapSection(service));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Retry failed'));
+      await tester.pump();
+
+      final sync = tester.widget<AnimatedLoadingButton>(
+        find.byType(AnimatedLoadingButton),
+      );
+      expect(sync.onPressed, isNull);
+
+      gate.complete(
+        const WaveRetryResult(requeued: 1, scanned: 1, pushed: 1, failed: 0),
+      );
+      await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     });
 

@@ -1,28 +1,28 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
-
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
-import 'package:scheduling/features/calendar/application/appointment_series_editor.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_outcome.dart';
+import 'package:scheduling/features/calendar/application/event_details_save_pipeline.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
-import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
+import 'package:scheduling/features/calendar/domain/policies/appointment_image_doc_id.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -81,9 +81,14 @@ class EventDetailsController extends Notifier<EventDetailsState>
   // Settles when employee enrichment completes, so save() runs on warm data.
   Future<void>? _seedFuture;
 
+  /// The photo list [build] seeded from the record, so the subcollection load
+  /// below can tell "the user has not touched these yet" from "they have".
+  List<AppointmentImage>? _seededImages;
+
   @override
   EventDetailsState build() {
     Future.microtask(() => _loadClientIfNeeded(appointment.clientId));
+    Future.microtask(_loadStoredPictures);
     _seedFuture = Future.microtask(_enrichSelectedEmployees);
     return EventDetailsState(
       selectedDate: appointment.startTime,
@@ -99,8 +104,119 @@ class EventDetailsController extends Notifier<EventDetailsState>
       // Seeded synchronously to avoid a race with the async load below — employee
       // visibility depends on employeeIds being set right away.
       selectedEmployees: _assigneesFromRecord(appointment),
-      existingImages: List.of(appointment.pictures),
+      existingImages: _seededImages = List.of(appointment.pictures),
     );
+  }
+
+  /// Reads this job's photos from `appointments/{id}/images`, falling back to
+  /// the array the record already carries.
+  ///
+  /// Photos are moving off the parent document, and this is the read half.
+  /// "Prefer the subcollection, fall back to the array" is safe at every point
+  /// of the migration, which is why it is written this way rather than as a
+  /// switch to be flipped later:
+  ///
+  /// - a document the backfill has not reached yet returns EMPTY here, and the
+  ///   array — still authoritative, still dual-written — is what renders;
+  /// - a backfilled document returns the same photos the array holds;
+  /// - after the array is retired, the subcollection is the only source and
+  ///   the fallback is dead weight rather than wrong.
+  ///
+  /// Empty therefore means "nothing to add", never "this job has no photos" —
+  /// don't rewrite this to trust the subcollection unconditionally before the
+  /// array is gone.
+  ///
+  /// Failure is swallowed to the seeded array for the same reason: this is an
+  /// optimisation of where the photos are read from, and it must never be the
+  /// thing that empties a photo list the record could have rendered.
+  Future<void> _loadStoredPictures() async {
+    final id = appointment.id;
+    if (id == null || id.isEmpty) return;
+    // No photos in EITHER store means there is nothing for this read to find,
+    // and the sheet is the most-opened surface in the app.
+    //
+    // TODO(gvogas): revisit at the photo-subcollection CONTRACT step.
+    // This is safe ONLY while `pictures` is still dual-written: `hasPictures`
+    // is true if the array is non-empty OR `pictureCount > 0`, so today the
+    // array carries the decision. `pictureCount` is function-owned and reads
+    // as 0 on any doc the trigger or the backfill has not reached — so once
+    // the array is retired, a stale or missing count makes this gate skip the
+    // read and render a job's photos as none, silently. That is the same trap
+    // the docstring above names; when the array goes, this must gate on the
+    // counter ONLY if the backfill is known complete, or not gate at all.
+    if (!appointment.hasPictures) return;
+    final repo = ref.read(appointmentsRepositoryProvider);
+    // Hoisted with `repo`: the `ref.mounted` check below proves disposal here
+    // is real, and `ref.read` on a disposed notifier throws a StateError over
+    // the failure it is trying to report.
+    final logger = ref.read(loggerProvider);
+    List<AppointmentImage> stored;
+    try {
+      stored = await repo.fetchAppointmentPictures(id);
+    } catch (e, st) {
+      logger.warn('APPT-IMG subcollection read failed', e, st);
+      return;
+    }
+    if (stored.isEmpty || !ref.mounted) return;
+    // Only adopt the read while the list is still exactly what build() seeded.
+    // A Storage-backed read is a real window, and the user can have removed a
+    // photo inside it — swapping then would silently put it back on screen,
+    // and the next Save would act on a list they had already edited.
+    //
+    // Compared BY VALUE, not with `identical`. `existingImages` is a freezed
+    // collection getter that wraps the backing list in a NEW
+    // `EqualUnmodifiableListView` on every access, so an identity test against
+    // the plain list `build()` seeded could never be true and this method
+    // always returned here — the read ran on every sheet open and was thrown
+    // away. Harmless while the array is authoritative; at the CONTRACT step it
+    // would have shown zero photos on every job.
+    final seeded = _seededImages;
+    if (seeded == null || !listEquals(state.existingImages, seeded)) return;
+    final adopted = _mergeStoredPictures(seeded, stored);
+    if (listEquals(adopted, seeded)) return;
+    state = state.copyWith(existingImages: _seededImages = adopted);
+  }
+
+  /// Combines the subcollection read with the array [build] seeded, PREFERRING
+  /// the array's instance wherever the same photo is in both.
+  ///
+  /// Which instance wins matters, and not for display — the two render
+  /// identically. `removeAppointmentPictures` takes the array half out with
+  /// `FieldValue.arrayRemove`, which matches by DEEP EQUALITY of the whole
+  /// map, so it only removes an image that was parsed from the parent
+  /// document. A subcollection row deliberately omits `url` when it has a
+  /// `storagePath`, so adopting it wholesale would leave every later removal
+  /// deleting the subcollection doc while the array kept its copy — the photo
+  /// reappearing on the shipped build, and the Storage bytes orphaning.
+  ///
+  /// Identity is [appointmentImageDocId], the same derivation the subcollection
+  /// keys on, so the two halves agree on what "the same photo" means.
+  ///
+  /// It is a UNION, not a replace, and PARTIAL IS THE NORMAL STATE during
+  /// photo phase 1: `appendAppointmentPictures` writes only the NEW photos to
+  /// the subcollection while `arrayUnion`-ing them onto the array, and the
+  /// backfill has not run — so a job with three legacy photos and one added on
+  /// the current build reads back one row here. Iterating [stored] alone
+  /// rendered that job as a single photo, made the other three unremovable and
+  /// stopped them counting toward the photo cap, with nothing logged.
+  ///
+  /// The array's order leads because it is the order the sheet already showed.
+  static List<AppointmentImage> _mergeStoredPictures(
+    List<AppointmentImage> seeded,
+    List<AppointmentImage> stored,
+  ) {
+    final seenIds = <String>{
+      for (final image in seeded) appointmentImageDocId(image),
+    };
+    final merged = [...seeded];
+    for (final image in stored) {
+      final id = appointmentImageDocId(image);
+      // An id-less row carries neither a storage path nor a url, so nothing can
+      // render it and nothing can match it against the array.
+      if (id.isEmpty || !seenIds.add(id)) continue;
+      merged.add(image);
+    }
+    return merged;
   }
 
   /// Builds placeholder employees from the stored ids and names. They get
@@ -128,7 +244,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
         ],
       );
     } catch (e, st) {
-      logger.warn('enrichSelectedEmployees failed', e, st);
+      logger.warn('APPT-LOAD enrichSelectedEmployees failed', e, st);
     }
   }
 
@@ -166,7 +282,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
         state = state.copyWith(client: client);
       }
     } catch (e, st) {
-      logger.warn('loadClientIfNeeded failed', e, st);
+      logger.warn('APPT-LOAD loadClientIfNeeded failed', e, st);
     }
   }
 
@@ -330,18 +446,24 @@ class EventDetailsController extends Notifier<EventDetailsState>
   void setSaving({required bool busy}) =>
       state = state.copyWith(isSaving: busy);
 
-  /// Builds the final assignee list: the selected employees plus any original
-  /// assignees that weren't in the picker, so we don't silently unassign them.
+  /// The write half of a save. Built per call so it closes over nothing.
+  EventDetailsSavePipeline _pipeline() => EventDetailsSavePipeline(
+    repo: ref.read(appointmentsRepositoryProvider),
+    resolveStorage: () => ref.mounted ? ref.read(imageStorageProvider) : null,
+    logger: ref.read(loggerProvider),
+  );
+
+  /// The final assignee list. The awaited active-employee read is the point —
+  /// see [_resolveActiveEmployees].
   Future<({List<String> ids, List<String> names})> _resolveAssignees(
     AppointmentRecord appointment,
+    EventDetailsSavePipeline pipeline,
   ) async {
     final activeEmployees = await _resolveActiveEmployees();
-    return mergeRetainedAssignees(
-      originalIds: appointment.employeeIds,
-      originalNames: appointment.employeeNames,
-      selectedIds: state.selectedEmployees.map((e) => e.id).toList(),
-      selectedNames: state.selectedEmployees.map((e) => e.name).toList(),
-      activeIds: activeEmployees.map((e) => e.id).toSet(),
+    return pipeline.resolveAssignees(
+      appointment: appointment,
+      selected: state.selectedEmployees,
+      activeEmployees: activeEmployees,
     );
   }
 
@@ -365,17 +487,29 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
     state = state.copyWith(isSaving: true);
 
+    // Snapshot before the first await. The all-day switch stays live while a
+    // save is in flight, and the instants below are DERIVED from this flag —
+    // re-reading it afterwards could write `isAllDay: true` over a 09:00–17:00
+    // window, which reads as "All day" on the card while the travel sweep skips
+    // it and the crew gets no "time to leave" push.
+    final isAllDay = state.isAllDay;
+
     // Resolve dependencies before the first await, so they survive the sheet
     // being dismissed (Riverpod 3).
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
+    final pipeline = _pipeline();
     // Only resolve the upload service if there are photos, so we skip
     // initializing FirebaseStorage otherwise.
     final uploader = state.newImages.isEmpty
         ? null
         : ref.read(appointmentImageUploadProvider);
 
-    final invalid = await _settleAndValidate(appointment, title: title);
+    final invalid = await _settleAndValidate(
+      appointment,
+      title: title,
+      isAllDay: isAllDay,
+    );
     if (invalid != null) return invalid;
 
     final id = appointment.id;
@@ -389,7 +523,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     final (:start, :end) = appointmentSpan(
       date: state.selectedDate,
       endDate: state.endDate,
-      isAllDay: state.isAllDay,
+      isAllDay: isAllDay,
       startTime: state.selectedStartTime,
       endTime: state.selectedEndTime,
     );
@@ -420,8 +554,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
         }
       }
 
-      final assignees = await _resolveAssignees(appointment);
-      final updated = _buildUpdatedRecord(
+      final assignees = await _resolveAssignees(appointment, pipeline);
+      final updated = pipeline.buildUpdatedRecord(
         appointment,
         id: id,
         title: title,
@@ -431,24 +565,34 @@ class EventDetailsController extends Notifier<EventDetailsState>
         start: start,
         end: end,
         assignees: assignees,
+        selectedClient: state.selectedClient,
+        pictures: state.existingImages,
+        status: state.editingStatus,
+        repeat: state.repeat,
+        isPersonal: state.isPersonal,
+        isAllDay: isAllDay,
       );
 
-      final saved = await _applySeriesChange(
+      final saved = await pipeline.applySeriesChange(
         appointment,
-        repo: repo,
         updated: updated,
         id: id,
         start: start,
         end: end,
         applyToSeries: applyToSeries,
+        repeat: state.repeat,
+        savedRepeat: state.savedRepeat,
       );
 
-      await _applyPhotoChanges(
+      await pipeline.applyPhotoChanges(
         id: id,
-        repo: repo,
         uploader: uploader,
         removedImages: removedImages,
         newImages: newImages,
+        // The repeat baseline for the NEXT edit — state, so it stays here.
+        onRecordWritten: () {
+          if (ref.mounted) state = state.copyWith(savedRepeat: state.repeat);
+        },
       );
 
       if (ref.mounted) state = state.copyWith(isSaving: false);
@@ -460,35 +604,15 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Applies photo changes after the record write — this ordering matters.
-  Future<void> _applyPhotoChanges({
-    required String id,
-    required AppointmentsRepository repo,
-    required AppointmentImageUploadService? uploader,
-    required List<AppointmentImage> removedImages,
-    required List<File> newImages,
-  }) async {
-    // Use arrayRemove only for removed photos to avoid clobbering concurrent uploads.
-    if (removedImages.isNotEmpty) {
-      await repo.removeAppointmentPictures(id, removedImages);
-    }
-
-    // Update baseline for next edit.
-    if (ref.mounted) state = state.copyWith(savedRepeat: state.repeat);
-
-    // Clean up images only after the doc stops referencing them.
-    await _deleteOrphanedImages(removedImages, tag: 'APPT-SAVE');
-
-    if (newImages.isNotEmpty) {
-      uploader?.uploadInBackground(appointmentId: id, newImages: newImages);
-    }
-  }
-
   /// Waits for the seed to settle, then validates the form. Returns a stop
   /// outcome if it's invalid, or null to keep going.
+  /// [isAllDay] is passed rather than re-read: it is the value [save]
+  /// snapshotted, so the form is validated against the same flag the instants
+  /// and the record are built from.
   Future<EventDetailsSaveOutcome?> _settleAndValidate(
     AppointmentRecord appointment, {
     required String title,
+    required bool isAllDay,
   }) async {
     // Wait for enrichment to finish, so assignee resolution reads a warm active-employee list.
     await _seedFuture;
@@ -511,7 +635,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
         client: clientForValidation,
         selectedEmployees: state.selectedEmployees,
         isPersonal: state.isPersonal,
-        isAllDay: state.isAllDay,
+        isAllDay: isAllDay,
       ),
     );
     state = state.copyWith(errors: errors);
@@ -520,92 +644,6 @@ class EventDetailsController extends Notifier<EventDetailsState>
       return const EventDetailsInvalid();
     }
     return null;
-  }
-
-  // Build the edited record from the form fields and the resolved assignees.
-  AppointmentRecord _buildUpdatedRecord(
-    AppointmentRecord appointment, {
-    required String id,
-    required String title,
-    required String address,
-    required String notes,
-    required String materialsNeeded,
-    required DateTime start,
-    required DateTime end,
-    required ({List<String> ids, List<String> names}) assignees,
-  }) {
-    final isPersonal = state.isPersonal;
-    // A personal job carries no client and no address — including when an
-    // existing client visit is converted into one, so the stored copies are
-    // cleared rather than left behind on a job that no longer shows them.
-    final pickedClient = isPersonal ? null : state.selectedClient;
-    return AppointmentRecord(
-      id: id,
-      title: title.trim(),
-      startTime: start,
-      endTime: end,
-      clientId: isPersonal ? '' : pickedClient?.id ?? appointment.clientId,
-      clientName: isPersonal
-          ? ''
-          : pickedClient?.displayName ?? appointment.clientName,
-      clientPhone: isPersonal
-          ? ''
-          : pickedClient?.phone ?? appointment.clientPhone,
-      address: isPersonal ? '' : address.trim(),
-      isPersonal: isPersonal,
-      isAllDay: state.isAllDay,
-      employeeIds: assignees.ids,
-      employeeNames: assignees.names,
-      notes: notes.trim(),
-      materialsNeeded: materialsNeeded.trim(),
-      // Pictures are included here only for the outcome/UI — actual updates
-      // go through append/remove instead.
-      pictures: state.existingImages,
-      status: state.editingStatus,
-      repeat: state.repeat,
-      seriesId: appointment.seriesId,
-    );
-  }
-
-  // Apply the edit: rewrite the series if the repeat changed, propagate it if
-  // applyToSeries is set, or otherwise just update the single appointment.
-  Future<EventDetailsSaved> _applySeriesChange(
-    AppointmentRecord appointment, {
-    required AppointmentsRepository repo,
-    required AppointmentRecord updated,
-    required String id,
-    required DateTime start,
-    required DateTime end,
-    required bool applyToSeries,
-  }) async {
-    final seriesEditor = AppointmentSeriesEditor(repo);
-    if (state.repeat != state.savedRepeat) {
-      final result = await seriesEditor.rewrite(
-        updated: updated,
-        appointment: appointment,
-        id: id,
-        start: start,
-        end: end,
-        repeat: state.repeat,
-      );
-      return EventDetailsSaved(
-        result.updated,
-        futureBookings: result.futureBookings,
-        removedBookings: result.removedBookings,
-      );
-    }
-    if (applyToSeries && appointment.seriesId.isNotEmpty) {
-      final updatedSiblings = await seriesEditor.propagate(
-        updated: updated,
-        appointment: appointment,
-        id: id,
-        start: start,
-        end: end,
-      );
-      return EventDetailsSaved(updated, updatedSiblings: updatedSiblings);
-    }
-    await repo.updateAppointment(updated);
-    return EventDetailsSaved(updated);
   }
 
   /// Returns null on success, or the failure error otherwise. When
@@ -619,6 +657,10 @@ class EventDetailsController extends Notifier<EventDetailsState>
     if (id == null) {
       return StateError('Cannot delete an appointment without an id.');
     }
+    // Reject a double-tap on the delete — same reentrancy guard save() and the
+    // status writes use. Without it a second run pays getSeries, the batch
+    // delete and deleteOrphanedImages all over again.
+    if (state.isSaving) return null;
     state = state.copyWith(isSaving: true);
     // Resolve these before the first await, so they survive the sheet being dismissed.
     final repo = ref.read(appointmentsRepositoryProvider);
@@ -646,7 +688,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
       }
 
       // Delete orphaned images after docs are gone.
-      await _deleteOrphanedImages(orphanedImages, tag: 'APPT-DEL');
+      if (ref.mounted) {
+        await _pipeline().deleteOrphanedImages(
+          orphanedImages,
+          tag: 'APPT-DEL',
+        );
+      }
 
       if (ref.mounted) state = state.copyWith(isSaving: false);
       return null;
@@ -654,22 +701,6 @@ class EventDetailsController extends Notifier<EventDetailsState>
       logger.warn('APPT-DEL deleteAppointment failed', e, st);
       if (ref.mounted) state = state.copyWith(isSaving: false);
       return e;
-    }
-  }
-
-  /// Best-effort cleanup — if it fails, the orphaned bytes are harmless, so
-  /// we just log it.
-  Future<void> _deleteOrphanedImages(
-    List<AppointmentImage> images, {
-    required String tag,
-  }) async {
-    if (images.isEmpty || !ref.mounted) return;
-    final storage = ref.read(imageStorageProvider);
-    final logger = ref.read(loggerProvider);
-    try {
-      await storage.deleteImages(images);
-    } catch (e, st) {
-      logger.warn('$tag deleteImages failed (orphaned bytes)', e, st);
     }
   }
 }

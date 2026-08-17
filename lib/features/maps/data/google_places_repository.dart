@@ -8,6 +8,11 @@ import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
 import 'package:scheduling/features/maps/domain/models/parsed_address.dart';
 import 'package:scheduling/features/maps/domain/places_repository.dart';
 
+/// The deadline on every Places callable. Short on purpose: these back an
+/// as-you-type field, so a slow response is worse than no response. Hoisted
+/// because it was written out at all three call sites.
+const Duration _callableTimeout = Duration(seconds: 10);
+
 class GooglePlacesRepository implements PlacesRepository {
   GooglePlacesRepository({FirebaseFunctions? functions, AppLogger? logger})
     : _functions = functions ?? FirebaseFunctions.instance,
@@ -30,11 +35,11 @@ class GooglePlacesRepository implements PlacesRepository {
       result = await _functions
           .httpsCallable(
             'placesAutocomplete',
-            options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
+            options: HttpsCallableOptions(timeout: _callableTimeout),
           )
           .call({'input': stripped, 'sessionToken': sessionToken});
     } catch (e, st) {
-      _logger.warn('placesAutocomplete callable failed', e, st);
+      _logger.warn('ADDR-PLACES placesAutocomplete callable failed', e, st);
       throw MapsErrorMapper.map(e, st);
     }
 
@@ -46,7 +51,11 @@ class GooglePlacesRepository implements PlacesRepository {
           .map((e) => AddressSuggestion.fromJson(e.cast<String, dynamic>()))
           .toList();
     } catch (e, st) {
-      _logger.warn('placesAutocomplete response parse failed', e, st);
+      _logger.warn(
+        'ADDR-PLACES placesAutocomplete response parse failed',
+        e,
+        st,
+      );
       throw MapsFailureParse(cause: e, stackTrace: st);
     }
   }
@@ -61,11 +70,11 @@ class GooglePlacesRepository implements PlacesRepository {
       result = await _functions
           .httpsCallable(
             'placesGetDetails',
-            options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
+            options: HttpsCallableOptions(timeout: _callableTimeout),
           )
           .call({'placeId': placeId, 'sessionToken': sessionToken});
     } catch (e, st) {
-      _logger.warn('placesGetDetails callable failed', e, st);
+      _logger.warn('ADDR-PLACES placesGetDetails callable failed', e, st);
       throw MapsErrorMapper.map(e, st);
     }
 
@@ -85,9 +94,11 @@ class GooglePlacesRepository implements PlacesRepository {
       var postalCode = '';
 
       for (final c in components) {
-        final types = (c['types'] as List? ?? []).cast<String>();
-        final longText = (c['longText'] as String?) ?? '';
-        final shortText = (c['shortText'] as String?) ?? '';
+        // `whereType`, not `cast`: a cast is lazy, so a non-string entry in
+        // the array throws later at the `contains` call rather than here.
+        final types = (c['types'] as List? ?? const []).whereType<String>();
+        final longText = c['longText']?.toString() ?? '';
+        final shortText = c['shortText']?.toString() ?? '';
 
         if (types.contains('subpremise')) unit = longText;
         if (types.contains('street_number')) streetNumber = longText;
@@ -107,14 +118,14 @@ class GooglePlacesRepository implements PlacesRepository {
           : baseStreet;
 
       return ParsedAddress(
-        fullAddress: (data['formattedAddress'] as String?) ?? '',
+        fullAddress: data['formattedAddress']?.toString() ?? '',
         street: street,
         city: city,
         province: province,
         postalCode: postalCode,
       );
     } catch (e, st) {
-      _logger.warn('placesGetDetails response parse failed', e, st);
+      _logger.warn('ADDR-PLACES placesGetDetails response parse failed', e, st);
       throw MapsFailureParse(cause: e, stackTrace: st);
     }
   }
@@ -130,11 +141,11 @@ class GooglePlacesRepository implements PlacesRepository {
       result = await _functions
           .httpsCallable(
             'placesReverseGeocode',
-            options: HttpsCallableOptions(timeout: const Duration(seconds: 10)),
+            options: HttpsCallableOptions(timeout: _callableTimeout),
           )
           .call({'lat': lat, 'lng': lng, 'locale': locale});
     } catch (e, st) {
-      _logger.warn('placesReverseGeocode callable failed', e, st);
+      _logger.warn('ADDR-PLACES placesReverseGeocode callable failed', e, st);
       throw MapsErrorMapper.map(e, st);
     }
 
@@ -142,10 +153,13 @@ class GooglePlacesRepository implements PlacesRepository {
       // NOTE: loose `as Map?` is required — Android callables return
       // Map<dynamic, dynamic>, so a direct Map<String, dynamic> cast throws.
       final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
-      final address = data['address'];
-      return address == null ? null : address as String;
+      return data['address']?.toString();
     } catch (e, st) {
-      _logger.warn('placesReverseGeocode response parse failed', e, st);
+      _logger.warn(
+        'ADDR-PLACES placesReverseGeocode response parse failed',
+        e,
+        st,
+      );
       throw MapsFailureParse(cause: e, stackTrace: st);
     }
   }

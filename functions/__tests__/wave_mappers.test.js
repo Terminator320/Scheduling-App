@@ -191,6 +191,57 @@ describe("toWaveCustomerInput", () => {
     expect(result.address).not.toHaveProperty("countryCode");
   });
 
+  // These are enum fields. A value outside the vocabulary is not an
+  // `inputErrors` entry the worker can report against the field — GraphQL
+  // refuses to coerce the whole `$input` and answers with a top-level error,
+  // which is non-retryable, so the job dead-letters and no "Retry failed"
+  // press can ever move it. Dropping one address line is the cheap outcome.
+  test("a province typed into the country box is dropped, not sent", () => {
+    const result = toWaveCustomerInput({name: "T", country: "ON"});
+    expect(result.address).not.toHaveProperty("countryCode");
+  });
+
+  test("a two-letter non-country is dropped, not sent", () => {
+    const result = toWaveCustomerInput({name: "T", country: "XX"});
+    expect(result.address).not.toHaveProperty("countryCode");
+  });
+
+  test("a real foreign country code still passes through", () => {
+    const result = toWaveCustomerInput({name: "T", country: "fr"});
+    expect(result.address.countryCode).toBe("FR");
+  });
+
+  test("a US client's plain province is prefixed US-, never CA-", () => {
+    // `CA-NY` is a subdivision of nowhere. It used to be what a New York
+    // client was sent as, which killed that client's sync permanently.
+    const result = toWaveCustomerInput({
+      name: "T",
+      province: "NY",
+      country: "US",
+    });
+    expect(result.address.provinceCode).toBe("US-NY");
+  });
+
+  test("a province that is not one of its country's is dropped", () => {
+    const result = toWaveCustomerInput({
+      name: "T",
+      province: "QC",
+      country: "US",
+    });
+    expect(result.address).not.toHaveProperty("provinceCode");
+    expect(result.address.countryCode).toBe("US");
+  });
+
+  test("an already-coded province that exists nowhere is dropped", () => {
+    const result = toWaveCustomerInput({name: "T", province: "CA-NY"});
+    expect(result.address).not.toHaveProperty("provinceCode");
+  });
+
+  test("a bare province still reads as Canadian, the business's own", () => {
+    const result = toWaveCustomerInput({name: "T", province: "ON"});
+    expect(result.address.provinceCode).toBe("CA-ON");
+  });
+
   test("name-only minimal client → valid input with empty address", () => {
     const result = toWaveCustomerInput({name: "Solo"});
     expect(result.name).toBe("Solo");
@@ -257,6 +308,88 @@ describe("toWaveCustomerInput", () => {
   test("name with trailing space → trimmed in output", () => {
     const result = toWaveCustomerInput({name: "Acme "});
     expect(result.name).toBe("Acme");
+  });
+
+  test("sends the stored name VERBATIM, phone number and all", () => {
+    // `clients/{id}.name` carries the client's phone on the end (owner call
+    // 2026-08-14, `ClientNamePolicy`) precisely because Wave's customer list
+    // and its invoices are what the number has to show up on — the app shows
+    // `displayName` instead. Nothing else pins this, so a future "cleanup"
+    // applying the display name here would break invoice identification with
+    // no test failing. It is the reason `clientDisplayName` exists as a
+    // SEPARATE function rather than being folded into the mapper.
+    const result = toWaveCustomerInput({
+      name: "Marc Tremblay (514) 555-1234",
+      firstName: "Marc",
+      lastName: "Tremblay",
+      phone: "(514) 555-1234",
+    });
+    expect(result.name).toBe("Marc Tremblay (514) 555-1234");
+  });
+
+  test("a business name reaches Wave as the business, not its contact", () => {
+    const result = toWaveCustomerInput({
+      name: "Vogas Plumbing (514) 555-1234",
+      firstName: "Marc",
+      lastName: "Tremblay",
+      phone: "(514) 555-1234",
+    });
+    expect(result.name).toBe("Vogas Plumbing (514) 555-1234");
+  });
+
+  // Merged in from the former `mappers.test.js` (2026-08-15): the cases below
+  // were the only ones that suite covered and this one did not.
+
+  test("null/undefined clientFields never throws and yields an empty name",
+      () => {
+        // The trigger hands this whatever the doc snapshot held, so a deleted
+        // or empty doc must degrade rather than take down the enqueue path.
+        expect(toWaveCustomerInput(null)).toEqual({name: "", address: {}});
+        expect(toWaveCustomerInput(undefined))
+            .toEqual({name: "", address: {}});
+      });
+
+  test("a whitespace-only optional field is omitted, not sent as ''", () => {
+    const result = toWaveCustomerInput({name: "Jane Doe", email: "  "});
+    expect(result).toEqual({name: "Jane Doe", address: {}});
+    expect(result).not.toHaveProperty("email");
+  });
+
+  test("legacy businessName-only doc: name stays empty (no fallback)", () => {
+    // Unlike ClientRecord.fromMap (Dart), this mapper does NOT fall back to
+    // businessName — legacy business-only docs reach Wave with an empty name
+    // by design, and `businessName` itself is never part of the payload.
+    const result = toWaveCustomerInput({
+      name: "",
+      businessName: "Acme Plumbing",
+      email: "acme@example.com",
+    });
+    expect(result.name).toBe("");
+    expect(result).not.toHaveProperty("businessName");
+  });
+
+  test("empty address and no apt yields no addressLine1", () => {
+    const result = toWaveCustomerInput({name: "A", address: ""});
+    expect(result.address).not.toHaveProperty("addressLine1");
+  });
+
+  test("apt alone (no street) becomes addressLine1", () => {
+    const result = toWaveCustomerInput({name: "A", address: "", apt: "4"});
+    expect(result.address.addressLine1).toBe("4");
+  });
+
+  test("a full province NAME (unknown format) omits provinceCode", () => {
+    // Only a 2-letter code or an already-prefixed subdivision maps; "Quebec"
+    // is not guessed at, the same way an unknown country is not.
+    expect(toWaveCustomerInput({name: "A", province: "Quebec"}).address)
+        .not.toHaveProperty("provinceCode");
+  });
+
+  test("country name matching is case-insensitive", () => {
+    expect(toWaveCustomerInput({name: "A", country: "CANADA"})
+        .address.countryCode).toBe("CA");
+    expect(toWaveCustomerInput({name: "A", country: "usa"})
+        .address.countryCode).toBe("US");
   });
 });
 
@@ -501,6 +634,59 @@ describe("fromWaveCustomer", () => {
 
   test("null node → does not throw", () => {
     expect(() => fromWaveCustomer(null)).not.toThrow();
+  });
+
+  // Merged in from the former `mappers.test.js` (2026-08-15).
+
+  test("a null node returns every field as a safe default", () => {
+    // Stronger than the not-throw above: the import writes this patch onto a
+    // client doc, so a missing key would leave a stale value in place rather
+    // than clearing it.
+    expect(fromWaveCustomer(null)).toEqual({
+      waveCustomerId: "",
+      name: "",
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      mobile: "",
+      address: "",
+      addressLine2: "",
+      apt: "",
+      city: "",
+      province: "",
+      country: "",
+      postalCode: "",
+    });
+  });
+
+  test("a plain province code with no subdivision prefix passes through",
+      () => {
+        expect(fromWaveCustomer({address: {province: {code: "QC"}}}).province)
+            .toBe("QC");
+      });
+
+  test("a missing province code yields ''", () => {
+    expect(fromWaveCustomer({address: {province: {}}}).province).toBe("");
+  });
+
+  test("US country code with no name falls back to the code->name lookup",
+      () => {
+        expect(fromWaveCustomer({address: {country: {code: "US"}}}).country)
+            .toBe("United States");
+      });
+
+  test("an unknown country code with no name yields ''", () => {
+    // Never guessed at — an invented country name would round-trip back to
+    // Wave as a real edit.
+    expect(fromWaveCustomer({address: {country: {code: "FR"}}}).country)
+        .toBe("");
+  });
+
+  test("an all-whitespace name falls through to first/last", () => {
+    expect(fromWaveCustomer({
+      name: "   ", firstName: "Jane", lastName: "Doe",
+    }).name).toBe("Jane Doe");
   });
 });
 

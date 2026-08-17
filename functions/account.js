@@ -3,7 +3,11 @@ const logger = require("firebase-functions/logger");
 const {getAuth} = require("firebase-admin/auth");
 const {getFirestore} = require("firebase-admin/firestore");
 
-const {assertPayloadShape, enforceDurableRateLimit} = require("./security");
+const {
+  assertPayloadShape,
+  enforceDurableRateLimit,
+  assertFreshReauth,
+} = require("./security");
 const {runAccountDeletion} = require("./account_policy");
 
 // deleteAccount is capped at AUTH_RATE_MAX attempts per AUTH_RATE_WINDOW_MS,
@@ -15,19 +19,6 @@ const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
 // deleteAccount requires the caller to have re-authenticated within this
 // window, since a still-valid ID token alone shouldn't trigger deletion.
 const REAUTH_MAX_AGE_SECONDS = 5 * 60;
-
-/**
- * True when the caller's re-authentication is missing or too old to permit an
- * irreversible delete. Pure/testable.
- * @param {*} authTime ID-token `auth_time` (epoch seconds) or undefined.
- * @param {number} nowSec Current time in epoch seconds.
- * @param {number} maxAgeSeconds Allowed staleness window in seconds.
- * @return {boolean}
- */
-function isReauthStale(authTime, nowSec, maxAgeSeconds) {
-  return typeof authTime !== "number" ||
-      nowSec - authTime > maxAgeSeconds;
-}
 
 // ----- deleteAccount callable ------------------------------------------------
 //
@@ -49,16 +40,14 @@ const deleteAccount = onCall(
       assertPayloadShape(req.data, new Set());
       // Checked before the rate limiter so a stale-auth rejection doesn't
       // burn one of the caller's deletion slots.
-      const authTime = req.auth.token?.auth_time;
-      const nowSec = Math.floor(Date.now() / 1000);
-      if (isReauthStale(authTime, nowSec, REAUTH_MAX_AGE_SECONDS)) {
-        logger.warn("deleteAccount: stale auth_time; reauth required", {
-          uid: req.auth.uid,
-          authTime,
-          ageSec: typeof authTime === "number" ? nowSec - authTime : null,
-        });
-        throw new HttpsError("unauthenticated", "stale-auth");
-      }
+      //
+      // Through the shared `assertFreshReauth`, not a local copy: this was the
+      // helper's whole body hand-inlined — same `isReauthStale` call, same
+      // warn fields, same `stale-auth` code — which is the two-owner shape
+      // this codebase kills everywhere else (`displayStatusAt`, `_who`,
+      // `hasWorkLeft`). The `stale-auth` string in particular is a contract:
+      // the Flutter client branches on it.
+      assertFreshReauth(req.auth, "deleteAccount", REAUTH_MAX_AGE_SECONDS);
       const limiter = await enforceDurableRateLimit(
           "deleteAccount",
           req.auth.uid,
@@ -82,8 +71,4 @@ const deleteAccount = onCall(
     },
 );
 
-module.exports = {
-  deleteAccount,
-  // Exported for unit tests.
-  isReauthStale,
-};
+module.exports = {deleteAccount};

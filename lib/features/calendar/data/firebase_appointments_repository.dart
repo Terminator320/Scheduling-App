@@ -4,12 +4,15 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show compute;
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/core/utils/retry.dart';
+import 'package:scheduling/features/calendar/data/appointment_images_store.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
@@ -22,10 +25,20 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     DateTime Function()? clock,
   }) : _appointments = firestore.collection('appointments'),
        _logger = logger ?? AppLogger(),
-       _clock = clock ?? DateTime.now;
+       _clock = clock ?? DateTime.now {
+    _images = AppointmentImagesStore(
+      appointments: _appointments,
+      logger: _logger,
+    );
+  }
 
   final CollectionReference<Map<String, dynamic>> _appointments;
   final AppLogger _logger;
+
+  /// The photo half — the `pictures` array plus the `appointments/{id}/images`
+  /// subcollection it is migrating to. A collaborator because that migration's
+  /// CONTRACT step rewrites the whole surface; see [AppointmentImagesStore].
+  late final AppointmentImagesStore _images;
 
   /// Lets tests inject a fake clock so the search-cache TTL is testable.
   final DateTime Function() _clock;
@@ -62,7 +75,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   void _invalidateSearchCache() {
     _searchCache.clear();
     _scanWindow = null;
-    _localWrites.add(null);
+    if (!_localWrites.isClosed) _localWrites.add(null);
   }
 
   // Broadcasts whenever a local write happens, so the cache can invalidate itself.
@@ -71,6 +84,15 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   @override
   Stream<void> get onLocalWrite => _localWrites.stream;
 
+  /// Releases the local-write broadcast, from the provider's `onDispose`.
+  ///
+  /// The provider is not `autoDispose`, so in production this fires only with
+  /// the container — but a widget test builds a container per pump, and an
+  /// unclosed controller keeps one alive per test.
+  void dispose() {
+    unawaited(_localWrites.close());
+  }
+
   @override
   String newDocId() => _appointments.doc().id;
 
@@ -78,7 +100,30 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   Future<AppointmentRecord?> getAppointmentById(String id) async {
     final doc = await _appointments.doc(id).get();
     if (!doc.exists) return null;
-    return AppointmentRecord.fromMap(doc.id, doc.data() ?? {});
+    return _recordFrom(doc.id, doc.data() ?? {});
+  }
+
+  /// Maps a doc, leaving a breadcrumb when it carried no `startTime`/`endTime`.
+  ///
+  /// `AppointmentRecord.fromMap` substitutes `DateTime.now()` for a missing
+  /// instant, and that fabricated time then seeds the edit sheet and is written
+  /// back by the next save — so a legacy or console-written row is silently
+  /// given a start time nobody chose. Not an error record: nothing failed, and
+  /// the read still returns a usable record.
+  ///
+  /// This has two callers, and `getAppointmentById` is now the only one that
+  /// can reach such a doc. `fetchClientHistory` could until it gained the
+  /// `orderBy` its `limit` needs to be meaningful, and Firestore excludes docs
+  /// missing the orderBy field — so a startTime-less row is invisible in a
+  /// client's job history now, and is repairable only through the deep link
+  /// that opens it by id.
+  AppointmentRecord _recordFrom(String id, Map<String, dynamic> data) {
+    if (data['startTime'] == null || data['endTime'] == null) {
+      _logger.breadcrumb(
+        'APPT-LOAD $id has no startTime/endTime; substituting now',
+      );
+    }
+    return AppointmentRecord.fromMap(id, data);
   }
 
   @override
@@ -87,32 +132,61 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     // "Has work left", NOT "starts in the future". A tech can be on day 3 of a
     // 10-day run with nothing else booked — counting from `now` reported "0
     // upcoming jobs" under Disable account, so the admin disabled someone who
-    // was standing on a job site. The query floor therefore reaches back a full
-    // span and the real endTime test runs below (Firestore takes only the one
-    // inequality the index serves), which is also why this can't stay a
-    // count() aggregate. Served by the existing
-    // (employeeIds CONTAINS, startTime ASC) composite index.
-    final floor = DateTime(
-      now.year,
-      now.month,
-      now.day - maxAppointmentSpanDays,
-    );
+    // was standing on a job site.
+    //
+    // That test is `endTime >= now`, so the QUERY asks it directly. It used to
+    // ask `startTime >= now - maxAppointmentSpanDays` — a superset chosen to
+    // reach a run already under way — and that query has no upper bound at
+    // all, so it read every job this person is assigned to from a fortnight
+    // ago to the end of time (the repeat horizon pre-books five years out) to
+    // render one caption. Bounding the field the rule is about reads only the
+    // jobs that actually have work left. Served by the existing
+    // `(employeeIds CONTAINS, endTime ASC)` composite index.
+    //
+    // Two consequences, both accepted: a doc with no `endTime` is excluded by
+    // the filter rather than admitted and then counted on `fromMap`'s
+    // fabricated instant, and a run longer than `maxAppointmentSpanDays` (only
+    // reachable by a console or Admin-SDK write) is now counted correctly
+    // instead of falling out of the floor.
+    //
+    // `endTime >= now` still has no UPPER bound, and a repeat series pre-books
+    // up to `RepeatInterval.maxOccurrences` (120) occurrences out to a 5-year
+    // horizon — so a tech on several series was several hundred documents read
+    // to render one caption. Every query in this repository now names a
+    // ceiling — `findBusyEmployees` was the last one without, and got
+    // `_conflictScanLimit`.
+    //
+    // A `.limit` rather than a horizon bound, deliberately: with `endTime` the
+    // only inequality, Firestore returns these in `endTime` ASC order, so the
+    // cap keeps the SOONEST-ending jobs — exactly the ones an admin about to
+    // disable someone needs to reassign. It also keeps the caption's number
+    // EXACT for anyone below the cap, which is everyone in practice, so
+    // `employees_disableReassignCaption` needs no rewording. Bounding the
+    // horizon instead ("12 jobs in the next 90 days") would read fewer
+    // documents again, but it changes what the sentence claims — a product
+    // call, not a performance one.
     final snapshot = await _appointments
         .where('employeeIds', arrayContains: employeeId)
-        .where('startTime', isGreaterThanOrEqualTo: Timestamp.fromDate(floor))
+        .where('endTime', isGreaterThanOrEqualTo: Timestamp.fromDate(now))
+        .limit(_futureAssignmentScanLimit)
         .get();
+    if (snapshot.docs.length >= _futureAssignmentScanLimit) {
+      // Understating this caption tells an admin they have less to reassign
+      // than they do, so a truncation must not pass in silence.
+      _logger.warn(
+        'APPT-COUNT future-assignment query hit the '
+        '$_futureAssignmentScanLimit-doc cap — the caption is understating',
+      );
+    }
     return snapshot.docs
         .map((d) => AppointmentRecord.fromMap(d.id, d.data()))
-        // Terminal jobs are not "still assigned". The old `startTime >= now`
-        // query excluded them incidentally, since a job can't be marked done
-        // before it starts; reaching a span back deliberately admits started
-        // jobs, so the status test has to be explicit or a visit completed
-        // this morning still tells the admin to reassign it.
-        .where(
-          (a) =>
-              !a.endTime.isBefore(now) &&
-              !AppointmentStatus.fromRaw(a.status).isTerminal,
-        )
+        // Terminal jobs are not "still assigned". Deliberately kept in Dart
+        // rather than added as a `whereIn` constraint: that would need a third
+        // index field for a query the `endTime` bound already keeps small, and
+        // an `in` over the open statuses silently drops any status the
+        // allowlist doesn't name. This caption must err towards telling the
+        // admin to reassign, so an unknown status has to count.
+        .where((a) => !AppointmentStatus.fromRaw(a.status).isTerminal)
         .length;
   }
 
@@ -139,9 +213,22 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   @override
   Future<List<AppointmentRecord>> getSeries(String seriesId) async {
+    // Bounded like every other read here. `RepeatInterval.maxOccurrences` caps
+    // what the APP can write, but the console and the Admin SDK bypass that,
+    // so the query states its own ceiling. +1 so a series sitting exactly at
+    // the cap doesn't trip the warn.
     final snapshot = await _appointments
         .where('seriesId', isEqualTo: seriesId)
+        .limit(_seriesScanLimit)
         .get();
+    if (snapshot.docs.length >= _seriesScanLimit) {
+      // A truncated series means a "this and all future" edit would silently
+      // skip the siblings past the cap, so this must not pass in silence.
+      _logger.warn(
+        'APPT-LOAD series $seriesId hit the '
+        '$_seriesScanLimit-doc cap — siblings beyond it were not loaded',
+      );
+    }
     return snapshot.docs
         .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
         .toList();
@@ -222,14 +309,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     String id,
     List<AppointmentImage> pictures,
   ) async {
-    if (pictures.isEmpty) return;
-    // Use arrayUnion so concurrent uploads only append their own photos, never erase.
-    await _appointments.doc(id).update({
-      'pictures': FieldValue.arrayUnion(
-        pictures.map(_imageToFirestoreMap).toList(),
-      ),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    await _images.append(id, pictures);
     _invalidateSearchCache();
   }
 
@@ -238,15 +318,13 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     String id,
     List<AppointmentImage> pictures,
   ) async {
-    if (pictures.isEmpty) return;
-    await _appointments.doc(id).update({
-      'pictures': FieldValue.arrayRemove(
-        pictures.map(_imageToFirestoreMap).toList(),
-      ),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    await _images.remove(id, pictures);
     _invalidateSearchCache();
   }
+
+  @override
+  Future<List<AppointmentImage>> fetchAppointmentPictures(String id) =>
+      _images.fetch(id);
 
   // Valid statuses: pending → in_progress → done, plus cancelled.
   static const _allowedStatuses = {
@@ -311,20 +389,42 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         .toList();
   }
 
+  /// The shared head of every range query: the widened `fetchStart` floor, the
+  /// range end, the `startTime` order and the doc cap.
+  ///
+  /// One owner because the dashboard's split — a live listener over the current
+  /// weeks plus a one-shot `.get()` over the settled ones — depends on both
+  /// halves reaching the SAME `fetchStart`. They overlap by a fortnight by
+  /// design and are merged by doc id, so a floor edited on one of the three
+  /// copies and not the others silently changes the overlap that merge assumes.
+  /// [employeeId] adds the assignee constraint the non-admin stream needs. It
+  /// is a CONSTRAINT, not a post-filter: for a list query the rules are
+  /// evaluated against the constraints, so without it `isAssignedEmployee`
+  /// rejects a technician's whole query.
+  Query<Map<String, dynamic>> _rangeQuery(
+    AppointmentDateRange range, {
+    String? employeeId,
+  }) {
+    Query<Map<String, dynamic>> query = _appointments;
+    if (employeeId != null) {
+      query = query.where('employeeIds', arrayContains: employeeId);
+    }
+    return query
+        .where(
+          'startTime',
+          isGreaterThanOrEqualTo: Timestamp.fromDate(range.fetchStart),
+        )
+        .where('startTime', isLessThan: Timestamp.fromDate(range.end))
+        .orderBy('startTime')
+        .limit(_rangeStreamLimit);
+  }
+
   @override
   Stream<List<AppointmentRecord>> watchInRange(AppointmentDateRange range) {
     return retryStream(
-      () => _appointments
-          .where(
-            'startTime',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(range.fetchStart),
-          )
-          .where('startTime', isLessThan: Timestamp.fromDate(range.end))
-          .orderBy('startTime')
-          .limit(_rangeStreamLimit)
-          .snapshots()
-          .map((snapshot) => _mapRangeSnapshot(snapshot, 'APPT-RANGE')),
-      retryWhen: isAuthPropagationDenied,
+      () => _rangeQuery(range).snapshots().map(
+        (snapshot) => _mapRangeSnapshot(snapshot, 'APPT-RANGE'),
+      ),
     );
   }
 
@@ -333,15 +433,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     AppointmentDateRange range,
   ) async {
     final snapshot = await retryAsync(
-      () => _appointments
-          .where(
-            'startTime',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(range.fetchStart),
-          )
-          .where('startTime', isLessThan: Timestamp.fromDate(range.end))
-          .orderBy('startTime')
-          .limit(_rangeStreamLimit)
-          .get(),
+      () => _rangeQuery(range).get(),
       // Same post-sign-in token-propagation window watchInRange retries for —
       // this one is fired from the dashboard, which can be the first screen a
       // freshly signed-in admin lands on.
@@ -377,16 +469,26 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     int limit = 50,
   }) async {
     if (clientId.isEmpty) return const [];
-    // We only filter on clientId here (it just needs a single-field index)
-    // and sort newest-first ourselves in Dart.
+    // The `orderBy` is what makes the `limit` mean "the newest [limit] visits".
+    // Without it Firestore falls back to `__name__` order, so a client with
+    // more visits than the cap got an ARBITRARY slice of its history — sorted
+    // newest-first in Dart afterwards, which made the wrong page look right.
+    // Served by the `(clientId ASC, startTime DESC)` composite index.
     final snapshot = await _appointments
         .where('clientId', isEqualTo: clientId)
+        .orderBy('startTime', descending: true)
         .limit(limit)
         .get();
-    return snapshot.docs
-        .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
-        .toList()
-      ..sort((a, b) => b.startTime.compareTo(a.startTime));
+    if (snapshot.docs.length == limit) {
+      // Same posture as every other capped read here. The client's Job
+      // history section has no "see more", so at the cap it silently presents
+      // the newest [limit] visits as the whole history.
+      _logger.warn(
+        'HIST-LOAD fetchClientHistory hit the cap; '
+        'older visits are not shown',
+      );
+    }
+    return snapshot.docs.map((doc) => _recordFrom(doc.id, doc.data())).toList();
   }
 
   // A bounded scan window for history search, same approach as clients search.
@@ -399,6 +501,32 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   /// is far above any real month; hitting it means something is wrong, which is
   /// why it warns rather than truncating silently.
   static const int _rangeStreamLimit = 1000;
+
+  /// Ceiling on [countFutureAssignments]. Sized well above any real person's
+  /// open book — it exists so the read cannot scale with the repeat horizon,
+  /// not to trim a typical one. See the reasoning at the query.
+  static const int _futureAssignmentScanLimit = 200;
+
+  /// Ceiling on [getSeries]. `RepeatInterval.maxOccurrences` (120) is what the
+  /// app will write, and the `+ 1` is what lets the warn distinguish "a full
+  /// legal series" from "more than the app could have created" — the latter
+  /// only being reachable through the console or the Admin SDK, which bypass
+  /// that assertion.
+  static const int _seriesScanLimit = RepeatInterval.maxOccurrences + 1;
+
+  /// Ceiling on each [findBusyEmployees] chunk.
+  ///
+  /// Same number as [_rangeStreamLimit] and deliberately its own constant: that
+  /// one bounds ~58 days of the whole business, and this one bounds a single
+  /// booking window — at most `maxAppointmentSpanDays` (14) days — for the ≤30
+  /// assignees an `arrayContainsAny` chunk can name. So the business rate the
+  /// calendar's cap already assumes leaves this one roughly 4× headroom, and
+  /// the two can move apart without either inheriting the other's reasoning.
+  ///
+  /// With `endTime`/`startTime` the only inequalities and no `orderBy`,
+  /// Firestore returns these in the composite index's order — `endTime` ASC —
+  /// so a truncated chunk keeps the soonest-ending overlaps.
+  static const int _conflictScanLimit = 1000;
 
   @override
   Future<List<AppointmentRecord>> searchHistory(String query) async {
@@ -451,6 +579,17 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       return null;
     }
 
+    if (snapshot.docs.length >= _historySearchScanLimit) {
+      // Same posture as `_mapRangeSnapshot`: past the cap this window is the
+      // newest N terminal visits, so history search is answering over a PREFIX
+      // and an older match simply never appears. Silent partial results are
+      // worse than loud ones — there is no error anywhere else to notice.
+      _logger.warn(
+        'HIST-SEARCH scan window hit the $_historySearchScanLimit-doc cap — '
+        'search is matching against the newest visits only',
+      );
+    }
+
     final window = _CachedHistoryScanWindow(
       [
         for (final doc in snapshot.docs) (id: doc.id, data: doc.data()),
@@ -467,18 +606,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     AppointmentDateRange range,
   ) {
     return retryStream(
-      () => _appointments
-          .where('employeeIds', arrayContains: employeeId)
-          .where(
-            'startTime',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(range.fetchStart),
-          )
-          .where('startTime', isLessThan: Timestamp.fromDate(range.end))
-          .orderBy('startTime')
-          .limit(_rangeStreamLimit)
-          .snapshots()
-          .map((snapshot) => _mapRangeSnapshot(snapshot, 'APPT-MYRANGE')),
-      retryWhen: isAuthPropagationDenied,
+      () => _rangeQuery(range, employeeId: employeeId).snapshots().map(
+        (snapshot) => _mapRangeSnapshot(snapshot, 'APPT-MYRANGE'),
+      ),
     );
   }
 
@@ -503,12 +633,22 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
             .where('employeeIds', arrayContainsAny: batch)
             .where('startTime', isLessThan: Timestamp.fromDate(end))
             .where('endTime', isGreaterThan: Timestamp.fromDate(start))
+            .limit(_conflictScanLimit)
             .get(),
       );
     }
 
     final busyIds = <String>{};
     for (final snapshot in await Future.wait(queries)) {
+      if (snapshot.docs.length >= _conflictScanLimit) {
+        // Same posture as `_mapRangeSnapshot`, and it matters more here:
+        // truncating this prefilter UNDERSTATES the conflicts, so the admin is
+        // never warned and double-books someone. Nothing else notices.
+        _logger.warn(
+          'APPT-BUSY conflict query hit the $_conflictScanLimit-doc cap — '
+          'clashes beyond it are not reported',
+        );
+      }
       for (final doc in snapshot.docs) {
         // An edit must not collide with the very appointment being edited.
         if (doc.id == excludeAppointmentId) continue;
@@ -521,8 +661,13 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         // stored instants, but the pair is a DAILY window. Without this a
         // multi-day 9-5 run reports its crew busy at 7 pm on every one of its
         // days, and the admin has to force through a phantom clash.
-        final docStart = (data['startTime'] as Timestamp?)?.toDate();
-        final docEnd = (data['endTime'] as Timestamp?)?.toDate();
+        // Through the shared parser, not a raw `as Timestamp?` cast: that form
+        // handled only a real Timestamp, so a legacy or console-written row
+        // holding a string instant parsed as null, skipped the daily-window
+        // narrowing below, and reported the phantom clash this narrowing
+        // exists to prevent.
+        final docStart = firestoreDateTime(data['startTime']);
+        final docEnd = firestoreDateTime(data['endTime']);
         if (docStart != null &&
             docEnd != null &&
             !dailyWindowsOverlap(
@@ -533,8 +678,17 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
             )) {
           continue;
         }
-        final empIds = data['employeeIds'] as List<dynamic>? ?? const [];
-        busyIds.addAll(empIds.whereType<String>());
+        // Read the same way `AppointmentRecord._parseStringList` does, for the
+        // same reason the `startTime` cast above was removed: the model
+        // already asserts `employeeIds` can arrive as a bare String, and a
+        // hard `as List` on one such doc throws out of the whole conflict
+        // check — which is the path that decides whether to warn the admin.
+        final rawIds = data['employeeIds'];
+        if (rawIds is List) {
+          busyIds.addAll(rawIds.whereType<String>());
+        } else if (rawIds is String && rawIds.isNotEmpty) {
+          busyIds.add(rawIds);
+        }
       }
     }
 
@@ -550,7 +704,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     base['endTime'] = Timestamp.fromDate(appointment.endTime);
     if (includePictures) {
       base['pictures'] = appointment.pictures
-          .map(_imageToFirestoreMap)
+          .map(AppointmentImagesStore.toArrayMap)
           .toList();
     } else {
       base.remove('pictures');
@@ -558,16 +712,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     return base;
   }
 
-  Map<String, dynamic> _imageToFirestoreMap(AppointmentImage image) {
-    return {
-      'url': image.url,
-      'storagePath': image.storagePath,
-      'fileName': image.fileName,
-      'uploadedAt': image.uploadedAt == null
-          ? null
-          : Timestamp.fromDate(image.uploadedAt!),
-    };
-  }
 }
 
 /// A raw doc, safe to pass into an isolate — Firestore's own doc/snapshot

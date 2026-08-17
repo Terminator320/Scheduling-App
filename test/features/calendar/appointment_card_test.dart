@@ -11,6 +11,7 @@ import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -52,6 +53,11 @@ AppointmentRecord _appt({
     status: status,
   );
 }
+
+/// The same visit with one photo attached.
+AppointmentRecord _withPhoto({String status = 'pending'}) => _appt(
+  status: status,
+).copyWith(pictures: const [AppointmentImage(storagePath: 'a1/one.jpg')]);
 
 AppointmentRecord _multiDay({
   required DateTime start,
@@ -224,6 +230,47 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.warning_amber_rounded), findsNothing);
+  });
+
+  testWidgets('shows a photo glyph only when the job carries pictures', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(AppointmentCard(appointment: _appt(), crew: _theo)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.photo_outlined), findsNothing);
+
+    await tester.pumpWidget(
+      _wrap(AppointmentCard(appointment: _withPhoto(), crew: _theo)),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byIcon(Icons.photo_outlined), findsOneWidget);
+
+    // It rides the title line, not the time line below it — the placement is
+    // the point, so pin it rather than just its presence.
+    expect(
+      tester.getTopLeft(find.byIcon(Icons.photo_outlined)).dy,
+      lessThan(tester.getTopLeft(find.textContaining('–')).dy),
+    );
+  });
+
+  testWidgets('a collapsed closed job keeps the photo glyph', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: _withPhoto(status: 'done'),
+          crew: _theo,
+          collapseWhenClosed: true,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The collapsed row drops the avatars, so the glyph is the only thing left
+    // saying there is something to look at.
+    expect(find.byType(AppAvatar), findsNothing);
+    expect(find.byIcon(Icons.photo_outlined), findsOneWidget);
   });
 
   testWidgets('cancelled strikes the title through when dimming is on', (

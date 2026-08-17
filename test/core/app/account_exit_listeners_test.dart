@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/app/account_exit_listeners.dart';
+import 'package:scheduling/core/images/appointment_image_loader.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
@@ -23,6 +24,18 @@ class _MockLiveActivity extends Mock
     implements LiveActivityRegistrationController {}
 
 class _MockAuthService extends Mock implements AuthService {}
+
+/// Keeps the photo-cache teardown off the platform channels.
+///
+/// `deregisterThisDevice` clears the on-disk photo cache, which resolves the
+/// platform cache directory through `path_provider`. A method channel never
+/// completes under `testWidgets`' fake clock, so the real loader makes every
+/// account-exit test HANG rather than fail — override this provider in any
+/// test that reaches an account exit.
+class _StubLoader extends AppointmentImageLoader {
+  @override
+  Future<void> clear() async {}
+}
 
 void main() {
   late _MockPush push;
@@ -72,6 +85,7 @@ void main() {
             liveActivity,
           ),
           authServiceProvider.overrideWithValue(auth),
+          appointmentImageLoaderProvider.overrideWithValue(_StubLoader()),
         ],
         child: MaterialApp(
           navigatorKey: navigatorKey,

@@ -50,7 +50,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     notes: TextEditingController(),
     materials: TextEditingController(),
   );
-  final _clientSearchDebounce = Debouncer(const Duration(milliseconds: 300));
+  final _clientSearchDebounce = Debouncer(kSearchDebounce);
   late final _provider = addEventControllerProvider(widget.initialDate);
 
   // Admin-only surface: this sheet is only reachable from the calendar FAB
@@ -98,15 +98,13 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     _clientSearchDebounce.run(() => _notifier.searchClients(query));
   }
 
-  Future<void> _pickDate() async {
-    final state = ref.read(_provider);
-    final picked = await showAdaptiveDatePicker(
-      context,
-      initialDate: state.selectedDate ?? DateTime.now(),
-      firstDate: AppointmentDraftDefaults.datePickerFirstDate,
-      lastDate: AppointmentDraftDefaults.datePickerLastDate,
-    );
-    if (picked == null || !mounted) return;
+  /// The date rows drop an inline month calendar down beneath themselves, so a
+  /// date arrives already picked — there is no modal to await and no cancelled
+  /// outcome to handle. The bounds the picker enforces live on the row.
+  void _onStartDateSelected(DateTime picked) {
+    // No setState around the controller writes: the body watches the
+    // controller provider and `selectDate` always emits a new state, so the
+    // rebuild is already coming. This matches `_pickStartTime` below.
     _controllers.date.text = DateUtilsHelper.formatDate(picked);
     _notifier.selectDate(picked);
     // selectDate mirrors or shifts the end date, and the end row renders the
@@ -117,19 +115,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     }
   }
 
-  Future<void> _pickEndDate() async {
-    final state = ref.read(_provider);
-    final picked = await showAdaptiveDatePicker(
-      context,
-      initialDate: state.endDate ?? state.selectedDate ?? DateTime.now(),
-      // Never offer a date before the start: an end date that precedes it is
-      // unbookable, so it shouldn't be reachable in the picker either.
-      firstDate:
-          state.selectedDate?.dateOnly ??
-          AppointmentDraftDefaults.datePickerFirstDate,
-      lastDate: AppointmentDraftDefaults.datePickerLastDate,
-    );
-    if (picked == null || !mounted) return;
+  void _onEndDateSelected(DateTime picked) {
     _controllers.endDate.text = DateUtilsHelper.formatDate(picked);
     _notifier.selectEndDate(picked);
   }
@@ -285,6 +271,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
             selectedEmployees: state.selectedEmployees,
             repeat: state.repeat,
             useCustomAddress: state.useCustomAddress,
+            selectedDate: state.selectedDate,
+            endDate: state.endDate,
             isPersonal: state.isPersonal,
             onPersonalChanged: (value) => _notifier.setPersonal(value: value),
             isAllDay: state.isAllDay,
@@ -294,21 +282,23 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
             employeeRequired: true,
             materialsHint: context.l10n.calendar_typeTheMaterialsHere,
             onApplyTemplate: _applyTemplate,
-            onSearchClients: _onClientSearchChanged,
-            onSelectClient: _notifier.selectClient,
-            onClearClient: _notifier.clearClient,
             onRequestAddClient: requestAddClient,
-            onToggleEmployee: _notifier.toggleEmployee,
-            onPickDate: _pickDate,
-            onPickEndDate: _pickEndDate,
             isMultiDay: spanLength > 1,
             isOvernight: _isOvernight(state),
             spanLength: spanLength,
-            onPickStartTime: _pickStartTime,
-            onPickEndTime: _pickEndTime,
-            onSelectRepeat: _notifier.selectRepeat,
-            onUseCustomAddress: (value) =>
-                _notifier.setUseCustomAddress(value: value),
+            callbacks: AppointmentFormCallbacks(
+              onSearchClients: _onClientSearchChanged,
+              onSelectClient: _notifier.selectClient,
+              onClearClient: _notifier.clearClient,
+              onToggleEmployee: _notifier.toggleEmployee,
+              onSelectStartDate: _onStartDateSelected,
+              onSelectEndDate: _onEndDateSelected,
+              onPickStartTime: _pickStartTime,
+              onPickEndTime: _pickEndTime,
+              onSelectRepeat: _notifier.selectRepeat,
+              onUseCustomAddress: (value) =>
+                  _notifier.setUseCustomAddress(value: value),
+            ),
             photosSection: PhotoPickerSection(
               existingImages: const [],
               newImages: state.selectedImages,

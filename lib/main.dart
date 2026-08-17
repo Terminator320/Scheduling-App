@@ -165,6 +165,12 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   final _settingsRepository = SharedPrefsSettingsRepository();
   final _settingsSaveDebouncer = SettingsSaveDebouncer();
   final _topRouteObserver = TopRouteObserver();
+
+  // Held so `dispose` can cancel them. Harmless in production — this is the
+  // root widget and only dies with the process — but a widget test pumping
+  // this app stacks a live plugin listener per pump.
+  StreamSubscription<Uri?>? _widgetTapSubscription;
+  StreamSubscription<RemoteMessage>? _pushTapSubscription;
   DeepLinkDispatcher? _deepLinkDispatcher;
   late ThemeMode _themeMode;
   late double _textScale;
@@ -196,19 +202,20 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   /// iOS home-widget taps deep-link to appointment detail via URI scheme.
   void _setupWidgetTapHandling() {
     if (!Platform.isIOS) return;
+    final logger = ref.read(loggerProvider);
     // Register App Group before first widget read.
     unawaited(() async {
       try {
         await HomeWidget.setAppGroupId(widgetAppGroupId);
-        HomeWidget.widgetClicked.listen(
+        _widgetTapSubscription = HomeWidget.widgetClicked.listen(
           _handleWidgetTap,
           onError: (Object e, StackTrace st) =>
-              ref.read(loggerProvider).warn('WIDGET-TAP stream error', e, st),
+              logger.warn('WIDGET-TAP stream error', e, st),
         );
         final launchUri = await HomeWidget.initiallyLaunchedFromHomeWidget();
         await _handleWidgetTap(launchUri);
       } catch (e, st) {
-        ref.read(loggerProvider).warn('WIDGET-TAP setup failed', e, st);
+        logger.warn('WIDGET-TAP setup failed', e, st);
       }
     }());
   }
@@ -216,11 +223,12 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   Future<void> _handleWidgetTap(Uri? uri) async {
     if (uri == null) return;
     final appointmentId = uri.queryParameters['id']?.trim() ?? '';
+    final logger = ref.read(loggerProvider);
     // Swallow errors to prevent leaking into zone handlers as FATAL crashes.
     try {
       await _openAppointmentDeepLink(appointmentId);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('WIDGET-TAP open failed', e, st);
+      logger.warn('WIDGET-TAP open failed', e, st);
     }
   }
 
@@ -237,7 +245,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
                 .warn('PUSH-TAP initial message failed', e, st),
           ),
     );
-    service.onMessageOpenedApp.listen(
+    _pushTapSubscription = service.onMessageOpenedApp.listen(
       _handlePushTap,
       onError: (Object e, StackTrace st) =>
           ref.read(loggerProvider).warn('PUSH-TAP stream error', e, st),
@@ -248,11 +256,12 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     if (message == null) return;
     final appointmentId =
         (message.data['appointmentId'] as String?)?.trim() ?? '';
+    final logger = ref.read(loggerProvider);
     // Swallow errors to prevent leaking into zone handlers as FATAL crashes.
     try {
       await _openAppointmentDeepLink(appointmentId);
     } catch (e, st) {
-      ref.read(loggerProvider).warn('PUSH-TAP open failed', e, st);
+      logger.warn('PUSH-TAP open failed', e, st);
     }
   }
 
@@ -261,19 +270,17 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   Future<void> _openAppointmentDeepLink(String appointmentId) async {
     if (FirebaseAuth.instance.currentUser == null) return;
 
-    // Fetch this concurrently with hub startup. One retry is enough to
-    // survive the auth-token race that can happen right after cold start.
+    final logger = ref.read(loggerProvider);
+    // Fetch this concurrently with hub startup, on the shared retry ladder —
+    // a cold start right after sign-in can lose the auth-token race.
     final recordFuture = appointmentId.isEmpty
         ? Future<AppointmentRecord?>.value()
         : retryAsync<AppointmentRecord?>(
             () => ref
                 .read(appointmentsRepositoryProvider)
                 .getAppointmentById(appointmentId),
-            delays: const [Duration(milliseconds: 600)],
           ).catchError((Object e, StackTrace st) {
-            ref
-                .read(loggerProvider)
-                .warn('PUSH-TAP load appointment failed', e, st);
+            logger.warn('PUSH-TAP load appointment failed', e, st);
             return null;
           });
 
@@ -318,6 +325,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
 
   @override
   void dispose() {
+    unawaited(_widgetTapSubscription?.cancel());
+    unawaited(_pushTapSubscription?.cancel());
     _deepLinkDispatcher?.dispose();
     _settingsSaveDebouncer.dispose();
     super.dispose();
@@ -380,60 +389,57 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     // account-lifecycle control, so don't reorder these calls.
     AppSyncListeners(ref).registerAll();
     _primeControllerSyncsOnce();
-    return AppLanguageScope(
-      controller: _languageController,
-      child: ThemeNotifier(
-        themeMode: _themeMode,
-        toggleTheme: toggleTheme,
-        textScale: _textScale,
-        setTextScale: setTextScale,
-        setLanguage: setLanguage,
-        child: ValueListenableBuilder<String>(
-          valueListenable: _languageController,
-          builder: (context, languageCode, _) {
-            final locale = Locale(languageCode, 'CA');
-            return MaterialApp(
-              navigatorKey: _navigatorKey,
-              navigatorObservers: [_topRouteObserver],
-              scaffoldMessengerKey: _scaffoldMessengerKey,
-              debugShowCheckedModeBanner: false,
-              locale: locale,
-              supportedLocales: AppLocalizations.supportedLocales,
-              localizationsDelegates: AppLocalizations.localizationsDelegates,
-              theme: lightTheme(),
-              darkTheme: darkTheme(),
-              themeMode: _themeMode,
-              scrollBehavior: const AppScrollBehavior(),
-              home: const OnboardingGate(),
-              onGenerateRoute: AppRoutes.onGenerateRoute,
-              builder: (context, child) {
-                final media = MediaQuery.of(context);
-                // Compose in-app text scale with the OS scale, capped at 2.2.
-                final systemFactor = media.textScaler.scale(14) / 14;
-                final effectiveScale = math.min(
-                  _textScale * systemFactor,
-                  2.2,
-                );
-                return MediaQuery(
-                  data: media.copyWith(
-                    textScaler: TextScaler.linear(effectiveScale),
-                  ),
-                  child: AppLock(
-                    child: NoticeListener(
-                      navigatorKey: _navigatorKey,
-                      child: Column(
-                        children: [
-                          Expanded(child: child ?? const SizedBox.shrink()),
-                          const OfflineBanner(),
-                        ],
-                      ),
+    return ThemeNotifier(
+      themeMode: _themeMode,
+      toggleTheme: toggleTheme,
+      textScale: _textScale,
+      setTextScale: setTextScale,
+      setLanguage: setLanguage,
+      child: ValueListenableBuilder<String>(
+        valueListenable: _languageController,
+        builder: (context, languageCode, _) {
+          final locale = Locale(languageCode, 'CA');
+          return MaterialApp(
+            navigatorKey: _navigatorKey,
+            navigatorObservers: [_topRouteObserver],
+            scaffoldMessengerKey: _scaffoldMessengerKey,
+            debugShowCheckedModeBanner: false,
+            locale: locale,
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            theme: lightTheme(),
+            darkTheme: darkTheme(),
+            themeMode: _themeMode,
+            scrollBehavior: const AppScrollBehavior(),
+            home: const OnboardingGate(),
+            onGenerateRoute: AppRoutes.onGenerateRoute,
+            builder: (context, child) {
+              final media = MediaQuery.of(context);
+              // Compose in-app text scale with the OS scale, capped at 2.2.
+              final systemFactor = media.textScaler.scale(14) / 14;
+              final effectiveScale = math.min(
+                _textScale * systemFactor,
+                2.2,
+              );
+              return MediaQuery(
+                data: media.copyWith(
+                  textScaler: TextScaler.linear(effectiveScale),
+                ),
+                child: AppLock(
+                  child: NoticeListener(
+                    navigatorKey: _navigatorKey,
+                    child: Column(
+                      children: [
+                        Expanded(child: child ?? const SizedBox.shrink()),
+                        const OfflineBanner(),
+                      ],
                     ),
                   ),
-                );
-              },
-            );
-          },
-        ),
+                ),
+              );
+            },
+          );
+        },
       ),
     );
   }

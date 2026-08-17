@@ -2,7 +2,7 @@ name: scheduling
 description: "ES Pro — appointment, client, and employee scheduling."
 publish_to: 'none'
 
-version: 1.44.1+71
+version: 1.46.2+75
 
 environment:
   sdk: ^3.10.7
@@ -41,7 +41,9 @@ dependencies:
 
   # Images
   image_picker: ^1.2.2
-  cached_network_image: ^3.4.1
+  # Names the on-disk photo cache's files. Promoted from transitive because
+  # AppointmentImageDiskCache imports it directly.
+  crypto: ^3.0.6
 
   # Network / external launches
   url_launcher: ^6.3.2
@@ -92,7 +94,6 @@ dependencies:
   firebase_messaging: ^16.4.1
   home_widget: ^0.9.3
   share_plus: ^13.2.0
-  flutter_cache_manager: ^3.4.1
   saver_gallery: ^5.1.0
   showcaseview: ^5.1.0
 
@@ -125,7 +126,13 @@ flutter:
 
   assets:
     - dev/.env
-    - assets/images/icon.png
+    # The 512px derivative, NOT the 1254px master. `BrandMark` renders at
+    # <=156 logical px and the native splash needs 468 at dpr 3, so the master
+    # was ~0.85 MB of a ~1.02 MB asset shipping in the IPA unused. The master
+    # stays on disk for `flutter_launcher_icons` / `flutter_native_splash`,
+    # which read it from the filesystem rather than the bundle — regenerate
+    # this file from it with the one-liner in `assets/images/README.md`.
+    - assets/images/brand_mark.png
 
   fonts:
     - family: InstrumentSans

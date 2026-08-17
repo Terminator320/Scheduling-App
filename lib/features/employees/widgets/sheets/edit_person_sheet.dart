@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
-import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/employees/application/employee_form_controller.dart';
@@ -18,11 +17,11 @@ import 'package:scheduling/features/employees/domain/policies/crew_color_policy.
 import 'package:scheduling/features/employees/domain/policies/employee_form_validator.dart';
 import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
+import 'package:scheduling/features/employees/widgets/fields/availability_panel.dart';
 import 'package:scheduling/features/employees/widgets/fields/employee_color_grid.dart';
 import 'package:scheduling/features/employees/widgets/fields/job_title_chips.dart';
-import 'package:scheduling/features/employees/widgets/fields/working_days_picker.dart';
+import 'package:scheduling/features/employees/widgets/fields/work_schedule_pickers.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
@@ -31,9 +30,6 @@ import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
 import 'package:scheduling/shared/widgets/sheets/form_sheet_frame.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
-
-/// The daily cap options: no cap, then 1–12, which covers any real crew day.
-const _kMaxJobsOptions = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 /// Opens the edit-person sheet. Resolves to the saved record, or null when the
 /// sheet was cancelled.
@@ -213,40 +209,8 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
     return next.values.every((e) => e == null);
   }
 
-  Future<void> _pickTime({required bool isStart}) async {
-    // Same adaptive picker the appointment form uses — a Cupertino wheel on
-    // iOS, Material elsewhere. A raw showTimePicker here made availability the
-    // one place in the app that picked a time with a different control.
-    final picked = await showAdaptiveTimePicker(
-      context,
-      initialTime: minutesToTimeOfDay(
-        isStart ? _workStartMinutes : _workEndMinutes,
-      ),
-    );
-    if (picked == null || !mounted) return;
-    setState(() {
-      if (isStart) {
-        _workStartMinutes = timeOfDayToMinutes(picked);
-      } else {
-        _workEndMinutes = timeOfDayToMinutes(picked);
-      }
-      errors['hours'] = null;
-    });
-  }
-
   Future<void> _pickMaxJobs() async {
-    final l10n = context.l10n;
-    final picked = await showAdaptiveActionSheet<int>(
-      context,
-      title: l10n.employees_maxJobsPerDay,
-      actions: [
-        for (final option in _kMaxJobsOptions)
-          AdaptiveSheetAction(
-            label: option == 0 ? l10n.employees_noCap : '$option',
-            value: option,
-          ),
-      ],
-    );
+    final picked = await showMaxJobsPicker(context);
     if (picked == null || !mounted) return;
     setState(() => _maxJobsPerDay = picked);
   }
@@ -272,7 +236,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
       name: composedName,
       firstName: _firstNameController.text.trim(),
       lastName: _lastNameController.text.trim(),
-      email: _emailController.text.trim().toLowerCase(),
+      email: normalizeEmail(_emailController.text),
       phone: _phoneController.text.trim(),
       color: Color(_selectedColor),
       role: _isAdmin ? 'admin' : 'employee',
@@ -491,49 +455,29 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
   ) => [
     MonoSectionLabel(l10n.employees_sectionAvailability),
     const SizedBox(height: AppSpacing.sp8),
-    SheetPanel(
-      children: [
-        _PanelRow(
-          label: l10n.employees_workingDays,
-          child: WorkingDaysPicker(
-            workingDays: _workingDays,
-            onChanged: (next) => setState(() => _workingDays = next),
-          ),
-        ),
-        SheetFieldRow(
-          label: l10n.employees_startsAt,
-          value: materialL10n.formatTimeOfDay(
-            minutesToTimeOfDay(_workStartMinutes),
-          ),
-          useMonoValue: true,
-          accent: true,
-          onTap: () => _pickTime(isStart: true),
-        ),
-        SheetFieldRow(
-          label: l10n.employees_endsAt,
-          value: materialL10n.formatTimeOfDay(
-            minutesToTimeOfDay(_workEndMinutes),
-          ),
-          useMonoValue: true,
-          accent: true,
-          errorText: errors['hours'],
-          onTap: () => _pickTime(isStart: false),
-        ),
-        SheetFieldRow(
-          label: l10n.employees_maxJobsPerDay,
-          value: _maxJobsPerDay == 0 ? l10n.employees_noCap : '$_maxJobsPerDay',
-          useMonoValue: true,
-          onTap: _pickMaxJobs,
-        ),
-        _PanelRow(
-          label: l10n.employees_onCall,
-          trailing: Switch.adaptive(
-            value: _onCall,
-            activeTrackColor: theme.colorScheme.primary,
-            onChanged: (value) => setState(() => _onCall = value),
-          ),
-        ),
-      ],
+    // The SAME panel Settings › My details renders, so the two can't drift on
+    // a row's treatment or on which time picker it opens.
+    AvailabilityPanel(
+      workingDays: _workingDays,
+      workStartMinutes: _workStartMinutes,
+      workEndMinutes: _workEndMinutes,
+      onCall: _onCall,
+      hoursErrorText: errors['hours'],
+      // Admin-only, and written through the admin save path — it is not on the
+      // self-service allowlist, so it is a slot rather than part of the patch.
+      maxJobsRow: SheetFieldRow(
+        label: l10n.employees_maxJobsPerDay,
+        value: maxJobsLabel(l10n, _maxJobsPerDay),
+        useMonoValue: true,
+        onTap: _pickMaxJobs,
+      ),
+      onChanged: (days, start, end, {required onCall}) => setState(() {
+        _workingDays = days;
+        _workStartMinutes = start;
+        _workEndMinutes = end;
+        _onCall = onCall;
+        errors['hours'] = null;
+      }),
     ),
     const SizedBox(height: AppSpacing.sp24),
     // Its own section, not a tail on AVAILABILITY — who to call in an
@@ -603,50 +547,6 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
       onToggle: _confirmToggleStatus,
     ),
   ];
-}
-
-/// A panel row that is not a picker — a label beside arbitrary content
-/// (the working-day strip) or a trailing control (the on-call switch).
-class _PanelRow extends StatelessWidget {
-  const _PanelRow({required this.label, this.child, this.trailing});
-
-  final String label;
-  final Widget? child;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final labelText = Text(
-      label,
-      style: theme.textTheme.labelSmall?.copyWith(
-        color: theme.colorScheme.onSurfaceVariant,
-      ),
-    );
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sp16,
-        vertical: AppSpacing.sp12,
-      ),
-      child: trailing != null
-          ? Row(
-              children: [
-                Expanded(child: labelText),
-                const SizedBox(width: AppSpacing.sp8),
-                trailing!,
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                labelText,
-                const SizedBox(height: AppSpacing.sp8),
-                child!,
-              ],
-            ),
-    );
-  }
 }
 
 /// Disable / re-enable, with the count of jobs a human still has to move.

@@ -3,8 +3,12 @@ import 'dart:io';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/notices/app_notice.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 FirebaseException _fb(String code) =>
@@ -144,6 +148,64 @@ void main() {
       final message = noticeFor(_fb('permission-denied'));
       expect(message, isNot(contains('permission-denied')));
       expect(message, isNot(contains('(')));
+    });
+  });
+
+  // I12: nine call sites, zero tests — while `composeErrorNotice` beside it is
+  // well covered. This is the guard that stops an awaited Firestore write
+  // spinning until the connection returns, so both halves of its contract
+  // matter: the boolean the caller returns on, and the notice it pushes.
+  group('guardedOffline', () {
+    Future<({bool fired, List<AppNotice> notices})> run(
+      WidgetTester tester, {
+      required bool offline,
+    }) async {
+      final notices = <AppNotice>[];
+      late bool fired;
+      final container = ProviderContainer(
+        overrides: [isOfflineProvider.overrideWithValue(offline)],
+      );
+      addTearDown(container.dispose);
+      container.read(noticeServiceProvider).stream.listen(notices.add);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Consumer(
+              builder: (context, ref, _) {
+                fired = guardedOffline(context, ref, intro: 'Intro');
+                return const SizedBox.shrink();
+              },
+            ),
+          ),
+        ),
+      );
+      // The notice rides a broadcast stream, so let the event loop turn.
+      await tester.pump();
+      return (fired: fired, notices: notices);
+    }
+
+    testWidgets('returns false and stays silent when online', (tester) async {
+      final result = await run(tester, offline: false);
+      expect(result.fired, isFalse);
+      expect(result.notices, isEmpty);
+    });
+
+    testWidgets('returns true and pushes the offline cause', (tester) async {
+      final result = await run(tester, offline: true);
+      expect(result.fired, isTrue);
+      expect(result.notices, hasLength(1));
+      final notice = result.notices.single;
+      expect(notice, isA<NoticeError>());
+      // The caller's intro, then the shared offline cause — the same sentence
+      // composeErrorNotice builds for a real SocketException.
+      expect(
+        notice.message,
+        'Intro. ${l10n.error_causeOffline}',
+      );
     });
   });
 }

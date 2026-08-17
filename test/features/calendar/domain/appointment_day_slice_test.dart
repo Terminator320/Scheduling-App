@@ -431,9 +431,9 @@ void main() {
   });
 
   group('the maxAppointmentSpanDays clamp', () {
-    // The cap is client-side only — firestore.rules constrains neither
-    // instant — so a doc written by the console, the Admin SDK or another
-    // build can exceed it. When these owners disagree the drawer badge reads
+    // firestore.rules bounds client writes to the cap, but the console and the
+    // Admin SDK bypass rules — so a doc that exceeds it is still reachable and
+    // this clamp still has to hold. When these owners disagree the drawer reads
     // "1 job today" every day for a year and a card reads "Day 400 of 900".
     final corrupt = _record(
       start: DateTime(2026, 8, 2, 9),

@@ -1,6 +1,21 @@
 "use strict";
 
 /**
+ * `live_activity_dispatch` is mocked for the whole file so the multi-day skip
+ * at the bottom can observe whether a CARD was started. Nothing else in here
+ * asserts on Live Activities, and the real dispatch no-ops against this
+ * harness anyway.
+ */
+jest.mock("../live_activity_dispatch", () => ({
+  startLiveActivity: jest.fn(async () => 1),
+  updateLiveActivity: jest.fn(async () => 0),
+  endLiveActivity: jest.fn(async () => 0),
+}));
+
+const {startLiveActivity} = require("../live_activity_dispatch");
+
+
+/**
  * Unit tests for the travel-time "leave now" pure helpers and the injectable
  * sweep orchestration (runTravelAwareReminderSweep).
  */
@@ -15,6 +30,7 @@ const {
   computeTravelSeconds,
   travelReminderLedgerId,
   runTravelAwareReminderSweep,
+  wantsTravelAlerts,
 } = require("../travel_utils");
 
 // Noon Toronto (EDT -4) on Wed 2026-07-08.
@@ -395,11 +411,14 @@ describe("travelReminderLedgerId", () => {
  * reminder ledger with get/create/delete stubs.
  * @param {!Object} config users/tokens/appointments/context/presence/
  *   ledgerExisting/throwLedgerGetFor fixtures.
- * @return {!Object} `{db, ledgerCreates, ledgerDeletes}`.
+ * @return {!Object} `{db, ledgerCreates, ledgerDeletes, appointmentQueries}`.
  */
 function makeTravelDb(config) {
   const ledgerCreates = [];
   const ledgerDeletes = [];
+  // Every appointments query this run built, so a test can assert the shape
+  // (bounds, ordering, cap) and not just the rows it happened to return.
+  const appointmentQueries = [];
   const existing = new Set(config.ledgerExisting || []);
   const db = {
     getAll: async (...refs) => refs.map((ref) => {
@@ -435,15 +454,19 @@ function makeTravelDb(config) {
       }
       if (name === "appointments") {
         const wheres = [];
+        const shape = {wheres, orderBy: null, limit: null};
+        appointmentQueries.push(shape);
         const q = {
           where(field, op, value) {
             wheres.push({field, op, value});
             return q;
           },
-          orderBy() {
+          orderBy(field) {
+            shape.orderBy = field;
             return q;
           },
-          limit() {
+          limit(n) {
+            shape.limit = n;
             return q;
           },
           get: async () => {
@@ -485,7 +508,7 @@ function makeTravelDb(config) {
       return {doc: () => ({})};
     },
   };
-  return {db, ledgerCreates, ledgerDeletes};
+  return {db, ledgerCreates, ledgerDeletes, appointmentQueries};
 }
 
 /**
@@ -524,6 +547,37 @@ describe("runTravelAwareReminderSweep", () => {
     tokens: {e1: [{id: "t", locale: "en"}]},
   };
 
+  test("the candidate query is capped and ordered by startTime", async () => {
+    // Every other sweep in this codebase names a ceiling; this one did not.
+    // In practice the 90-minute window keeps it small, so the cap is a tail
+    // guard: a bulk import or a wide series landing in one window is
+    // otherwise an unbounded fan-out that then makes a BILLABLE Routes call
+    // per candidate assignee. The ordering is what makes the cap safe to
+    // have — it keeps the most imminent departures, and anything deferred
+    // self-heals on the next 5-minute run.
+    const {db, appointmentQueries} = makeTravelDb({
+      ...activeE1,
+      appointments: [job],
+      presence: {e1: {lat: 45.5, lng: -73.6, updatedAt: future(-5 * MIN)}},
+    });
+    await runTravelAwareReminderSweep({
+      db, messaging: makeMessaging(), fetchImpl: okFetch(600),
+      apiKey: "k", now: NOW, logger: silentLogger,
+    });
+
+    // The first appointments query of the run is the candidate sweep; the
+    // per-employee context reads follow it.
+    const candidates = appointmentQueries[0];
+    expect(candidates.wheres.map((w) => `${w.field} ${w.op}`)).toEqual([
+      "status in",
+      "startTime >",
+      "startTime <=",
+    ]);
+    expect(candidates.orderBy).toBe("startTime");
+    expect(typeof candidates.limit).toBe("number");
+    expect(candidates.limit).toBeGreaterThan(0);
+  });
+
   test("fresh GPS -> Routes -> due leaveNow push, travel body", async () => {
     const {db, ledgerCreates} = makeTravelDb({
       ...activeE1,
@@ -549,6 +603,54 @@ describe("runTravelAwareReminderSweep", () => {
     expect(msg.notification.body).toBe("About 10 min drive · 123 Main St");
     expect(msg.apns.payload.aps["interruption-level"])
         .toBe("time-sensitive");
+  });
+
+  test("an opted-out assignee degrades to reminder, keeping the push",
+      async () => {
+        // The toggle turns off traffic-aware DEPARTURE alerts, not the
+        // reminder itself — losing the notification entirely would be a
+        // different, much worse feature.
+        const {db, ledgerCreates} = makeTravelDb({
+          users: {
+            e1: {
+              role: "employee", status: "active", travelAlertsEnabled: false,
+            },
+          },
+          tokens: {e1: [{id: "t", locale: "en"}]},
+          appointments: [job],
+          presence: {e1: {lat: 45.5, lng: -73.6, updatedAt: future(-5 * MIN)}},
+        });
+        const messaging = makeMessaging();
+        const res = await runTravelAwareReminderSweep({
+          db, messaging, fetchImpl: okFetch(600), apiKey: "k", now: NOW,
+          logger: silentLogger,
+        });
+
+        expect(res.reminded).toBe(1);
+        expect(ledgerCreates).toHaveLength(1);
+        expect(messaging.sent).toHaveLength(1);
+        expect(messaging.sent[0].data.kind).toBe("reminder");
+        // Not time-sensitive: that interruption level belongs to leaveNow.
+        expect(messaging.sent[0].apns.payload.aps["interruption-level"])
+            .toBeUndefined();
+      });
+
+  test("an opted-in assignee still gets leaveNow", async () => {
+    const {db} = makeTravelDb({
+      users: {
+        e1: {role: "employee", status: "active", travelAlertsEnabled: true},
+      },
+      tokens: {e1: [{id: "t", locale: "en"}]},
+      appointments: [job],
+      presence: {e1: {lat: 45.5, lng: -73.6, updatedAt: future(-5 * MIN)}},
+    });
+    const messaging = makeMessaging();
+    await runTravelAwareReminderSweep({
+      db, messaging, fetchImpl: okFetch(600), apiKey: "k", now: NOW,
+      logger: silentLogger,
+    });
+
+    expect(messaging.sent[0].data.kind).toBe("leaveNow");
   });
 
   test("a not-yet-due job burns no ledger claim", async () => {
@@ -706,4 +808,175 @@ describe("runTravelAwareReminderSweep", () => {
     expect(frMsg.data.kind).toBe("reminder");
     expect(frMsg.notification.title).toBe("Visite à venir");
   });
+});
+
+describe("wantsTravelAlerts", () => {
+  test("an absent flag means ON", () => {
+    // Every users doc written before this field existed has no value. Reading
+    // undefined as off would silence the whole fleet, and the symptom is a
+    // push that does not arrive — which nobody reports.
+    expect(wantsTravelAlerts({})).toBe(true);
+  });
+
+  test("a null user means ON", () => {
+    // A failed read must not silence a departure alert.
+    expect(wantsTravelAlerts(null)).toBe(true);
+  });
+
+  test("an explicit true means ON", () => {
+    expect(wantsTravelAlerts({travelAlertsEnabled: true})).toBe(true);
+  });
+
+  test("only an explicit false opts out", () => {
+    expect(wantsTravelAlerts({travelAlertsEnabled: false})).toBe(false);
+  });
+
+  test("a non-boolean value does not opt out", () => {
+    // The rules type-check this field, but a doc written by the console or the
+    // Admin SDK bypasses them.
+    expect(wantsTravelAlerts({travelAlertsEnabled: "false"})).toBe(true);
+    expect(wantsTravelAlerts({travelAlertsEnabled: 0})).toBe(true);
+  });
+});
+
+// ----- opting out of travel alerts ------------------------------------------
+
+describe("an opted-out assignee", () => {
+  // `wantsTravelAlerts` is unit-tested above, but the flag was only READ where
+  // `kind` is chosen — after the Routes call and after `computeLeadMinutes`.
+  // So an opted-out tech got the generic "Upcoming job" push at the
+  // TRAVEL-derived instant (up to MAX_LEAD_MINUTES early) rather than at the
+  // documented fixed 30, and the business paid Google Routes for an estimate
+  // that changed nothing. Both the code comment and CLAUDE.md described the
+  // degradation as "the fixed 30-minute reminder"; the code did not do it.
+  const job = {
+    id: "job1",
+    status: "pending",
+    startTime: future(20 * MIN),
+    employeeIds: ["e1"],
+    clientName: "Acme",
+    address: "123 Main St",
+  };
+
+  const sweepWith = async (travelAlertsEnabled) => {
+    const fetchImpl = okFetch(600);
+    const {db} = makeTravelDb({
+      users: {e1: {role: "employee", status: "active", travelAlertsEnabled}},
+      tokens: {e1: [{id: "t", locale: "en"}]},
+      appointments: [job],
+      presence: {e1: {lat: 45.5, lng: -73.6, updatedAt: future(-5 * MIN)}},
+    });
+    const res = await runTravelAwareReminderSweep({
+      db,
+      messaging: makeMessaging(),
+      fetchImpl,
+      apiKey: "k",
+      now: NOW,
+      logger: silentLogger,
+      estimateCache: new Map(),
+    });
+    return {res, fetchImpl};
+  };
+
+  beforeEach(() => startLiveActivity.mockClear());
+
+  test("opted IN still prices the drive", async () => {
+    // The control: without it the assertion below could pass for the wrong
+    // reason (a sweep that never reached the Routes call at all).
+    const {res, fetchImpl} = await sweepWith(true);
+
+    expect(res.reminded).toBe(1);
+    expect(fetchImpl).toHaveBeenCalled();
+  });
+
+  test("opted OUT is still notified, but never prices the drive", async () => {
+    const {res, fetchImpl} = await sweepWith(false);
+
+    // Still notified — opting out drops the ESCALATION, not the reminder.
+    expect(res.reminded).toBe(1);
+    // No Routes spend, which is also what forces the fixed 30-minute lead:
+    // `computeLeadMinutes(null)` is the fallback, so the flag has to be read
+    // BEFORE the estimate rather than beside `kind`.
+    expect(fetchImpl).not.toHaveBeenCalled();
+    // And no Lock Screen card, which only a leaveNow starts.
+    expect(startLiveActivity).not.toHaveBeenCalled();
+  });
+});
+
+// ----- the multi-day Live Activity skip -------------------------------------
+
+describe("the multi-day Live Activity skip", () => {
+  // Built 2026-08-11 and shipped untested. A regression is invisible in every
+  // other signal — the leaveNow push still goes out and `reminded` is
+  // unchanged — and the only symptom is a Lock Screen card counting down to the
+  // END of a multi-day run, which is days of countdown on somebody's phone.
+  // CLAUDE.md asserted this gate as fact for a day before it existed, which is
+  // exactly why it needs a test and not a sentence.
+  const dayJob = {
+    id: "job1",
+    status: "pending",
+    startTime: future(20 * MIN),
+    // 12:20 -> 20:20 the SAME day: one work day, so it keeps its card.
+    endTime: future(20 * MIN + 8 * 60 * MIN),
+    employeeIds: ["e1"],
+    clientName: "Acme",
+    address: "123 Main St",
+  };
+  const activeE1 = {
+    users: {e1: {role: "employee", status: "active"}},
+    tokens: {e1: [{id: "t", locale: "en"}]},
+  };
+
+  const sweepWith = async (job) => {
+    const {db} = makeTravelDb({
+      ...activeE1,
+      appointments: [job],
+      presence: {e1: {lat: 45.5, lng: -73.6, updatedAt: future(-5 * MIN)}},
+    });
+    return runTravelAwareReminderSweep({
+      db,
+      messaging: makeMessaging(),
+      fetchImpl: okFetch(600),
+      apiKey: "k",
+      now: NOW,
+      logger: silentLogger,
+      estimateCache: new Map(),
+    });
+  };
+
+  beforeEach(() => startLiveActivity.mockClear());
+
+  test("a single-day leaveNow still starts a card", async () => {
+    // The control: without it the skip below could pass for the wrong reason.
+    const res = await sweepWith(dayJob);
+
+    expect(res.reminded).toBe(1);
+    expect(startLiveActivity).toHaveBeenCalledTimes(1);
+  });
+
+  test("a multi-day run gets the push but NO card", async () => {
+    const res = await sweepWith({
+      ...dayJob,
+      endTime: future(20 * MIN + 4 * 24 * 60 * MIN),
+    });
+
+    expect(res.reminded).toBe(1);
+    expect(res.liveActivitiesStarted).toBe(0);
+    expect(startLiveActivity).not.toHaveBeenCalled();
+  });
+
+  test("a single overnight shift is one work day and keeps its card",
+      async () => {
+        // The gate is the run's LENGTH in work days, not how many hours it
+        // covers — a night shift must not lose its card.
+        // 12:20 -> 06:00 the next morning. The window crosses midnight, so
+        // the run counts NIGHTS and the end date names the morning it
+        // finishes — one work day, one card.
+        await sweepWith({
+          ...dayJob,
+          endTime: future(20 * MIN + 17 * 60 * MIN + 40 * MIN),
+        });
+
+        expect(startLiveActivity).toHaveBeenCalledTimes(1);
+      });
 });

@@ -56,6 +56,13 @@ class LiveActivityTokenRepository {
     }
   }
 
+  /// Ceiling on the opt-out sweep below, matching every other bounded read in
+  /// the repositories. In practice this is devices-per-user (1-3) against a
+  /// 3-day TTL, so it is a tail guard rather than a live cost — but this was
+  /// the last unbounded query left in any repository here, which made the
+  /// "every query names a ceiling" invariant simply untrue.
+  static const int _deviceTokenScanLimit = 50;
+
   /// Deletes every row of [kind] without needing the token value — the
   /// push-to-start doc id IS the token, and a device that opted out may
   /// never have had one to look up.
@@ -69,7 +76,14 @@ class LiveActivityTokenRepository {
           .doc(userDocId)
           .collection('liveActivityTokens')
           .where('kind', isEqualTo: kind.raw)
+          .limit(_deviceTokenScanLimit)
           .get();
+      if (snap.docs.length == _deviceTokenScanLimit) {
+        _logger.warn(
+          'LIVE-ACT deleteTokensOfKind hit the scan cap; '
+          'some rows survive until their TTL',
+        );
+      }
       await Future.wait(snap.docs.map((doc) => doc.reference.delete()));
     } catch (e, st) {
       _logger.warn('LIVE-ACT deleteTokensOfKind failed', e, st);

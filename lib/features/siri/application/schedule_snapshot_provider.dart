@@ -12,6 +12,16 @@ final scheduleSnapshotProvider =
     Provider.autoDispose<AsyncValue<Map<String, dynamic>?>>((ref) {
       final identityAsync = ref.watch(activeUserIdentityProvider);
       if (identityAsync.isLoading) return const AsyncValue.loading();
+      // An identity read that FAILED is propagated as an error, never collapsed
+      // into a settled null: null means "signed out, clear the snapshot", and a
+      // Firestore failure is not that — Siri would answer "no appointments" to
+      // someone who has jobs. See `AppSyncListeners._isUnsettled`.
+      if (identityAsync.hasError) {
+        return AsyncValue<Map<String, dynamic>?>.error(
+          identityAsync.error!,
+          identityAsync.stackTrace ?? StackTrace.current,
+        );
+      }
       final identity = identityAsync.value;
       if (identity == null) {
         return const AsyncValue<Map<String, dynamic>?>.data(null);
@@ -36,6 +46,7 @@ final scheduleSnapshotProvider =
           appointments: list,
           role: identity.role,
           now: DateTime.now(),
+          viewerDocId: identity.docId,
         ),
       );
     });

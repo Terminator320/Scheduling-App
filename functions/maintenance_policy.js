@@ -17,6 +17,9 @@
  * @module maintenance_policy
  */
 
+const {TERMINAL_STATUSES} = require("./time_utils");
+const {hasValidImageMagic} = require("./image_magic");
+
 /** Appointments older than this (by `startTime`) are eligible for purge. */
 const HISTORY_RETENTION_YEARS = 2;
 
@@ -24,8 +27,14 @@ const HISTORY_RETENTION_YEARS = 2;
  * ONLY terminal appointments are ever purged. A `pending`/`in_progress` job
  * is live work no matter how old its startTime is — widening this set deletes
  * jobs that were never finished.
+ *
+ * Derived from `time_utils`' TERMINAL_STATUSES rather than restated, so it
+ * cannot drift from the other three copies again: this one had dropped the
+ * legacy `completed` alias, so such a doc was never eligible for purge at any
+ * age and quietly outlived the retention policy. The array form is what
+ * Firestore's `where("status", "in", ...)` needs.
  */
-const PURGE_STATUSES = ["done", "cancelled"];
+const PURGE_STATUSES = [...TERMINAL_STATUSES];
 
 /** Well under Firestore's 500-writes-per-batch ceiling, with headroom. */
 const PURGE_BATCH_SIZE = 200;
@@ -52,6 +61,66 @@ function historyCutoff(now) {
  */
 function isAppointmentImagePath(filePath) {
   return APPOINTMENT_IMAGE_PREFIX.test(String(filePath || ""));
+}
+
+/**
+ * Decides what happens to a finalized Storage object, with the read and the
+ * delete injected.
+ *
+ * **A read failure DELETES the file, deliberately.** The Storage rule trusts
+ * the client-provided `contentType`, so this check is the only thing standing
+ * between an upload and a file whose bytes were never inspected — and bytes we
+ * could not read are bytes we cannot clear. Failing closed costs a user a
+ * re-upload; failing open keeps an unvalidated file forever. Keep the
+ * asymmetry, and keep it tested: it is the branch that destroys a photo, and
+ * it was the one branch with no coverage at all.
+ *
+ * Both delete paths swallow their own failure — the object simply survives to
+ * be re-validated on its next finalize, which beats throwing out of a Storage
+ * trigger that has nothing to retry.
+ *
+ * @param {{
+ *   filePath: string,
+ *   readHeader: function(): !Promise<!Buffer>,
+ *   deleteFile: function(): !Promise<void>,
+ *   logger: !Object,
+ * }} deps
+ * @return {!Promise<string>} One of `skipped`, `kept`, `deleted-unreadable`,
+ *     `deleted-invalid`.
+ */
+async function runImageValidation(deps) {
+  const {filePath, readHeader, deleteFile, logger} = deps;
+  if (!isAppointmentImagePath(filePath)) return "skipped";
+
+  let buffer;
+  try {
+    buffer = await readHeader();
+  } catch (err) {
+    logger.warn("validateUploadedImage: read failed — deleting", {
+      filePath,
+      err: err.message,
+    });
+    await deleteFile().catch((delErr) =>
+      logger.error("validateUploadedImage: delete after read-fail failed", {
+        filePath,
+        err: delErr.message,
+      }),
+    );
+    return "deleted-unreadable";
+  }
+
+  if (hasValidImageMagic(buffer)) return "kept";
+
+  logger.warn("validateUploadedImage: invalid magic bytes — deleting", {
+    filePath,
+  });
+  await deleteFile().catch((err) =>
+    logger.error("validateUploadedImage: delete failed", {
+      filePath,
+      err: err.message,
+    }),
+  );
+  return "deleted-invalid";
 }
 
 /**
@@ -113,10 +182,14 @@ async function runHistoryPurge(deps) {
 }
 
 module.exports = {
+  // Exported for unit tests: the purge is the only unattended, irreversible
+  // deletion in the repo, so its bounds are asserted against these rather than
+  // against copied literals.
   HISTORY_RETENTION_YEARS,
   PURGE_STATUSES,
   PURGE_BATCH_SIZE,
   historyCutoff,
   isAppointmentImagePath,
+  runImageValidation,
   runHistoryPurge,
 };

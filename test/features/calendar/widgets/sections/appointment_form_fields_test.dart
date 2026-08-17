@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
+import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -18,6 +19,8 @@ void main() {
     String clientQuery = '',
     List<ClientRecord> clientResults = const [],
     ValueChanged<ClientRecord>? onSelectClient,
+    ClientRecord? selectedClient,
+    bool useCustomAddress = true,
     Future<ClientRecord?> Function(String initialName)? onRequestAddClient,
     ValueChanged<JobTemplate>? onApplyTemplate,
     Map<String, AppointmentFormError> errors = const {},
@@ -29,6 +32,10 @@ void main() {
     bool isMultiDay = false,
     bool isOvernight = false,
     int spanLength = 1,
+    DateTime? selectedDate,
+    DateTime? endDate,
+    ValueChanged<DateTime>? onSelectStartDate,
+    ValueChanged<DateTime>? onSelectEndDate,
   }) async {
     tester.view.physicalSize = Size(width, 740);
     tester.view.devicePixelRatio = 1.0;
@@ -63,12 +70,14 @@ void main() {
             child: AppointmentFormFields(
               controllers: controllers,
               allEmployees: const [],
-              selectedClient: null,
+              selectedClient: selectedClient,
               clientResults: clientResults,
               isSearchingClient: false,
               selectedEmployees: const [],
               repeat: RepeatInterval.none,
-              useCustomAddress: true,
+              useCustomAddress: useCustomAddress,
+              selectedDate: selectedDate,
+              endDate: endDate,
               isPersonal: isPersonal,
               onPersonalChanged: showPersonalSwitch
                   ? (onPersonalChanged ?? (_) {})
@@ -83,16 +92,18 @@ void main() {
               employeeRequired: false,
               materialsHint: 'Materials',
               photosSection: const SizedBox.shrink(),
-              onSearchClients: (_) {},
-              onSelectClient: onSelectClient ?? (_) {},
-              onClearClient: () {},
-              onToggleEmployee: (_) {},
-              onPickDate: () {},
-              onPickEndDate: () {},
-              onPickStartTime: () {},
-              onPickEndTime: () {},
-              onSelectRepeat: (_) {},
-              onUseCustomAddress: (_) {},
+              callbacks: AppointmentFormCallbacks(
+                onSearchClients: (_) {},
+                onSelectClient: onSelectClient ?? (_) {},
+                onClearClient: () {},
+                onToggleEmployee: (_) {},
+                onSelectStartDate: onSelectStartDate ?? (_) {},
+                onSelectEndDate: onSelectEndDate ?? (_) {},
+                onPickStartTime: () {},
+                onPickEndTime: () {},
+                onSelectRepeat: (_) {},
+                onUseCustomAddress: (_) {},
+              ),
               onRequestAddClient: onRequestAddClient,
               onApplyTemplate: onApplyTemplate,
             ),
@@ -244,18 +255,44 @@ void main() {
     expect(find.text('End Time'), findsOneWidget);
   });
 
-  testWidgets('a personal job hides the client picker and the address', (
+  testWidgets(
+    'a personal job hides the client picker but keeps the address, optional',
+    (tester) async {
+      await pumpAppointmentForm(tester, width: 400, isPersonal: true);
+
+      expect(find.text('Personal job'), findsOneWidget);
+      expect(find.text('Client'), findsNothing);
+      // A personal block can still have somewhere to be — the field stays, and
+      // says so rather than reading as an unfinished required one.
+      expect(find.text('Address'), findsWidgets);
+      expect(
+        tester
+            .widget<AppointmentAddressField>(
+              find.byType(AppointmentAddressField),
+            )
+            .optional,
+        isTrue,
+      );
+      // The rest of the form is untouched.
+      expect(find.text('WHO'), findsOneWidget);
+      expect(find.text('DETAILS'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('a client visit does not mark its address optional', (
     tester,
   ) async {
-    await pumpAppointmentForm(tester, width: 400, isPersonal: true);
+    await pumpAppointmentForm(tester, width: 400);
 
-    expect(find.text('Personal job'), findsOneWidget);
-    expect(find.text('Client'), findsNothing);
-    expect(find.text('Address'), findsNothing);
-    // The rest of the form is untouched.
-    expect(find.text('WHO'), findsOneWidget);
-    expect(find.text('DETAILS'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+    expect(
+      tester
+          .widget<AppointmentAddressField>(
+            find.byType(AppointmentAddressField),
+          )
+          .optional,
+      isFalse,
+    );
   });
 
   testWidgets('switching a job to personal clears the hidden fields', (
@@ -274,9 +311,58 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(toggled, [true]);
-    // Neither field is visible any more, so neither may keep its value.
+    // The client picker is gone, so it may not keep its value.
     expect(controllers.clientSearch.text, isEmpty);
+    // A HAND-TYPED address survives: a personal block may well have somewhere
+    // to be, and this is the case the field exists for.
+    expect(controllers.address.text, '9 Rue Test');
+  });
+
+  testWidgets('switching to personal drops the CLIENT address', (
+    tester,
+  ) async {
+    // `_selectClient` writes the client's address into the controller and it
+    // renders as a read-only pill, so the admin never typed it. The switch is
+    // the first row of WHO while the field is far below in DETAILS, so leaving
+    // it behind silently gave the personal block a client's street — which the
+    // travel sweep then uses as the crew's destination.
+    final controllers = await pumpAppointmentForm(
+      tester,
+      width: 400,
+      selectedClient: const ClientRecord(
+        id: 'c1',
+        name: 'Marchetti',
+        address: '12 Rue Principale',
+      ),
+      useCustomAddress: false,
+      onPersonalChanged: (_) {},
+    );
+    controllers.address.text = '12 Rue Principale';
+
+    await tester.tap(find.byType(SwitchListTile).first);
+    await tester.pumpAndSettle();
+
     expect(controllers.address.text, isEmpty);
+  });
+
+  testWidgets('an address typed before any client is picked survives', (
+    tester,
+  ) async {
+    // `useCustomAddress` is still false at this point — it only flips when the
+    // admin taps "Change" on the pill — so testing that flag ALONE would wipe
+    // an address the user typed themselves. Both halves of the guard matter.
+    final controllers = await pumpAppointmentForm(
+      tester,
+      width: 400,
+      useCustomAddress: false,
+      onPersonalChanged: (_) {},
+    );
+    controllers.address.text = '400 Rue Mine';
+
+    await tester.tap(find.byType(SwitchListTile).first);
+    await tester.pumpAndSettle();
+
+    expect(controllers.address.text, '400 Rue Mine');
   });
 
   testWidgets('an all-day personal job drops the start and end rows', (

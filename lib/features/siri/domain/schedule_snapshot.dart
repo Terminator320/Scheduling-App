@@ -1,11 +1,13 @@
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 /// Schema version; bump only alongside Swift `ScheduleSnapshot` decoder.
 /// v2 added `title` and `isAllDay` for personal jobs, which carry no client
-/// and may span the whole day.
-const scheduleSnapshotVersion = 2;
+/// and may span the whole day. v3 adds `dayIndex`/`dayCount`/`isOvernight`, and
+/// buckets a multi-day job on every day it runs rather than only its first.
+const scheduleSnapshotVersion = 3;
 
 /// Days carried beyond today; Phase-2 date queries ("what's my schedule
 /// Friday?") resolve against these buckets, and anything further out gets
@@ -22,20 +24,48 @@ const scheduleSnapshotPerDayCap = 30;
 /// Only the fields the Siri intents speak, plus `id` for Phase-4 actions.
 /// Notes, phone, and pictures are excluded, since the App Group is readable
 /// even while the device is locked.
-Map<String, dynamic> _appointment(AppointmentRecord a) => {
-  'id': a.id,
-  'startMillis': a.startTime.millisecondsSinceEpoch,
-  'endMillis': a.endTime.millisecondsSinceEpoch,
-  'clientName': a.clientName,
-  // A personal job has no client, so Siri names it by title instead — the
-  // same fallback the widget and the push text already use.
-  'title': a.title,
-  'address': a.address,
-  'status': AppointmentStatus.storedRaw(a.status),
-  // An all-day block stores a real midnight–23:59 span; Siri says "all day"
-  // rather than reading those two clock times out.
-  'isAllDay': a.isAllDay,
-};
+///
+/// [slice] scopes the record to ONE of the days it runs. The counter fields are
+/// omitted for a single-day job, so a decoder reading them as optional parses a
+/// payload that predates multi-day support unchanged.
+///
+/// [viewerDocId] is the signed-in person's users-doc id, and it gates ONE field:
+/// a personal job's address. See [buildScheduleSnapshot].
+Map<String, dynamic> _appointment(
+  AppointmentDaySlice slice,
+  String viewerDocId,
+) {
+  final a = slice.appointment;
+  // A personal block is somebody's private appointment — a clinic, a school.
+  // Since 2026-08-11 those carry a real address, and an ADMIN's snapshot holds
+  // the whole business, so this payload would put every employee's private
+  // location on the admin's device, readable while it is locked. The viewer's
+  // OWN personal jobs keep their address: it is their data, and directions to
+  // it is the point of the field. Client visits are unaffected — an address is
+  // what the crew is being sent to.
+  final isOthersPersonalJob =
+      a.isPersonal && !a.employeeIds.contains(viewerDocId);
+  return {
+    'id': a.id,
+    // THIS day's window — a multi-day run works the same hours each day, and
+    // Siri answering with the run's first morning would be wrong on day 2.
+    'startMillis': slice.windowStart.millisecondsSinceEpoch,
+    'endMillis': slice.windowEnd.millisecondsSinceEpoch,
+    'clientName': a.clientName,
+    // A personal job has no client, so Siri names it by title instead — the
+    // same fallback the widget and the push text already use.
+    'title': a.title,
+    'address': isOthersPersonalJob ? '' : a.address,
+    'status': AppointmentStatus.storedRaw(a.status),
+    // An all-day block stores a real midnight–23:59 span; Siri says "all day"
+    // rather than reading those two clock times out.
+    'isAllDay': a.isAllDay,
+    if (slice.isMultiDay) 'dayIndex': slice.dayIndex,
+    if (slice.isMultiDay) 'dayCount': slice.dayCount,
+    // A window crossing midnight counts NIGHTS, so Siri says "night 2 of 3".
+    if (slice.isMultiDay) 'isOvernight': slice.isOvernight,
+  };
+}
 
 String _dayKey(DateTime day) =>
     '${day.year.toString().padLeft(4, '0')}-'
@@ -45,23 +75,38 @@ String _dayKey(DateTime day) =>
 /// Serializes the schedule the Siri App Intents extension answers from.
 /// Pure and unit-testable — carries one bucket per day, and excludes
 /// cancelled visits and id-less records, since Phase-4 write actions resolve by id.
+///
+/// [viewerDocId] is whose device this is. An employee only ever receives their
+/// own appointments, so it changes nothing for them; for an admin, whose
+/// snapshot is business-wide, it withholds the ADDRESS of other people's
+/// personal blocks — the one field in this payload that describes a third
+/// party's private whereabouts. Pass `''` and every personal address is
+/// withheld, which is the safe direction.
 Map<String, dynamic> buildScheduleSnapshot({
   required List<AppointmentRecord> appointments,
   required String role,
   required DateTime now,
+  String viewerDocId = '',
 }) {
   final startOfToday = now.dateOnly;
-  final buckets = <String, List<AppointmentRecord>>{
+  // Keyed by day rather than by its formatted string, so the bucketing loop
+  // below can ask `sliceFor` directly instead of parsing `_dayKey` back — that
+  // helper stays one-directional.
+  final buckets = <DateTime, List<AppointmentDaySlice>>{
     for (var i = 0; i <= scheduleSnapshotLookaheadDays; i++)
-      _dayKey(
-        DateTime(startOfToday.year, startOfToday.month, startOfToday.day + i),
-      ): <AppointmentRecord>[],
+      DateTime(startOfToday.year, startOfToday.month, startOfToday.day + i):
+          <AppointmentDaySlice>[],
   };
 
   for (final a in appointments) {
     if (a.id == null || a.id!.isEmpty) continue;
     if (AppointmentStatus.fromRaw(a.status).isCancelled) continue;
-    buckets[_dayKey(a.startTime)]?.add(a);
+    // A run is bucketed on every day it WORKS, not just the day it began —
+    // otherwise Siri says "nothing today" on day 2 of a five-day job.
+    for (final day in buckets.keys) {
+      final slice = sliceFor(a, day);
+      if (slice != null) buckets[day]!.add(slice);
+    }
   }
 
   return {
@@ -71,15 +116,15 @@ Map<String, dynamic> buildScheduleSnapshot({
     'days': [
       for (final entry in buckets.entries)
         {
-          'date': entry.key,
+          'date': _dayKey(entry.key),
           'appointments': [
-            for (final a
+            for (final slice
                 in (entry.value
-                      ..sort((x, y) => x.startTime.compareTo(y.startTime)))
+                      ..sort((x, y) => x.windowStart.compareTo(y.windowStart)))
                     .take(
                       scheduleSnapshotPerDayCap,
                     ))
-              _appointment(a),
+              _appointment(slice, viewerDocId),
           ],
         },
     ],

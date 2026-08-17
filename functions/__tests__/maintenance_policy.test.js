@@ -19,6 +19,7 @@ const {
   isAppointmentImagePath,
   runHistoryPurge,
 } = require("../maintenance_policy");
+const {TERMINAL_STATUSES} = require("../time_utils");
 
 const NOW = new Date("2026-08-04T12:00:00.000Z");
 
@@ -92,8 +93,14 @@ describe("historyCutoff", () => {
 
 describe("the status gate", () => {
   test("purges terminal statuses ONLY — live work is never eligible", () => {
-    // Widening this set is how an unfinished job gets deleted for being old.
-    expect(PURGE_STATUSES).toEqual(["done", "cancelled"]);
+    // Widening this set is how an unfinished job gets deleted for being old,
+    // so the assertion is on the whole set, not just a couple of absences.
+    // It pinned ["done", "cancelled"] until 2026-08-11: this copy had dropped
+    // the legacy `completed` alias the other copies carried, so such a doc was
+    // never eligible at any age and outlived the retention policy in silence.
+    // It now derives from TERMINAL_STATUSES and cannot drift again.
+    expect(PURGE_STATUSES).toEqual([...TERMINAL_STATUSES]);
+    expect(PURGE_STATUSES).toEqual(["done", "completed", "cancelled"]);
     expect(PURGE_STATUSES).not.toContain("pending");
     expect(PURGE_STATUSES).not.toContain("in_progress");
   });

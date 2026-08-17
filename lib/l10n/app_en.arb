@@ -321,6 +321,10 @@
   "@calendar_assignedLabel": {
     "description": "Mono all-caps label above the assignee panel in the appointment detail sheet. Already uppercase in source."
   },
+  "calendar_hasPhotos": "Has photos",
+  "@calendar_hasPhotos": {
+    "description": "Spoken form of the photo icon on an appointment card, appended to the card's semantics label when the job carries pictures."
+  },
   "calendar_photosLabel": "PHOTOS",
   "@calendar_photosLabel": {
     "description": "Mono all-caps label above the photo row in the appointment detail sheet. Already uppercase in source."
@@ -344,6 +348,15 @@
   "calendar_jobsCount": "{count, plural, =1{1 JOB} other{{count} JOBS}}",
   "@calendar_jobsCount": {
     "description": "Mono all-caps count of the selected day's jobs, shown right-aligned in the agenda header. Already uppercase in source.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_jobsDoneCount": "{count, plural, =1{1 DONE} other{{count} DONE}}",
+  "@calendar_jobsDoneCount": {
+    "description": "Appended to the agenda header's job count once some of the day's jobs are closed, reading '3 JOBS · 1 DONE'. Counts finished and cancelled visits alike, matching the 'Done' rule in the list below. Already uppercase in source.",
     "placeholders": {
       "count": {
         "type": "int"
@@ -597,6 +610,14 @@
   "@calendar_selectDate": {
     "description": "Select date"
   },
+  "calendar_previousMonth": "Previous month",
+  "@calendar_previousMonth": {
+    "description": "Tooltip and screen-reader label of the back chevron on the inline month calendar that drops down under an appointment's date row."
+  },
+  "calendar_nextMonth": "Next month",
+  "@calendar_nextMonth": {
+    "description": "Tooltip and screen-reader label of the forward chevron on the inline month calendar that drops down under an appointment's date row."
+  },
   "calendar_startDate": "Start date",
   "@calendar_startDate": {
     "description": "Label of the first day of a job's run, in the appointment form's schedule panel."
@@ -774,7 +795,11 @@
   "validation_spanTooLong": "A job can run at most {days} days. Shorten the end date or book a second job.",
   "@validation_spanTooLong": {
     "description": "Shown on the appointment form when the booked span exceeds the maximum.",
-    "placeholders": { "days": { "type": "int" } }
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
   },
   "calendar_mustBeAfterStartTime": "Must be after start time",
   "@calendar_mustBeAfterStartTime": {
@@ -923,17 +948,29 @@
   "clients_archivedNotice": "Archived {name}",
   "@clients_archivedNotice": {
     "description": "Success notice after archiving a client.",
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "clients_unarchivedNotice": "Restored {name}",
   "@clients_unarchivedNotice": {
     "description": "Success notice after un-archiving a client.",
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "clients_deletedNotice": "Deleted {name}",
   "@clients_deletedNotice": {
     "description": "Success notice after deleting a client.",
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "clients_deleteTitle": "Delete client?",
   "@clients_deleteTitle": {
@@ -942,7 +979,11 @@
   "clients_deleteMessage": "{name} will be removed permanently. This can't be undone.",
   "@clients_deleteMessage": {
     "description": "Body of the confirm dialog before deleting a client.",
-    "placeholders": { "name": { "type": "String" } }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "error_introArchiveClient": "Couldn't archive the client",
   "@error_introArchiveClient": {
@@ -1007,6 +1048,41 @@
   "clients_allStaff": "All staff",
   "@clients_allStaff": {
     "description": "History employee-filter chip option that clears the employee filter"
+  },
+  "clients_historyFilterYear": "Year",
+  "@clients_historyFilterYear": {
+    "description": "Title of the single-select sheet the History year chip opens"
+  },
+  "clients_historyFilterStaff": "Staff",
+  "@clients_historyFilterStaff": {
+    "description": "Title of the single-select sheet the History crew chip opens"
+  },
+  "clients_historyJobsCount": "{count, plural, =1{1 JOB} other{{count} JOBS}}",
+  "@clients_historyJobsCount": {
+    "description": "History list count, all caps — the first half of '18 JOBS · 2 CANCELLED'",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clients_historyResultsCount": "{count, plural, =1{1 RESULT} other{{count} RESULTS}}",
+  "@clients_historyResultsCount": {
+    "description": "History count in search, all caps — search spans every appointment, so its hits are results rather than the day's jobs",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clients_historyCancelledCount": "{count, plural, other{{count} CANCELLED}}",
+  "@clients_historyCancelledCount": {
+    "description": "How many of the counted History rows were cancelled, all caps — a subset of the total, not an addition",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "clients_noAppointmentsMatchFilters": "No appointments match your filters",
   "@clients_noAppointmentsMatchFilters": {
@@ -1676,6 +1752,80 @@
   "@settings_myDetailsEmergencyBlurb": {
     "description": "Caption under the emergency-contact section on My details, stating who can read it"
   },
+  "settings_myDetailsIdentity": "YOU CAN CHANGE THESE",
+  "@settings_myDetailsIdentity": {
+    "description": "Section header over the fields a person may edit about themselves on My details"
+  },
+  "settings_myDetailsIdentityBlurb": "Your manager sets everything else.",
+  "@settings_myDetailsIdentityBlurb": {
+    "description": "Caption under the editable-fields section on My details"
+  },
+  "settings_myDetailsEmailReadOnly": "Ask your manager to change this.",
+  "@settings_myDetailsEmailReadOnly": {
+    "description": "Caption under the read-only sign-in email row on My details"
+  },
+  "settings_myAvailability": "MY AVAILABILITY",
+  "@settings_myAvailability": {
+    "description": "Section header over the working-days and hours controls on My details"
+  },
+  "settings_myAvailabilityBlurb": "Changes apply right away.",
+  "@settings_myAvailabilityBlurb": {
+    "description": "Caption telling the user availability toggles save immediately, unlike the explicitly-saved fields above"
+  },
+  "settings_availabilityConflict": "{days} already has booked work — the jobs stay until someone moves them.",
+  "@settings_availabilityConflict": {
+    "description": "Amber warning shown when a person turns off a working day that still holds appointments",
+    "placeholders": {
+      "days": {
+        "type": "String",
+        "example": "Mon, Wed"
+      }
+    }
+  },
+  "settings_myScheduling": "SCHEDULING",
+  "@settings_myScheduling": {
+    "description": "Admin-only section header on My details for scheduling limits"
+  },
+  "settings_travelAlerts": "Time-to-leave alerts",
+  "@settings_travelAlerts": {
+    "description": "Settings toggle for the traffic-aware departure push; off still leaves the fixed 30-minute reminder"
+  },
+  "error_introSaveTravelAlerts": "Couldn't change your alert setting",
+  "@error_introSaveTravelAlerts": {
+    "description": "Error intro when the time-to-leave toggle fails to save"
+  },
+  "settings_changeEmail": "Change sign-in email",
+  "@settings_changeEmail": {
+    "description": "Title of the dialog where a person changes their own sign-in email"
+  },
+  "settings_changeEmailBlurb": "You'll sign in with the new address from now on. Type it twice — a typo locks you out until an admin fixes it.",
+  "@settings_changeEmailBlurb": {
+    "description": "Explains why the change-email dialog asks for the address twice"
+  },
+  "settings_confirmNewEmail": "Confirm new email",
+  "@settings_confirmNewEmail": {
+    "description": "Label of the second email field in the change-email dialog"
+  },
+  "settings_emailsDoNotMatch": "The two addresses don't match.",
+  "@settings_emailsDoNotMatch": {
+    "description": "Shown under the confirm field when the two typed addresses differ"
+  },
+  "error_introChangeEmail": "Couldn't change your sign-in email",
+  "@error_introChangeEmail": {
+    "description": "Error intro for ME-EMAIL (a person changing their own sign-in address)"
+  },
+  "settings_unsavedChanges": "Unsaved changes",
+  "@settings_unsavedChanges": {
+    "description": "Label on the save/discard bar that appears once the My details identity form is edited"
+  },
+  "common_discard": "Discard",
+  "@common_discard": {
+    "description": "Button that throws away unsaved edits and restores the stored values"
+  },
+  "error_introSaveAvailability": "Couldn't save your availability",
+  "@error_introSaveAvailability": {
+    "description": "Error intro for ME-SAVE when the immediate availability write fails"
+  },
   "error_introSaveAppLock": "Couldn't change the app lock setting",
   "@error_introSaveAppLock": {
     "description": "Intro for a failed App Lock toggle (keychain write failed)"
@@ -1707,6 +1857,10 @@
   "error_introLoadAppointments": "Couldn't load appointments",
   "@error_introLoadAppointments": {
     "description": "Error intro for APPT-LOAD"
+  },
+  "error_introOpenAppointment": "Couldn't open the appointment",
+  "@error_introOpenAppointment": {
+    "description": "Error intro for APPT-OPEN"
   },
   "error_introDeleteAccount": "Couldn't delete your account",
   "@error_introDeleteAccount": {
@@ -1898,6 +2052,38 @@
   "@dashboard_title": {
     "description": "Admin dashboard screen title, drawer nav item, and settings tile label"
   },
+  "dashboard_summary": "Summary",
+  "@dashboard_summary": {
+    "description": "Section label above the dashboard's KPI tiles and their period control"
+  },
+  "dashboard_periodLabel": "Summary period",
+  "@dashboard_periodLabel": {
+    "description": "Accessibility label for the Today/Week/Month segmented control that scopes the KPI tiles"
+  },
+  "dashboard_periodToday": "Today",
+  "@dashboard_periodToday": {
+    "description": "Segmented control option counting the KPI tiles over today only"
+  },
+  "dashboard_periodWeek": "Week",
+  "@dashboard_periodWeek": {
+    "description": "Segmented control option counting the KPI tiles from Monday through the end of today"
+  },
+  "dashboard_periodMonth": "Month",
+  "@dashboard_periodMonth": {
+    "description": "Segmented control option counting the KPI tiles from the 1st through the end of today"
+  },
+  "dashboard_kpiBooked": "Booked",
+  "@dashboard_kpiBooked": {
+    "description": "KPI tile label for jobs running in the selected period, excluding cancelled ones"
+  },
+  "dashboard_kpiCompleted": "Completed",
+  "@dashboard_kpiCompleted": {
+    "description": "KPI tile label for jobs in the selected period whose stored status is done"
+  },
+  "dashboard_kpiCancelled": "Cancelled",
+  "@dashboard_kpiCancelled": {
+    "description": "KPI tile label for cancelled jobs in the selected period"
+  },
   "dashboard_visitsToday": "{count, plural, =1{visit today} other{visits today}}",
   "@dashboard_visitsToday": {
     "description": "Label rendered beside the hero's big count of today's visits; the number itself is a separate Text",
@@ -1922,6 +2108,27 @@
         "type": "int"
       }
     }
+  },
+  "dashboard_jobsPerDay": "Jobs booked per day — this week",
+  "@dashboard_jobsPerDay": {
+    "description": "Title of the dashboard chart showing how many jobs are booked on each day of the current week"
+  },
+  "dashboard_jobsPerDaySemantics": "{day}: {count} booked",
+  "@dashboard_jobsPerDaySemantics": {
+    "description": "Screen-reader label for one bar of the jobs-per-day chart",
+    "placeholders": {
+      "day": {
+        "type": "String",
+        "example": "Monday"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_overCapacity": "over capacity",
+  "@dashboard_overCapacity": {
+    "description": "Appended to a jobs-per-day bar's screen-reader label when the day is booked past the roster's capacity"
   },
   "dashboard_businessTrends": "Business trends",
   "@dashboard_businessTrends": {
@@ -1956,13 +2163,63 @@
   "@dashboard_completedVsCancelled": {
     "description": "Title of the grouped weekly bar chart of done vs cancelled visits"
   },
+  "dashboard_newClientsEmpty": "No new clients in the last 8 weeks",
+  "@dashboard_newClientsEmpty": {
+    "description": "Shown in the dashboard's New clients card when no client was added over the window"
+  },
   "dashboard_newClients": "New clients",
   "@dashboard_newClients": {
     "description": "Caption of the new-clients sparkline inside the trends card"
   },
-  "dashboard_newClientsTotal": "{count, plural, =1{1 in the last 8 weeks} other{{count} in the last 8 weeks}}",
-  "@dashboard_newClientsTotal": {
-    "description": "Total line under the new-clients caption, summing the 8 weekly buckets",
+  "dashboard_newClientsWindow": "{weeks, plural, =1{In the last week} other{In the last {weeks} weeks}}",
+  "@dashboard_newClientsWindow": {
+    "description": "Caption under the new-clients headline number, naming the window the count and the sparkline cover",
+    "placeholders": {
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_newClientsTrendUp": "{count, plural, =1{1 more than the previous {weeks} weeks} other{{count} more than the previous {weeks} weeks}}",
+  "@dashboard_newClientsTrendUp": {
+    "description": "Screen-reader and tooltip text for the new-clients trend chip when the recent half of the window beat the half before it",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_newClientsTrendDown": "{count, plural, =1{1 fewer than the previous {weeks} weeks} other{{count} fewer than the previous {weeks} weeks}}",
+  "@dashboard_newClientsTrendDown": {
+    "description": "Screen-reader and tooltip text for the new-clients trend chip when the recent half of the window fell behind the half before it",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_newClientsTrendFlat": "Same as the previous {weeks} weeks",
+  "@dashboard_newClientsTrendFlat": {
+    "description": "Screen-reader and tooltip text for the new-clients trend chip when both halves of the window are equal",
+    "placeholders": {
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_newClientsThisWeek": "This week",
+  "@dashboard_newClientsThisWeek": {
+    "description": "Micro label under the last bar of the new-clients sparkline, marking which end is the current week"
+  },
+  "dashboard_newClientsMore": "{count, plural, =1{1 more} other{{count} more}}",
+  "@dashboard_newClientsMore": {
+    "description": "Footer line of the new-clients card when more clients were added than the card lists",
     "placeholders": {
       "count": {
         "type": "int"
@@ -1975,6 +2232,34 @@
     "placeholders": {
       "day": {
         "type": "String"
+      }
+    }
+  },
+  "dashboard_neverSetUpHeader": "{count, plural, =1{1 account was never set up} other{{count} accounts were never set up}}",
+  "@dashboard_neverSetUpHeader": {
+    "description": "Attention group header for accounts an admin created that the person never completed setup for, so they still hold the shared starting password",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_availabilityConflictHeader": "{count, plural, =1{1 person is booked outside their availability} other{{count} people are booked outside their availability}}",
+  "@dashboard_availabilityConflictHeader": {
+    "description": "Attention group header for staff holding booked work on weekdays they are marked unavailable for",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_availabilityConflictDays": "Booked on {days}",
+  "@dashboard_availabilityConflictDays": {
+    "description": "Row subtitle naming the weekdays a person is booked on despite being unavailable",
+    "placeholders": {
+      "days": {
+        "type": "String",
+        "example": "Sat, Sun"
       }
     }
   },
@@ -1994,6 +2279,15 @@
   "dashboard_overdueOpenHeader": "{count, plural, =1{1 past visit was never closed} other{{count} past visits were never closed}}",
   "@dashboard_overdueOpenHeader": {
     "description": "Attention flag group header for ended visits never marked done or cancelled",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboard_andMoreVisits": "{count, plural, =1{1 more not shown} other{{count} more not shown}}",
+  "@dashboard_andMoreVisits": {
+    "description": "Footer under a capped attention-flag group, naming how many visits are not rendered",
     "placeholders": {
       "count": {
         "type": "int"
@@ -2538,10 +2832,6 @@
   "@nav_dashboard": {
     "description": "Navigation label for the admin dashboard destination"
   },
-  "nav_myDetails": "My details",
-  "@nav_myDetails": {
-    "description": "Navigation label for the signed-in user's own profile destination"
-  },
   "nav_groupToday": "TODAY",
   "@nav_groupToday": {
     "description": "Drawer group heading for destinations used during today's work; stored uppercase"
@@ -2976,5 +3266,58 @@
   "employees_newPasswordIssued": "New temporary password — the previous one no longer works",
   "@employees_newPasswordIssued": {
     "description": "Caption under the credentials stating the password was just re-issued"
+  },
+  "wave_outboxPending": "{count, plural, =1{1 client waiting to sync} other{{count} clients waiting to sync}}",
+  "@wave_outboxPending": {
+    "description": "Settings > Wave: how many client edits are queued for Wave.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_outboxFailed": "{count, plural, =1{1 client failed to sync} other{{count} clients failed to sync}}",
+  "@wave_outboxFailed": {
+    "description": "Settings > Wave: how many client edits permanently failed to reach Wave.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_retryFailedButton": "Retry failed",
+  "@wave_retryFailedButton": {
+    "description": "Settings > Wave: button that returns failed client edits to the sync queue."
+  },
+  "wave_retryNoneRecovered": "Nothing to retry — those clients were already back in the queue.",
+  "@wave_retryNoneRecovered": {
+    "description": "Settings > Wave: notice when Retry failed found nothing left to requeue."
+  },
+  "wave_retryQueued": "{count, plural, =1{1 client queued for Wave again} other{{count} clients queued for Wave again}}",
+  "@wave_retryQueued": {
+    "description": "Settings > Wave: notice naming how many client edits were returned to the queue.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_retryPushed": "{count, plural, =1{1 client sent to Wave} other{{count} clients sent to Wave}}",
+  "@wave_retryPushed": {
+    "description": "Settings > Wave: notice naming how many requeued client edits reached Wave.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wave_retryStillFailed": "{count, plural, =1{1 client still couldn't be sent — open it to see the error} other{{count} clients still couldn't be sent — open them to see the error}}",
+  "@wave_retryStillFailed": {
+    "description": "Settings > Wave: notice naming how many requeued client edits failed again on the push right after Retry failed.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

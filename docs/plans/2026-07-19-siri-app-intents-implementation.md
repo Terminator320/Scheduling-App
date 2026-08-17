@@ -5,7 +5,12 @@ That doc is the *what/why* (six phases, scope decisions, architecture). This is
 the *how* — files, order, tests, Mac steps — grounded in the code that already
 exists.
 
-**Status: Phase 1 COMPLETE except on-device verification (2026-07-19).**
+**Status: Phases 1, 2 and 3 are BUILT; none has ever been run on a device**
+(banner corrected 2026-08-15 — it had said "Phase 1 COMPLETE" since 2026-07-19,
+while the per-phase headings below already recorded 2 and 3 as built). The
+snapshot the intents read is at **schema v3** — the multi-day mirrors work
+raised it. Phase 4 (voice write actions) is specified in its own doc and nothing
+is landed.
 The Dart half (builder, service, provider, `main.dart` wiring, 15 unit tests) is
 in `lib/features/siri/`; the Swift half is in `ios/SiriIntents/` with a Mac
 runbook + device checklist at `ios/SiriIntents/README.md`. The `SiriIntents`

@@ -9,7 +9,8 @@ import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/features/auth/application/sign_in_controller.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
-import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
+import 'package:scheduling/features/auth/widgets/auth_fields.dart';
+import 'package:scheduling/features/auth/widgets/auth_scaffold.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
@@ -42,6 +43,10 @@ class _LoginState extends ConsumerState<Login> {
   }
 
   Future<void> _prefillRememberedEmail() async {
+    // Resolved before the await: `ref` throws once this consumer is disposed,
+    // and the log has to survive that — a failed read here is the
+    // pre-first-unlock keychain case, which must not go unrecorded.
+    final logger = ref.read(loggerProvider);
     try {
       final email = await ref
           .read(secureStorageServiceProvider)
@@ -50,7 +55,7 @@ class _LoginState extends ConsumerState<Login> {
       if (_emailController.text.isNotEmpty) return;
       _emailController.text = email;
     } catch (e, st) {
-      if (mounted) ref.read(loggerProvider).warn('login.prefill_email', e, st);
+      logger.warn('login.prefill_email', e, st);
     }
   }
 

@@ -1,11 +1,12 @@
 import 'dart:async';
 
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/storage/secure_storage_service.dart';
+import 'package:scheduling/core/utils/retry.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
@@ -121,7 +122,7 @@ class SignInController extends Notifier<SignInState> {
 
       // Every account has a doc keyed by uid from the moment the admin
       // creates it — including one that has never been set up.
-      final userDoc = await _retryOnAuthPropagation(
+      final userDoc = await retryAsync(
         () => employees.findUserByUid(user.uid),
       );
 
@@ -163,10 +164,7 @@ class SignInController extends Notifier<SignInState> {
       );
       unawaited(
         storage
-            .write(
-              SecureStorageKeys.rememberedEmail,
-              email.trim().toLowerCase(),
-            )
+            .write(SecureStorageKeys.rememberedEmail, normalizeEmail(email))
             .catchError((Object e, StackTrace st) {
               logger.warn('login.remember_email', e, st);
             }),
@@ -191,7 +189,7 @@ class SignInController extends Notifier<SignInState> {
     final user = auth.currentUser;
     if (user == null) return const SignInNoSession();
     try {
-      final userDoc = await _retryOnAuthPropagation(
+      final userDoc = await retryAsync(
         () => employees.findUserByUid(user.uid),
       );
       if (userDoc == null) return const SignInProfilePending();
@@ -213,19 +211,6 @@ class SignInController extends Notifier<SignInState> {
 
   void _settle() {
     if (ref.mounted) state = const SignInState();
-  }
-}
-
-/// Retries a read once after a short delay if it comes back permission-denied,
-/// since the freshly minted ID token can lag Firestore's request channel
-/// right after sign-in.
-Future<T> _retryOnAuthPropagation<T>(Future<T> Function() read) async {
-  try {
-    return await read();
-  } on FirebaseException catch (e) {
-    if (e.code != 'permission-denied') rethrow;
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    return read();
   }
 }
 

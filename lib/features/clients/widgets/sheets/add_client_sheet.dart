@@ -11,8 +11,10 @@ import 'package:scheduling/features/clients/application/client_form_controller.d
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_form_validator.dart';
+import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
 import 'package:scheduling/features/clients/widgets/client_form_state.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_address_section.dart';
+import 'package:scheduling/features/clients/widgets/fields/client_name_phone_lift.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_type_chips.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -121,23 +123,38 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     apt: _aptController.text,
   );
 
-  ClientRecord _draft() => ClientRecord(
-    id: '',
-    name: _nameController.text.trim(),
-    firstName: _firstNameController.text.trim(),
-    lastName: _lastNameController.text.trim(),
-    phone: _phoneController.text.trim(),
-    email: _emailController.text.trim(),
-    address: noFixedAddress ? '' : _buildFullAddress(),
-    apt: noFixedAddress ? '' : _aptController.text.trim(),
-    city: noFixedAddress ? '' : _cityController.text.trim(),
-    province: noFixedAddress ? '' : _provinceController.text.trim(),
-    postalCode: noFixedAddress ? '' : _postalCodeController.text.trim(),
-    country: noFixedAddress ? '' : _countryController.text.trim(),
-    noFixedAddress: noFixedAddress,
-    accessNotes: _accessNotesController.text.trim(),
-    type: _type,
-  );
+  ClientRecord _draft() {
+    // The STORED name is the Wave CUSTOMER name: the phone number for a
+    // person, the typed name for a business. `type` has to be passed or a
+    // business is renamed to its number on the invoices it appears on.
+    // `composeSave`, not `composeStored` — Name is required here while both
+    // halves are optional, so for a person it is routinely the only copy of
+    // the typed name and composing alone would discard it.
+    final composed = ClientNamePolicy.composeSave(
+      baseName: _nameController.text,
+      phone: _phoneController.text,
+      firstName: _firstNameController.text,
+      lastName: _lastNameController.text,
+      type: _type,
+    );
+    return ClientRecord(
+      id: '',
+      name: composed.name,
+      firstName: composed.firstName,
+      lastName: composed.lastName,
+      phone: _phoneController.text.trim(),
+      email: _emailController.text.trim(),
+      address: noFixedAddress ? '' : _buildFullAddress(),
+      apt: noFixedAddress ? '' : _aptController.text.trim(),
+      city: noFixedAddress ? '' : _cityController.text.trim(),
+      province: noFixedAddress ? '' : _provinceController.text.trim(),
+      postalCode: noFixedAddress ? '' : _postalCodeController.text.trim(),
+      country: noFixedAddress ? '' : _countryController.text.trim(),
+      noFixedAddress: noFixedAddress,
+      accessNotes: _accessNotesController.text.trim(),
+      type: _type,
+    );
+  }
 
   Future<void> _save({required AddClientNext next}) async {
     // The EXISTING validator, not a fast-capture variant: address is required
@@ -247,7 +264,17 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
           // LabeledTextField has no `onCleared` — its built-in ClearTextButton
           // routes through onChanged(''), so clearing the error here covers
           // both typing and the clear "x".
-          onChanged: (_) => clearError('name'),
+          onChanged: (_) {
+            clearError('name');
+            // Pulls a phone number out of what was just typed or pasted —
+            // quiet unless the phone field is still empty.
+            if (liftPhoneFromNameField(
+              name: _nameController,
+              phone: _phoneController,
+            )) {
+              setState(() => clearError('phone'));
+            }
+          },
         ),
       ),
       const SizedBox(height: AppSpacing.sp16),

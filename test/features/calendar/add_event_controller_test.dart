@@ -325,7 +325,7 @@ void main() {
       );
     });
 
-    test('a personal job saves with no client, no address, all day', () async {
+    test('a personal job saves with no client, all day', () async {
       final c = readNotifier()
         ..selectDate(DateTime(2026, 5, 10))
         ..selectClient(_aClient)
@@ -338,7 +338,8 @@ void main() {
 
       final outcome = await c.submit(
         title: 'Dentist',
-        // Whatever the (now hidden) address field still holds is dropped.
+        // The address field stays on screen for a personal job, so what it
+        // holds is saved rather than dropped.
         address: '999 Maple',
         notes: '',
         materialsNeeded: '',
@@ -350,7 +351,7 @@ void main() {
       expect(saved.isAllDay, isTrue);
       expect(saved.clientId, isEmpty);
       expect(saved.clientName, isEmpty);
-      expect(saved.address, isEmpty);
+      expect(saved.address, '999 Maple');
       expect(saved.startTime, DateTime(2026, 5, 10));
       expect(saved.endTime, DateTime(2026, 5, 10, 23, 59));
       expect(saved.status, 'pending');

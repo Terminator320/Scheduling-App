@@ -1,12 +1,16 @@
-# First iOS Build on a Mac — Set-by-Set
+# iOS Build on a Mac — Set-by-Set
 
-The config side of the iOS port is **done** (deployment target 18.0 in
+**This has all been done — the app builds on a Mac and has shipped to the App
+Store several times.** Read this as the setup runbook for a *fresh* machine (or
+a fresh checkout), not as outstanding work: the Mac-only parts are native
+tooling, the two gitignored secret files, the App Attest capability and device
+verification, and every one of them has been through at least once.
+
+The config side is committed and needs nothing: deployment target 18.0 in
 `project.pbxproj` and `AppFrameworkInfo.plist`, `Info.plist` +
-`PrivacyInfo.xcprivacy` in place, `main.dart` already using
+`PrivacyInfo.xcprivacy` in place, `main.dart` on
 `DefaultFirebaseOptions.currentPlatform`, and the Crashlytics dSYM run-script
-phases committed on all three targets). What's left is Mac-only: native
-tooling, the two gitignored secret files, the App Attest capability, and device
-verification.
+phases on all three targets.
 
 > **This project uses Swift Package Manager — there is no `Podfile` and never
 > will be.** Ignore any older notes mentioning `pod install` / `${PODS_ROOT}`.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
@@ -16,9 +17,10 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     @Default('') String lastName,
     @Default('') String email,
     @Default('') String phone,
-    // Legacy default (Material blue) for docs predating the color palette —
-    // changing this recolors those employees.
-    @Default(Color(0xFF2196F3)) Color color,
+    // A crewPalette member, not Material blue: an off-palette hue is also
+    // outside the dark-theme override map, so a doc that never picked a colour
+    // rendered unlifted in dark.
+    @Default(AppColors.crewDefault) Color color,
     @Default('employee') String role,
     @Default('') String status,
     @Default('') String uid,
@@ -29,10 +31,20 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     // 0 means no cap.
     @Default(0) int maxJobsPerDay,
     @Default(false) bool onCall,
+    // Per-person opt-out for the traffic-aware "time to leave" push. Defaults
+    // to TRUE and an absent field reads as true, matching `wantsTravelAlerts`
+    // in `functions/travel_utils.js` — every doc written before this field
+    // existed has no value, and a default of false would silence the fleet.
+    // Opting out degrades to the fixed 30-minute reminder; it does not drop
+    // the notification.
+    @Default(true) bool travelAlertsEnabled,
     // NOTE: emergencyContact/emergencyPhone are NOT here — they live in
     // users/{docId}/private/emergency so rules can gate them to the admin and
     // the person themselves. See EmergencyContact.
-    // Server timestamp, same read-only contract as ClientRecord.createdAt.
+    // Server timestamp, same read-only contract as ClientRecord.createdAt —
+    // though unlike that one it has no reader yet (ClientRecord's drives the
+    // dashboard trends). Parsed so the field is available and never written
+    // back: toMap() must not emit it.
     DateTime? createdAt,
   }) = _EmployeeRecord;
   const EmployeeRecord._();
@@ -40,7 +52,7 @@ abstract class EmployeeRecord with _$EmployeeRecord {
   factory EmployeeRecord.fromMap(String id, Map<String, dynamic> data) {
     final colorValue =
         int.tryParse((data['colorValue'] ?? '').toString()) ??
-        Colors.blue.toARGB32();
+        AppColors.crewDefault.toARGB32();
     final storedDays = (data['workingDays'] as List?)
         ?.map((v) => v == true)
         .toList();
@@ -56,15 +68,21 @@ abstract class EmployeeRecord with _$EmployeeRecord {
       role: (data['role'] ?? 'employee').toString(),
       status: (data['status'] ?? '').toString(),
       uid: (data['uid'] ?? '').toString(),
-      jobTitle: JobTitle.fromRaw(data['jobTitle'] as String?),
+      // Lenient like every other field here, and for a sharper reason: this
+      // factory runs inside three `users` snapshot streams AND on the sign-in
+      // path, so one console-edited doc holding a numeric jobTitle or a string
+      // "480" would throw app-wide — crew picker, day route, live-map roster
+      // and calendar dots at once — and lock that person out of signing in.
+      jobTitle: JobTitle.fromRaw(data['jobTitle']?.toString()),
       workingDays: normalizeWorkingDays(storedDays ?? const []),
       workStartMinutes:
-          (data['workStartMinutes'] as num?)?.toInt() ??
-          kDefaultWorkStartMinutes,
+          firestoreInt(data['workStartMinutes']) ?? kDefaultWorkStartMinutes,
       workEndMinutes:
-          (data['workEndMinutes'] as num?)?.toInt() ?? kDefaultWorkEndMinutes,
-      maxJobsPerDay: (data['maxJobsPerDay'] as num?)?.toInt() ?? 0,
+          firestoreInt(data['workEndMinutes']) ?? kDefaultWorkEndMinutes,
+      maxJobsPerDay: firestoreInt(data['maxJobsPerDay']) ?? 0,
       onCall: data['onCall'] == true,
+      // `!= false`, never `== true`: an absent field must read as ON.
+      travelAlertsEnabled: data['travelAlertsEnabled'] != false,
       createdAt: firestoreDateTime(data['createdAt']),
     );
   }
@@ -76,11 +94,18 @@ abstract class EmployeeRecord with _$EmployeeRecord {
   /// `/users` update denylist in `firestore.rules`, and `status` belongs to
   /// deactivate/reactivate. Emitting either would make a whole-record write
   /// fail with an opaque `permission-denied`.
+  ///
+  /// `email` is absent for a sharper one: it is the person's SIGN-IN identity,
+  /// and it moves through `changeEmployeeEmail` — which owns Auth and
+  /// Firestore together — or not at all. A whole-record write carrying it
+  /// would rewrite the doc while Auth kept the old address, the exact desync
+  /// that callable exists to end, and it is the key `updateEmployee`'s
+  /// uniqueness query reads. `updateEmployee` writes the normalized address
+  /// itself, after the callable has committed.
   Map<String, dynamic> toMap() => {
     'name': name,
     'firstName': firstName,
     'lastName': lastName,
-    'email': email,
     'phone': phone,
     'colorValue': color.toARGB32().toString(),
     'role': role,
@@ -90,6 +115,11 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     'workEndMinutes': workEndMinutes,
     'maxJobsPerDay': maxJobsPerDay,
     'onCall': onCall,
+    // NOTE: `travelAlertsEnabled` is deliberately NOT emitted. It is the
+    // person's own notification preference, written only by
+    // `updateSelfDetails` — an admin save must leave it exactly as it was, and
+    // emitting it here would let a future whole-record write flip somebody
+    // else's push setting.
   };
 
   bool get isAdmin => role == 'admin';

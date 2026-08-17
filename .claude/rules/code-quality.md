@@ -1,0 +1,34 @@
+---
+alwaysApply: true
+---
+
+# Code Quality
+
+## Anti-defaults (counter common Claude tendencies)
+
+- No premature abstractions. Three similar lines beats a helper used once.
+- Don't add features beyond what was asked.
+- No dead code or commented-out blocks. Git has history.
+- Comments: one line max, only where intent isn't obvious from the code.
+
+## Naming (Dart conventions)
+
+- Files: `snake_case` (`user_profile.dart`, `app_routes.dart`, `auth_service.dart`).
+- Classes/enums/extensions: `UpperCamelCase`.
+- Methods, variables, parameters: `lowerCamelCase`.
+- Private members: leading underscore (`_controller`, `_initStreams`).
+- Constants: `lowerCamelCase` for `const` values; `SCREAMING_SNAKE` only for top-level legacy constants.
+- Booleans: `is` / `has` / `should` / `can` prefix. Functions: verb-first (`getUser`).
+- Abbreviations only when universally known (`id`, `uid`, `api`, `auth`).
+
+## Code Markers
+
+`TODO(author): desc (#issue)` for planned work. `FIXME(author): desc (#issue)` for known bugs. `HACK(author): desc (#issue)` for workarounds (explain the proper fix). `NOTE: desc` for non-obvious context. Never `XXX`, `TEMP`, `REMOVEME`.
+
+## File Organization
+
+- Imports: `dart:` SDK imports first, then `package:` imports, then relative imports. Blank line between groups.
+- Save `.dart` files as UTF-8 **without a BOM**. An editor that writes "UTF-8 with BOM" prepends `EF BB BF` to line 1; Dart still compiles, but it pollutes every diff and spreads on each re-save (scan with `head -c 3 file | od -An -tx1`; strip with `tail -c +4`). This has bitten the repo before.
+- One class or widget per file.
+- Public API first, then private helpers in call order.
+- Keep `build()` methods under ~60 lines. Extract sub-widgets or builder methods when larger.

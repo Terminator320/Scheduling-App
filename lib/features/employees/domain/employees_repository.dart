@@ -66,6 +66,20 @@ abstract class EmployeesRepository {
     required EmployeeRecord employee,
   });
 
+  /// A person's edit to their OWN record (P5, Settings › My details).
+  ///
+  /// Deliberately separate from [updateEmployee] rather than a flag on it: the
+  /// rules gate a self write through `isAvailabilityOnlyChange()`, whose
+  /// `hasOnly` rejects the ENTIRE update if one unnamed key rides along — and
+  /// `updateEmployee`'s patch carries `role`, `email` and the emergency
+  /// `FieldValue.delete()` scrub, every one of which would fail it.
+  ///
+  /// The keys written here must stay equal to `kSelfServiceUserFields`, which
+  /// mirrors the rules; `self_service_fields_test.dart` pins that equality.
+  /// Takes the whole record — see the implementation for why loose scalars were
+  /// a trap here. Pass `record.copyWith(...)` of just the fields that changed.
+  Future<void> updateSelfDetails(EmployeeRecord employee);
+
   /// Streams `users/{docId}/private/emergency`.
   ///
   /// Its own document, not two fields on the users doc: rules are

@@ -6,10 +6,36 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
 import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
+
+class _RecordingLogger extends AppLogger {
+  final warnings = <String>[];
+
+  @override
+  void warn(String message, [Object? error, StackTrace? stack]) {
+    warnings.add(message);
+  }
+}
+
+/// A plain fake rather than a `Mock`: the cap test builds a thousand of them,
+/// and only `id` and `data()` are ever read.
+class _FakeDoc extends Fake
+    implements QueryDocumentSnapshot<Map<String, dynamic>> {
+  _FakeDoc(this.id, this._data);
+
+  @override
+  final String id;
+
+  final Map<String, dynamic> _data;
+
+  @override
+  Map<String, dynamic> data() => _data;
+}
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
 
@@ -93,8 +119,15 @@ void main() {
     ).thenAnswer((_) async => _MockCallableResult());
   });
 
-  FirebaseClientsRepository repo({DateTime Function()? clock}) =>
-      FirebaseClientsRepository(firestore, functions: functions, clock: clock);
+  FirebaseClientsRepository repo({
+    DateTime Function()? clock,
+    AppLogger? logger,
+  }) => FirebaseClientsRepository(
+    firestore,
+    functions: functions,
+    clock: clock,
+    logger: logger,
+  );
 
   ClientRecord client({String id = 'c1', String name = 'Test Client'}) =>
       ClientRecord(
@@ -209,6 +242,38 @@ void main() {
     );
   });
 
+  group('the client scan window warns at its cap', () {
+    // This is the quietest truncation in the app. The window is ordered by
+    // `name`, so at the cap it is the alphabetically FIRST 1000 clients —
+    // everything past that point goes invisible to search, to the type-filter
+    // chips and to the Archived chip at once, gradually, as the roster grows,
+    // with no error anywhere. The warn is the entire mitigation.
+    void withClients(int count) => when(() => snapshot.docs).thenReturn([
+      for (var i = 0; i < count; i++)
+        _FakeDoc('c$i', {'name': 'Client ${i.toString().padLeft(4, '0')}'}),
+    ]);
+
+    test('a full window warns', () async {
+      withClients(ClientSearchPolicy.serverReadLimit);
+      final logger = _RecordingLogger();
+
+      await repo(logger: logger).searchClients('client');
+
+      expect(logger.warnings, hasLength(1));
+      expect(logger.warnings.single, startsWith('CLI-SEARCH'));
+      expect(logger.warnings.single, contains('1000'));
+    });
+
+    test('a short window is silent', () async {
+      withClients(ClientSearchPolicy.serverReadLimit - 1);
+      final logger = _RecordingLogger();
+
+      await repo(logger: logger).searchClients('client');
+
+      expect(logger.warnings, isEmpty);
+    });
+  });
+
   group('searchClients', () {
     test(
       'returns empty list without querying Firestore for a blank or '
@@ -297,6 +362,44 @@ void main() {
         await r.addClient(client(id: 'c2', name: 'Zebra Corp'));
 
         expect((await r.searchClients('Zebra')).map((c) => c.id), ['c2']);
+        verify(() => query.get()).called(1);
+      },
+    );
+
+    // I7: `_patchWindow` MERGES the write over the cached doc rather than
+    // substituting it, because `toMap()` emits user-owned fields only. Nothing
+    // asserted that, so a "simplification" back to a plain replace would blank
+    // every function-owned field on every search and type-filter result until
+    // the TTL expired — with no test failing.
+    test(
+      'a local write KEEPS the function-owned fields on the cached doc',
+      () async {
+        // Built before the stub: `doc()` stubs internally, and mocktail
+        // refuses a `when` inside a stub response.
+        final docs = [
+          doc('c1', {
+            'name': 'John Smith',
+            // Function-owned: written by recountClientJobs and the server, and
+            // deliberately absent from ClientRecord.toMap().
+            'jobCount': 7,
+            'waveCustomerId': 'wave-123',
+          }),
+        ];
+        when(() => snapshot.docs).thenReturn(docs);
+
+        final r = repo();
+        expect((await r.searchClients('John')).single.jobCount, 7);
+
+        await r.updateClient(client(name: 'John Smith Jr'));
+
+        final patched = (await r.searchClients('John')).single;
+        expect(patched.name, 'John Smith Jr');
+        expect(
+          patched.jobCount,
+          7,
+          reason: 'jobCount was dropped by the patch',
+        );
+        expect(patched.waveCustomerId, 'wave-123');
         verify(() => query.get()).called(1);
       },
     );

@@ -38,6 +38,7 @@ jest.mock("../security", () => {
 });
 jest.mock("../notification_utils", () => ({
   sendToEmployee: jest.fn().mockResolvedValue(0),
+  sendToActiveAdmins: jest.fn().mockResolvedValue(undefined),
   TIMED_RECIPIENT_ROLES: ["employee", "admin"],
 }));
 
@@ -45,6 +46,10 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {getMessaging} = require("firebase-admin/messaging");
 const logger = require("firebase-functions/logger");
+const {
+  sendToEmployee,
+  sendToActiveAdmins,
+} = require("../notification_utils");
 const {
   createEmployeeAccount,
   completeEmployeeSetup,
@@ -67,11 +72,21 @@ const VALID_CREATE = {
 /**
  * Firestore double. `docs` is the users collection keyed by doc id.
  * Records an ordered trace of the operations the callables perform.
- * @param {!Object} docs Map of docId -> doc data.
+ *
+ * `usersByUid` is a SEPARATE map, because changeEmployeeEmail resolves its
+ * caller through that bridge rather than through assertAdmin — it has to tell
+ * an admin from the person editing their own row. It defaults to an active
+ * admin so every pre-existing test keeps its old meaning.
+ *
+ * @param {!Object} docs Map of docId -> doc data (the `users` collection).
  * @param {!Array<string>} trace Shared ordered call log.
+ * @param {!Object=} bridge Map of auth uid -> `usersByUid` doc data.
  * @return {!Object}
  */
-function makeDb(docs, trace) {
+function makeDb(docs, trace, bridge) {
+  const bridgeDocs = bridge || {
+    "admin-uid": {role: "admin", status: "active", docId: "admin-doc"},
+  };
   const snapOf = (id) => ({
     id,
     exists: Object.prototype.hasOwnProperty.call(docs, id),
@@ -92,12 +107,21 @@ function makeDb(docs, trace) {
     __value: value,
   });
 
+  const bridgeSnapOf = (id) => ({
+    id,
+    exists: Object.prototype.hasOwnProperty.call(bridgeDocs, id),
+    data: () => bridgeDocs[id],
+    ref: {id},
+  });
+
   const db = {
-    collection: () => ({
+    collection: (name) => ({
       where: (field, _op, value) => makeQuery(field, value),
       doc: (id) => ({
         id: id || "generated-doc-id",
-        get: async () => snapOf(id),
+        get: async () => (name === "usersByUid" ?
+          bridgeSnapOf(id) :
+          snapOf(id)),
       }),
     }),
     runTransaction: async (fn) => {
@@ -425,4 +449,154 @@ describe("changeEmployeeEmail ordering", () => {
 
         expect(auth.updateUser).not.toHaveBeenCalled();
       });
+});
+
+describe("changeEmployeeEmail caller branches", () => {
+  const PAYLOAD = {docId: "d1", email: "New@Example.com"};
+  const seedDocs = () => ({
+    d1: {
+      email: "old@example.com", uid: "u1", status: "active", name: "Theo Roy",
+    },
+  });
+  // The self branch demands a fresh re-auth, so every self caller carries a
+  // current `auth_time` the way a real re-authenticated client does.
+  const freshAuthTime = () => Math.floor(Date.now() / 1000);
+  const SELF = {uid: "self-uid", token: {auth_time: freshAuthTime()}};
+  const selfBridge = {
+    "self-uid": {role: "employee", status: "active", docId: "d1"},
+  };
+
+  test("an employee may move their OWN email", async () => {
+    const trace = [];
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace, selfBridge));
+    getAuth.mockReturnValue(auth);
+
+    await changeEmployeeEmail.run({data: PAYLOAD, auth: SELF});
+
+    expect(auth.updateUser).toHaveBeenCalledWith("u1", {
+      email: "new@example.com",
+      emailVerified: false,
+    });
+  });
+
+  test("an employee may NOT move someone else's email", async () => {
+    // Widening past admins must not widen WHICH doc a caller can reach.
+    const trace = [];
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace, {
+      "self-uid": {role: "employee", status: "active", docId: "other"},
+    }));
+    getAuth.mockReturnValue(auth);
+
+    await expect(
+        changeEmployeeEmail.run({data: PAYLOAD, auth: SELF}),
+    ).rejects.toThrow(/not-admin/);
+    expect(auth.updateUser).not.toHaveBeenCalled();
+  });
+
+  test("a disabled employee may not move their own email", async () => {
+    const trace = [];
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace, {
+      "self-uid": {role: "employee", status: "disabled", docId: "d1"},
+    }));
+    getAuth.mockReturnValue(auth);
+
+    await expect(
+        changeEmployeeEmail.run({data: PAYLOAD, auth: SELF}),
+    ).rejects.toThrow(/not-admin/);
+    expect(auth.updateUser).not.toHaveBeenCalled();
+  });
+
+  test("a SELF change notifies the admins, not the person", async () => {
+    const trace = [];
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace, selfBridge));
+    getAuth.mockReturnValue(makeAuth(trace));
+
+    await changeEmployeeEmail.run({data: PAYLOAD, auth: SELF});
+
+    expect(sendToActiveAdmins).toHaveBeenCalled();
+    expect(sendToEmployee).not.toHaveBeenCalled();
+  });
+
+  test("an ADMIN change notifies the person, not the admins", async () => {
+    const trace = [];
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace));
+    getAuth.mockReturnValue(makeAuth(trace));
+
+    await changeEmployeeEmail.run({data: PAYLOAD, auth: ADMIN});
+
+    expect(sendToEmployee).toHaveBeenCalled();
+    expect(sendToActiveAdmins).not.toHaveBeenCalled();
+  });
+
+  test("the admin notice never carries the address", async () => {
+    // It lands on every admin's Lock Screen, and an email is PII.
+    const trace = [];
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace, selfBridge));
+    getAuth.mockReturnValue(makeAuth(trace));
+
+    await changeEmployeeEmail.run({data: PAYLOAD, auth: SELF});
+
+    const [, data, buildMsg] = sendToActiveAdmins.mock.calls[0];
+    expect(JSON.stringify(data)).not.toContain("@example.com");
+    expect(JSON.stringify(buildMsg("en"))).not.toContain("@example.com");
+    expect(buildMsg("en").body).toContain("Theo Roy");
+  });
+
+  test("a signed-out caller is refused before anything else", async () => {
+    const trace = [];
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace));
+    getAuth.mockReturnValue(auth);
+
+    await expect(
+        changeEmployeeEmail.run({data: PAYLOAD, auth: null}),
+    ).rejects.toThrow(/auth-required/);
+    expect(auth.updateUser).not.toHaveBeenCalled();
+  });
+
+  test("a SELF change with a stale re-auth is refused", async () => {
+    // A still-valid ID token alone must not move a sign-in address — that is
+    // the unattended-unlocked-phone primitive SelfEmailService guards against
+    // client-side, restated here so a direct call can't skip it.
+    const trace = [];
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace, selfBridge));
+    getAuth.mockReturnValue(auth);
+
+    await expect(changeEmployeeEmail.run({
+      data: PAYLOAD,
+      auth: {uid: "self-uid", token: {auth_time: freshAuthTime() - 600}},
+    })).rejects.toThrow(/stale-auth/);
+    expect(auth.updateUser).not.toHaveBeenCalled();
+  });
+
+  test("a SELF change presenting no token at all is refused", async () => {
+    // Fails closed: a missing auth_time must not read as "recently
+    // re-authenticated".
+    const trace = [];
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace, selfBridge));
+    getAuth.mockReturnValue(auth);
+
+    await expect(
+        changeEmployeeEmail.run({data: PAYLOAD, auth: {uid: "self-uid"}}),
+    ).rejects.toThrow(/stale-auth/);
+    expect(auth.updateUser).not.toHaveBeenCalled();
+  });
+
+  test("an ADMIN change is NOT gated on re-auth freshness", async () => {
+    // Deliberate scope: updateEmployee has no re-auth step to satisfy, so
+    // gating it would reject every admin edit made minutes after sign-in.
+    const trace = [];
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb(seedDocs(), trace));
+    getAuth.mockReturnValue(auth);
+
+    await changeEmployeeEmail.run({data: PAYLOAD, auth: ADMIN});
+
+    expect(auth.updateUser).toHaveBeenCalled();
+  });
 });

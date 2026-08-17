@@ -34,6 +34,7 @@ class AppLockController extends Notifier<bool> {
   }
 
   Future<void> _load() async {
+    final logger = ref.read(loggerProvider);
     try {
       state = await ref
           .read(secureStorageServiceProvider)
@@ -44,9 +45,9 @@ class AppLockController extends Notifier<bool> {
       // iOS pre-first-unlock — that's environmental, not a bug. Deliberately
       // leaves `_resolved` false so a later resume retries.
       if (isKeychainLockedError(e)) {
-        ref.read(loggerProvider).warn('APPLOCK read skipped: keychain locked');
+        logger.warn('APPLOCK read skipped: keychain locked');
       } else {
-        ref.read(loggerProvider).warn('APPLOCK read flag failed', e, st);
+        logger.warn('APPLOCK read flag failed', e, st);
       }
     }
   }

@@ -2,12 +2,14 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import 'package:scheduling/core/utils/retry.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
+import 'package:scheduling/features/employees/domain/policies/self_service_fields.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 
 /// Shared bound on every `users` stream to prevent unbounded snapshots.
@@ -37,7 +39,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
                 .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
                 .toList(),
           ),
-      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -55,7 +56,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
                 .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
                 .toList(),
           ),
-      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -71,7 +71,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
                 .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
                 .toList(),
           ),
-      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -96,7 +95,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
             'name': name.trim(),
             'firstName': firstName.trim(),
             'lastName': lastName.trim(),
-            'email': email.trim().toLowerCase(),
+            'email': normalizeEmail(email),
             'phone': phone.trim(),
             'colorValue': colorValue,
             'jobTitle': jobTitle,
@@ -165,7 +164,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     required String docId,
     required EmployeeRecord employee,
   }) async {
-    final normalizedEmail = employee.email.trim().toLowerCase();
+    final normalizedEmail = normalizeEmail(employee.email);
     final ref = _users.doc(docId);
     final stored = (await ref.get()).data();
     final storedEmail = stored?['email'] as String? ?? '';
@@ -178,8 +177,13 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       if (storedUid.isEmpty) {
         // No Auth account behind this doc, so the email is ours to write.
         // Uniqueness isn't atomic here; the transaction below re-checks.
+        // Bounded like every other query in this layer. Two is enough to
+        // answer "does anyone else already hold this address" — the result
+        // set is 0-1 in practice, so this is the missing guardrail rather
+        // than a live cost.
         final existing = await _users
             .where('email', isEqualTo: normalizedEmail)
+            .limit(2)
             .get();
         if (existing.docs.any((doc) => doc.id != docId)) {
           throw const EmployeesFailureEmailAlreadyExists();
@@ -247,6 +251,38 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     });
   }
 
+  @override
+  Future<void> updateSelfDetails(EmployeeRecord employee) async {
+    // Exactly the rules allowlist and nothing else — `hasOnly` rejects the
+    // whole write on one stray key. In particular NO emergency scrub here:
+    // `updateEmployee` sends one, and it would add two unnamed keys.
+    //
+    // Takes the WHOLE record rather than loose scalars, the same shape and for
+    // the same reason as `createAccount`: because `hasOnly` forces the patch to
+    // name every allowlisted key, each caller has to pass through the fields it
+    // is NOT changing, and the three of them re-spelled all seven. A field
+    // omitted there silently overwrote somebody's setting, and adding a key to
+    // `kSelfServiceUserFields` meant three edits with no compile error to catch
+    // a miss. Callers now hand over `record.copyWith(...)` of just what changed.
+    final patch = <String, dynamic>{
+      'phone': employee.phone.trim(),
+      'workingDays': normalizeWorkingDays(employee.workingDays),
+      'workStartMinutes': employee.workStartMinutes,
+      'workEndMinutes': employee.workEndMinutes,
+      'onCall': employee.onCall,
+      'travelAlertsEnabled': employee.travelAlertsEnabled,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    assert(
+      patch.keys.every(kSelfServiceUserFields.contains),
+      'self patch carries a key firestore.rules will reject',
+    );
+    // A plain update, not a transaction: one person editing their own doc from
+    // one device has no concurrent writer to guard against, and a needless
+    // client transaction is a real risk on iOS (see the no-transactions rule).
+    await _users.doc(employee.id).update(patch);
+  }
+
   /// Moves the sign-in email in Firebase Auth AND on the users doc.
   ///
   /// Private on purpose: `updateEmployee` is the only caller, so "an email edit
@@ -287,7 +323,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       () => _emergencyDoc(
         docId,
       ).snapshots().map((snap) => EmergencyContact.fromMap(snap.data())),
-      retryWhen: isAuthPropagationDenied,
     );
   }
 
@@ -361,7 +396,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
             _cachedUserDocId = snapshot.docs.first.id;
             return snapshot.docs.first.data();
           }),
-      retryWhen: isAuthPropagationDenied,
     );
   }
 }

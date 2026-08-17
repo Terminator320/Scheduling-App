@@ -63,10 +63,11 @@ void main() {
     ).thenReturn(query);
     when(
       () => query.where(
-        'startTime',
+        'endTime',
         isGreaterThanOrEqualTo: any(named: 'isGreaterThanOrEqualTo'),
       ),
     ).thenReturn(query);
+    when(() => query.limit(any())).thenReturn(query);
     when(() => query.get()).thenAnswer((_) async => snapshot);
     withDocs([]);
   });
@@ -75,7 +76,7 @@ void main() {
       FirebaseAppointmentsRepository(firestore);
 
   test('counts a run already under way, not just one starting later', () async {
-    // Day 3 of a 10-day job: the old startTime >= now query reported 0 and the
+    // Day 3 of a 10-day job: a `startTime >= now` query reported 0 and the
     // admin disabled someone standing on a job site.
     withDocs([
       job(
@@ -88,56 +89,106 @@ void main() {
     expect(await repo().countFutureAssignments('e1'), 1);
   });
 
-  test('excludes a job completed earlier today', () async {
-    // Its window hasn't closed, so the widened floor admits it — only the
-    // status test keeps it from reading as "still assigned, reassign it".
-    withDocs([
-      job(
-        id: 'a',
-        start: now.subtract(const Duration(hours: 4)),
-        end: now.add(const Duration(hours: 4)),
-        status: 'done',
-      ),
-    ]);
+  group('"has work left" is a QUERY bound, not a Dart filter', () {
+    // The query used to be `startTime >= now - maxAppointmentSpanDays` with no
+    // upper bound — every job this person was ever assigned to from a
+    // fortnight ago to the end of time — and then dropped the ended ones in
+    // Dart. Bounding `endTime` instead is what makes the read proportional to
+    // the answer, so the constraint itself is the thing worth pinning.
 
-    expect(await repo().countFutureAssignments('e1'), 0);
+    test('constrains endTime forward of now', () async {
+      await repo().countFutureAssignments('e1');
+
+      final captured = verify(
+        () => query.where(
+          'endTime',
+          isGreaterThanOrEqualTo: captureAny(
+            named: 'isGreaterThanOrEqualTo',
+          ),
+        ),
+      ).captured.single;
+
+      expect(captured, isA<Timestamp>());
+      final floor = (captured as Timestamp).toDate();
+      // Sampled inside the call, so it is `now` to within the test's runtime.
+      expect(floor.difference(now).abs(), lessThan(const Duration(minutes: 1)));
+    });
+
+    test('adds no startTime floor, so the read is proportional to the answer',
+        () async {
+      await repo().countFutureAssignments('e1');
+
+      verifyNever(
+        () => query.where(
+          'startTime',
+          isGreaterThanOrEqualTo: any(named: 'isGreaterThanOrEqualTo'),
+        ),
+      );
+      verifyNever(
+        () => collection.where(
+          'startTime',
+          isGreaterThanOrEqualTo: any(named: 'isGreaterThanOrEqualTo'),
+        ),
+      );
+    });
+
+    test('caps the read, so the repeat horizon cannot set its size', () async {
+      // `endTime >= now` has no upper bound, and a repeat series pre-books up
+      // to 120 occurrences five years out — so without a cap the size of this
+      // read is set by how far ahead the business books, not by how much the
+      // caption needs. This was the last unbounded query in the repository.
+      await repo().countFutureAssignments('e1');
+
+      final cap = verify(() => query.limit(captureAny())).captured.single;
+      expect(cap, isA<int>());
+      expect(cap, lessThanOrEqualTo(500));
+    });
   });
 
-  test('excludes a cancelled job whose window is still open', () async {
-    withDocs([
-      job(
-        id: 'a',
-        start: now.subtract(const Duration(hours: 4)),
-        end: now.add(const Duration(hours: 4)),
-        status: 'cancelled',
-      ),
-    ]);
+  group('status is still tested in Dart', () {
+    // Deliberately not a `whereIn` constraint: an `in` over the open statuses
+    // would drop anything the allowlist does not name, and this caption must
+    // err towards telling the admin to reassign.
 
-    expect(await repo().countFutureAssignments('e1'), 0);
-  });
+    test('excludes a job completed earlier today', () async {
+      // Its window has not closed, so the query admits it — only the status
+      // test keeps it from reading as "still assigned, reassign it".
+      withDocs([
+        job(
+          id: 'a',
+          start: now.subtract(const Duration(hours: 4)),
+          end: now.add(const Duration(hours: 4)),
+          status: 'done',
+        ),
+      ]);
 
-  test('excludes a run that finished inside the widened floor', () async {
-    withDocs([
-      job(
-        id: 'a',
-        start: now.subtract(const Duration(days: 10)),
-        end: now.subtract(const Duration(days: 2)),
-      ),
-    ]);
+      expect(await repo().countFutureAssignments('e1'), 0);
+    });
 
-    expect(await repo().countFutureAssignments('e1'), 0);
-  });
+    test('excludes a cancelled job whose window is still open', () async {
+      withDocs([
+        job(
+          id: 'a',
+          start: now.subtract(const Duration(hours: 4)),
+          end: now.add(const Duration(hours: 4)),
+          status: 'cancelled',
+        ),
+      ]);
 
-  test('counts an unknown status as open work', () async {
-    withDocs([
-      job(
-        id: 'a',
-        start: now.add(const Duration(days: 1)),
-        end: now.add(const Duration(days: 1, hours: 8)),
-        status: 'legacy_confirmed',
-      ),
-    ]);
+      expect(await repo().countFutureAssignments('e1'), 0);
+    });
 
-    expect(await repo().countFutureAssignments('e1'), 1);
+    test('counts an unknown status as open work', () async {
+      withDocs([
+        job(
+          id: 'a',
+          start: now.add(const Duration(days: 1)),
+          end: now.add(const Duration(days: 1, hours: 8)),
+          status: 'legacy_confirmed',
+        ),
+      ]);
+
+      expect(await repo().countFutureAssignments('e1'), 1);
+    });
   });
 }

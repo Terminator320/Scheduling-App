@@ -17,30 +17,53 @@
 
 const {
   toMillis,
-  businessYmd,
-  businessMidnight,
+  businessDayStartMs,
   businessMinutesOfDay,
   hasWorkLeft,
-  MAX_APPOINTMENT_SPAN_MS,
+  isCancelledStatus,
 } = require("./time_utils");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // How long after its endTime a job stays eligible for the overdue prompt. A
 // job left open longer than this just gets no prompt — an accepted v1 gap.
-const OVERDUE_LOOKBACK_MS = 24 * 60 * 60 * 1000;
-
-// The overdue sweep queries by startTime (endTime would need a new index),
-// so its floor must cover the eligibility window PLUS the longest bookable
-// span. That span used to be just under 24h; since multi-day appointments it
-// is MAX_APPOINTMENT_SPAN_DAYS, and a 48h floor silently stopped matching any
-// run longer than a day — those jobs never became candidates and were never
-// prompted to close.
-const OVERDUE_QUERY_WINDOW_MS = OVERDUE_LOOKBACK_MS + MAX_APPOINTMENT_SPAN_MS;
+//
+// This is BOTH the eligibility window and the sweep's query floor, because the
+// sweep queries `endTime` directly (index `(status, endTime DESC)`). It used
+// to query `startTime` and so needed a floor of this PLUS the longest bookable
+// span — about 15 days — which meant re-reading every open job started in the
+// last fortnight, every 15 minutes, to act on the few that had just ended.
+// Querying the field the rule is actually about makes the scan the width of
+// the rule. It also drops the span coupling entirely: a run longer than
+// MAX_APPOINTMENT_SPAN_DAYS (only reachable by a console or Admin-SDK write,
+// which bypass the rules' span bound) is now swept on its real end time
+// instead of falling out of the floor.
+//
+// **The WIDTH is sized against the sweep CADENCE, and the two must be revisited
+// together.** It was 24 h under the standalone `sendOverdueJobPrompts` timer
+// (`every 15 minutes`, 96 runs/day). Folding that sweep into
+// `sendUpcomingJobReminders` on 2026-08-13 tripled the cadence to 288 runs/day
+// and left the width alone, so every job sitting open past its end was re-read
+// and had its ledger `create()` re-attempted on 287 further sweeps — every one
+// of them guaranteed to fail ALREADY_EXISTS. At 2 h the window still gives 24
+// examinations per job at the current cadence (fewer wasted, more than the 8
+// the old cadence gave over the same two hours), and the ledger — never the
+// cadence — is what makes delivery at-most-once. What the extra reach actually
+// bought was the retry after a RELEASED claim (a zero-delivery pass releases it
+// for a later sweep, so an assignee registering a token late is re-tried) and
+// slack across an outage; both now span 2 h rather than a day.
+const OVERDUE_LOOKBACK_MS = 2 * 60 * 60 * 1000;
 
 // Safety valve bounding the candidate set so one run can't blow the function
 // timeout. Logs a warning instead of silently truncating if it's ever hit.
 const OVERDUE_SWEEP_MAX = 500;
+
+// The same valve for the nightly digest, which reads a ~15-day window of open
+// jobs business-wide. Larger than OVERDUE_SWEEP_MAX because the window is
+// wider and a truncated digest means a crew is told nothing about tomorrow —
+// a silent omission, unlike an overdue nudge that simply arrives on the next
+// 5-minute run.
+const DIGEST_SWEEP_MAX = 1000;
 
 // FCM's hard cap on a message's data map is 4 KB. This leaves headroom for
 // the other data keys (kind, appointment id, deep link) alongside the payload.
@@ -87,6 +110,11 @@ const KIND_PRIORITY = {
 // edits themselves. Time-based pushes also reach an assigned admin.
 const CHANGE_RECIPIENT_ROLES = new Set(["employee"]);
 const TIMED_RECIPIENT_ROLES = new Set(["employee", "admin"]);
+// Admin-only fan-outs: something a person did that the managers need to know
+// about. `sendToEmployee` re-checks the recipient's role against whichever set
+// it is handed, so passing one of the two above would silently deliver nothing
+// useful here (they both admit employees).
+const ADMIN_RECIPIENT_ROLES = new Set(["admin"]);
 
 /**
  * Normalizes an employeeIds field to an array of usable doc ids.
@@ -97,6 +125,15 @@ const TIMED_RECIPIENT_ROLES = new Set(["employee", "admin"]);
  * `db.collection("users").doc(id)`, which throws SYNCHRONOUSLY on a slash —
  * and one poisoned element in one appointment was enough to reject the whole
  * daily-digest batch and silence it for every employee.
+ *
+ * Deliberately NOT `security.requireDocId`, which owns the same rule for the
+ * callables. Two reasons, either alone sufficient: this DROPS a bad element
+ * and keeps the rest, where the callable form throws `HttpsError` — turning a
+ * trigger's one poisoned id into a thrown request is the exact failure this
+ * filter exists to prevent; and this module is the pure-policy half of the
+ * push stack (no `deps`, no db, no messaging), so requiring `security.js`
+ * would drag firebase-functions and a firebase-admin handle into it. Change
+ * the 128 here and in `requireDocId`/`isValidDocIdField` together.
  * @param {*} value
  * @return {!Array<string>}
  */
@@ -161,8 +198,7 @@ function diffAppointmentForNotifications(before, after, now, id) {
   const nowMs = nowMillis(now);
   const acc = {};
 
-  const isCancelled = (d) =>
-    d && String(d.status || "").toLowerCase() === "cancelled";
+  const isCancelled = (d) => Boolean(d) && isCancelledStatus(d.status);
   const stillLive = (d) => hasWorkLeft(d, nowMs);
 
   if (!before && after) {
@@ -219,7 +255,7 @@ function diffAppointmentForNotifications(before, after, now, id) {
 
 /**
  * Filters appointment records to those overdue for a "job finished?" prompt
- * — still open per OPEN_LIKE, with an endTime within OVERDUE_LOOKBACK_MS,
+ * — still open per OPEN_LIKE, with an endTime within OVERDUE_LOOKBACK_MS (2 h),
  * mirroring the app's AppointmentRecord.displayStatus. A status OPEN_LIKE
  * doesn't recognize is never swept. Pure — unit-testable.
  * @param {!Array<!Object>} records Appointment records ({id, status,
@@ -249,8 +285,9 @@ function selectOverdueCandidates(records, now) {
  * then. This is an instant-span overlap rather than the app's daily-window
  * model (`AppointmentDaySlice`), so an overnight run can still be listed on
  * the morning it finishes — over-inclusive, which is the safe direction here.
- * The full mirror is Plan 2 (`docs/plans/2026-08-02-multi-day-appointments.md`
- * §8).
+ * Plan 2 mirrored that model into JS as `./day_slice_utils` (2026-08-10) and
+ * deliberately left the digest on the coarser test; switching it is a
+ * behaviour change, not a port.
  * @param {!Array<!Object>} records Appointment records.
  * @param {(Date|number)} now
  * @return {!Object<string, !Array<!Object>>}
@@ -261,7 +298,7 @@ function groupTomorrowsJobsByEmployee(records, now) {
   const endMs = end.getTime();
   const grouped = {};
   for (const r of records || []) {
-    if (String(r.status || "").toLowerCase() === "cancelled") continue;
+    if (isCancelledStatus(r.status)) continue;
     const ms = toMillis(r.startTime);
     if (ms == null) continue;
     // Overlap, not "starts tomorrow": a multi-day run booked days ago is
@@ -294,11 +331,9 @@ function groupTomorrowsJobsByEmployee(records, now) {
  * @return {{start: !Date, end: !Date}}
  */
 function tomorrowWindowToronto(now) {
-  const date = now instanceof Date ? now : new Date(Number(now));
-  const [y, m, d] = businessYmd(date);
   return {
-    start: businessMidnight(y, m, d + 1),
-    end: businessMidnight(y, m, d + 2),
+    start: new Date(businessDayStartMs(now, 1)),
+    end: new Date(businessDayStartMs(now, 2)),
   };
 }
 
@@ -364,6 +399,9 @@ function contextFor(kind, before, after) {
     // instead — same fallback the widget and the Siri intents already use.
     title: d.title,
     startTime: d.startTime,
+    // The run's end, so a multi-day job's message reads a date RANGE rather
+    // than naming only the first morning.
+    endTime: d.endTime,
     // An all-day block stores a midnight start; the message speaks the date
     // alone rather than "12:00 a.m.".
     isAllDay: d.isAllDay === true,
@@ -375,15 +413,13 @@ function contextFor(kind, before, after) {
 module.exports = {
   DAY_MS,
   OVERDUE_LOOKBACK_MS,
-  OVERDUE_QUERY_WINDOW_MS,
   OVERDUE_SWEEP_MAX,
+  DIGEST_SWEEP_MAX,
   WIDGET_PAYLOAD_MAX_BYTES,
-  LEDGER_TTL_MS,
-  OPEN_LIKE,
   OPEN_STATUSES,
-  KIND_PRIORITY,
   CHANGE_RECIPIENT_ROLES,
   TIMED_RECIPIENT_ROLES,
+  ADMIN_RECIPIENT_ROLES,
   ledgerBody,
   toIdList,
   nowMillis,

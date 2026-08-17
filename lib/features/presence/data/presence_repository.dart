@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
 
@@ -74,10 +75,21 @@ class PresenceRepository {
   Stream<List<PresenceFix>> watchAllPresence() => retryStream(
     () => _firestore
         .collectionGroup('presence')
+        // The `orderBy` is what makes the limit mean anything — without it
+        // Firestore falls back to `__name__`, so a truncated feed would show
+        // an arbitrary slice of the roster rather than the freshest fixes.
+        // Same shape that bit `fetchClientHistory`.
+        //
+        // NEEDS the COLLECTION_GROUP-scoped `presence.updatedAt` override in
+        // `firestore.indexes.json` — a collection-group order is NOT served by
+        // the automatic single-field index, so this query fails with
+        // FAILED_PRECONDITION until `firestore:indexes` is deployed. Every
+        // write path stamps `updatedAt` (see `upsertFix`), so no doc is
+        // excluded by the ordering.
+        .orderBy('updatedAt', descending: true)
         .limit(_presenceStreamLimit)
         .snapshots()
         .map(_toFixes),
-    retryWhen: isAuthPropagationDenied,
   );
 
   /// One malformed doc must not drop the whole map — skip it and keep going.
@@ -97,7 +109,11 @@ class PresenceRepository {
           userDocId: userDocId,
           lat: lat,
           lng: lng,
-          updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
+          // Lenient, like the lat/lng type tests above: a cast here would
+          // throw inside `snapshots().map` on one string instant and blank
+          // the WHOLE admin map, which is exactly what this method's
+          // "skip it and keep going" contract exists to prevent.
+          updatedAt: firestoreDateTime(data['updatedAt']),
         ),
       );
     }

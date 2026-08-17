@@ -10,6 +10,229 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.46.2+75] - 2026-08-16
+
+Two clients had been unable to reach Wave for days, and the evening "tomorrow's
+jobs" notification had a way of going quiet for everyone at once. Both are
+fixed here, along with a photo-sharing hole that outlived switching an account
+off.
+
+### Fixed
+- **A client could get permanently stuck as "failed to sync" with Wave.** If
+  the customer had been deleted on the Wave side, every push — and every press
+  of **Retry failed** — sent it to the same missing record and failed the same
+  way, so the count never came down and there was nothing you could do about
+  it. The client is now reconnected to its Wave customer, or a new one is
+  created, instead. Two real clients were in this state and are recovered.
+- **One typo in an address could stop a client syncing, for good.** Putting a
+  province in the country box, or having a client outside Canada, sent Wave a
+  code it doesn't recognise and killed the whole update — not just that one
+  line. Retrying could never help, because it resent the same thing. Unknown
+  country or province values are now left off instead, and the rest of the
+  client still syncs.
+- **"Retry failed" could report success while nothing had actually gone
+  through.** It told you what it had queued up again, not what Wave accepted —
+  so it read as good news over a row still saying clients had failed. It now
+  reports what landed and what didn't, and what didn't is shown as an error.
+- **The 6 p.m. "tomorrow's jobs" notification could stop reaching everyone.**
+  Once enough finished-but-never-closed jobs built up, the evening summary
+  filled up with old work and found nothing about tomorrow, so nobody's crew
+  got one — with nothing to indicate it had happened.
+- **Job photos could still be opened by someone whose account had been
+  switched off.** Showing a photo used to create a permanent web link for it,
+  and those links kept working for anyone whose phone had already received
+  them. Disabling someone now invalidates the links on every job they were
+  assigned to. Two honest limits: this covers their most recent 500 jobs, and
+  it cannot reach a link that was saved somewhere outside the app.
+- **Photos stayed in the phone's memory after signing out** — worth knowing on
+  a shared device. Signing out now clears them.
+- **A failed address lookup could copy the address being typed into the
+  server's logs.** Only the error code is recorded now.
+
+### Changed
+- **A long job history scrolls and searches more smoothly.** The screen was
+  re-counting and re-grouping the whole loaded history on every keystroke and
+  every redraw, which got heavier the further you scrolled.
+
+## [1.46.1+74] - 2026-08-15
+
+A correctness and privacy pass over the whole codebase. The headline is that a
+client's typed name could be silently replaced by their phone number when you
+saved them.
+
+### Changed
+- **Job photos are checked against your account every time they're shown.**
+  Displaying a photo used to mint a permanent web link for it. That link never
+  expired and needed no sign-in, so a photo someone saw while they worked here
+  kept opening for them long after their account was switched off. Photos now
+  load through your account on every view, and no shareable link is created at
+  all. The cost, and it's a real one: **photos no longer work offline**, and
+  they download once per session instead of being kept on the phone. This does
+  not reach back — a link somebody already saved under an older version of the
+  app still works.
+
+### Fixed
+- **Saving a client could replace their name with their phone number.** The
+  Name field is required while First and Last are optional, so filling in just
+  the name — the ordinary way to add someone — left the number as the only
+  thing stored. The client then showed as a bare number on every card, in
+  search and on their own page, and re-typing the name just did it again. The
+  typed name is now kept. Clients this already happened to are recovered
+  separately, from the names their past visits still carry.
+- **Photos could vanish from a job.** A job whose photos had been moved to the
+  new storage showed only the moved ones and dropped the rest.
+- **A cancelled job could be marked complete.** An assignee could put a
+  cancelled visit back into the schedule as a finished one.
+- **Some saves failed with "something went wrong" and no way to fix it.**
+  Saving an appointment for a client with a long name, or a client with a long
+  street address plus an apartment number, was rejected outright.
+- **One bad record could blank a whole screen.** A client, employee or staff
+  location edited outside the app — in the Firebase console — could stop the
+  list it belonged to from loading at all, and for an employee record it could
+  stop that person signing in.
+- **Reporting a failure could itself crash the app.** The same fault behind the
+  address-lookup crash fixed last release was present in twelve other places,
+  each one turning a handled error into a crash if the screen had already
+  closed.
+- **The photo-upload warning's "Open" button could do nothing** when the job it
+  pointed at had since been deleted.
+
+## [1.46.0+73] - 2026-08-14
+
+Changes how clients are named — in the app and on your Wave invoices — replaces
+the date wheel on the appointment form with a real calendar, and makes edits
+reach Wave in seconds instead of minutes.
+
+### Added
+- **Picking a date now drops a whole month down under the row.** The
+  appointment form had a spinning wheel in a pop-up that showed three days at a
+  time and covered the form behind it. Tapping a date row now opens the month
+  right where the row is, so you can see which day of the week the 12th falls
+  on before you commit. The start and end dates each get their own row, and
+  picking a day doesn't slam the calendar shut — changing your mind costs one
+  more tap, not a reopen. Days you can't book are greyed out and won't take a
+  tap, and the other end of the run is tinted so you can see the whole job at
+  once.
+- **The new-clients card on the dashboard shows the trend, not just the
+  number.** A small bar per week with "this week" marked at the end, and one
+  line telling you whether that's more or fewer than the weeks before it.
+  It names how many more clients came in than the card lists, so five rows
+  never reads as five clients.
+- **Settings › Wave tells you what's still waiting.** It shows how many client
+  edits are queued to reach Wave and how many gave up, and a **Retry failed**
+  button puts the failed ones back in the queue and pushes them straight away —
+  so after a Wave outage you can clear the backlog yourself instead of waiting
+  for the overnight sync.
+
+### Changed
+- **A person is now named by their phone number in Wave, and a business keeps
+  its name.** The invoicing side identifies people by number, so that is what
+  shows on the customer list and on an invoice; the real name is still on the
+  client and is what the app shows you everywhere. A company — "Vogas
+  Plumbing", "1505 Village de Bergerac" — keeps its own name, because a number
+  in its place is unrecognisable on an invoice. In the app nothing reads as a
+  bare number: a person shows their first and last name, a business shows the
+  business.
+- **Phone numbers all read the same way now.** Numbers that came in from Wave
+  or from older records were stored as bare digits, so the customer list mixed
+  "(514) 234-0818" with "4506220931". They're all formatted now.
+- **Typing a phone number into the client's Name field moves it to the phone
+  field.** Only when the phone field is still empty, and it leaves the name
+  alone if the number is all that was typed.
+- **A client edit reaches Wave in seconds.** It used to wait for a sync that
+  ran every five minutes. Saving a client now pushes it immediately.
+- **Today reads as a ring around the date instead of a blue number.** The blue
+  was also the colour of the date you'd picked, so "today" and "your choice"
+  looked the same. This applies to the month grid, the week strip and the new
+  date picker alike.
+
+### Fixed
+- **Editing a client could rename that customer in Wave.** Opening the edit
+  sheet for a business filled the Name field with the contact person's name, so
+  saving anything at all — even a phone number correction — replaced the
+  company's name on its live invoices. The field now shows the name that is
+  actually stored.
+- **Some clients whose name was replaced with their number were companies.**
+  House of Jazz, La Scala, Yokohama and nine others had been renamed on real
+  invoices; their names are restored and they're marked as businesses so it
+  can't happen again.
+- **The dashboard and the client detail showed a client's phone number as part
+  of their name.**
+- **The day route could keep showing yesterday.** It read the clock once
+  instead of following the current day, so an app left open overnight stayed on
+  the previous day's stops.
+- **A failed address lookup could crash the app** if the sheet it belonged to
+  had already been closed.
+- **Signing out could leave this device still registered.** If the first
+  clean-up step failed, the two after it were skipped — including the ones that
+  stop your location showing on the admin map.
+- **A photo that the app accepted could be deleted by the server.** The two
+  checks on what makes a valid image file disagreed by one byte.
+
+## [1.45.0+72] - 2026-08-11
+
+Gives everyone a place to edit their own details, rebuilds the dashboard and
+History screens, and finishes the job multi-day appointments started — a job
+that runs Monday to Friday now shows up on all five days everywhere, not just
+the day it began.
+
+### Added
+- **You can now change your own details.** Settings › My details used to hold
+  an emergency contact and nothing else. It now covers your phone number, your
+  emergency contact, and your whole availability — which days you work, your
+  hours, and whether you're on call. Availability applies the moment you tap it;
+  the phone and emergency fields wait behind a Save button, because a half-typed
+  phone number saving itself is worse than one extra tap. If you switch off a
+  day you already have work booked on, it says so and leaves the jobs alone for
+  a human to move.
+- **You can change the email you sign in with.** Same screen. It asks for your
+  password first and makes you type the new address twice — a typo there locks
+  you out until an admin undoes it. Your administrators are told when you change
+  it, and you're told when they change it for you.
+- **Time-to-leave alerts can be switched off per person.** Settings ›
+  Notifications. Off means you still get the ordinary half-hour reminder — you
+  just stop getting the traffic-aware "leave now" version.
+- **The dashboard covers Today, this Week, or this Month.** A period control at
+  the top switches the summary between them; booked, completed and cancelled
+  counts follow it. There's also a jobs-per-day chart for the week that marks
+  any day booked past the crew's capacity, and a new-clients section whose rows
+  open the client.
+- **The dashboard flags two more things worth knowing.** Accounts that were
+  created but never set up, and anyone booked on a day they're not available.
+- **Appointment cards show when a job has photos.** A small camera icon on the
+  card, and the day's header now reads "4 JOBS · 1 DONE" so you can see at a
+  glance how much of the day is behind you.
+
+### Changed
+- **History has been rebuilt.** Dates moved to a rail down the left, each month
+  gets a heading that sticks to the top while you scroll through it, and one
+  line tells you what you're looking at — "18 JOBS · 2 CANCELLED". Two quick
+  filters sit beside the year and staff pickers so you can jump to just the
+  completed or just the cancelled jobs. Searching switches to a flat list, since
+  results from all over the calendar don't group into months usefully.
+- **A personal job can have an address again.** A dentist appointment or a
+  supply run still happens somewhere, and the crew wants directions to it. The
+  address field stays on screen, marked optional. It no longer auto-fills from a
+  client you removed when you turned the job personal.
+- **A multi-day job now appears on every day it runs.** Previously it showed up
+  only on the day it started, which meant the home-screen widget went blank on
+  day two, Siri said "nothing today", and the assignment notification named only
+  the first morning. Each day now shows that day's hours plus a "Day 3 of 5"
+  counter, and a job spanning days reads as a date range in notifications.
+
+### Fixed
+- **The dashboard judged a running job by its first morning.** On day three of a
+  job that starts at 2pm, the counts included it while the list underneath said
+  "No visits today", and it sorted above jobs that were genuinely earlier.
+- **Live job cards were always orange, whoever the job belonged to.** Cards also
+  no longer appear for jobs spanning several days — a five-day countdown on your
+  Lock Screen is worse than no card at all.
+- **A job photo you're no longer entitled to see could still load.** It now
+  shows as an unavailable tile instead.
+- **The widget and Siri went blank on a temporary error.** A failed read was
+  being treated as "signed out", which wiped the schedule instead of leaving the
+  last one in place.
+
 ## [1.44.1+71] - 2026-08-08
 
 Restores work that was reverted in error before 1.44.0 went out, and which the

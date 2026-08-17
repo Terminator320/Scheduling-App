@@ -1,17 +1,32 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 
-/// Today, as a single-day range. Keyed off `currentDayProvider` rather than
-/// `DateTime.now()` so an app left open across midnight rolls over — the same
-/// rule the calendar's today-circle and the off-screen mirrors follow.
+/// The window the today-scoped roster surfaces read. Keyed off
+/// `currentDayProvider` rather than `DateTime.now()` so an app left open across
+/// midnight rolls over — the same rule the calendar's today-circle and the
+/// off-screen mirrors follow.
+///
+/// Deliberately [AppointmentDateRange.forMirrors] and NOT `forDay`, even
+/// though every consumer wants a single day: `appointmentsInRangeProvider` is
+/// keyed by range VALUE, and for an admin the Siri snapshot already holds this
+/// exact range open for the whole session. `forDay`'s result set is a strict
+/// subset of it (same `fetchStart`, narrower `end`), so asking for it forked a
+/// SECOND permanent business-wide listener over documents the first was
+/// already streaming — and the hub keeps the Team tab mounted, so one visit
+/// pinned it for the session. Every consumer below re-scopes with `runsOn`, so
+/// the wider list feeds them unchanged. Same rule as `myDetailsRangeProvider`.
 final todayRangeProvider = Provider<AppointmentDateRange>((ref) {
-  return AppointmentDateRange.forDay(ref.watch(currentDayProvider));
+  return AppointmentDateRange.forMirrors(ref.watch(currentDayProvider));
 });
 
 /// How many jobs each employee is booked for today, keyed by users-doc id.
@@ -28,10 +43,14 @@ final todayRangeProvider = Provider<AppointmentDateRange>((ref) {
 /// of the session.
 final employeeJobsTodayProvider = Provider.autoDispose<Map<String, int>>((ref) {
   final range = ref.watch(todayRangeProvider);
-  final jobs = ref.watch(appointmentsInRangeProvider(range)).value ?? const [];
+  final jobs = appointmentsOrEmpty(
+    ref,
+    ref.watch(appointmentsInRangeProvider(range)),
+    'EMP-TODAY jobs-today range stream failed',
+  );
   final counts = <String, int>{};
   for (final job in jobs) {
-    if (job.status == 'cancelled') continue;
+    if (isCancelledStatusRaw(job.status)) continue;
     if (!runsOn(job, range.start)) continue;
     for (final id in job.employeeIds) {
       counts[id] = (counts[id] ?? 0) + 1;
@@ -47,11 +66,29 @@ final employeeJobsTodayProvider = Provider.autoDispose<Map<String, int>>((ref) {
 /// themselves, so a peer's read errors rather than returning empty — surfaces
 /// must render it only when they already know the viewer is entitled, and
 /// treat an error as "not shown", never as "none on file".
+/// The failure is logged HERE, once per error emission, and rethrown.
+///
+/// Not in the three consumers' error branches: those live inside `build`, so
+/// they fire on every rebuild, and all three would have to carry the same
+/// call. Without it a failing read on this path was invisible in Crashlytics
+/// while every surface quietly rendered "not shown" — a swallowed failure with
+/// no log is the shape the error-handling rules exist to forbid.
 final emergencyContactProvider = StreamProvider.autoDispose
     .family<EmergencyContact, String>((ref, docId) {
+      final logger = ref.watch(loggerProvider);
       return ref
           .watch(employeesRepositoryProvider)
-          .watchEmergencyContact(docId);
+          .watchEmergencyContact(docId)
+          .transform(
+            StreamTransformer<EmergencyContact, EmergencyContact>.fromHandlers(
+              handleError: (error, stackTrace, sink) {
+                logger.warn('EMP-EMERGENCY watch failed', error, stackTrace);
+                // Rethrown, so a surface still tells the two apart: an error
+                // must never render as "none on file".
+                sink.addError(error, stackTrace);
+              },
+            ),
+          );
     });
 
 /// How many future jobs an employee is still assigned to — the caption under
@@ -73,23 +110,36 @@ final futureAssignmentCountProvider = FutureProvider.autoDispose
 final employeeTodayJobsProvider = Provider.autoDispose
     .family<List<AppointmentRecord>, String>((ref, employeeId) {
       final range = ref.watch(todayRangeProvider);
-      final jobs =
-          ref.watch(appointmentsInRangeProvider(range)).value ?? const [];
-      final today = [
-        for (final job in jobs)
-          if (job.status != 'cancelled' &&
-              job.employeeIds.contains(employeeId) &&
-              runsOn(job, range.start))
-            job,
-      ];
-      // Sort by THIS DAY's window start, not the stored instant. The stream
+      final jobs = appointmentsOrEmpty(
+        ref,
+        ref.watch(appointmentsInRangeProvider(range)),
+        'EMP-TODAY today-panel range stream failed',
+      );
+      // Sorted by THIS DAY's window start, not the stored instant. The stream
       // arrives in `orderBy('startTime')` order, so a run that began days ago
       // sorted ahead of everything — a 5-day 17:00 job listed above today's
       // 08:00 one. `notification_policy.js` sorts by the day's clock time for
       // exactly this reason; this is the Dart mirror of that rule.
-      return today..sort((a, b) {
-        final aStart = sliceFor(a, range.start)?.windowStart ?? a.startTime;
-        final bStart = sliceFor(b, range.start)?.windowStart ?? b.startTime;
-        return aStart.compareTo(bStart);
-      });
+      //
+      // Decorate-sort-undecorate: the key is built ONCE per record, not on
+      // both operands of every comparison — `fetchClientsByType` documents
+      // avoiding the same pattern. Inside the comparator a 20-job day cost
+      // ~170 slice constructions instead of 20, on every stream emission.
+      //
+      // The slice is ALSO the day-scoping test, so it is resolved once and
+      // used for both: a null slice is precisely `!runsOn`, and asking
+      // `runsOn` first and then `sliceFor` re-ran the whole day-index
+      // computation on every surviving record.
+      final keyed = <({AppointmentRecord job, DateTime start})>[];
+      for (final job in jobs) {
+        if (isCancelledStatusRaw(job.status) ||
+            !job.employeeIds.contains(employeeId)) {
+          continue;
+        }
+        final slice = sliceFor(job, range.start);
+        if (slice == null) continue;
+        keyed.add((job: job, start: slice.windowStart));
+      }
+      keyed.sort((a, b) => a.start.compareTo(b.start));
+      return [for (final entry in keyed) entry.job];
     });

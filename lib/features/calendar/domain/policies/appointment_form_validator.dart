@@ -40,12 +40,14 @@ class AppointmentFormInput {
   final DateTime? endDate;
 
   /// A personal job blocks time out for the crew instead of visiting a client,
-  /// so it carries no client, no address, and needn't be named. The assignees
-  /// are still required — they are who the block is for, and who can see it.
+  /// so it carries no client and needn't be named. Its address is optional
+  /// rather than absent — the block may still have somewhere to be. The
+  /// assignees are still required: they are who it is for, and who can see it.
   final bool isPersonal;
 
   /// No time was put in, so the block owns the whole day and neither time is
-  /// required. Only reachable on a personal job.
+  /// required. Offered on every job, and defaulted on for an untimed personal
+  /// block.
   final bool isAllDay;
 }
 

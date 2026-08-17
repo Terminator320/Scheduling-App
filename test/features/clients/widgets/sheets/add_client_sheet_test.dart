@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -150,6 +149,66 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repo.added!.type, ClientType.unset);
+  });
+
+  // I4: `repo.added!.name` had zero assertions here, though the stored name IS
+  // the Wave customer name — the one field a wrong save renames on live
+  // invoices. Both branches of `composeStored`, from the form.
+  testWidgets('a PERSON is stored under their phone number', (tester) async {
+    final repo = await pumpSheet(tester);
+
+    await tester.enterText(find.byType(TextField).first, 'Marc Tremblay');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Phone'),
+      '5145550101',
+    );
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added!.name, '5145550101');
+  });
+
+  testWidgets('a PERSON keeps the typed name in the halves', (tester) async {
+    // Name is required here and both halves are optional, so composing alone
+    // would leave the typed name nowhere — the card would render a bare
+    // number and nothing in the app could recover it.
+    final repo = await pumpSheet(tester);
+
+    await tester.enterText(find.byType(TextField).first, 'Marc Tremblay');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Phone'),
+      '5145550101',
+    );
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added!.firstName, 'Marc');
+    expect(repo.added!.lastName, 'Tremblay');
+  });
+
+  testWidgets('a COMMERCIAL client keeps its typed name', (tester) async {
+    // The type has to reach `composeStored`, or a real company is booked into
+    // Wave under a phone number.
+    final repo = await pumpSheet(tester);
+
+    await tester.enterText(find.byType(TextField).first, 'Vogas Plumbing');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Phone'),
+      '5145550101',
+    );
+    await tester.tap(find.byType(SwitchListTile));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Commercial'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add'));
+    await tester.pumpAndSettle();
+
+    expect(repo.added!.name, 'Vogas Plumbing');
   });
 
   testWidgets('access notes are saved', (tester) async {

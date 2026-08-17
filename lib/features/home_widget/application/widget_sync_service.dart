@@ -11,6 +11,7 @@ import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
@@ -21,20 +22,31 @@ const widgetAppGroupId = 'group.net.vogas.scheduling';
 const _iosWidgetName = 'ScheduleWidget';
 const _payloadKey = 'schedulePayload';
 
-Map<String, dynamic> _job(AppointmentRecord a) => {
-  // Carried so tapping the widget can deep-link back to the job. `?? ''`
-  // avoids sending null, since Swift decodes this field as non-optional.
-  'id': a.id ?? '',
-  // Emit an absolute UTC instant with the Z suffix — a bare toIso8601String()
-  // omits the zone designator the widget's formatter needs.
-  'startTime': a.startTime.toUtc().toIso8601String(),
-  'clientName': a.clientName,
-  'title': a.title,
-  'address': a.address,
-  'status': a.status,
-  // The widget speaks "All day" instead of the stored midnight–23:59 pair.
-  'isAllDay': a.isAllDay,
-};
+/// One job as the widget renders it, scoped to the day it appears on.
+///
+/// [slice] carries that day's window and position in the run — the widget must
+/// show TODAY's clock, not the run's first morning. `dayIndex`/`dayCount` are
+/// omitted for a single-day job so a pre-multi-day Swift decoder still parses
+/// (it reads them as `Int?`) and so the widget shows no counter.
+Map<String, dynamic> _job(AppointmentDaySlice slice) {
+  final a = slice.appointment;
+  return {
+    // Carried so tapping the widget can deep-link back to the job. `?? ''`
+    // avoids sending null, since Swift decodes this field as non-optional.
+    'id': a.id ?? '',
+    // Emit an absolute UTC instant with the Z suffix — a bare toIso8601String()
+    // omits the zone designator the widget's formatter needs.
+    'startTime': slice.windowStart.toUtc().toIso8601String(),
+    'clientName': a.clientName,
+    'title': a.title,
+    'address': a.address,
+    'status': a.status,
+    // The widget speaks "All day" instead of the stored midnight–23:59 pair.
+    'isAllDay': a.isAllDay,
+    if (slice.isMultiDay) 'dayIndex': slice.dayIndex,
+    if (slice.isMultiDay) 'dayCount': slice.dayCount,
+  };
+}
 
 /// How long after the last job of the day is finished the widget keeps showing
 /// today before it rolls forward to tomorrow's schedule.
@@ -50,46 +62,49 @@ Map<String, dynamic> buildWidgetPayload(
 }) {
   final startOfToday = now.dateOnly;
   final startOfTomorrow = DateTime(now.year, now.month, now.day + 1);
-  final startOfDayAfter = DateTime(now.year, now.month, now.day + 2);
 
-  bool inRange(AppointmentRecord a, DateTime lo, DateTime hi) =>
-      !a.startTime.isBefore(lo) && a.startTime.isBefore(hi);
   AppointmentStatus statusOf(AppointmentRecord a) =>
       AppointmentStatus.fromRaw(a.status);
 
-  final todayAll = appointments
-      .where((a) => inRange(a, startOfToday, startOfTomorrow))
-      .toList();
+  // A job is "on" a day when it WORKS that day — not when its stored startTime
+  // happens to fall in it. Without this a run that began yesterday is invisible
+  // today, which is the whole point of multi-day support.
+  List<AppointmentDaySlice> slicesOn(DateTime day) => [
+    for (final a in appointments) ?sliceFor(a, day),
+  ];
+
+  final todayAll = slicesOn(startOfToday);
   final todayIncomplete = todayAll
-      .where((a) => !statusOf(a).isTerminal)
+      .where((s) => !statusOf(s.appointment).isTerminal)
       .toList();
-  // "Still ahead of you today". An all-day block starts at midnight, so a
-  // start-time test would drop it from today the moment the day began — it
-  // stays listed until its 23:59 end passes.
-  bool stillAhead(AppointmentRecord a) =>
-      a.isAllDay ? a.endTime.isAfter(now) : a.startTime.isAfter(now);
+  // "Still ahead of you today", judged against THIS day's window. An all-day
+  // block starts at midnight, so a start test would drop it the moment the day
+  // began — it stays listed until its 23:59 end passes.
+  bool stillAhead(AppointmentDaySlice s) => s.appointment.isAllDay
+      ? s.windowEnd.isAfter(now)
+      : s.windowStart.isAfter(now);
 
   final todayJobs = todayIncomplete.where(stillAhead).toList()
-    ..sort((x, y) => x.startTime.compareTo(y.startTime));
+    ..sort((x, y) => x.windowStart.compareTo(y.windowStart));
   final tomorrowJobs =
-      appointments
-          .where(
-            (a) =>
-                inRange(a, startOfTomorrow, startOfDayAfter) &&
-                !statusOf(a).isTerminal,
-          )
-          .toList()
-        ..sort((x, y) => x.startTime.compareTo(y.startTime));
+      slicesOn(
+          startOfTomorrow,
+        ).where((s) => !statusOf(s.appointment).isTerminal).toList()
+        ..sort((x, y) => x.windowStart.compareTo(y.windowStart));
 
   DateTime? rolloverAt;
   if (todayIncomplete.isEmpty) {
-    final finished = todayAll.where((a) => !statusOf(a).isCancelled).toList();
+    final finished = todayAll
+        .where((s) => !statusOf(s.appointment).isCancelled)
+        .toList();
     // If today's jobs are empty or all cancelled, use a stable past instant so
-    // we don't churn; otherwise roll over 1h after the last job ends.
+    // we don't churn; otherwise roll over 1h after the last job ends. The
+    // window end, not the record's — a run rolls the widget over at the end of
+    // TODAY's window, not at the end of the whole run.
     rolloverAt = finished.isEmpty
         ? startOfToday
         : finished
-              .map((a) => a.endTime)
+              .map((s) => s.windowEnd)
               .reduce((a, b) => a.isAfter(b) ? a : b)
               .add(widgetRolloverGrace);
   }
@@ -122,13 +137,34 @@ Future<void> writeWidgetPayloadJson(String payloadJson) async {
   }
 }
 
+/// The App Group write itself. A null [payloadJson] wipes the key.
+typedef WidgetPayloadWriter = Future<void> Function(String? payloadJson);
+
+// Declared here rather than imported from `AppSyncListeners` (which already
+// imports this file) so the two don't form a cycle.
+bool _platformIsIos() => Platform.isIOS;
+
+Future<void> _writeToAppGroup(String? payloadJson) async {
+  await HomeWidget.setAppGroupId(widgetAppGroupId);
+  await HomeWidget.saveWidgetData<String>(_payloadKey, payloadJson);
+  await HomeWidget.updateWidget(iOSName: _iosWidgetName);
+}
+
 /// Writes the widget payload into the App Group and refreshes the widget.
-/// iOS-only, and verified on-device rather than with unit tests — the payload
-/// builder above is the part that's actually tested.
+/// iOS-only; the actual App Group write is verified on-device, but the dedup
+/// bookkeeping around it is injectable and covered by tests.
 class WidgetSyncService {
-  WidgetSyncService({AppLogger? logger}) : _logger = logger ?? AppLogger();
+  WidgetSyncService({
+    AppLogger? logger,
+    bool Function()? isIosPlatform,
+    WidgetPayloadWriter? write,
+  }) : _logger = logger ?? AppLogger(),
+       _isIos = isIosPlatform ?? _platformIsIos,
+       _write = write ?? _writeToAppGroup;
 
   final AppLogger _logger;
+  final bool Function() _isIos;
+  final WidgetPayloadWriter _write;
 
   /// Signature of the last successful write, used to dedup repeat syncs.
   /// Null means nothing's been written yet; [_clearedState] means we cleared it.
@@ -136,13 +172,15 @@ class WidgetSyncService {
   String? _lastState;
 
   Future<void> sync(Map<String, dynamic> payload) async {
-    if (!Platform.isIOS) return;
+    if (!_isIos()) return;
     final signature = _signatureOf(payload);
     if (signature == _lastState) return;
     try {
-      await HomeWidget.setAppGroupId(widgetAppGroupId);
-      await HomeWidget.saveWidgetData<String>(_payloadKey, jsonEncode(payload));
-      await HomeWidget.updateWidget(iOSName: _iosWidgetName);
+      await _write(jsonEncode(payload));
+      // Stamped only AFTER the write lands. Set it first and a failed write is
+      // remembered as the current state, so the next identical payload dedupes
+      // away and the home screen is frozen on stale jobs until the schedule
+      // itself changes.
       _lastState = signature;
     } catch (e, st) {
       _logger.warn('WIDGET sync failed', e, st);
@@ -150,12 +188,12 @@ class WidgetSyncService {
   }
 
   Future<void> clear() async {
-    if (!Platform.isIOS) return;
+    if (!_isIos()) return;
     if (_lastState == _clearedState) return;
     try {
-      await HomeWidget.setAppGroupId(widgetAppGroupId);
-      await HomeWidget.saveWidgetData<String>(_payloadKey, null);
-      await HomeWidget.updateWidget(iOSName: _iosWidgetName);
+      await _write(null);
+      // Same ordering rule as [sync]: a failed clear must stay retryable, or a
+      // signed-out user's jobs sit in the App Group until something else writes.
       _lastState = _clearedState;
     } catch (e, st) {
       _logger.warn('WIDGET clear failed', e, st);
@@ -179,20 +217,23 @@ final widgetSyncServiceProvider = Provider<WidgetSyncService>(
   (ref) => WidgetSyncService(logger: ref.watch(loggerProvider)),
 );
 
-/// The signed-in user's doc id, or null when signed out. Both employees and
-/// admins qualify here, since admins can assign themselves to jobs too.
-final widgetEmployeeIdProvider = FutureProvider.autoDispose<String?>(
-  (ref) async => (await ref.watch(activeUserIdentityProvider.future))?.docId,
-);
-
-/// The current widget payload for the signed-in employee, or null when the
-/// widget should be cleared. Watches today plus the lookahead range.
+/// The current widget payload for the signed-in user, or null when the widget
+/// should be cleared. Watches today plus the lookahead range.
 final widgetPayloadProvider =
     Provider.autoDispose<AsyncValue<Map<String, dynamic>?>>((ref) {
-      final empIdAsync = ref.watch(widgetEmployeeIdProvider);
-      if (empIdAsync.isLoading) return const AsyncValue.loading();
-      final empId = empIdAsync.value;
-      if (empId == null) {
+      final identityAsync = ref.watch(activeUserIdentityProvider);
+      if (identityAsync.isLoading) return const AsyncValue.loading();
+      // An identity read that FAILED is propagated as an error, never collapsed
+      // into a settled null: null means "signed out, clear the widget", and a
+      // Firestore failure is not that. See `AppSyncListeners.isUnsettled`.
+      if (identityAsync.hasError) {
+        return AsyncValue<Map<String, dynamic>?>.error(
+          identityAsync.error!,
+          identityAsync.stackTrace ?? StackTrace.current,
+        );
+      }
+      final identity = identityAsync.value;
+      if (identity == null) {
         return const AsyncValue<Map<String, dynamic>?>.data(
           null,
         );
@@ -205,9 +246,29 @@ final widgetPayloadProvider =
       // same range value means one listener for both.
       // `buildWidgetPayload` re-scopes to today/tomorrow in Dart regardless.
       final range = AppointmentDateRange.forMirrors(today);
-      final appts = ref.watch(
-        myAppointmentsProvider((employeeId: empId, range: range)),
-      );
+      // Role-branched the same way the Siri snapshot is, and for the same
+      // reason: an ADMIN already holds a business-wide listener on this exact
+      // range for the snapshot, and their own jobs are a strict subset of it —
+      // asking for `myAppointmentsProvider` as well opened a SECOND permanent
+      // Firestore listener over documents the first was already streaming.
+      // The assignee filter has to happen here: `buildWidgetPayload` day-scopes
+      // but does NOT filter by assignee, so feeding it the business-wide list
+      // would put every colleague's jobs on the admin's home screen.
+      final appts = identity.role == 'admin'
+          ? ref
+                .watch(appointmentsInRangeProvider(range))
+                .whenData(
+                  (list) => [
+                    for (final a in list)
+                      if (a.employeeIds.contains(identity.docId)) a,
+                  ],
+                )
+          : ref.watch(
+              myAppointmentsProvider((
+                employeeId: identity.docId,
+                range: range,
+              )),
+            );
       final locale = AppLanguageController.instance.value == 'fr' ? 'fr' : 'en';
       return appts.whenData(
         (list) => buildWidgetPayload(list, DateTime.now(), locale: locale),

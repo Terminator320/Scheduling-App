@@ -4,11 +4,14 @@ import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/auth_validators.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
-import 'package:scheduling/features/auth/widgets/auth_form_widgets.dart';
+import 'package:scheduling/features/auth/widgets/auth_fields.dart';
+import 'package:scheduling/features/auth/widgets/auth_scaffold.dart';
+import 'package:scheduling/features/auth/widgets/auth_text.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 
@@ -49,7 +52,7 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
 
   Future<void> _sendResetEmail() async {
     FocusScope.of(context).unfocus();
-    final email = _emailController.text.trim().toLowerCase();
+    final email = normalizeEmail(_emailController.text);
     final emailError = AuthValidators.email(context, email);
 
     if (emailError != null) {

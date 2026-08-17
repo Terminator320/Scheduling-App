@@ -18,7 +18,7 @@ private let snapshotKey = "schedule_snapshot"
 
 /// Schema version this decoder understands. A snapshot stamped with anything
 /// else is rejected outright, rather than risk a mis-decode.
-private let supportedVersion = 2
+private let supportedVersion = 3
 
 struct SnapshotAppointment: Codable, Hashable {
     // Non-optional on purpose: the Dart builder drops records without a doc id,
@@ -33,6 +33,12 @@ struct SnapshotAppointment: Codable, Hashable {
     let address: String
     let status: String
     let isAllDay: Bool?
+    // v3. Optional so the decode of an older payload still reaches the version
+    // gate above rather than failing field-wise. Absent means a single-day job
+    // — the builder omits them rather than sending 1 of 1.
+    let dayIndex: Int?
+    let dayCount: Int?
+    let isOvernight: Bool?
 
     var start: Date { Date(timeIntervalSince1970: startMillis / 1000) }
     var end: Date { Date(timeIntervalSince1970: endMillis / 1000) }
@@ -40,6 +46,10 @@ struct SnapshotAppointment: Codable, Hashable {
     /// True for an all-day block, which stores a real midnight–23:59 span but
     /// must never be read out as a clock time.
     var allDay: Bool { isAllDay == true }
+
+    /// True when this job runs across more than one day, so Siri names which
+    /// day of the run it is speaking about.
+    var isMultiDay: Bool { (dayCount ?? 1) > 1 }
 
     var isDone: Bool {
         let s = status.lowercased()

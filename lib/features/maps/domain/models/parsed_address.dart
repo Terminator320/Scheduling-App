@@ -2,9 +2,17 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 
 part 'parsed_address.freezed.dart';
 
+/// A Places result, as returned by `placesGetDetails`.
+///
+/// Only [fullAddress] is read today — `AddressAutocompleteField` formats that
+/// one string and hands it to the form. The four components are kept
+/// deliberately rather than trimmed: they are parsed server-side from the
+/// `addressComponents` field mask that `functions/places.js` already requests,
+/// and they are what a structured address entry would need. Kept, not dead —
+/// don't wire a caller to them without deciding whether the form should hold
+/// components instead of one line.
 @freezed
 abstract class ParsedAddress with _$ParsedAddress {
-
   const factory ParsedAddress({
     @Default('') String fullAddress,
     @Default('') String street,

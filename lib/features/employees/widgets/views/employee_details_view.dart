@@ -56,6 +56,11 @@ class EmployeeDetailsView extends ConsumerWidget {
     // always passes that rule and a failed read means the read failed — NOT
     // that there is none on file. If this view is ever reused on a non-admin
     // surface it must distinguish the two, the way MyDetailsScreen does.
+    //
+    // Loading and error deliberately render the SAME thing here (the panel is
+    // omitted below when the rows are empty), which is what "not shown" means
+    // on a read-only surface. The failure itself is not swallowed: the
+    // provider logs it once per error emission.
     final emergency =
         ref.watch(emergencyContactProvider(employee.id)).value ??
         EmergencyContact.empty;
@@ -103,6 +108,9 @@ class EmployeeDetailsView extends ConsumerWidget {
           labels: weekdayAbbreviationsForLocale(locale),
         ),
       ),
+      // No "No cap" row here, unlike the two edit surfaces: this is a
+      // read-only body, which omits empty sections rather than rendering a
+      // placeholder — an uncapped person has no daily cap to report.
       if (employee.maxJobsPerDay > 0)
         KeyValueRow(
           label: l10n.employees_maxPerDayKey,

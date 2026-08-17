@@ -180,18 +180,25 @@ class _ProfileCard extends StatelessWidget {
     final subtitle = _subtitle(context);
     // Shown only when it says something the name doesn't already — a business
     // with a named individual on file.
+    // Resolved once: `displayName` is an uncached getter that runs `stripPhone`
+    // (two regex passes), and this body reads it four times.
+    final displayName = client.displayName;
     final fullName = [
       client.firstName,
       client.lastName,
     ].where((part) => part.trim().isNotEmpty).join(' ').trim();
-    final showPersonName = fullName.isNotEmpty && fullName != client.name;
+    // Compared against what the title actually RENDERS, not the stored `name`
+    // — that one carries the phone number, so it never equals `fullName` and
+    // this line used to repeat the title verbatim on every person client.
+    final showPersonName =
+        fullName.isNotEmpty && fullName != displayName;
 
     final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          client.displayName,
+          displayName,
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.w700,
           ),
@@ -235,7 +242,7 @@ class _ProfileCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      AppAvatar(name: client.displayName, size: AvatarSize.lg),
+                      AppAvatar(name: displayName, size: AvatarSize.lg),
                       const SizedBox(width: AppSpacing.sp12),
                       Expanded(child: identity),
                     ],
@@ -249,7 +256,7 @@ class _ProfileCard extends StatelessWidget {
               )
             : Row(
                 children: [
-                  AppAvatar(name: client.displayName, size: AvatarSize.lg),
+                  AppAvatar(name: displayName, size: AvatarSize.lg),
                   const SizedBox(width: AppSpacing.sp12),
                   Expanded(child: identity),
                   const SizedBox(width: AppSpacing.sp8),

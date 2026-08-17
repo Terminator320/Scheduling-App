@@ -34,3 +34,16 @@ final List<String> terminalStatusQueryValues = List.unmodifiable(
 /// True when [raw] is a stored status meaning the job is closed.
 bool isTerminalStatusRaw(String raw) =>
     terminalStatusRawValues.contains(raw.toLowerCase());
+
+/// True when [raw] is the stored status meaning the visit was called off.
+///
+/// Split out of the terminal set rather than spelled again at the call site:
+/// History both counts cancelled work and offers it as a quick filter, and a
+/// second `== 'cancelled'` literal is how this vocabulary drifted the first
+/// time.
+bool isCancelledStatusRaw(String raw) => raw.toLowerCase() == 'cancelled';
+
+/// True when [raw] is a stored status meaning the job was finished — `done` in
+/// either of its spellings, and never `cancelled`.
+bool isCompletedStatusRaw(String raw) =>
+    isTerminalStatusRaw(raw) && !isCancelledStatusRaw(raw);

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
+import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
 import 'package:scheduling/features/auth/data/auth_error_mapper.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
@@ -47,13 +48,13 @@ class AuthService {
     required String password,
   }) {
     return _auth.signInWithEmailAndPassword(
-      email: email.trim().toLowerCase(),
+      email: normalizeEmail(email),
       password: password.trim(),
     );
   }
 
   Future<void> sendPasswordResetEmail(String email) {
-    return _auth.sendPasswordResetEmail(email: email.trim().toLowerCase());
+    return _auth.sendPasswordResetEmail(email: normalizeEmail(email));
   }
 
   /// Whether the signed-in address has been verified.
@@ -212,7 +213,7 @@ class AuthService {
       try {
         await _authCache.clear();
       } catch (e, st) {
-        _logger.warn('signOut: auth cache clear failed', e, st);
+        _logger.warn('ACCT-SIGNOUT auth cache clear failed', e, st);
       }
     }
   }
