@@ -153,10 +153,43 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   (it sits inside a `retry: true` trigger) and it is defence-in-depth behind
   the rules' status gate, never the gate itself. Retire it with the `url`
   write.
-  **The accepted cost, stated up front by the owner:** this loses
-  `cached_network_image`'s on-disk byte cache, so photos re-download once per
-  session and **do not render offline at all**. `cached_network_image` /
-  `flutter_cache_manager` are no longer imported anywhere in `lib/`.
+  **Photos render OFFLINE again as of 2026-08-16, and this was never in
+  tension with the rule above.** The render-from-bytes change was written up as
+  costing the on-disk cache outright — "photos re-download once per session and
+  do not render offline at all" — and that cost was paid for a day on the one
+  use case the app exists for: a tech in a basement or an underground garage
+  opening a job they looked at that morning. But `cached_network_image` cached
+  BYTES too; what made it unacceptable was the HANDLE it cached them against, a
+  permanent rules-free token URL. **`AppointmentImageDiskCache`
+  (`core/images/appointment_image_disk_cache.dart`) keys on `storagePath` and
+  stores nothing shareable**, so the offline win is back without the leak.
+  `cached_network_image` / `flutter_cache_manager` are still not imported
+  anywhere in `lib/` and must not come back — the point was never to restore
+  that package, only the property it happened to provide.
+  **Two caches, two distinct jobs — don't collapse them.** The session map
+  (below) keeps the fetch from being paid per widget State; the disk cache keeps
+  it from being paid per SESSION. `load` reads disk BEFORE the network and
+  writes back after a successful fetch; the write is deliberately **not**
+  awaited, so a file write and its eviction sweep never sit in front of a first
+  render.
+  **Be precise about the residual, which is real:** a cache HIT of either kind
+  is not rules-evaluated, so bytes fetched while entitled stay renderable on
+  that device until they are evicted or the session is forgotten. That is the
+  accepted cost and it is bounded by three things — the entries live in the
+  platform CACHE directory (iOS excludes it from device and iCloud backups, the
+  same posture as the Keychain `first_unlock_this_device` rule), the folder is
+  budgeted at `maxCachedBytes` (128 MB, oldest-first by INSERTION, matching the
+  memory cache rather than paying a write per render to track use), and
+  `clear()` wipes disk as well as memory.
+  **Entries never need revalidating, and that is what makes the whole thing
+  safe:** `ImageStorageService.uploadImage` composes every file name from
+  `DateTime.now()`, so a `storagePath` is written exactly once and never
+  overwritten. A rotated download token mints a different URL, so a legacy
+  `url:`-keyed entry simply becomes unreachable and ages out. Every disk
+  operation is best-effort — a failure degrades to a cache miss and a log,
+  never to a photo that fails to render — and the resolved directory is
+  memoized with its REJECTION explicitly forgotten, or one hiccup at launch
+  would silently disable offline photos for the whole process.
   **The session cache holds the BYTES** (`Map<key, Future<Uint8List>>` keyed on
   `storagePath`, or `'url:<url>'` for a legacy entry that has no storage path —
   keying THOSE on the shared empty `storagePath` would serve one doc's bytes
@@ -169,14 +202,23 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   than the strings they replaced; a session that opens fifty jobs would
   otherwise retain every photo of every one of them. `loadAll` keeps its
   concurrency bound of 4, and `appointment_image_loader_test.dart` now asserts
-  that bound rather than only the ordering that survives it. **The cache is
+  that bound rather than only the ordering that survives it. **BOTH caches are
   cleared by `deregisterThisDevice`** (`core/app/device_deregistration.dart`),
   the single owner of "forget this session" — the provider is a plain
   `Provider`, so its bytes otherwise live for the whole process and one user's
   job photos stay in the heap across sign-out into the next user's session on
-  a shared device. Not a rules bypass (serving them still needs the next
+  a shared device, **and the DISK half outlives the process entirely**, which
+  is what turns this from a memory-forensics footnote into a real leak on a
+  shared handset. Not a rules bypass (serving them still needs the next
   reader to be entitled to the same `storagePath`), which is why it sits after
-  the credential-dependent steps rather than before them.
+  the credential-dependent steps rather than before them. `clear()` is
+  therefore `Future<void>` and goes through that function's isolating `step`
+  like every other teardown — it touches the file system now, so it can fail.
+  The memory half is emptied first and synchronously, so an awaited disk delete
+  cannot delay it. A disk write whose session ended mid-flight is **dropped**
+  (the cache carries a generation counter): the loader's write-back is
+  unawaited, so a fetch resolving just after sign-out would otherwise re-seed
+  the cache that was just emptied.
   A doc written before `storagePath` was stored has only its `url`, so **that
   URL is unavoidably the handle** — but it is turned back into a `Reference`
   via `refFromURL` and fetched through the SDK like any other, so even the

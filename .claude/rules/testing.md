@@ -26,6 +26,15 @@ paths:
   `FlutterSecureStorage.setMockInitialValues({})` in `setUp`. `SettingsScreen`
   additionally needs `PackageInfo.setMockInitialValues(...)` and a `ProviderScope`
   (it watches `appInfoProvider` + `appLockEnabledProvider` during build).
+- **Any widget test reaching an account exit must override
+  `appointmentImageLoaderProvider`.** `deregisterThisDevice` clears the on-disk
+  photo cache, which resolves the platform cache directory through
+  `path_provider` — and a method channel never completes under `testWidgets`'
+  fake clock, so the real loader makes the test **HANG until its timeout rather
+  than fail**, with no error naming the cause. Override it with a subclass whose
+  `clear()` is a no-op (see `_StubLoader` in `account_exit_listeners_test.dart`,
+  `_RecordingLoader` in `device_deregistration_test.dart`). Same class of trap
+  as the `FlutterSecureStorage.setMockInitialValues({})` rule above.
 - Overflow regressions: sweep the screen at a small viewport (375×667) across
   text scales 0.8–2.0 and assert no exceptions — reuse the `_scaled` /
   `_pumpAtViewport` harness pattern in
