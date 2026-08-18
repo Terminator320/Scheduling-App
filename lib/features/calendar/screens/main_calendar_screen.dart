@@ -479,7 +479,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           onMonthChanged: _setFocusedDay,
           dotColorsFor: (day) =>
               dayJobDotColors(_appointmentsOn(day), colorMap),
-          countFor: (day) => _getEventsForDay(day).length,
+          // The cell's semantics label speaks the dots' meaning, so it counts
+          // what the dots count — cancelled visits are excluded from both.
+          countFor: (day) => dottedJobsOn(_appointmentsOn(day)).length,
         ),
       );
 

@@ -32,7 +32,6 @@ void main() {
           data: const MediaQueryData(textScaler: TextScaler.linear(2)),
           child: _wrap(
             DetailsActionBar(
-              hasStarted: true,
               isDone: false,
               isCancelled: false,
               isSaving: false,
@@ -48,11 +47,31 @@ void main() {
     },
   );
 
+  testWidgets('an open job offers Complete before it has started', (
+    tester,
+  ) async {
+    // The bar has no clock at all any more (owner call, 2026-08-17): a job
+    // booked for next week offers the same close action as one under way.
+    await tester.pumpWidget(
+      _wrap(
+        DetailsActionBar(
+          isDone: false,
+          isCancelled: false,
+          isSaving: false,
+          onMarkDone: () {},
+          onCancel: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Mark as complete'), findsOneWidget);
+  });
+
   testWidgets('done appointment hides the cancel button', (tester) async {
     await tester.pumpWidget(
       _wrap(
         DetailsActionBar(
-          hasStarted: true,
           isDone: true,
           isCancelled: false,
           isSaving: false,
@@ -74,7 +93,6 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         DetailsActionBar(
-          hasStarted: true,
           isDone: true,
           isCancelled: false,
           isSaving: false,

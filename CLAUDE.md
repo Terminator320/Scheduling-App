@@ -440,12 +440,19 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `event_details_controller`, per-sibling in `appointment_series_editor`'s
   `propagate`, and in the Siri snapshot builder. `UserStatus.fromRaw` is the
   matching mapper for account statuses (unknown/empty → `invited`).
-- **Employee "Mark as complete" gates on `hasStarted`, not on "is today".**
-  `!appointment.startTime.isAfter(now)` in `details_view_body.dart` — the edit
-  form's status picker is admin-only, so an employee who misses the button
-  before midnight (or is on day 2+ of a multi-day visit) has no other way to
-  close the job while the server keeps sending "job finished?" nudges. The
-  rules allow an assignee to write `status:'done'` with no date restriction.
+- **"Mark as complete" carries NO clock gate at all** (owner call, 2026-08-17,
+  which widened the 2026-07 `hasStarted` rule). `DetailsActionBar` offers it on
+  every open job — the only conditions are `!isDone && !isCancelled` — so the
+  bar reads nothing from the clock and `details_view_body.dart` derives no
+  `now`. The old `!appointment.startTime.isAfter(now)` gate already existed
+  because the edit form's status picker is admin-only, so an employee who
+  misses the button before midnight (or is on day 2+ of a multi-day visit) has
+  no other way to close a job the server keeps nudging them about; the same
+  reasoning applies before the start time, to a crew that finishes early or a
+  job booked for later today. The rules have always allowed an assignee to
+  write `status:'done'` with no date restriction (pinned by
+  `appointment_employee_update_rules_test.dart`), so nothing server-side
+  changed. Don't reintroduce a start-time or "is today" test here.
 - **Admin-only appointment actions are gated by an explicit `showActions`.**
   `showEventDetails(..., showActions:)` is a REQUIRED param, and
   `AppointmentTile` / `EventDetailsSheet` / `EventDetailsView` all default it
