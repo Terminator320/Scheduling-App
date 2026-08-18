@@ -21,26 +21,40 @@ class DeepLinkDispatcher {
   final Future<void> Function(String appointmentId) openAppointment;
 
   StreamSubscription<Uri>? _subscription;
+  bool _started = false;
+  bool _disposed = false;
 
   /// Subscribes to inbound links and drains the cold-start launch URL.
   void start() {
+    if (_started || _disposed) return;
+    _started = true;
     unawaited(() async {
       try {
         final appLinks = AppLinks();
+        if (_disposed) return;
         _subscription = appLinks.uriLinkStream.listen(
           handleLink,
           onError: (Object e, StackTrace st) =>
               logger.warn('DEEP-LINK stream error', e, st),
         );
         final initial = await appLinks.getInitialLink();
+        if (_disposed) {
+          unawaited(_subscription?.cancel());
+          _subscription = null;
+          return;
+        }
         if (initial != null) await handleLink(initial);
       } catch (e, st) {
+        await _subscription?.cancel();
+        _subscription = null;
+        _started = false;
         logger.warn('DEEP-LINK setup failed', e, st);
       }
     }());
   }
 
   void dispose() {
+    _disposed = true;
     unawaited(_subscription?.cancel());
     _subscription = null;
   }

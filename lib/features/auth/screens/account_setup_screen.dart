@@ -85,6 +85,7 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   late bool _emailVerified;
   bool _isSendingVerification = false;
   bool _isCheckingVerification = false;
+  bool _isSigningOut = false;
   bool _verificationSent = false;
   String? _verificationNotice;
 
@@ -190,12 +191,20 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   /// submit button.
   void _onPasswordChanged() => _onFieldChanged();
 
+  bool get _isVerificationBusy =>
+      _isSendingVerification || _isCheckingVerification;
+
+  bool get _isTransitionBusy =>
+      _isLoading || _isSigningOut || _isVerificationBusy;
+
   /// Sends Firebase's own verification email to the address they signed in
   /// with. Deliberately user-triggered rather than automatic: an auto-send on
   /// every visit spends the provider's rate limit on people who already have
   /// the message open.
   Future<void> _sendVerificationEmail() async {
-    if (_isSendingVerification) return;
+    if (_isTransitionBusy) {
+      return;
+    }
     // Before the await: the catch logs above its `mounted` guard, and
     // `ref.read` on an unmounted consumer throws under Riverpod 3.
     final logger = ref.read(loggerProvider);
@@ -237,7 +246,9 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   /// callable reads `email_verified` off the token, so without that the server
   /// would keep refusing an address the person has already verified.
   Future<void> _checkVerification() async {
-    if (_isCheckingVerification) return;
+    if (_isTransitionBusy) {
+      return;
+    }
     final logger = ref.read(loggerProvider);
     setState(() {
       _isCheckingVerification = true;
@@ -278,7 +289,7 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
     // onPressed after the setState rebuild, so a same-frame double-tap would
     // otherwise run two updatePassword calls and two completeEmployeeSetup
     // invocations — burning 2 of 5 rate-limit slots and pushing the hub twice.
-    if (_isLoading) return;
+    if (_isTransitionBusy) return;
     FocusScope.of(context).unfocus();
     // Consent and email verification are the two gates, and this is where they
     // are enforced: the confirm-password field's keyboard-submit reaches here
@@ -371,10 +382,7 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       // The account is active server-side; the doc just isn't readable yet.
       // Say so and offer the way back to sign-in.
       case SignInNoSession() || SignInProfilePending():
-        setState(() {
-          _isLoading = false;
-          _bannerSuccess = context.l10n.auth_accountReadySignInAgain;
-        });
+        await _recoverToLoginAfterSetup();
       // These only come from signIn() — resumeAfterSignUp() never produces
       // them, but the sealed family forces the branch. `NeedsAccountSetup`
       // included: reaching it here would mean activation didn't stick, and
@@ -384,8 +392,24 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
           SignInAccountDisabled() ||
           SignInNeedsAccountSetup() ||
           SignInError():
-        break;
+        setState(() {
+          _isLoading = false;
+          _bannerError = context.l10n.error_somethingWentWrongPleaseTryAgain;
+        });
     }
+  }
+
+  Future<void> _recoverToLoginAfterSetup() async {
+    final logger = ref.read(loggerProvider);
+    try {
+      await _authService.signOut();
+    } catch (error, stackTrace) {
+      logger.warn('AUTH-SETUP recovery signOut failed', error, stackTrace);
+    }
+    if (!mounted) return;
+    await Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
   }
 
   /// Abandoning setup has to be possible: the person is holding a live session
@@ -400,11 +424,26 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   /// nothing to tear down. If a future registration ever starts before
   /// activation, this has to route through the shared exit path instead.
   Future<void> _signOut() async {
-    await _authService.signOut();
-    if (!mounted) return;
-    await Navigator.of(
-      context,
-    ).pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+    if (_isTransitionBusy) return;
+    final logger = ref.read(loggerProvider);
+    setState(() {
+      _isSigningOut = true;
+      _bannerError = null;
+    });
+    try {
+      await _authService.signOut();
+      if (!mounted) return;
+      await Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+    } catch (error, stackTrace) {
+      logger.warn('AUTH-SETUP signOut failed', error, stackTrace);
+      if (!mounted) return;
+      setState(() {
+        _isSigningOut = false;
+        _bannerError = context.l10n.error_somethingWentWrongPleaseTryAgain;
+      });
+    }
   }
 
   @override
@@ -441,8 +480,8 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
         const SizedBox(height: AppSpacing.sp16),
         VerifyEmailPanel(
           hasSent: _verificationSent,
-          isSending: _isSendingVerification,
-          isChecking: _isCheckingVerification,
+          isSending: _isSendingVerification || _isSigningOut,
+          isChecking: _isCheckingVerification || _isSigningOut,
           notice: _verificationNotice,
           onSend: _sendVerificationEmail,
           onCheck: _checkVerification,
@@ -549,7 +588,7 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       const SizedBox(height: AppSpacing.sp24),
       AnimatedLoadingButton(
         label: l10n.auth_finishSetup,
-        isLoading: _isLoading,
+        isLoading: _isLoading || _isSigningOut,
         // The checkbox and the verification panel ARE the gates — both are
         // on screen and self-explanatory, so a disabled button needs no
         // error copy of its own.
@@ -558,7 +597,7 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       const SizedBox(height: AppSpacing.sp8),
       Center(
         child: TextButton(
-          onPressed: _isLoading ? null : _signOut,
+          onPressed: _isTransitionBusy ? null : _signOut,
           child: Text(l10n.settings_logOut),
         ),
       ),

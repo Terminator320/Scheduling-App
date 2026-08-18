@@ -110,7 +110,10 @@ class LiveActivityRegistrationController with ReentrantSync {
     // defaults to true, which would re-register a device that opted out.
     await _ref.read(liveActivityEnabledProvider.notifier).ready;
     if (!_ref.read(liveActivityEnabledProvider)) {
-      await _cancelStreams();
+      // A stored opt-out is authoritative, so reconcile by actively removing
+      // any stale server rows left behind by an interrupted previous opt-out
+      // rather than only stopping local streams.
+      await unregister();
       return;
     }
     final signedIn = _auth.currentUser != null;

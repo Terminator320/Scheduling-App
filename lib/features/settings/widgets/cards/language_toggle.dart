@@ -27,12 +27,12 @@ class LanguageToggle extends StatelessWidget {
           _LangBtn(
             label: 'EN',
             isActive: currentCode == 'en',
-            onTap: () => onChanged('en'),
+            onTap: currentCode == 'en' ? null : () => onChanged('en'),
           ),
           _LangBtn(
             label: 'FR',
             isActive: currentCode == 'fr',
-            onTap: () => onChanged('fr'),
+            onTap: currentCode == 'fr' ? null : () => onChanged('fr'),
           ),
         ],
       ),
@@ -49,7 +49,7 @@ class _LangBtn extends StatelessWidget {
 
   final String label;
   final bool isActive;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   /// Minimum tap-target side (Apple HIG / Material a11y): the old
   /// text-sized GestureDetector was ~24x17px and easy to miss.

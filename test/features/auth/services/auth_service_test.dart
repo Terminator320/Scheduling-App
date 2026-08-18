@@ -199,4 +199,22 @@ void main() {
       verifyNever(() => auth.signOut());
     });
   });
+
+  group('signOut', () {
+    test('swallows a local sign-out failure once auth state is already cleared', () async {
+      when(() => auth.signOut()).thenThrow(Exception('ios signOut failed'));
+      when(() => auth.currentUser).thenReturn(null);
+
+      await service.signOut();
+
+      verify(() => auth.signOut()).called(1);
+    });
+
+    test('rethrows a local sign-out failure when the session is still live', () async {
+      when(() => auth.signOut()).thenThrow(Exception('ios signOut failed'));
+      when(() => auth.currentUser).thenReturn(user);
+
+      await expectLater(service.signOut(), throwsException);
+    });
+  });
 }

@@ -17,14 +17,20 @@ const Duration kSearchDebounce = Duration(milliseconds: 250);
 /// Coalesces rapid calls into one, firing only the last action within
 /// [duration] (e.g. per-keystroke search). Own one instance per widget state.
 class Debouncer {
-  Debouncer(this.duration);
+  Debouncer(this.duration, {this.onError});
 
   final Duration duration;
+  final void Function(Object error, StackTrace stackTrace)? onError;
   Timer? _timer;
 
-  void run(void Function() action) {
+  void run(FutureOr<void> Function() action) {
     _timer?.cancel();
-    _timer = Timer(duration, action);
+    _timer = Timer(duration, () {
+      _timer = null;
+      Future.sync(action).catchError((Object error, StackTrace stackTrace) {
+        onError?.call(error, stackTrace);
+      });
+    });
   }
 
   /// Drops any pending action without running it.

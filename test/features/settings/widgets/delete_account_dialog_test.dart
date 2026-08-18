@@ -105,6 +105,82 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets(
+      'Delete permanently is disabled until a password is entered',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Builder(
+              builder: (context) => Scaffold(
+                body: Center(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      await showDialog<String>(
+                        context: context,
+                        builder: (_) => const DeleteAccountReauthDialog(),
+                      );
+                    },
+                    child: const Text('open'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+
+        final button = tester.widget<FilledButton>(
+          find.widgetWithText(FilledButton, 'Delete permanently'),
+        );
+        expect(button.onPressed, isNull);
+
+        await tester.enterText(find.byType(TextField), 'hunter2');
+        await tester.pumpAndSettle();
+
+        final enabledButton = tester.widget<FilledButton>(
+          find.widgetWithText(FilledButton, 'Delete permanently'),
+        );
+        expect(enabledButton.onPressed, isNotNull);
+      },
+    );
+
+    testWidgets('empty keyboard submit keeps the dialog open', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    await showDialog<String>(
+                      context: context,
+                      builder: (_) => const DeleteAccountReauthDialog(),
+                    );
+                  },
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Confirm your password'), findsOneWidget);
+    });
+
     testWidgets('renders the Cupertino variant on iOS', (tester) async {
       String? result;
       await tester.pumpWidget(

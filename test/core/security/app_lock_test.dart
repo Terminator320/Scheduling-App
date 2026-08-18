@@ -23,6 +23,7 @@ void main() {
   setUp(() {
     storage = _MockSecureStorage();
     biometrics = _MockBiometrics();
+    when(() => biometrics.isAvailable()).thenAnswer((_) async => true);
     when(() => biometrics.authenticate(any())).thenAnswer((_) async => false);
   });
 
@@ -114,5 +115,16 @@ void main() {
 
     expect(isLocked(tester), isTrue);
     verify(() => biometrics.authenticate(any())).called(greaterThan(0));
+  });
+
+  testWidgets('a thrown biometric prompt does not escape the zone handler', (
+    tester,
+  ) async {
+    when(() => storage.readFlag(any())).thenAnswer((_) async => true);
+    when(() => biometrics.authenticate(any())).thenThrow(Exception('plugin'));
+    await pumpLock(tester);
+
+    expect(isLocked(tester), isTrue);
+    expect(tester.takeException(), isNull);
   });
 }

@@ -33,6 +33,18 @@ void main() {
     expect(selected, 'fr');
   });
 
+  testWidgets('tapping the already-selected language reports no change', (
+    tester,
+  ) async {
+    String? selected;
+    await tester.pumpWidget(
+      _wrap(LanguageToggle(currentCode: 'fr', onChanged: (c) => selected = c)),
+    );
+
+    await tester.tap(find.text('FR'));
+    expect(selected, isNull);
+  });
+
   testWidgets('buttons expose button + selected semantics', (tester) async {
     final handle = tester.ensureSemantics();
     await tester.pumpWidget(

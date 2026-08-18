@@ -239,6 +239,26 @@ void main() {
     });
   });
 
+  test('a download-url failure deletes the just-uploaded object before rethrowing', () async {
+    final ref = _MockRef();
+    final snapshot = _MockSnapshot();
+    when(() => snapshot.ref).thenReturn(ref);
+    when(() => ref.putFile(any(), any())).thenReturn(_FakeUploadTask(snapshot));
+    when(ref.getDownloadURL).thenThrow(
+      FirebaseException(plugin: 'firebase_storage', code: 'unauthorized'),
+    );
+    when(ref.delete).thenAnswer(Future<void>.value);
+    when(() => storage.ref(any())).thenReturn(ref);
+
+    await expectLater(
+      service.uploadImage('j1', fileWith('photo.jpg', _jpegMagic)),
+      throwsA(isA<FirebaseException>()),
+    );
+
+    verify(ref.delete).called(1);
+    expect(logger.warnings.single, startsWith('IMG-UPLOAD getDownloadURL failed:'));
+  });
+
   group('deleting an image', () {
     test('deletes by storagePath when the doc has one', () async {
       final ref = _MockRef();

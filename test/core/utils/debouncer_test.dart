@@ -40,4 +40,28 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 80));
     expect(ran, isFalse);
   });
+
+  test('forwards async action failures to onError', () async {
+    Object? capturedError;
+    StackTrace? capturedStack;
+    final debouncer = Debouncer(
+      const Duration(milliseconds: 40),
+      onError: (error, stackTrace) {
+        capturedError = error;
+        capturedStack = stackTrace;
+      },
+    );
+
+    expect(
+      () => debouncer.run(() async {
+        throw StateError('boom');
+      }),
+      returnsNormally,
+    );
+
+    await Future<void>.delayed(const Duration(milliseconds: 80));
+
+    expect(capturedError, isA<StateError>());
+    expect(capturedStack, isNotNull);
+  });
 }

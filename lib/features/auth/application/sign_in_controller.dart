@@ -97,6 +97,18 @@ class SignInController extends Notifier<SignInState> {
   @override
   SignInState build() => const SignInState();
 
+  Future<void> _bestEffortSignOut(
+    AuthService auth,
+    AppLogger logger, {
+    required String label,
+  }) async {
+    try {
+      await auth.signOut();
+    } catch (error, stackTrace) {
+      logger.warn(label, error, stackTrace);
+    }
+  }
+
   /// Runs a full credential sign-in — on success it stays in-progress, and on
   /// any failure it resets itself so the form re-enables.
   Future<SignInOutcome> signIn({
@@ -128,7 +140,11 @@ class SignInController extends Notifier<SignInState> {
 
       if (userDoc == null) {
         // Signed in, but no profile doc — not a provisioned account.
-        await auth.signOut();
+        await _bestEffortSignOut(
+          auth,
+          logger,
+          label: 'login.sign_in.no_profile signOut failed',
+        );
         _settle();
         return const SignInNoProfile();
       }
@@ -149,7 +165,11 @@ class SignInController extends Notifier<SignInState> {
       }
 
       if (!employee.isActive) {
-        await auth.signOut();
+        await _bestEffortSignOut(
+          auth,
+          logger,
+          label: 'login.sign_in.inactive signOut failed',
+        );
         _settle();
         return const SignInAccountDisabled();
       }
@@ -185,6 +205,7 @@ class SignInController extends Notifier<SignInState> {
   Future<SignInOutcome> resumeAfterSignUp() async {
     final auth = ref.read(authServiceProvider);
     final employees = ref.read(employeesRepositoryProvider);
+    final authCache = ref.read(authCacheProvider);
     final logger = ref.read(loggerProvider);
     final user = auth.currentUser;
     if (user == null) return const SignInNoSession();
@@ -200,6 +221,11 @@ class SignInController extends Notifier<SignInState> {
       // still-`invited` person into the hub, where every rules gate denies them
       // and nothing routes them back to setup.
       if (!employee.isActive) return const SignInProfilePending();
+      unawaited(
+        authCache.save(employee).catchError((Object e, StackTrace st) {
+          logger.warn('login.resume_after_sign_up.auth_cache_save', e, st);
+        }),
+      );
       return SignInSuccess(employee);
     } catch (error, stackTrace) {
       // The account is already created and active server-side, so we just

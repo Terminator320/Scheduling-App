@@ -3,6 +3,9 @@
 // their own account. The screen was previously only swept for overflow, so
 // every gate below could be deleted with a green suite.
 
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,12 +14,28 @@ import 'package:mocktail/mocktail.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
+import 'package:scheduling/features/auth/application/sign_in_controller.dart';
+import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/screens/account_setup_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/employees/domain/policies/starting_password_policy.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/routes/app_routes.dart';
 
 class _MockAuthService extends Mock implements AuthService {}
+class _MockUser extends Mock implements User {}
+
+class _StubSignInController extends SignInController {
+  _StubSignInController(this._resumeOutcome);
+
+  final SignInOutcome _resumeOutcome;
+
+  @override
+  SignInState build() => const SignInState();
+
+  @override
+  Future<SignInOutcome> resumeAfterSignUp() async => _resumeOutcome;
+}
 
 /// A password that satisfies every requirement and is NOT the shared default.
 const _chosen = 'Chosen1!pass';
@@ -24,9 +43,16 @@ const _chosen = 'Chosen1!pass';
 Widget _harness({
   required AuthService auth,
   bool offline = false,
+  SignInOutcome? resumeOutcome,
 }) {
   return ProviderScope(
-    overrides: [isOfflineProvider.overrideWithValue(offline)],
+    overrides: [
+      isOfflineProvider.overrideWithValue(offline),
+      if (resumeOutcome != null)
+        signInControllerProvider.overrideWith(
+          () => _StubSignInController(resumeOutcome),
+        ),
+    ],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
@@ -37,6 +63,12 @@ Widget _harness({
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: lightTheme(),
+        routes: {
+          AppRoutes.login: (_) =>
+              const Scaffold(body: Text('login screen')),
+          AppRoutes.mainCalendar: (_) =>
+              const Scaffold(body: Text('main calendar')),
+        },
         home: AccountSetupScreen(authService: auth),
       ),
     ),
@@ -281,6 +313,34 @@ void main() {
       expect(find.byKey(const Key('checkVerification')), findsNothing);
       expect(find.byKey(const Key('sendVerificationEmail')), findsNothing);
     });
+
+    testWidgets(
+      'check verification cannot start while sending the email is already in flight',
+      (tester) async {
+        final sendCompleter = Completer<void>();
+        when(() => auth.sendVerificationEmail()).thenAnswer(
+          (_) => sendCompleter.future,
+        );
+
+        await tester.pumpWidget(_harness(auth: auth));
+        await tester.pumpAndSettle();
+
+        final send = find.byKey(const Key('sendVerificationEmail'));
+        final check = find.byKey(const Key('checkVerification'));
+        await tester.ensureVisible(send);
+        await tester.pumpAndSettle();
+
+        await tester.tap(send);
+        await tester.pump();
+        await tester.tap(check, warnIfMissed: false);
+        await tester.pump();
+
+        verifyNever(() => auth.refreshEmailVerified());
+
+        sendCompleter.complete();
+        await tester.pumpAndSettle();
+      },
+    );
   });
 
   group('the offline guard', () {
@@ -305,5 +365,100 @@ void main() {
         ),
       );
     });
+  });
+
+  group('the setup sign-out path', () {
+    testWidgets(
+      'log out stays disabled while a verification request is in flight',
+      (tester) async {
+        final user = _MockUser();
+        when(() => user.email).thenReturn('a@b.com');
+        when(() => auth.currentUser).thenReturn(user);
+        when(() => auth.isEmailVerified).thenReturn(false);
+        final sendCompleter = Completer<void>();
+        when(() => auth.sendVerificationEmail()).thenAnswer(
+          (_) => sendCompleter.future,
+        );
+
+        await tester.pumpWidget(_harness(auth: auth));
+        await tester.pumpAndSettle();
+
+        final send = find.byKey(const Key('sendVerificationEmail'));
+        await tester.ensureVisible(send);
+        await tester.pumpAndSettle();
+        await tester.tap(send);
+        await tester.pump();
+
+        final logOut = find.widgetWithText(TextButton, 'Log out');
+        expect(tester.widget<TextButton>(logOut).onPressed, isNull);
+
+        await tester.tap(logOut, warnIfMissed: false);
+        await tester.pump();
+        verifyNever(() => auth.signOut());
+
+        sendCompleter.complete();
+        await tester.pumpAndSettle();
+
+        expect(tester.widget<TextButton>(logOut).onPressed, isNotNull);
+      },
+    );
+
+    testWidgets('shows a recoverable error if sign-out fails', (tester) async {
+      when(() => auth.signOut()).thenThrow(Exception('sign-out failed'));
+      await tester.pumpWidget(_harness(auth: auth));
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Log out'));
+      await tester.tap(find.text('Log out'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Something went wrong, please try again'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('post-setup recovery', () {
+    testWidgets('a pending resume routes back to login for a clean retry', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _harness(
+          auth: auth,
+          resumeOutcome: const SignInProfilePending(),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _fillForm(tester);
+      await _consent(tester);
+
+      await _submit(tester);
+      await tester.pumpAndSettle();
+
+      expect(find.text('login screen'), findsOneWidget);
+    });
+
+    testWidgets(
+      'unexpected resume outcomes re-enable the screen instead of leaving it stuck loading',
+      (tester) async {
+        await tester.pumpWidget(
+          _harness(
+            auth: auth,
+            resumeOutcome: const SignInError(AuthFailureUnknown()),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await _fillForm(tester);
+        await _consent(tester);
+
+        await _submit(tester);
+
+        expect(
+          find.text('Something went wrong, please try again'),
+          findsOneWidget,
+        );
+        final button = tester.widget<FilledButton>(find.byType(FilledButton).last);
+        expect(button.onPressed, isNotNull);
+      },
+    );
   });
 }

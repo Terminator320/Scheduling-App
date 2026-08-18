@@ -6,6 +6,39 @@ import 'package:scheduling/features/live_activity/application/live_activity_regi
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 
+class DeviceDeregistrationDeps {
+  DeviceDeregistrationDeps({
+    required this.logger,
+    required this.push,
+    required this.presence,
+    required this.liveActivity,
+    required this.imageLoader,
+  });
+
+  factory DeviceDeregistrationDeps.fromRef(Ref ref) => DeviceDeregistrationDeps(
+    logger: ref.read(loggerProvider),
+    push: ref.read(pushRegistrationControllerProvider),
+    presence: ref.read(presenceSyncControllerProvider),
+    liveActivity: ref.read(liveActivityRegistrationControllerProvider),
+    imageLoader: ref.read(appointmentImageLoaderProvider),
+  );
+
+  factory DeviceDeregistrationDeps.fromWidgetRef(WidgetRef ref) =>
+      DeviceDeregistrationDeps(
+        logger: ref.read(loggerProvider),
+        push: ref.read(pushRegistrationControllerProvider),
+        presence: ref.read(presenceSyncControllerProvider),
+        liveActivity: ref.read(liveActivityRegistrationControllerProvider),
+        imageLoader: ref.read(appointmentImageLoaderProvider),
+      );
+
+  final AppLogger logger;
+  final PushRegistrationController push;
+  final PresenceSyncController presence;
+  final LiveActivityRegistrationController liveActivity;
+  final AppointmentImageLoader imageLoader;
+}
+
 /// Drops every server-side registration this DEVICE holds, in the one order
 /// that works — and then forgets the session's local photo cache.
 ///
@@ -40,16 +73,13 @@ import 'package:scheduling/features/presence/application/presence_sync_controlle
 /// The ORDER still matters and is unchanged; isolation only stops one failure
 /// from cancelling the rest.
 ///
-/// Typed on [WidgetRef] because all three exits are widget-layer: the two
-/// Settings actions and `AccountExitListeners`, which holds one to drive its
-/// `ref.listen`s.
-Future<void> deregisterThisDevice(WidgetRef ref) async {
-  // Resolved up front — the awaits below can outlive the caller's widget, and
-  // `ref.read` throws on an unmounted consumer under Riverpod 3.
-  final logger = ref.read(loggerProvider);
-  final push = ref.read(pushRegistrationControllerProvider);
-  final presence = ref.read(presenceSyncControllerProvider);
-  final liveActivity = ref.read(liveActivityRegistrationControllerProvider);
+/// Typed on explicit dependencies so widget callers and long-lived controllers
+/// can share the same teardown path without generic `read` indirection.
+Future<void> deregisterThisDevice(DeviceDeregistrationDeps deps) async {
+  final logger = deps.logger;
+  final push = deps.push;
+  final presence = deps.presence;
+  final liveActivity = deps.liveActivity;
   // Hoisted for the same reason, even though it is USED last: the read is
   // what throws, not the call. Left at the bottom it sat after three network
   // round-trips and outside `step`'s catch, so on the account-deleted path —
@@ -57,7 +87,7 @@ Future<void> deregisterThisDevice(WidgetRef ref) async {
   // out of this function and `AccountExitListeners` never reached `signOut()`,
   // leaving a deleted account signed in and the cache it exists to clear
   // uncleared.
-  final imageLoader = ref.read(appointmentImageLoaderProvider);
+  final imageLoader = deps.imageLoader;
 
   Future<void> step(String label, Future<void> Function() run) async {
     try {

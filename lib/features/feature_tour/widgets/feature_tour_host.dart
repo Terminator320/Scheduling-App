@@ -167,6 +167,7 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
           ShowcaseView.getNamed(_scope).dismiss();
         } catch (e, st) {
           _tourRunning = false;
+          _started = false;
           _logger.warn('TOUR dismiss failed', e, st);
         }
       });
@@ -226,6 +227,7 @@ class _FeatureTourHostState extends ConsumerState<FeatureTourHost> {
       } catch (e, st) {
         // getNamed throws if the scope's already gone — don't let that crash the tab.
         _tourRunning = false;
+        _started = false;
         _logger.warn('TOUR start failed', e, st);
       }
     });

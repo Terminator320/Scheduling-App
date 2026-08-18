@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
@@ -44,6 +45,15 @@ class AppSyncListeners {
     _uploadDrain();
   }
 
+  void _fireAndForget(String tag, Future<void> Function() action) {
+    final logger = ref.read(loggerProvider);
+    unawaited(
+      Future<void>.sync(action).catchError((Object error, StackTrace stack) {
+        logger.warn(tag, error, stack);
+      }),
+    );
+  }
+
   void _pushRegistration() {
     // Registers this device's FCM token once an active employee's or admin's
     // account doc resolves. Admins also get time-based nudges for jobs
@@ -52,7 +62,10 @@ class AppSyncListeners {
       prev,
       next,
     ) {
-      unawaited(ref.read(pushRegistrationControllerProvider).sync());
+      _fireAndForget(
+        'APP-SYNC push registration sync failed',
+        () => ref.read(pushRegistrationControllerProvider).sync(),
+      );
     });
   }
 
@@ -63,7 +76,10 @@ class AppSyncListeners {
       prev,
       next,
     ) {
-      unawaited(ref.read(presenceSyncControllerProvider).sync());
+      _fireAndForget(
+        'APP-SYNC presence sync failed',
+        () => ref.read(presenceSyncControllerProvider).sync(),
+      );
     });
   }
 
@@ -75,7 +91,10 @@ class AppSyncListeners {
       prev,
       next,
     ) {
-      unawaited(ref.read(liveActivityRegistrationControllerProvider).sync());
+      _fireAndForget(
+        'APP-SYNC live activity sync failed',
+        () => ref.read(liveActivityRegistrationControllerProvider).sync(),
+      );
     });
   }
 
@@ -104,9 +123,12 @@ class AppSyncListeners {
       final payload = next.value;
       final service = ref.read(widgetSyncServiceProvider);
       if (payload == null) {
-        unawaited(service.clear());
+        _fireAndForget('APP-SYNC widget clear failed', service.clear);
       } else {
-        unawaited(service.sync(payload));
+        _fireAndForget(
+          'APP-SYNC widget sync failed',
+          () => service.sync(payload),
+        );
       }
     });
   }
@@ -122,9 +144,15 @@ class AppSyncListeners {
       final payload = next.value;
       final service = ref.read(scheduleSnapshotServiceProvider);
       if (payload == null) {
-        unawaited(service.clearSnapshot());
+        _fireAndForget(
+          'APP-SYNC snapshot clear failed',
+          service.clearSnapshot,
+        );
       } else {
-        unawaited(service.writeSnapshot(payload));
+        _fireAndForget(
+          'APP-SYNC snapshot write failed',
+          () => service.writeSnapshot(payload),
+        );
       }
     });
   }
@@ -137,7 +165,10 @@ class AppSyncListeners {
         final isSignedIn =
             ref.read(currentUserDocProvider).value?.isNotEmpty ?? false;
         if (previous == true && !next && isSignedIn) {
-          unawaited(ref.read(appointmentImageUploadProvider).drainPending());
+          _fireAndForget(
+            'APP-SYNC photo drain failed',
+            () => ref.read(appointmentImageUploadProvider).drainPending(),
+          );
         }
       })
       // On startup or sign-in, drain once as soon as the account doc first
@@ -149,8 +180,12 @@ class AppSyncListeners {
       ) {
         final wasEmpty = previous?.value?.isEmpty ?? true;
         final hasDoc = next.value?.isNotEmpty ?? false;
-        if (wasEmpty && hasDoc) {
-          unawaited(ref.read(appointmentImageUploadProvider).drainPending());
+        final offline = ref.read(isOfflineProvider);
+        if (wasEmpty && hasDoc && !offline) {
+          _fireAndForget(
+            'APP-SYNC photo drain failed',
+            () => ref.read(appointmentImageUploadProvider).drainPending(),
+          );
         }
       });
   }

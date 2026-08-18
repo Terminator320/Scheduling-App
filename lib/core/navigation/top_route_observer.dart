@@ -7,9 +7,12 @@ import 'package:flutter/widgets.dart';
 /// the **topmost** route, so pushing too early would have splash replace the
 /// invite screen itself.
 ///
-/// `didRemove` is deliberately not overridden — `pushNamedAndRemoveUntil`
-/// pushes first and then removes, so reacting to the removals would overwrite
-/// the just-pushed name with a route that is no longer on the stack.
+/// `didRemove` only reacts when the REMOVED route is the current topmost one.
+/// `pushNamedAndRemoveUntil` pushes first and then removes lower routes, so
+/// those removals must still be ignored — but routes such as the hub's
+/// redirect shim remove themselves after a post-frame handoff, and without
+/// handling that case the observer stays stuck on a route that no longer
+/// exists.
 class TopRouteObserver extends NavigatorObserver {
   String? _currentRouteName;
 
@@ -28,5 +31,11 @@ class TopRouteObserver extends NavigatorObserver {
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     _currentRouteName = newRoute?.settings.name;
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    if (route.settings.name != _currentRouteName) return;
+    _currentRouteName = previousRoute?.settings.name;
   }
 }

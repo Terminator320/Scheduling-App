@@ -75,10 +75,12 @@ class _LoginState extends ConsumerState<Login> {
       _passwordController.text,
     );
 
-    setState(() {
-      _emailError = emailErr;
-      _passwordError = passwordErr;
-    });
+    if (emailErr != _emailError || passwordErr != _passwordError) {
+      setState(() {
+        _emailError = emailErr;
+        _passwordError = passwordErr;
+      });
+    }
 
     return emailErr == null && passwordErr == null;
   }
@@ -94,6 +96,7 @@ class _LoginState extends ConsumerState<Login> {
   }
 
   Future<void> _signIn() async {
+    if (ref.read(signInControllerProvider).inProgress) return;
     FocusScope.of(context).unfocus();
     setState(() {
       _submitted = true;

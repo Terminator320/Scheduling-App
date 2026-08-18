@@ -127,4 +127,13 @@ void main() {
     );
     expect(requested, isFalse);
   });
+
+  test('a thrown plugin call degrades to denied instead of crashing', () async {
+    final svc = LocationPermissionService(
+      isServiceEnabled: () async => true,
+      checkPermission: () async => throw StateError('platform failed'),
+    );
+
+    expect(await svc.ensureLocation(), LocationPermissionResult.denied);
+  });
 }

@@ -120,8 +120,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       : FirebaseAuth.instance.currentUser?.email ?? '';
 
   bool get _isAdmin => widget.role == 'admin';
+  bool? _pendingAppLockValue;
+  bool? _pendingLiveActivityValue;
+  bool? _pendingTravelAlertsValue;
 
   Future<void> _toggleAppLock({required bool value}) async {
+    if (_pendingAppLockValue != null) return;
     // Captured before the first await: `ref.read` throws once this consumer is
     // unmounted (Riverpod 3), and the catch below deliberately logs before its
     // mounted guard so the failure still reaches Crashlytics.
@@ -138,6 +142,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         return;
       }
     }
+    setState(() => _pendingAppLockValue = value);
     try {
       await ref.read(appLockEnabledProvider.notifier).setEnabled(value: value);
     } catch (e, st) {
@@ -156,6 +161,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
               error: e,
             ),
           );
+    } finally {
+      if (mounted) setState(() => _pendingAppLockValue = null);
     }
   }
 
@@ -206,6 +213,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   /// Turning this off unregisters the device, which ends any live card;
   /// turning it back on re-registers. Best effort — it never throws.
   Future<void> _toggleLiveActivity({required bool value}) async {
+    if (_pendingLiveActivityValue != null) return;
     // Both providers are resolved up front. This runs unawaited from
     // `Switch.onChanged`, so backing out of Settings mid-flight unmounts the
     // consumer — and under Riverpod 3 the second `ref.read` would then throw a
@@ -213,11 +221,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     // with no guard at all.
     final enabled = ref.read(liveActivityEnabledProvider.notifier);
     final controller = ref.read(liveActivityRegistrationControllerProvider);
-    await enabled.setEnabled(value: value);
-    if (value) {
-      await controller.sync();
-    } else {
-      await controller.unregister();
+    setState(() => _pendingLiveActivityValue = value);
+    try {
+      await enabled.setEnabled(value: value);
+      if (value) {
+        await controller.sync();
+      } else {
+        await controller.unregister();
+      }
+    } finally {
+      if (mounted) setState(() => _pendingLiveActivityValue = null);
     }
   }
 
@@ -229,6 +242,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   /// dropping the notification — see `wantsTravelAlerts` in
   /// `functions/travel_utils.js`.
   Future<void> _toggleTravelAlerts({required bool value}) async {
+    if (_pendingTravelAlertsValue != null) return;
     final record = ref.read(myEmployeeRecordProvider);
     if (record == null) return;
 
@@ -241,6 +255,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       return;
     }
 
+    setState(() => _pendingTravelAlertsValue = value);
     try {
       await ref
           .read(employeesRepositoryProvider)
@@ -255,6 +270,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           error: error,
         ),
       );
+    } finally {
+      if (mounted) setState(() => _pendingTravelAlertsValue = null);
     }
   }
 
@@ -394,6 +411,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     ),
     const SizedBox(height: AppSpacing.sp12),
     AccountSettingsCard(
+      isBusy: isAccountExitBusy,
       onSignOut: signOut,
       onDeleteAccount: confirmDeleteAccount,
     ),
@@ -401,7 +419,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     SettingsSectionHeader(
       label: context.l10n.settings_security.toUpperCase(),
     ),
-    SecuritySettingsCard(onToggleAppLock: _toggleAppLock),
+    SecuritySettingsCard(
+      enabled: _pendingAppLockValue ?? ref.watch(appLockEnabledProvider),
+      isBusy: _pendingAppLockValue != null,
+      onToggleAppLock: _toggleAppLock,
+    ),
     const SizedBox(height: AppSpacing.sp24),
     SettingsSectionHeader(
       label: context.l10n.settings_notifications.toUpperCase(),
@@ -410,14 +432,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       TourStepId.settingsNotifications,
       child: NotificationsSettingsCard(
         onNotificationsTap: _onNotificationsTap,
+        liveActivityEnabled:
+            _pendingLiveActivityValue ??
+            ref.watch(liveActivityEnabledProvider),
         onToggleLiveActivity: _toggleLiveActivity,
+        isTogglingLiveActivity: _pendingLiveActivityValue != null,
         // Null hides the row until the person's own record has loaded —
         // rendering the switch against a guessed default would show a state
         // that may be wrong and then flip under them.
-        travelAlertsEnabled: ref
-            .watch(myEmployeeRecordProvider)
-            ?.travelAlertsEnabled,
+        travelAlertsEnabled:
+            _pendingTravelAlertsValue ??
+            ref.watch(myEmployeeRecordProvider)?.travelAlertsEnabled,
         onToggleTravelAlerts: _toggleTravelAlerts,
+        isTogglingTravelAlerts: _pendingTravelAlertsValue != null,
       ),
     ),
     if (_isAdmin) ...[

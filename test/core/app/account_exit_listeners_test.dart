@@ -1,4 +1,4 @@
-// Pins the two things AccountExitListeners' own doc calls load-bearing: the
+// Pins the two things the forced-exit flow calls load-bearing: the
 // teardown ORDER (de-register everything BEFORE signOut, because each
 // de-registration needs the credential sign-out revokes) and the one-exit-at-a-
 // time guard (three listeners can fire for a single underlying event).
@@ -8,8 +8,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:scheduling/core/app/account_exit_listeners.dart';
+import 'package:scheduling/core/app/account_exit_controller.dart';
+import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/images/appointment_image_loader.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
@@ -71,11 +73,11 @@ void main() {
 
   /// Pumps a real MaterialApp so navigatorKey.currentContext resolves — the
   /// handler bails early without one.
-  Future<AccountExitListeners> pumpListeners(
+  Future<AccountExitController> pumpController(
     WidgetTester tester, {
     bool signedIn = true,
   }) async {
-    late AccountExitListeners listeners;
+    late AccountExitController controller;
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -94,11 +96,12 @@ void main() {
           supportedLocales: AppLocalizations.supportedLocales,
           home: Consumer(
             builder: (context, ref, _) {
-              listeners = AccountExitListeners(
-                ref: ref,
-                navigatorKey: navigatorKey,
-                scaffoldMessengerKey: messengerKey,
-                isMounted: () => true,
+              controller = AccountExitController(
+                logger: AppLogger(),
+                authService: auth,
+                deregisterDevice: () => deregisterThisDevice(
+                  DeviceDeregistrationDeps.fromWidgetRef(ref),
+                ),
                 isSignedIn: () => signedIn,
               );
               return const Scaffold(body: SizedBox.shrink());
@@ -108,15 +111,20 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    return listeners;
+    return controller;
   }
 
   testWidgets('tears every registration down BEFORE signing out', (
     tester,
   ) async {
-    final listeners = await pumpListeners(tester);
+    final controller = await pumpController(tester);
 
-    await listeners.handleAccountExit((l10n) => 'disabled');
+    await controller.exitAccount(
+      selectMessage: (l10n) => 'disabled',
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: messengerKey,
+      isMounted: () => true,
+    );
     await tester.pumpAndSettle();
 
     // Reordering signOut above any de-registration makes those writes fail
@@ -128,13 +136,23 @@ void main() {
   testWidgets('a second signal while one exit is in flight is ignored', (
     tester,
   ) async {
-    final listeners = await pumpListeners(tester);
+    final controller = await pumpController(tester);
 
     // Three listeners can fire for one underlying event (a delete flips
     // status AND empties the doc). Without the guard each starts its own
     // teardown and navigation.
-    final first = listeners.handleAccountExit((l10n) => 'disabled');
-    final second = listeners.handleAccountExit((l10n) => 'disabled');
+    final first = controller.exitAccount(
+      selectMessage: (l10n) => 'disabled',
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: messengerKey,
+      isMounted: () => true,
+    );
+    final second = controller.exitAccount(
+      selectMessage: (l10n) => 'disabled',
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: messengerKey,
+      isMounted: () => true,
+    );
     await Future.wait([first, second]);
     await tester.pumpAndSettle();
 
@@ -143,9 +161,14 @@ void main() {
   });
 
   testWidgets('does nothing when nobody is signed in', (tester) async {
-    final listeners = await pumpListeners(tester, signedIn: false);
+    final controller = await pumpController(tester, signedIn: false);
 
-    await listeners.handleAccountExit((l10n) => 'disabled');
+    await controller.exitAccount(
+      selectMessage: (l10n) => 'disabled',
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: messengerKey,
+      isMounted: () => true,
+    );
     await tester.pumpAndSettle();
 
     expect(calls, isEmpty);
@@ -155,10 +178,15 @@ void main() {
   testWidgets(
     'a failed sign-out releases the guard so the next signal retries',
     (tester) async {
-      final listeners = await pumpListeners(tester);
+      final controller = await pumpController(tester);
       when(() => auth.signOut()).thenThrow(Exception('network'));
 
-      await listeners.handleAccountExit((l10n) => 'disabled');
+      await controller.exitAccount(
+        selectMessage: (l10n) => 'disabled',
+        navigatorKey: navigatorKey,
+        scaffoldMessengerKey: messengerKey,
+        isMounted: () => true,
+      );
       await tester.pumpAndSettle();
 
       // The guard must NOT stay latched on failure — the account is still live
@@ -166,7 +194,12 @@ void main() {
       when(() => auth.signOut()).thenAnswer((_) async {
         calls.add('signOut');
       });
-      await listeners.handleAccountExit((l10n) => 'disabled');
+      await controller.exitAccount(
+        selectMessage: (l10n) => 'disabled',
+        navigatorKey: navigatorKey,
+        scaffoldMessengerKey: messengerKey,
+        isMounted: () => true,
+      );
       await tester.pumpAndSettle();
 
       expect(calls.where((c) => c == 'signOut').length, 1);

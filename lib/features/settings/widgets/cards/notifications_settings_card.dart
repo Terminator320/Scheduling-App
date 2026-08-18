@@ -15,19 +15,25 @@ import 'package:scheduling/l10n/l10n.dart';
 class NotificationsSettingsCard extends ConsumerWidget {
   const NotificationsSettingsCard({
     required this.onNotificationsTap,
+    required this.liveActivityEnabled,
     required this.onToggleLiveActivity,
     required this.travelAlertsEnabled,
     required this.onToggleTravelAlerts,
+    this.isTogglingLiveActivity = false,
+    this.isTogglingTravelAlerts = false,
     super.key,
   });
 
   final void Function(AuthorizationStatus status) onNotificationsTap;
+  final bool liveActivityEnabled;
   final void Function({required bool value}) onToggleLiveActivity;
+  final bool isTogglingLiveActivity;
 
   /// Null while the person's own record is still loading, which hides the row
   /// rather than rendering a switch in a state that may be wrong.
   final bool? travelAlertsEnabled;
   final void Function({required bool value}) onToggleTravelAlerts;
+  final bool isTogglingTravelAlerts;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -37,9 +43,12 @@ class NotificationsSettingsCard extends ConsumerWidget {
         ref.watch(notificationAuthStatusProvider).asData?.value ??
         AuthorizationStatus.notDetermined;
     final granted = PushNotificationService.isGranted(status);
+    final liveActivityReady =
+        ref.watch(liveActivityPreferenceReadyProvider).hasValue;
     // Hidden when the device/OS version can't host a Live Activity card.
     final showLiveActivity =
-        ref.watch(liveActivitySupportedProvider).asData?.value ?? false;
+        (ref.watch(liveActivitySupportedProvider).asData?.value ?? false) &&
+        liveActivityReady;
     final showTravelAlerts = travelAlertsEnabled != null;
     return SettingsSectionCard(
       child: Column(
@@ -81,8 +90,10 @@ class NotificationsSettingsCard extends ConsumerWidget {
               label: context.l10n.settings_liveActivity,
               isLast: !showTravelAlerts,
               trailing: Switch.adaptive(
-                value: ref.watch(liveActivityEnabledProvider),
-                onChanged: (value) => onToggleLiveActivity(value: value),
+                value: liveActivityEnabled,
+                onChanged: isTogglingLiveActivity
+                    ? null
+                    : (value) => onToggleLiveActivity(value: value),
                 activeTrackColor: scheme.primary,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
@@ -99,7 +110,9 @@ class NotificationsSettingsCard extends ConsumerWidget {
               trailing: Switch.adaptive(
                 key: const Key('travelAlertsSwitch'),
                 value: travelAlertsEnabled!,
-                onChanged: (value) => onToggleTravelAlerts(value: value),
+                onChanged: isTogglingTravelAlerts
+                    ? null
+                    : (value) => onToggleTravelAlerts(value: value),
                 activeTrackColor: scheme.primary,
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),

@@ -43,8 +43,14 @@ class AddressAutocompleteField extends ConsumerStatefulWidget {
 class _AddressAutocompleteFieldState
     extends ConsumerState<AddressAutocompleteField> {
   late final PlacesRepository _service = ref.read(placesRepositoryProvider);
+  late final AppLogger _logger = ref.read(loggerProvider);
   static const _uuid = Uuid();
-  final Debouncer _debounce = Debouncer(_debounceDelay);
+  late final Debouncer _debounce = Debouncer(
+    _debounceDelay,
+    onError: (error, stackTrace) {
+      _logger.warn('ADDR-AUTO debounced action failed', error, stackTrace);
+    },
+  );
   List<AddressSuggestion> _suggestions = [];
   bool _isLoading = false;
   String? _serviceError;
@@ -111,7 +117,6 @@ class _AddressAutocompleteFieldState
     // throw escaped to the zone handler as a FATAL — on the most-used field in
     // the app, whenever a lookup failed after the sheet was dismissed. Holding
     // the logger keeps both properties.
-    final logger = ref.read(loggerProvider);
     setState(() {
       _isLoading = true;
       _serviceError = null;
@@ -131,7 +136,7 @@ class _AddressAutocompleteFieldState
     } catch (e, st) {
       // Logged before the mounted guard so it reaches Crashlytics even if the
       // field is gone by then — through the logger captured above.
-      logger.warn('ADDR-AUTO autocomplete failed', e, st);
+      _logger.warn('ADDR-AUTO autocomplete failed', e, st);
       if (!mounted || requestId != _requestId) return;
       setState(() {
         _suggestions = [];
@@ -167,7 +172,6 @@ class _AddressAutocompleteFieldState
     // Resolved BEFORE the await for the same reason as _fetch above — this is
     // fired from onTap, so the sheet being dismissed before Places responds is
     // routine, and `ref.read` on an unmounted consumer throws.
-    final logger = ref.read(loggerProvider);
     // Invalidate any pending debounce/in-flight request so a late response can't resurface suggestions.
     _debounce.cancel();
     _requestId++;
@@ -195,7 +199,7 @@ class _AddressAutocompleteFieldState
       setState(() => _isLoading = false);
       widget.onAddressSelected?.call(widget.controller.text);
     } catch (e, st) {
-      logger.warn('ADDR-DETAILS getPlaceDetails failed', e, st);
+      _logger.warn('ADDR-DETAILS getPlaceDetails failed', e, st);
       if (!mounted) return;
       setState(() {
         _isLoading = false;

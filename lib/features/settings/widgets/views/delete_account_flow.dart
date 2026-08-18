@@ -10,6 +10,9 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
+import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
+import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
@@ -31,28 +34,46 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   bool get isAdminAccount;
 
   bool _isSigningOut = false;
+  bool _isConfirmingDeleteAccount = false;
   bool _isDeletingAccount = false;
 
   /// True while the irreversible deletion runs — the host blocks the UI on it.
   bool get isDeletingAccount => _isDeletingAccount;
+  bool get isAccountExitBusy =>
+      _isSigningOut || _isConfirmingDeleteAccount || _isDeletingAccount;
 
   Future<void> signOut() async {
-    if (_isSigningOut) return;
+    if (isAccountExitBusy) return;
     // Resolved before the de-registration round-trips: `ref.read` throws on an
     // unmounted consumer (Riverpod 3), and this catch is what guarantees the
     // user still reaches login rather than being stranded signed in.
     final logger = ref.read(loggerProvider);
     final authService = ref.read(authServiceProvider);
+    final notices = ref.read(noticeServiceProvider);
     setState(() => _isSigningOut = true);
+    var deregistered = false;
     try {
       // Clean up this device's push token, presence, and Live Activity state
       // — best effort, so a failure here doesn't block sign-out. The ORDER is
       // owned by `deregisterThisDevice`; all three exits share it.
-      await deregisterThisDevice(ref);
+      await deregisterThisDevice(DeviceDeregistrationDeps.fromWidgetRef(ref));
+      deregistered = true;
       await authService.signOut();
     } catch (e, st) {
-      // Log but still route to login so the user isn't stuck signed in.
       logger.warn('ACCT-SIGNOUT signOut failed', e, st);
+      if (deregistered) {
+        await _restoreDeviceRegistrations();
+      }
+      if (!mounted) return;
+      setState(() => _isSigningOut = false);
+      notices.error(
+        composeErrorNotice(
+          context,
+          intro: context.l10n.error_somethingWentWrong,
+          error: e,
+        ),
+      );
+      return;
     }
     if (!mounted) return;
     await Navigator.pushNamedAndRemoveUntil(
@@ -63,7 +84,7 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   }
 
   Future<void> confirmDeleteAccount() async {
-    if (_isDeletingAccount) return;
+    if (isAccountExitBusy) return;
     // Bail out early if we're offline — otherwise the call just hangs for ~30s.
     if (guardedOffline(
       context,
@@ -72,38 +93,45 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     )) {
       return;
     }
-    final result = await showConfirmDialog(
-      context,
-      title: context.l10n.settings_deleteAccountConfirmTitle,
-      confirmLabel: context.l10n.settings_deletePermanently,
-      content: DeleteAccountWarningContent(isAdmin: isAdminAccount),
-    );
-    if (!result || !mounted) return;
+    _isConfirmingDeleteAccount = true;
+    try {
+      final result = await showConfirmDialog(
+        context,
+        title: context.l10n.settings_deleteAccountConfirmTitle,
+        confirmLabel: context.l10n.settings_deletePermanently,
+        content: DeleteAccountWarningContent(isAdmin: isAdminAccount),
+      );
+      if (!result || !mounted) return;
 
-    // Match the platform presentation of the adaptive confirm dialog shown before this.
-    final password = context.isCupertino
-        ? await showCupertinoDialog<String>(
-            context: context,
-            builder: (dialogContext) => const DeleteAccountReauthDialog(),
-          )
-        : await showDialog<String>(
-            context: context,
-            builder: (dialogContext) => const DeleteAccountReauthDialog(),
-          );
-    if (password == null || password.isEmpty || !mounted) return;
+      // Match the platform presentation of the adaptive confirm dialog shown before this.
+      final password = context.isCupertino
+          ? await showCupertinoDialog<String>(
+              context: context,
+              builder: (dialogContext) => const DeleteAccountReauthDialog(),
+            )
+          : await showDialog<String>(
+              context: context,
+              builder: (dialogContext) => const DeleteAccountReauthDialog(),
+            );
+      if (password == null || password.isEmpty || !mounted) return;
 
-    await _runDeletion(password);
+      await _runDeletion(password);
+    } finally {
+      _isConfirmingDeleteAccount = false;
+    }
   }
 
   Future<void> _runDeletion(String password) async {
     setState(() => _isDeletingAccount = true);
     final notices = ref.read(noticeServiceProvider);
     final logger = ref.read(loggerProvider);
+    var deregistered = false;
     try {
       await deletionService.reauthenticateWithPassword(password);
       // Drop this device's registrations while still authenticated, before
       // deleteAccount revokes access — same shared order as the other exits.
-      await deregisterThisDevice(ref);
+      await deregisterThisDevice(DeviceDeregistrationDeps.fromWidgetRef(ref));
+      deregistered = true;
       await deletionService.deleteAccount();
     } on AuthFailure catch (e, st) {
       // Logged before the mounted guard: this fires AFTER push, presence and
@@ -111,6 +139,9 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       // account must leave a trace. `authFailure` keeps a user-correctable
       // wrong password a breadcrumb and records the rest.
       logger.authFailure('ACCT-DEL settings.delete_account', e, e, st);
+      if (deregistered) {
+        await _restoreDeviceRegistrations();
+      }
       if (!mounted) return;
       setState(() => _isDeletingAccount = false);
       // Reauthentication context, not the default: every AuthFailure that can
@@ -126,6 +157,9 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       return;
     } catch (e, st) {
       logger.warn('ACCT-DEL settings.delete_account', e, st);
+      if (deregistered) {
+        await _restoreDeviceRegistrations();
+      }
       if (!mounted) return;
       setState(() => _isDeletingAccount = false);
       notices.error(
@@ -145,5 +179,24 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       (_) => false,
     );
     notices.success(message);
+  }
+
+  Future<void> _restoreDeviceRegistrations() async {
+    final logger = ref.read(loggerProvider);
+
+    Future<void> step(String label, Future<void> Function() run) async {
+      try {
+        await run();
+      } catch (e, st) {
+        logger.warn('ACCOUNT-EXIT restore $label failed', e, st);
+      }
+    }
+
+    await step('push', ref.read(pushRegistrationControllerProvider).sync);
+    await step('presence', ref.read(presenceSyncControllerProvider).sync);
+    await step(
+      'liveActivity',
+      ref.read(liveActivityRegistrationControllerProvider).sync,
+    );
   }
 }

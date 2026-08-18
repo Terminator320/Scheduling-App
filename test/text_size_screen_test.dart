@@ -23,6 +23,59 @@ Widget _wrap(Widget child, {double textScale = 1.0}) => ThemeNotifier(
       ),
     );
 
+class _ThemeHost extends StatefulWidget {
+  const _ThemeHost({required this.onSetTextScale});
+
+  final ValueChanged<double> onSetTextScale;
+
+  @override
+  State<_ThemeHost> createState() => _ThemeHostState();
+}
+
+class _ThemeHostState extends State<_ThemeHost> {
+  ThemeMode _themeMode = ThemeMode.light;
+
+  @override
+  Widget build(BuildContext context) {
+    return ThemeNotifier(
+      themeMode: _themeMode,
+      toggleTheme: () => setState(() {
+        _themeMode = _themeMode == ThemeMode.light
+            ? ThemeMode.dark
+            : ThemeMode.light;
+      }),
+      textScale: 1,
+      setTextScale: widget.onSetTextScale,
+      setLanguage: (_) {},
+      child: MaterialApp(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: Column(
+            children: [
+              ElevatedButton(
+                onPressed: () => setState(() {
+                  _themeMode = _themeMode == ThemeMode.light
+                      ? ThemeMode.dark
+                      : ThemeMode.light;
+                }),
+                child: const Text('toggle theme'),
+              ),
+              const Expanded(
+                child: TextSizeScreen(isAdmin: true, employeeId: 'e1'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 void main() {
   testWidgets('shows all 4 size options', (tester) async {
     await tester.pumpWidget(_wrap(const TextSizeScreen(isAdmin: true, employeeId: 'e1')));
@@ -84,4 +137,24 @@ void main() {
     ));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'a dependency rebuild does not wipe the un-applied text-size selection',
+    (tester) async {
+      double? appliedScale;
+
+      await tester.pumpWidget(
+        _ThemeHost(onSetTextScale: (value) => appliedScale = value),
+      );
+
+      await tester.tap(find.text('Small'));
+      await tester.pump();
+      await tester.tap(find.text('toggle theme'));
+      await tester.pump();
+      await tester.tap(find.text('Apply'));
+      await tester.pump();
+
+      expect(appliedScale, 0.8);
+    },
+  );
 }

@@ -49,6 +49,10 @@ void main() {
       expect(parseWebUrl('https:'), isNull);
     });
 
+    test('rejects non-web schemes even when they have an authority', () {
+      expect(parseWebUrl('ftp://example.com/file'), isNull);
+    });
+
     test('rejects empty and whitespace', () {
       expect(parseWebUrl(''), isNull);
       expect(parseWebUrl('   '), isNull);

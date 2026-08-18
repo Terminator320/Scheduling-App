@@ -52,6 +52,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
   bool _seeded = false;
   bool _isSaving = false;
   bool _isEmailSheetOpen = false;
+  int _availabilityMutationId = 0;
 
   List<bool> _workingDays = kDefaultWorkingDays;
   int _workStartMinutes = kDefaultWorkStartMinutes;
@@ -66,6 +67,8 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
   /// silently commit a half-typed phone number, which is exactly the auto-save
   /// the identity bar exists to prevent.
   String _storedPhone = '';
+  String _storedEmergencyContact = '';
+  String _storedEmergencyPhone = '';
 
   /// Seeds once, from the first record that arrives — a later snapshot must not
   /// overwrite what the person is part-way through changing.
@@ -77,6 +80,14 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     _workEndMinutes = record.workEndMinutes;
     _onCall = record.onCall;
     _storedPhone = record.phone;
+  }
+
+  void _seedEmergencyContact(EmergencyContact contact) {
+    if (_storedEmergencyContact.isNotEmpty || _storedEmergencyPhone.isNotEmpty) {
+      return;
+    }
+    _storedEmergencyContact = contact.contact;
+    _storedEmergencyPhone = contact.phone;
   }
 
   /// Identity save — the emergency contact (subcollection) AND the phone (users
@@ -126,7 +137,11 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
         ),
       );
       if (!mounted) return;
-      setState(() => _storedPhone = edit.phone);
+      setState(() {
+        _storedPhone = edit.phone;
+        _storedEmergencyContact = edit.emergencyContact;
+        _storedEmergencyPhone = edit.emergencyPhone;
+      });
       notices.success(l10n.common_changesSaved);
     } catch (error, stackTrace) {
       logger.warn('ME-SAVE identity save failed', error, stackTrace);
@@ -164,8 +179,10 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     final previousStart = _workStartMinutes;
     final previousEnd = _workEndMinutes;
     final previousOnCall = _onCall;
+    final mutationId = ++_availabilityMutationId;
 
     void rollBack() {
+      if (!mounted || mutationId != _availabilityMutationId) return;
       setState(() {
         _workingDays = previousDays;
         _workStartMinutes = previousStart;
@@ -204,8 +221,8 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
           );
     } catch (error, stackTrace) {
       logger.warn('ME-SAVE availability failed', error, stackTrace);
-      if (!mounted) return;
       rollBack();
+      if (!mounted || mutationId != _availabilityMutationId) return;
       notices.error(
         composeErrorNotice(
           context,
@@ -417,15 +434,16 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
 
     _seed(record);
     final contact = emergency.requireValue;
+    _seedEmergencyContact(contact);
 
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.sp16),
       children: [
         MyIdentitySection(
           email: record.email,
-          initialPhone: record.phone,
-          initialEmergencyContact: contact.contact,
-          initialEmergencyPhone: contact.phone,
+          initialPhone: _storedPhone,
+          initialEmergencyContact: _storedEmergencyContact,
+          initialEmergencyPhone: _storedEmergencyPhone,
           isSaving: _isSaving,
           onSave: (edit) => _saveIdentity(record, edit),
           onChangeEmail: () => _changeEmail(docId, record.email),
