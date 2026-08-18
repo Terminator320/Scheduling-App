@@ -44,6 +44,18 @@ STAYS in the root `CLAUDE.md`, because those are reachable from
   card's crew bar uses for an unassigned job. The old per-assignee version
   simply skipped those, so a day holding only unassigned work read as empty.
   The week strip renders the same list capped at 1, for the same reason.
+  **A CANCELLED job gets no dot** (owner call, 2026-08-17): the dots answer
+  "how busy is this day", and a called-off visit is work that is not
+  happening, so a day holding only a cancellation has to read as free. `done`
+  still dots — that work happened. The filter has one owner, `dottedJobsOn`
+  (same file), and `dayJobDotColors` runs it BEFORE the cap, so a cancellation
+  early in the day can't cost a live job its dot. **`CalendarDayCell`'s
+  semantics count must use the same predicate** — the label speaks the dots'
+  meaning ("the dots are colour-only, so the count carries their meaning
+  instead"), so `countFor` in `main_calendar_screen.dart` reads
+  `dottedJobsOn(...).length`, not the raw slice count, or a screen reader
+  describes dots nobody can see. Note the count stays UNCAPPED while the dots
+  cap at 3; only the cancelled filter is shared.
   `today` always comes from
   `currentDayProvider`, never `DateTime.now()`, or the circle sticks on
   yesterday in an app left open across midnight.
