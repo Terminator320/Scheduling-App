@@ -4,8 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// S2: the employee branch of `allow update` on `/appointments` is the only
 /// write an assignee can make, and it is the ONLY gate on that write —
-/// `DetailsActionBar` hides the button (`hasStarted && !isDone &&
-/// !isCancelled`) but a modified client never runs it. The branch used to test
+/// `DetailsActionBar` hides the button (`!isDone && !isCancelled`) but a
+/// modified client never runs it. The branch used to test
 /// what was being WRITTEN and never what was STORED, so `done` could go over
 /// `cancelled` and resurrect a cancelled visit as a completed one in History,
 /// in the dashboard tallies and in `purgeExpiredHistory`'s accounting.
@@ -80,11 +80,11 @@ void main() {
   });
 
   test('the branch carries NO date restriction, deliberately', () {
-    // The documented invariant: "Mark as complete" gates on `hasStarted`, not
-    // on "is today", and the rules allow an assignee to write `status:'done'`
-    // with no date restriction. A `request.time` / instant comparison creeping
-    // in here silently strands an employee on day 2+ of a multi-day run, or one
-    // who taps the button after midnight, with a job they cannot close.
+    // The documented invariant: "Mark as complete" carries no clock gate at
+    // all, and the rules allow an assignee to write `status:'done'` with no
+    // date restriction. A `request.time` / instant comparison creeping in here
+    // silently strands an employee on day 2+ of a multi-day run, or one who
+    // taps the button after midnight, with a job they cannot close.
     final branch = employeeBranch();
     for (final term in const [
       'request.time',
