@@ -8,7 +8,6 @@ import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 
 class DetailsActionBar extends StatelessWidget {
   const DetailsActionBar({
-    required this.hasStarted,
     required this.isDone,
     required this.isCancelled,
     required this.isSaving,
@@ -19,7 +18,6 @@ class DetailsActionBar extends StatelessWidget {
     this.onEdit,
   });
 
-  final bool hasStarted;
   final bool isDone;
   final bool isCancelled;
   final bool isSaving;
@@ -45,7 +43,13 @@ class DetailsActionBar extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: AppSpacing.sp24),
-        if (hasStarted && !isDone && !isCancelled)
+        // Offered for the whole life of an open job — there is no
+        // "has it started yet" gate (owner call, 2026-08-17). A crew that
+        // finishes early, or an admin closing a job booked for later today,
+        // had no affordance at all until the start time passed, while the
+        // rules have always allowed an assignee's `status:'done'` write with
+        // no date restriction.
+        if (!isDone && !isCancelled)
           FilledButton(
             style: FilledButton.styleFrom(
               minimumSize: const Size(double.infinity, 48),
@@ -104,7 +108,9 @@ class DetailsActionBar extends StatelessWidget {
             ),
         ],
         if (showCancel && !isCancelled && !isDone) ...[
-          if (hasStarted) const SizedBox(height: AppSpacing.sp8),
+          // The complete button is always above this on an open job, so the
+          // gap is unconditional.
+          const SizedBox(height: AppSpacing.sp8),
           OutlinedButton(
             style: destructiveOutlinedButtonStyle(
               context,

@@ -96,7 +96,6 @@ class DetailsViewBody extends ConsumerWidget {
           onRetry: notifier.enterEditing,
         ),
         DetailsActionBar(
-          hasStarted: data.hasStarted,
           isDone: data.isDone,
           isCancelled: data.isCancelled,
           isSaving: isSaving,
@@ -183,7 +182,6 @@ class _DetailsViewData {
     required this.displayStatus,
     required this.isCancelled,
     required this.isDone,
-    required this.hasStarted,
     required this.clientName,
     required this.phone,
     required this.displayAddress,
@@ -201,7 +199,6 @@ class _DetailsViewData {
     // status, while the header chip uses the time-derived one instead, so it
     // matches what the card shows.
     final displayStatus = AppointmentStatus.fromRaw(appointment.displayStatus);
-    final now = DateTime.now();
     final phone = (client?.phone.isNotEmpty ?? false)
         ? client!.phone
         : appointment.clientPhone;
@@ -214,12 +211,6 @@ class _DetailsViewData {
       displayStatus: displayStatus,
       isCancelled: status.isCancelled,
       isDone: status.isDone,
-      // Gate "Mark as complete" on the visit having STARTED, not on it being
-      // today, so employees on multi-day/overnight visits aren't stuck
-      // without a way to update status. This matches the security rules,
-      // which allow an assignee's `status:'done'` write with no date
-      // restriction.
-      hasStarted: !appointment.startTime.isAfter(now),
       clientName: client?.displayName ?? appointment.clientName,
       phone: phone,
       displayAddress: appointment.address.isNotEmpty
@@ -234,7 +225,6 @@ class _DetailsViewData {
   final AppointmentStatus displayStatus;
   final bool isCancelled;
   final bool isDone;
-  final bool hasStarted;
   final String clientName;
   final String phone;
   final String displayAddress;
