@@ -20,7 +20,7 @@ import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 const double _kDrawerWidth = 284;
 
-/// The right-anchored navigation drawer — the app's only nav surface at
+/// The right-anchored navigation drawer - the app's only nav surface at
 /// every screen size. Rows are grouped by when you would reach for them.
 ///
 /// A closed drawer's child is never built (`_DrawerControllerState`
@@ -62,7 +62,7 @@ class AppNavDrawer extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Header(isAdmin: isAdmin, userName: userName, email: email),
+            _Header(isAdmin: isAdmin, userName: userName),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(12, 14, 12, 20),
@@ -102,11 +102,10 @@ class AppNavDrawer extends ConsumerWidget {
 }
 
 class _Header extends ConsumerWidget {
-  const _Header({required this.isAdmin, this.userName, this.email});
+  const _Header({required this.isAdmin, this.userName});
 
   final bool isAdmin;
   final String? userName;
-  final String? email;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -149,8 +148,8 @@ class _Header extends ConsumerWidget {
                       ),
                     ),
                     Text(
-                      // brandName is a proper noun — never localized.
-                      '${roleLabel(context.l10n, isAdmin: isAdmin)} · '
+                      // brandName is a proper noun and stays in English.
+                      '${roleLabel(context.l10n, isAdmin: isAdmin)} - '
                       '$brandName',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -199,7 +198,7 @@ class _NavRow extends ConsumerWidget {
 
   void _go(BuildContext context) {
     Scaffold.of(context).closeEndDrawer();
-    // Calendar routes through goHome so it also collapses any pushed stack —
+    // Calendar routes through goHome so it also collapses any pushed stack -
     // no screen is a dead end.
     if (destination == HubTab.calendar) {
       goHomeToCalendar(context);
@@ -221,7 +220,7 @@ class _NavRow extends ConsumerWidget {
     final scheme = theme.colorScheme;
     final isActive = _isActive(context);
     final count = _countFor(ref);
-    // The stored hue lifted for the current theme — never paint the raw value.
+    // The stored hue lifted for the current theme - never paint the raw value.
     final tint = crewColorOf(theme, drawerDotColor(destination).toARGB32());
 
     return Material(
@@ -277,7 +276,7 @@ class _NavRow extends ConsumerWidget {
                     ),
                   ),
                 ),
-                // An absent count renders nothing — the empty-omitted rule.
+                // An absent count renders nothing - the empty-omitted rule.
                 if (count != null) ...[
                   const SizedBox(width: AppSpacing.sp8),
                   Text('$count', style: theme.monoType.data),
@@ -309,7 +308,7 @@ class _NavRow extends ConsumerWidget {
           );
     final today = jobs.value;
     if (today == null) return null;
-    // Re-scoped: the range stream is a 14-day superset — see runsOn. Cancelled
+    // Re-scoped: the range stream is a 14-day superset - see runsOn. Cancelled
     // visits aren't load, matching employeeJobsTodayProvider.
     return today
         .where(

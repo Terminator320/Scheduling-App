@@ -12,6 +12,7 @@ import 'package:scheduling/core/storage/secure_storage_service.dart';
 class AppLockController extends Notifier<bool> {
   Future<void>? _loading;
   bool _resolved = false;
+  int _revision = 0;
 
   /// True once a read has actually settled. A `false` state with this still
   /// false means "unknown", not "disabled".
@@ -35,10 +36,13 @@ class AppLockController extends Notifier<bool> {
 
   Future<void> _load() async {
     final logger = ref.read(loggerProvider);
+    final revision = _revision;
     try {
-      state = await ref
+      final enabled = await ref
           .read(secureStorageServiceProvider)
           .readFlag(SecureStorageKeys.biometricEnabled);
+      if (revision != _revision) return;
+      state = enabled;
       _resolved = true;
     } catch (e, st) {
       // Encrypted-storage reads can throw on an Android keystore failure or
@@ -53,9 +57,11 @@ class AppLockController extends Notifier<bool> {
   }
 
   Future<void> setEnabled({required bool value}) async {
+    final revision = ++_revision;
     await ref
         .read(secureStorageServiceProvider)
         .writeFlag(SecureStorageKeys.biometricEnabled, value: value);
+    if (revision != _revision) return;
     state = value;
     // An explicit choice is authoritative even if every read so far has failed.
     _resolved = true;

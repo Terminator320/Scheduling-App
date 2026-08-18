@@ -205,8 +205,13 @@ class AuthService {
   }
 
   Future<void> signOut() async {
+    Object? signOutError;
+    StackTrace? signOutStack;
     try {
       await _auth.signOut();
+    } catch (e, st) {
+      signOutError = e;
+      signOutStack = st;
     } finally {
       // Best-effort cache clear — if the keystore fails here it shouldn't fail
       // signOut too, since we check the cached uid again on next launch.
@@ -216,5 +221,15 @@ class AuthService {
         _logger.warn('ACCT-SIGNOUT auth cache clear failed', e, st);
       }
     }
+    if (signOutError == null) return;
+    if (_auth.currentUser == null) {
+      _logger.warn(
+        'ACCT-SIGNOUT local signOut threw after auth state cleared',
+        signOutError,
+        signOutStack,
+      );
+      return;
+    }
+    Error.throwWithStackTrace(signOutError, signOutStack!);
   }
 }

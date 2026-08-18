@@ -185,6 +185,23 @@ void main() {
       expect(state().inProgress, isFalse);
     });
 
+    test(
+      'a failing signOut still reports no-profile instead of turning into a generic error',
+      () async {
+        stubSignedIn();
+        when(() => repo.findUserByUid('u1')).thenAnswer((_) async => null);
+        when(() => auth.signOut()).thenThrow(Exception('ios signOut failed'));
+
+        final outcome = await notifier().signIn(
+          email: 'user@test.com',
+          password: 'password123',
+        );
+
+        expect(outcome, isA<SignInNoProfile>());
+        expect(state().inProgress, isFalse);
+      },
+    );
+
     test('signs out and reports disabled for an inactive account', () async {
       stubSignedIn();
       when(
@@ -201,6 +218,25 @@ void main() {
       verifyNever(() => cache.save(any()));
       expect(state().inProgress, isFalse);
     });
+
+    test(
+      'a failing signOut still reports disabled for an inactive account',
+      () async {
+        stubSignedIn();
+        when(
+          () => repo.findUserByUid('u1'),
+        ).thenAnswer((_) async => _disabledDoc);
+        when(() => auth.signOut()).thenThrow(Exception('ios signOut failed'));
+
+        final outcome = await notifier().signIn(
+          email: 'user@test.com',
+          password: 'password123',
+        );
+
+        expect(outcome, isA<SignInAccountDisabled>());
+        expect(state().inProgress, isFalse);
+      },
+    );
 
     test('routes an invited account to setup and KEEPS the session', () async {
       stubSignedIn();
@@ -361,6 +397,22 @@ void main() {
       expect(outcome, isA<SignInSuccess>());
       expect((outcome as SignInSuccess).employee.id, 'doc1');
       expect(reads, 2);
+      verify(() => cache.save(any())).called(1);
+    });
+
+    test('tolerates a failing identity-cache save after setup resume', () async {
+      final user = _MockUser();
+      when(() => user.uid).thenReturn('u1');
+      when(() => auth.currentUser).thenReturn(user);
+      when(() => repo.findUserByUid('u1')).thenAnswer((_) async => _activeDoc);
+      when(
+        () => cache.save(any()),
+      ).thenAnswer((_) async => throw Exception('keystore flake'));
+
+      final outcome = await notifier().resumeAfterSignUp();
+
+      expect(outcome, isA<SignInSuccess>());
+      await Future<void>.delayed(Duration.zero);
     });
 
     test('maps a throwing profile read to a pending profile instead of '

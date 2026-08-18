@@ -46,4 +46,22 @@ void main() {
 
     expect(observer.currentRouteName, '/forgot-password');
   });
+
+  test('removing the current top route falls back to the route beneath', () {
+    observer
+      ..didPush(_route('/calendar'), null)
+      ..didPush(_route('/hub-redirect'), _route('/calendar'))
+      ..didRemove(_route('/hub-redirect'), _route('/calendar'));
+
+    expect(observer.currentRouteName, '/calendar');
+  });
+
+  test('removing a lower route does not overwrite the current top route', () {
+    observer
+      ..didPush(_route('/calendar'), null)
+      ..didPush(_route('/settings'), _route('/calendar'))
+      ..didRemove(_route('/calendar'), null);
+
+    expect(observer.currentRouteName, '/settings');
+  });
 }

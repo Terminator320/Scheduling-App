@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/security/biometric_auth_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
@@ -45,8 +46,17 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
   /// Resolves the flag through the controller — the ONE reader of the stored
   /// value, so the widget and the Settings switch can't disagree about it.
   Future<void> _lockOnStartIfEnabled() async {
-    await ref.read(appLockEnabledProvider.notifier).ensureLoaded();
+    final controller = ref.read(appLockEnabledProvider.notifier);
+    await controller.ensureLoaded();
     if (!mounted) return;
+    if (!controller.isResolved) {
+      setState(() {
+        _locked = true;
+        _lockedUnresolved = true;
+      });
+      unawaited(controller.retryIfUnresolved().then((_) => _afterRetry()));
+      return;
+    }
     _lockIfEnabled();
   }
 
@@ -123,16 +133,38 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
   Future<void> _authenticate() async {
     if (_authenticating || !mounted) return;
     _authenticating = true;
-    final reason = context.l10n.applock_reason;
-    final ok = await ref
-        .read(biometricAuthServiceProvider)
-        .authenticate(reason);
-    _authenticating = false;
-    if (ok && mounted) {
-      setState(() {
-        _locked = false;
-        _lockedUnresolved = false;
-      });
+    final logger = ref.read(loggerProvider);
+    final service = ref.read(biometricAuthServiceProvider);
+    try {
+      final available = await service.isAvailable();
+      if (!mounted) return;
+      if (!available) {
+        logger.warn('APPLOCK unavailable after lock engaged; disabling gate');
+        try {
+          await ref.read(appLockEnabledProvider.notifier).setEnabled(value: false);
+        } catch (e, st) {
+          logger.warn('APPLOCK disable after unavailable auth failed', e, st);
+        }
+        if (!mounted) return;
+        setState(() {
+          _locked = false;
+          _lockedUnresolved = false;
+        });
+        return;
+      }
+
+      final reason = context.l10n.applock_reason;
+      final ok = await service.authenticate(reason);
+      if (ok && mounted) {
+        setState(() {
+          _locked = false;
+          _lockedUnresolved = false;
+        });
+      }
+    } catch (e, st) {
+      logger.warn('APPLOCK authenticate flow failed', e, st);
+    } finally {
+      _authenticating = false;
     }
   }
 

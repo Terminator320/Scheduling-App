@@ -50,7 +50,8 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
     super.dispose();
   }
 
-  Future<void> _sendResetEmail() async {
+  Future<bool> _sendResetEmail() async {
+    if (_isLoading) return false;
     FocusScope.of(context).unfocus();
     final email = normalizeEmail(_emailController.text);
     final emailError = AuthValidators.email(context, email);
@@ -60,7 +61,7 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
         _emailError = emailError;
         _errorMessage = '';
       });
-      return;
+      return false;
     }
 
     setState(() {
@@ -80,11 +81,11 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
         error,
         st,
       );
-      if (!mounted) return;
+      if (!mounted) return false;
       systemError = failure.toForgotPasswordMessage(context);
     }
 
-    if (!mounted) return;
+    if (!mounted) return systemError == null;
     setState(() {
       _isLoading = false;
       if (systemError != null) {
@@ -96,12 +97,15 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
         _emailSent = true;
       }
     });
+    return systemError == null;
   }
 
   Future<void> _resendEmail() async {
     if (_resentOnce || _isLoading) return;
-    setState(() => _resentOnce = true);
-    await _sendResetEmail();
+    if (await _sendResetEmail()) {
+      if (!mounted) return;
+      setState(() => _resentOnce = true);
+    }
   }
 
   void _backToSignIn() {

@@ -69,6 +69,28 @@ Future<void> _wireFirebaseEmulator() async {
   ]);
 }
 
+Future<void> _recordUnhandledError(
+  Object error,
+  StackTrace stack, {
+  required bool fatal,
+}) async {
+  try {
+    if (Firebase.apps.isEmpty) {
+      debugPrint('Unhandled error before Firebase initialization: $error');
+      debugPrintStack(stackTrace: stack);
+      return;
+    }
+    await FirebaseCrashlytics.instance.recordError(
+      error,
+      stack,
+      fatal: fatal,
+    );
+  } catch (_) {
+    debugPrint('Failed to report unhandled error: $error');
+    debugPrintStack(stackTrace: stack);
+  }
+}
+
 Future<void> main() async {
   await runZonedGuarded<Future<void>>(
     () async {
@@ -106,11 +128,11 @@ Future<void> main() async {
         final crashlytics = FirebaseCrashlytics.instance;
         FlutterError.onError = crashlytics.recordFlutterFatalError;
         PlatformDispatcher.instance.onError = (error, stack) {
-          crashlytics.recordError(
+          unawaited(_recordUnhandledError(
             error,
             stack,
             fatal: isFatalUnhandledError(error),
-          );
+          ));
           return true;
         };
 
@@ -141,11 +163,11 @@ Future<void> main() async {
       );
     },
     (error, stack) {
-      FirebaseCrashlytics.instance.recordError(
+      unawaited(_recordUnhandledError(
         error,
         stack,
         fatal: isFatalUnhandledError(error),
-      );
+      ));
     },
   );
 }
@@ -163,9 +185,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
   final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final _settingsRepository = SharedPrefsSettingsRepository();
-  final _settingsSaveDebouncer = SettingsSaveDebouncer();
+  late final SettingsSaveDebouncer _settingsSaveDebouncer;
   final _topRouteObserver = TopRouteObserver();
-
   // Held so `dispose` can cancel them. Harmless in production — this is the
   // root widget and only dies with the process — but a widget test pumping
   // this app stacks a live plugin listener per pump.
@@ -180,6 +201,10 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   @override
   void initState() {
     super.initState();
+    _settingsSaveDebouncer = SettingsSaveDebouncer(
+      onError: (error, stackTrace) =>
+          ref.read(loggerProvider).warn('SETTINGS debounced save failed', error, stackTrace),
+    );
     _themeMode = widget.settings.themeMode;
     _textScale = widget.settings.textScale;
     _languageController = AppLanguageController.instance;
@@ -207,6 +232,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     unawaited(() async {
       try {
         await HomeWidget.setAppGroupId(widgetAppGroupId);
+        if (!mounted) return;
         _widgetTapSubscription = HomeWidget.widgetClicked.listen(
           _handleWidgetTap,
           onError: (Object e, StackTrace st) =>
@@ -341,7 +367,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     setState(() {
       _themeMode = toggledThemeMode(_themeMode, platformBrightness);
     });
-    _settingsRepository.save(themeMode: _themeMode);
+    unawaited(_saveSettings(themeMode: _themeMode));
   }
 
   void setTextScale(double value) {
@@ -349,13 +375,13 @@ class _PaulAppState extends ConsumerState<PaulApp> {
       _textScale = value;
     });
     _settingsSaveDebouncer.run(
-      () => _settingsRepository.save(textScale: value),
+      () => _saveSettings(textScale: value),
     );
   }
 
   void setLanguage(String code) {
     _languageController.setLanguage(code);
-    _settingsRepository.save(language: code);
+    unawaited(_saveSettings(language: code));
     // Re-upsert the token so its `locale` field follows the app language.
     unawaited(ref.read(pushRegistrationControllerProvider).sync());
     // Same for the Live Activity tokens — `locale` drives the card's text.
@@ -365,6 +391,22 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     // the app language right away, instead of waiting for the next
     // appointment-stream emission.
     ref.invalidate(widgetPayloadProvider);
+  }
+
+  Future<void> _saveSettings({
+    ThemeMode? themeMode,
+    double? textScale,
+    String? language,
+  }) async {
+    try {
+      await _settingsRepository.save(
+        themeMode: themeMode,
+        textScale: textScale,
+        language: language,
+      );
+    } catch (error, stackTrace) {
+      ref.read(loggerProvider).warn('SETTINGS save failed', error, stackTrace);
+    }
   }
 
   /// Syncs once on first build, in case the account doc is already present —

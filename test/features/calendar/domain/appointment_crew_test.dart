@@ -156,7 +156,7 @@ void main() {
     final colors = dayJobDotColors(
       [
         _appt(ids: ['e1'], hour: 8, status: 'cancelled'),
-        _appt(ids: ['e2'], hour: 9),
+        _appt(ids: ['e2']),
         _appt(ids: ['e3'], hour: 10),
         _appt(ids: ['e4'], hour: 11),
       ],
@@ -170,7 +170,7 @@ void main() {
     // them about a cancelled visit — and it is UNCAPPED, unlike the dots.
     final day = [
       _appt(ids: ['e1'], hour: 8, status: 'cancelled'),
-      _appt(ids: ['e2'], hour: 9),
+      _appt(ids: ['e2']),
       _appt(ids: ['e3'], hour: 10),
       _appt(ids: ['e4'], hour: 11),
       _appt(ids: ['e1'], hour: 12),

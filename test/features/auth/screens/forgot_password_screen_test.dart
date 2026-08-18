@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -116,5 +119,54 @@ void main() {
     expect(find.text('Send it again'), findsNothing);
     expect(find.text('Sent again just now'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a failed resend does not consume the one allowed retry', (
+    tester,
+  ) async {
+    var calls = 0;
+    when(() => auth.sendPasswordResetEmail(any())).thenAnswer((_) async {
+      calls++;
+      if (calls == 2) {
+        throw FirebaseAuthException(code: 'network-request-failed');
+      }
+    });
+
+    await tester.pumpWidget(_wrap(auth, initialEmail: 'user@example.com'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Send').last);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Send it again'));
+    await tester.pumpAndSettle();
+
+    verify(() => auth.sendPasswordResetEmail('user@example.com')).called(2);
+    expect(find.text('Send it again'), findsOneWidget);
+    expect(find.text('Sent again just now'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('keyboard resubmit while loading does not fire a second reset request', (
+    tester,
+  ) async {
+    final completer = Completer<void>();
+    when(() => auth.sendPasswordResetEmail(any())).thenAnswer(
+      (_) => completer.future,
+    );
+
+    await tester.pumpWidget(_wrap(auth, initialEmail: 'user@example.com'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    verify(() => auth.sendPasswordResetEmail('user@example.com')).called(1);
+
+    completer.complete();
+    await tester.pumpAndSettle();
   });
 }

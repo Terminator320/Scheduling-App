@@ -72,7 +72,7 @@ class ImageStorageService {
     // builds that predate that change keep showing photos uploaded from this
     // one; drop the write (and the field) once the fleet has moved, the same
     // way the 1.37.1 shim was retired.
-    final url = await snapshot.ref.getDownloadURL();
+    final url = await _downloadUrlOrDelete(snapshot.ref, path);
 
     return AppointmentImage(
       url: url,
@@ -99,6 +99,24 @@ class ImageStorageService {
     } catch (e, st) {
       _logger.warn('IMG-URL downloadUrlFor failed: $storagePath', e, st);
       return '';
+    }
+  }
+
+  Future<String> _downloadUrlOrDelete(Reference ref, String path) async {
+    try {
+      return await ref.getDownloadURL();
+    } catch (e, st) {
+      try {
+        await ref.delete();
+      } catch (deleteError, deleteStack) {
+        _logger.warn(
+          'IMG-UPLOAD cleanup after download url failure failed: $path',
+          deleteError,
+          deleteStack,
+        );
+      }
+      _logger.warn('IMG-UPLOAD getDownloadURL failed: $path', e, st);
+      rethrow;
     }
   }
 

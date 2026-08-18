@@ -63,13 +63,31 @@ class AccountDeletionService {
       if (e.code == 'unauthenticated') {
         throw const AuthFailureRequiresRecentLogin();
       }
+      if (e.code == 'resource-exhausted') {
+        throw const AuthFailureTooManyRequests();
+      }
+      if (e.code == 'unavailable' || e.code == 'deadline-exceeded') {
+        throw const AuthFailureNetwork();
+      }
       _logger.warn('ACCT-DEL deleteAccount callable failed', e, e.stackTrace);
       throw const AuthFailureUnknown();
     } catch (e, st) {
       _logger.warn('ACCT-DEL deleteAccount failed', e, st);
       throw const AuthFailureUnknown();
     }
-    await _auth.signOut();
-    await _authCache.clear();
+    try {
+      await _auth.signOut();
+    } catch (e, st) {
+      // The server-side deletion already landed. A local sign-out failure must
+      // not turn that into "delete failed" or leave Settings trying to
+      // restore registrations for an account that no longer exists.
+      _logger.warn('ACCT-DEL local signOut failed after deletion', e, st);
+    } finally {
+      try {
+        await _authCache.clear();
+      } catch (e, st) {
+        _logger.warn('ACCT-DEL auth cache clear failed', e, st);
+      }
+    }
   }
 }

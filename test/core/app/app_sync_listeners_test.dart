@@ -261,6 +261,19 @@ void main() {
 
       verifyNever(() => uploads.drainPending());
     });
+
+    testWidgets('does not drain on first account-doc arrival while offline', (
+      tester,
+    ) async {
+      final container = await pump(tester);
+      container.read(_offline.notifier).goOffline();
+      await tester.pump();
+
+      accountDocs.add(_account);
+      await tester.pump();
+
+      verifyNever(() => uploads.drainPending());
+    });
   });
 
   group('AppSyncListeners.isUnsettled', () {
@@ -334,6 +347,18 @@ void main() {
       verifyNever(() => widgetSync.clear());
     });
 
+    testWidgets('a widget sync failure is caught instead of escaping', (
+      tester,
+    ) async {
+      when(() => widgetSync.sync(any())).thenThrow(StateError('disk full'));
+      await pump(tester);
+
+      widgetPayloads.add(_payload);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('the listener never registers off iOS', (tester) async {
       await pump(tester, isIos: false);
 
@@ -377,6 +402,20 @@ void main() {
 
       verify(() => snapshotSync.writeSnapshot(_payload)).called(1);
       verifyNever(() => snapshotSync.clearSnapshot());
+    });
+
+    testWidgets('a snapshot write failure is caught instead of escaping', (
+      tester,
+    ) async {
+      when(
+        () => snapshotSync.writeSnapshot(any()),
+      ).thenThrow(StateError('app group locked'));
+      await pump(tester);
+
+      snapshotPayloads.add(_payload);
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('the listener never registers off iOS', (tester) async {

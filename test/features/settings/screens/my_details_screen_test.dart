@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -166,6 +168,35 @@ void main() {
     );
   });
 
+  testWidgets(
+    'a successful identity save clears the save bar before provider snapshots catch up',
+    (tester) async {
+      final saveEmergency = Completer<void>();
+      final saveSelf = Completer<void>();
+      when(() => repo.saveEmergencyContact(any(), any())).thenAnswer(
+        (_) => saveEmergency.future,
+      );
+      when(() => repo.updateSelfDetails(any())).thenAnswer(
+        (_) => saveSelf.future,
+      );
+
+      await pump(tester);
+
+      await tester.enterText(find.byKey(const Key('myEmergencyContact')), 'Marie');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('myIdentitySaveBar')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('myIdentitySave')));
+      await tester.pump();
+
+      saveEmergency.complete();
+      saveSelf.complete();
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('myIdentitySaveBar')), findsNothing);
+    },
+  );
+
   testWidgets('offline save fails fast without calling the repository', (
     tester,
   ) async {
@@ -234,6 +265,44 @@ void main() {
       ).captured.single;
       // The STORED phone, not the half-typed text in the identity field.
       expect((captured as EmployeeRecord).phone, '(514) 555-0000');
+    },
+  );
+
+  testWidgets(
+    'a stale availability failure does not roll back a newer successful change',
+    (tester) async {
+      final firstWrite = Completer<void>();
+      final secondWrite = Completer<void>();
+      var callCount = 0;
+
+      when(() => repo.updateSelfDetails(any())).thenAnswer((_) {
+        callCount += 1;
+        if (callCount == 1) return firstWrite.future;
+        return secondWrite.future;
+      });
+
+      await pump(tester);
+
+      final switchFinder = find.byKey(const Key('myOnCall'));
+
+      expect(tester.widget<Switch>(switchFinder).value, isFalse);
+
+      await tester.tap(switchFinder);
+      await tester.pump();
+      expect(tester.widget<Switch>(switchFinder).value, isTrue);
+
+      await tester.tap(switchFinder);
+      await tester.pump();
+      expect(tester.widget<Switch>(switchFinder).value, isFalse);
+
+      secondWrite.complete();
+      await tester.pumpAndSettle();
+
+      firstWrite.completeError(Exception('offline'));
+      await tester.pump();
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<Switch>(switchFinder).value, isFalse);
     },
   );
 

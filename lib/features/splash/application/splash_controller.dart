@@ -6,6 +6,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/auth/data/auth_cache.dart';
+import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -48,6 +49,7 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
 
   final employeesRepo = ref.watch(employeesRepositoryProvider);
   final logger = ref.read(loggerProvider);
+  final authService = ref.read(authServiceProvider);
   final UserUidMatch? match;
   try {
     match = await retryAsync(
@@ -61,7 +63,7 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
     rethrow;
   }
   if (match == null) {
-    await auth.signOut();
+    await authService.signOut();
     return const SplashGoToLogin();
   }
 
@@ -80,8 +82,7 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
     );
   }
   if (!employee.isActive) {
-    await auth.signOut();
-    await authCache.clear();
+    await authService.signOut();
     return const SplashGoToLogin();
   }
   unawaited(

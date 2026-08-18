@@ -51,11 +51,12 @@ void main() {
     );
   });
 
-  Future<void> change() => service.changeOwnEmail(
-    docId: 'd1',
-    email: 'new@example.com',
-    password: 'S3cret!pass',
-  );
+  Future<void> change({String email = 'new@example.com'}) =>
+      service.changeOwnEmail(
+        docId: 'd1',
+        email: email,
+        password: 'S3cret!pass',
+      );
 
   test('re-authenticates BEFORE calling changeEmployeeEmail', () async {
     when(() => deletion.reauthenticateWithPassword(any())).thenAnswer(
@@ -71,6 +72,21 @@ void main() {
         'email': 'new@example.com',
       }),
     ]);
+  });
+
+  test('normalizes the address before calling changeEmployeeEmail', () async {
+    when(() => deletion.reauthenticateWithPassword(any())).thenAnswer(
+      (_) async {},
+    );
+
+    await change(email: ' New@Example.com ');
+
+    verify(
+      () => callable.call<dynamic>({
+        'docId': 'd1',
+        'email': 'new@example.com',
+      }),
+    ).called(1);
   });
 
   test('a failed re-auth never reaches the callable', () async {
@@ -100,5 +116,53 @@ void main() {
       change(),
       throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
     );
+  });
+
+  test('an unauthenticated callable asks the user to sign in again', () async {
+    when(() => deletion.reauthenticateWithPassword(any())).thenAnswer(
+      (_) async {},
+    );
+    when(() => callable.call<dynamic>(any<dynamic>())).thenThrow(
+      FirebaseFunctionsException(
+        code: 'unauthenticated',
+        message: 'stale-token',
+      ),
+    );
+
+    await expectLater(
+      change(),
+      throwsA(isA<AuthFailureRequiresRecentLogin>()),
+    );
+  });
+
+  test('resource exhaustion surfaces as too many requests', () async {
+    when(() => deletion.reauthenticateWithPassword(any())).thenAnswer(
+      (_) async {},
+    );
+    when(() => callable.call<dynamic>(any<dynamic>())).thenThrow(
+      FirebaseFunctionsException(
+        code: 'resource-exhausted',
+        message: 'quota',
+      ),
+    );
+
+    await expectLater(
+      change(),
+      throwsA(isA<AuthFailureTooManyRequests>()),
+    );
+  });
+
+  test('transport failures surface as network errors', () async {
+    when(() => deletion.reauthenticateWithPassword(any())).thenAnswer(
+      (_) async {},
+    );
+    when(() => callable.call<dynamic>(any<dynamic>())).thenThrow(
+      FirebaseFunctionsException(
+        code: 'unavailable',
+        message: 'offline',
+      ),
+    );
+
+    await expectLater(change(), throwsA(isA<AuthFailureNetwork>()));
   });
 }

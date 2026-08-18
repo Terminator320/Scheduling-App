@@ -39,6 +39,20 @@ void main() {
       final settings = await repo().load();
       expect(settings.language, 'fr');
     });
+
+    test('falls back to defaults when persisted values are invalid', () async {
+      SharedPreferences.setMockInitialValues({
+        'theme_mode': 99,
+        'text_scale': -1.0,
+        'language': 'es',
+      });
+
+      final settings = await repo().load();
+
+      expect(settings.themeMode, ThemeMode.system);
+      expect(settings.textScale, 1.0);
+      expect(settings.language, 'en');
+    });
   });
 
   group('save', () {
