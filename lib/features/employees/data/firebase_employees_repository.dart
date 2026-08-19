@@ -12,9 +12,6 @@ import 'package:scheduling/features/employees/domain/policies/employee_name_poli
 import 'package:scheduling/features/employees/domain/policies/self_service_fields.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 
-/// Shared bound on every `users` stream to prevent unbounded snapshots.
-const _userStreamLimit = 500;
-
 const _callableTimeout = Duration(seconds: 20);
 
 class FirebaseEmployeesRepository implements EmployeesRepository {
@@ -31,14 +28,8 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   Stream<List<EmployeeRecord>> watchAllUsers() {
     return retryStream(
       () => _users
-          .orderBy('name')
-          .limit(_userStreamLimit)
           .snapshots()
-          .map(
-            (snapshot) => snapshot.docs
-                .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
-                .toList(),
-          ),
+          .map(_toSortedEmployeeRecords),
     );
   }
 
@@ -49,13 +40,8 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
           .where('role', whereIn: ['employee', 'admin'])
           .where('status', isEqualTo: 'active')
           // NOTE: no orderBy (watchAllUsers' orderBy excludes docs without name, dropping unnamed active employees).
-          .limit(_userStreamLimit)
           .snapshots()
-          .map(
-            (snapshot) => snapshot.docs
-                .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
-                .toList(),
-          ),
+          .map(_toSortedEmployeeRecords),
     );
   }
 
@@ -64,14 +50,33 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     return retryStream(
       () => _users
           .where('status', isEqualTo: 'active')
-          .limit(_userStreamLimit)
           .snapshots()
-          .map(
-            (snapshot) => snapshot.docs
-                .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
-                .toList(),
-          ),
+          .map(_toSortedEmployeeRecords),
     );
+  }
+
+  List<EmployeeRecord> _toSortedEmployeeRecords(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    return snapshot.docs
+      .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
+      .toList()
+      ..sort((a, b) {
+        final byName = _sortKeyFor(a).compareTo(_sortKeyFor(b));
+        if (byName != 0) return byName;
+        return a.id.compareTo(b.id);
+      });
+  }
+
+  String _sortKeyFor(EmployeeRecord employee) {
+    final name = employee.name.trim();
+    if (name.isNotEmpty) return name.toLowerCase();
+    final composed = composeEmployeeName(
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+      fallback: employee.email,
+    ).trim();
+    return composed.toLowerCase();
   }
 
   @override
@@ -151,9 +156,9 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
         // (empty == absent) and the flags as `=== true`, so a conditional
         // payload shape would be a second thing to test for no benefit.
         .call<dynamic>({
-          'firstName': firstName,
-          'lastName': lastName,
-          'phone': phone,
+          'firstName': firstName.trim(),
+          'lastName': lastName.trim(),
+          'phone': phone.trim(),
           'termsAccepted': termsAccepted,
           'locationConsent': locationConsent,
         });
@@ -167,7 +172,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     final normalizedEmail = normalizeEmail(employee.email);
     final ref = _users.doc(docId);
     final stored = (await ref.get()).data();
-    final storedEmail = stored?['email'] as String? ?? '';
+    final storedEmail = normalizeEmail(stored?['email'] as String? ?? '');
     final storedUid = stored?['uid'] as String? ?? '';
 
     // What we believe the doc holds going into the commit below.
@@ -241,7 +246,9 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       // `email` field reads as null here and would never equal the `''` the
       // check above settled on, so the guard would abort EVERY save on such a
       // doc rather than only a concurrent one.
-      final currentEmail = (snapshot.data()?['email'] as String?) ?? '';
+      final currentEmail = normalizeEmail(
+        snapshot.data()?['email'] as String? ?? '',
+      );
       if (currentEmail != emailAtCheck) {
         // Concurrent edit — surface a retryable "try again" instead of
         // committing on top of state the uniqueness check never saw.
@@ -333,6 +340,10 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   ) async {
     // set(merge) rather than update(): the doc doesn't exist until the first
     // save, and update() on a missing doc throws not-found.
+    //
+    // Deliberately NO parent-doc scrub here. This path is used by self-service
+    // settings, and the users/{id} self-write allowlist would reject the extra
+    // emergencyContact/emergencyPhone delete keys outright.
     await _emergencyDoc(docId).set({
       ...contact.toMap(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -388,7 +399,13 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
             return snapshot.docs.isNotEmpty || !snapshot.metadata.isFromCache;
           })
           .map((snapshot) {
-            if (snapshot.docs.isEmpty) return const <String, dynamic>{};
+            if (snapshot.docs.isEmpty) {
+              if (_cachedUserDocUid == uid) {
+                _cachedUserDocUid = null;
+                _cachedUserDocId = null;
+              }
+              return const <String, dynamic>{};
+            }
             // Remember the id this snapshot already carries. Without it,
             // activeUserIdentityProvider re-queried the same doc by uid on
             // every emission purely to learn something this stream had.

@@ -66,10 +66,10 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
         .toSet();
   }
 
-  /// Every status counts as taken, not just active ones: a DISABLED employee's
+  /// Every status counts as taken, not just active ones: a disabled employee's
   /// colour must stay reserved (re-enabling them would otherwise collide with
   /// whoever took it, and the crew colour is what the appointment bar and the
-  /// calendar dots are keyed on), and an INVITED employee's colour was already
+  /// calendar dots are keyed on), and an invited employee's colour was already
   /// reserved by the invite. `employeesStreamProvider` filters to active, so it
   /// is the wrong source here.
   Set<int> _usedColorsFor(String? excludeId) {
@@ -106,7 +106,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   }
 
   Future<void> _onEmployeeTap(EmployeeRecord employee) async {
-    // An invited person expands in place inside PendingInviteTile — there is
+    // An invited person expands in place inside PendingInviteTile - there is
     // no detail page worth opening, and the sheet's actions all assume an
     // account that exists.
     if (employee.isInvited) return;
@@ -136,7 +136,15 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     if (!mounted) return;
     // Edit is the only action the detail sheet can raise: disable/enable moved
     // into the edit sheet (which announces its own notice) and delete is gone.
-    if (result == 'edit') await _openEditSheet(employee);
+    if (result == 'edit') {
+      final liveUsers = ref.read(allUsersStreamProvider).asData?.value;
+      final latest = _employeeById(liveUsers, employee.id);
+      if (latest != null) {
+        await _openEditSheet(latest);
+      } else if (liveUsers == null) {
+        await _openEditSheet(employee);
+      }
+    }
   }
 
   void _clearSearch() {
@@ -166,9 +174,9 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   }
 
   Widget _buildMasterList() {
-    // Gated on the stream that actually SUPPLIES the rows. It used to watch
+    // Gated on the stream that actually supplies the rows. It used to watch
     // employeesStreamProvider here while every row came from
-    // allUsersStreamProvider via filteredEmployeesProvider — a second live
+    // allUsersStreamProvider via filteredEmployeesProvider - a second live
     // `users` query pinned for the session, and a spinner keyed off a query
     // whose results the list never showed (watchEmployees filters to active,
     // so it excludes the invited and disabled rows this roster renders).
@@ -225,14 +233,15 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                   ? PendingInviteTile(employee: employee)
                   : EmployeeCard(
                       employee: employee,
-                      // Only highlight when the detail pane is actually shown (two-pane).
+                      // Only highlight when the detail pane is actually shown
+                      // (two-pane).
                       selected:
                           context.isTwoPane &&
                           _selectedEmployee?.id == employee.id,
                       onTap: () => _onEmployeeTap(employee),
                     ),
             );
-            // The FIRST row only — the step's GlobalKey must stay unique.
+            // The first row only - the step's GlobalKey must stay unique.
             return index == 0
                 ? _tour.stepIf(TourStepId.employeesRow, row)
                 : row;
@@ -242,15 +251,21 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     );
   }
 
-  /// Keeps the selected employee in sync with the live users stream, so an in-pane
-  /// enable/disable/edit doesn't leave the detail pane showing a stale status.
+  /// Keeps the selected employee in sync with the live users stream, so an
+  /// in-pane enable/disable/edit doesn't leave the detail pane showing a stale
+  /// status.
   EmployeeRecord? _liveSelectedEmployee() {
     final snapshot = _selectedEmployee;
     if (snapshot == null) return null;
     final liveUsers = ref.watch(allUsersStreamProvider).asData?.value;
     if (liveUsers == null) return snapshot;
+    return _employeeById(liveUsers, snapshot.id);
+  }
+
+  EmployeeRecord? _employeeById(List<EmployeeRecord>? liveUsers, String id) {
+    if (liveUsers == null) return null;
     for (final employee in liveUsers) {
-      if (employee.id == snapshot.id) return employee;
+      if (employee.id == id) return employee;
     }
     return null;
   }
@@ -263,28 +278,32 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
   @override
   Widget build(BuildContext context) {
     // Watches the stream this screen actually renders. It used to listen to
-    // employeesStreamProvider, which nothing here shows — and because that
+    // employeesStreamProvider, which nothing here shows - and because that
     // provider is not autoDispose and the hub keeps this tab mounted, merely
     // listening pinned a second live `users` query for the whole session. The
     // ref.watch above was moved off it for exactly that reason; this was the
     // half that got left behind.
     //
-    // Only log on the data→error transition — otherwise this would re-log on every rebuild while the stream stays errored.
+    // Only log on the data-to-error transition - otherwise this would re-log
+    // on every rebuild while the stream stays errored.
     ref.listen(allUsersStreamProvider, (previous, next) {
       if (next is! AsyncError || previous is AsyncError) return;
-      ref
-          .read(loggerProvider)
-          .warn('EMP-LOAD allUsersStreamProvider error', next.error, next.stackTrace);
+      ref.read(loggerProvider).warn(
+        'EMP-LOAD allUsersStreamProvider error',
+        next.error,
+        next.stackTrace,
+      );
     });
+    final usersReady = ref.watch(allUsersStreamProvider).hasValue;
     final selected = _liveSelectedEmployee();
     return FeatureTourHost(
       scope: _tour.scope,
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
       // The roster-row step has no target while the body is the loading
-      // placeholder, and a tour started then drops it and marks the WHOLE
-      // scope seen — the row step would never be shown again.
-      ready: ref.watch(allUsersStreamProvider).hasValue,
+      // placeholder, and a tour started then drops it and marks the whole
+      // scope seen - the row step would never be shown again.
+      ready: usersReady,
       child: Scaffold(
         appBar: _buildAppBar(),
         endDrawer: AppNavDrawer(
@@ -296,15 +315,21 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
                 TourStepId.employeesAdd,
                 targetBorderRadius: BorderRadius.circular(AppRadius.r16),
                 child: FloatingActionButton(
-                  // Needs to be unique across tabs, since IndexedStack keeps every tab's FAB mounted at the same time.
+                  // Needs to be unique across tabs, since IndexedStack keeps
+                  // every tab's FAB mounted at the same time.
                   heroTag: 'employeesAddFab',
-                  onPressed: _openInviteSheet,
+                  // Until the roster settles we don't know which crew colours
+                  // are already reserved by active, invited, or disabled
+                  // people. Opening early would seed the picker from an empty
+                  // set and can offer a duplicate default.
+                  onPressed: usersReady ? _openInviteSheet : null,
                   tooltip: context.l10n.employees_inviteEmployee,
                   child: const Icon(Icons.add),
                 ),
               )
             : null,
-        // Only the master list listens to the search controller, so typing rebuilds just the list.
+        // Only the master list listens to the search controller, so typing
+        // rebuilds just the list.
         body: MasterDetailScaffold(
           master: ListenableBuilder(
             listenable: _searchController,

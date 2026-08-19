@@ -30,7 +30,7 @@ abstract class ClientsRepository {
   /// their `clientId` links on existing appointments are untouched.
   Future<void> setClientArchived(String id, {required bool archived});
 
-  /// Archived clients, name-sorted, from the same bounded cached window
+  /// Archived clients, name-sorted, from the same cached window
   /// `searchClients` scans — so the Archived chip costs no extra read inside
   /// the TTL and needs no composite index.
   Future<List<ClientRecord>> fetchArchivedClients();
@@ -44,11 +44,11 @@ abstract class ClientsRepository {
     ClientRecord? after,
   });
 
-  /// One-shot fetch of clients created since [since], used for dashboard trends. Legacy
-  /// docs without `createdAt` (old imports) are excluded.
+  /// One-shot fetch of clients created since [since], used for dashboard
+  /// trends. Legacy docs without `createdAt` (old imports) are excluded.
   Future<List<ClientRecord>> fetchClientsCreatedSince(DateTime since);
 
-  /// Clients of [type], name-sorted, from the same bounded, cached window
+  /// Clients of [type], name-sorted, from the same cached window
   /// `searchClients` scans — so the filter costs no extra read inside the TTL
   /// and needs no composite index.
   ///

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/security/credential_input.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/validators/auth_validators.dart';
 import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -140,6 +141,7 @@ class _ChangeEmailDialogBodyState extends State<ChangeEmailDialogBody> {
   ChangeEmailDraft? get _draft {
     final email = normalizeEmail(_email.text);
     if (email.isEmpty ||
+        !AuthValidators.isValidEmailFormat(email) ||
         !_matches ||
         email == normalizeEmail(widget.currentEmail) ||
         _password.text.isEmpty) {

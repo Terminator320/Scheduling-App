@@ -8,6 +8,7 @@ import 'package:scheduling/features/clients/domain/policies/client_search_policy
 import 'package:scheduling/features/employees/data/firebase_employees_repository.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 
 final employeesRepositoryProvider = Provider<EmployeesRepository>((ref) {
   final firestore = ref.watch(firestoreProvider);
@@ -15,11 +16,56 @@ final employeesRepositoryProvider = Provider<EmployeesRepository>((ref) {
 });
 
 final allUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
-  if (ref.authUid == null) return Stream.value(const []);
   final repo = ref.watch(employeesRepositoryProvider);
-  final role = ref.watch(userRoleProvider).value;
-  if (role == 'admin') return repo.watchAllUsers();
-  return repo.watchAssignableUsers();
+
+  Stream<List<EmployeeRecord>> streamForRole(String? uid, String role) {
+    if (uid == null) return Stream.value(const []);
+    if (role == 'admin') return repo.watchAllUsers();
+    return repo.watchAssignableUsers();
+  }
+
+  final uidState = ref.watch(authUidProvider);
+  if (uidState.hasError) {
+    return Stream.error(
+      uidState.error!,
+      uidState.stackTrace ?? StackTrace.current,
+    );
+  }
+  if (uidState.isLoading) {
+    return Stream.fromFuture(
+      ref.watch(authUidProvider.future),
+    ).asyncExpand((uid) async* {
+      if (uid == null) {
+        yield const <EmployeeRecord>[];
+        return;
+      }
+      final doc = await ref.watch(currentUserDocProvider.future);
+      final role = (doc['role'] ?? '').toString().trim();
+      yield* streamForRole(uid, role);
+    });
+  }
+
+  final uid = uidState.value;
+  if (uid == null) return Stream.value(const []);
+
+  final docState = ref.watch(currentUserDocProvider);
+  if (docState.hasError) {
+    return Stream.error(
+      docState.error!,
+      docState.stackTrace ?? StackTrace.current,
+    );
+  }
+  if (docState.isLoading) {
+    return Stream.fromFuture(
+      ref.watch(currentUserDocProvider.future),
+    ).asyncExpand(
+      (doc) => streamForRole(uid, (doc['role'] ?? '').toString().trim()),
+    );
+  }
+  return streamForRole(
+    uid,
+    (docState.value?['role'] ?? '').toString().trim(),
+  );
 });
 
 /// Container-scoped mutable holders for the content-equality memo — each
@@ -30,6 +76,13 @@ final _nameMapMemoProvider = Provider((ref) => _MapMemo<String>());
 class _MapMemo<V> {
   Map<String, V>? value;
 }
+
+String _displayName(EmployeeRecord employee) => displayEmployeeName(
+  firstName: employee.firstName,
+  lastName: employee.lastName,
+  name: employee.name,
+  email: employee.email,
+);
 
 // Memoized lookup maps — avoids re-allocating on every rebuild, and reuses
 // the same instance when the content hasn't actually changed so watchers
@@ -53,7 +106,8 @@ final employeeColorMapProvider = Provider<Map<String, Color>>(
 );
 
 final employeeNameMapProvider = Provider<Map<String, String>>(
-  (ref) => _memoizedEmployeeMap(ref, _nameMapMemoProvider, (e) => e.name),
+  (ref) =>
+      _memoizedEmployeeMap(ref, _nameMapMemoProvider, _displayName),
 );
 
 /// Active employees only.
@@ -63,13 +117,28 @@ final employeeNameMapProvider = Provider<Map<String, String>>(
 /// ONCE attached a second live `users` listener (alongside the always-on
 /// `watchAllUsers()`) for the rest of the session.
 ///
-/// Deliberately NOT derived from `allUsersStreamProvider`: that one orders by
-/// `name`, and Firestore excludes docs missing the orderBy field, so an
-/// unnamed active employee would silently drop out of the crew picker — which
-/// changes who can see a visit. That part is load-bearing; keep it.
+/// Deliberately NOT derived from `allUsersStreamProvider`: that one includes
+/// invited and disabled accounts for admin roster surfaces, while this one is
+/// active employees only for crew-picking surfaces. That distinction is
+/// load-bearing; keep it.
 final employeesStreamProvider =
     StreamProvider.autoDispose<List<EmployeeRecord>>((ref) {
-      if (ref.authUid == null) return Stream.value(const []);
+      final uidState = ref.watch(authUidProvider);
+      if (uidState.hasError) {
+        return Stream.error(
+          uidState.error!,
+          uidState.stackTrace ?? StackTrace.current,
+        );
+      }
+      if (uidState.isLoading) {
+        return Stream.fromFuture(
+          ref.watch(authUidProvider.future),
+        ).asyncExpand((uid) {
+          if (uid == null) return Stream.value(const <EmployeeRecord>[]);
+          return ref.watch(employeesRepositoryProvider).watchEmployees();
+        });
+      }
+      if (uidState.value == null) return Stream.value(const []);
       return ref.watch(employeesRepositoryProvider).watchEmployees();
     });
 
@@ -89,7 +158,7 @@ final _employeeSearchIndexProvider = Provider<List<_EmployeeSearchEntry>>((
     for (final e in employees)
       (
         employee: e,
-        text: ClientSearchPolicy.normalize('${e.name} ${e.email}'),
+        text: ClientSearchPolicy.normalize('${_displayName(e)} ${e.email}'),
         phoneDigits: ClientSearchPolicy.digitsOnly(e.phone),
       ),
   ];

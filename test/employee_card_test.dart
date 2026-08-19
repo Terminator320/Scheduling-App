@@ -54,6 +54,44 @@ void main() {
     expect(find.text('alex@salon.com'), findsOneWidget);
   });
 
+  testWidgets('falls back to composed first and last name when name is blank', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        EmployeeCard(
+          employee: const EmployeeRecord(
+            id: 'e1',
+            firstName: 'Amy',
+            lastName: 'Adams',
+            email: 'amy@shop.ca',
+          ),
+          onTap: () {},
+        ),
+      ),
+    );
+
+    expect(find.text('Amy Adams'), findsOneWidget);
+  });
+
+  testWidgets('does not repeat the email when it is already the display name', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        EmployeeCard(
+          employee: const EmployeeRecord(
+            id: 'e1',
+            email: 'amy@shop.ca',
+          ),
+          onTap: () {},
+        ),
+      ),
+    );
+
+    expect(find.text('amy@shop.ca'), findsOneWidget);
+  });
+
   testWidgets('shows AppAvatar', (tester) async {
     await tester.pumpWidget(
       _wrap(EmployeeCard(employee: _fakeEmployee(), onTap: () {})),

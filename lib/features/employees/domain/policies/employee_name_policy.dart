@@ -2,9 +2,9 @@
 /// string: `watchAllUsers` orders by `name` and Firestore excludes documents
 /// missing the orderBy field, so an unnamed user would silently vanish from the
 /// admin roster.
-const String kUnnamedEmployee = '—';
+const String kUnnamedEmployee = '-';
 
-/// The single place `users.name` is built. Every write path routes through it —
+/// The single place `users.name` is built. Every write path routes through it -
 /// P4 adds first/last names but never stops populating the composed `name`.
 String composeEmployeeName({
   required String firstName,
@@ -19,3 +19,19 @@ String composeEmployeeName({
   final stored = fallback.trim();
   return stored.isNotEmpty ? stored : kUnnamedEmployee;
 }
+
+/// Best-effort UI/display name for an employee record.
+///
+/// Uses the split-name fields first, then the stored composed name, then the
+/// email as a last meaningful identifier before falling back to the unnamed
+/// placeholder.
+String displayEmployeeName({
+  required String firstName,
+  required String lastName,
+  required String name,
+  required String email,
+}) => composeEmployeeName(
+  firstName: firstName,
+  lastName: lastName,
+  fallback: name.trim().isNotEmpty ? name : email,
+);

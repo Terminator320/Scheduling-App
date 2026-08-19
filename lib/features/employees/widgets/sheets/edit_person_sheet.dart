@@ -321,6 +321,8 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
                   ? l10n.employees_employeeDisabledSuccessfully
                   : l10n.employees_employeeEnabledSuccessfully,
             );
+      case EmployeeStatusBusy():
+        break;
       case EmployeeStatusChangeFailed(:final error):
         ref
             .read(noticeServiceProvider)
@@ -340,11 +342,12 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
     final l10n = context.l10n;
     final materialL10n = MaterialLocalizations.of(context);
     final activity = ref.watch(employeeFormControllerProvider);
+    final sheetBusy = activity.isSaving || activity.isTogglingStatus;
 
     return FormSheetFrame(
       title: l10n.employees_editPerson,
       primaryLabel: l10n.common_save,
-      isBusy: activity.isSaving,
+      isBusy: sheetBusy,
       onPrimary: _save,
       children: [
         ..._detailsSection(theme, l10n),
@@ -352,7 +355,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
         ..._colourSection(theme, l10n),
         ..._availabilitySection(theme, l10n, materialL10n),
         ..._emergencySection(theme, l10n),
-        ..._accessSection(theme, l10n, activity),
+        ..._accessSection(theme, l10n, activity, sheetBusy),
       ],
     );
   }
@@ -527,6 +530,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
     ThemeData theme,
     AppLocalizations l10n,
     EmployeeFormActivity activity,
+    bool sheetBusy,
   ) => [
     MonoSectionLabel(l10n.employees_sectionAccess),
     const SizedBox(height: AppSpacing.sp8),
@@ -543,7 +547,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
     _StatusFooter(
       employeeId: widget.employee.id,
       isDisabled: _isDisabled,
-      isBusy: activity.isTogglingStatus,
+      isBusy: sheetBusy,
       onToggle: _confirmToggleStatus,
     ),
   ];

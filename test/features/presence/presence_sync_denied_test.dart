@@ -148,6 +148,28 @@ void main() {
     expect(geolocator.cancelled, isFalse);
   });
 
+  test('a loading account doc does not start tracking yet', () async {
+    final docs = StreamController<Map<String, dynamic>>();
+    final container = ProviderContainer(
+      overrides: [
+        currentUserDocProvider.overrideWith((ref) => docs.stream),
+        employeesRepositoryProvider.overrideWithValue(employees),
+        presenceRepositoryProvider.overrideWithValue(presence),
+        locationPermissionServiceProvider.overrideWithValue(permissions),
+        presenceSyncControllerProvider.overrideWith(
+          (ref) => PresenceSyncController(ref, auth: auth),
+        ),
+      ],
+    );
+    addTearDown(docs.close);
+    addTearDown(container.dispose);
+
+    await container.read(presenceSyncControllerProvider).sync();
+
+    verifyNever(() => permissions.ensureLocation());
+    verifyNever(() => employees.findUserByUid(any()));
+  });
+
   test('a denied write drops the tracked doc, so unregister has nothing to '
       'delete', () async {
     when(

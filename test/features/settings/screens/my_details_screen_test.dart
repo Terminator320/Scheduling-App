@@ -197,6 +197,36 @@ void main() {
     },
   );
 
+  testWidgets(
+    'availability does not autosave while the identity save is still running',
+    (tester) async {
+      final saveEmergency = Completer<void>();
+      final saveSelf = Completer<void>();
+      when(() => repo.saveEmergencyContact(any(), any())).thenAnswer(
+        (_) => saveEmergency.future,
+      );
+      when(() => repo.updateSelfDetails(any())).thenAnswer(
+        (_) => saveSelf.future,
+      );
+
+      await pump(tester);
+
+      await tester.enterText(find.byKey(const Key('myEmergencyContact')), 'Marie');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('myIdentitySave')));
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('myOnCall')));
+      await tester.pump();
+
+      verify(() => repo.updateSelfDetails(any())).called(1);
+
+      saveEmergency.complete();
+      saveSelf.complete();
+      await tester.pumpAndSettle();
+    },
+  );
+
   testWidgets('offline save fails fast without calling the repository', (
     tester,
   ) async {

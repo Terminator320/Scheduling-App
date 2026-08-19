@@ -28,18 +28,21 @@ class FirebaseClientsRepository implements ClientsRepository {
   /// Injectable time source so the search-cache TTL is testable.
   final DateTime Function() _clock;
 
-  // Bounded LRU cache — once it hits _searchCacheMax entries, the oldest one gets evicted
-  // so this can't grow without limit.
+  // Bounded LRU cache — once it hits _searchCacheMax entries, the oldest one
+  // gets evicted so this can't grow without limit.
   static const int _searchCacheMax = 50;
 
-  /// Cache TTL for search results and the scan window. Local writes patch the cache
-  /// immediately, so this TTL is really just a safety net for remote writes.
+  /// Cache TTL for search results and the scan window. Local writes patch the
+  /// cache immediately, so this TTL is really just a safety net for remote
+  /// writes.
   static const Duration _searchCacheTtl = Duration(minutes: 2);
 
   final Map<String, _CachedClientSearch> _searchCache = {};
 
   // Shared name-ordered scan window serving all queries within the TTL.
   _CachedClientScanWindow? _scanWindow;
+
+  static const int _clientScanPageSize = 500;
 
   bool _isFresh(DateTime fetchedAt) =>
       _clock().difference(fetchedAt) < _searchCacheTtl;
@@ -54,24 +57,14 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   // For local writes we patch the written doc into the scan window directly, so
   // search can recompute without an extra read. A null [data] means the doc is
-  // gone (a delete) and is dropped rather than re-appended — one owner for the
-  // whole window/cache-invalidation contract.
+  // gone (a delete) and is dropped rather than re-appended.
   void _patchWindow(String id, {Map<String, dynamic>? data}) {
     final window = _scanWindow;
     if (window != null && _isFresh(window.fetchedAt)) {
-      // Merged over the cached doc, never substituted for it: `toMap()` emits
-      // user-owned fields only, so a plain replace would drop the
-      // function-owned `jobCount`/`createdAt` and blank the count on every
-      // search and type-filter result until the window's TTL expired.
-      final previous = window.docs
-          .where((doc) => doc.id == id)
-          .firstOrNull
-          ?.data;
+      final previous = window.docs.where((doc) => doc.id == id).firstOrNull?.data;
       final docs = [
         for (final doc in window.docs)
           if (doc.id != id) doc,
-        // Where it lands in the window doesn't matter — matching happens per-doc, and the
-        // final order comes from the relevance sort anyway.
         if (data != null) (id: id, data: {...?previous, ...data}),
       ];
       _scanWindow = _CachedClientScanWindow(docs, window.fetchedAt);
@@ -81,16 +74,8 @@ class FirebaseClientsRepository implements ClientsRepository {
     _searchCache.clear();
   }
 
-  // Page-boundary doc names keyed by id. The cursor needs the exact Firestore `name`
-  // value, not the `businessName` fallback, or we'd end up skipping docs.
-  //
-  // BOUNDED, like `_searchCache` beside it: this repository is a session-long
-  // singleton and this map gains an entry per page fetched, so unbounded it
-  // only ever grows. It is deliberately capped rather than CLEARED on write —
-  // dropping a live boundary is not free, since the fallback `after.name`
-  // carries the `businessName` substitution for a legacy business-only doc and
-  // would page straight past it. The cap is far deeper than any list is
-  // scrolled, and eviction is oldest-first, so a boundary still in use stays.
+  // Page-boundary doc names keyed by id. The cursor needs the exact Firestore
+  // `name` value, not the `businessName` fallback, or we'd end up skipping docs.
   final Map<String, String> _pageBoundaryNames = {};
 
   /// Page boundaries retained — ~`_clientsPageSize` × this many clients deep.
@@ -101,17 +86,6 @@ class FirebaseClientsRepository implements ClientsRepository {
     required int limit,
     ClientRecord? after,
   }) async {
-    // Archived clients are filtered out SERVER-side, so the server still fills
-    // a whole page: `items.last` stays the true cursor and the list's
-    // `pages.last.length < pageSize` end-of-list test stays valid. Filtering
-    // here in Dart instead would shorten a full server page and truncate the
-    // list permanently at the first archived client.
-    //
-    // Firestore excludes docs missing a filtered field, so this depends on
-    // every client doc carrying `archived` — see the backfill script and the
-    // two create paths (`_normalizedMap` and Wave `importCustomers`).
-    //
-    // Ordered alphabetically by name (with doc id as tiebreaker) to avoid skipping/duplicating clients with shared names.
     var query = _clients
         .where('archived', isEqualTo: false)
         .orderBy('name')
@@ -153,28 +127,18 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   @override
   Future<List<ClientRecord>> fetchClientsCreatedSince(DateTime since) async {
-    // Cap this so a windowed read can never turn into an unbounded query.
-    // DESCENDING is load-bearing: the cap truncates the far end, and every
-    // consumer renders newest-first, so ascending would drop the newest
-    // clients — the ones the dashboard exists to show — and keep the oldest.
-    // The same single-field index serves both directions.
-    final snapshot = await _clients
+    final docs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+    var query = _clients
         .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
         .orderBy('createdAt', descending: true)
-        .limit(ClientSearchPolicy.serverReadLimit)
-        .get();
-    if (snapshot.docs.length == ClientSearchPolicy.serverReadLimit) {
-      // Same posture as every other capped read here. At the cap the
-      // dashboard's 8-week new-client trend under-reports its OLDEST weeks —
-      // gradually, as the roster grows, with no error anywhere.
-      _logger.warn(
-        'CLI-LIST fetchClientsCreatedSince hit the scan cap; '
-        'the oldest weeks of the trend are understated',
-      );
+        .limit(_clientScanPageSize);
+    while (true) {
+      final snapshot = await query.get();
+      docs.addAll(snapshot.docs);
+      if (snapshot.docs.length < _clientScanPageSize) break;
+      query = query.startAfterDocument(snapshot.docs.last);
     }
-    return snapshot.docs
-        .map((doc) => ClientRecord.fromMap(doc.id, doc.data()))
-        .toList();
+    return docs.map((doc) => ClientRecord.fromMap(doc.id, doc.data())).toList();
   }
 
   @override
@@ -201,9 +165,6 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   @override
   Future<void> deleteClient(String id) async {
-    // Via the callable, not a direct doc delete: `allow delete` on /clients is
-    // withdrawn, because rules cannot express "only when this client has no
-    // appointments" and a direct delete would orphan the job history.
     try {
       await _functions.httpsCallable('deleteClient').call<void>({
         'clientId': id,
@@ -217,8 +178,6 @@ class FirebaseClientsRepository implements ClientsRepository {
       }
       rethrow;
     }
-    // Drops the doc out of the cached window so search and the filters stop
-    // returning it without paying for a fresh read.
     _patchWindow(id);
   }
 
@@ -228,7 +187,6 @@ class FirebaseClientsRepository implements ClientsRepository {
       'archived': archived,
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    // Merges over the cached doc rather than replacing it — see _patchWindow.
     _patchWindow(id, data: {'archived': archived});
   }
 
@@ -241,8 +199,6 @@ class FirebaseClientsRepository implements ClientsRepository {
         if (doc.data['archived'] == true)
           ClientRecord.fromMap(doc.id, doc.data),
     ];
-    // Sort key computed once per record rather than twice per comparison
-    // (same shape as fetchClientsByType).
     final keyed = [
       for (final record in matches)
         (sortKey: record.displayName.toLowerCase(), record: record),
@@ -255,13 +211,8 @@ class FirebaseClientsRepository implements ClientsRepository {
     if (type == ClientType.unset) return const [];
     final window = await _clientScanWindow();
     if (window == null) return const [];
-    // Sort key comes from displayName (so legacy business-only docs still order
-    // by their businessName fallback) but is computed once per record rather
-    // than twice per comparison.
     final matches = [
       for (final doc in window.docs)
-        // Archived clients are out of the type filter for the same reason
-        // they're out of the list — the Archived chip is where they live.
         if (doc.data['archived'] != true &&
             ClientType.fromRaw(doc.data['type']?.toString()) == type)
           ClientRecord.fromMap(doc.id, doc.data),
@@ -281,7 +232,7 @@ class FirebaseClientsRepository implements ClientsRepository {
     final cacheKey = ClientSearchPolicy.cacheKey(q);
     final cached = _searchCache[cacheKey];
     if (cached != null && _isFresh(cached.fetchedAt)) {
-      _cacheSearch(cacheKey, cached.results); // mark most-recently-used
+      _cacheSearch(cacheKey, cached.results);
       return cached.results;
     }
     _searchCache.remove(cacheKey);
@@ -289,8 +240,6 @@ class FirebaseClientsRepository implements ClientsRepository {
     final window = await _clientScanWindow();
     if (window == null) return const [];
 
-    // Parsing + normalizing + scoring up to serverReadLimit docs is CPU work
-    // (8 regex passes over 13 fields per doc) — run it off the UI thread.
     final results = await compute(
       matchClientDocs,
       ClientSearchScan(docs: window.docs, query: q),
@@ -299,51 +248,36 @@ class FirebaseClientsRepository implements ClientsRepository {
     return results;
   }
 
-  /// The raw, name-ordered window of clients every search scans. Served from cache so
-  /// successive queries can share a single read.
   Future<_CachedClientScanWindow?> _clientScanWindow() async {
     final cached = _scanWindow;
     if (cached != null && _isFresh(cached.fetchedAt)) return cached;
-    // Drop the expired window rather than merely declining to use it. This
-    // repository is a non-autoDispose singleton, so up to 1000 raw doc maps
-    // otherwise stayed pinned for the whole session after one search. The next
-    // search re-reads either way.
     _scanWindow = null;
 
-    final QuerySnapshot<Map<String, dynamic>> snapshot;
     try {
-      // Order by `name`, not createdAt, so legacy business-only docs stay searchable —
-      // `name` is the one field that's set on every write.
-      snapshot = await _clients
+      final docs = <RawClientDoc>[];
+      var query = _clients
           .orderBy('name')
-          .limit(ClientSearchPolicy.serverReadLimit)
-          .get();
+          .orderBy(FieldPath.documentId)
+          .limit(_clientScanPageSize);
+      while (true) {
+        final snapshot = await query.get();
+        docs.addAll([
+          for (final doc in snapshot.docs) (id: doc.id, data: doc.data()),
+        ]);
+        if (snapshot.docs.length < _clientScanPageSize) break;
+        final last = snapshot.docs.last;
+        query = query.startAfter([
+          (last.data()['name'] ?? '').toString(),
+          last.id,
+        ]);
+      }
+      final window = _CachedClientScanWindow(docs, _clock());
+      _scanWindow = window;
+      return window;
     } on FirebaseException catch (e, st) {
       _logger.warn('CLI-SEARCH searchClients failed', e, st);
       return null;
     }
-
-    if (snapshot.docs.length >= ClientSearchPolicy.serverReadLimit) {
-      // Ordered by `name`, so at the cap this window is the alphabetically
-      // FIRST N clients — everything past that point is invisible to search,
-      // to the type-filter chips and to the Archived chip, all at once and
-      // with no error anywhere. It arrives gradually as the roster grows,
-      // which is exactly the kind of failure nobody reports. Same posture as
-      // `_mapRangeSnapshot` in the appointments repository.
-      _logger.warn(
-        'CLI-SEARCH scan window hit the ${ClientSearchPolicy.serverReadLimit}'
-        '-doc cap — search and the filters are seeing a prefix of the roster',
-      );
-    }
-
-    final window = _CachedClientScanWindow(
-      [
-        for (final doc in snapshot.docs) (id: doc.id, data: doc.data()),
-      ],
-      _clock(),
-    );
-    _scanWindow = window;
-    return window;
   }
 
   Map<String, dynamic> _normalizedMap(ClientRecord client) {
@@ -370,7 +304,8 @@ class ClientSearchScan {
   final String query;
 }
 
-/// Parses scan window and returns clients matching [ClientSearchScan.query] across all fields with relevance scoring.
+/// Parses scan window and returns clients matching [ClientSearchScan.query]
+/// across all fields with relevance scoring.
 List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
   final normalizedQuery = ClientSearchPolicy.normalize(scan.query);
   final queryDigits = ClientSearchPolicy.digitsOnly(scan.query);
@@ -394,8 +329,6 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
         })
         .join(' ');
 
-    // Resolved once per record: `displayName` is an uncached getter that runs
-    // `stripPhone` twice, and this loop walks the whole 1000-doc scan window.
     final rawDisplayName = client.displayName;
     final displayName = ClientSearchPolicy.normalize(rawDisplayName);
     final personName = ClientSearchPolicy.normalize(
@@ -409,13 +342,6 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
     );
     final contactsDigits = ClientSearchPolicy.digitsOnly(contactSearchText);
 
-    // Whether a client matches is ClientSearchPolicy's call, not this file's.
-    // This used to be a hand-rolled index off the raw map, and it had already
-    // drifted: it kept client digits and contact digits in two strings while
-    // the policy concatenates all of them into one, so a query spanning both
-    // (client phone tail + contact phone head) matched in the instant local
-    // filter and then vanished when this debounced read landed. Only the
-    // relevance SCORING below stays local.
     if (!ClientSearchPolicy.entryMatches(
       ClientSearchPolicy.index(client),
       queryText: normalizedQuery,
@@ -443,9 +369,6 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
       score = 5;
     }
 
-    // The sort key is computed HERE, once per record, rather than twice per
-    // comparison — the comparator below runs over the whole match set before
-    // `.take`. Same rule as `fetchClientsByType`.
     scoredClients.add((
       score: score,
       sortKey: rawDisplayName.toLowerCase(),

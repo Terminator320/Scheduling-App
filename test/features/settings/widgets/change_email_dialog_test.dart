@@ -94,6 +94,17 @@ void main() {
     expect(draft, isNull);
   });
 
+  testWidgets('no draft for an invalid email format', (tester) async {
+    await pump(tester);
+    await _fill(
+      tester,
+      email: 'not-an-email',
+      confirm: 'not-an-email',
+    );
+
+    expect(draft, isNull);
+  });
+
   testWidgets('no draft when the address is unchanged', (tester) async {
     await pump(tester);
     await _fill(

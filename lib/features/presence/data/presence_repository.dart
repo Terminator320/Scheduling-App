@@ -9,11 +9,6 @@ import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
 /// failure from a rules denial.
 enum PresenceWriteResult { ok, failed, denied }
 
-/// Upper bound on the admin live-map presence feed, mirroring the users
-/// streams' `_userStreamLimit` posture so a rules/data anomaly can't stream an
-/// unbounded snapshot to the client.
-const _presenceStreamLimit = 500;
-
 /// Reads and writes the single `users/{docId}/presence/location` doc that
 /// feeds the server's travel-time "leave now" reminders. Logs and swallows
 /// failures so a presence write never breaks a flow.
@@ -71,23 +66,17 @@ class PresenceRepository {
   }
 
   /// Live feed of every staff member's last-known fix, for the admin map;
-  /// unlike the write paths above, stream errors PROPAGATE to the listener.
+  /// unlike the write paths above, stream errors propagate to the listener.
   Stream<List<PresenceFix>> watchAllPresence() => retryStream(
     () => _firestore
         .collectionGroup('presence')
-        // The `orderBy` is what makes the limit mean anything — without it
-        // Firestore falls back to `__name__`, so a truncated feed would show
-        // an arbitrary slice of the roster rather than the freshest fixes.
-        // Same shape that bit `fetchClientHistory`.
-        //
         // NEEDS the COLLECTION_GROUP-scoped `presence.updatedAt` override in
-        // `firestore.indexes.json` — a collection-group order is NOT served by
+        // `firestore.indexes.json` — a collection-group order is not served by
         // the automatic single-field index, so this query fails with
         // FAILED_PRECONDITION until `firestore:indexes` is deployed. Every
-        // write path stamps `updatedAt` (see `upsertFix`), so no doc is
+        // write path stamps `updatedAt` (see `upsertLocation`), so no doc is
         // excluded by the ordering.
         .orderBy('updatedAt', descending: true)
-        .limit(_presenceStreamLimit)
         .snapshots()
         .map(_toFixes),
   );
@@ -109,10 +98,6 @@ class PresenceRepository {
           userDocId: userDocId,
           lat: lat,
           lng: lng,
-          // Lenient, like the lat/lng type tests above: a cast here would
-          // throw inside `snapshots().map` on one string instant and blank
-          // the WHOLE admin map, which is exactly what this method's
-          // "skip it and keep going" contract exists to prevent.
           updatedAt: firestoreDateTime(data['updatedAt']),
         ),
       );

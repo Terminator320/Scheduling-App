@@ -88,8 +88,11 @@ abstract class EmployeesRepository {
   /// Emits [EmergencyContact.empty] when the doc doesn't exist yet.
   Stream<EmergencyContact> watchEmergencyContact(String docId);
 
-  /// Writes `users/{docId}/private/emergency`, and scrubs the legacy pair off
-  /// the parent users doc in the same pass — see the implementation.
+  /// Writes `users/{docId}/private/emergency`.
+  ///
+  /// The legacy parent-doc pair is scrubbed by admin saves in
+  /// [updateEmployee]; this path is also used by self-service settings, whose
+  /// allowlist would reject those extra delete keys.
   Future<void> saveEmergencyContact(String docId, EmergencyContact contact);
 
   Future<UserUidMatch?> findUserByUid(String uid);

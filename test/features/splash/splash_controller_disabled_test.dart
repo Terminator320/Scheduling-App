@@ -167,6 +167,61 @@ void main() {
       verify(() => mockAuth.signOut()).called(1);
     });
 
+    test(
+      'returns SplashGoToLogin for a missing doc even if sign-out throws',
+      () async {
+        when(() => mockRepo.findUserByUid('uid1')).thenAnswer((_) async => null);
+        when(() => mockAuth.signOut()).thenThrow(Exception('ios signOut failed'));
+
+        final container = ProviderContainer(
+          overrides: [
+            firebaseAuthProvider.overrideWithValue(mockAuth),
+            employeesRepositoryProvider.overrideWithValue(mockRepo),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final result = await container.read(splashDestinationProvider.future);
+
+        expect(result, isA<SplashGoToLogin>());
+        verify(() => mockAuth.signOut()).called(1);
+      },
+    );
+
+    test(
+      'returns SplashGoToLogin for a disabled employee even if sign-out throws',
+      () async {
+        when(() => mockRepo.findUserByUid('uid1')).thenAnswer(
+          (_) async => const UserUidMatch(
+            id: 'doc1',
+            data: {
+              'uid': 'uid1',
+              'role': 'employee',
+              'status': 'disabled',
+              'name': 'Jane',
+              'email': 'jane@example.com',
+              'phone': '',
+              'colorValue': '4280391411',
+            },
+          ),
+        );
+        when(() => mockAuth.signOut()).thenThrow(Exception('ios signOut failed'));
+
+        final container = ProviderContainer(
+          overrides: [
+            firebaseAuthProvider.overrideWithValue(mockAuth),
+            employeesRepositoryProvider.overrideWithValue(mockRepo),
+          ],
+        );
+        addTearDown(container.dispose);
+
+        final result = await container.read(splashDestinationProvider.future);
+
+        expect(result, isA<SplashGoToLogin>());
+        verify(() => mockAuth.signOut()).called(1);
+      },
+    );
+
     test('rethrows when findUserByUid throws (transient errors)', () async {
       // M8: transient Firestore failures must rethrow, not sign out, so the splash UI can surface an error and retry.
       when(

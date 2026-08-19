@@ -76,11 +76,18 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       return;
     }
     if (!mounted) return;
-    await Navigator.pushNamedAndRemoveUntil(
-      context,
-      AppRoutes.login,
-      (_) => false,
-    );
+    try {
+      await Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.login,
+        (_) => false,
+      );
+    } catch (e, st) {
+      logger.warn('ACCT-SIGNOUT navigation failed', e, st);
+      if (!mounted) return;
+      setState(() => _isSigningOut = false);
+      notices.error(context.l10n.error_somethingWentWrong);
+    }
   }
 
   Future<void> confirmDeleteAccount() async {
@@ -173,12 +180,19 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     }
     if (!mounted) return;
     final message = context.l10n.settings_accountDeleted;
-    await Navigator.pushNamedAndRemoveUntil(
-      context,
-      AppRoutes.login,
-      (_) => false,
-    );
-    notices.success(message);
+    try {
+      await Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.login,
+        (_) => false,
+      );
+      notices.success(message);
+    } catch (e, st) {
+      logger.warn('ACCT-DEL navigation failed', e, st);
+      if (!mounted) return;
+      setState(() => _isDeletingAccount = false);
+      notices.error(context.l10n.error_somethingWentWrong);
+    }
   }
 
   Future<void> _restoreDeviceRegistrations() async {

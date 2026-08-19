@@ -406,12 +406,10 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     //
     // A SETTLED roster that still doesn't hold us is an error, not a pending
     // read. `myEmployeeRecordProvider` resolves the person by scanning
-    // `allUsersStreamProvider`, which is bounded by `_userStreamLimit` and —
-    // for an admin — ordered by `name`, which Firestore uses to EXCLUDE any
-    // doc missing that field. Both are narrow, but treating either as "still
-    // loading" leaves an indefinite spinner with no error and no retry. The
-    // identity is already settled here (see the caller), so this cannot fire
-    // on a slow sign-in.
+    // `allUsersStreamProvider`, which is still bounded by `_userStreamLimit`.
+    // Treating that settled miss as "still loading" leaves an indefinite
+    // spinner with no error and no retry. The identity is already settled
+    // here (see the caller), so this cannot fire on a slow sign-in.
     final roster = ref.watch(allUsersStreamProvider);
     if (record == null) {
       if (roster.isLoading) {
@@ -461,6 +459,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
           workStartMinutes: _workStartMinutes,
           workEndMinutes: _workEndMinutes,
           onCall: _onCall,
+          enabled: !_isSaving,
           conflictDays: ref.watch(
             myAvailabilityConflictProvider(
               AvailabilityChange(
@@ -476,6 +475,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
         MySchedulingSection(
           isAdmin: isAdmin,
           maxJobsPerDay: record.maxJobsPerDay,
+          enabled: !_isSaving,
           onChanged: (value) => _saveMaxJobs(docId, record, value),
         ),
         const SizedBox(height: AppSpacing.sp32),

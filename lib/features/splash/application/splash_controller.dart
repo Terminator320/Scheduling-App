@@ -40,6 +40,19 @@ class SplashGoToAccountSetup extends SplashDestination {
   final String lastName;
 }
 
+Future<SplashDestination> _signOutToLogin(
+  Ref ref,
+  AppLogger logger, {
+  required String logContext,
+}) async {
+  try {
+    await ref.read(authServiceProvider).signOut();
+  } catch (e, st) {
+    logger.warn(logContext, e, st);
+  }
+  return const SplashGoToLogin();
+}
+
 final splashDestinationProvider = FutureProvider<SplashDestination>((
   ref,
 ) async {
@@ -49,7 +62,6 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
 
   final employeesRepo = ref.watch(employeesRepositoryProvider);
   final logger = ref.read(loggerProvider);
-  final authService = ref.read(authServiceProvider);
   final UserUidMatch? match;
   try {
     match = await retryAsync(
@@ -63,8 +75,11 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
     rethrow;
   }
   if (match == null) {
-    await authService.signOut();
-    return const SplashGoToLogin();
+    return _signOutToLogin(
+      ref,
+      logger,
+      logContext: 'SPLASH signOut failed after missing employee record',
+    );
   }
 
   final authCache = ref.read(authCacheProvider);
@@ -82,8 +97,11 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
     );
   }
   if (!employee.isActive) {
-    await authService.signOut();
-    return const SplashGoToLogin();
+    return _signOutToLogin(
+      ref,
+      logger,
+      logContext: 'SPLASH signOut failed for non-active employee',
+    );
   }
   unawaited(
     authCache.save(employee).catchError((Object e, StackTrace st) {

@@ -38,7 +38,23 @@ void _keepWarmWithGrace(Ref ref) {
 
 final appointmentsInRangeProvider = StreamProvider.family
     .autoDispose<List<AppointmentRecord>, AppointmentDateRange>((ref, range) {
-      if (ref.authUid == null) return Stream.value(const []);
+      final uidState = ref.watch(authUidProvider);
+      if (uidState.hasError) {
+        return Stream.error(
+          uidState.error!,
+          uidState.stackTrace ?? StackTrace.current,
+        );
+      }
+      if (uidState.isLoading) {
+        return Stream.fromFuture(
+          ref.watch(authUidProvider.future),
+        ).asyncExpand((uid) {
+          if (uid == null) return Stream.value(const <AppointmentRecord>[]);
+          _keepWarmWithGrace(ref);
+          return ref.watch(appointmentsRepositoryProvider).watchInRange(range);
+        });
+      }
+      if (uidState.value == null) return Stream.value(const []);
       _keepWarmWithGrace(ref);
       return ref.watch(appointmentsRepositoryProvider).watchInRange(range);
     });
@@ -49,7 +65,25 @@ typedef _MyAppointmentsKey = ({String employeeId, AppointmentDateRange range});
 
 final myAppointmentsProvider = StreamProvider.family
     .autoDispose<List<AppointmentRecord>, _MyAppointmentsKey>((ref, key) {
-      if (ref.authUid == null) return Stream.value(const []);
+      final uidState = ref.watch(authUidProvider);
+      if (uidState.hasError) {
+        return Stream.error(
+          uidState.error!,
+          uidState.stackTrace ?? StackTrace.current,
+        );
+      }
+      if (uidState.isLoading) {
+        return Stream.fromFuture(
+          ref.watch(authUidProvider.future),
+        ).asyncExpand((uid) {
+          if (uid == null) return Stream.value(const <AppointmentRecord>[]);
+          _keepWarmWithGrace(ref);
+          return ref
+              .watch(appointmentsRepositoryProvider)
+              .watchForEmployeeInRange(key.employeeId, key.range);
+        });
+      }
+      if (uidState.value == null) return Stream.value(const []);
       // Same keep-alive grace as admin provider.
       _keepWarmWithGrace(ref);
       return ref

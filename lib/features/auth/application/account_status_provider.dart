@@ -4,12 +4,11 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 
 /// Keeps a single live snapshot of the signed-in user's `users/{uid}` doc, covering
 /// their name, status, and role.
 final currentUserDocProvider = StreamProvider<Map<String, dynamic>>((ref) {
-  final uid = ref.watch(authUidProvider).value;
-  if (uid == null) return Stream.value(const {});
   final repository = ref.watch(employeesRepositoryProvider);
   // P10: this is the app's first Firestore listener, so we hold it until the
   // deferred App Check activation finishes. Any failures there get logged
@@ -17,9 +16,27 @@ final currentUserDocProvider = StreamProvider<Map<String, dynamic>>((ref) {
   final firebaseReady = ref
       .watch(firebaseReadyProvider.future)
       .catchError((Object _) {});
-  return Stream.fromFuture(
-    firebaseReady,
-  ).asyncExpand((_) => repository.watchUserDoc(uid));
+
+  Stream<Map<String, dynamic>> watchDoc(String? uid) {
+    if (uid == null) return Stream.value(const {});
+    return Stream.fromFuture(
+      firebaseReady,
+    ).asyncExpand((_) => repository.watchUserDoc(uid));
+  }
+
+  final uidState = ref.watch(authUidProvider);
+  if (uidState.hasError) {
+    return Stream.error(
+      uidState.error!,
+      uidState.stackTrace ?? StackTrace.current,
+    );
+  }
+  if (uidState.isLoading) {
+    return Stream.fromFuture(ref.watch(authUidProvider.future)).asyncExpand(
+      watchDoc,
+    );
+  }
+  return watchDoc(uidState.value);
 });
 
 final accountDisabledProvider = Provider<AsyncValue<bool>>((ref) {
@@ -106,5 +123,11 @@ Future<bool> confirmColdStartDeletion({
 /// The signed-in user's display name, empty until doc loads.
 final currentUserNameProvider = Provider<String>((ref) {
   final doc = ref.watch(currentUserDocProvider).value;
-  return (doc?['name'] ?? '').toString().trim();
+  if (doc == null) return '';
+  return displayEmployeeName(
+    firstName: (doc['firstName'] ?? '').toString(),
+    lastName: (doc['lastName'] ?? '').toString(),
+    name: (doc['name'] ?? '').toString(),
+    email: (doc['email'] ?? '').toString(),
+  );
 });

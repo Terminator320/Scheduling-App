@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 import 'package:scheduling/features/employees/domain/policies/team_row_policy.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/list_item_tile.dart';
@@ -25,6 +26,12 @@ class EmployeeCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
+    final name = displayEmployeeName(
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+      name: employee.name,
+      email: employee.email,
+    );
     // One shared day-range listener behind this — not a query per row. The
     // `select` narrows it further to THIS row's count: the provider rebuilds a
     // fresh Map on every emission, so watching it whole rebuilt every roster
@@ -36,14 +43,14 @@ class EmployeeCard extends ConsumerWidget {
     // ListItemTile's InkWell already exposes button semantics, so we don't
     // need an explicit Semantics label here.
     return ListItemTile(
-      avatarName: employee.name.isEmpty ? '?' : employee.name,
+      avatarName: name,
       avatarColor: employee.isDisabled ? scheme.outlineVariant : employee.color,
-      title: employee.name.isEmpty ? '—' : employee.name,
+      title: name,
       subtitle: teamRowSubtitle(
         l10n: context.l10n,
         jobTitle: employee.jobTitle,
         jobsToday: jobsToday,
-        email: employee.email,
+        email: name == employee.email ? '' : employee.email,
       ),
       selected: selected,
       dimmed: employee.isDisabled,

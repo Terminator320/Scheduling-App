@@ -75,7 +75,9 @@ class PushRegistrationController with ReentrantSync {
 
   Future<void> _syncGuarded() async {
     final signedIn = _auth.currentUser != null;
-    final doc = _ref.read(currentUserDocProvider).value ?? const {};
+    final docState = _ref.read(currentUserDocProvider);
+    if (docState.isLoading || docState.hasError) return;
+    final doc = docState.value ?? const {};
     final role = (doc['role'] ?? '').toString().trim();
     final status = (doc['status'] ?? '').toString().trim();
     if (!shouldRegisterPush(role: role, status: status, signedIn: signedIn)) {

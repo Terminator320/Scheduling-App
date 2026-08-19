@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,8 +25,8 @@ class _MockRepo extends Mock implements EmployeesRepository {}
 
 const _invited = EmployeeRecord(
   id: 'inv1',
-  name: 'Zoé Roy',
-  firstName: 'Zoé',
+  name: 'Zoe Roy',
+  firstName: 'Zoe',
   lastName: 'Roy',
   email: 'zoe@example.com',
   phone: '(514) 555-1234',
@@ -110,7 +112,7 @@ void main() {
   /// The credentials render in SelectableTexts whose cursors never settle, so
   /// pump a fixed span rather than settling.
   Future<void> expand(WidgetTester tester) async {
-    await tester.tap(find.text('Zoé Roy'));
+    await tester.tap(find.text('Zoe Roy'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
   }
@@ -137,7 +139,7 @@ void main() {
     await tester.pumpWidget(wrap(_invited));
     await tester.pumpAndSettle();
 
-    expect(find.text('Zoé Roy'), findsOneWidget);
+    expect(find.text('Zoe Roy'), findsOneWidget);
     expect(find.text('Invited'), findsOneWidget);
     expect(find.text('SIGN-IN DETAILS'), findsNothing);
     // The collapsed body must leave the tree entirely — a cross-fade would
@@ -146,6 +148,46 @@ void main() {
     expect(find.text('Welcome123!'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'collapsed row falls back to first and last name when name is blank',
+    (tester) async {
+      useTallViewport(tester);
+      await tester.pumpWidget(
+        wrap(
+          const EmployeeRecord(
+            id: 'inv2',
+            firstName: 'Amy',
+            lastName: 'Adams',
+            email: 'amy@example.com',
+            status: 'invited',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Amy Adams'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'collapsed row does not repeat the email when it is already the display name',
+    (tester) async {
+      useTallViewport(tester);
+      await tester.pumpWidget(
+        wrap(
+          const EmployeeRecord(
+            id: 'inv3',
+            email: 'amy@example.com',
+            status: 'invited',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('amy@example.com'), findsOneWidget);
+    },
+  );
 
   testWidgets('expanding shows the credentials and calls nothing', (
     tester,
@@ -233,8 +275,8 @@ void main() {
     // dropped one would silently blank it.
     verify(
       () => repo.createEmployeeAccount(
-        name: 'Zoé Roy',
-        firstName: 'Zoé',
+        name: 'Zoe Roy',
+        firstName: 'Zoe',
         lastName: 'Roy',
         email: 'zoe@example.com',
         phone: '(514) 555-1234',
@@ -263,6 +305,72 @@ void main() {
     expect(find.text('Welcome123!'), findsNothing);
     expect(find.textContaining('no longer works'), findsOneWidget);
     expect(find.text('Password reset'), findsOneWidget);
+  });
+
+  testWidgets('Remove disables Reset password while deletion is in flight', (
+    tester,
+  ) async {
+    useTallViewport(tester);
+    final deleteCompleter = Completer<void>();
+    when(
+      () => repo.deleteEmployeeAccount('inv1'),
+    ).thenAnswer((_) => deleteCompleter.future);
+
+    await tester.pumpWidget(wrap(_invited));
+    await tester.pumpAndSettle();
+    await expand(tester);
+
+    await tester.tap(find.text('Remove account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove account').last);
+    await tester.pump();
+
+    final resetButton = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Reset password'),
+    );
+    expect(resetButton.onPressed, isNull);
+
+    deleteCompleter.complete();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('Reset password disables Remove account while reset is in flight', (
+    tester,
+  ) async {
+    useTallViewport(tester);
+    final createCompleter = Completer<NewAccountCredentials>();
+    when(
+      () => repo.createEmployeeAccount(
+        name: any(named: 'name'),
+        firstName: any(named: 'firstName'),
+        lastName: any(named: 'lastName'),
+        email: any(named: 'email'),
+        phone: any(named: 'phone'),
+        colorValue: any(named: 'colorValue'),
+        jobTitle: any(named: 'jobTitle'),
+        isAdmin: any(named: 'isAdmin'),
+      ),
+    ).thenAnswer((_) => createCompleter.future);
+
+    await tester.pumpWidget(wrap(_invited));
+    await tester.pumpAndSettle();
+    await expand(tester);
+
+    await tester.tap(find.text('Reset password'));
+    await tester.pump();
+
+    final removeButton = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Remove account'),
+    );
+    expect(removeButton.onPressed, isNull);
+
+    createCompleter.complete(
+      const NewAccountCredentials(
+        email: 'zoe@example.com',
+        password: 'Reset456!',
+      ),
+    );
+    await tester.pumpAndSettle();
   });
 
   testWidgets('offline Reset notices instead of hanging on the call', (

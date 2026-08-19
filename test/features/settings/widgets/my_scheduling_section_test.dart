@@ -54,6 +54,26 @@ void main() {
     expect(find.text('0'), findsNothing);
   });
 
+  testWidgets('tapping is ignored when the section is disabled', (tester) async {
+    int? picked;
+    await tester.pumpWidget(
+      _harness(
+        MySchedulingSection(
+          isAdmin: true,
+          maxJobsPerDay: 5,
+          enabled: false,
+          onChanged: (value) => picked = value,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('myMaxJobsPerDay')));
+    await tester.pumpAndSettle();
+
+    expect(picked, isNull);
+    expect(find.text('No cap'), findsNothing);
+  });
+
   testWidgets('picking a value reports it', (tester) async {
     // Tall viewport: the Material branch of showAdaptiveActionSheet is a
     // non-scrolling Column, so 13 options overflow the default 600x800 test

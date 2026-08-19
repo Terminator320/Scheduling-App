@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart' show TimeOfDay;
@@ -208,6 +209,84 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       verifyNever(() => scopedClients.getClientById(any()));
+    });
+
+    test('waits for role resolution before deciding whether to load the client', () async {
+      final scopedClients = _MockClientsRepo();
+      final docs = StreamController<Map<String, dynamic>>();
+      when(
+        () => scopedClients.getClientById(any()),
+      ).thenAnswer((_) async => _existingClient);
+      final scoped = ProviderContainer(
+        overrides: [
+          appointmentsRepositoryProvider.overrideWithValue(appointments),
+          clientsRepositoryProvider.overrideWithValue(scopedClients),
+          employeesRepositoryProvider.overrideWithValue(employees),
+          appointmentImageUploadProvider.overrideWithValue(uploader),
+          imageStorageProvider.overrideWithValue(storage),
+          currentUserDocProvider.overrideWith((ref) => docs.stream),
+        ],
+      );
+      addTearDown(docs.close);
+      addTearDown(scoped.dispose);
+
+      scoped
+        ..listen(currentUserDocProvider, (_, _) {})
+        ..listen(
+          eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+          (_, _) {},
+        )
+        ..read(
+          eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+        );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      verifyNever(() => scopedClients.getClientById(any()));
+
+      docs.add(const {'role': 'employee', 'uid': 'u1'});
+      await pumpEventQueue();
+
+      verifyNever(() => scopedClients.getClientById(any()));
+    });
+
+    test('loads the client once an admin role settles', () async {
+      final scopedClients = _MockClientsRepo();
+      final docs = StreamController<Map<String, dynamic>>();
+      when(
+        () => scopedClients.getClientById(any()),
+      ).thenAnswer((_) async => _existingClient);
+      final scoped = ProviderContainer(
+        overrides: [
+          appointmentsRepositoryProvider.overrideWithValue(appointments),
+          clientsRepositoryProvider.overrideWithValue(scopedClients),
+          employeesRepositoryProvider.overrideWithValue(employees),
+          appointmentImageUploadProvider.overrideWithValue(uploader),
+          imageStorageProvider.overrideWithValue(storage),
+          currentUserDocProvider.overrideWith((ref) => docs.stream),
+        ],
+      );
+      addTearDown(docs.close);
+      addTearDown(scoped.dispose);
+
+      scoped
+        ..listen(currentUserDocProvider, (_, _) {})
+        ..listen(
+          eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+          (_, _) {},
+        )
+        ..read(
+          eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+        );
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      verifyNever(() => scopedClients.getClientById(any()));
+
+      docs.add(const {'role': 'admin', 'uid': 'u1'});
+      await pumpEventQueue();
+
+      verify(() => scopedClients.getClientById('c1')).called(1);
     });
   });
 

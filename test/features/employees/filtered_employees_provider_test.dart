@@ -50,6 +50,31 @@ void main() {
     expect(results.map((e) => e.id), ['e2']);
   });
 
+  test('matches a legacy split-name doc even when name is blank', () async {
+    final container = ProviderContainer(
+      overrides: [
+        allUsersStreamProvider.overrideWith(
+          (ref) => Stream.value(const [
+            EmployeeRecord(
+              id: 'e3',
+              firstName: 'Amy',
+              lastName: 'Adams',
+              email: 'amy@shop.ca',
+            ),
+          ]),
+        ),
+      ],
+    );
+    final sub = container.listen(allUsersStreamProvider, (_, _) {});
+    await Future<void>.delayed(Duration.zero);
+
+    final result = container.read(filteredEmployeesProvider('amy adams'));
+
+    sub.close();
+    container.dispose();
+    expect(result.map((e) => e.id), ['e3']);
+  });
+
   test('a blank query returns everyone', () async {
     final results = await filter('   ');
     expect(results.length, 2);

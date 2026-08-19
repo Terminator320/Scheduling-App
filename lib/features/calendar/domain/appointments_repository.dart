@@ -91,7 +91,10 @@ abstract class AppointmentsRepository {
   /// Search terminal appointments by client/employee name or phone, newest-first.
   Future<List<AppointmentRecord>> searchHistory(String query);
 
-  /// This client's appointments in any status, newest-first, capped at [limit].
+  /// This client's appointments in any status, newest-first.
+  ///
+  /// [limit] is the page size used internally while collecting the full
+  /// history.
   Future<List<AppointmentRecord>> fetchClientHistory({
     required String clientId,
     int limit,
