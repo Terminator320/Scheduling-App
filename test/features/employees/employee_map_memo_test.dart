@@ -61,4 +61,28 @@ void main() {
     colorSub.close();
     container.dispose();
   });
+
+  test('name map falls back to a composed display name', () async {
+    final controller = StreamController<List<EmployeeRecord>>();
+    addTearDown(controller.close);
+    final container = ProviderContainer(
+      overrides: [
+        allUsersStreamProvider.overrideWith((ref) => controller.stream),
+      ],
+    );
+
+    controller.add(const [
+      EmployeeRecord(
+        id: 'e1',
+        firstName: 'Amy',
+        lastName: 'Adams',
+        email: 'amy@shop.ca',
+      ),
+    ]);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(container.read(employeeNameMapProvider), {'e1': 'Amy Adams'});
+
+    container.dispose();
+  });
 }

@@ -31,6 +31,7 @@ class MyAvailabilitySection extends StatelessWidget {
     required this.onCall,
     required this.conflictDays,
     required this.onChanged,
+    this.enabled = true,
     super.key,
   });
 
@@ -38,6 +39,7 @@ class MyAvailabilitySection extends StatelessWidget {
   final int workStartMinutes;
   final int workEndMinutes;
   final bool onCall;
+  final bool enabled;
 
   /// Sunday-indexed weekdays being switched off that still hold booked work.
   final Set<int> conflictDays;
@@ -60,13 +62,16 @@ class MyAvailabilitySection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),
-        AvailabilityPanel(
-          workingDays: workingDays,
-          workStartMinutes: workStartMinutes,
-          workEndMinutes: workEndMinutes,
-          onCall: onCall,
-          onCallKey: const Key('myOnCall'),
-          onChanged: onChanged,
+        IgnorePointer(
+          ignoring: !enabled,
+          child: AvailabilityPanel(
+            workingDays: workingDays,
+            workStartMinutes: workStartMinutes,
+            workEndMinutes: workEndMinutes,
+            onCall: onCall,
+            onCallKey: const Key('myOnCall'),
+            onChanged: onChanged,
+          ),
         ),
         if (conflictDays.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sp12),

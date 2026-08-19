@@ -18,6 +18,47 @@ class _MockUser extends Mock implements User {}
 class _MockRepo extends Mock implements EmployeesRepository {}
 
 void main() {
+  group('currentUserDocProvider', () {
+    late _MockFirebaseAuth mockAuth;
+    late _MockUser mockUser;
+    late _MockRepo mockRepo;
+
+    setUp(() {
+      mockAuth = _MockFirebaseAuth();
+      mockUser = _MockUser();
+      mockRepo = _MockRepo();
+    });
+
+    test('waits for auth uid to settle before opening watchUserDoc', () async {
+      final authStates = StreamController<User?>();
+      when(
+        () => mockAuth.authStateChanges(),
+      ).thenAnswer((_) => authStates.stream);
+      when(() => mockUser.uid).thenReturn('uid1');
+      when(
+        () => mockRepo.watchUserDoc('uid1'),
+      ).thenAnswer((_) => Stream.value({'status': 'active'}));
+
+      final container = ProviderContainer(
+        overrides: [
+          firebaseAuthProvider.overrideWithValue(mockAuth),
+          employeesRepositoryProvider.overrideWithValue(mockRepo),
+        ],
+      );
+      addTearDown(authStates.close);
+      addTearDown(container.dispose);
+
+      container.listen(currentUserDocProvider, (_, _) {});
+      await pumpEventQueue();
+      verifyNever(() => mockRepo.watchUserDoc(any()));
+
+      authStates.add(mockUser);
+      await pumpEventQueue();
+
+      verify(() => mockRepo.watchUserDoc('uid1')).called(1);
+    });
+  });
+
   group('accountDisabledProvider', () {
     late _MockFirebaseAuth mockAuth;
     late _MockUser mockUser;
@@ -499,6 +540,70 @@ void main() {
       // Sequencing matters here — admin has to appear before employee, or the
       // main.dart listener can't detect the admin → employee demotion.
       expect(emissions, containsAllInOrder(['admin', 'employee']));
+    });
+  });
+
+  group('currentUserNameProvider', () {
+    late _MockFirebaseAuth mockAuth;
+    late _MockUser mockUser;
+    late _MockRepo mockRepo;
+
+    setUp(() {
+      mockAuth = _MockFirebaseAuth();
+      mockUser = _MockUser();
+      mockRepo = _MockRepo();
+    });
+
+    ProviderContainer container0() => ProviderContainer(
+      overrides: [
+        firebaseAuthProvider.overrideWithValue(mockAuth),
+        employeesRepositoryProvider.overrideWithValue(mockRepo),
+      ],
+    );
+
+    Future<String> firstNameValue(ProviderContainer container) async {
+      final completer = Completer<String>();
+      final sub = container.listen<String>(currentUserNameProvider, (_, next) {
+        if (!completer.isCompleted) completer.complete(next);
+      }, fireImmediately: true);
+      return completer.future.whenComplete(sub.close);
+    }
+
+    test('falls back to first and last name when name is blank', () async {
+      when(() => mockUser.uid).thenReturn('uid1');
+      when(
+        () => mockRepo.watchUserDoc('uid1'),
+      ).thenAnswer((_) => Stream.value({
+        'firstName': 'Theo',
+        'lastName': 'Roy',
+        'status': 'active',
+      }));
+      when(
+        () => mockAuth.authStateChanges(),
+      ).thenAnswer((_) => Stream.value(mockUser));
+
+      final container = container0();
+      addTearDown(container.dispose);
+
+      expect(await firstNameValue(container), 'Theo Roy');
+    });
+
+    test('falls back to email when the doc has no name fields', () async {
+      when(() => mockUser.uid).thenReturn('uid1');
+      when(
+        () => mockRepo.watchUserDoc('uid1'),
+      ).thenAnswer((_) => Stream.value({
+        'email': 'theo@example.com',
+        'status': 'active',
+      }));
+      when(
+        () => mockAuth.authStateChanges(),
+      ).thenAnswer((_) => Stream.value(mockUser));
+
+      final container = container0();
+      addTearDown(container.dispose);
+
+      expect(await firstNameValue(container), 'theo@example.com');
     });
   });
 }

@@ -85,6 +85,15 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('renders working hours with a clean ASCII separator', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(_populated, isCurrentUserAdmin: true));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining(' - '), findsOneWidget);
+  });
+
   testWidgets('omits rows with no value', (tester) async {
     await tester.pumpWidget(
       _wrap(
@@ -110,6 +119,26 @@ void main() {
     expect(find.text('Edit'), findsNothing);
     // The rest of the page is still readable.
     expect(find.byType(EmployeeProfileCard), findsOneWidget);
+  });
+
+  testWidgets('profile card falls back to the split name when name is blank', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        const EmployeeRecord(
+          id: 'e1',
+          firstName: 'Amy',
+          lastName: 'Adams',
+          email: 'amy@shop.ca',
+          status: 'active',
+        ),
+        isCurrentUserAdmin: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Amy Adams'), findsOneWidget);
   });
 
   testWidgets('survives 260x640 at 2.0 text scale', (tester) async {

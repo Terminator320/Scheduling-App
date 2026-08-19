@@ -6,21 +6,11 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
-import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
 import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
-
-class _RecordingLogger extends AppLogger {
-  final warnings = <String>[];
-
-  @override
-  void warn(String message, [Object? error, StackTrace? stack]) {
-    warnings.add(message);
-  }
-}
 
 /// A plain fake rather than a `Mock`: the cap test builds a thousand of them,
 /// and only `id` and `data()` are ever read.
@@ -119,14 +109,11 @@ void main() {
     ).thenAnswer((_) async => _MockCallableResult());
   });
 
-  FirebaseClientsRepository repo({
-    DateTime Function()? clock,
-    AppLogger? logger,
-  }) => FirebaseClientsRepository(
+  FirebaseClientsRepository repo({DateTime Function()? clock}) =>
+      FirebaseClientsRepository(
     firestore,
     functions: functions,
     clock: clock,
-    logger: logger,
   );
 
   ClientRecord client({String id = 'c1', String name = 'Test Client'}) =>
@@ -253,24 +240,36 @@ void main() {
         _FakeDoc('c$i', {'name': 'Client ${i.toString().padLeft(4, '0')}'}),
     ]);
 
-    test('a full window warns', () async {
-      withClients(ClientSearchPolicy.serverReadLimit);
-      final logger = _RecordingLogger();
+    test('a full first page is followed by the next page', () async {
+      final firstPage = [
+        for (var i = 0; i < 500; i++)
+          _FakeDoc('c$i', {'name': 'Client ${i.toString().padLeft(4, '0')}'}),
+      ];
+      final secondPage = [
+        _FakeDoc('c500', {'name': 'Client 0500'}),
+      ];
+      final secondSnapshot = _MockQuerySnapshot();
+      when(() => snapshot.docs).thenReturn(firstPage);
+      when(() => secondSnapshot.docs).thenReturn(secondPage);
+      var call = 0;
+      when(() => query.get()).thenAnswer((_) async {
+        call++;
+        return call == 1 ? snapshot : secondSnapshot;
+      });
 
-      await repo(logger: logger).searchClients('client');
+      final results = await repo().searchClients('client');
 
-      expect(logger.warnings, hasLength(1));
-      expect(logger.warnings.single, startsWith('CLI-SEARCH'));
-      expect(logger.warnings.single, contains('1000'));
+      expect(results, hasLength(ClientSearchPolicy.resultDisplayLimit));
+      expect(results.map((c) => c.id), contains('c500'));
+      verify(() => query.startAfter(['Client 0499', 'c499'])).called(1);
     });
 
-    test('a short window is silent', () async {
-      withClients(ClientSearchPolicy.serverReadLimit - 1);
-      final logger = _RecordingLogger();
+    test('a short window stays on one page', () async {
+      withClients(499);
 
-      await repo(logger: logger).searchClients('client');
+      await repo().searchClients('client');
 
-      expect(logger.warnings, isEmpty);
+      verifyNever(() => query.startAfter(any()));
     });
   });
 

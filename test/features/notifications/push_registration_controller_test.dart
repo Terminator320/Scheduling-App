@@ -106,6 +106,28 @@ void main() {
     verifyNever(() => employees.findUserByUid(any()));
   });
 
+  test('a loading account doc does not register yet', () async {
+    final docs = StreamController<Map<String, dynamic>>();
+    final container = ProviderContainer(
+      overrides: [
+        currentUserDocProvider.overrideWith((ref) => docs.stream),
+        pushNotificationServiceProvider.overrideWithValue(service),
+        employeesRepositoryProvider.overrideWithValue(employees),
+        fcmTokenRepositoryProvider.overrideWithValue(fcm),
+        pushRegistrationControllerProvider.overrideWith(
+          (ref) => PushRegistrationController(ref, auth: auth),
+        ),
+      ],
+    );
+    addTearDown(docs.close);
+    addTearDown(container.dispose);
+
+    await container.read(pushRegistrationControllerProvider).sync();
+
+    verifyNever(() => service.requestPermission());
+    verifyNever(() => employees.findUserByUid(any()));
+  });
+
   test('active employee registers once; second sync fast-paths', () async {
     final container = makeContainer(const {
       'role': 'employee',

@@ -13,6 +13,7 @@ import 'package:scheduling/features/employees/application/employee_form_controll
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
+import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 import 'package:scheduling/features/employees/domain/policies/starting_password_policy.dart';
 import 'package:scheduling/features/employees/widgets/fields/credential_line.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -139,6 +140,8 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
         // No notice: the live stream drops the row, and that IS the
         // confirmation.
         break;
+      case AccountDeleteBusy():
+        break;
       case AccountDeleteFailed(:final error):
         notices.error(
           error is EmployeesFailureAccountNoLongerPending
@@ -205,7 +208,16 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final compact = context.isCompact;
-    final name = widget.employee.name.isEmpty ? '—' : widget.employee.name;
+    final displayName = displayEmployeeName(
+      firstName: widget.employee.firstName,
+      lastName: widget.employee.lastName,
+      name: widget.employee.name,
+      email: widget.employee.email,
+    );
+    assert(
+      displayName.isNotEmpty,
+      'display-name placeholder should never be empty',
+    );
     const chip = UserStatusChip(status: UserStatus.invited);
 
     return Material(
@@ -220,7 +232,7 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _DashedAvatar(name: widget.employee.name),
+              _DashedAvatar(name: displayName),
               const SizedBox(width: AppSpacing.sp12),
               Expanded(
                 child: Column(
@@ -228,14 +240,15 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      name,
+                      displayName,
                       maxLines: compact ? 2 : 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (widget.employee.email.isNotEmpty) ...[
+                    if (widget.employee.email.isNotEmpty &&
+                        displayName != widget.employee.email) ...[
                       const SizedBox(height: AppSpacing.sp4),
                       Text(
                         widget.employee.email,
@@ -291,6 +304,7 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
     // exactly what the server just set instead of assuming the two agree.
     final email = reissued?.email ?? widget.employee.email;
     final password = reissued?.password ?? kDefaultStartingPassword;
+    final actionsBusy = isResetting || isRemoving;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -330,8 +344,8 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
             resetLabel: reissued != null
                 ? l10n.employees_passwordReset
                 : l10n.employees_resetPassword,
-            onReset: isResetting ? null : _resetPassword,
-            onRemove: isRemoving ? null : _remove,
+            onReset: actionsBusy ? null : _resetPassword,
+            onRemove: actionsBusy ? null : _remove,
             isRemoving: isRemoving,
           ),
         ],

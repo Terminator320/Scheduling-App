@@ -9,9 +9,6 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/data/firebase_appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
-/// Every bounded read in this repository truncates in SILENCE otherwise — the
-/// caller gets a short list that looks exactly like a complete one. The warn is
-/// the entire mitigation, and none of the three were asserted anywhere.
 class _RecordingLogger extends AppLogger {
   final warnings = <String>[];
 
@@ -21,8 +18,6 @@ class _RecordingLogger extends AppLogger {
   }
 }
 
-/// A plain fake rather than a `Mock`: these tests build a thousand of them, and
-/// only `id` and `data()` are ever read.
 class _FakeDoc extends Fake
     implements QueryDocumentSnapshot<Map<String, dynamic>> {
   _FakeDoc(this.id, this._data);
@@ -55,6 +50,10 @@ void main() {
 
   final now = DateTime(2026, 8, 15, 9);
 
+  setUpAll(() {
+    registerFallbackValue(_FakeDoc('fallback', const {}));
+  });
+
   setUp(() {
     firestore = _MockFirestore();
     collection = _MockCollection();
@@ -79,6 +78,9 @@ void main() {
       () => collection.where('status', whereIn: any(named: 'whereIn')),
     ).thenReturn(query);
     when(
+      () => collection.where('clientId', isEqualTo: any(named: 'isEqualTo')),
+    ).thenReturn(query);
+    when(
       () => query.where(
         'endTime',
         isGreaterThanOrEqualTo: any(named: 'isGreaterThanOrEqualTo'),
@@ -90,7 +92,9 @@ void main() {
     when(
       () => query.orderBy(any(), descending: any(named: 'descending')),
     ).thenReturn(query);
+    when(() => query.orderBy(any())).thenReturn(query);
     when(() => query.limit(any())).thenReturn(query);
+    when(() => query.startAfterDocument(any())).thenReturn(query);
     when(() => query.get()).thenAnswer((_) async => snapshot);
     when(() => snapshot.docs).thenReturn(const []);
   });
@@ -98,7 +102,6 @@ void main() {
   FirebaseAppointmentsRepository repo() =>
       FirebaseAppointmentsRepository(firestore, logger: logger);
 
-  /// [count] assignable jobs, all open and all still running.
   void withJobs(int count) => when(() => snapshot.docs).thenReturn([
     for (var i = 0; i < count; i++)
       _FakeDoc('a$i', {
@@ -110,9 +113,6 @@ void main() {
   ]);
 
   group('countFutureAssignments warns at its cap', () {
-    // Understating this caption tells an admin they have LESS work to reassign
-    // before disabling someone than they actually do.
-
     test('a full page warns', () async {
       withJobs(200);
 
@@ -130,60 +130,47 @@ void main() {
     });
   });
 
-  group('a range read warns at its cap', () {
-    // Past the cap the caller holds a PREFIX of the range, and the calendar's
-    // grid dots and agenda would disagree with reality with nothing failing.
-
-    final range = AppointmentDateRange(
-      start: DateTime(2026, 8),
-      end: DateTime(2026, 9),
+  test('fetchInRange no longer truncates through a hard query limit', () async {
+    await repo().fetchInRange(
+      AppointmentDateRange(
+        start: DateTime(2026, 8),
+        end: DateTime(2026, 9),
+      ),
     );
 
-    test('a full page warns', () async {
-      withJobs(1000);
-
-      expect(await repo().fetchInRange(range), hasLength(1000));
-      expect(logger.warnings, hasLength(1));
-      expect(logger.warnings.single, startsWith('APPT-RANGE-ONCE'));
-      expect(logger.warnings.single, contains('1000'));
-    });
-
-    test('a short page is silent', () async {
-      withJobs(999);
-
-      await repo().fetchInRange(range);
-      expect(logger.warnings, isEmpty);
-    });
+    verifyNever(() => query.limit(1000));
   });
 
-  group('the history search scan window warns at its cap', () {
-    // At the cap the window is the NEWEST 1000 terminal visits, so an older
-    // match simply never appears and search reports "no results" for a job
-    // that exists.
-
-    void withHistory(int count) => when(() => snapshot.docs).thenReturn([
-      for (var i = 0; i < count; i++)
+  test('history search walks additional pages instead of warning at a cap', () async {
+    final firstPage = [
+      for (var i = 0; i < 500; i++)
         _FakeDoc('h$i', {
           'clientName': 'Sophie Tremblay',
           'employeeNames': const <String>[],
           'status': 'done',
         }),
-    ]);
-
-    test('a full window warns', () async {
-      withHistory(1000);
-
-      await repo().searchHistory('sophie');
-      expect(logger.warnings, hasLength(1));
-      expect(logger.warnings.single, startsWith('HIST-SEARCH'));
-      expect(logger.warnings.single, contains('1000'));
+    ];
+    final secondPage = [
+      _FakeDoc('h500', {
+        'clientName': 'Sophie Tremblay',
+        'employeeNames': const <String>[],
+        'status': 'done',
+      }),
+    ];
+    final secondSnapshot = _MockQuerySnapshot();
+    when(() => snapshot.docs).thenReturn(firstPage);
+    when(() => secondSnapshot.docs).thenReturn(secondPage);
+    var call = 0;
+    when(() => query.get()).thenAnswer((_) async {
+      call++;
+      return call == 1 ? snapshot : secondSnapshot;
     });
 
-    test('a short window is silent', () async {
-      withHistory(999);
+    final result = await repo().searchHistory('sophie');
 
-      await repo().searchHistory('sophie');
-      expect(logger.warnings, isEmpty);
-    });
+    expect(result, hasLength(501));
+    expect(result.last.id, 'h500');
+    expect(logger.warnings, isEmpty);
+    verify(() => query.startAfterDocument(firstPage.last)).called(1);
   });
 }

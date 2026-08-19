@@ -53,7 +53,7 @@ class EmployeeDetailsView extends ConsumerWidget {
         : () => launchPhoneCall(context, ref, employee.phone);
     // Its own document (users/{id}/private/emergency), gated by rules to an
     // admin and the person themselves. Team is admin-only, so a viewer here
-    // always passes that rule and a failed read means the read failed — NOT
+    // always passes that rule and a failed read means the read failed - not
     // that there is none on file. If this view is ever reused on a non-admin
     // surface it must distinguish the two, the way MyDetailsScreen does.
     //
@@ -77,7 +77,7 @@ class EmployeeDetailsView extends ConsumerWidget {
 
     final hoursValue = employee.workingDays.contains(true)
         ? '${materialL10n.formatTimeOfDay(minutesToTimeOfDay(employee.workStartMinutes))}'
-              ' – '
+              ' - '
               '${materialL10n.formatTimeOfDay(minutesToTimeOfDay(employee.workEndMinutes))}'
         : l10n.employees_noWorkingDays;
 
@@ -110,13 +110,13 @@ class EmployeeDetailsView extends ConsumerWidget {
       ),
       // No "No cap" row here, unlike the two edit surfaces: this is a
       // read-only body, which omits empty sections rather than rendering a
-      // placeholder — an uncapped person has no daily cap to report.
+      // placeholder - an uncapped person has no daily cap to report.
       if (employee.maxJobsPerDay > 0)
         KeyValueRow(
           label: l10n.employees_maxPerDayKey,
           value: l10n.employees_jobsPerDay(employee.maxJobsPerDay),
         ),
-      // NO `ON CALL` row — the profile card carries it as a chip, and a row
+      // No `ON CALL` row - the profile card carries it as a chip, and a row
       // here would state the same boolean twice on one screen.
       KeyValueRow(
         label: l10n.employees_accessKey,
@@ -165,7 +165,7 @@ class EmployeeDetailsView extends ConsumerWidget {
   }
 
   /// Opens the appointment sheet for the tapped card. `showActions` carries
-  /// the caller's resolved role — never `true`.
+  /// the caller's resolved role - never `true`.
   void _openJob(
     BuildContext context,
     WidgetRef ref,
@@ -181,7 +181,7 @@ class EmployeeDetailsView extends ConsumerWidget {
     }
   }
 
-  /// Only the buttons whose data exists — a tile with nothing behind it is
+  /// Only the buttons whose data exists - a tile with nothing behind it is
   /// worse than no tile.
   List<Widget> _quickActions(
     AppLocalizations l10n, {

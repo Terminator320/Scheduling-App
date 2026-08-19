@@ -21,11 +21,13 @@ Widget _section({
   Set<int> conflictDays = const {},
   AvailabilityChanged? onChanged,
   bool onCall = false,
+  bool enabled = true,
 }) => MyAvailabilitySection(
   workingDays: _fiveDayWeek,
   workStartMinutes: 480,
   workEndMinutes: 1020,
   onCall: onCall,
+  enabled: enabled,
   conflictDays: conflictDays,
   onChanged: onChanged ?? (_, _, _, {required onCall}) {},
 );
@@ -47,6 +49,25 @@ void main() {
 
     expect(applied, isTrue);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('toggling on-call is ignored when the section is disabled', (
+    tester,
+  ) async {
+    var called = false;
+    await tester.pumpWidget(
+      _harness(
+        _section(
+          enabled: false,
+          onChanged: (_, _, _, {required onCall}) => called = true,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('myOnCall')));
+    await tester.pumpAndSettle();
+
+    expect(called, isFalse);
   });
 
   testWidgets('toggling a working day applies immediately', (tester) async {

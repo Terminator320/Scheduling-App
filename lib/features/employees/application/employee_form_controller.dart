@@ -8,6 +8,7 @@ import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
+import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 
 /// Outcome of an employee save, whether an invite or an edit — the form maps
 /// this to a notice, an error, or a navigation action.
@@ -63,6 +64,14 @@ class EmployeeStatusChangeFailed extends EmployeeStatusOutcome {
   final Object error;
 }
 
+/// A duplicate tap while a status toggle is already in flight.
+///
+/// Same posture as [EmployeeSaveBusy]: nothing committed and nothing failed, so
+/// callers should surface nothing.
+class EmployeeStatusBusy extends EmployeeStatusOutcome {
+  const EmployeeStatusBusy();
+}
+
 /// Outcome of revoking a pending invite.
 sealed class AccountDeleteOutcome {
   const AccountDeleteOutcome();
@@ -75,6 +84,14 @@ class AccountDeleted extends AccountDeleteOutcome {
 class AccountDeleteFailed extends AccountDeleteOutcome {
   const AccountDeleteFailed(this.error);
   final Object error;
+}
+
+/// A duplicate tap while this account removal is already in flight.
+///
+/// Silent by design: the first tap owns the outcome and a second tap is not a
+/// new failure.
+class AccountDeleteBusy extends AccountDeleteOutcome {
+  const AccountDeleteBusy();
 }
 
 /// Busy state for the employee form/detail surfaces — these drive the Save
@@ -172,7 +189,11 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
       employee.id,
       (repo) async => EmployeeAccountCreated(
         await repo.createEmployeeAccount(
-          name: employee.name,
+          name: composeEmployeeName(
+            firstName: employee.firstName,
+            lastName: employee.lastName,
+            fallback: employee.name,
+          ),
           firstName: employee.firstName,
           lastName: employee.lastName,
           email: employee.email,
@@ -248,6 +269,9 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
     required String docId,
     required bool disable,
   }) async {
+    if (state.isTogglingStatus) {
+      return const EmployeeStatusBusy();
+    }
     // Resolved before the first await — see _save.
     final repo = ref.read(employeesRepositoryProvider);
     final logger = ref.read(loggerProvider);
@@ -274,6 +298,9 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
   /// at the row) is a *failed* outcome, not a silent success — the live stream
   /// will have flipped the row to Active by the time the notice lands.
   Future<AccountDeleteOutcome> deleteAccount(String docId) async {
+    if (state.isDeletingAccountId(docId)) {
+      return const AccountDeleteBusy();
+    }
     // Resolved before the first await — see _save.
     final repo = ref.read(employeesRepositoryProvider);
     final logger = ref.read(loggerProvider);

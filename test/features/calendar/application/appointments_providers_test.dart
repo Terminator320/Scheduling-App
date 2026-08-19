@@ -1,9 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+
+class _MockAppointmentsRepo extends Mock implements AppointmentsRepository {}
 
 class _RecordingLogger extends AppLogger {
   final List<String> warnings = [];
@@ -38,6 +45,18 @@ AppointmentRecord _appt(String id) => AppointmentRecord(
 }
 
 void main() {
+  late _MockAppointmentsRepo repo;
+
+  setUp(() {
+    repo = _MockAppointmentsRepo();
+    when(
+      () => repo.watchInRange(any()),
+    ).thenAnswer((_) => Stream.value(const <AppointmentRecord>[]));
+    when(
+      () => repo.watchForEmployeeInRange(any(), any()),
+    ).thenAnswer((_) => Stream.value(const <AppointmentRecord>[]));
+  });
+
   group('appointmentsOrEmpty', () {
     test('passes a settled list straight through', () {
       expect(
@@ -110,6 +129,58 @@ void main() {
       await Future<void>.delayed(Duration.zero);
 
       expect(container.read(cold), 2);
+    });
+  });
+
+  group('auth bootstrap', () {
+    // Any stable month window works here; the behavior under test is the auth
+    // bootstrap gate, not the exact calendar arithmetic.
+    final range = AppointmentDateRange(
+      start: DateTime(2026, 7),
+      end: DateTime(2026, 7, 31, 23, 59),
+    );
+
+    test('appointmentsInRange waits for auth uid before opening the query', () async {
+      final auth = StreamController<String?>();
+      addTearDown(auth.close);
+      final container = ProviderContainer(
+        overrides: [
+          authUidProvider.overrideWith((ref) => auth.stream),
+          appointmentsRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      container.listen(appointmentsInRangeProvider(range), (_, _) {});
+      await pumpEventQueue();
+      verifyNever(() => repo.watchInRange(any()));
+
+      auth.add('uid-1');
+      await pumpEventQueue();
+
+      verify(() => repo.watchInRange(range)).called(1);
+    });
+
+    test('myAppointments waits for auth uid before opening the query', () async {
+      final auth = StreamController<String?>();
+      addTearDown(auth.close);
+      final container = ProviderContainer(
+        overrides: [
+          authUidProvider.overrideWith((ref) => auth.stream),
+          appointmentsRepositoryProvider.overrideWithValue(repo),
+        ],
+      );
+      addTearDown(container.dispose);
+      final key = (employeeId: 'e1', range: range);
+
+      container.listen(myAppointmentsProvider(key), (_, _) {});
+      await pumpEventQueue();
+      verifyNever(() => repo.watchForEmployeeInRange(any(), any()));
+
+      auth.add('uid-1');
+      await pumpEventQueue();
+
+      verify(() => repo.watchForEmployeeInRange('e1', range)).called(1);
     });
   });
 }

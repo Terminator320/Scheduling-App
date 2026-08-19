@@ -259,8 +259,14 @@ class EventDetailsController extends Notifier<EventDetailsState>
     // The clients read rule is admin-only, so skip this load for employees —
     // otherwise it just logs a permission-denied error.
     if (ref.exists(currentUserDocProvider)) {
-      final role = ref.read(userRoleProvider).value ?? '';
-      if (role.isNotEmpty && role != 'admin') return;
+      final docState = ref.read(currentUserDocProvider);
+      if (docState.hasError) return;
+      final doc = docState.isLoading
+          ? await ref.read(currentUserDocProvider.future)
+          : (docState.value ?? const <String, dynamic>{});
+      if (!ref.mounted) return;
+      final role = (doc['role'] ?? '').toString().trim();
+      if (role != 'admin') return;
     }
     final logger = ref.read(loggerProvider);
     final clientsRepo = ref.read(clientsRepositoryProvider);

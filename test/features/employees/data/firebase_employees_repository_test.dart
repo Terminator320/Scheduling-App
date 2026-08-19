@@ -34,6 +34,8 @@ class _MockQuerySnapshot extends Mock
 class _MockQueryDocSnapshot extends Mock
     implements QueryDocumentSnapshot<Map<String, dynamic>> {}
 
+class _MockSnapshotMetadata extends Mock implements SnapshotMetadata {}
+
 class _MockDocRef extends Mock
     implements DocumentReference<Map<String, dynamic>> {}
 
@@ -323,6 +325,21 @@ void main() {
       expect(captured['termsAccepted'], isTrue);
       expect(captured['locationConsent'], isTrue);
     });
+
+    test('trims setup profile strings before calling the server', () async {
+      final callable = stubCallable('completeEmployeeSetup');
+
+      await repo().completeEmployeeSetup(
+        firstName: '  Zoe ',
+        lastName: ' Roy ',
+        phone: ' (514) 555-1234 ',
+      );
+
+      final captured = capturedPayload(callable);
+      expect(captured['firstName'], 'Zoe');
+      expect(captured['lastName'], 'Roy');
+      expect(captured['phone'], '(514) 555-1234');
+    });
   });
 
   group('deleteEmployeeAccount', () {
@@ -569,6 +586,30 @@ void main() {
       );
     });
 
+    test(
+      'treats a normalized match as unchanged even if the stored email has legacy casing',
+      () async {
+        stubStoredDoc(uid: 'auth-uid');
+        when(
+          docSnapshot.data,
+        ).thenReturn({'email': ' Old@Example.com ', 'uid': 'auth-uid'});
+
+        await repo().updateEmployee(
+          docId: 'my-id',
+          employee: const EmployeeRecord(
+            id: 'my-id',
+            name: 'Alice',
+            email: 'old@example.com',
+            uid: 'auth-uid',
+          ),
+        );
+
+        verifyNever(
+          () => functions.httpsCallable(any(), options: any(named: 'options')),
+        );
+      },
+    );
+
     test('writes the email directly when the doc carries no uid', () async {
       stubStoredDoc(uid: '');
 
@@ -611,6 +652,35 @@ void main() {
         throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
       );
     });
+
+    test(
+      'surfaces the callable email-changed refusal as a retryable failure and leaves the doc untouched',
+      () async {
+        stubStoredDoc(uid: 'auth-uid');
+        stubFailingCallable(
+          'changeEmployeeEmail',
+          FirebaseFunctionsException(
+            message: 'email-changed',
+            code: 'failed-precondition',
+          ),
+        );
+
+        await expectLater(
+          repo().updateEmployee(
+            docId: 'my-id',
+            employee: const EmployeeRecord(
+              id: 'my-id',
+              name: 'Alice',
+              email: 'new@example.com',
+              uid: 'auth-uid',
+            ),
+          ),
+          throwsA(isA<EmployeesFailureUnknown>()),
+        );
+
+        verifyNever(() => transaction.update(docRef, any()));
+      },
+    );
 
     test('saveEmergencyContact writes users/{id}/private/emergency', () async {
       final privateCollection = _MockCollection();
@@ -687,8 +757,8 @@ void main() {
         ),
       );
 
-      // Never empty: watchAllUsers orders by name and Firestore drops docs
-      // missing the orderBy field.
+      // Never empty: the repository preserves the stored fallback name when
+      // split-name fields are blank.
       expect(capturedUpdate()['name'], 'Legacy Single Name');
     });
 
@@ -725,9 +795,7 @@ void main() {
       code: 'permission-denied',
     );
 
-    test(
-      'watchEmployees constrains role + active status and bounds the stream',
-      () async {
+    test('watchEmployees constrains role + active status', () async {
         when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
         repo().watchEmployees().listen((_) {});
         // retryStream builds the query on subscribe, one microtask later.
@@ -742,32 +810,95 @@ void main() {
           () => collection.where('role', whereIn: ['employee', 'admin']),
         ).called(1);
         verify(() => query.where('status', isEqualTo: 'active')).called(1);
-        verify(() => query.limit(500)).called(1);
+        verifyNever(() => query.limit(any()));
       },
     );
 
-    test(
-      'watchAssignableUsers constrains active status and bounds the stream',
-      () async {
+    test('watchAssignableUsers constrains active status', () async {
         when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
         repo().watchAssignableUsers().listen((_) {});
         // retryStream builds the query on subscribe, one microtask later.
         await Future<void>.delayed(Duration.zero);
 
         verify(() => collection.where('status', isEqualTo: 'active')).called(1);
-        verify(() => query.limit(500)).called(1);
+        verifyNever(() => query.limit(any()));
       },
     );
 
-    test('watchAllUsers orders by name and bounds the stream', () async {
-      when(() => collection.orderBy(any())).thenReturn(query);
+    test('watchEmployees sorts active users client-side by display name', () async {
+      final zed = _MockQueryDocSnapshot();
+      final amy = _MockQueryDocSnapshot();
+      when(() => zed.id).thenReturn('z');
+      when(() => amy.id).thenReturn('a');
+      when(zed.data).thenReturn(const {
+        'name': 'Zed Roy',
+        'status': 'active',
+        'role': 'employee',
+      });
+      when(amy.data).thenReturn(const {
+        'firstName': 'Amy',
+        'lastName': 'Adams',
+        'status': 'active',
+        'role': 'employee',
+      });
+      when(() => snapshot.docs).thenReturn([zed, amy]);
       when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
-      repo().watchAllUsers().listen((_) {});
-      // retryStream builds the query on subscribe, one microtask later.
-      await Future<void>.delayed(Duration.zero);
 
-      verify(() => collection.orderBy('name')).called(1);
-      verify(() => query.limit(500)).called(1);
+      final records = await repo().watchEmployees().first;
+
+      expect(records.map((e) => e.id).toList(), ['a', 'z']);
+    });
+
+    test(
+      'watchAssignableUsers sorts active users client-side without requiring orderBy(name)',
+      () async {
+        final zed = _MockQueryDocSnapshot();
+        final amy = _MockQueryDocSnapshot();
+        when(() => zed.id).thenReturn('z');
+        when(() => amy.id).thenReturn('a');
+        when(zed.data).thenReturn(const {
+          'name': 'Zed Roy',
+          'status': 'active',
+        });
+        when(amy.data).thenReturn(const {
+          'firstName': 'Amy',
+          'lastName': 'Adams',
+          'status': 'active',
+        });
+        when(() => snapshot.docs).thenReturn([zed, amy]);
+        when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+
+        final records = await repo().watchAssignableUsers().first;
+
+        expect(records.map((e) => e.id).toList(), ['a', 'z']);
+      },
+    );
+
+    test(
+      'watchAllUsers sorts users client-side without requiring orderBy(name)',
+      () async {
+      final zed = _MockQueryDocSnapshot();
+      final amy = _MockQueryDocSnapshot();
+      when(() => zed.id).thenReturn('z');
+      when(() => amy.id).thenReturn('a');
+      when(zed.data).thenReturn(const {
+        'name': 'Zed Roy',
+        'status': 'disabled',
+      });
+      when(amy.data).thenReturn(const {
+        'firstName': 'Amy',
+        'lastName': 'Adams',
+        'status': 'invited',
+      });
+      when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+      when(() => collection.snapshots()).thenAnswer((_) => Stream.value(snapshot));
+      when(() => snapshot.docs).thenReturn([zed, amy]);
+
+      final records = await repo().watchAllUsers().first;
+
+      expect(records.map((e) => e.id).toList(), ['a', 'z']);
+      verifyNever(() => collection.orderBy(any()));
+      verifyNever(() => query.limit(any()));
     });
 
     test('watchEmployees resubscribes past a permission-denied error', () {
@@ -852,6 +983,35 @@ void main() {
       });
     });
 
+    test('cachedUserDocId is cleared when the authoritative stream goes empty', () {
+      fakeAsync((async) {
+        final userDoc = _MockQueryDocSnapshot();
+        final liveSnapshot = _MockQuerySnapshot();
+        final deletedSnapshot = _MockQuerySnapshot();
+        final deletedMetadata = _MockSnapshotMetadata();
+        when(userDoc.data).thenReturn(const {'role': 'admin'});
+        when(() => userDoc.id).thenReturn('doc-1');
+        when(() => liveSnapshot.docs).thenReturn([userDoc]);
+        when(() => deletedSnapshot.docs).thenReturn(const []);
+        when(() => deletedSnapshot.metadata).thenReturn(deletedMetadata);
+        when(() => deletedMetadata.isFromCache).thenReturn(false);
+        when(
+          query.snapshots,
+        ).thenAnswer((_) => Stream.fromIterable([liveSnapshot, deletedSnapshot]));
+
+        final emissions = <Map<String, dynamic>>[];
+        final repository = repo();
+        repository.watchUserDoc('uid-1').listen(emissions.add);
+        async.flushMicrotasks();
+
+        expect(emissions, [
+          {'role': 'admin'},
+          <String, dynamic>{},
+        ]);
+        expect(repository.cachedUserDocId('uid-1'), isNull);
+      });
+    });
+
     test('watchUserDoc does not retry a non-permission error', () {
       fakeAsync((async) {
         var subscriptions = 0;
@@ -914,6 +1074,7 @@ void main() {
       int workStartMinutes = 420,
       int workEndMinutes = 960,
       bool onCall = true,
+      bool travelAlertsEnabled = true,
     }) async {
       await repo().updateSelfDetails(
         EmployeeRecord(
@@ -925,6 +1086,7 @@ void main() {
           workStartMinutes: workStartMinutes,
           workEndMinutes: workEndMinutes,
           onCall: onCall,
+          travelAlertsEnabled: travelAlertsEnabled,
         ),
       );
       return (verify(() => docRef.update(captureAny())).captured.single as Map)
@@ -938,6 +1100,13 @@ void main() {
       expect(captured['onCall'], isTrue);
       expect(captured['workStartMinutes'], 420);
       expect(captured['workEndMinutes'], 960);
+      expect(captured['travelAlertsEnabled'], isTrue);
+    });
+
+    test('writes the travel-alert preference explicitly', () async {
+      final captured = await save(travelAlertsEnabled: false);
+
+      expect(captured['travelAlertsEnabled'], isFalse);
     });
 
     test('the patch carries no key outside the rules allowlist', () async {

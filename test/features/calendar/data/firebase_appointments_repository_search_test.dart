@@ -48,6 +48,7 @@ void main() {
     ).thenReturn(query);
     when(() => query.limit(any())).thenReturn(query);
     when(() => query.get()).thenAnswer((_) async => snapshot);
+    when(() => query.startAfterDocument(any())).thenReturn(query);
 
     // Build the doc mocks before stubbing `docs` — mocktail forbids calling
     // `when` (inside the doc() helper) while another stub is being defined.

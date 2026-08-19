@@ -189,6 +189,20 @@ void main() {
         expect(activity().isDeletingAccount, isFalse);
       },
     );
+
+    test('a concurrent delete for the SAME pending account returns Busy', () async {
+      final gate = Completer<void>();
+      when(() => repo.deleteEmployeeAccount('a')).thenAnswer((_) => gate.future);
+
+      final first = notifier().deleteAccount('a');
+      final second = await notifier().deleteAccount('a');
+
+      expect(second, isA<AccountDeleteBusy>());
+
+      gate.complete();
+      expect(await first, isA<AccountDeleted>());
+      verify(() => repo.deleteEmployeeAccount('a')).called(1);
+    });
   });
 
   group('createAccount', () {
@@ -219,6 +233,48 @@ void main() {
         'Welcome123!',
       );
       expect(activity().isSaving, isFalse);
+    });
+
+    test('recomposes name from first and last before creating the account', () async {
+      when(
+        () => repo.createEmployeeAccount(
+          name: any(named: 'name'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          email: any(named: 'email'),
+          phone: any(named: 'phone'),
+          colorValue: any(named: 'colorValue'),
+          jobTitle: any(named: 'jobTitle'),
+          isAdmin: any(named: 'isAdmin'),
+        ),
+      ).thenAnswer(
+        (_) async => const NewAccountCredentials(
+          email: 'alex@test.com',
+          password: 'Welcome123!',
+        ),
+      );
+
+      await notifier().createAccount(
+        const EmployeeRecord(
+          id: '',
+          firstName: 'Amy',
+          lastName: 'Adams',
+          email: 'amy@test.com',
+        ),
+      );
+
+      verify(
+        () => repo.createEmployeeAccount(
+          name: 'Amy Adams',
+          firstName: 'Amy',
+          lastName: 'Adams',
+          email: 'amy@test.com',
+          phone: '',
+          colorValue: any(named: 'colorValue'),
+          jobTitle: any(named: 'jobTitle'),
+          isAdmin: false,
+        ),
+      ).called(1);
     });
 
     test('surfaces a taken email as a field-level outcome', () async {
@@ -292,6 +348,24 @@ void main() {
   });
 
   group('setEmployeeStatus', () {
+    test('a concurrent status toggle returns Busy, not a duplicate write', () async {
+      final gate = Completer<void>();
+      when(() => repo.deactivateEmployee('e1')).thenAnswer((_) => gate.future);
+
+      final first = notifier().setEmployeeStatus(docId: 'e1', disable: true);
+      final second = await notifier().setEmployeeStatus(
+        docId: 'e1',
+        disable: true,
+      );
+
+      expect(second, isA<EmployeeStatusBusy>());
+
+      gate.complete();
+      expect(await first, isA<EmployeeStatusChanged>());
+      verify(() => repo.deactivateEmployee('e1')).called(1);
+      expect(activity().isTogglingStatus, isFalse);
+    });
+
     test('disables via deactivateEmployee', () async {
       when(() => repo.deactivateEmployee(any())).thenAnswer((_) async {});
 

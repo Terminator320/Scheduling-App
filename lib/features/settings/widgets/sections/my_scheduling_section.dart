@@ -24,12 +24,14 @@ class MySchedulingSection extends StatelessWidget {
     required this.isAdmin,
     required this.maxJobsPerDay,
     required this.onChanged,
+    this.enabled = true,
     super.key,
   });
 
   final bool isAdmin;
   final int maxJobsPerDay;
   final ValueChanged<int> onChanged;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -43,12 +45,15 @@ class MySchedulingSection extends StatelessWidget {
         const SizedBox(height: AppSpacing.sp16),
         SheetPanel(
           children: [
-            SheetFieldRow(
-              key: const Key('myMaxJobsPerDay'),
-              label: l10n.employees_maxJobsPerDay,
-              value: maxJobsLabel(l10n, maxJobsPerDay),
-              useMonoValue: true,
-              onTap: () => _pick(context),
+            IgnorePointer(
+              ignoring: !enabled,
+              child: SheetFieldRow(
+                key: const Key('myMaxJobsPerDay'),
+                label: l10n.employees_maxJobsPerDay,
+                value: maxJobsLabel(l10n, maxJobsPerDay),
+                useMonoValue: true,
+                onTap: () => _pick(context),
+              ),
             ),
           ],
         ),

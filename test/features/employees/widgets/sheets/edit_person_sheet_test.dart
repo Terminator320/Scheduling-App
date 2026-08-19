@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -164,7 +166,7 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    // Never blank: watchAllUsers orders by name.
+    // Never blank: the repository preserves the stored fallback name.
     expect(capturedSave().name, 'Jean-Luc');
   });
 
@@ -310,6 +312,79 @@ void main() {
     verify(() => repo.deactivateEmployee('e1')).called(1);
     // The footer flips to the re-enable action without leaving the sheet.
     expect(find.text('Enable employee'), findsOneWidget);
+  });
+
+  testWidgets('saving disables the status toggle until the write finishes', (
+    tester,
+  ) async {
+    final saveCompleter = Completer<void>();
+    when(
+      () => repo.updateEmployee(
+        docId: any(named: 'docId'),
+        employee: any(named: 'employee'),
+      ),
+    ).thenAnswer((_) => saveCompleter.future);
+
+    useTallViewport(tester);
+    await tester.pumpWidget(
+      wrap(
+        const EmployeeRecord(
+          id: 'e1',
+          name: 'Theo',
+          email: 'theo@x.com',
+          status: 'active',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Save'));
+    await tester.pump();
+
+    final disableButton = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Disable employee'),
+    );
+    expect(disableButton.onPressed, isNull);
+
+    saveCompleter.complete();
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('status toggle disables Save until the change finishes', (
+    tester,
+  ) async {
+    final toggleCompleter = Completer<void>();
+    when(() => repo.deactivateEmployee('e1')).thenAnswer(
+      (_) => toggleCompleter.future,
+    );
+
+    useTallViewport(tester);
+    await tester.pumpWidget(
+      wrap(
+        const EmployeeRecord(
+          id: 'e1',
+          name: 'Theo',
+          email: 'theo@x.com',
+          status: 'active',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Disable employee'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(FilledButton, 'Disable employee'),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('Save'), findsNothing);
+
+    toggleCompleter.complete();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('offline save fails fast without calling the repository', (

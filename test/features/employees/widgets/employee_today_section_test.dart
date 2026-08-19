@@ -52,6 +52,46 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a job with no id renders but is not tappable', (tester) async {
+    final tapped = <String>[];
+    final job = AppointmentRecord(
+      title: 'Untitled job',
+      startTime: DateTime(2026, 8, 2, 9),
+      endTime: DateTime(2026, 8, 2, 10),
+      employeeIds: const ['e1'],
+      employeeNames: const ['Theo Roy'],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [employeeTodayJobsProvider('e1').overrideWithValue([job])],
+        child: ThemeNotifier(
+          themeMode: ThemeMode.light,
+          toggleTheme: () {},
+          textScale: 1,
+          setTextScale: (_) {},
+          setLanguage: (_) {},
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            theme: lightTheme(),
+            home: Scaffold(
+              body: EmployeeTodaySection(
+                employeeId: 'e1',
+                onJobTap: tapped.add,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final card = tester.widget<AppointmentCard>(find.byType(AppointmentCard));
+    expect(card.onTap, isNull);
+    expect(tapped, isEmpty);
+  });
+
   // Deliberate exception to the omit-empty-sections rule: "nothing" is a real
   // answer an admin needs, and a missing section is indistinguishable from a
   // section that does not exist.

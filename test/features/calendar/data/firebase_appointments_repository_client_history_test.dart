@@ -33,6 +33,10 @@ void main() {
     return d;
   }
 
+  setUpAll(() {
+    registerFallbackValue(_MockDocSnap());
+  });
+
   setUp(() {
     firestore = _MockFirestore();
     collection = _MockCollection();
@@ -48,10 +52,8 @@ void main() {
     ).thenReturn(query);
     when(() => query.limit(any())).thenReturn(query);
     when(() => query.get()).thenAnswer((_) async => snapshot);
+    when(() => query.startAfterDocument(any())).thenReturn(query);
 
-    // The server orders these now; the mock hands them back in the order it
-    // was given, which is what lets the ordering test below prove the
-    // repository no longer re-sorts.
     final docs = [
       doc('older', {
         'clientId': 'c1',
@@ -74,33 +76,70 @@ void main() {
   FirebaseAppointmentsRepository repo() =>
       FirebaseAppointmentsRepository(firestore);
 
-  test('filters by clientId and applies the limit', () async {
+  test('filters by clientId and uses the provided page size', () async {
     await repo().fetchClientHistory(clientId: 'c1', limit: 25);
     verify(() => collection.where('clientId', isEqualTo: 'c1')).called(1);
     verify(() => query.limit(25)).called(1);
   });
 
-  test(
-    'orders newest-first on the SERVER, so the limit takes the newest',
-    () async {
-      // Without this the query has no orderBy, Firestore falls back to
-      // `__name__`, and a client with more visits than the limit gets an
-      // ARBITRARY slice of its history — which a Dart sort afterwards then
-      // makes look like a correct page. Served by
-      // `(clientId ASC, startTime DESC)`.
-      await repo().fetchClientHistory(clientId: 'c1');
-      verify(() => query.orderBy('startTime', descending: true)).called(1);
-    },
-  );
+  test('orders newest-first on the server before paging', () async {
+    await repo().fetchClientHistory(clientId: 'c1');
+    verify(() => query.orderBy('startTime', descending: true)).called(1);
+  });
 
   test('returns the server order as-is, without re-sorting in Dart', () async {
     final result = await repo().fetchClientHistory(clientId: 'c1');
     expect(result.map((a) => a.id), ['older', 'newer']);
   });
 
-  test('defaults to a bounded limit of 50', () async {
+  test('defaults to a page size of 50 when collecting the full history', () async {
     await repo().fetchClientHistory(clientId: 'c1');
     verify(() => query.limit(50)).called(1);
+  });
+
+  test('walks additional pages until the history is complete', () async {
+    final firstPage = [
+      doc('a1', {
+        'clientId': 'c1',
+        'title': 'One',
+        'startTime': Timestamp.fromDate(DateTime(2026, 7, 2)),
+        'endTime': Timestamp.fromDate(DateTime(2026, 7, 2, 1)),
+        'status': 'done',
+      }),
+      doc('a2', {
+        'clientId': 'c1',
+        'title': 'Two',
+        'startTime': Timestamp.fromDate(DateTime(2026, 7)),
+        'endTime': Timestamp.fromDate(DateTime(2026, 7, 1, 1)),
+        'status': 'done',
+      }),
+    ];
+    final secondPage = [
+      doc('a3', {
+        'clientId': 'c1',
+        'title': 'Three',
+        'startTime': Timestamp.fromDate(DateTime(2026, 6, 30)),
+        'endTime': Timestamp.fromDate(DateTime(2026, 6, 30, 1)),
+        'status': 'done',
+      }),
+    ];
+    when(() => snapshot.docs).thenReturn(firstPage);
+    when(() => query.get()).thenAnswer((_) async => snapshot);
+
+    final secondSnapshot = _MockQuerySnapshot();
+    when(() => secondSnapshot.docs).thenReturn(secondPage);
+    when(
+      () => query.startAfterDocument(firstPage.last),
+    ).thenReturn(query);
+    var call = 0;
+    when(() => query.get()).thenAnswer((_) async {
+      call++;
+      return call == 1 ? snapshot : secondSnapshot;
+    });
+
+    final result = await repo().fetchClientHistory(clientId: 'c1', limit: 2);
+
+    expect(result.map((a) => a.id), ['a1', 'a2', 'a3']);
   });
 
   test('returns empty without querying for a blank clientId', () async {

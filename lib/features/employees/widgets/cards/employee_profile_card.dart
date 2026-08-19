@@ -5,6 +5,7 @@ import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
+import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/user_status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
@@ -30,13 +31,19 @@ class EmployeeProfileCard extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final title = jobTitleLabel(l10n, employee.jobTitle);
+    final name = displayEmployeeName(
+      firstName: employee.firstName,
+      lastName: employee.lastName,
+      name: employee.name,
+      email: employee.email,
+    );
 
     final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          employee.name.isEmpty ? '—' : employee.name,
+          name,
           style: theme.textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.w700,
           ),
@@ -85,7 +92,7 @@ class EmployeeProfileCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       AppAvatar(
-                        name: employee.name,
+                        name: name,
                         color: employee.color,
                         size: AvatarSize.lg,
                       ),
@@ -106,7 +113,7 @@ class EmployeeProfileCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   AppAvatar(
-                    name: employee.name,
+                    name: name,
                     color: employee.color,
                     size: AvatarSize.lg,
                   ),
