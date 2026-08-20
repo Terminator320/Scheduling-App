@@ -18,8 +18,11 @@
 //   1. Format `phone` and `mobile` INDEPENDENTLY, and only when the stored
 //      value is a NANP number: ten digits with no "+", or eleven beginning
 //      with 1 (that leading 1 is the `+1` country code and is dropped).
-//      Everything else is left untouched — see `formatNanpNumber` for why
-//      that bound is the whole safety of this script.
+//      Everything else is left untouched — see `formatNanpNumber` in
+//      `../client_name_utils` for why that bound is the whole safety of
+//      this script. It moved there when the Wave import started resolving
+//      an imported number the same way, and is re-exported below so this
+//      script's own tests still read it off here.
 //   2. If `name` is nothing but this client's own number, re-state it from the
 //      formatted value. That is the only case where `name` is touched, so a
 //      BUSINESS — whose name is its own — can never be renamed here.
@@ -49,7 +52,7 @@ const {readFileSync} = require("fs");
 const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 
-const {digitsOf} = require("../client_name_utils");
+const {digitsOf, formatNanpNumber} = require("../client_name_utils");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
 // The batched-write loop, shared so `--dry-run` cannot be forgotten at a
 // call site — see `_batch.js`.
@@ -69,47 +72,6 @@ const EXACT_FLAGS = ["--dry-run"];
  */
 function assertKnownFlags(argv) {
   rejectUnknownFlags(argv, {exact: EXACT_FLAGS});
-}
-
-/**
- * `value` rendered as "(514) 555-1234", or null when it must be left alone.
- *
- * TWO SHAPES ARE ACCEPTED, and both are the same number:
- *   - ten digits, with no "+";
- *   - ELEVEN digits beginning with 1, with or without a "+". That leading 1 is
- *     the NANP country code (`+1`), so it is dropped and the remaining ten are
- *     formatted. `digitsOf` in `client_name_utils.js` already treats the two
- *     as equal, which is why a doc in either shape matches its own name.
- *
- * DELIBERATELY NARROWER THAN `formatPhoneNumber`
- * (`lib/core/validators/phone_format.dart`), which this otherwise mirrors.
- * That one masks as the admin TYPES, so it formats progressively and appends
- * digits past the tenth verbatim — reasonable live, wrong for a bulk rewrite.
- * It renders the 11-digit form as "(151) 455-5123 4", reading the country code
- * as part of the area code, and would rewrite a 7-digit or half-entered number
- * into a shape claiming to be complete.
- *
- * Everything else is left exactly as stored. The "+" bar on the ten-digit case
- * is what keeps a genuine foreign number out: "+49 30 123456" is ten digits
- * and bracketing its first three as an area code would be wrong.
- *
- * @param {*} value Any stored phone value.
- * @return {?string} The formatted number, or null to leave the field as it is.
- */
-function formatNanpNumber(value) {
-  const raw = String(value == null ? "" : value).trim();
-  if (!raw) return null;
-
-  let digits = raw.replace(/\D/g, "");
-  if (digits.length === 11 && digits.startsWith("1")) {
-    digits = digits.slice(1);
-  } else if (digits.length !== 10 || raw.includes("+")) {
-    return null;
-  }
-
-  const formatted =
-    `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
-  return formatted === raw ? null : formatted;
 }
 
 /**

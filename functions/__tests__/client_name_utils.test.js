@@ -5,7 +5,9 @@ const {
   clientDisplayName,
   composeStored,
   digitsOf,
+  formatNanpNumber,
   isBusiness,
+  liftPhoneFromName,
   stripPhone,
 } = require("../client_name_utils");
 
@@ -249,5 +251,57 @@ describe("isBusiness", () => {
 
   test("a legacy businessName makes it a business regardless of type", () => {
     expect(isBusiness({businessName: "Acme Inc"})).toBe(true);
+  });
+});
+
+describe("formatNanpNumber", () => {
+  // The full set lives in `backfill_client_phone_formatting.test.js`, which
+  // reads this function back off the script that re-exports it. These are the
+  // cases the Wave import leans on.
+  test("renders a NANP number the way the app stores one", () => {
+    expect(formatNanpNumber("5145551234")).toBe("(514) 555-1234");
+    expect(formatNanpNumber("+1 514 555 1234")).toBe("(514) 555-1234");
+  });
+
+  test("null means leave it alone", () => {
+    // Idempotence, and the bar that keeps a foreign number unmangled.
+    expect(formatNanpNumber("(514) 555-1234")).toBeNull();
+    expect(formatNanpNumber("+33 1 23 45 67 89")).toBeNull();
+    expect(formatNanpNumber("")).toBeNull();
+  });
+});
+
+describe("liftPhoneFromName", () => {
+  test("moves a pasted number into the phone field", () => {
+    expect(liftPhoneFromName({name: "Marc Tremblay 514-555-1234", phone: ""}))
+        .toEqual({name: "Marc Tremblay", phone: "(514) 555-1234"});
+  });
+
+  test("takes the number off the FRONT of the name too", () => {
+    expect(liftPhoneFromName({name: "514-555-1234 - Marc Tremblay", phone: ""}))
+        .toEqual({name: "Marc Tremblay", phone: "(514) 555-1234"});
+  });
+
+  test("a typed phone wins — nothing moves", () => {
+    expect(liftPhoneFromName({
+      name: "Marc Tremblay 514-555-1234", phone: "(438) 222-3333",
+    })).toBeNull();
+  });
+
+  test("a name that is NOTHING but the number keeps it", () => {
+    // The name field is required, so emptying it would read as the paste
+    // having vanished. This is the shape a Wave-added person arrives in.
+    expect(liftPhoneFromName({name: "5145551234", phone: ""}))
+        .toEqual({name: "5145551234", phone: "(514) 555-1234"});
+  });
+
+  test("leaves a non-phone digit run and an international number alone", () => {
+    expect(liftPhoneFromName({name: "Suite 12345", phone: ""})).toBeNull();
+    expect(liftPhoneFromName({name: "Marc +33 6 12 34 56 78", phone: ""}))
+        .toBeNull();
+  });
+
+  test("a name with no number at all", () => {
+    expect(liftPhoneFromName({name: "Marc Tremblay", phone: ""})).toBeNull();
   });
 });

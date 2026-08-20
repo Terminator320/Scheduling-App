@@ -481,8 +481,10 @@ describe("fromWaveCustomer", () => {
       firstName: "Jane",
       lastName: "Doe",
       email: "jane@acme.com",
-      phone: "514-555-1234",
-      mobile: "514-555-9876",
+      // Rendered the way the app stores a number, and folded into the ONE
+      // phone field the app has — see the "imported phone" block below.
+      phone: "(514) 555-1234",
+      mobile: "",
       address: "12-3450 Main St",
       addressLine2: "",
       apt: "",
@@ -687,6 +689,102 @@ describe("fromWaveCustomer", () => {
     expect(fromWaveCustomer({
       name: "   ", firstName: "Jane", lastName: "Doe",
     }).name).toBe("Jane Doe");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The imported phone
+// ---------------------------------------------------------------------------
+
+describe("the imported phone lands in the app's ONE phone field", () => {
+  /**
+   * @param {!Object} node Overrides on a minimal Wave customer node.
+   * @return {!Object} The imported client fields.
+   */
+  const importedFrom = (node) =>
+    fromWaveCustomer({id: "wave-1", name: "Marc Tremblay", ...node});
+
+  test("Wave's phone is rendered the way the app stores one", () => {
+    // Wave holds whatever was typed into it; `PhoneInputFormatter` masks
+    // anything typed in the app, so bare digits off an import were reaching
+    // the client detail screen and every appointment card.
+    expect(importedFrom({phone: "5145551234"}).phone).toBe("(514) 555-1234");
+    expect(importedFrom({phone: "+1 514 555 1234"}).phone)
+        .toBe("(514) 555-1234");
+  });
+
+  test("a number that is not NANP is stored exactly as Wave has it", () => {
+    // No fixed shape to render it in, and a number the app cannot dial is
+    // worse than an unformatted one.
+    expect(importedFrom({phone: "+33 1 23 45 67 89"}).phone)
+        .toBe("+33 1 23 45 67 89");
+    expect(importedFrom({phone: "5145551234 x42"}).phone)
+        .toBe("5145551234 x42");
+  });
+
+  test("a mobile-only customer's number is promoted into phone", () => {
+    // `mobile` is not editable and not rendered anywhere in the app
+    // (owner change 5), so an import that kept it there left the number
+    // where nothing could dial it.
+    const imported = importedFrom({phone: "", mobile: "514-555-9876"});
+    expect(imported.phone).toBe("(514) 555-9876");
+    expect(imported.mobile).toBe("");
+  });
+
+  test("a stored phone wins over a mobile, and the mobile is dropped", () => {
+    // Exactly what `EditClientSheet._save` does on every save — keeping the
+    // second number would un-heal a doc the app had already folded.
+    const imported = importedFrom({
+      phone: "514-555-1234", mobile: "514-555-9876",
+    });
+    expect(imported.phone).toBe("(514) 555-1234");
+    expect(imported.mobile).toBe("");
+  });
+
+  test("a customer NAMED by their number gets it lifted into phone", () => {
+    // This business names a person by their phone number in Wave, so a
+    // customer added there routinely has the number in the name and nothing
+    // in the phone box.
+    const imported = fromWaveCustomer({id: "w", name: "5145551234"});
+    expect(imported.phone).toBe("(514) 555-1234");
+    // The name is Wave's customer identity — mirrored verbatim, never
+    // rewritten here, or the next in-app edit pushes a rename to Wave.
+    expect(imported.name).toBe("5145551234");
+  });
+
+  test("a number sitting beside a name is lifted, name still verbatim", () => {
+    const imported = fromWaveCustomer({
+      id: "w", name: "Marc Tremblay 514-555-1234",
+    });
+    expect(imported.phone).toBe("(514) 555-1234");
+    expect(imported.name).toBe("Marc Tremblay 514-555-1234");
+  });
+
+  test("a name that is not a number lifts nothing", () => {
+    expect(fromWaveCustomer({id: "w", name: "Marc Tremblay"}).phone).toBe("");
+    // A street number, a postal code and a year are all left alone: the lift
+    // only ever acts on a clean ten-digit run.
+    expect(fromWaveCustomer({id: "w", name: "1505 Village de Bergerac"}).phone)
+        .toBe("");
+    expect(fromWaveCustomer({id: "w", name: "3101-5696 qc inc."}).phone)
+        .toBe("");
+  });
+
+  test("a real phone beats one sitting in the name", () => {
+    const imported = fromWaveCustomer({
+      id: "w", name: "5145551234", phone: "450-622-0931",
+    });
+    expect(imported.phone).toBe("(450) 622-0931");
+  });
+
+  test("importing twice is stable — no second write, no push-back", () => {
+    // The caller hashes these resolved fields into `wave.lastSyncedHash`, so
+    // a reshaped number must hash identically on the next run or every import
+    // rewrites every client and re-enters the outbox.
+    const node = {id: "w", name: "5145551234", mobile: "5145551234"};
+    const first = fromWaveCustomer(node);
+    expect(mappedFieldsHash(fromWaveCustomer(node)))
+        .toBe(mappedFieldsHash(first));
   });
 });
 

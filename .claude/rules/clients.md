@@ -173,6 +173,32 @@ Root context: `../../CLAUDE.md`.
   the doc forever — invisible, uneditable, still matched by `matchClientDocs`
   (which reads `mobile`) and still in the Wave payload. There is no migration
   script and none is needed; the fleet heals as clients are edited.
+  **The Wave IMPORT folds the same way, and it has to**
+  (`importedPhone`, `functions/wave/mappers.js`, 2026-08-19): it resolves ONE
+  phone — Wave's `phone`, else Wave's `mobile`, else a number lifted out of the
+  customer NAME — and always writes `mobile: ''`. Each leg closes a way the
+  number reached the doc but not the field anything dials (the Call button, the
+  `clientPhone` denormalized onto every appointment, the next push back to
+  Wave). The `mobile` leg additionally stops the import UN-healing a doc the app
+  had already folded: the app never clears Wave's copy (`toWaveCustomerInput`
+  omits an empty field rather than blanking it), so the next run read the value
+  still sitting there and put it back. The NAME leg is the same rule
+  `liftPhoneFromName` applies at the keyboard, and it is the one that matters
+  most here — this business names a person by their phone number in Wave, so a
+  customer added THERE routinely arrives called "5145551234" with the phone box
+  empty, and no in-app save ever repaired it (`composeStored` reads a name made
+  of digits as a business and leaves it alone). **Only the phone half of the
+  lift is taken** — `name` is Wave's customer identity, mirrored verbatim, and
+  rewriting it locally would push a rename to Wave on that client's next edit.
+  The resolved number is rendered "(514) 555-1234" when it is NANP, the shape
+  `PhoneInputFormatter` gives anything typed in the app; that is the durable
+  form of what `backfill-client-phone-formatting.js` did once by hand, and
+  `formatNanpNumber` moved to `client_name_utils.js` so the two share it.
+  Because the caller hashes these resolved fields into `wave.lastSyncedHash`,
+  a reshaped number does NOT enqueue a push — Wave keeps its own spelling until
+  that client is next edited in-app. Don't "fix" that by hashing Wave's raw
+  values instead: every import would then re-enter the whole roster into the
+  outbox.
 - **`clients/{id}.name` IS WAVE'S CUSTOMER NAME, and what it holds depends on
   who the client is** (owner call 2026-08-14). `toWaveCustomerInput` syncs it
   VERBATIM, and it is what shows on Wave's customer list and on an invoice —

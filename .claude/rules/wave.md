@@ -233,6 +233,12 @@ the sync badge, `clients/{id}.name` as Wave's customer name — are in
   is newer and unproven-dead, so it wins. Keep the predicates narrow
   (a structured `NOT_FOUND`, never a text match on Wave's message): this is the
   one path here that REWRITES a client's Wave identity.
+  **Import invariant: the customer's number lands in the app's ONE `phone`
+  field** (2026-08-19). `importedPhone` (`wave/mappers.js`) resolves it the way
+  the app does — Wave's `phone`, else Wave's `mobile`, else a number lifted out
+  of the customer NAME — renders it "(514) 555-1234" when it is NANP, and
+  always writes `mobile: ''`. Full reasoning, and why only the phone half of
+  the name lift is taken, in `clients.md`.
   **Mapper invariant: NEVER send a value outside a Wave ENUM's vocabulary —
   omit the field instead** (2026-08-15). `provinceCode` and `countryCode` are
   GraphQL enums, so a value they don't know is NOT an `inputErrors` entry the
