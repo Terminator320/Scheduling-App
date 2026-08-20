@@ -300,12 +300,127 @@ function clientDisplayName(data) {
   return str(d.name);
 }
 
+/**
+ * `value` rendered the way the app stores a number — "(514) 555-1234" — or
+ * null when it must be left exactly as it is.
+ *
+ * TWO SHAPES ARE ACCEPTED, and both are the same number:
+ *   - ten digits, with no "+";
+ *   - ELEVEN digits beginning with 1, with or without a "+". That leading 1 is
+ *     the NANP country code (`+1`), so it is dropped and the remaining ten are
+ *     formatted. [digitsOf] already treats the two as equal, which is why a
+ *     doc in either shape matches its own name.
+ *
+ * DELIBERATELY NARROWER THAN `formatPhoneNumber`
+ * (`lib/core/validators/phone_format.dart`), which this otherwise mirrors.
+ * That one masks as the admin TYPES, so it formats progressively and appends
+ * digits past the tenth verbatim — reasonable live, wrong for a value being
+ * rewritten in bulk or read off a Wave customer. It renders the 11-digit form
+ * as "(151) 455-5123 4", reading the country code as part of the area code,
+ * and would rewrite a 7-digit or half-entered number into a shape claiming to
+ * be complete.
+ *
+ * Everything else is left exactly as stored, and NULL is how that is said —
+ * callers use it as their "nothing to change" test. The "+" bar on the
+ * ten-digit case is what keeps a genuine foreign number out: "+49 30 123456"
+ * is ten digits and bracketing its first three as an area code would be wrong.
+ *
+ * @param {*} value Any stored phone value.
+ * @return {?string} The formatted number, or null to leave the field as it is.
+ */
+function formatNanpNumber(value) {
+  const raw = String(value == null ? "" : value).trim();
+  if (!raw) return null;
+
+  let digits = raw.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) {
+    digits = digits.slice(1);
+  } else if (digits.length !== 10 || raw.includes("+")) {
+    return null;
+  }
+
+  const formatted =
+    `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  return formatted === raw ? null : formatted;
+}
+
+/**
+ * A run of digits and the separators a person types between them, ANYWHERE in
+ * the string. The `\d` at each end keeps a trailing "(" or "-" out of the
+ * match.
+ *
+ * Only ever acted on when it reduces to a clean 10-digit number — see
+ * [matchPhoneInName], which is what makes this loose pattern safe against a
+ * street number, a postal code or a year.
+ */
+const PHONE_CANDIDATE = /\+?\d[\d\s().-]{7,}\d/g;
+
+/**
+ * The first run in [text] that is really a phone number, located and rendered.
+ * @param {string} text Any name.
+ * @return {?{start: number, end: number, formatted: string}}
+ */
+function matchPhoneInName(text) {
+  for (const match of text.matchAll(PHONE_CANDIDATE)) {
+    const candidate = match[0];
+    // An international number has no fixed shape, so bracketing its first
+    // three digits as an area code would be wrong. Leave it in the name.
+    if (candidate.includes("+")) continue;
+    const digits = digitsOf(candidate);
+    if (digits.length !== 10) continue;
+    return {
+      start: match.index,
+      end: match.index + candidate.length,
+      formatted: formatNanpNumber(digits),
+    };
+  }
+  return null;
+}
+
+/**
+ * Moves a phone number sitting in the NAME over into the phone field, and
+ * takes it back out of the name.
+ *
+ * Returns null when there is nothing to do — which is the common case, so
+ * callers can use it as their "did anything change" test.
+ *
+ * Two rules, both carried over from the one-off backfill the Dart side
+ * replaced: a stored phone always WINS (an existing number means the name's is
+ * a duplicate or a second line, and guessing between them is worse than
+ * leaving it), and a name that is NOTHING but the number keeps it — the name
+ * is required, so emptying it would look like the number had vanished.
+ *
+ * HAND-MIRROR of `ClientNamePolicy.liftPhoneFromName`, which is wired to both
+ * client sheets' name field. **The Wave import takes only the `phone` half**
+ * (`fromWaveCustomer`, `wave/mappers.js`): `clients/{id}.name` IS Wave's
+ * customer name, so rewriting it locally would push a rename to Wave on that
+ * client's next edit.
+ *
+ * @param {{name: (string|undefined), phone: (string|undefined)}} opts The name
+ *   to read and the phone already on file.
+ * @return {?{name: string, phone: string}} The two new values, or null.
+ */
+function liftPhoneFromName(opts) {
+  const o = opts || {};
+  const name = typeof o.name === "string" ? o.name : "";
+  if (str(o.phone)) return null;
+  const match = matchPhoneInName(name);
+  if (!match) return null;
+
+  const remaining = trimSeparators(
+      `${name.slice(0, match.start)} ${name.slice(match.end)}`);
+  if (!remaining) return {name, phone: match.formatted};
+  return {name: remaining, phone: match.formatted};
+}
+
 module.exports = {
   bareNumber,
   clientDisplayName,
   composeStored,
   digitsOf,
+  formatNanpNumber,
   isBusiness,
+  liftPhoneFromName,
   looksLikeBusinessName,
   stripPhone,
 };

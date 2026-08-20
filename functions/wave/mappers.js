@@ -9,6 +9,9 @@
 
 const crypto = require("crypto");
 
+const {formatNanpNumber, liftPhoneFromName} =
+  require("../client_name_utils");
+
 // ---------------------------------------------------------------------------
 // Country name ↔ ISO-3166-1 alpha-2 tables
 // ---------------------------------------------------------------------------
@@ -114,8 +117,9 @@ const IMPORT_FIELD_CAPS = {
   firstName: 200,
   lastName: 200,
   email: 320,
+  // No `mobile` entry: the import folds Wave's mobile into the one `phone`
+  // field and always writes `mobile: ""` — see `importedPhone`.
   phone: 32,
-  mobile: 32,
   address: 500,
   // 500, matching `address` and NOT the app's 64-char `apt`: Wave models
   // `addressLine2` as a peer street line of `addressLine1`, and
@@ -380,10 +384,56 @@ function stableStringify(value) {
 }
 
 /**
+ * The single `phone` the APP would hold for this Wave customer.
+ *
+ * Wave models a customer's number in three places and the app has one field,
+ * so mirroring Wave's shape left the number somewhere nothing could dial —
+ * neither the detail view's Call button, nor the `clientPhone` denormalized
+ * onto every appointment, nor the next push back to Wave. Resolved here
+ * exactly the way the app resolves it, in the app's own order of preference:
+ *
+ * 1. Wave's `phone`.
+ * 2. Wave's `mobile` — `mobile` stopped being an editable field (owner change
+ *    5), and `EditClientSheet._save` promotes a stored one into `phone` and
+ *    clears it on every save. An import that kept writing `mobile` un-healed
+ *    that on the next run, since it re-reads the value still sitting in Wave.
+ * 3. The customer NAME. This business names a person by their phone number in
+ *    Wave (`ClientNamePolicy`), so a customer added there is routinely called
+ *    "5145551234" with the phone box left empty — the same shape
+ *    `liftPhoneFromName` catches at the keyboard on both client sheets.
+ *
+ * **Only the phone half of the lift is taken.** `clients/{id}.name` IS Wave's
+ * customer name and is mirrored verbatim; rewriting it here would push a
+ * rename to Wave on that client's next edit.
+ *
+ * The result is rendered "(514) 555-1234" when it is a NANP number, which is
+ * the shape `PhoneInputFormatter` gives anything typed into the app — Wave
+ * holds whatever was typed there, and bare digits were reaching the client
+ * detail screen and every appointment card. Anything else (an extension, a
+ * genuine foreign number) is stored exactly as Wave has it.
+ *
+ * Note what this does NOT do: the caller hashes these same resolved fields
+ * into `wave.lastSyncedHash`, so a reshaped number does not enqueue a push —
+ * Wave keeps its own spelling until that client is next edited in-app.
+ *
+ * @param {{name: string, phone: *, mobile: *}} fields The resolved stored
+ *   name, and Wave's two raw number fields.
+ * @return {string} The number to store, possibly empty.
+ */
+function importedPhone({name, phone, mobile}) {
+  const stored = presence(phone) || presence(mobile);
+  if (stored) return formatNanpNumber(stored) || stored;
+
+  const lifted = liftPhoneFromName({name, phone: ""});
+  return lifted ? lifted.phone : "";
+}
+
+/**
  * Converts a Wave customer query node to a Firestore client field patch
  * (Wave-owned fields only — the caller merges these in). Defensive against
- * sparse/null sub-objects. `apt` is always `''`, and `addressLine2` stays in
- * its own field so the round-trip through `toWaveCustomerInput` stays lossless.
+ * sparse/null sub-objects. `apt` is always `''`, `mobile` is always `''` (see
+ * [importedPhone]), and `addressLine2` stays in its own field so the
+ * round-trip through `toWaveCustomerInput` stays lossless.
  * @param {!Object} node Wave customer GraphQL node. Expected shape:
  *   { id, name, firstName, lastName, email, phone, mobile, isArchived,
  *     address: { addressLine1, addressLine2, city,
@@ -433,8 +483,11 @@ function fromWaveCustomer(node) {
     firstName: capped("firstName", firstName),
     lastName: capped("lastName", lastName),
     email: capped("email", email),
-    phone: capped("phone", typeof n.phone === "string" ? n.phone : ""),
-    mobile: capped("mobile", typeof n.mobile === "string" ? n.mobile : ""),
+    phone: capped("phone", importedPhone({
+      name, phone: n.phone, mobile: n.mobile,
+    })),
+    // One phone field, like the app's — never a second stranded number.
+    mobile: "",
     address: capped("address", address),
     addressLine2: capped("addressLine2", line2),
     apt: "",

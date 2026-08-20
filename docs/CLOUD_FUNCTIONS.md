@@ -958,6 +958,18 @@ app's notice read "650 clients updated in the app" after a sync that changed
 nothing. The `hasCreatedAt` half of the condition is load-bearing — the update
 branch is the only `createdAt` backfill, and the clients list orders by it.
 
+**The imported number lands in the app's one `phone` field** (2026-08-19).
+Wave models a customer's number in `phone` and `mobile`, and this business
+additionally names a person BY their number, so an import that mirrored Wave's
+shape routinely left the number where nothing could dial it. `importedPhone`
+(`wave/mappers.js`) resolves it the way the app does — Wave's `phone`, else
+Wave's `mobile`, else a number lifted out of the customer NAME — renders it
+"(514) 555-1234" when it is a NANP number, and always writes `mobile: ''`. The
+name itself is still mirrored verbatim: it is Wave's customer identity, so only
+the phone half of the lift is taken. Since these resolved fields are what
+`mappedFieldsHash` sees, a reshaped number does not enqueue a push back; Wave
+keeps its own spelling until that client is next edited in-app.
+
 Writes `createdAt`/`updatedAt` on every client doc it does write (the
 list/search order by `createdAt`, and Firestore excludes docs missing the
 orderBy field). Rate-limited 5/hr; 300s timeout.
