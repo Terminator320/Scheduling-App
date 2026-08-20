@@ -6,6 +6,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/permissions/location_permission_service.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
@@ -320,14 +321,12 @@ class PresenceSyncController with ReentrantSync {
 
   /// This device's `users` doc id, for a teardown that never got as far as
   /// [_start]. Null when signed out or when the lookup fails.
-  Future<String?> _resolveUserDocId() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return null;
-    final match = await _ref
-        .read(employeesRepositoryProvider)
-        .findUserByUid(uid);
-    return match?.id;
-  }
+  Future<String?> _resolveUserDocId() => resolveUserDocId(
+    ref: _ref,
+    auth: _auth,
+    logger: _logger,
+    tag: 'PRESENCE',
+  );
 
   /// Container-teardown cleanup — cancels the stream, timers, and lifecycle
   /// listener without the network delete that [unregister] does on sign-out.

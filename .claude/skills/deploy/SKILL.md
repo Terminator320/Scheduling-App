@@ -26,7 +26,12 @@ Fix failures before deploying — a broken deploy leaves prod half-updated.
 
 ## 2. Deploy
 
+Clear the AI-agent env vars first, or the CLI stamps `agent-name/claude_code`
+into the Cloud Audit Log (see `docs/DEPLOYMENT.md` §5 — the entry is immutable
+once written). Export once; the rollback and `functions:delete` paths need it too.
+
 ```bash
+export AI_AGENT= CLAUDECODE= CLAUDE_CODE=
 firebase deploy --only functions,firestore:rules,storage
 ```
 

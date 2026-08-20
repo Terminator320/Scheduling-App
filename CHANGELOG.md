@@ -10,6 +10,67 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.47.0+76] - 2026-08-19
+
+A full audit pass sits behind this release. Two things you will notice straight
+away: job photos now open with no signal, and **Mark as complete** is always
+there when a job is still open. Behind them is a round of fixes to things that
+went wrong quietly — a pin left behind on the live map after signing out, a
+photo that never arrived, an app lock that switched itself off.
+
+### Added
+- **Job photos now open offline.** A photo you have opened once is kept on the
+  phone, so it opens again in a basement, a tunnel, or anywhere with no signal
+  — instantly, with no spinner and no "couldn't load". Signing out clears them
+  off the device.
+
+### Changed
+- **"Mark as complete" is always offered on an open job.** It used to appear
+  only once the start time had passed, so a crew that finished early, or was on
+  day two of a multi-day job, had no way to close a job the app kept nudging
+  them about — and only an admin can change a status from the edit form. The
+  only things that hide the button now are a job already done or cancelled.
+- **A cancelled visit no longer marks its day on the calendar.** The dots
+  answer "how busy is this day", and a called-off visit is work that is not
+  happening, so a day holding only a cancellation now reads as free. Finished
+  jobs still show a dot — that work happened.
+- **Client search, history search and a client's job history no longer stop at
+  the first page.** Each now reads through to its limit instead of showing
+  whatever the first batch happened to contain. On a long client list that
+  quietly hid everyone past the first page from search and from the filter
+  chips at the same time, with no error anywhere.
+- **Importing from Wave puts the customer's number where you can dial it.**
+  Wave keeps a number in two places, and this business also names people by
+  their phone number — so an imported customer routinely arrived with the
+  number sitting somewhere the Call button couldn't see. It is now resolved
+  into the one phone field and formatted the way the app formats it.
+
+### Fixed
+- **Your last known location could stay on the live staff map after you signed
+  out.** If location sharing hadn't started that session — you had turned the
+  permission off, for example — signing out cleared nothing, and the pin from a
+  previous launch stayed on the admin's map looking exactly like a live one.
+- **A signed-out phone could keep receiving that account's job notifications.**
+  Sign-out and account deletion now finish tearing down the device's
+  registrations instead of racing a refresh that could re-register it.
+- **The app lock could switch itself off, permanently.** A momentary hiccup
+  reading Face ID on resume was being written down as "biometrics unavailable"
+  and saved over the setting you had chosen, with nothing to tell you.
+- **Photos attached to a job could silently never arrive.** If the upload queue
+  failed at the wrong moment the photos were dropped from the queue while their
+  files stayed on the phone, so nothing could ever retry them and nothing said
+  so.
+- **Deleting your account could leave the button spinning with no error.** If
+  the screen was closed while the deletion was in flight, the real failure was
+  replaced by a crash you never saw.
+- **Tapping a notification while the app was still starting could do nothing.**
+  The tap was discarded silently if the app took too long to come up.
+- **French: two labels lost their accent** — job counts on the calendar and in
+  history read "TACHE" instead of "TÂCHE".
+- **Small typography fixes:** the separator in the drawer's role line, the dash
+  in an employee's working hours, and the placeholder shown for a person with
+  no name had all been flattened to a plain hyphen.
+
 ## [1.46.2+75] - 2026-08-16
 
 Two clients had been unable to reach Wave for days, and the evening "tomorrow's

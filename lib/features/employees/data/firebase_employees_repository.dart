@@ -79,14 +79,21 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
         'staff beyond it are not listed',
       );
     }
-    return snapshot.docs
-      .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
-      .toList()
-      ..sort((a, b) {
-        final byName = _sortKeyFor(a).compareTo(_sortKeyFor(b));
-        if (byName != 0) return byName;
-        return a.id.compareTo(b.id);
-      });
+    final records = [
+      for (final doc in snapshot.docs)
+        EmployeeRecord.fromMap(doc.id, doc.data()),
+    ];
+    // Keyed once per record, not twice per comparison.
+    final keyed =
+        [
+          for (final record in records)
+            (sortKey: _sortKeyFor(record), record: record),
+        ]..sort((a, b) {
+          final byName = a.sortKey.compareTo(b.sortKey);
+          if (byName != 0) return byName;
+          return a.record.id.compareTo(b.record.id);
+        });
+    return [for (final entry in keyed) entry.record];
   }
 
   String _sortKeyFor(EmployeeRecord employee) {

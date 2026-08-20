@@ -1,7 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 
 import 'package:scheduling/core/images/appointment_image_loader.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
@@ -15,22 +18,17 @@ class DeviceDeregistrationDeps {
     required this.imageLoader,
   });
 
-  factory DeviceDeregistrationDeps.fromRef(Ref ref) => DeviceDeregistrationDeps(
-    logger: ref.read(loggerProvider),
-    push: ref.read(pushRegistrationControllerProvider),
-    presence: ref.read(presenceSyncControllerProvider),
-    liveActivity: ref.read(liveActivityRegistrationControllerProvider),
-    imageLoader: ref.read(appointmentImageLoaderProvider),
+  /// Takes the read function so `Ref.read` and `WidgetRef.read` share ONE
+  /// list — the listener path and the widget path cannot drift on a new entry.
+  factory DeviceDeregistrationDeps.from(
+    T Function<T>(ProviderListenable<T>) read,
+  ) => DeviceDeregistrationDeps(
+    logger: read(loggerProvider),
+    push: read(pushRegistrationControllerProvider),
+    presence: read(presenceSyncControllerProvider),
+    liveActivity: read(liveActivityRegistrationControllerProvider),
+    imageLoader: read(appointmentImageLoaderProvider),
   );
-
-  factory DeviceDeregistrationDeps.fromWidgetRef(WidgetRef ref) =>
-      DeviceDeregistrationDeps(
-        logger: ref.read(loggerProvider),
-        push: ref.read(pushRegistrationControllerProvider),
-        presence: ref.read(presenceSyncControllerProvider),
-        liveActivity: ref.read(liveActivityRegistrationControllerProvider),
-        imageLoader: ref.read(appointmentImageLoaderProvider),
-      );
 
   final AppLogger logger;
   final PushRegistrationController push;
@@ -74,7 +72,8 @@ class DeviceDeregistrationDeps {
 /// from cancelling the rest.
 ///
 /// Typed on explicit dependencies so widget callers and long-lived controllers
-/// can share the same teardown path without generic `read` indirection.
+/// can share the same teardown path — only the factory that builds them takes
+/// a `read`, and both kinds of caller hand it the same one.
 Future<void> deregisterThisDevice(DeviceDeregistrationDeps deps) async {
   final logger = deps.logger;
   final push = deps.push;
@@ -89,17 +88,9 @@ Future<void> deregisterThisDevice(DeviceDeregistrationDeps deps) async {
   // uncleared.
   final imageLoader = deps.imageLoader;
 
-  Future<void> step(String label, Future<void> Function() run) async {
-    try {
-      await run();
-    } catch (e, st) {
-      logger.warn('ACCOUNT-EXIT $label de-registration failed', e, st);
-    }
-  }
-
-  await step('push', push.unregisterCurrentDevice);
-  await step('presence', presence.unregister);
-  await step('liveActivity', liveActivity.unregister);
+  await _step(logger, 'push de-registration', push.unregisterCurrentDevice);
+  await _step(logger, 'presence de-registration', presence.unregister);
+  await _step(logger, 'liveActivity de-registration', liveActivity.unregister);
 
   // LOCAL, and deliberately last: nothing above depends on it.
   // `appointmentImageLoaderProvider` is a plain `Provider`, so its byte cache
@@ -113,5 +104,56 @@ Future<void> deregisterThisDevice(DeviceDeregistrationDeps deps) async {
   // single owner of "forget this session", and it was the one thing it did not
   // forget. It goes through `step` like the rest now that it touches the file
   // system and can therefore fail.
-  await step('imageCache', imageLoader.clear);
+  await _step(logger, 'imageCache de-registration', imageLoader.clear);
+}
+
+/// Puts the three server-side registrations back after an exit that failed
+/// AFTER [deregisterThisDevice] already dropped them.
+///
+/// It lives beside the teardown, drives the same three controllers in the same
+/// order and shares its step helper, because a rollback that drifts from the
+/// teardown leaves exactly the rows the teardown exists to remove — it was a
+/// verbatim copy in a Settings widget mixin until 2026-08-19.
+Future<void> restoreThisDevice(DeviceDeregistrationDeps deps) async {
+  final logger = deps.logger;
+  await _step(logger, 'restore push', deps.push.sync);
+  await _step(logger, 'restore presence', deps.presence.sync);
+  await _step(logger, 'restore liveActivity', deps.liveActivity.sync);
+}
+
+/// One isolated best-effort step, shared by the teardown and its rollback.
+Future<void> _step(
+  AppLogger logger,
+  String label,
+  Future<void> Function() run,
+) async {
+  try {
+    await run();
+  } catch (e, st) {
+    logger.warn('ACCOUNT-EXIT $label failed', e, st);
+  }
+}
+
+/// The signed-in user's `users` doc id, or null when signed out or the lookup
+/// fails — never throws, so a teardown that needs it is never blocked.
+///
+/// [tag] is the caller's own Crashlytics log tag: push, presence and the Live
+/// Activity each resolve this and each stays searchable under its own tag.
+Future<String?> resolveUserDocId({
+  required Ref ref,
+  required FirebaseAuth auth,
+  required AppLogger logger,
+  required String tag,
+}) async {
+  final uid = auth.currentUser?.uid;
+  if (uid == null) return null;
+  try {
+    final match = await ref
+        .read(employeesRepositoryProvider)
+        .findUserByUid(uid);
+    return match?.id;
+  } catch (e, st) {
+    logger.warn('$tag resolve users doc failed', e, st);
+    return null;
+  }
 }

@@ -13,7 +13,6 @@ import 'package:scheduling/features/employees/application/employee_form_controll
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
-import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 import 'package:scheduling/features/employees/domain/policies/starting_password_policy.dart';
 import 'package:scheduling/features/employees/widgets/fields/credential_line.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -208,16 +207,7 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final compact = context.isCompact;
-    final displayName = displayEmployeeName(
-      firstName: widget.employee.firstName,
-      lastName: widget.employee.lastName,
-      name: widget.employee.name,
-      email: widget.employee.email,
-    );
-    assert(
-      displayName.isNotEmpty,
-      'display-name placeholder should never be empty',
-    );
+    final displayName = widget.employee.displayName;
     const chip = UserStatusChip(status: UserStatus.invited);
 
     return Material(

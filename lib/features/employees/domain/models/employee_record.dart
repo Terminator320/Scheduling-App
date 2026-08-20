@@ -4,6 +4,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
+import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 import 'package:scheduling/features/employees/domain/policies/work_schedule_policy.dart';
 
 part 'employee_record.freezed.dart';
@@ -121,6 +122,15 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     // emitting it here would let a future whole-record write flip somebody
     // else's push setting.
   };
+
+  /// The name every in-app surface renders — the split halves first, then the
+  /// stored composed [name], then [email]. See [displayEmployeeName].
+  String get displayName => displayEmployeeName(
+    firstName: firstName,
+    lastName: lastName,
+    name: name,
+    email: email,
+  );
 
   bool get isAdmin => role == 'admin';
   bool get isActive => status == 'active';

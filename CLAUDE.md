@@ -286,6 +286,14 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   replace a ceiling with an unbounded `while (true)` paging loop —
   `fetchClientHistory` (`_clientHistoryScanLimit`, 1000) and
   `fetchClientsCreatedSince` carry the same pair.
+  **The loop itself has ONE owner: `pageToCap` (`core/data/paged_scan.dart`),
+  2026-08-19** — the four call sites had a hand-written copy each, which is
+  four chances to omit the cap or the warn on the next one. The caller still
+  supplies its own cap, page size and warn text (each names a different
+  user-visible consequence); only the loop is shared. **Page size is NOT the
+  display bound** — `fetchClientHistory` used its `limit` (50) as both against
+  a 1000 cap, so one client-detail open cost up to 20 sequential round-trips;
+  it pages at 500 like the other two windows.
 - **Client "Job history" section** (`ClientJobHistorySection`, admin-only client
   detail) reads via `fetchClientHistory` (`clientJobHistoryProvider`, an
   `autoDispose.family` that re-fetches on `onLocalWrite`). It orders
@@ -302,6 +310,14 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   so `getAppointmentById` is now the only read in that repository that can
   reach a legacy or console-written row missing one — which is what
   `_recordFrom`'s breadcrumb is left for.
+  **The SECTION renders at most `_maxRendered` (50) of them**, because it is a
+  non-lazy `Column` inside the detail body's own scroll view — there is no
+  sliver context to hand a builder, so every row it is given is built eagerly,
+  and each is an `AppointmentCard` (an `IntrinsicHeight` subtree). Adding
+  paging to the repository silently took that from 50 rows to up to 1000. Keep
+  the bound until the surface grows a "show all" affordance or hands off to
+  History filtered by client; a taller list means a builder, not a bigger
+  number.
 - **The team roster's "jobs today" count is ONE listener, not one per row.**
   `employeeJobsTodayProvider` reduces a single `appointmentsInRangeProvider` over
   today's range into a `Map<String,int>`; every row reads the map. The range
@@ -344,10 +360,15 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   that one slot escaped the class's ownership and Clients, History and Team each
   re-spelled the same six-line `has(id) ? TourShowcaseBar(...) : bar` block by
   hand.
-- **The account-exit teardown lives in `AccountExitListeners`**
-  (`core/app/account_exit_listeners.dart`), the sibling of `AppSyncListeners`.
-  The ORDER is load-bearing: push, presence and Live Activity de-register
-  BEFORE `signOut()`, because each needs the credential sign-out revokes. Its
+- **Account exit is SPLIT: `AccountExitListeners` detects, `AccountExitController`
+  tears down** (`core/app/`, siblings of `AppSyncListeners`; the controller was
+  split out 2026-08-19). The listeners are three `ref.listen` wire-ups
+  (disabled / role revoked / doc deleted) and nothing else; every one of them
+  calls `AccountExitController.exitAccount`, which owns the teardown, the
+  navigation and the guard. Don't put teardown back in a listener — that is
+  what made the order and the guard untestable. The ORDER is load-bearing:
+  push, presence and Live Activity de-register BEFORE `signOut()`, because each
+  needs the credential sign-out revokes. The controller's
   `_isHandlingAccountExit` guard is released by the post-frame callback on
   success and by the `finally` only on failure — three listeners can fire for
   one underlying event.
@@ -356,8 +377,13 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   That constant is one cost dial, not a per-surface taste, and it lives in
   `core/` rather than on `ClientSearchPolicy` because its callers span features
   — the appointment sheets debounce a CLIENT search, History an APPOINTMENT
-  one. `SettingsSaveDebouncer` is the async-action variant — don't add a third
-  raw `Timer`, and don't re-spell the interval at a call site (it had already
+  one. **`Debouncer` is the ONLY one** — `SettingsSaveDebouncer` was deleted
+  2026-08-19: making `onError` required (below) turned `Debouncer` into a
+  strict superset, and a second wrapper whose `onError` stayed OPTIONAL voids
+  exactly the guarantee that change buys. Its interval survives as
+  `kSettingsSaveDebounce` beside `settings_providers.dart`, which is a
+  different cost dial from `kSearchDebounce`. Don't add a second wrapper or a
+  raw `Timer`, and don't re-spell an interval at a call site (it had already
   split 300 ms / 250 ms across four).
   **`Debouncer`'s `onError` is REQUIRED** (2026-08-19). It was optional, and
   five of the six call sites omitted it — the action runs from a `Timer`
@@ -440,6 +466,8 @@ production actually runs. Read it before any deploy that touches a callable
 payload or a rules cap.
 
 Deploy: `firebase deploy --only functions,firestore:rules,firestore:indexes,storage`
+(clear `AI_AGENT`/`CLAUDECODE`/`CLAUDE_CODE` in the shell first, or the CLI
+stamps `agent-name/claude_code` into the audit log — see `docs/DEPLOYMENT.md` §5.)
 (`storage:rules` is **not** a valid deploy target — use `storage`.)
 **Never pass `--force`** — it deletes any prod Firestore TTL policy missing from
 `firestore.indexes.json` (this removed all 5 live policies once, 2026-07-21).

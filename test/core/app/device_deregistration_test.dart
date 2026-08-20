@@ -87,7 +87,7 @@ void main() {
         ),
       ),
     );
-    await deregisterThisDevice(DeviceDeregistrationDeps.fromWidgetRef(captured));
+    await deregisterThisDevice(DeviceDeregistrationDeps.from(captured.read));
   }
 
   testWidgets(

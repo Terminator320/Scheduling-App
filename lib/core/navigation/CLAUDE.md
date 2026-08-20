@@ -27,6 +27,16 @@ Loaded when working under `lib/core/navigation/`. Root context: `../../../CLAUDE
   **calendar only** it is built with `showCalendarPill: false` (a go-home pill
   on the screen it goes home to is dead weight; owner call 2026-07-31), so that
   header carries the day-route button and the hamburger alone.
+- **An interface `core/` needs the shell to satisfy lives in
+  `hub_shell_scope.dart`, never in the consumer's own file.** Two do:
+  `HubTabSelector` (tab switching) and `AppointmentLinkHub` (the
+  `isAdmin`/`showCalendar`/`goHome` slice an inbound push or widget tap
+  drives), and `HubShellState` implements both. Declaring one where its
+  consumer lives instead forces `routes/hub_shell.dart` to import back into
+  `core/app/`, and the mutual dependency gets papered over with a forwarding
+  adapter — which is exactly what `AppointmentLinkHub` grew before it moved
+  here (2026-08-19). `routes/` already imports this file; `core/` importing
+  `routes/` one way is fine, both ways is not.
   `_hubRoute` + `HubTabRedirectRoute` survive at three tab routes — they look
   dead but remain the cold-start fallback. **Both branches are pinned, one test
   each:** `test/routes/hub_shell_test.dart` covers the REDIRECT branch (it

@@ -36,6 +36,12 @@ extension AuthGatedRef on Ref {
 /// straight through. [build] keeps each site's own per-null-uid behaviour, so
 /// nothing is flattened away — one site returns an empty list, another opens a
 /// different query.
+///
+/// The loading branch opens NOTHING: an empty stream leaves the provider in
+/// `AsyncLoading` (a stream that closes without emitting never settles one),
+/// and the settling uid rebuilds the provider, which is what opens the real
+/// query. Waiting on `authUidProvider.future` here instead raced that rebuild
+/// to open the same query twice.
 Stream<T> streamForUid<T>(Ref ref, Stream<T> Function(String? uid) build) {
   final uidState = ref.watch(authUidProvider);
   if (uidState.hasError) {
@@ -44,8 +50,6 @@ Stream<T> streamForUid<T>(Ref ref, Stream<T> Function(String? uid) build) {
       uidState.stackTrace ?? StackTrace.current,
     );
   }
-  if (uidState.isLoading) {
-    return Stream.fromFuture(ref.watch(authUidProvider.future)).asyncExpand(build);
-  }
+  if (uidState.isLoading) return Stream<T>.empty();
   return build(uidState.value);
 }

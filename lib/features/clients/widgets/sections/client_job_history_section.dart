@@ -66,13 +66,20 @@ class _JobList extends StatelessWidget {
   final List<AppointmentRecord> jobs;
   final Map<String, Color> colorMap;
 
+  /// This section is a plain `Column` inside the detail body's own scroll view,
+  /// so every row it emits is built whether or not it is on screen — and the
+  /// repository scans a client's history up to its 1000-doc ceiling. Each row
+  /// is an `IntrinsicHeight` card with an avatar stack, so the slice is bounded
+  /// here rather than paid for off-screen.
+  static const int _maxRendered = 50;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final job in jobs) ...[
+        for (final job in jobs.take(_maxRendered)) ...[
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sp4),
             child: Text(

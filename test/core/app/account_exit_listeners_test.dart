@@ -100,7 +100,7 @@ void main() {
                 logger: AppLogger(),
                 authService: auth,
                 deregisterDevice: () => deregisterThisDevice(
-                  DeviceDeregistrationDeps.fromWidgetRef(ref),
+                  DeviceDeregistrationDeps.from(ref.read),
                 ),
                 isSignedIn: () => signedIn,
               );

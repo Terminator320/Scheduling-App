@@ -47,6 +47,37 @@ void main() {
     verifyNever(repo.watchAssignableUsers);
   });
 
+  test('a later own-doc write does not reopen the roster query', () async {
+    final docs = StreamController<Map<String, dynamic>>();
+    addTearDown(docs.close);
+    final container = ProviderContainer(
+      overrides: [
+        authUidProvider.overrideWith((ref) => Stream.value('uid-1')),
+        currentUserDocProvider.overrideWith((ref) => docs.stream),
+        employeesRepositoryProvider.overrideWithValue(repo),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.listen(allUsersStreamProvider, (_, _) {});
+    docs.add(const {'role': 'admin', 'status': 'active'});
+    await pumpEventQueue();
+    verify(repo.watchAllUsers).called(1);
+
+    // A My-details save re-emits the same doc as a NEW map, and a `Map`
+    // compares by identity - watching the doc whole tore the roster listener
+    // down and re-read the whole collection.
+    docs.add(const {
+      'role': 'admin',
+      'status': 'active',
+      'phone': '5145551234',
+    });
+    await pumpEventQueue();
+
+    verifyNever(repo.watchAllUsers);
+    verifyNever(repo.watchAssignableUsers);
+  });
+
   test('waits for the account doc before choosing the employee roster stream', () async {
     final docs = StreamController<Map<String, dynamic>>();
     addTearDown(docs.close);

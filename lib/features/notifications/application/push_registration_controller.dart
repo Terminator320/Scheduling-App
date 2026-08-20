@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notifications/push_notification_service.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
@@ -140,14 +141,12 @@ class PushRegistrationController with ReentrantSync {
 
   /// This device's `users` doc id, for a teardown that never completed a
   /// registration. Null when signed out or when the lookup fails.
-  Future<String?> _resolveUserDocId() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return null;
-    final match = await _ref
-        .read(employeesRepositoryProvider)
-        .findUserByUid(uid);
-    return match?.id;
-  }
+  Future<String?> _resolveUserDocId() => resolveUserDocId(
+    ref: _ref,
+    auth: _auth,
+    logger: _logger,
+    tag: 'PUSH',
+  );
 
   Future<void> _upsert(String docId, String token, String uid, String locale) {
     return _ref

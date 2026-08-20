@@ -4,7 +4,7 @@
 /// (It also used to guard a Firestore `orderBy('name')` on `watchAllUsers`,
 /// which would have excluded the doc outright — that ordering is gone, and the
 /// sort happens in Dart now, but the placeholder is still load-bearing.)
-const String kUnnamedEmployee = '-';
+const String kUnnamedEmployee = '—';
 
 /// The single place `users.name` is built. Every write path routes through it -
 /// P4 adds first/last names but never stops populating the composed `name`.

@@ -37,7 +37,7 @@ void main() {
     test('never returns empty, even with an empty fallback', () {
       expect(
         composeEmployeeName(firstName: '', lastName: '', fallback: '   '),
-        '-',
+        '—',
       );
     });
   });

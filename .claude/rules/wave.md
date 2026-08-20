@@ -22,18 +22,23 @@ the sync badge, `clients/{id}.name` as Wave's customer name — are in
   "Sync with Wave" button on every phone until it updates. This outlived the
   `#compat-1.37.1` shim it was first tagged with: the constraint was never
   specific to 1.37.1.
-  **The two halves of customer sync are SEPARATE FILES.** `wave/customers.js`
-  keeps the App → Wave push (`upsertCustomer`, `writeSyncSuccess`, the
-  `LIST_CUSTOMERS`/`LIST_CUSTOMERS_SINCE` documents, `readBusinessId`);
-  `wave/customers_import.js` owns the Wave → App pull (`importCustomers`,
-  `importOneCustomer`, `buildWaveIdIndex`, `BATCH_LIMIT`). `customers.js`
-  re-exports `importCustomers`, so **no call site changed** — `sync_run.js`,
-  `callables.js` and the jest suite all still `require("./customers")`. The
-  require direction is what keeps the pair loadable: customers.js →
-  customers_import.js is EAGER (module scope), and the back-reference is LAZY
-  (`pushHalf()`, called at run time). So a new import-side helper must never
-  eagerly require the push half — that closes a real cycle and whichever file
-  loaded second sees a half-built `exports`.
+  **Customer sync is THREE FILES, and the third is what keeps the other two
+  acyclic.** `wave/customers.js` keeps the App → Wave push (`upsertCustomer`,
+  `writeSyncSuccess`); `wave/customers_import.js` owns the Wave → App pull
+  (`importCustomers`, `importOneCustomer`, `buildWaveIdIndex`, `BATCH_LIMIT`);
+  and `wave/customer_queries.js` is a LEAF holding what both need —
+  `readBusinessId` and the `LIST_CUSTOMERS`/`LIST_CUSTOMERS_SINCE` documents.
+  It requires nothing, so it cannot participate in a cycle. `customers.js`
+  still re-exports `importCustomers`, so **no call site changed** —
+  `sync_run.js`, `callables.js` and the jest suite all still
+  `require("./customers")`.
+  Those three lived in `customers.js` until 2026-08-19, which forced the pull
+  half to require the push half back at RUN time (a `pushHalf()` shim) and made
+  `customers.js` export three internals under a comment saying they were not
+  public. Put anything both halves need in the leaf; **never** add a require
+  from `customers_import.js` back to `customers.js`, and never re-introduce a
+  lazy require to dodge one — whichever file loaded second would see a
+  half-built `exports`.
   **AN IMPORT MUST NEVER TOUCH A CLIENT WITH AN UN-PUSHED OUTBOX JOB.** This is
   the invariant, and push-before-pull is only half of it. `importCustomers`
   overwrites every mapped field of a linked client with Wave's values AND

@@ -32,6 +32,7 @@ import 'package:scheduling/core/security/app_lock.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/app_language.dart';
+import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
@@ -178,7 +179,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   final _navigatorKey = GlobalKey<NavigatorState>();
   final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
   final _settingsRepository = SharedPrefsSettingsRepository();
-  late final SettingsSaveDebouncer _settingsSaveDebouncer;
+  late final Debouncer _settingsSaveDebouncer;
   final _topRouteObserver = TopRouteObserver();
   // Held so `dispose` can cancel them. Harmless in production — this is the
   // root widget and only dies with the process — but a widget test pumping
@@ -193,9 +194,12 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   @override
   void initState() {
     super.initState();
-    _settingsSaveDebouncer = SettingsSaveDebouncer(
+    // Read here, never inside the handler: the timer can fire after dispose.
+    final logger = ref.read(loggerProvider);
+    _settingsSaveDebouncer = Debouncer(
+      kSettingsSaveDebounce,
       onError: (error, stackTrace) =>
-          ref.read(loggerProvider).warn('SETTINGS debounced save failed', error, stackTrace),
+          logger.warn('SETTINGS debounced save failed', error, stackTrace),
     );
     _themeMode = widget.settings.themeMode;
     _textScale = widget.settings.textScale;

@@ -89,13 +89,14 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('renders working hours with a clean ASCII separator', (
-    tester,
-  ) async {
+  testWidgets('renders working hours joined by an en dash', (tester) async {
     await tester.pumpWidget(_wrap(_populated, isCurrentUserAdmin: true));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining(' - '), findsOneWidget);
+    // A range, so an en dash — a hyphen here reads as one hyphenated token.
+    // Matched exactly: the working-DAYS row is a range too, so a substring
+    // test for the dash alone passes on the wrong widget.
+    expect(find.text('8:00 AM – 5:00 PM'), findsOneWidget);
   });
 
   testWidgets('omits rows with no value', (tester) async {

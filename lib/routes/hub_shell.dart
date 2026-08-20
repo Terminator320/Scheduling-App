@@ -44,7 +44,8 @@ class HubShell extends StatefulWidget {
   State<HubShell> createState() => HubShellState();
 }
 
-class HubShellState extends State<HubShell> implements HubTabSelector {
+class HubShellState extends State<HubShell>
+    implements HubTabSelector, AppointmentLinkHub {
   static HubShellState? _live;
 
   late bool _isAdmin = widget.isAdmin;
@@ -61,6 +62,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
 
   /// The live role, used by deep links to gate admin-only edit/cancel/delete
   /// controls.
+  @override
   bool get isAdmin => _isAdmin;
 
   /// The shell's own route — [goHome]'s pop target. Null only in a bare test
@@ -151,6 +153,7 @@ class HubShellState extends State<HubShell> implements HubTabSelector {
   }
 
   /// Switch to calendar, preserving identity for deep-linked appointment sheets.
+  @override
   void showCalendar() {
     select(
       HubTab.calendar,

@@ -162,38 +162,41 @@ void main() {
     });
   });
 
-  test('history search walks additional pages instead of warning at a cap', () async {
-    final firstPage = [
-      for (var i = 0; i < 500; i++)
-        _FakeDoc('h$i', {
+  test(
+    'history search walks additional pages instead of warning at a cap',
+    () async {
+      final firstPage = [
+        for (var i = 0; i < 500; i++)
+          _FakeDoc('h$i', {
+            'clientName': 'Sophie Tremblay',
+            'employeeNames': const <String>[],
+            'status': 'done',
+          }),
+      ];
+      final secondPage = [
+        _FakeDoc('h500', {
           'clientName': 'Sophie Tremblay',
           'employeeNames': const <String>[],
           'status': 'done',
         }),
-    ];
-    final secondPage = [
-      _FakeDoc('h500', {
-        'clientName': 'Sophie Tremblay',
-        'employeeNames': const <String>[],
-        'status': 'done',
-      }),
-    ];
-    final secondSnapshot = _MockQuerySnapshot();
-    when(() => snapshot.docs).thenReturn(firstPage);
-    when(() => secondSnapshot.docs).thenReturn(secondPage);
-    var call = 0;
-    when(() => query.get()).thenAnswer((_) async {
-      call++;
-      return call == 1 ? snapshot : secondSnapshot;
-    });
+      ];
+      final secondSnapshot = _MockQuerySnapshot();
+      when(() => snapshot.docs).thenReturn(firstPage);
+      when(() => secondSnapshot.docs).thenReturn(secondPage);
+      var call = 0;
+      when(() => query.get()).thenAnswer((_) async {
+        call++;
+        return call == 1 ? snapshot : secondSnapshot;
+      });
 
-    final result = await repo().searchHistory('sophie');
+      final result = await repo().searchHistory('sophie');
 
-    expect(result, hasLength(501));
-    expect(result.last.id, 'h500');
-    expect(logger.warnings, isEmpty);
-    verify(() => query.startAfterDocument(firstPage.last)).called(1);
-  });
+      expect(result, hasLength(501));
+      expect(result.last.id, 'h500');
+      expect(logger.warnings, isEmpty);
+      verify(() => query.startAfterDocument(firstPage.last)).called(1);
+    },
+  );
 
   test('history search stops at its scan ceiling and warns', () async {
     when(() => snapshot.docs).thenReturn([
@@ -216,7 +219,7 @@ void main() {
 
   test('client history stops at its scan ceiling and warns', () async {
     when(() => snapshot.docs).thenReturn([
-      for (var i = 0; i < 50; i++)
+      for (var i = 0; i < 500; i++)
         _FakeDoc('c$i', {
           'startTime': Timestamp.fromDate(now),
           'endTime': Timestamp.fromDate(now.add(const Duration(hours: 1))),
@@ -226,6 +229,8 @@ void main() {
 
     await repo().fetchClientHistory(clientId: 'c1');
 
+    // 1000 / 500 per page - a busy client costs two round-trips, not twenty.
+    verify(() => query.get()).called(2);
     expect(logger.warnings, hasLength(1));
     expect(logger.warnings.single, startsWith('APPT-LOAD'));
     expect(logger.warnings.single, contains('1000'));

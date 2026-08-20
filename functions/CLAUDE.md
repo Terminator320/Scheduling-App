@@ -140,9 +140,12 @@ is a callable, which is why they no longer sit in the file named for them),
 `readWaveBusinessIdCached`), `wave/customers.js` (the App → Wave PUSH half),
 `wave/customers_import.js` (the Wave → App PULL half — `importCustomers`,
 `importOneCustomer`, `buildWaveIdIndex`, `BATCH_LIMIT`; `customers.js`
-re-exports `importCustomers`, so no call site changed, and the require back to
-the push half is LAZY to avoid a cycle) and the pure `wave/retry_policy.js` (the
-dead-letter taxonomy, `deps`-free like `notification_policy.js`).
+re-exports `importCustomers`, so no call site changed),
+`wave/customer_queries.js` (the LEAF both halves require at module scope —
+`readBusinessId` plus the `LIST_CUSTOMERS`/`LIST_CUSTOMERS_SINCE` documents; it
+requires nothing, which is what keeps the pair acyclic without a lazy
+require-back) and the pure `wave/retry_policy.js` (the dead-letter taxonomy,
+`deps`-free like `notification_policy.js`).
 Instant + business-time-zone primitives (`toMillis`,
 `formatBusinessTime`/`formatTimeOfDay`, `businessYmd`/`businessOffsetMs`/
 `businessMidnight`/`businessDayStartMs`, `BUSINESS_TIME_ZONE`) live in
@@ -244,6 +247,8 @@ Release runbook (ordering, old-build compatibility, rollback, deploy log):
 `docs/DEPLOYMENT.md`.
 
 Deploy: `firebase deploy --only functions,firestore:rules,firestore:indexes,storage`
+(clear `AI_AGENT`/`CLAUDECODE`/`CLAUDE_CODE` in the shell first, or the CLI
+stamps `agent-name/claude_code` into the audit log — see `docs/DEPLOYMENT.md` §5.)
 (drop `firestore:indexes` only when `firestore.indexes.json` is unchanged — a
 query whose index is missing fails `FAILED_PRECONDITION`, which best-effort
 callers swallow into a silent no-op.)

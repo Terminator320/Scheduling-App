@@ -124,14 +124,17 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   whoever signs in next on a shared handset.
   **The generation must be read where the FETCH starts, not inside `write`**
   (S2, 2026-08-19). `AppointmentImageDiskCache` exposes a `generation` getter
-  and `write(key, bytes, {int? generation})` takes it back;
+  and `write(key, bytes, {required int generation})` takes it back — **required,
+  so a call site cannot silently opt out**; it defaulted to the cache's own
+  current generation, which always passes the check, making the parameter that
+  protects the invariant opt-in;
   `AppointmentImageLoader._resolve` reads `_disk.generation` BEFORE
   `await _fetch(...)` and passes that value to `write`, which drops the write
   when `clear()` has run since. Capturing it inside `write` was a **no-op for
   exactly the case the guard exists for**: the loader only calls `write` after
   the Storage fetch resolves, so the value captured there already equalled the
-  current one and the bytes landed on disk regardless. Any new caller that
-  writes bytes fetched asynchronously must thread the same value through.
+  current one and the bytes landed on disk regardless. The required parameter is what makes that unrepresentable
+  at a new call site.
   Pinned by `test/core/images/appointment_image_disk_cache_test.dart` ("a write
   already in flight when the session ends is dropped" / "a write started after
   the session ended is kept").

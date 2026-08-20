@@ -87,6 +87,14 @@ class AppointmentImageDiskCache {
   /// device — the exact leak [clear] exists to prevent.
   int _generation = 0;
 
+  /// The folder's size in bytes, or `null` when no sweep has measured it yet.
+  ///
+  /// Only ever read and written from inside [_serialized], so it cannot be
+  /// observed mid-mutation; `null` forces the next write to measure, which is
+  /// what bounds how far it can drift LOW (drifting HIGH only buys a sweep
+  /// that evicts nothing).
+  int? _bytesOnDisk;
+
   static Future<Directory> _platformCacheDirectory() =>
       getApplicationCacheDirectory();
 
@@ -131,14 +139,17 @@ class AppointmentImageDiskCache {
   /// process, on a shared handset, for whoever signs in next.
   int get generation => _generation;
 
-  /// Stores [bytes] for [key], then trims the folder to its budget.
+  /// Stores [bytes] for [key], trimming the folder when it may be over budget.
   ///
   /// Empty bytes are never written — see the refusal rule on
   /// `AppointmentImageLoader`. [generation] is the value read when the fetch
   /// behind these bytes started; the write is dropped if [clear] has run since.
-  Future<void> write(String key, Uint8List bytes, {int? generation}) {
+  /// It is REQUIRED rather than defaulted to [generation] because a default is
+  /// always the current value, which always passes the staleness check — the
+  /// one caller that forgot the argument would silently get no guard at all.
+  Future<void> write(String key, Uint8List bytes, {required int generation}) {
     if (key.isEmpty || bytes.isEmpty) return Future<void>.value();
-    final startedAt = generation ?? _generation;
+    final startedAt = generation;
     return _serialized(() async {
       // The session ended while the fetch behind this was still in flight.
       if (startedAt != _generation) return;
@@ -150,7 +161,16 @@ class AppointmentImageDiskCache {
       final temp = File('${file.path}.part');
       await temp.writeAsBytes(bytes, flush: true);
       await temp.rename(file.path);
-      await _trim();
+      // A sweep stats every file in the folder, so it is paid only when the
+      // running total says the budget could be breached — a ten-photo strip
+      // otherwise queues ten full sweeps to evict nothing. The total is
+      // re-seeded from every sweep, and forgotten by [clear] and by a failed
+      // directory resolve, so drift (the OS prunes the platform cache folder
+      // behind us) costs at most one unnecessary sweep.
+      final known = _bytesOnDisk;
+      _bytesOnDisk = known == null || known + bytes.length > _budget
+          ? await _trim()
+          : known + bytes.length;
     }, 'write $key');
   }
 
@@ -162,6 +182,7 @@ class AppointmentImageDiskCache {
   Future<void> clear() {
     _generation += 1;
     return _serialized(() async {
+      _bytesOnDisk = null;
       final dir = await _directory();
       // Sync existence/metadata checks throughout: they are single cheap
       // syscalls, and `avoid_slow_async_io` is right that the async forms cost
@@ -194,6 +215,9 @@ class AppointmentImageDiskCache {
           // disable offline photos for the rest of the process. Forget it and
           // let the next fetch resolve the directory again.
           _root = null;
+          // The next resolve may land somewhere else entirely, so the measured
+          // size no longer describes anything.
+          _bytesOnDisk = null;
           Error.throwWithStackTrace(e, st);
         });
   }
@@ -203,14 +227,15 @@ class AppointmentImageDiskCache {
     return File('${dir.path}${Platform.pathSeparator}${fileNameFor(key)}');
   }
 
-  /// Evicts oldest-first until the folder is inside its budget.
+  /// Evicts oldest-first until the folder is inside its budget, and returns the
+  /// bytes it holds afterwards — the only measurement [_bytesOnDisk] trusts.
   ///
   /// Ordered by last-modified, i.e. by INSERTION, not by use — the same
   /// tradeoff the in-memory cache makes one level up, and for the same reason:
   /// touching a file on every render turns each cache hit into a write.
-  Future<void> _trim() async {
+  Future<int> _trim() async {
     final dir = await _directory();
-    if (!dir.existsSync()) return;
+    if (!dir.existsSync()) return 0;
 
     final entries = <({File file, int size, DateTime modified})>[];
     var total = 0;
@@ -220,7 +245,7 @@ class AppointmentImageDiskCache {
       total += stat.size;
       entries.add((file: entity, size: stat.size, modified: stat.modified));
     }
-    if (total <= _budget) return;
+    if (total <= _budget) return total;
 
     entries.sort((a, b) => a.modified.compareTo(b.modified));
     for (final entry in entries) {
@@ -233,5 +258,6 @@ class AppointmentImageDiskCache {
         _logger.warn('IMG-DISK evict failed: ${entry.file.path}', e, st);
       }
     }
+    return total;
   }
 }
