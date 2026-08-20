@@ -372,5 +372,4 @@ module.exports = {
   rotateObjectToken,
   rotatePictures,
   rotateAssignedImageTokens,
-  defaultBucket,
 };

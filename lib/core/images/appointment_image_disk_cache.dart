@@ -121,16 +121,27 @@ class AppointmentImageDiskCache {
     }
   }
 
+  /// The current session's cache generation, bumped by [clear].
+  ///
+  /// Read this where a fetch STARTS and hand it back to [write], so a write
+  /// whose session ended mid-flight is dropped. Capturing it inside [write]
+  /// instead is a no-op for that case: the loader only calls `write` after the
+  /// Storage fetch resolves, by which point the captured value already equals
+  /// the current one and the bytes land on disk — where they outlive the
+  /// process, on a shared handset, for whoever signs in next.
+  int get generation => _generation;
+
   /// Stores [bytes] for [key], then trims the folder to its budget.
   ///
   /// Empty bytes are never written — see the refusal rule on
-  /// `AppointmentImageLoader`.
-  Future<void> write(String key, Uint8List bytes) {
+  /// `AppointmentImageLoader`. [generation] is the value read when the fetch
+  /// behind these bytes started; the write is dropped if [clear] has run since.
+  Future<void> write(String key, Uint8List bytes, {int? generation}) {
     if (key.isEmpty || bytes.isEmpty) return Future<void>.value();
-    final generation = _generation;
+    final startedAt = generation ?? _generation;
     return _serialized(() async {
       // The session ended while the fetch behind this was still in flight.
-      if (generation != _generation) return;
+      if (startedAt != _generation) return;
       final file = await _fileFor(key);
       await file.parent.create(recursive: true);
       // Written beside the target and renamed, so a kill mid-write leaves a

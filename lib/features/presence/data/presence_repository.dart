@@ -70,6 +70,9 @@ class PresenceRepository {
   Stream<List<PresenceFix>> watchAllPresence() => retryStream(
     () => _firestore
         .collectionGroup('presence')
+        // Bounded: this is a live listener over a collection group that grows
+        // with the roster, and the map only ever renders one pin per user.
+        .limit(_presenceStreamLimit)
         // NEEDS the COLLECTION_GROUP-scoped `presence.updatedAt` override in
         // `firestore.indexes.json` — a collection-group order is not served by
         // the automatic single-field index, so this query fails with
@@ -81,8 +84,16 @@ class PresenceRepository {
         .map(_toFixes),
   );
 
+  static const int _presenceStreamLimit = 1000;
+
   /// One malformed doc must not drop the whole map — skip it and keep going.
   List<PresenceFix> _toFixes(QuerySnapshot<Map<String, dynamic>> snapshot) {
+    if (snapshot.docs.length >= _presenceStreamLimit) {
+      _logger.warn(
+        'PRESENCE watchAllPresence hit the $_presenceStreamLimit-doc cap - '
+        'the oldest fixes are not on the map',
+      );
+    }
     final fixes = <PresenceFix>[];
     for (final doc in snapshot.docs) {
       final userDocId = doc.reference.parent.parent?.id;

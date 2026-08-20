@@ -50,6 +50,53 @@ void main() {
         expect(createBlock, contains('emergencyPhone'));
       });
 
+      test('the legacy caps survive with their exact bounds', () {
+        // These two caps only ever see a LEGACY value passing through
+        // untouched on an unrelated update — no write path can introduce one
+        // any more. That is precisely what makes them look unreachable and
+        // invites deletion, and the rules comment says so in as many words.
+        // Delete them and a straggler doc becomes permanently un-updatable,
+        // including by deactivateEmployee.
+        //
+        // SCOPED to /users and then to isValidUserData: `isBoundedString` is
+        // used all over this file, and an unscoped search would pass on some
+        // other block's cap. The numbers are asserted, not just the field
+        // names — a cap whose bound drifted below a stored value bricks the
+        // doc exactly as removing it does.
+        final users = rules.substring(rules.indexOf('match /users/{userId}'));
+        final shapeGuard = RegExp(
+          r'function isValidUserData\(d\)\s*\{(.*?)\n      \}',
+          dotAll: true,
+        ).firstMatch(users)?.group(1);
+
+        expect(shapeGuard, isNotNull, reason: 'isValidUserData was removed');
+        expect(
+          shapeGuard,
+          contains('isBoundedString(d.emergencyContact, 200)'),
+        );
+        expect(shapeGuard, contains('isBoundedString(d.emergencyPhone, 40)'));
+        // Both are guarded by a key-presence check, so an ordinary doc that
+        // never carried the pair still validates.
+        expect(shapeGuard, contains("!('emergencyContact' in d.keys())"));
+        expect(shapeGuard, contains("!('emergencyPhone' in d.keys())"));
+      });
+
+      test('both create and the self-update branch run isValidUserData', () {
+        // The caps are only worth anything if the shape guard is actually
+        // reached. Scoped to /users for the same reason as above.
+        final users = rules.substring(rules.indexOf('match /users/{userId}'));
+
+        // The call form, not the bare name — the name also appears in three
+        // explanatory comments in this file.
+        expect(
+          RegExp(
+            r'isValidUserData\(request\.resource\.data\)',
+          ).allMatches(users).length,
+          greaterThanOrEqualTo(2),
+          reason: 'isValidUserData is no longer wired into both write branches',
+        );
+      });
+
       test('the private/emergency subcollection is gated to admin + self', () {
         final block = RegExp(
           r'match /private/emergency \{(.*?)\n      \}',

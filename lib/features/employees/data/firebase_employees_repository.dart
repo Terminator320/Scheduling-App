@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/features/employees/domain/employees_failure.dart';
@@ -18,18 +19,28 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   FirebaseEmployeesRepository(
     FirebaseFirestore firestore, {
     FirebaseFunctions? functions,
+    AppLogger? logger,
   }) : _users = firestore.collection('users'),
-       _functions = functions ?? FirebaseFunctions.instance;
+       _functions = functions ?? FirebaseFunctions.instance,
+       _logger = logger ?? AppLogger();
 
   final CollectionReference<Map<String, dynamic>> _users;
   final FirebaseFunctions _functions;
+  final AppLogger _logger;
+
+  /// Ceiling shared by all three `users` listeners. These are live
+  /// `snapshots()` held open for the whole session, so an unbounded one grows
+  /// with the roster forever; the sort happens in Dart, so the cap is a safety
+  /// valve rather than a pagination window.
+  static const int _userStreamLimit = 1000;
 
   @override
   Stream<List<EmployeeRecord>> watchAllUsers() {
     return retryStream(
       () => _users
+          .limit(_userStreamLimit)
           .snapshots()
-          .map(_toSortedEmployeeRecords),
+          .map((s) => _toSortedEmployeeRecords(s, 'watchAllUsers')),
     );
   }
 
@@ -39,9 +50,11 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       () => _users
           .where('role', whereIn: ['employee', 'admin'])
           .where('status', isEqualTo: 'active')
-          // NOTE: no orderBy (watchAllUsers' orderBy excludes docs without name, dropping unnamed active employees).
+          // NOTE: no orderBy - it would exclude docs with no `name`, dropping
+          // unnamed active employees. Ordering is done in Dart below.
+          .limit(_userStreamLimit)
           .snapshots()
-          .map(_toSortedEmployeeRecords),
+          .map((s) => _toSortedEmployeeRecords(s, 'watchEmployees')),
     );
   }
 
@@ -50,14 +63,22 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     return retryStream(
       () => _users
           .where('status', isEqualTo: 'active')
+          .limit(_userStreamLimit)
           .snapshots()
-          .map(_toSortedEmployeeRecords),
+          .map((s) => _toSortedEmployeeRecords(s, 'watchAssignableUsers')),
     );
   }
 
   List<EmployeeRecord> _toSortedEmployeeRecords(
     QuerySnapshot<Map<String, dynamic>> snapshot,
+    String source,
   ) {
+    if (snapshot.docs.length >= _userStreamLimit) {
+      _logger.warn(
+        'EMP-LOAD $source hit the $_userStreamLimit-doc cap - '
+        'staff beyond it are not listed',
+      );
+    }
     return snapshot.docs
       .map((doc) => EmployeeRecord.fromMap(doc.id, doc.data()))
       .toList()

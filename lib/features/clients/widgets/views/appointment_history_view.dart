@@ -86,7 +86,7 @@ class _AppointmentHistoryViewState
 
   // Debounce before running a history search, same as the clients list. The
   // loaded-page filter covers the gap in the meantime so it still feels instant.
-  final _searchDebounce = Debouncer(kSearchDebounce);
+  late final Debouncer _searchDebounce;
 
   int? _year;
   String? _employeeId;
@@ -140,6 +140,14 @@ class _AppointmentHistoryViewState
   @override
   void initState() {
     super.initState();
+    // Read the logger here, not lazily: the debounce handler can fire after
+    // this view is gone, and `ref.read` on an unmounted consumer throws.
+    final logger = ref.read(loggerProvider);
+    _searchDebounce = Debouncer(
+      kSearchDebounce,
+      onError: (error, stackTrace) =>
+          logger.warn('HIST-SEARCH debounced search failed', error, stackTrace),
+    );
     // Load first page upfront so search/filter has data when view opens directly into filtered state.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _pagingController.fetchNextPage();

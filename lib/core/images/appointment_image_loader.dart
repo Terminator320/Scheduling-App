@@ -137,11 +137,16 @@ class AppointmentImageLoader {
     final onDisk = await _disk.read(key);
     if (onDisk != null) return onDisk;
 
+    // Read BEFORE the fetch: a sign-out during the round trip bumps the
+    // generation, and this is the value that lets the write-back notice.
+    final generation = _disk.generation;
     final bytes = await _fetch(() => _refFor(image), key);
     // An EMPTY result is a refusal or a transport failure. Caching either one
     // would outlive the thing that caused it — a change of entitlement, or the
     // network coming back — so neither store keeps it.
-    if (bytes.isNotEmpty) unawaited(_disk.write(key, bytes));
+    if (bytes.isNotEmpty) {
+      unawaited(_disk.write(key, bytes, generation: generation));
+    }
     return bytes;
   }
 

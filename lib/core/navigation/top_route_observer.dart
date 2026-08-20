@@ -7,35 +7,42 @@ import 'package:flutter/widgets.dart';
 /// the **topmost** route, so pushing too early would have splash replace the
 /// invite screen itself.
 ///
-/// `didRemove` only reacts when the REMOVED route is the current topmost one.
-/// `pushNamedAndRemoveUntil` pushes first and then removes lower routes, so
-/// those removals must still be ignored — but routes such as the hub's
-/// redirect shim remove themselves after a post-frame handoff, and without
-/// handling that case the observer stays stuck on a route that no longer
-/// exists.
+/// `didRemove` only reacts when the removed route IS the current topmost one,
+/// and the test is `identical`, never the route's name. `pushNamedAndRemoveUntil`
+/// (the account-disabled path) pushes first and then removes the routes beneath,
+/// so those removals must be ignored — and a name test does not ignore them
+/// when a lower route happens to share the just-pushed route's name, which
+/// would leave the observer reporting a route no longer on the stack. The
+/// override earns its place because the hub's redirect shim
+/// (`hub_shell.dart`) calls `removeRoute(this)` on ITSELF after a post-frame
+/// handoff; without handling that, the observer stays stuck on a route that
+/// no longer exists.
+///
+/// Tracking the route object rather than just its name is what makes the
+/// identity test possible; `currentRouteName` is derived from it.
 class TopRouteObserver extends NavigatorObserver {
-  String? _currentRouteName;
+  Route<dynamic>? _currentRoute;
 
-  String? get currentRouteName => _currentRouteName;
+  String? get currentRouteName => _currentRoute?.settings.name;
 
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _currentRouteName = route.settings.name;
+    _currentRoute = route;
   }
 
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    _currentRouteName = previousRoute?.settings.name;
+    _currentRoute = previousRoute;
   }
 
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
-    _currentRouteName = newRoute?.settings.name;
+    _currentRoute = newRoute;
   }
 
   @override
   void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (route.settings.name != _currentRouteName) return;
-    _currentRouteName = previousRoute?.settings.name;
+    if (!identical(route, _currentRoute)) return;
+    _currentRoute = previousRoute;
   }
 }

@@ -107,44 +107,14 @@ class AppointmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final compact = context.isCompact;
-    final status = AppointmentStatus.fromRaw(appointment.displayStatus);
-    final isCancelled = dimWhenCancelled && status.isCancelled;
-    final collapsed = collapseWhenClosed && appointment.isClosed;
-
-    final timeLabel = _timeLabel(context);
-    // Both stores, via the model — photos are moving to a subcollection and a
-    // doc can legitimately carry either the array or the denormalized count
-    // during the migration. See AppointmentRecord.hasPictures.
-    final hasPhotos = appointment.hasPictures;
-
-    // A personal job has no client, so it names itself in that slot rather
-    // than leaving the meta line as the crew alone.
-    final client = appointment.isPersonal
-        ? context.l10n.calendar_personal
-        : (clientName ?? appointment.clientName).trim();
-    // The crew is now the avatar stack, so the meta text is the client alone.
-    // A job with no client to name (an unassigned legacy record) falls back to
-    // the crew names rather than leaving the line blank.
-    final metaLine = client.isNotEmpty ? client : (_crewLabel(context) ?? '');
-
-    final semanticsLabel = [
-      appointment.title,
-      statusLabel(context.l10n, status),
-      timeLabel,
-      for (final member in crew) member.name,
-      if (client.isNotEmpty) client,
-      // The glyph is the only cue that a job carries photos, so it has to be
-      // spoken — the card excludes its subtree's own semantics.
-      if (hasPhotos) context.l10n.calendar_hasPhotos,
-    ].join(', ');
+    final model = _CardModel.from(context, this);
 
     final card = TapScale(
       child: DecoratedBox(
         decoration: appCardDecoration(
           theme,
           radius: AppRadius.rCard,
-          color: _cardColor(theme, status: status, collapsed: collapsed),
+          color: _cardColor(theme, model),
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(AppRadius.rCard),
@@ -153,7 +123,7 @@ class AppointmentCard extends StatelessWidget {
             child: InkWell(
               onTap: onTap,
               child: Semantics(
-                label: semanticsLabel,
+                label: model.semanticsLabel,
                 excludeSemantics: true,
                 // IntrinsicHeight stretches the crew bar to the card's full
                 // height. Nothing inside this subtree may use LayoutBuilder,
@@ -169,18 +139,7 @@ class AppointmentCard extends StatelessWidget {
                           _barColors(theme),
                         ),
                       ),
-                      Expanded(
-                        child: _body(
-                          theme: theme,
-                          status: status,
-                          timeLabel: timeLabel,
-                          metaLine: metaLine,
-                          compact: compact,
-                          collapsed: collapsed,
-                          isCancelled: isCancelled,
-                          hasPhotos: hasPhotos,
-                        ),
-                      ),
+                      Expanded(child: _body(theme, model)),
                     ],
                   ),
                 ),
@@ -191,7 +150,7 @@ class AppointmentCard extends StatelessWidget {
       ),
     );
 
-    return isCancelled ? Opacity(opacity: 0.6, child: card) : card;
+    return model.isCancelled ? Opacity(opacity: 0.6, child: card) : card;
   }
 
   /// One band per crew member rather than the first assignee's colour alone: a
@@ -212,13 +171,11 @@ class AppointmentCard extends StatelessWidget {
   /// Selection wins outright; a collapsed *done* job otherwise takes the same
   /// success token the "Complete" chip fills with, so the card and its own
   /// chip can't disagree. (In light the two are the same green anyway.)
-  Color _cardColor(
-    ThemeData theme, {
-    required AppointmentStatus status,
-    required bool collapsed,
-  }) {
+  Color _cardColor(ThemeData theme, _CardModel model) {
     if (selected) return theme.colorScheme.secondaryContainer;
-    if (collapsed && status.isDone) return theme.statusColors.successContainer;
+    if (model.collapsed && model.status.isDone) {
+      return theme.statusColors.successContainer;
+    }
     return theme.colorScheme.surface;
   }
 
@@ -228,25 +185,16 @@ class AppointmentCard extends StatelessWidget {
   /// Collapsed drops the crew avatars and puts the time beside the client on
   /// one line. The colour bar still carries the crew, so *who* survives the
   /// collapse; only the faces go.
-  Widget _body({
-    required ThemeData theme,
-    required AppointmentStatus status,
-    required String timeLabel,
-    required String metaLine,
-    required bool compact,
-    required bool collapsed,
-    required bool isCancelled,
-    required bool hasPhotos,
-  }) {
+  Widget _body(ThemeData theme, _CardModel model) {
     final titleRow = _TitleRow(
       title: appointment.title,
-      status: status,
-      compact: compact,
-      isCancelled: isCancelled,
-      hasPhotos: hasPhotos,
+      status: model.status,
+      compact: model.compact,
+      isCancelled: model.isCancelled,
+      hasPhotos: model.hasPhotos,
     );
 
-    if (collapsed) {
+    if (model.collapsed) {
       return ConstrainedBox(
         constraints: const BoxConstraints(minHeight: _kClosedMinHeight),
         child: Padding(
@@ -257,7 +205,7 @@ class AppointmentCard extends StatelessWidget {
             children: [
               titleRow,
               const SizedBox(height: 5),
-              _ClosedMetaRow(time: timeLabel, label: metaLine),
+              _ClosedMetaRow(time: model.timeLabel, label: model.metaLine),
             ],
           ),
         ),
@@ -274,10 +222,10 @@ class AppointmentCard extends StatelessWidget {
         children: [
           titleRow,
           const SizedBox(height: 7),
-          Text(timeLabel, style: theme.monoType.data),
-          if (metaLine.isNotEmpty) ...[
+          Text(model.timeLabel, style: theme.monoType.data),
+          if (model.metaLine.isNotEmpty) ...[
             const SizedBox(height: 7),
-            _CrewRow(crew: crew, label: metaLine, compact: compact),
+            _CrewRow(crew: crew, label: model.metaLine, compact: model.compact),
           ],
           if (footer != null) ...[
             const SizedBox(height: AppSpacing.sp8),
@@ -320,6 +268,74 @@ class AppointmentCard extends StatelessWidget {
     final space = trimmed.indexOf(' ');
     return space == -1 ? trimmed : trimmed.substring(0, space);
   }
+}
+
+/// Everything `build` derives before it builds anything: the three variant
+/// flags (compact / collapsed / cancelled), the two composed strings and the
+/// spoken label.
+///
+/// Pulled out because `_body` needed most of them and was taking them one
+/// named parameter at a time — eight of them, which is what made the three
+/// variants hard to read side by side.
+class _CardModel {
+  const _CardModel({
+    required this.status,
+    required this.compact,
+    required this.collapsed,
+    required this.isCancelled,
+    required this.hasPhotos,
+    required this.timeLabel,
+    required this.metaLine,
+    required this.semanticsLabel,
+  });
+
+  factory _CardModel.from(BuildContext context, AppointmentCard card) {
+    final appointment = card.appointment;
+    final status = AppointmentStatus.fromRaw(appointment.displayStatus);
+    final timeLabel = card._timeLabel(context);
+    // Both stores, via the model — photos are moving to a subcollection and a
+    // doc can legitimately carry either the array or the denormalized count
+    // during the migration. See AppointmentRecord.hasPictures.
+    final hasPhotos = appointment.hasPictures;
+
+    // A personal job has no client, so it names itself in that slot rather
+    // than leaving the meta line as the crew alone.
+    final client = appointment.isPersonal
+        ? context.l10n.calendar_personal
+        : (card.clientName ?? appointment.clientName).trim();
+
+    return _CardModel(
+      status: status,
+      compact: context.isCompact,
+      collapsed: card.collapseWhenClosed && appointment.isClosed,
+      isCancelled: card.dimWhenCancelled && status.isCancelled,
+      hasPhotos: hasPhotos,
+      timeLabel: timeLabel,
+      // The crew is now the avatar stack, so the meta text is the client
+      // alone. A job with no client to name (an unassigned legacy record)
+      // falls back to the crew names rather than leaving the line blank.
+      metaLine: client.isNotEmpty ? client : (card._crewLabel(context) ?? ''),
+      semanticsLabel: [
+        appointment.title,
+        statusLabel(context.l10n, status),
+        timeLabel,
+        for (final member in card.crew) member.name,
+        if (client.isNotEmpty) client,
+        // The glyph is the only cue that a job carries photos, so it has to be
+        // spoken — the card excludes its subtree's own semantics.
+        if (hasPhotos) context.l10n.calendar_hasPhotos,
+      ].join(', '),
+    );
+  }
+
+  final AppointmentStatus status;
+  final bool compact;
+  final bool collapsed;
+  final bool isCancelled;
+  final bool hasPhotos;
+  final String timeLabel;
+  final String metaLine;
+  final String semanticsLabel;
 }
 
 class _TitleRow extends StatelessWidget {

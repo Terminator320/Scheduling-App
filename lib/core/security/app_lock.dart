@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/security/biometric_auth_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
@@ -133,19 +134,22 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
   Future<void> _authenticate() async {
     if (_authenticating || !mounted) return;
     _authenticating = true;
+    // Riverpod 3 throws on `ref.read` from an unmounted consumer, so every
+    // provider this path needs is resolved before the first await.
     final logger = ref.read(loggerProvider);
+    final notices = ref.read(noticeServiceProvider);
     final service = ref.read(biometricAuthServiceProvider);
     try {
       final available = await service.isAvailable();
       if (!mounted) return;
       if (!available) {
-        logger.warn('APPLOCK unavailable after lock engaged; disabling gate');
-        try {
-          await ref.read(appLockEnabledProvider.notifier).setEnabled(value: false);
-        } catch (e, st) {
-          logger.warn('APPLOCK disable after unavailable auth failed', e, st);
-        }
-        if (!mounted) return;
+        // Release the gate for THIS SESSION only, and say so. Never persist it:
+        // `isAvailable()` is `try { isDeviceSupported() } catch { false }`, so
+        // it returns false for the pre-first-unlock `local_auth` channel window
+        // this whole subsystem exists to handle — and writing the flag there
+        // turns the user's app lock off forever, silently, on one hiccup.
+        logger.warn('APPLOCK unavailable after lock engaged; opening for this session');
+        notices.error(context.l10n.settings_appLockUnavailable);
         setState(() {
           _locked = false;
           _lockedUnresolved = false;

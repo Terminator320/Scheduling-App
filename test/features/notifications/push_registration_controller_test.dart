@@ -153,4 +153,102 @@ void main() {
       ),
     ).called(1);
   });
+
+  group('unregisterCurrentDevice', () {
+    setUp(() {
+      when(
+        () => fcm.deleteToken(
+          userDocId: any(named: 'userDocId'),
+          token: any(named: 'token'),
+        ),
+      ).thenAnswer((_) async {});
+      when(() => service.deleteToken()).thenAnswer((_) async {});
+    });
+
+    test('a session that never registered still deletes the stale row', () async {
+      // `_registeredDocId`/`_registeredToken` are set only on a fully-successful
+      // sync, so an incomplete session left one `fcmTokens` row per device that
+      // the server keeps pushing to - `syncUsersByUid` purges those on DISABLE,
+      // not on sign-out, so they just accumulate.
+      when(() => service.requestPermission()).thenAnswer((_) async => false);
+      final container = makeContainer(const {
+        'role': 'employee',
+        'status': 'active',
+      });
+      addTearDown(container.dispose);
+      await settleDoc(container);
+      final controller = container.read(pushRegistrationControllerProvider);
+      await controller.sync();
+
+      await controller.unregisterCurrentDevice();
+
+      verify(
+        () => fcm.deleteToken(userDocId: 'doc-1', token: 'tok-1'),
+      ).called(1);
+      verify(() => service.deleteToken()).called(1);
+    });
+
+    test('deletes nothing when the device has no token at all', () async {
+      when(() => service.currentToken()).thenAnswer((_) async => null);
+      when(() => auth.currentUser).thenReturn(null);
+      final container = makeContainer(const {});
+      addTearDown(container.dispose);
+      await settleDoc(container);
+
+      await container
+          .read(pushRegistrationControllerProvider)
+          .unregisterCurrentDevice();
+
+      verifyNever(
+        () => fcm.deleteToken(
+          userDocId: any(named: 'userDocId'),
+          token: any(named: 'token'),
+        ),
+      );
+    });
+
+    test('a sync resuming mid-teardown does not re-register the device', () async {
+      // Teardown runs BEFORE signOut(), so the resumed body still holds a valid
+      // credential: FCM would mint a fresh token (the old one just invalidated)
+      // and this would upsert it, leaving a signed-out device registered and
+      // still receiving that account's pushes - and the write SUCCEEDS, so
+      // nothing logs an error.
+      final release = Completer<UserUidMatch?>();
+      var call = 0;
+      when(() => employees.findUserByUid(any())).thenAnswer((_) {
+        call++;
+        return call == 1
+            ? release.future
+            : Future<UserUidMatch?>.value(
+                const UserUidMatch(id: 'doc-1', data: {}),
+              );
+      });
+
+      final container = makeContainer(const {
+        'role': 'employee',
+        'status': 'active',
+      });
+      addTearDown(container.dispose);
+      await settleDoc(container);
+      final controller = container.read(pushRegistrationControllerProvider);
+
+      final inFlight = controller.sync();
+      await pumpEventQueue();
+
+      await controller.unregisterCurrentDevice();
+      release.complete(const UserUidMatch(id: 'doc-1', data: {}));
+      await inFlight;
+      await pumpEventQueue();
+
+      verifyNever(
+        () => fcm.upsertToken(
+          userDocId: any(named: 'userDocId'),
+          token: any(named: 'token'),
+          platform: any(named: 'platform'),
+          locale: any(named: 'locale'),
+          uid: any(named: 'uid'),
+        ),
+      );
+    });
+  });
 }

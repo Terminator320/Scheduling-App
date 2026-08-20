@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
@@ -50,7 +51,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     notes: TextEditingController(),
     materials: TextEditingController(),
   );
-  final _clientSearchDebounce = Debouncer(kSearchDebounce);
+  late final Debouncer _clientSearchDebounce;
   late final _provider = addEventControllerProvider(widget.initialDate);
 
   // Admin-only surface: this sheet is only reachable from the calendar FAB
@@ -65,6 +66,17 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   @override
   void initState() {
     super.initState();
+    // Read the logger here, not lazily: the debounce handler can fire after
+    // this sheet is dismissed, and `ref.read` on an unmounted consumer throws.
+    final logger = ref.read(loggerProvider);
+    _clientSearchDebounce = Debouncer(
+      kSearchDebounce,
+      onError: (error, stackTrace) => logger.warn(
+        'CLI-SEARCH debounced client search failed',
+        error,
+        stackTrace,
+      ),
+    );
     final initialDate = widget.initialDate;
     if (initialDate != null) {
       _controllers.date.text = DateUtilsHelper.formatDate(initialDate);

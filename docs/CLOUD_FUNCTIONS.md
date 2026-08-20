@@ -210,7 +210,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `deleteEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (pending-account row) | — | App Check ✓ · admin · durable 20/hr·uid |
 | `changeEmployeeEmail` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (inside `updateEmployee`, when the email changed on a doc with a `uid`); `self_email_service.dart` (a person changing their own) | — | App Check ✓ · admin **or self** · non-admin also needs re-auth <5 min · durable 5/hr·uid |
 | `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
-| `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin |
+| `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin · durable 60/hr |
 | `waveSetImportSchedule` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings cadence picker) | — | App Check ✓ · admin · durable 20/hr |
 | `waveImportCustomers` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (`syncCustomers`, Settings "Sync with Wave") | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable 5/hr · 300s |
 | `deleteClient` | callable | `onCall` | `clients.js` | `firebase_clients_repository.dart` | — | App Check ✓ · admin · durable 20/hr |
@@ -220,7 +220,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/triggers.js` | any `clients` doc write | `WAVE_FULL_ACCESS_TOKEN` | `retry: true` · 300s · enqueues **and pushes** |
 | `validateUploadedImage` | trigger | `onObjectFinalized` (Storage) | `maintenance.js` | `appointments/*/images/*` upload | — | region `us-east1` |
 | `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | no `retry` (dupe push worse than missed) |
-| `waveRetryFailedJobs` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings, requeue dead outbox jobs) | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable |
+| `waveRetryFailedJobs` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings, requeue dead outbox jobs) | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable 10/hr |
 | `cascadeDeleteAppointmentImages` | trigger | `onDocumentDeleted appointments/{id}` | `appointment_images.js` | any appointment delete | — | `retry: true` · **rethrows** |
 | `recountAppointmentPictures` | trigger | `onDocumentWritten appointments/{id}/images/{imageId}` | `appointment_images.js` | any photo doc write | — | `retry: true` · absolute `count()` |
 | `purgeExpiredHistory` | scheduled | `0 3 1 1,4,7,10 *` — quarterly, 1st of Jan/Apr/Jul/Oct 03:00 (Toronto) | `maintenance.js` | quarterly | — | `maxInstances: 1` · 1800s |
@@ -882,7 +882,10 @@ path makes live Wave calls (`whoami` + `listBusinesses`) and is rate-limited
 ### `waveGetConnection` — `wave/callables.js`
 Admin-only read of `wave/connection` — the **only** Wave read path for the app
 (the Settings Wave section calls it on mount to show "Connected to X"). No
-secret, no rate limit.
+secret. **Durably rate-limited at 60/hour per admin uid** (`wave-connection`) —
+a higher ceiling than the write callables because this one is called on every
+Settings mount, but it is a limiter like all the rest, so don't "fix the gap"
+by adding a second one.
 
 ### `waveSetImportSchedule` — `wave/callables.js`
 Admin-only setter for the automatic-import cadence — writes the `importSchedule`
@@ -902,8 +905,10 @@ future rename still has to solve (deploy both names, then drop the old one
 once no build calls it).
 
 **Push, then pull, in that order.** `drainForSync` first drains pending
-`waveSyncQueue` jobs to Wave, then `importCustomers` pulls Wave customers back
-(paginates ~650 customers over ~7 Wave pages). The order is the correctness
+`waveSyncQueue` jobs to Wave, then `importCustomers` (`wave/customers_import.js`
+— the pull half was split out of `wave/customers.js`, which keeps the push half
+and re-exports `importCustomers`, so no call site changed) pulls Wave customers
+back (paginates ~650 customers over ~7 Wave pages). The order is the correctness
 rule: the outbox holds edits the app already accepted, so importing first would
 overwrite them with the Wave rows they are on their way to replace.
 
@@ -915,7 +920,9 @@ no-ops. The drain is bounded and its query only takes jobs already due, so a job
 backed off after a transient Wave error survives it. Both this callable and
 `runWaveDaily` therefore pass `importCustomers` a `skipClientIds` set
 from `listOutstandingClientIds` (`wave/worker.js`, covering `queued` and
-`inflight`); skipped clients are counted as `skippedPending`.
+`inflight`); skipped clients are counted as `skippedPending`. The set is
+injected rather than read inside `wave/customers_import.js` because `worker.js`
+already requires that module and reaching back would close a cycle.
 
 The push half is **best-effort and bounded** — `SYNC_PUSH_BATCH_LIMIT` (20) and
 `SYNC_PUSH_BUDGET_MS` (20 s), with the `waveUpsertCustomer` trigger having
@@ -964,7 +971,10 @@ sort — it runs server-side, so Wave returns only what changed instead of us
 paging everything and stopping early.
 
 `importCustomers` therefore takes an optional `since` (ISO-8601). Present → the
-`LIST_CUSTOMERS_SINCE` document; absent → the full `LIST_CUSTOMERS`. These are
+`LIST_CUSTOMERS_SINCE` document; absent → the full `LIST_CUSTOMERS`. Both
+documents (and `readBusinessId`) still live in `wave/customers.js` and are
+reached from `wave/customers_import.js` through its lazy `pushHalf()` helper,
+so the split adds no second copy of the query. These are
 **two separate documents on purpose**: omitting a variable to make an argument
 "not present" is valid GraphQL, but relying on that against a third-party
 server risks it being read as `modifiedAtAfter: null` — a full import that
@@ -972,7 +982,8 @@ imports nothing and reports success. Both must keep passing strings as
 variables; Wave refuses inline `String` arguments (see `functions/CLAUDE.md`).
 
 The watermark lives on `wave/connection` (`customerDeltaSince`,
-`lastFullImportAt`) and `importCustomers` stays stateless about it. The whole
+`lastFullImportAt`) and `importCustomers` (`wave/customers_import.js`) stays
+stateless about it. The whole
 read → decide → import → advance sequence has **one owner**,
 `importWithWatermark` in `wave/sync_run.js`, used by both the interactive sync
 and the daily `runWaveDaily`; the decisions are the pure `resolveImportWindow` /
@@ -1009,7 +1020,8 @@ because the two cadences interact.
 - **A watermark ahead of now is refused**, not honoured — otherwise a clock or
   data fault makes every subsequent run import nothing, forever.
 
-`buildWaveIdIndex` is now built **lazily**, so a delta run that finds nothing
+`buildWaveIdIndex` (`wave/customers_import.js`) is now built **lazily**, so a
+delta run that finds nothing
 changed costs one Wave call and zero Firestore reads instead of ~650 document
 reads to resolve nothing. When a delta does have work, it still reads the whole
 `clients` collection — a targeted `whereIn` lookup over just the changed wave

@@ -53,7 +53,14 @@ void main() {
     );
   });
 
-  tearDown(() {
+  tearDown(() async {
+    // Drain first: the loader's write-back is deliberately unawaited, so a
+    // fetch that resolved late can still be creating files here. `clear()`
+    // goes through the cache's own mutation queue, so it lands behind every
+    // pending write - deleting the directory underneath one fails on Windows
+    // with "directory is not empty", which surfaced as a failure attributed to
+    // whichever test happened to run at the time.
+    await disk.clear();
     if (cacheRoot.existsSync()) cacheRoot.deleteSync(recursive: true);
   });
 
@@ -196,8 +203,21 @@ void main() {
     // keeps this deterministic rather than pumping a guessed number of turns.
     var drained = 0;
     while (drained < paths.length) {
-      for (var turn = 0; turn < 50 && gates.isEmpty; turn++) {
+      // Wait until the batch has stopped GROWING, not merely until one gate
+      // exists: each item consults the disk cache before it reaches Storage,
+      // so a batch opens its gates over several microtask turns, and draining
+      // a half-open batch understates the peak — which is what made this test
+      // report 3 on some runs and 4 on others.
+      var seen = -1;
+      var stable = 0;
+      for (var turn = 0; turn < 400 && (gates.isEmpty || stable < 8); turn++) {
         await Future<void>.delayed(Duration.zero);
+        if (gates.length == seen) {
+          stable += 1;
+        } else {
+          seen = gates.length;
+          stable = 0;
+        }
       }
       final open = gates.keys.toList();
       expect(open, isNotEmpty);

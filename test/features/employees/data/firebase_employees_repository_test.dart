@@ -94,6 +94,7 @@ void main() {
       () => query.where(any(), isEqualTo: any(named: 'isEqualTo')),
     ).thenReturn(query);
     when(() => query.limit(any())).thenReturn(query);
+    when(() => collection.limit(any())).thenReturn(query);
     when(() => query.get()).thenAnswer((_) async => snapshot);
     when(() => snapshot.docs).thenReturn(const []);
 
@@ -810,7 +811,8 @@ void main() {
           () => collection.where('role', whereIn: ['employee', 'admin']),
         ).called(1);
         verify(() => query.where('status', isEqualTo: 'active')).called(1);
-        verifyNever(() => query.limit(any()));
+        // Bounded: this is a live listener held open for the whole session.
+        verify(() => query.limit(1000)).called(1);
       },
     );
 
@@ -821,7 +823,7 @@ void main() {
         await Future<void>.delayed(Duration.zero);
 
         verify(() => collection.where('status', isEqualTo: 'active')).called(1);
-        verifyNever(() => query.limit(any()));
+        verify(() => query.limit(1000)).called(1);
       },
     );
 
@@ -897,8 +899,11 @@ void main() {
       final records = await repo().watchAllUsers().first;
 
       expect(records.map((e) => e.id).toList(), ['a', 'z']);
+      // No orderBy - it would exclude docs with no `name`, dropping an unnamed
+      // user off the admin roster. The sort happens in Dart instead, which is
+      // also where the cap warn lives.
       verifyNever(() => collection.orderBy(any()));
-      verifyNever(() => query.limit(any()));
+      verify(() => collection.limit(1000)).called(1);
     });
 
     test('watchEmployees resubscribes past a permission-denied error', () {

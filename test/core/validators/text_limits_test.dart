@@ -80,6 +80,39 @@ void main() {
       return caps.reduce((a, b) => a < b ? a : b);
     }
 
+    /// The cap `isValidClientData` puts on `field`, scoped to that ONE
+    /// validator's body.
+    ///
+    /// `rulesCapFor` takes the MINIMUM across the whole file, which is right
+    /// for a value the app writes into more than one collection but cannot
+    /// express a client cap that is deliberately WIDER than the appointment
+    /// cap on the same field name: `address` is 533 on `/clients` and 500 on
+    /// `/appointments`, so an unscoped lookup measures a client-only write
+    /// path against a bound belonging to a collection it never touches.
+    ///
+    /// The body is extracted first rather than regexing the whole file for
+    /// the inline `data.x.size() <= N` form. That form happens to be unique
+    /// to this validator today, which makes an unscoped search right by
+    /// accident of file order — the trap
+    /// `appointment_span_rules_test.dart:80-83` documents and scopes around.
+    int clientRulesCapFor(String field) {
+      final body = RegExp(
+        r'function isValidClientData\(data\) \{(.*?)\n    \}',
+        dotAll: true,
+      ).firstMatch(rules);
+      expect(body, isNotNull, reason: 'isValidClientData not found');
+
+      final match = RegExp(
+        r'data\.' + RegExp.escape(field) + r'\.size\(\)\s*<=\s*(\d+)',
+      ).firstMatch(body!.group(1)!);
+      expect(
+        match,
+        isNotNull,
+        reason: 'isValidClientData puts no length cap on "$field"',
+      );
+      return int.parse(match!.group(1)!);
+    }
+
     // Appointment fields — all four are currently exactly equal, so a bump on
     // either side breaks the write. That is the point of pinning them.
     test('appointment title', () {
@@ -122,26 +155,6 @@ void main() {
         lessThanOrEqualTo(rulesCapFor('name')),
       );
     });
-
-    /// The cap `isValidClientData` puts on `field`.
-    ///
-    /// Scoped to the inline `data.x.size() <= N` form, which only the client
-    /// validator is written with — `rulesCapFor` above takes the MINIMUM
-    /// across every collection, so it cannot express a client cap that is
-    /// deliberately WIDER than the appointment cap on the same field name.
-    int clientRulesCapFor(String field) {
-      final matches = RegExp(
-        r'data\.' + RegExp.escape(field) + r'\.size\(\)\s*<=\s*(\d+)',
-      ).allMatches(rules);
-      expect(
-        matches,
-        isNotEmpty,
-        reason: 'no isValidClientData cap found for "$field"',
-      );
-      return matches
-          .map((m) => int.parse(m.group(1)!))
-          .reduce((a, b) => a < b ? a : b);
-    }
 
     test('the widest name composeStored can emit fits the client cap', () {
       // `composeStored` returns the phone number for a person and the stripped
@@ -237,21 +250,33 @@ void main() {
       };
       expect(caps, isNotEmpty);
 
-      // `city`/`province`/`country`/`postalCode` are capped inside the rules'
-      // address family rather than by their own bare name, so they have no
-      // `rulesCapFor` entry to compare against.
-      const checked = {
-        'name',
-        'firstName',
-        'lastName',
-        'email',
-        'phone',
-        'mobile',
-      };
-      for (final entry in caps.entries.where((e) => checked.contains(e.key))) {
+      // Deny by default. An allowlist here filtered `caps` down to 6 of the 12
+      // fields the map defines and skipped the rest in silence, which is the
+      // one thing this test exists to prevent: adding a capped field to
+      // `mappers.js` has to FAIL here until it is checked, not sail through.
+      for (final entry in caps.entries) {
+        final rulesCap = switch (entry.key) {
+          'name' ||
+          'firstName' ||
+          'lastName' ||
+          'email' ||
+          'phone' ||
+          'mobile' ||
+          'address' ||
+          'addressLine2' ||
+          'city' ||
+          'province' ||
+          'country' ||
+          'postalCode' => clientRulesCapFor(entry.key),
+          _ => fail(
+            'IMPORT_FIELD_CAPS.${entry.key} is new and unchecked. Add it here '
+            'with the /clients rules cap it must clear — an import cap above '
+            'the rules cap writes a doc the app can never update again.',
+          ),
+        };
         expect(
           entry.value,
-          lessThanOrEqualTo(rulesCapFor(entry.key)),
+          lessThanOrEqualTo(rulesCap),
           reason: 'IMPORT_FIELD_CAPS.${entry.key} exceeds its rules cap',
         );
       }

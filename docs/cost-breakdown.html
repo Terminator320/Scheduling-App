@@ -366,7 +366,8 @@
     <p class="lede">
       Across every function, trigger, and supporting service, the backend runs
       almost entirely inside Google's free tiers &mdash; a realistic
-      <b>~$0.30/month</b> (six Cloud Scheduler jobs, only three free), with a
+      <b>$0/month</b> recurring &mdash; the three Cloud Scheduler jobs sit
+      exactly on the three-job free allowance &mdash; with a
       ceiling near <b>$5</b>. No function's compute is a lever. Two Google Maps
       Platform SKUs scale cost: <b>Places autocomplete</b> (bills per keystroke)
       and the <b>Routes API</b> the travel-time reminder sweep now calls
@@ -413,8 +414,12 @@
       (~9,000 vCPU-seconds) sits far under the <b>180,000 vCPU-s</b> free tier.
       You'd need roughly <b>110&times; more traffic</b> to leave the free tier on
       invocations. Cloud Scheduler was the lone recurring charge &mdash; six timer
-      jobs against three free, ~$0.30/month. <b>The three schedules were merged
-      down to three on 2026-08-13</b>, so nothing recurring is left.
+      jobs against three free, ~$0.30/month. <b>Three of those six schedules were
+      retired or merged away on 2026-08-13, taking the count from six to
+      three</b>, so nothing recurring is left. What runs now:
+      <code>sendUpcomingJobReminders</code> (every 5 minutes),
+      <code>sendDailyJobDigest</code> (18:00 daily) and
+      <code>purgeExpiredHistory</code> (quarterly).
     </p>
   </div>
 
@@ -658,8 +663,10 @@
   <section>
     <h2>Supporting services</h2>
     <p class="section-note">
-      Where any real cost would first appear. Cloud Scheduler's fourth-through-sixth
-      job is the only guaranteed charge (~$0.30/mo); the usage-scaling external
+      Where any real cost would first appear. Cloud Scheduler used to be the only
+      guaranteed charge, at ~$0.30/mo for its fourth-through-sixth job; three jobs
+      run now, which is exactly the free allowance, so a <em>fourth</em> timer job
+      is what would put that charge back. The usage-scaling external
       APIs are Google Places and the Routes API (both Maps Platform, each with its
       own 10K-free-per-SKU cap). FCM push and Wave Accounting bill nothing per call.
     </p>
@@ -797,7 +804,7 @@
           <tr>
             <td class="fn">Current scale</td>
             <td>~900 appts &middot; ~450 address lookups &middot; ~1,350 photos</td>
-            <td class="num"><span class="pill pill--free">~$0.30&ndash;5</span></td>
+            <td class="num"><span class="pill pill--free">$0&ndash;5</span></td>
           </tr>
           <tr>
             <td class="fn">~3&ndash;5&times; growth</td>

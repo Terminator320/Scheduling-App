@@ -51,6 +51,20 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   static const Duration _searchCacheTtl = Duration(minutes: 2);
   static const int _historySearchPageSize = 500;
 
+  /// Ceiling on the live business-wide range listeners. Paging fixed the silent
+  /// truncation these used to have, but a listener still has to be bounded: it
+  /// is re-established per month page and held open by the calendar, the day
+  /// route, the drawer badge, the roster reducer and the dashboard at once.
+  static const int _rangeStreamLimit = 3000;
+
+  /// Ceiling on the paged history-search scan window. The archive is only
+  /// pruned at the 2-year retention mark, so without this the first committed
+  /// keystroke walks every terminal appointment the business has ever had.
+  static const int _historySearchScanLimit = 5000;
+
+  /// Ceiling on one client's paged job history.
+  static const int _clientHistoryScanLimit = 1000;
+
   final Map<String, _CachedHistorySearch> _searchCache = {};
   _CachedHistoryScanWindow? _scanWindow;
 
@@ -284,9 +298,17 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   List<AppointmentRecord> _mapRangeSnapshot(
     QuerySnapshot<Map<String, dynamic>> snapshot,
-  ) => snapshot.docs
-      .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
-      .toList();
+  ) {
+    if (snapshot.docs.length >= _rangeStreamLimit) {
+      _logger.warn(
+        'APPT-LOAD range query hit the $_rangeStreamLimit-doc cap - '
+        'appointments beyond it are not shown',
+      );
+    }
+    return snapshot.docs
+        .map((doc) => AppointmentRecord.fromMap(doc.id, doc.data()))
+        .toList();
+  }
 
   Query<Map<String, dynamic>> _rangeQuery(
     AppointmentDateRange range, {
@@ -302,7 +324,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
           isGreaterThanOrEqualTo: Timestamp.fromDate(range.fetchStart),
         )
         .where('startTime', isLessThan: Timestamp.fromDate(range.end))
-        .orderBy('startTime');
+        .orderBy('startTime')
+        .limit(_rangeStreamLimit);
   }
 
   @override
@@ -354,6 +377,13 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     while (true) {
       final snapshot = await query.get();
       docs.addAll(snapshot.docs);
+      if (docs.length >= _clientHistoryScanLimit) {
+        _logger.warn(
+          'APPT-LOAD client history hit the $_clientHistoryScanLimit-doc cap - '
+          'older visits are not listed',
+        );
+        break;
+      }
       if (snapshot.docs.length < limit) break;
       query = query.startAfterDocument(snapshot.docs.last);
     }
@@ -404,6 +434,13 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         docs.addAll([
           for (final doc in snapshot.docs) (id: doc.id, data: doc.data()),
         ]);
+        if (docs.length >= _historySearchScanLimit) {
+          _logger.warn(
+            'HIST-SEARCH scan window hit the $_historySearchScanLimit-doc cap - '
+            'older jobs are not searchable',
+          );
+          break;
+        }
         if (snapshot.docs.length < _historySearchPageSize) break;
         query = query.startAfterDocument(snapshot.docs.last);
       }

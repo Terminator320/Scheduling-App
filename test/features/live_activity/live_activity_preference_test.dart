@@ -152,10 +152,15 @@ void main() {
       addTearDown(fresh.dispose);
 
       final notifier = fresh.read(liveActivityEnabledProvider.notifier);
-      await notifier.setEnabled(value: true);
+      // Deliberately NOT awaited: `setEnabled` bumps the revision and sets the
+      // state synchronously, and its own `getInstance()` is queued behind the
+      // very read we are holding open - awaiting it here deadlocks the test
+      // rather than exercising the race.
+      final write = notifier.setEnabled(value: true);
       expect(fresh.read(liveActivityEnabledProvider), isTrue);
 
       releaseRead.complete();
+      await write;
       await notifier.ready;
 
       expect(fresh.read(liveActivityEnabledProvider), isTrue);

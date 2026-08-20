@@ -34,7 +34,6 @@ class _LoginState extends ConsumerState<Login> {
   String? _emailError;
   String? _passwordError;
   String? _bannerError;
-  String? _bannerSuccess;
 
   @override
   void initState() {
@@ -87,11 +86,8 @@ class _LoginState extends ConsumerState<Login> {
 
   void _onFieldChanged() {
     if (_submitted) _validate();
-    if (_bannerError != null || _bannerSuccess != null) {
-      setState(() {
-        _bannerError = null;
-        _bannerSuccess = null;
-      });
+    if (_bannerError != null) {
+      setState(() => _bannerError = null);
     }
   }
 
@@ -101,7 +97,6 @@ class _LoginState extends ConsumerState<Login> {
     setState(() {
       _submitted = true;
       _bannerError = null;
-      _bannerSuccess = null;
     });
 
     if (!_validate()) return;
@@ -186,7 +181,6 @@ class _LoginState extends ConsumerState<Login> {
       _emailError = null;
       _passwordError = null;
       _bannerError = null;
-      _bannerSuccess = null;
     });
   }
 
@@ -201,12 +195,12 @@ class _LoginState extends ConsumerState<Login> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AuthBanner(
-            message: _bannerError ?? _bannerSuccess,
-            kind: _bannerError != null
-                ? AuthBannerKind.error
-                : AuthBannerKind.success,
-          ),
+          // Error-only: this screen has no success message to show - it
+          // navigates away on success. The `_bannerSuccess` field it used to
+          // read here was assigned `null` at all four sites and nothing else,
+          // so the success branch was unreachable (the same dead state the
+          // audit found on `AccountSetupScreen`, in a file it did not name).
+          AuthBanner(message: _bannerError),
           const SizedBox(height: AppSpacing.sp16),
           AuthEmailField(
             label: context.l10n.common_email,

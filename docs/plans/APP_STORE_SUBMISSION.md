@@ -604,19 +604,33 @@ In French and English:
 ES Pro is built for a plumbing crew by the company that runs one. Sign-in is by invitation from your administrator, so the whole team stays on one shared schedule.
 ```
 
-**What's New in This Version** — v1.45.0+72, the 4th update (2026-08-11)
+**What's New in This Version** — v1.46.2+75 (2026-08-16)
 ```
-• My details — update your own phone number, working days and hours, on-call
-  status, emergency contact, and sign-in email from Settings.
-• Redesigned Dashboard — Today, Week and Month views, jobs booked per day
-  against your daily limit, and new alerts for accounts that were never set up
-  and jobs booked outside someone's availability.
-• Redesigned History — grouped by month with the date beside each job, plus
-  quick filters for Complete and Cancelled work.
-• Multi-day jobs now show on every day they run, including the home-screen
-  widget, Siri and notifications, with a "Day 3 of 5" counter.
-• Time-to-leave alerts can now be switched on or off per person.
+• Pick a date on a real calendar. Tapping a date row drops the whole month down
+  underneath it, instead of a spinning wheel that showed three days at a time
+  and covered the form. Start and end dates each get their own row, and days you
+  can't book are greyed out.
+• Job photos are checked against your account every time they're shown, and the
+  permanent web links older versions created no longer keep working for someone
+  whose account has been switched off. Photos now need a connection to load, and
+  signing out clears them from the phone.
+• Client edits reach Wave in seconds instead of minutes. Settings › Wave shows
+  how many are still queued and how many failed, and Retry failed now reports
+  what actually went through rather than what it queued up again.
+• A client's typed name is kept. Saving a client could replace it with their
+  phone number, and clients that already happened to are recovered.
+• The 6 p.m. "tomorrow's jobs" notification no longer goes quiet for everyone
+  once enough finished-but-never-closed jobs build up.
+• Fixes throughout: photos vanishing from a job, a cancelled job being marked
+  complete, saves rejected outright for a long name or address, one bad record
+  blanking a whole screen, and a smoother scroll and search through a long
+  History.
 ```
+
+> **Covers three releases, because 1.46.0+73 and 1.46.1+74 were built but not
+> separately submitted.** If either did go to ASC on its own, trim this block to
+> what landed since — users only ever see the newest note, so it must describe
+> the cut being uploaded, not the whole gap.
 
 > **Write this block fresh for every update — it is per-version and users only
 > ever see the newest one.** Name features with the wording the app actually
@@ -738,22 +752,30 @@ En français et en anglais :
 ES Pro est conçu pour une équipe de plomberie par l'entreprise qui en exploite une. La connexion se fait sur invitation de votre administrateur, pour que toute l'équipe partage le même horaire.
 ```
 
-**Nouveautés de cette version** — v1.45.0+72, 4e mise à jour (2026-08-11)
+**Nouveautés de cette version** — v1.46.2+75 (2026-08-16)
 ```
-• Mes informations — modifiez vous-même votre numéro de téléphone, vos jours et
-  heures de travail, votre statut de garde, votre contact d'urgence et votre
-  courriel de connexion, depuis les Réglages.
-• Tableau de bord repensé — vues Aujourd'hui, Semaine et Mois, chantiers
-  réservés par jour selon votre limite quotidienne, et nouvelles alertes pour
-  les comptes jamais configurés et les chantiers réservés en dehors des
-  disponibilités.
-• Historique repensé — regroupé par mois avec la date à côté de chaque
-  chantier, et filtres rapides Terminé et Annulé.
-• Les chantiers sur plusieurs jours apparaissent maintenant chaque jour où ils
-  ont lieu, y compris dans le widget, Siri et les notifications, avec un
-  compteur « Jour 3 sur 5 ».
-• Les alertes de départ peuvent maintenant être activées ou désactivées par
-  personne.
+• Choisissez une date sur un vrai calendrier. Toucher une ligne de date déroule
+  le mois complet en dessous, au lieu de la roulette qui affichait trois jours à
+  la fois et masquait le formulaire. Les dates de début et de fin ont chacune
+  leur ligne, et les jours non réservables sont grisés.
+• Les photos de chantier sont vérifiées avec votre compte à chaque affichage, et
+  les liens web permanents créés par les versions précédentes ne fonctionnent
+  plus pour une personne dont le compte a été désactivé. Les photos ont
+  maintenant besoin d'une connexion pour s'afficher, et la déconnexion les
+  efface de l'appareil.
+• Les modifications de clients atteignent Wave en quelques secondes plutôt qu'en
+  quelques minutes. Paramètres › Wave indique combien sont en attente et combien
+  ont échoué, et Réessayer indique maintenant ce qui est réellement passé plutôt
+  que ce qui a été remis en file.
+• Le nom saisi pour un client est conservé. L'enregistrement pouvait le
+  remplacer par son numéro de téléphone; les clients déjà touchés sont rétablis.
+• La notification de 18 h « chantiers de demain » ne cesse plus d'être envoyée à
+  tout le monde lorsque trop de chantiers terminés mais jamais fermés
+  s'accumulent.
+• Corrections diverses : photos qui disparaissaient d'un chantier, chantier
+  annulé pouvant être marqué terminé, enregistrements refusés à cause d'un nom
+  ou d'une adresse trop longs, une seule fiche erronée qui vidait tout un écran,
+  et un défilement et une recherche plus fluides dans un long Historique.
 ```
 
 <details>

@@ -94,7 +94,6 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   String? _passwordError;
   String? _confirmError;
   String? _bannerError;
-  String? _bannerSuccess;
 
   @override
   void initState() {
@@ -570,7 +569,6 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
 
   /// Consent, any banner, and the primary action.
   List<Widget> _submitBlock(AppLocalizations l10n) {
-    final bannerSuccess = _bannerSuccess;
     return [
       const SizedBox(height: AppSpacing.sp24),
       ConsentRow(
@@ -580,11 +578,6 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
         onTapTerms: () => launchWebUrl(context, ref, AppUrls.termsOfService),
       ),
       AuthBanner(message: _bannerError),
-      if (bannerSuccess != null)
-        AuthBanner(
-          message: bannerSuccess,
-          kind: AuthBannerKind.success,
-        ),
       const SizedBox(height: AppSpacing.sp24),
       AnimatedLoadingButton(
         label: l10n.auth_finishSetup,

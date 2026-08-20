@@ -13,31 +13,16 @@ typedef ActiveUserIdentity = ({String role, String docId});
 /// and Siri snapshot.
 final activeUserIdentityProvider =
     FutureProvider.autoDispose<ActiveUserIdentity?>((ref) async {
-      final docState = ref.watch(currentUserDocProvider);
-      if (docState.hasError) {
-        Error.throwWithStackTrace(
-          docState.error!,
-          docState.stackTrace ?? StackTrace.current,
-        );
-      }
-      final doc = docState.isLoading
-          ? await ref.watch(currentUserDocProvider.future)
-          : (docState.value ?? const <String, dynamic>{});
+      // Await the settled value rather than branching on the AsyncValue: a
+      // loading build that resolved the future itself then rebuilt on the
+      // emission, so every sign-in paid for the uid lookup below twice.
+      final doc = await ref.watch(currentUserDocProvider.future);
       final role = (doc['role'] ?? '').toString().trim();
       final status = (doc['status'] ?? '').toString().trim();
       if (status != 'active' || (role != 'employee' && role != 'admin')) {
         return null;
       }
-      final uidState = ref.watch(authUidProvider);
-      if (uidState.hasError) {
-        Error.throwWithStackTrace(
-          uidState.error!,
-          uidState.stackTrace ?? StackTrace.current,
-        );
-      }
-      final uid = uidState.isLoading
-          ? await ref.watch(authUidProvider.future)
-          : uidState.value;
+      final uid = await ref.watch(authUidProvider.future);
       if (uid == null) return null;
       final repo = ref.watch(employeesRepositoryProvider);
       // We only got here because currentUserDocProvider emitted a populated

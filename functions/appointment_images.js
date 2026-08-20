@@ -309,11 +309,8 @@ module.exports = {
   purgeAppointmentImages,
   recountPictures,
   debouncedRecountPictures,
-  claimRecount,
-  releaseRecount,
   IMAGES_SUBCOLLECTION,
   RECOUNT_CLAIM_COLLECTION,
-  RECOUNT_SETTLE_MS,
   RECOUNT_CLAIM_STALE_MS,
   RECOUNT_CLAIM_TTL_MS,
 };

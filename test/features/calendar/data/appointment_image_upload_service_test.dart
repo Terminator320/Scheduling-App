@@ -17,6 +17,15 @@ class _MockAppointmentsRepository extends Mock
 
 class _MockImageStorageService extends Mock implements ImageStorageService {}
 
+/// Fails the requeue write, to pin that a throw there leaves the queue entry
+/// (and therefore its staged files) reachable.
+class _FailingReplaceStore extends PendingUploadStore {
+  @override
+  Future<void> replace(String id, PendingUpload entry) async {
+    throw const FileSystemException('prefs write failed');
+  }
+}
+
 AppointmentImage _img(String name) => AppointmentImage(
   url: 'https://example.com/$name',
   storagePath: 'appointments/a1/images/$name',
@@ -207,6 +216,30 @@ void main() {
         remaining.single.uploaded.single.storagePath,
         'appointments/a1/images/1.jpg',
       );
+    });
+
+    test('a failed requeue write leaves the original entry queued', () async {
+      // B5: the requeue was `remove(id)` then `add(next)`. A throw in the
+      // second half left the entry gone while its staged files stayed on disk,
+      // and nothing walks the staging dir — those photos were unreachable
+      // forever. One `replace` makes the failure a no-op instead.
+      store = _FailingReplaceStore();
+      final entry = await stageEntry('a1', ['ok.jpg', 'fail.jpg']);
+      when(() => storage.uploadImage(any(), any())).thenAnswer((invocation) {
+        final f = invocation.positionalArguments[1] as File;
+        if (f.path.endsWith('fail.jpg')) {
+          throw const SocketException('offline');
+        }
+        return Future.value(_img('ok.jpg'));
+      });
+
+      await makeService().drainPending();
+
+      final remaining = await store.load();
+      expect(remaining, hasLength(1));
+      expect(remaining.single.id, entry.id);
+      expect(remaining.single.paths, entry.paths);
+      expect(File(entry.paths.last).existsSync(), isTrue);
     });
 
     test('permanent ImageUploadFailure drops the file and the entry', () async {

@@ -104,12 +104,27 @@ void main() {
     // The loader fills this cache with an unawaited write, so a fetch that
     // resolves just after sign-out would otherwise re-seed a cache that was
     // deliberately emptied a moment earlier.
+    //
+    // The ordering here is the REAL one, and it is the whole point: the
+    // generation is read where the FETCH starts, then `clear()` runs, and the
+    // write arrives afterwards carrying the stale value. Capturing the
+    // generation inside `write` instead passes with clear-then-write reversed
+    // and lets the bytes through in exactly this case.
     final cache = cacheOver();
-    final write = cache.write(key, _bytes('photo'));
-    final cleared = cache.clear();
-    await Future.wait([write, cleared]);
+    final generation = cache.generation;
+    await cache.clear();
+    await cache.write(key, _bytes('photo'), generation: generation);
 
     expect(await cache.read(key), isNull);
+  });
+
+  test('a write started after the session ended is kept', () async {
+    // The mirror of the case above - a fresh session must still fill the cache.
+    final cache = cacheOver();
+    await cache.clear();
+    await cache.write(key, _bytes('photo'), generation: cache.generation);
+
+    expect(await cache.read(key), isNotNull);
   });
 
   test('the folder is trimmed oldest-first once it is over budget', () async {

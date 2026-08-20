@@ -216,6 +216,10 @@ void main() {
       expect(field.obscureText, isTrue);
 
       await tester.enterText(find.byType(CupertinoTextField), 'hunter2');
+      // The destructive action is null-gated on `_hasPassword`, so the rebuild
+      // that enables it has to land before the tap.
+      await tester.pumpAndSettle();
+
       await tester.tap(find.text('Delete permanently'));
       await tester.pumpAndSettle();
       expect(result, 'hunter2');

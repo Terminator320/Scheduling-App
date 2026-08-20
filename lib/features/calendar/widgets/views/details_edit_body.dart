@@ -46,7 +46,23 @@ class DetailsEditBody extends ConsumerStatefulWidget {
 
 class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     with InlineAddClientHost {
-  final _clientSearchDebounce = Debouncer(kSearchDebounce);
+  late final Debouncer _clientSearchDebounce;
+
+  @override
+  void initState() {
+    super.initState();
+    // Read the logger here, not lazily: the debounce handler can fire after
+    // this sheet is dismissed, and `ref.read` on an unmounted consumer throws.
+    final logger = ref.read(loggerProvider);
+    _clientSearchDebounce = Debouncer(
+      kSearchDebounce,
+      onError: (error, stackTrace) => logger.warn(
+        'CLI-SEARCH debounced client search failed',
+        error,
+        stackTrace,
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -392,26 +408,31 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     // call below, which now refuses while the flag is set.
     notifier.setSaving(busy: false);
     if (choice == null || !context.mounted) return;
-    final error = await notifier.deleteAppointment(
+    final outcome = await notifier.deleteAppointment(
       appointment,
       includeFuture: choice == SeriesScopeChoice.thisAndFuture,
     );
     if (!context.mounted) return;
-    if (error == null) {
-      ref
-          .read(noticeServiceProvider)
-          .success(context.l10n.common_appointmentDeleted);
-      widget.onClose();
-    } else {
-      ref
-          .read(noticeServiceProvider)
-          .error(
-            composeErrorNotice(
-              context,
-              intro: context.l10n.error_introDeleteAppointment,
-              error: error,
-            ),
-          );
+    switch (outcome) {
+      // A delete skipped by the reentrancy guard wrote nothing, so it must
+      // announce nothing — neither the success notice nor an error.
+      case EventDetailsActionBusy():
+        return;
+      case EventDetailsActionOk():
+        ref
+            .read(noticeServiceProvider)
+            .success(context.l10n.common_appointmentDeleted);
+        widget.onClose();
+      case EventDetailsActionFailed(:final error):
+        ref
+            .read(noticeServiceProvider)
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introDeleteAppointment,
+                error: error,
+              ),
+            );
     }
   }
 }

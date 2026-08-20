@@ -102,7 +102,6 @@ function classifyBridgeRow(uid, {expectedUids, claimedUids}) {
 
 module.exports = {
   VALID_ROLES,
-  VALID_BRIDGE_STATUS,
   shouldHaveBridge,
   bridgeBody,
   bridgeMatches,

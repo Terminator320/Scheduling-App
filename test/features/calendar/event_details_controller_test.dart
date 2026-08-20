@@ -211,44 +211,47 @@ void main() {
       verifyNever(() => scopedClients.getClientById(any()));
     });
 
-    test('waits for role resolution before deciding whether to load the client', () async {
-      final scopedClients = _MockClientsRepo();
-      final docs = StreamController<Map<String, dynamic>>();
-      when(
-        () => scopedClients.getClientById(any()),
-      ).thenAnswer((_) async => _existingClient);
-      final scoped = ProviderContainer(
-        overrides: [
-          appointmentsRepositoryProvider.overrideWithValue(appointments),
-          clientsRepositoryProvider.overrideWithValue(scopedClients),
-          employeesRepositoryProvider.overrideWithValue(employees),
-          appointmentImageUploadProvider.overrideWithValue(uploader),
-          imageStorageProvider.overrideWithValue(storage),
-          currentUserDocProvider.overrideWith((ref) => docs.stream),
-        ],
-      );
-      addTearDown(docs.close);
-      addTearDown(scoped.dispose);
-
-      scoped
-        ..listen(currentUserDocProvider, (_, _) {})
-        ..listen(
-          eventDetailsControllerProvider(EventDetailsKey(_appointment)),
-          (_, _) {},
-        )
-        ..read(
-          eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+    test(
+      'waits for role resolution before deciding whether to load the client',
+      () async {
+        final scopedClients = _MockClientsRepo();
+        final docs = StreamController<Map<String, dynamic>>();
+        when(
+          () => scopedClients.getClientById(any()),
+        ).thenAnswer((_) async => _existingClient);
+        final scoped = ProviderContainer(
+          overrides: [
+            appointmentsRepositoryProvider.overrideWithValue(appointments),
+            clientsRepositoryProvider.overrideWithValue(scopedClients),
+            employeesRepositoryProvider.overrideWithValue(employees),
+            appointmentImageUploadProvider.overrideWithValue(uploader),
+            imageStorageProvider.overrideWithValue(storage),
+            currentUserDocProvider.overrideWith((ref) => docs.stream),
+          ],
         );
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+        addTearDown(docs.close);
+        addTearDown(scoped.dispose);
 
-      verifyNever(() => scopedClients.getClientById(any()));
+        scoped
+          ..listen(currentUserDocProvider, (_, _) {})
+          ..listen(
+            eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+            (_, _) {},
+          )
+          ..read(
+            eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+          );
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
 
-      docs.add(const {'role': 'employee', 'uid': 'u1'});
-      await pumpEventQueue();
+        verifyNever(() => scopedClients.getClientById(any()));
 
-      verifyNever(() => scopedClients.getClientById(any()));
-    });
+        docs.add(const {'role': 'employee', 'uid': 'u1'});
+        await pumpEventQueue();
+
+        verifyNever(() => scopedClients.getClientById(any()));
+      },
+    );
 
     test('loads the client once an admin role settles', () async {
       final scopedClients = _MockClientsRepo();
@@ -1092,21 +1095,40 @@ void main() {
 
   group('deleteAppointment', () {
     test(
-      'returns null on repo success and calls the repo with the doc id',
+      'returns Ok on repo success and calls the repo with the doc id',
       () async {
-        final error = await readNotifier().deleteAppointment(_appointment);
-        expect(error, isNull);
+        final outcome = await readNotifier().deleteAppointment(_appointment);
+        expect(outcome, isA<EventDetailsActionOk>());
         verify(() => appointments.deleteAppointment('appt-1')).called(1);
       },
     );
 
-    test('returns the error and resets isSaving when repo throws', () async {
+    test('returns Failed and resets isSaving when repo throws', () async {
       when(
         () => appointments.deleteAppointment(any()),
       ).thenThrow(Exception('boom'));
-      final error = await readNotifier().deleteAppointment(_appointment);
-      expect(error, isNotNull);
+      final outcome = await readNotifier().deleteAppointment(_appointment);
+      expect(outcome, isA<EventDetailsActionFailed>());
       expect(readState().isSaving, isFalse);
+    });
+
+    test('a reentrant delete returns Busy, not a success', () async {
+      // B3: the guard used to return the same `null` success meant, so the
+      // sheet announced "Appointment deleted" for a write it never made.
+      final notifier = readNotifier()..setSaving(busy: true);
+
+      final outcome = await notifier.deleteAppointment(_appointment);
+
+      expect(outcome, isA<EventDetailsActionBusy>());
+      verifyNever(() => appointments.deleteAppointment(any()));
+    });
+
+    test('a delete without a doc id returns Failed', () async {
+      final outcome = await readNotifier().deleteAppointment(
+        _appointment.copyWith(id: null),
+      );
+      expect(outcome, isA<EventDetailsActionFailed>());
+      verifyNever(() => appointments.deleteAppointment(any()));
     });
 
     test('includeFuture deletes the series future visits too', () async {
@@ -1137,9 +1159,9 @@ void main() {
         eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
       );
 
-      final error = await c.deleteAppointment(repeating, includeFuture: true);
+      final outcome = await c.deleteAppointment(repeating, includeFuture: true);
 
-      expect(error, isNull);
+      expect(outcome, isA<EventDetailsActionOk>());
       final captured = verify(
         () => appointments.deleteAppointments(captureAny()),
       ).captured.single;
@@ -1149,11 +1171,11 @@ void main() {
     });
 
     test('includeFuture without a series is a single delete', () async {
-      final error = await readNotifier().deleteAppointment(
+      final outcome = await readNotifier().deleteAppointment(
         _appointment,
         includeFuture: true,
       );
-      expect(error, isNull);
+      expect(outcome, isA<EventDetailsActionOk>());
       verify(() => appointments.deleteAppointment('appt-1')).called(1);
     });
   });

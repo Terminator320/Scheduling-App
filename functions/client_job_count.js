@@ -115,4 +115,13 @@ const recountClientJobs = onDocumentWritten(
     },
 );
 
-module.exports = {clientsToRecount, recountClientJobs};
+module.exports = {
+  clientsToRecount,
+  recountClientJobs,
+  // Exported for __tests__/client_job_count.test.js. Both of its decisions —
+  // update() over set({merge:true}), and swallowing NOT_FOUND while rethrowing
+  // everything else so `retry: true` still means something — are silent when
+  // wrong, so they are asserted directly rather than through the trigger.
+  recountOne,
+  NOT_FOUND,
+};

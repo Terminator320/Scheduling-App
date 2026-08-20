@@ -121,6 +121,74 @@ void main() {
     expect(loaded.single.id, 'a1_2');
   });
 
+  test('replace swaps an entry in place and leaves the others', () async {
+    final store = PendingUploadStore();
+    await store.add(
+      const PendingUpload(
+        appointmentId: 'a1',
+        paths: ['/x/1.jpg', '/x/2.jpg'],
+        enqueuedAtMs: 1,
+      ),
+    );
+    await store.add(
+      const PendingUpload(
+        appointmentId: 'a2',
+        paths: ['/x/3.jpg'],
+        enqueuedAtMs: 2,
+      ),
+    );
+
+    await store.replace(
+      'a1_1',
+      const PendingUpload(
+        appointmentId: 'a1',
+        paths: ['/x/2.jpg'],
+        enqueuedAtMs: 1,
+      ),
+    );
+
+    final loaded = await store.load();
+    expect(loaded.map((e) => e.id), ['a2_2', 'a1_1']);
+    expect(loaded.last.paths, ['/x/2.jpg']);
+  });
+
+  test('an overlapping add and replace do not erase each other', () async {
+    // B5: the requeue was `remove` then `add`, two separate serialized
+    // read-modify-writes. `replace` is ONE, so a mutation that interleaves
+    // between the halves can no longer be lost.
+    final store = PendingUploadStore();
+    const first = PendingUpload(
+      appointmentId: 'a1',
+      paths: ['/x/1.jpg', '/x/2.jpg'],
+      enqueuedAtMs: 1000,
+    );
+    await store.add(first);
+
+    final replacing = store.replace(
+      first.id,
+      const PendingUpload(
+        appointmentId: 'a1',
+        paths: ['/x/2.jpg'],
+        enqueuedAtMs: 1000,
+      ),
+    );
+    final adding = store.add(
+      const PendingUpload(
+        appointmentId: 'a2',
+        paths: ['/x/3.jpg'],
+        enqueuedAtMs: 2000,
+      ),
+    );
+    await Future.wait([replacing, adding]);
+
+    final loaded = await store.load();
+    expect(loaded.map((e) => e.id).toSet(), {'a1_1000', 'a2_2000'});
+    expect(
+      loaded.firstWhere((e) => e.id == 'a1_1000').paths,
+      ['/x/2.jpg'],
+    );
+  });
+
   test('prune removes entries older than maxAge and returns them', () async {
     final store = PendingUploadStore();
     const old = PendingUpload(

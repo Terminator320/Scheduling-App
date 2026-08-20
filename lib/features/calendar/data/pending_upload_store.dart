@@ -149,6 +149,23 @@ class PendingUploadStore {
     await _save(entries.where((e) => e.id != id).toList());
   });
 
+  /// Swaps the entry with [id] for [entry] in ONE serialized read-modify-write.
+  ///
+  /// A requeue used to be `remove(id)` then `add(next)`. Each half was safe on
+  /// its own, but the PAIR is two read-modify-writes: a throw between them left
+  /// the entry gone while its staged files stayed on disk, and both [prune] and
+  /// the drain walk queue ENTRIES — so nothing could ever reach those files
+  /// again. The photos silently never appeared and the staging directory grew
+  /// forever. Failing this single mutation leaves the original entry intact,
+  /// which is what keeps the files reachable on the next drain.
+  Future<void> replace(String id, PendingUpload entry) => _serialized(() async {
+    final entries = await load();
+    await _save([
+      ...entries.where((e) => e.id != id && e.id != entry.id),
+      entry,
+    ]);
+  });
+
   /// Drops entries older than [_maxAge] and returns them so the caller can
   /// clean up their files.
   Future<List<PendingUpload>> prune({required DateTime now}) =>

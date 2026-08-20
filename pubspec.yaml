@@ -87,6 +87,11 @@ dependencies:
   # SPM-capable iOS implementation override (Maps SDK 9.x, iOS 15+) —
   # the default google_maps_flutter_ios is CocoaPods-only and would
   # reintroduce a Podfile. Keep this override while the project is SPM-only.
+  # It belongs in `dependencies`, NOT `dependency_overrides`: a DIRECT
+  # dependency on an implementation package beats the transitive default, so
+  # the swap already takes effect — verified by GeneratedPluginRegistrant.m,
+  # which registers only `google_maps_flutter_ios_sdk9`. Don't "fix" it into
+  # an overrides block.
   google_maps_flutter_ios_sdk9: ^2.18.6
 
   # Network reachability (app-wide offline banner)

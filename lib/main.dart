@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -16,28 +15,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:home_widget/home_widget.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/adaptive/app_scroll_behavior.dart';
 import 'package:scheduling/core/app/account_exit_listeners.dart';
 import 'package:scheduling/core/app/app_sync_listeners.dart';
+import 'package:scheduling/core/app/appointment_link_opener.dart';
 import 'package:scheduling/core/connectivity/offline_banner.dart';
 import 'package:scheduling/core/deep_links/deep_link_dispatcher.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/logging/unhandled_error_severity.dart';
 import 'package:scheduling/core/navigation/top_route_observer.dart';
 import 'package:scheduling/core/notices/notice_listener.dart';
-import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/notifications/fcm_background_handler.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/security/app_lock.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/app_language.dart';
-import 'package:scheduling/core/utils/retry.dart';
-import 'package:scheduling/features/calendar/application/appointments_providers.dart';
-import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
@@ -49,7 +43,6 @@ import 'package:scheduling/features/settings/domain/models/app_settings.dart';
 import 'package:scheduling/firebase_options.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
-import 'package:scheduling/routes/hub_shell.dart';
 
 const bool _useFirebaseEmulator = bool.fromEnvironment('USE_FIREBASE_EMULATOR');
 // The iOS Simulator shares the host's network, so localhost is the right
@@ -190,8 +183,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   // Held so `dispose` can cancel them. Harmless in production — this is the
   // root widget and only dies with the process — but a widget test pumping
   // this app stacks a live plugin listener per pump.
-  StreamSubscription<Uri?>? _widgetTapSubscription;
-  StreamSubscription<RemoteMessage>? _pushTapSubscription;
+  late final AppointmentLinkOpener _linkOpener;
   DeepLinkDispatcher? _deepLinkDispatcher;
   late ThemeMode _themeMode;
   late double _textScale;
@@ -209,9 +201,18 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _textScale = widget.settings.textScale;
     _languageController = AppLanguageController.instance;
     _languageController.setLanguage(widget.settings.language);
-    _setupPushTapHandling();
-    _setupWidgetTapHandling();
+    _setupLinkOpening();
     _setupDeepLinkHandling();
+  }
+
+  /// The two external entry points the `app_links` dispatcher doesn't own:
+  /// iOS home-widget taps and notification taps.
+  void _setupLinkOpening() {
+    _linkOpener = AppointmentLinkOpener(
+      ref: ref,
+      navigatorKey: _navigatorKey,
+      isMounted: () => mounted,
+    )..start();
   }
 
   /// Inbound `esproschedule://` URLs — appointment links only since the invite
@@ -220,139 +221,13 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   void _setupDeepLinkHandling() {
     _deepLinkDispatcher = DeepLinkDispatcher(
       logger: ref.read(loggerProvider),
-      openAppointment: _openAppointmentDeepLink,
+      openAppointment: _linkOpener.openAppointment,
     )..start();
-  }
-
-  /// iOS home-widget taps deep-link to appointment detail via URI scheme.
-  void _setupWidgetTapHandling() {
-    if (!Platform.isIOS) return;
-    final logger = ref.read(loggerProvider);
-    // Register App Group before first widget read.
-    unawaited(() async {
-      try {
-        await HomeWidget.setAppGroupId(widgetAppGroupId);
-        if (!mounted) return;
-        _widgetTapSubscription = HomeWidget.widgetClicked.listen(
-          _handleWidgetTap,
-          onError: (Object e, StackTrace st) =>
-              logger.warn('WIDGET-TAP stream error', e, st),
-        );
-        final launchUri = await HomeWidget.initiallyLaunchedFromHomeWidget();
-        await _handleWidgetTap(launchUri);
-      } catch (e, st) {
-        logger.warn('WIDGET-TAP setup failed', e, st);
-      }
-    }());
-  }
-
-  Future<void> _handleWidgetTap(Uri? uri) async {
-    if (uri == null) return;
-    final appointmentId = uri.queryParameters['id']?.trim() ?? '';
-    final logger = ref.read(loggerProvider);
-    // Swallow errors to prevent leaking into zone handlers as FATAL crashes.
-    try {
-      await _openAppointmentDeepLink(appointmentId);
-    } catch (e, st) {
-      logger.warn('WIDGET-TAP open failed', e, st);
-    }
-  }
-
-  /// Notification taps open appointment detail on calendar hub.
-  void _setupPushTapHandling() {
-    final service = ref.read(pushNotificationServiceProvider);
-    unawaited(
-      service
-          .initialMessage()
-          .then(_handlePushTap)
-          .catchError(
-            (Object e, StackTrace st) => ref
-                .read(loggerProvider)
-                .warn('PUSH-TAP initial message failed', e, st),
-          ),
-    );
-    _pushTapSubscription = service.onMessageOpenedApp.listen(
-      _handlePushTap,
-      onError: (Object e, StackTrace st) =>
-          ref.read(loggerProvider).warn('PUSH-TAP stream error', e, st),
-    );
-  }
-
-  Future<void> _handlePushTap(RemoteMessage? message) async {
-    if (message == null) return;
-    final appointmentId =
-        (message.data['appointmentId'] as String?)?.trim() ?? '';
-    final logger = ref.read(loggerProvider);
-    // Swallow errors to prevent leaking into zone handlers as FATAL crashes.
-    try {
-      await _openAppointmentDeepLink(appointmentId);
-    } catch (e, st) {
-      logger.warn('PUSH-TAP open failed', e, st);
-    }
-  }
-
-  /// Shared deep-link handler — shows the calendar, then opens the
-  /// appointment if it's valid.
-  Future<void> _openAppointmentDeepLink(String appointmentId) async {
-    if (FirebaseAuth.instance.currentUser == null) return;
-
-    final logger = ref.read(loggerProvider);
-    // Fetch this concurrently with hub startup, on the shared retry ladder —
-    // a cold start right after sign-in can lose the auth-token race.
-    final recordFuture = appointmentId.isEmpty
-        ? Future<AppointmentRecord?>.value()
-        : retryAsync<AppointmentRecord?>(
-            () => ref
-                .read(appointmentsRepositoryProvider)
-                .getAppointmentById(appointmentId),
-          ).catchError((Object e, StackTrace st) {
-            logger.warn('PUSH-TAP load appointment failed', e, st);
-            return null;
-          });
-
-    // Wait for hub on terminated-launch cold start.
-    final shell = await _awaitLiveHub();
-    if (shell == null || !mounted) return;
-    shell.showCalendar();
-
-    final record = await recordFuture;
-    if (!mounted) return;
-
-    final navContext = _navigatorKey.currentContext;
-    if (navContext == null || !navContext.mounted) return;
-    // Collapse stacked routes to open the appointment over the shell.
-    // Not popUntil(isFirst): on _hubRoute's fallback branch the shell is not
-    // route #1, so that predicate pops the shell itself.
-    shell.goHome();
-
-    if (appointmentId.isEmpty) return;
-    if (record == null) {
-      ref
-          .read(noticeServiceProvider)
-          .info(
-            AppLocalizations.of(navContext).calendar_appointmentUnavailable,
-          );
-      return;
-    }
-    await showEventDetails(navContext, record, showActions: shell.isAdmin);
-  }
-
-  /// Polls for up to ~10s waiting for the live hub to appear. Returns null
-  /// if it never shows up.
-  Future<HubShellState?> _awaitLiveHub() async {
-    for (var i = 0; i < 50; i++) {
-      final shell = HubShell.liveState;
-      if (shell != null && shell.mounted) return shell;
-      if (!mounted) return null;
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    }
-    return null;
   }
 
   @override
   void dispose() {
-    unawaited(_widgetTapSubscription?.cancel());
-    unawaited(_pushTapSubscription?.cancel());
+    _linkOpener.dispose();
     _deepLinkDispatcher?.dispose();
     _settingsSaveDebouncer.dispose();
     super.dispose();
