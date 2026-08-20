@@ -22,6 +22,7 @@ const {toWaveCustomerInput, mappedFieldsHash} = require("./mappers");
 // closes no cycle. `retry_policy.js` and `errors.js` both already require this
 // module AND that one.
 const {WaveApiError} = require("./client");
+const {readBusinessId, LIST_CUSTOMERS} = require("./customer_queries");
 
 // ---------------------------------------------------------------------------
 // WaveValidationError
@@ -92,68 +93,6 @@ mutation PatchCustomer($input: CustomerPatchInput!) {
   }
 }`;
 
-// One owner for the listing's page + node selection, so the full and delta
-// documents below can't drift on what they read back.
-const LIST_CUSTOMERS_BODY = `
-      pageInfo { currentPage totalPages totalCount }
-      edges {
-        node {
-          id
-          name
-          firstName
-          lastName
-          email
-          phone
-          mobile
-          isArchived
-          address {
-            addressLine1
-            addressLine2
-            city
-            province { code }
-            country { code name }
-            postalCode
-          }
-        }
-      }`;
-
-const LIST_CUSTOMERS = `
-query ListCustomers($id: ID!, $page: Int!, $pageSize: Int!) {
-  business(id: $id) {
-    customers(page: $page, pageSize: $pageSize, sort: [NAME_ASC]) {${
-  LIST_CUSTOMERS_BODY}
-    }
-  }
-}`;
-
-// Delta listing. `modifiedAtAfter` filters SERVER-SIDE, so Wave returns only
-// what changed — strictly better than paging everything and stopping early.
-// Confirmed against the live schema 2026-08-04 (see
-// scripts/wave-introspect-customer-sort.js).
-//
-// This is a SEPARATE document rather than one query with a nullable `$since`:
-// omitting a variable to make an argument "not present" is real GraphQL, but
-// it is subtle third-party behaviour, and a server that instead read it as
-// `modifiedAtAfter: null` would silently return nothing — a full import that
-// imports zero customers and reports success. Two documents make that
-// unrepresentable.
-//
-// Sort stays NAME_ASC: we page the entire filtered set either way, so
-// MODIFIED_AT_ASC would buy nothing and gives the two documents a second
-// difference to keep in step.
-const LIST_CUSTOMERS_SINCE = `
-query ListCustomersSince(
-  $id: ID!, $page: Int!, $pageSize: Int!, $since: DateTime!
-) {
-  business(id: $id) {
-    customers(
-      page: $page, pageSize: $pageSize, sort: [NAME_ASC]
-      modifiedAtAfter: $since
-    ) {${LIST_CUSTOMERS_BODY}
-    }
-  }
-}`;
-
 // ---------------------------------------------------------------------------
 // Error sanitization
 // ---------------------------------------------------------------------------
@@ -200,22 +139,6 @@ function sanitizeInputErrors(inputErrors) {
 function adminFirestore() {
   // eslint-disable-next-line global-require
   return require("firebase-admin/firestore");
-}
-
-/**
- * Reads the connected Wave `businessId` from the `wave/connection` doc.
- * @param {!Object} db Firestore instance.
- * @return {!Promise<string>} The business id.
- * @throws {Error} When the connection doc or its businessId is missing.
- */
-async function readBusinessId(db) {
-  const snap = await db.collection("wave").doc("connection").get();
-  const data = snap && snap.exists ? snap.data() : null;
-  const id = data && typeof data.businessId === "string" ? data.businessId : "";
-  if (!id) {
-    throw new Error("wave/connection businessId is missing — not connected.");
-  }
-  return id;
 }
 
 /**
@@ -672,9 +595,7 @@ async function writeSyncError(db, ref, now, inputErrors) {
 }
 
 // `importCustomers` moved to `./customers_import` and is re-exported below so
-// no call site changed (`sync_run.js`, `callables.js`, the jest suite). This
-// require runs at module scope and that module's require back is LAZY, so the
-// pair loads cleanly in either order — see `pushHalf` over there.
+// no call site changed (`sync_run.js`, `callables.js`, the jest suite).
 const {importCustomers} = require("./customers_import");
 
 module.exports = {
@@ -689,10 +610,4 @@ module.exports = {
   // __tests__/wave_customers_unlink.test.js.
   isStaleCustomerLink,
   hasNotFoundInputError,
-  // Shared with `./customers_import`, which owns the Wave → App half. Not part
-  // of this module's public surface — nothing outside these two files reads
-  // them.
-  readBusinessId,
-  LIST_CUSTOMERS,
-  LIST_CUSTOMERS_SINCE,
 };

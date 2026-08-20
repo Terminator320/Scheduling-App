@@ -2,7 +2,7 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-16 by auditing the source against the app's call sites and
+refreshed 2026-08-19 by auditing the source against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -984,9 +984,9 @@ paging everything and stopping early.
 
 `importCustomers` therefore takes an optional `since` (ISO-8601). Present → the
 `LIST_CUSTOMERS_SINCE` document; absent → the full `LIST_CUSTOMERS`. Both
-documents (and `readBusinessId`) still live in `wave/customers.js` and are
-reached from `wave/customers_import.js` through its lazy `pushHalf()` helper,
-so the split adds no second copy of the query. These are
+documents (and `readBusinessId`) live in the leaf `wave/customer_queries.js`,
+which both halves require at module scope, so the split adds no second copy of
+the query and needs no lazy require-back. These are
 **two separate documents on purpose**: omitting a variable to make an argument
 "not present" is valid GraphQL, but relying on that against a third-party
 server risks it being read as `modifiedAtAfter: null` — a full import that

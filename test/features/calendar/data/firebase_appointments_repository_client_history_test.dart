@@ -92,10 +92,13 @@ void main() {
     expect(result.map((a) => a.id), ['older', 'newer']);
   });
 
-  test('defaults to a page size of 50 when collecting the full history', () async {
-    await repo().fetchClientHistory(clientId: 'c1');
-    verify(() => query.limit(50)).called(1);
-  });
+  test(
+    'defaults to a page size of 500 when collecting the full history',
+    () async {
+      await repo().fetchClientHistory(clientId: 'c1');
+      verify(() => query.limit(500)).called(1);
+    },
+  );
 
   test('walks additional pages until the history is complete', () async {
     final firstPage = [

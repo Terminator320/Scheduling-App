@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart' show compute;
 
+import 'package:scheduling/core/data/paged_scan.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/features/clients/domain/clients_failure.dart';
@@ -67,7 +68,10 @@ class FirebaseClientsRepository implements ClientsRepository {
   void _patchWindow(String id, {Map<String, dynamic>? data}) {
     final window = _scanWindow;
     if (window != null && _isFresh(window.fetchedAt)) {
-      final previous = window.docs.where((doc) => doc.id == id).firstOrNull?.data;
+      final previous = window.docs
+          .where((doc) => doc.id == id)
+          .firstOrNull
+          ?.data;
       final docs = [
         for (final doc in window.docs)
           if (doc.id != id) doc,
@@ -133,24 +137,17 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   @override
   Future<List<ClientRecord>> fetchClientsCreatedSince(DateTime since) async {
-    final docs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-    var query = _clients
-        .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
-        .orderBy('createdAt', descending: true)
-        .limit(_clientScanPageSize);
-    while (true) {
-      final snapshot = await query.get();
-      docs.addAll(snapshot.docs);
-      if (docs.length >= _clientScanLimit) {
-        _logger.warn(
-          'CLI-LIST createdSince scan hit the $_clientScanLimit-doc cap - '
-          'older clients are not included',
-        );
-        break;
-      }
-      if (snapshot.docs.length < _clientScanPageSize) break;
-      query = query.startAfterDocument(snapshot.docs.last);
-    }
+    final docs = await pageToCap(
+      _clients
+          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(since))
+          .orderBy('createdAt', descending: true),
+      pageSize: _clientScanPageSize,
+      cap: _clientScanLimit,
+      onCapReached: () => _logger.warn(
+        'CLI-LIST createdSince scan hit the $_clientScanLimit-doc cap - '
+        'older clients are not included',
+      ),
+    );
     return docs.map((doc) => ClientRecord.fromMap(doc.id, doc.data())).toList();
   }
 
@@ -267,30 +264,20 @@ class FirebaseClientsRepository implements ClientsRepository {
     _scanWindow = null;
 
     try {
-      final docs = <RawClientDoc>[];
-      var query = _clients
-          .orderBy('name')
-          .orderBy(FieldPath.documentId)
-          .limit(_clientScanPageSize);
-      while (true) {
-        final snapshot = await query.get();
-        docs.addAll([
-          for (final doc in snapshot.docs) (id: doc.id, data: doc.data()),
-        ]);
-        if (docs.length >= _clientScanLimit) {
-          _logger.warn(
-            'CLI-SEARCH scan window hit the $_clientScanLimit-doc cap - '
-            'clients past it are invisible to search and to the filter chips',
-          );
-          break;
-        }
-        if (snapshot.docs.length < _clientScanPageSize) break;
-        final last = snapshot.docs.last;
-        query = query.startAfter([
-          (last.data()['name'] ?? '').toString(),
-          last.id,
-        ]);
-      }
+      final scanned = await pageToCap(
+        _clients.orderBy('name').orderBy(FieldPath.documentId),
+        pageSize: _clientScanPageSize,
+        cap: _clientScanLimit,
+        onCapReached: () => _logger.warn(
+          'CLI-SEARCH scan window hit the $_clientScanLimit-doc cap - '
+          'clients past it are invisible to search and to the filter chips',
+        ),
+        advance: (query, last) =>
+            query.startAfter([(last.data()['name'] ?? '').toString(), last.id]),
+      );
+      final docs = <RawClientDoc>[
+        for (final doc in scanned) (id: doc.id, data: doc.data()),
+      ];
       final window = _CachedClientScanWindow(docs, _clock());
       _scanWindow = window;
       return window;

@@ -39,7 +39,7 @@ void main() {
 
   test('bytes survive the round trip', () async {
     final cache = cacheOver();
-    await cache.write(key, _bytes('photo'));
+    await cache.write(key, _bytes('photo'), generation: cache.generation);
 
     expect(await cache.read(key), _bytes('photo'));
   });
@@ -51,7 +51,8 @@ void main() {
   test('bytes outlive the instance that wrote them', () async {
     // The whole point: a photo fetched in one session renders in the next one
     // with no network at all.
-    await cacheOver().write(key, _bytes('photo'));
+    final writer = cacheOver();
+    await writer.write(key, _bytes('photo'), generation: writer.generation);
 
     expect(await cacheOver().read(key), _bytes('photo'));
   });
@@ -69,8 +70,8 @@ void main() {
         '${'x' * 300}/o/b.jpg?alt=media&token=bbb';
     final cache = cacheOver();
 
-    await cache.write(legacyA, _bytes('a'));
-    await cache.write(legacyB, _bytes('b'));
+    await cache.write(legacyA, _bytes('a'), generation: cache.generation);
+    await cache.write(legacyB, _bytes('b'), generation: cache.generation);
 
     expect(await cache.read(legacyA), _bytes('a'));
     expect(await cache.read(legacyB), _bytes('b'));
@@ -81,7 +82,7 @@ void main() {
     // value. Persisting one would outlive the entitlement change or the
     // network outage that caused it.
     final cache = cacheOver();
-    await cache.write(key, Uint8List(0));
+    await cache.write(key, Uint8List(0), generation: cache.generation);
 
     expect(await cache.read(key), isNull);
   });
@@ -92,7 +93,7 @@ void main() {
       // These bytes outlive the PROCESS, so a shared handset would otherwise
       // hand the next person every job photo the last one opened.
       final cache = cacheOver();
-      await cache.write(key, _bytes('photo'));
+      await cache.write(key, _bytes('photo'), generation: cache.generation);
 
       await cache.clear();
 
@@ -130,7 +131,11 @@ void main() {
   test('the folder is trimmed oldest-first once it is over budget', () async {
     final cache = cacheOver(budgetBytes: 300);
     for (final tag in const ['old', 'mid', 'new']) {
-      await cache.write('key/$tag', Uint8List(200));
+      await cache.write(
+        'key/$tag',
+        Uint8List(200),
+        generation: cache.generation,
+      );
       // Distinct mtimes: the eviction order is what is under test, and a
       // coarse filesystem timestamp would make it arbitrary.
       await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -140,6 +145,55 @@ void main() {
     expect(await cache.read('key/new'), isNotNull);
   });
 
+  test('a folder left over budget by an earlier process is trimmed', () async {
+    // The running total that keeps writes off the full sweep starts UNKNOWN,
+    // so the first write of a process must still measure what is already
+    // there — otherwise a folder inherited over budget never shrinks.
+    final seeder = cacheOver(budgetBytes: 300);
+    for (final tag in const ['old', 'mid']) {
+      await seeder.write(
+        'key/$tag',
+        Uint8List(200),
+        generation: seeder.generation,
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+    }
+
+    final fresh = cacheOver(budgetBytes: 300);
+    await fresh.write('key/new', Uint8List(200), generation: fresh.generation);
+
+    expect(await fresh.read('key/old'), isNull);
+    expect(await fresh.read('key/new'), isNotNull);
+  });
+
+  test(
+    'the total is re-measured after a clear, so eviction still runs',
+    () async {
+      // clear() forgets the running total rather than zeroing it: the recursive
+      // delete is best-effort, and a total that drifts LOW is the one direction
+      // that would let the folder grow past its budget unchecked.
+      final cache = cacheOver(budgetBytes: 300);
+      await cache.write(
+        'key/first',
+        Uint8List(200),
+        generation: cache.generation,
+      );
+      await cache.clear();
+
+      for (final tag in const ['old', 'mid', 'new']) {
+        await cache.write(
+          'key/$tag',
+          Uint8List(200),
+          generation: cache.generation,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+
+      expect(await cache.read('key/old'), isNull);
+      expect(await cache.read('key/new'), isNotNull);
+    },
+  );
+
   test('an unresolvable directory degrades to a miss, never a throw', () async {
     // A disk failure must cost a network fetch, not a photo that fails to
     // render.
@@ -148,7 +202,7 @@ void main() {
       logger: AppLogger(),
     );
 
-    await cache.write(key, _bytes('photo'));
+    await cache.write(key, _bytes('photo'), generation: cache.generation);
     expect(await cache.read(key), isNull);
   });
 
@@ -167,7 +221,7 @@ void main() {
     );
 
     expect(await cache.read(key), isNull);
-    await cache.write(key, _bytes('photo'));
+    await cache.write(key, _bytes('photo'), generation: cache.generation);
 
     expect(await cache.read(key), _bytes('photo'));
   });

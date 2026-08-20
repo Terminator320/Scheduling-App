@@ -149,7 +149,7 @@ class _Header extends ConsumerWidget {
                     ),
                     Text(
                       // brandName is a proper noun and stays in English.
-                      '${roleLabel(context.l10n, isAdmin: isAdmin)} - '
+                      '${roleLabel(context.l10n, isAdmin: isAdmin)} · '
                       '$brandName',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

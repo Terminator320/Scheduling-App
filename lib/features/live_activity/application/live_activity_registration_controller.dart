@@ -6,12 +6,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:live_activities/live_activities.dart';
 import 'package:live_activities/models/activity_update.dart';
 
+import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/core/utils/reentrant_sync.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
-import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart'
     show widgetAppGroupId;
 import 'package:scheduling/features/live_activity/application/live_activity_preference.dart';
@@ -346,19 +346,12 @@ class LiveActivityRegistrationController with ReentrantSync {
 
   /// The users-doc id for the signed-in uid, or null when signed out or the
   /// lookup fails; never throws, so [unregister] is never blocked.
-  Future<String?> _resolveUserDocId() async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null) return null;
-    try {
-      final match = await _ref
-          .read(employeesRepositoryProvider)
-          .findUserByUid(uid);
-      return match?.id;
-    } catch (e, st) {
-      _logger.warn('LIVE-ACT resolve users doc failed', e, st);
-      return null;
-    }
-  }
+  Future<String?> _resolveUserDocId() => resolveUserDocId(
+    ref: _ref,
+    auth: _auth,
+    logger: _logger,
+    tag: 'LIVE-ACT',
+  );
 
   Future<void> _cancelStreams() async {
     await _pushToStartSub?.cancel();

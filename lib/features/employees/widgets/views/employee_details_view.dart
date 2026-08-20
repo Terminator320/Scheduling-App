@@ -108,7 +108,7 @@ class EmployeeDetailsView extends ConsumerWidget {
     final materialL10n = MaterialLocalizations.of(context);
     final hoursValue = employee.workingDays.contains(true)
         ? '${materialL10n.formatTimeOfDay(minutesToTimeOfDay(employee.workStartMinutes))}'
-              ' - '
+              ' – '
               '${materialL10n.formatTimeOfDay(minutesToTimeOfDay(employee.workEndMinutes))}'
         : l10n.employees_noWorkingDays;
 

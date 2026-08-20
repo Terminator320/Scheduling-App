@@ -355,7 +355,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
         ..._colourSection(theme, l10n),
         ..._availabilitySection(theme, l10n, materialL10n),
         ..._emergencySection(theme, l10n),
-        ..._accessSection(theme, l10n, activity, sheetBusy),
+        ..._accessSection(theme, l10n, sheetBusy),
       ],
     );
   }
@@ -529,7 +529,6 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
   List<Widget> _accessSection(
     ThemeData theme,
     AppLocalizations l10n,
-    EmployeeFormActivity activity,
     bool sheetBusy,
   ) => [
     MonoSectionLabel(l10n.employees_sectionAccess),

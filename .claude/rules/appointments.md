@@ -27,9 +27,9 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   the `isPersonal` carve-out, so a personal block past its end read "Scheduled"
   on its card and sat under the dashboard's Attention list as *overdue* —
   nagging an admin to close something "job finished?" is the wrong question
-  for. (A started personal block CAN be marked complete: `DetailsActionBar`
-  gates that button on `hasStarted && !isDone && !isCancelled` with no
-  `isPersonal` branch. An earlier note here justified the carve-out by claiming
+  for. (A personal block CAN be marked complete: `DetailsActionBar`
+  gates that button on `!isDone && !isCancelled` with no
+  `isPersonal` branch — and, since 2026-08-17, no clock gate either. An earlier note here justified the carve-out by claiming
   personal jobs have no mark-done flow — they do; the carve-out stands on the
   wrongness of the prompt, not on the absence of a way out.)
   Never re-copy the ladder; add clock-derived rules to

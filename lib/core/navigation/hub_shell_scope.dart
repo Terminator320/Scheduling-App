@@ -29,6 +29,22 @@ abstract interface class HubTabSelector {
   void goHome();
 }
 
+/// The slice of the live hub shell an inbound appointment link drives.
+///
+/// Narrow on purpose: the opener only ever shows the calendar, collapses the
+/// stack and reads the live role. Depending on the interface rather than
+/// `HubShellState` is what lets the routing be exercised without building the
+/// real four-tab shell (every tab of which reaches Firebase). It lives here
+/// beside [HubTabSelector] for that class's reason — so `core/` can name the
+/// shell without `routes/` having to import back into `core/app/`.
+abstract interface class AppointmentLinkHub {
+  bool get isAdmin;
+
+  void showCalendar();
+
+  void goHome();
+}
+
 /// Lets shell descendants reach the enclosing hub shell.
 class HubShellScope extends InheritedWidget {
   const HubShellScope({

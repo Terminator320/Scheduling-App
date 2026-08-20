@@ -408,7 +408,9 @@ void main() {
       // underground garage opens a job they looked at this morning and the
       // photos are there. `storage.ref` is left unstubbed, so any attempt to
       // reach Storage fails the test rather than quietly succeeding.
-      return disk.write(path, photo).then((_) async {
+      return disk.write(path, photo, generation: disk.generation).then((
+        _,
+      ) async {
         expect(await loader.load(image), photo);
         verifyNever(() => storage.ref(any()));
       });

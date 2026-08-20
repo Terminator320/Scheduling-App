@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show compute;
 
+import 'package:scheduling/core/data/paged_scan.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/core/utils/retry.dart';
@@ -64,6 +65,10 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   /// Ceiling on one client's paged job history.
   static const int _clientHistoryScanLimit = 1000;
+
+  /// Page size for that scan. Kept off the caller's `limit` so a busy client
+  /// costs two round-trips to reach the ceiling, not twenty.
+  static const int _clientHistoryPageSize = 500;
 
   final Map<String, _CachedHistorySearch> _searchCache = {};
   _CachedHistoryScanWindow? _scanWindow;
@@ -330,7 +335,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   @override
   Stream<List<AppointmentRecord>> watchInRange(AppointmentDateRange range) {
-    return retryStream(() => _rangeQuery(range).snapshots().map(_mapRangeSnapshot));
+    return retryStream(
+      () => _rangeQuery(range).snapshots().map(_mapRangeSnapshot),
+    );
   }
 
   @override
@@ -366,27 +373,20 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   @override
   Future<List<AppointmentRecord>> fetchClientHistory({
     required String clientId,
-    int limit = 50,
+    int limit = _clientHistoryPageSize,
   }) async {
     if (clientId.isEmpty) return const [];
-    final docs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-    var query = _appointments
-        .where('clientId', isEqualTo: clientId)
-        .orderBy('startTime', descending: true)
-        .limit(limit);
-    while (true) {
-      final snapshot = await query.get();
-      docs.addAll(snapshot.docs);
-      if (docs.length >= _clientHistoryScanLimit) {
-        _logger.warn(
-          'APPT-LOAD client history hit the $_clientHistoryScanLimit-doc cap - '
-          'older visits are not listed',
-        );
-        break;
-      }
-      if (snapshot.docs.length < limit) break;
-      query = query.startAfterDocument(snapshot.docs.last);
-    }
+    final docs = await pageToCap(
+      _appointments
+          .where('clientId', isEqualTo: clientId)
+          .orderBy('startTime', descending: true),
+      pageSize: limit,
+      cap: _clientHistoryScanLimit,
+      onCapReached: () => _logger.warn(
+        'APPT-LOAD client history hit the $_clientHistoryScanLimit-doc cap - '
+        'older visits are not listed',
+      ),
+    );
     return docs.map((doc) => _recordFrom(doc.id, doc.data())).toList();
   }
 
@@ -424,26 +424,20 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     _scanWindow = null;
 
     try {
-      final docs = <RawHistoryDoc>[];
-      var query = _appointments
-          .where('status', whereIn: terminalStatusQueryValues)
-          .orderBy('startTime', descending: true)
-          .limit(_historySearchPageSize);
-      while (true) {
-        final snapshot = await query.get();
-        docs.addAll([
-          for (final doc in snapshot.docs) (id: doc.id, data: doc.data()),
-        ]);
-        if (docs.length >= _historySearchScanLimit) {
-          _logger.warn(
-            'HIST-SEARCH scan window hit the $_historySearchScanLimit-doc cap - '
-            'older jobs are not searchable',
-          );
-          break;
-        }
-        if (snapshot.docs.length < _historySearchPageSize) break;
-        query = query.startAfterDocument(snapshot.docs.last);
-      }
+      final scanned = await pageToCap(
+        _appointments
+            .where('status', whereIn: terminalStatusQueryValues)
+            .orderBy('startTime', descending: true),
+        pageSize: _historySearchPageSize,
+        cap: _historySearchScanLimit,
+        onCapReached: () => _logger.warn(
+          'HIST-SEARCH scan window hit the $_historySearchScanLimit-doc cap - '
+          'older jobs are not searchable',
+        ),
+      );
+      final docs = <RawHistoryDoc>[
+        for (final doc in scanned) (id: doc.id, data: doc.data()),
+      ];
       final window = _CachedHistoryScanWindow(docs, _clock());
       _scanWindow = window;
       return window;

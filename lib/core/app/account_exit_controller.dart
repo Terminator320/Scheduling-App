@@ -13,9 +13,8 @@ final accountExitControllerProvider = Provider<AccountExitController>(
   (ref) => AccountExitController(
     logger: ref.read(loggerProvider),
     authService: ref.read(authServiceProvider),
-    deregisterDevice: () => deregisterThisDevice(
-      DeviceDeregistrationDeps.fromRef(ref),
-    ),
+    deregisterDevice: () =>
+        deregisterThisDevice(DeviceDeregistrationDeps.from(ref.read)),
     isSignedIn: () => ref.read(firebaseAuthProvider).currentUser != null,
   ),
 );

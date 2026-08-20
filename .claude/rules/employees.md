@@ -327,7 +327,18 @@ self-service settings. Root context: `../../CLAUDE.md`.
   the orderBy field**, so a user whose `name` went empty vanishes from the admin
   roster. Every write path builds it through `composeEmployeeName`
   (`employees/domain/policies/employee_name_policy.dart`), which falls back to
-  the stored name and then to `'—'` — it can never return `''`. The edit sheet
+  the stored name and then to `'—'` (`kUnnamedEmployee`) — it can never return
+  `''`. That fallback is an EM DASH, and the en dash joining an employee's
+  working hours is an EN dash; a 2026-08-19 cleanup flattened both to a plain
+  hyphen and rewrote the tests to match, so the tests pinned the regression
+  rather than catching it. Both are restored and re-pinned — treat a
+  mechanical non-ASCII sweep over `lib/` as a change to shipped strings, not
+  to comments.
+  **Rendering side: read `EmployeeRecord.displayName`**, the getter that
+  delegates to `displayEmployeeName` (mirroring `ClientRecord.displayName` →
+  `ClientNamePolicy.displayFor`) — the four-argument unpack was spelled at four
+  render sites. The free function stays public for the one caller holding a raw
+  map rather than a record (`account_status_provider.dart`). The edit sheet
   seeds First from the whole stored `name` when both halves are empty, so a
   legacy single-name doc round-trips unchanged. **`EmployeeFormValidator` takes
   the two halves separately, never the composed name** — `composeEmployeeName`

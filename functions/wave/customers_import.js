@@ -10,7 +10,9 @@
  * one fact, and it is load-bearing: the `lastSyncedHash` the push half writes
  * on a successful push is the same projection `importOneCustomer` compares
  * against here, which is what stops an import clobbering a queued local edit.
- * See the comments inside `importOneCustomer`.
+ * See the comments inside `importOneCustomer`. The connection read and the
+ * two listing documents both halves need live in the leaf
+ * `./customer_queries`.
  *
  * `customers.js` re-exports `importCustomers`, so `require("./customers")`
  * keeps working for every existing call site.
@@ -18,22 +20,9 @@
  */
 
 const {mappedFieldsHash, fromWaveCustomer} = require("./mappers");
-
-/**
- * The push half, required LAZILY for the three internals this module shares
- * with it (`readBusinessId` and the two customer-listing GraphQL documents).
- *
- * `customers.js` re-exports `importCustomers` from here at module scope, so a
- * module-scope require back would close a real cycle: whichever file was
- * required second would see a half-built `exports`. Deferring to call time
- * makes the two loadable in either order. Same shape as `adminFirestore`
- * below and `client.js`'s `graphql` in the push half.
- * @return {!Object} The `wave/customers` module exports.
- */
-function pushHalf() {
-  // eslint-disable-next-line global-require
-  return require("./customers");
-}
+const {
+  readBusinessId, LIST_CUSTOMERS, LIST_CUSTOMERS_SINCE,
+} = require("./customer_queries");
 
 /**
  * Lazily requires `firebase-admin/firestore` so tests that inject `db`/`now`
@@ -169,7 +158,6 @@ function importOneCustomer(node, ctx) {
  *   render it as "you have N clients".
  */
 async function importCustomers(deps = {}) {
-  const {readBusinessId, LIST_CUSTOMERS, LIST_CUSTOMERS_SINCE} = pushHalf();
   const db = deps.db || adminFirestore().getFirestore();
   const graphql = deps.graphql || require("./client").graphql;
   const now = deps.now || adminFirestore().FieldValue.serverTimestamp;

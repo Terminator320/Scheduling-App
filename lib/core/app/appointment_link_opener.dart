@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
@@ -17,20 +18,6 @@ import 'package:scheduling/features/home_widget/application/widget_sync_service.
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/hub_shell.dart';
-
-/// The slice of the live hub shell an inbound appointment link drives.
-///
-/// Narrow on purpose: the opener only ever shows the calendar, collapses the
-/// stack and reads the live role. Depending on the interface rather than
-/// `HubShellState` is what lets the routing be exercised without building the
-/// real four-tab shell (every tab of which reaches Firebase).
-abstract class AppointmentLinkHub {
-  bool get isAdmin;
-
-  void showCalendar();
-
-  void goHome();
-}
 
 /// Routes the two non-`app_links` external entry points — iOS home-widget taps
 /// and notification taps — into the appointment detail sheet.
@@ -67,7 +54,7 @@ class AppointmentLinkOpener {
   static AppointmentLinkHub? _liveHubShell() {
     final shell = HubShell.liveState;
     if (shell == null || !shell.mounted) return null;
-    return _HubShellHub(shell);
+    return shell;
   }
 
   final WidgetRef ref;
@@ -242,19 +229,4 @@ class AppointmentLinkOpener {
     }
     return null;
   }
-}
-
-class _HubShellHub implements AppointmentLinkHub {
-  _HubShellHub(this._shell);
-
-  final HubShellState _shell;
-
-  @override
-  bool get isAdmin => _shell.isAdmin;
-
-  @override
-  void showCalendar() => _shell.showCalendar();
-
-  @override
-  void goHome() => _shell.goHome();
 }

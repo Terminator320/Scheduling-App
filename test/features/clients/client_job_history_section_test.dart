@@ -70,6 +70,21 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('renders at most 50 cards however deep the history is', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _harness([for (var i = 0; i < 80; i++) _job('Job $i')]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byType(AppointmentCard, skipOffstage: false),
+      findsNWidgets(50),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('shows the empty line when the client has no jobs', (
     tester,
   ) async {
