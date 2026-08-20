@@ -71,13 +71,21 @@ void main() {
       await repo().save(
         themeMode: ThemeMode.dark,
         textScale: 2,
-        language: 'es',
+        language: 'fr',
       );
 
       final settings = await repo().load();
       expect(settings.themeMode, ThemeMode.dark);
       expect(settings.textScale, 2.0);
-      expect(settings.language, 'es');
+      expect(settings.language, 'fr');
+    });
+
+    test('an unsupported language loads back as English', () async {
+      // The app ships EN + FR only, so a stored locale from anywhere else -
+      // an older build, a hand-edited pref - must not reach MaterialApp.
+      await repo().save(language: 'es');
+
+      expect((await repo().load()).language, 'en');
     });
   });
 }

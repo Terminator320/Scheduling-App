@@ -63,13 +63,13 @@ void main() {
     await tester.pumpWidget(_harness(liveActivityReady: completer.future));
     await tester.pump();
 
-    expect(find.text('Live Activity'), findsNothing);
+    expect(find.text('Live job card'), findsNothing);
 
     completer.complete();
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('Live Activity'), findsOneWidget);
+    expect(find.text('Live job card'), findsOneWidget);
   });
 
   testWidgets('disables the Live Activity switch while its write is in flight', (

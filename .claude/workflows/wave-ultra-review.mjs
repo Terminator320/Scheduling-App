@@ -144,7 +144,7 @@ const UNITS = [
   {
     key: 'functions-security',
     agentType: 'security-reviewer',
-    paths: 'functions/wave/auth.js functions/wave/client.js functions/wave/customers.js functions/wave/worker.js functions/index.js functions/wave/errors.js',
+    paths: 'functions/wave/auth.js functions/wave/client.js functions/wave/customers.js functions/wave/customers_import.js functions/wave/worker.js functions/index.js functions/wave/errors.js',
     focus: `SECURITY of the Wave Cloud Functions. Check: Full Access Token sourced ONLY from Secret
 Manager and NEVER logged/returned to client; GraphQL request building is not injectable; callables
 enforce App Check + auth; assertPayloadShape + requireString/readSessionToken used on every callable
@@ -155,7 +155,7 @@ phone hashing not reversible/loggable; least-privilege on Firestore writes the f
   {
     key: 'functions-correctness',
     agentType: 'code-reviewer',
-    paths: 'functions/wave/client.js functions/wave/customers.js functions/wave/worker.js functions/wave/mappers.js functions/wave/errors.js functions/index.js',
+    paths: 'functions/wave/client.js functions/wave/customers.js functions/wave/customers_import.js functions/wave/worker.js functions/wave/mappers.js functions/wave/errors.js functions/index.js',
     focus: `CORRECTNESS + CONCURRENCY of the Wave Cloud Functions. Check: outbox worker transaction
 correctness (claimed-flag reset on retry, lease-based reaper for stuck inflight jobs, no stale-true
 bleed, no double-processing, idempotent upsert keying); drainQueue loop termination & batching;
@@ -258,7 +258,7 @@ major jumps; version bump 1.16.0+27 consistent; no secret committed in any of th
   {
     key: 'performance',
     agentType: 'performance-reviewer',
-    paths: 'lib/features/calendar/data/appointment_image_upload_service.dart lib/features/clients/widgets/views/clients_list_view.dart functions/wave/worker.js functions/wave/customers.js',
+    paths: 'lib/features/calendar/data/appointment_image_upload_service.dart lib/features/clients/widgets/views/clients_list_view.dart functions/wave/worker.js functions/wave/customers.js functions/wave/customers_import.js',
     focus: `Performance of hot paths touched by this change. Check: outbox worker drainQueue and bulk
 import for N+1 Firestore reads/writes, unbounded loops, missing batching, sequential awaits that should
 be parallel (and vice-versa where parallelism overwhelms quota); client list view rebuild cost & list

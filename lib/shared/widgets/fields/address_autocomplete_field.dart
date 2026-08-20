@@ -43,7 +43,7 @@ class AddressAutocompleteField extends ConsumerStatefulWidget {
 class _AddressAutocompleteFieldState
     extends ConsumerState<AddressAutocompleteField> {
   late final PlacesRepository _service = ref.read(placesRepositoryProvider);
-  late final AppLogger _logger = ref.read(loggerProvider);
+  late final AppLogger _logger;
   static const _uuid = Uuid();
   late final Debouncer _debounce = Debouncer(
     _debounceDelay,
@@ -64,6 +64,15 @@ class _AddressAutocompleteFieldState
 
   static const _minQueryLength = 3;
   static const _debounceDelay = Duration(milliseconds: 700);
+
+  @override
+  void initState() {
+    super.initState();
+    // Eager, not a lazy `late final`: the debounce error handler and the two
+    // post-await catches all run after this field can be gone, and `ref.read`
+    // on an unmounted consumer throws under Riverpod 3.
+    _logger = ref.read(loggerProvider);
+  }
 
   @override
   void dispose() {

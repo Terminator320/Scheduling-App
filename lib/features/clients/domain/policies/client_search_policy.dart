@@ -11,7 +11,6 @@ typedef ClientSearchEntry = ({
 class ClientSearchPolicy {
   const ClientSearchPolicy._();
 
-  static const int serverReadLimit = 1000;
   static const int resultDisplayLimit = 25;
 
   // These are compiled once, since normalize/digitsOnly run per row on every keystroke.

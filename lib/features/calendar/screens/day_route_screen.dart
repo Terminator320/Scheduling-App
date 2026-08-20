@@ -121,7 +121,10 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     final async = ref.watch(provider);
     ref.listen(provider, _onAppointmentsAsyncChange);
 
-    final data = _prepareBuild(async.value ?? const <AppointmentRecord>[]);
+    final data = _prepareBuild(
+      async.value ?? const <AppointmentRecord>[],
+      ref.watch(employeeNameMapProvider),
+    );
 
     return FeatureTourHost(
       scope: _tour.scope,
@@ -182,10 +185,34 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     );
   }
 
+  _DayRouteData? _preparedData;
+  // What _preparedData was last derived from. Everything _prepareBuild reads
+  // is remembered here, so adding an input means adding a field.
+  List<AppointmentRecord>? _preparedSource;
+  Map<String, String>? _preparedNameMap;
+  DateTime? _preparedDay;
+  String? _preparedEmployeeId;
+
   // Derives the render-ready slice of the day from the raw appointments:
   // filter+sort into driving order, resolve which assignee's route to show,
   // then the jobs for that assignee and their navigable stops.
-  _DayRouteData _prepareBuild(List<AppointmentRecord> source) {
+  //
+  // Memoized on its inputs the same way `_refreshDayIndex` is on the calendar
+  // screen: the source is the ~14-day range-stream superset, and every
+  // setState, `currentDayProvider` tick and name-map emission rebuilds.
+  _DayRouteData _prepareBuild(
+    List<AppointmentRecord> source,
+    Map<String, String> nameMap,
+  ) {
+    final cached = _preparedData;
+    if (cached != null &&
+        identical(source, _preparedSource) &&
+        identical(nameMap, _preparedNameMap) &&
+        _preparedDay == _day &&
+        _preparedEmployeeId == _selectedEmployeeId) {
+      return cached;
+    }
+
     // Re-scoped to `_day`: the range stream is a 14-day superset — see runsOn.
     // Slices, not records, so a continuing job carries THAT day's window.
     final daySlices =
@@ -199,7 +226,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
 
     // Collect the distinct employees assigned that day, falling back to the denormalized names for anyone who's since been removed.
     final assigneeEntries = widget.isAdmin
-        ? _assigneesWithJobs(daySlices)
+        ? _assigneesWithJobs(daySlices, nameMap)
         : const <MapEntry<String, String>>[];
     final employeeId = _resolveEmployeeId([
       for (final e in assigneeEntries) e.key,
@@ -220,7 +247,11 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         .map((s) => s.appointment.address)
         .toList();
 
-    return _DayRouteData(
+    _preparedSource = source;
+    _preparedNameMap = nameMap;
+    _preparedDay = _day;
+    _preparedEmployeeId = _selectedEmployeeId;
+    return _preparedData = _DayRouteData(
       assigneeEntries: assigneeEntries,
       employeeId: employeeId,
       jobs: jobs,
@@ -231,8 +262,8 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
   // Distinct id → display name for every employee assigned to a job that day.
   List<MapEntry<String, String>> _assigneesWithJobs(
     List<AppointmentDaySlice> daySlices,
+    Map<String, String> nameMap,
   ) {
-    final nameMap = ref.watch(employeeNameMapProvider);
     final byId = <String, String>{};
     for (final slice in daySlices) {
       final a = slice.appointment;

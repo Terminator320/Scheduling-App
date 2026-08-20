@@ -64,7 +64,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
   static const int _pageSize = 50;
   // Debounce before the server search, so we don't fire a read on every keystroke —
   // the local filter covers the gap in the meantime so it still feels immediate.
-  final _searchDebounce = Debouncer(kSearchDebounce);
+  late final Debouncer _searchDebounce;
   String _committedQuery = '';
 
   late final PagingController<int, ClientRecord> _pagingController =
@@ -78,6 +78,19 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
         },
         fetchPage: _fetchPage,
       );
+
+  @override
+  void initState() {
+    super.initState();
+    // Read the logger here, not lazily: the debounce handler can fire after
+    // this view is gone, and `ref.read` on an unmounted consumer throws.
+    final logger = ref.read(loggerProvider);
+    _searchDebounce = Debouncer(
+      kSearchDebounce,
+      onError: (error, stackTrace) =>
+          logger.warn('CLI-SEARCH debounced search failed', error, stackTrace),
+    );
+  }
 
   Future<List<ClientRecord>> _fetchPage(int pageKey) async {
     // Read before the await — switching tabs mid-fetch unmounts this consumer,

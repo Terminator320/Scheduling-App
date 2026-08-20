@@ -47,6 +47,12 @@ AppointmentRecord _appt(String id) => AppointmentRecord(
 void main() {
   late _MockAppointmentsRepo repo;
 
+  setUpAll(() {
+    registerFallbackValue(
+      AppointmentDateRange(start: DateTime(2026, 7, 8), end: DateTime(2026, 7, 9)),
+    );
+  });
+
   setUp(() {
     repo = _MockAppointmentsRepo();
     when(

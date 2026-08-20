@@ -20,7 +20,14 @@ class _MockQuerySnapshot extends Mock
 class _MockDocSnap extends Mock
     implements QueryDocumentSnapshot<Map<String, dynamic>> {}
 
+/// A plain fake, not a `Mock`: it is only ever the `startAfterDocument`
+/// fallback value, which mocktail requires for a custom argument type.
+class _FakeDocSnap extends Fake
+    implements QueryDocumentSnapshot<Map<String, dynamic>> {}
+
 void main() {
+  setUpAll(() => registerFallbackValue(_FakeDocSnap()));
+
   late _MockFirestore firestore;
   late _MockCollection collection;
   late _MockQuery query;

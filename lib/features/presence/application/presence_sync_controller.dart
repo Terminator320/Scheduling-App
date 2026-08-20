@@ -98,6 +98,11 @@ class PresenceSyncController with ReentrantSync {
   Future<void> sync() => runCoalesced(_syncGuarded);
 
   Future<void> _syncGuarded() async {
+    // Teardown runs BEFORE signOut(), so a body resuming mid-teardown still
+    // holds a valid credential: it would re-open the position stream and
+    // re-create presence/location for a user who just signed out, and keep
+    // uploading until the process dies. Every await below re-checks this.
+    final generation = syncGeneration;
     try {
       final signedIn = _auth.currentUser != null;
       final docState = _ref.read(currentUserDocProvider);
@@ -121,9 +126,11 @@ class PresenceSyncController with ReentrantSync {
       if (uid == _trackedUid && _positionSub != null) return;
 
       await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
+      if (isSyncStale(generation)) return;
       final permission = await _ref
           .read(locationPermissionServiceProvider)
           .ensureLocation();
+      if (isSyncStale(generation)) return;
       // Silent no-op on any non-grant (never nag) — the server's
       // address-fallback chain covers an untracked user. Silent to the USER,
       // not to us: the three non-grant reasons need different remedies
@@ -139,6 +146,7 @@ class PresenceSyncController with ReentrantSync {
       final match = await _ref
           .read(employeesRepositoryProvider)
           .findUserByUid(uid);
+      if (isSyncStale(generation)) return;
       final docId = match?.id;
       if (docId == null) {
         _logger.warn('PRESENCE no users doc for uid; skip tracking');
@@ -289,16 +297,36 @@ class PresenceSyncController with ReentrantSync {
   /// Best-effort teardown for sign-out or account deletion — stops the stream
   /// and deletes the presence doc. Never throws, since sign-out must not be blocked.
   Future<void> unregister() async {
-    final docId = _docId;
+    invalidateSync();
+    final knownDocId = _docId;
     _stop();
-    if (docId == null) return;
     try {
+      // Resolve the docId when this session never started — `_start` needs
+      // firebaseReady AND a granted location permission AND a successful
+      // findUserByUid, and if any of those failed today the doc from a
+      // PREVIOUS launch is still live. That stale pin is visually identical to
+      // a fresh one on the admin map (`LiveMapAggregator.join` filters on the
+      // user, never on freshness), and the privacy policy promises sign-out
+      // clears it. Same fix as `LiveActivityRegistrationController.unregister`.
+      final docId = knownDocId ?? await _resolveUserDocId();
+      if (docId == null) return;
       await _ref
           .read(presenceRepositoryProvider)
           .deleteLocation(userDocId: docId);
     } catch (e, st) {
       _logger.warn('PRESENCE unregister failed', e, st);
     }
+  }
+
+  /// This device's `users` doc id, for a teardown that never got as far as
+  /// [_start]. Null when signed out or when the lookup fails.
+  Future<String?> _resolveUserDocId() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return null;
+    final match = await _ref
+        .read(employeesRepositoryProvider)
+        .findUserByUid(uid);
+    return match?.id;
   }
 
   /// Container-teardown cleanup — cancels the stream, timers, and lifecycle

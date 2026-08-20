@@ -135,7 +135,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
     // No photos in EITHER store means there is nothing for this read to find,
     // and the sheet is the most-opened surface in the app.
     //
-    // TODO(gvogas): revisit at the photo-subcollection CONTRACT step.
+    // TODO(gvogas): revisit at the photo-subcollection CONTRACT step
+    // (`.claude/rules/images.md`, "THREE THINGS THE ARRAY IS STILL DOING").
     // This is safe ONLY while `pictures` is still dual-written: `hasPictures`
     // is true if the array is non-empty OR `pictureCount > 0`, so today the
     // array carries the decision. `pictureCount` is function-owned and reads
@@ -652,21 +653,29 @@ class EventDetailsController extends Notifier<EventDetailsState>
     return null;
   }
 
-  /// Returns null on success, or the failure error otherwise. When
-  /// [includeFuture] is set, this also deletes the series' future visits in
-  /// one batch (done/cancelled visits are preserved).
-  Future<Object?> deleteAppointment(
+  /// Deletes the visit and returns a sealed outcome. When [includeFuture] is
+  /// set, this also deletes the series' future visits in one batch
+  /// (done/cancelled visits are preserved).
+  ///
+  /// It returns [EventDetailsActionOutcome] rather than a nullable error for
+  /// the same reason the status setters do: `null` meant BOTH "deleted" and
+  /// "skipped by the reentrancy guard", so a skipped delete announced
+  /// "Appointment deleted" and closed the sheet without having written
+  /// anything.
+  Future<EventDetailsActionOutcome> deleteAppointment(
     AppointmentRecord appointment, {
     bool includeFuture = false,
   }) async {
     final id = appointment.id;
     if (id == null) {
-      return StateError('Cannot delete an appointment without an id.');
+      return EventDetailsActionFailed(
+        StateError('Cannot delete an appointment without an id.'),
+      );
     }
     // Reject a double-tap on the delete — same reentrancy guard save() and the
     // status writes use. Without it a second run pays getSeries, the batch
     // delete and deleteOrphanedImages all over again.
-    if (state.isSaving) return null;
+    if (state.isSaving) return const EventDetailsActionBusy();
     state = state.copyWith(isSaving: true);
     // Resolve these before the first await, so they survive the sheet being dismissed.
     final repo = ref.read(appointmentsRepositoryProvider);
@@ -702,11 +711,11 @@ class EventDetailsController extends Notifier<EventDetailsState>
       }
 
       if (ref.mounted) state = state.copyWith(isSaving: false);
-      return null;
+      return const EventDetailsActionOk();
     } catch (e, st) {
       logger.warn('APPT-DEL deleteAppointment failed', e, st);
       if (ref.mounted) state = state.copyWith(isSaving: false);
-      return e;
+      return EventDetailsActionFailed(e);
     }
   }
 }

@@ -24,48 +24,31 @@ final allUsersStreamProvider = StreamProvider<List<EmployeeRecord>>((ref) {
     return repo.watchAssignableUsers();
   }
 
-  final uidState = ref.watch(authUidProvider);
-  if (uidState.hasError) {
-    return Stream.error(
-      uidState.error!,
-      uidState.stackTrace ?? StackTrace.current,
-    );
-  }
-  if (uidState.isLoading) {
-    return Stream.fromFuture(
-      ref.watch(authUidProvider.future),
-    ).asyncExpand((uid) async* {
-      if (uid == null) {
-        yield const <EmployeeRecord>[];
-        return;
-      }
-      final doc = await ref.watch(currentUserDocProvider.future);
-      final role = (doc['role'] ?? '').toString().trim();
-      yield* streamForRole(uid, role);
-    });
-  }
+  return streamForUid(ref, (uid) {
+    if (uid == null) return Stream.value(const <EmployeeRecord>[]);
 
-  final uid = uidState.value;
-  if (uid == null) return Stream.value(const []);
-
-  final docState = ref.watch(currentUserDocProvider);
-  if (docState.hasError) {
-    return Stream.error(
-      docState.error!,
-      docState.stackTrace ?? StackTrace.current,
+    // The ROLE picks the query, so it has to settle too: an admin resolved as
+    // an employee gets `watchAssignableUsers`, which hides invited and
+    // disabled accounts from the roster that exists to manage them.
+    final docState = ref.watch(currentUserDocProvider);
+    if (docState.hasError) {
+      return Stream.error(
+        docState.error!,
+        docState.stackTrace ?? StackTrace.current,
+      );
+    }
+    if (docState.isLoading) {
+      return Stream.fromFuture(
+        ref.watch(currentUserDocProvider.future),
+      ).asyncExpand(
+        (doc) => streamForRole(uid, (doc['role'] ?? '').toString().trim()),
+      );
+    }
+    return streamForRole(
+      uid,
+      (docState.value?['role'] ?? '').toString().trim(),
     );
-  }
-  if (docState.isLoading) {
-    return Stream.fromFuture(
-      ref.watch(currentUserDocProvider.future),
-    ).asyncExpand(
-      (doc) => streamForRole(uid, (doc['role'] ?? '').toString().trim()),
-    );
-  }
-  return streamForRole(
-    uid,
-    (docState.value?['role'] ?? '').toString().trim(),
-  );
+  });
 });
 
 /// Container-scoped mutable holders for the content-equality memo — each
@@ -123,23 +106,10 @@ final employeeNameMapProvider = Provider<Map<String, String>>(
 /// load-bearing; keep it.
 final employeesStreamProvider =
     StreamProvider.autoDispose<List<EmployeeRecord>>((ref) {
-      final uidState = ref.watch(authUidProvider);
-      if (uidState.hasError) {
-        return Stream.error(
-          uidState.error!,
-          uidState.stackTrace ?? StackTrace.current,
-        );
-      }
-      if (uidState.isLoading) {
-        return Stream.fromFuture(
-          ref.watch(authUidProvider.future),
-        ).asyncExpand((uid) {
-          if (uid == null) return Stream.value(const <EmployeeRecord>[]);
-          return ref.watch(employeesRepositoryProvider).watchEmployees();
-        });
-      }
-      if (uidState.value == null) return Stream.value(const []);
-      return ref.watch(employeesRepositoryProvider).watchEmployees();
+      return streamForUid(ref, (uid) {
+        if (uid == null) return Stream.value(const <EmployeeRecord>[]);
+        return ref.watch(employeesRepositoryProvider).watchEmployees();
+      });
     });
 
 typedef _EmployeeSearchEntry = ({

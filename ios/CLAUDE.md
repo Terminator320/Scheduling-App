@@ -81,3 +81,14 @@ iOS notes (Phase 0 of clean-architecture restructure):
   together with the `home_widget` tap channel, when the P4b `app_links`
   dispatcher lands (docs/plans/2026-07-29-redesign-program.md). Swift-side, so
   Mac-only verification: widget row / Live Activity tap → appointment sheet.
+
+App Check simulator setup: debug builds use `AppleDebugProvider` (App Attest is
+Release-only and fails on the Simulator), so run the app once → take the debug
+token from the Xcode console, or read `GACAppCheckDebugToken` out of the
+simulator app's preferences plist → register it in Firebase Console → App Check
+→ the iOS app → Manage debug tokens. The token is per-install: re-register after
+a full reinstall or a fresh simulator. An unregistered token causes all Firestore
+writes and non-cached reads to fail with `permission-denied` while cached reads
+still succeed, making the failure appear collection-specific. Full walkthrough:
+`docs/IOS_MAC_BUILD.md` Phase E.
+

@@ -130,15 +130,36 @@ void main() {
     });
   });
 
-  test('fetchInRange no longer truncates through a hard query limit', () async {
-    await repo().fetchInRange(
-      AppointmentDateRange(
-        start: DateTime(2026, 8),
-        end: DateTime(2026, 9),
-      ),
-    );
+  group('the range query stays bounded', () {
+    test('it names a ceiling', () async {
+      await repo().fetchInRange(
+        AppointmentDateRange(start: DateTime(2026, 8), end: DateTime(2026, 9)),
+      );
 
-    verifyNever(() => query.limit(1000));
+      verify(() => query.limit(3000)).called(1);
+    });
+
+    test('a snapshot that comes back at the cap warns', () async {
+      withJobs(3000);
+
+      await repo().fetchInRange(
+        AppointmentDateRange(start: DateTime(2026, 8), end: DateTime(2026, 9)),
+      );
+
+      expect(logger.warnings, hasLength(1));
+      expect(logger.warnings.single, startsWith('APPT-LOAD'));
+      expect(logger.warnings.single, contains('3000'));
+    });
+
+    test('a short snapshot is silent', () async {
+      withJobs(2999);
+
+      await repo().fetchInRange(
+        AppointmentDateRange(start: DateTime(2026, 8), end: DateTime(2026, 9)),
+      );
+
+      expect(logger.warnings, isEmpty);
+    });
   });
 
   test('history search walks additional pages instead of warning at a cap', () async {
@@ -172,5 +193,41 @@ void main() {
     expect(result.last.id, 'h500');
     expect(logger.warnings, isEmpty);
     verify(() => query.startAfterDocument(firstPage.last)).called(1);
+  });
+
+  test('history search stops at its scan ceiling and warns', () async {
+    when(() => snapshot.docs).thenReturn([
+      for (var i = 0; i < 500; i++)
+        _FakeDoc('h$i', {
+          'clientName': 'Sophie Tremblay',
+          'employeeNames': const <String>[],
+          'status': 'done',
+        }),
+    ]);
+
+    await repo().searchHistory('sophie');
+
+    // 5000 / 500 per page - it must stop paging rather than walk the archive.
+    verify(() => query.get()).called(10);
+    expect(logger.warnings, hasLength(1));
+    expect(logger.warnings.single, startsWith('HIST-SEARCH'));
+    expect(logger.warnings.single, contains('5000'));
+  });
+
+  test('client history stops at its scan ceiling and warns', () async {
+    when(() => snapshot.docs).thenReturn([
+      for (var i = 0; i < 50; i++)
+        _FakeDoc('c$i', {
+          'startTime': Timestamp.fromDate(now),
+          'endTime': Timestamp.fromDate(now.add(const Duration(hours: 1))),
+          'status': 'done',
+        }),
+    ]);
+
+    await repo().fetchClientHistory(clientId: 'c1');
+
+    expect(logger.warnings, hasLength(1));
+    expect(logger.warnings.single, startsWith('APPT-LOAD'));
+    expect(logger.warnings.single, contains('1000'));
   });
 }

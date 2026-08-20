@@ -562,11 +562,12 @@ void main() {
     );
 
     Future<String> firstNameValue(ProviderContainer container) async {
-      final completer = Completer<String>();
-      final sub = container.listen<String>(currentUserNameProvider, (_, next) {
-        if (!completer.isCompleted) completer.complete(next);
-      }, fireImmediately: true);
-      return completer.future.whenComplete(sub.close);
+      final sub = container.listen<String>(currentUserNameProvider, (_, _) {});
+      addTearDown(sub.close);
+      // The doc listener opens behind an async auth-uid gate, so the name is
+      // empty by definition until the doc lands - settle it before reading.
+      await container.read(currentUserDocProvider.future);
+      return container.read(currentUserNameProvider);
     }
 
     test('falls back to first and last name when name is blank', () async {

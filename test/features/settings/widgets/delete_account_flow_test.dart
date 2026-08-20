@@ -21,9 +21,13 @@ import 'package:scheduling/features/settings/widgets/views/delete_account_flow.d
 import 'package:scheduling/l10n/l10n.dart';
 
 class _MockDeletionService extends Mock implements AccountDeletionService {}
+
 class _MockAuthService extends Mock implements AuthService {}
+
 class _MockPush extends Mock implements PushRegistrationController {}
+
 class _MockPresence extends Mock implements PresenceSyncController {}
+
 class _MockLiveActivity extends Mock
     implements LiveActivityRegistrationController {}
 
@@ -116,6 +120,10 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), 'hunter2');
+    // The submit button is null-gated on a non-empty password, so the rebuild
+    // that enables it has to land before the tap.
+    await tester.pumpAndSettle();
+
     await tester.tap(find.widgetWithText(FilledButton, 'Delete permanently'));
     await tester.pumpAndSettle();
 
@@ -187,38 +195,44 @@ void main() {
     expect(find.text('Delete account?'), findsOneWidget);
   });
 
-  testWidgets('delete flow cannot start while sign-out is already in progress', (
-    tester,
-  ) async {
-    final service = _MockDeletionService();
-    final auth = _MockAuthService();
-    final push = _MockPush();
-    final presence = _MockPresence();
-    final liveActivity = _MockLiveActivity();
-    final signOutCompleter = Completer<void>();
-    Future<void> waitForSignOut(_) => signOutCompleter.future;
+  testWidgets(
+    'a sign-out that fails after the host unmounted still restores the '
+    'device registrations',
+    (tester) async {
+      // B6: the rollback used to read its three controllers off `ref` inside
+      // the catch — after de-registration and the sign-out round-trip. If
+      // Settings unmounted in that window, Riverpod 3 threw a StateError over
+      // the real failure, skipping the restore, the notice and the busy reset.
+      final service = _MockDeletionService();
+      final auth = _MockAuthService();
+      final push = _MockPush();
+      final presence = _MockPresence();
+      final liveActivity = _MockLiveActivity();
+      final signOutCompleter = Completer<void>();
 
-    when(auth.signOut).thenAnswer(waitForSignOut);
-    when(push.unregisterCurrentDevice).thenAnswer((_) async {});
-    when(presence.unregister).thenAnswer((_) async {});
-    when(liveActivity.unregister).thenAnswer((_) async {});
+      when(auth.signOut).thenAnswer((_) => signOutCompleter.future);
+      when(push.unregisterCurrentDevice).thenAnswer((_) async {});
+      when(presence.unregister).thenAnswer((_) async {});
+      when(liveActivity.unregister).thenAnswer((_) async {});
+      when(push.sync).thenAnswer((_) async {});
+      when(presence.sync).thenAnswer((_) async {});
+      when(liveActivity.sync).thenAnswer((_) async {});
 
-    final container = ProviderContainer(
-      overrides: [
-        isOfflineProvider.overrideWithValue(false),
-        authServiceProvider.overrideWithValue(auth),
-        pushRegistrationControllerProvider.overrideWithValue(push),
-        presenceSyncControllerProvider.overrideWithValue(presence),
-        liveActivityRegistrationControllerProvider.overrideWithValue(
-          liveActivity,
-        ),
-        appointmentImageLoaderProvider.overrideWithValue(_RecordingLoader()),
-      ],
-    );
-    addTearDown(container.dispose);
+      final container = ProviderContainer(
+        overrides: [
+          isOfflineProvider.overrideWithValue(false),
+          authServiceProvider.overrideWithValue(auth),
+          pushRegistrationControllerProvider.overrideWithValue(push),
+          presenceSyncControllerProvider.overrideWithValue(presence),
+          liveActivityRegistrationControllerProvider.overrideWithValue(
+            liveActivity,
+          ),
+          appointmentImageLoaderProvider.overrideWithValue(_RecordingLoader()),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
+      Widget app(Widget home) => UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
           localizationsDelegates: const [
@@ -228,20 +242,85 @@ void main() {
           ],
           supportedLocales: AppLocalizations.supportedLocales,
           theme: lightTheme(),
-          home: _Host(service: service),
+          home: home,
         ),
-      ),
-    );
+      );
 
-    await tester.tap(find.text('sign out'));
-    await tester.pump();
+      await tester.pumpWidget(app(_Host(service: service)));
+      await tester.tap(find.text('sign out'));
+      await tester.pump();
+      await tester.pump();
 
-    await tester.tap(find.text('delete'));
-    await tester.pumpAndSettle();
+      // Leave Settings while sign-out is still in flight.
+      await tester.pumpWidget(app(const SizedBox.shrink()));
+      signOutCompleter.completeError(Exception('boom'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Delete account?'), findsNothing);
-    verifyNever(() => service.reauthenticateWithPassword(any()));
+      expect(tester.takeException(), isNull);
+      verify(push.sync).called(1);
+      verify(presence.sync).called(1);
+      verify(liveActivity.sync).called(1);
+    },
+  );
 
-    signOutCompleter.complete();
-  });
+  testWidgets(
+    'delete flow cannot start while sign-out is already in progress',
+    (
+      tester,
+    ) async {
+      final service = _MockDeletionService();
+      final auth = _MockAuthService();
+      final push = _MockPush();
+      final presence = _MockPresence();
+      final liveActivity = _MockLiveActivity();
+      final signOutCompleter = Completer<void>();
+      Future<void> waitForSignOut(_) => signOutCompleter.future;
+
+      when(auth.signOut).thenAnswer(waitForSignOut);
+      when(push.unregisterCurrentDevice).thenAnswer((_) async {});
+      when(presence.unregister).thenAnswer((_) async {});
+      when(liveActivity.unregister).thenAnswer((_) async {});
+
+      final container = ProviderContainer(
+        overrides: [
+          isOfflineProvider.overrideWithValue(false),
+          authServiceProvider.overrideWithValue(auth),
+          pushRegistrationControllerProvider.overrideWithValue(push),
+          presenceSyncControllerProvider.overrideWithValue(presence),
+          liveActivityRegistrationControllerProvider.overrideWithValue(
+            liveActivity,
+          ),
+          appointmentImageLoaderProvider.overrideWithValue(_RecordingLoader()),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            theme: lightTheme(),
+            home: _Host(service: service),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('sign out'));
+      await tester.pump();
+
+      await tester.tap(find.text('delete'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete account?'), findsNothing);
+      verifyNever(() => service.reauthenticateWithPassword(any()));
+
+      signOutCompleter.complete();
+    },
+  );
 }

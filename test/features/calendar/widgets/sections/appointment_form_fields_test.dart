@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
@@ -57,7 +58,10 @@ void main() {
     addTearDown(controllers.dispose);
 
     await tester.pumpWidget(
-      MaterialApp(
+      // The address field is a ConsumerStatefulWidget that resolves its logger
+      // in initState, so the tree needs a real scope.
+      ProviderScope(
+        child: MaterialApp(
         localizationsDelegates: const [
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,
@@ -107,6 +111,7 @@ void main() {
               onRequestAddClient: onRequestAddClient,
               onApplyTemplate: onApplyTemplate,
             ),
+          ),
           ),
         ),
       ),

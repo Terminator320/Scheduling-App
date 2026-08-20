@@ -20,6 +20,7 @@ import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart'
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/features/presence/application/live_map_providers.dart';
 import 'package:scheduling/features/presence/domain/live_map_aggregator.dart';
+import 'package:scheduling/features/presence/domain/staff_marker_assembly.dart';
 import 'package:scheduling/features/presence/widgets/live_map_overlays.dart';
 import 'package:scheduling/features/presence/widgets/staff_info_card.dart';
 import 'package:scheduling/features/presence/widgets/staff_marker_icon.dart';
@@ -237,111 +238,42 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     double dpr,
   ) {
     final scheme = Theme.of(context).colorScheme;
-    final ringColor = scheme.surface;
-    final haloColor = scheme.primary;
-    final signature = _signatureOf(
-      points,
-      selected,
-      dpr,
-      ringColor,
-      haloColor,
+    final params = (
+      points: points,
+      selectedDocId: selected,
+      devicePixelRatio: dpr,
+      ringColor: scheme.surface,
+      haloColor: scheme.primary,
     );
+    final signature = staffMarkerSignature(params);
     if (signature == _lastSignature) return;
 
     final token = ++_assembleToken;
-    unawaited(
-      _assembleMarkers(
-        points,
-        selected,
-        dpr,
-        ringColor,
-        haloColor,
-        signature,
-        token,
-      ),
-    );
-  }
-
-  String _signatureOf(
-    List<StaffMapPoint> points,
-    String? selected,
-    double dpr,
-    Color ringColor,
-    Color haloColor,
-  ) {
-    final buffer = StringBuffer()
-      ..write(dpr)
-      ..write('|')
-      ..write(selected ?? '')
-      ..write('|')
-      ..write(ringColor.toARGB32())
-      ..write(',')
-      ..write(haloColor.toARGB32());
-    for (final p in points) {
-      buffer
-        ..write(';')
-        ..write(p.userDocId)
-        ..write(',')
-        ..write(p.lat)
-        ..write(',')
-        ..write(p.lng)
-        ..write(',')
-        ..write(p.color.toARGB32())
-        ..write(',')
-        ..write(p.name);
-    }
-    return buffer.toString();
+    unawaited(_assembleMarkers(params, signature, token));
   }
 
   Future<void> _assembleMarkers(
-    List<StaffMapPoint> points,
-    String? selected,
-    double dpr,
-    Color ringColor,
-    Color haloColor,
+    StaffMarkerParams params,
     String signature,
     int token,
   ) async {
     final logger = ref.read(loggerProvider);
     try {
-      // Render every icon in parallel. The renderer caches per key, so
-      // repeated or superseded batches are near-free, but one failure aborts
-      // the whole batch.
-      final icons = await Future.wait(
-        points.map(
-          (point) => _renderer.resolve(
-            name: point.name,
-            color: point.color,
-            selected: point.userDocId == selected,
-            ringColor: ringColor,
-            haloColor: haloColor,
-            devicePixelRatio: dpr,
-          ),
-        ),
+      final markers = await assembleStaffMarkers(
+        params: params,
+        renderer: _renderer,
+        onMarkerTap: _selectMarker,
       );
       if (!mounted || token != _assembleToken) return;
-      final markers = <Marker>{};
-      for (var i = 0; i < points.length; i++) {
-        final point = points[i];
-        markers.add(
-          Marker(
-            markerId: MarkerId(point.userDocId),
-            position: LatLng(point.lat, point.lng),
-            icon: icons[i],
-            onTap: () => _selectMarker(point.userDocId),
-          ),
-        );
-      }
       // Commit the signature only now, so a failed render leaves the previous
       // markers + signature in place and the next data/theme change retries.
       _lastSignature = signature;
       setState(() => _markers = markers);
     } catch (e, st) {
-      // Logged before the guards, through the logger captured above — a marker
-      // render that fails after the screen is disposed is exactly the case
-      // worth having in Crashlytics, and it was being dropped.
+      // Logged through the logger captured above — a marker render that fails
+      // after the screen is disposed is exactly the case worth having in
+      // Crashlytics, and it was being dropped.
       logger.warn('LIVEMAP-MARKERS assemble failed', e, st);
-      if (!mounted || token != _assembleToken) return;
     }
   }
 

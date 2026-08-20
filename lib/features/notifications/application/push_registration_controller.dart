@@ -74,6 +74,12 @@ class PushRegistrationController with ReentrantSync {
   Future<void> sync() => runCoalesced(_syncGuarded);
 
   Future<void> _syncGuarded() async {
+    // Teardown runs BEFORE signOut(), so a body resuming mid-teardown still
+    // holds a valid credential. Worse here than elsewhere: if it lands after
+    // `deleteToken()`, FCM mints a FRESH token and this upserts it, leaving a
+    // signed-out device registered and still receiving that account's pushes —
+    // and the write succeeds, so nothing logs an error.
+    final generation = syncGeneration;
     final signedIn = _auth.currentUser != null;
     final docState = _ref.read(currentUserDocProvider);
     if (docState.isLoading || docState.hasError) return;
@@ -99,22 +105,25 @@ class PushRegistrationController with ReentrantSync {
 
     try {
       await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
+      if (isSyncStale(generation)) return;
       final service = _ref.read(pushNotificationServiceProvider);
       final granted = await service.requestPermission();
-      if (!granted) return;
+      if (!granted || isSyncStale(generation)) return;
       await service.configureForegroundPresentation();
+      if (isSyncStale(generation)) return;
 
       if (uid == null) return;
       final match = await _ref
           .read(employeesRepositoryProvider)
           .findUserByUid(uid);
+      if (isSyncStale(generation)) return;
       final docId = match?.id;
       if (docId == null) {
         _logger.warn('PUSH no users doc for uid; skip token upsert');
         return;
       }
       final token = await service.currentToken();
-      if (token == null) return;
+      if (token == null || isSyncStale(generation)) return;
 
       await _upsert(docId, token, uid, locale);
       _registeredDocId = docId;
@@ -127,6 +136,17 @@ class PushRegistrationController with ReentrantSync {
       // escape as an uncaught async error — just log it as non-fatal.
       _logger.warn('PUSH sync failed', e, st);
     }
+  }
+
+  /// This device's `users` doc id, for a teardown that never completed a
+  /// registration. Null when signed out or when the lookup fails.
+  Future<String?> _resolveUserDocId() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return null;
+    final match = await _ref
+        .read(employeesRepositoryProvider)
+        .findUserByUid(uid);
+    return match?.id;
   }
 
   Future<void> _upsert(String docId, String token, String uid, String locale) {
@@ -159,15 +179,24 @@ class PushRegistrationController with ReentrantSync {
   /// Best-effort de-registration for sign-out — deletes the token doc and
   /// invalidates the FCM token; never throws, so sign-out is never blocked.
   Future<void> unregisterCurrentDevice() async {
+    invalidateSync();
     try {
-      final docId = _registeredDocId;
-      final token = _registeredToken;
+      final service = _ref.read(pushNotificationServiceProvider);
+      // Resolve BOTH from the device when this session never completed a
+      // registration — the two fields are set only on a fully-successful sync,
+      // so an incomplete session left a stale `fcmTokens` row that the server
+      // keeps trying to push to (`syncUsersByUid` purges these on DISABLE, not
+      // on sign-out), one per device per incomplete session. The token is what
+      // identifies THIS device, so it has to come from FCM rather than from a
+      // kind/platform sweep, which would de-register the user's other phones.
+      final token = _registeredToken ?? await service.currentToken();
+      final docId = _registeredDocId ?? await _resolveUserDocId();
       if (docId != null && token != null) {
         await _ref
             .read(fcmTokenRepositoryProvider)
             .deleteToken(userDocId: docId, token: token);
       }
-      await _ref.read(pushNotificationServiceProvider).deleteToken();
+      await service.deleteToken();
     } catch (e, st) {
       _logger.warn('PUSH unregister failed', e, st);
     } finally {

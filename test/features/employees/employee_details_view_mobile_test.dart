@@ -8,6 +8,7 @@ import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/employees/domain/models/emergency_contact.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
 import 'package:scheduling/features/employees/widgets/cards/employee_profile_card.dart';
@@ -32,10 +33,13 @@ Widget _wrap(
   EmployeeRecord employee, {
   required bool isCurrentUserAdmin,
   double textScale = 1,
+  Stream<EmergencyContact>? emergency,
 }) => ProviderScope(
   overrides: [
     employeesRepositoryProvider.overrideWithValue(_MockRepo()),
     employeeTodayJobsProvider(employee.id).overrideWithValue(const []),
+    if (emergency != null)
+      emergencyContactProvider(employee.id).overrideWith((ref) => emergency),
   ],
   child: ThemeNotifier(
     themeMode: ThemeMode.light,
@@ -139,6 +143,49 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Amy Adams'), findsOneWidget);
+  });
+
+  testWidgets('shows the emergency panel when a contact is on file', (
+    tester,
+  ) async {
+    // The pair lives in users/{id}/private/emergency precisely so rules can
+    // gate it — this view is the admin-side surface that renders it.
+    tester.view.physicalSize = const Size(1000, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      _wrap(
+        _populated,
+        isCurrentUserAdmin: true,
+        emergency: Stream.value(
+          const EmergencyContact(contact: 'Mia Roy', phone: '555-0199'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('EMERGENCY PHONE'), findsOneWidget);
+    expect(find.text('Mia Roy'), findsOneWidget);
+    expect(find.text('555-0199'), findsOneWidget);
+  });
+
+  testWidgets('a failed emergency read shows nothing, not a placeholder', (
+    tester,
+  ) async {
+    // Loading and error deliberately render the same "not shown" on this
+    // read-only surface; the provider logs the failure itself.
+    await tester.pumpWidget(
+      _wrap(
+        _populated,
+        isCurrentUserAdmin: true,
+        emergency: Stream.error(StateError('denied')),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('EMERGENCY'), findsNothing);
+    expect(find.text('EMERGENCY PHONE'), findsNothing);
   });
 
   testWidgets('survives 260x640 at 2.0 text scale', (tester) async {

@@ -10,9 +10,6 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
-import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
-import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/settings/widgets/dialogs/delete_account_dialog.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
@@ -51,18 +48,24 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     final authService = ref.read(authServiceProvider);
     final notices = ref.read(noticeServiceProvider);
     setState(() => _isSigningOut = true);
-    var deregistered = false;
+    // Holds the deps once the teardown has actually run, so the rollback in
+    // the catch below reuses THEM instead of reading `ref` again — see
+    // [_restoreDeviceRegistrations]. Non-null is exactly "there is something
+    // to roll back", which is why it replaces a separate bool.
+    DeviceDeregistrationDeps? deregistered;
     try {
       // Clean up this device's push token, presence, and Live Activity state
       // — best effort, so a failure here doesn't block sign-out. The ORDER is
       // owned by `deregisterThisDevice`; all three exits share it.
-      await deregisterThisDevice(DeviceDeregistrationDeps.fromWidgetRef(ref));
-      deregistered = true;
+      final devices = DeviceDeregistrationDeps.fromWidgetRef(ref);
+      await deregisterThisDevice(devices);
+      deregistered = devices;
       await authService.signOut();
     } catch (e, st) {
       logger.warn('ACCT-SIGNOUT signOut failed', e, st);
-      if (deregistered) {
-        await _restoreDeviceRegistrations();
+      final devices = deregistered;
+      if (devices != null) {
+        await _restoreDeviceRegistrations(devices);
       }
       if (!mounted) return;
       setState(() => _isSigningOut = false);
@@ -132,13 +135,16 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     setState(() => _isDeletingAccount = true);
     final notices = ref.read(noticeServiceProvider);
     final logger = ref.read(loggerProvider);
-    var deregistered = false;
+    // See [_restoreDeviceRegistrations]: holding the deps is what lets both
+    // catch arms roll back without touching `ref` after these round-trips.
+    DeviceDeregistrationDeps? deregistered;
     try {
       await deletionService.reauthenticateWithPassword(password);
       // Drop this device's registrations while still authenticated, before
       // deleteAccount revokes access — same shared order as the other exits.
-      await deregisterThisDevice(DeviceDeregistrationDeps.fromWidgetRef(ref));
-      deregistered = true;
+      final devices = DeviceDeregistrationDeps.fromWidgetRef(ref);
+      await deregisterThisDevice(devices);
+      deregistered = devices;
       await deletionService.deleteAccount();
     } on AuthFailure catch (e, st) {
       // Logged before the mounted guard: this fires AFTER push, presence and
@@ -146,8 +152,9 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       // account must leave a trace. `authFailure` keeps a user-correctable
       // wrong password a breadcrumb and records the rest.
       logger.authFailure('ACCT-DEL settings.delete_account', e, e, st);
-      if (deregistered) {
-        await _restoreDeviceRegistrations();
+      final devices = deregistered;
+      if (devices != null) {
+        await _restoreDeviceRegistrations(devices);
       }
       if (!mounted) return;
       setState(() => _isDeletingAccount = false);
@@ -164,8 +171,9 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       return;
     } catch (e, st) {
       logger.warn('ACCT-DEL settings.delete_account', e, st);
-      if (deregistered) {
-        await _restoreDeviceRegistrations();
+      final devices = deregistered;
+      if (devices != null) {
+        await _restoreDeviceRegistrations(devices);
       }
       if (!mounted) return;
       setState(() => _isDeletingAccount = false);
@@ -195,22 +203,32 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     }
   }
 
-  Future<void> _restoreDeviceRegistrations() async {
-    final logger = ref.read(loggerProvider);
-
+  /// Rolls the three device registrations back after an exit that failed
+  /// AFTER `deregisterThisDevice` already dropped them.
+  ///
+  /// It takes [deps] rather than reading `ref` itself: both callers keep the
+  /// object they built for the teardown and hand it back here. This runs from a
+  /// `catch` that sits downstream of a re-auth, a de-registration and a
+  /// `deleteAccount` — if
+  /// Settings unmounted across those round-trips, a `ref.read` in here throws a
+  /// `StateError` (Riverpod 3) that REPLACES the real failure and skips both
+  /// the notice and the busy-flag reset, leaving a stuck spinner and a
+  /// misleading Crashlytics record. Reusing the object already built for the
+  /// teardown is also what guarantees the rollback targets the same three
+  /// controllers the teardown de-registered.
+  Future<void> _restoreDeviceRegistrations(
+    DeviceDeregistrationDeps deps,
+  ) async {
     Future<void> step(String label, Future<void> Function() run) async {
       try {
         await run();
       } catch (e, st) {
-        logger.warn('ACCOUNT-EXIT restore $label failed', e, st);
+        deps.logger.warn('ACCOUNT-EXIT restore $label failed', e, st);
       }
     }
 
-    await step('push', ref.read(pushRegistrationControllerProvider).sync);
-    await step('presence', ref.read(presenceSyncControllerProvider).sync);
-    await step(
-      'liveActivity',
-      ref.read(liveActivityRegistrationControllerProvider).sync,
-    );
+    await step('push', deps.push.sync);
+    await step('presence', deps.presence.sync);
+    await step('liveActivity', deps.liveActivity.sync);
   }
 }

@@ -17,19 +17,26 @@ const Duration kSearchDebounce = Duration(milliseconds: 250);
 /// Coalesces rapid calls into one, firing only the last action within
 /// [duration] (e.g. per-keystroke search). Own one instance per widget state.
 class Debouncer {
-  Debouncer(this.duration, {this.onError});
+  /// [onError] is REQUIRED: the action runs from a timer callback, so a throw
+  /// inside it has no caller left to catch it. It was optional once and five
+  /// of the six call sites omitted it, which turned every failed debounced
+  /// search into silence — nothing logged, nothing in Crashlytics, the search
+  /// just returning nothing. Requiring it is what makes that omission
+  /// impossible at a NEW call site. Build it from a logger read BEFORE the
+  /// widget can unmount (assign in `initState`, never a lazy `late final`
+  /// touching `ref`) — the handler can fire after dispose, and `ref.read` on
+  /// an unmounted consumer throws under Riverpod 3.
+  Debouncer(this.duration, {required this.onError});
 
   final Duration duration;
-  final void Function(Object error, StackTrace stackTrace)? onError;
+  final void Function(Object error, StackTrace stackTrace) onError;
   Timer? _timer;
 
   void run(FutureOr<void> Function() action) {
     _timer?.cancel();
     _timer = Timer(duration, () {
       _timer = null;
-      Future.sync(action).catchError((Object error, StackTrace stackTrace) {
-        onError?.call(error, stackTrace);
-      });
+      Future.sync(action).catchError(onError);
     });
   }
 

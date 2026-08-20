@@ -44,6 +44,12 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   static const int _clientScanPageSize = 500;
 
+  /// Ceiling on the paged client scan windows. Archived clients are never
+  /// deleted, so the roster only ever grows; without this the first committed
+  /// keystroke walks the whole collection and copies every raw doc map across
+  /// the `compute` isolate boundary.
+  static const int _clientScanLimit = 5000;
+
   bool _isFresh(DateTime fetchedAt) =>
       _clock().difference(fetchedAt) < _searchCacheTtl;
 
@@ -135,6 +141,13 @@ class FirebaseClientsRepository implements ClientsRepository {
     while (true) {
       final snapshot = await query.get();
       docs.addAll(snapshot.docs);
+      if (docs.length >= _clientScanLimit) {
+        _logger.warn(
+          'CLI-LIST createdSince scan hit the $_clientScanLimit-doc cap - '
+          'older clients are not included',
+        );
+        break;
+      }
       if (snapshot.docs.length < _clientScanPageSize) break;
       query = query.startAfterDocument(snapshot.docs.last);
     }
@@ -264,6 +277,13 @@ class FirebaseClientsRepository implements ClientsRepository {
         docs.addAll([
           for (final doc in snapshot.docs) (id: doc.id, data: doc.data()),
         ]);
+        if (docs.length >= _clientScanLimit) {
+          _logger.warn(
+            'CLI-SEARCH scan window hit the $_clientScanLimit-doc cap - '
+            'clients past it are invisible to search and to the filter chips',
+          );
+          break;
+        }
         if (snapshot.docs.length < _clientScanPageSize) break;
         final last = snapshot.docs.last;
         query = query.startAfter([

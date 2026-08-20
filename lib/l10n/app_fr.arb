@@ -16,7 +16,6 @@
   "auth_checkVerification": "Vérifier à nouveau",
   "auth_emailNotVerifiedYet": "Pas encore vérifiée. Ouvrez le lien dans le courriel, puis touchez Vérifier à nouveau.",
   "auth_emailVerified": "VÉRIFIÉE",
-  "auth_accountReadySignInAgain": "Votre compte est prêt. Connectez-vous avec votre nouveau mot de passe.",
   "auth_signIn": "Se connecter",
   "auth_forgotPassword": "Mot de passe oublié ?",
   "common_admin": "Admin",

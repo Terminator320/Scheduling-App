@@ -216,12 +216,19 @@ void main() {
       await tester.tap(find.byKey(const Key('myIdentitySave')));
       await tester.pump();
 
+      // The identity save writes the emergency contact FIRST, so let that leg
+      // land - `updateSelfDetails` is not reached until it does, and the
+      // in-flight state under test is the one where it is pending.
+      saveEmergency.complete();
+      await tester.pump();
+
       await tester.tap(find.byKey(const Key('myOnCall')));
       await tester.pump();
 
+      // Exactly one: the availability toggle must not start a SECOND write
+      // while the identity save still holds the flag.
       verify(() => repo.updateSelfDetails(any())).called(1);
 
-      saveEmergency.complete();
       saveSelf.complete();
       await tester.pumpAndSettle();
     },

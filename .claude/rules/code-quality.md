@@ -23,7 +23,9 @@ alwaysApply: true
 
 ## Code Markers
 
-`TODO(author): desc (#issue)` for planned work. `FIXME(author): desc (#issue)` for known bugs. `HACK(author): desc (#issue)` for workarounds (explain the proper fix). `NOTE: desc` for non-obvious context. Never `XXX`, `TEMP`, `REMOVEME`.
+`TODO(author): desc (#issue)` for planned work — the `(#issue)` suffix is
+optional here, because this repo has no issue tracker; where a marker's work is
+owned by a rule or plan doc, cite that doc instead of inventing a number. `FIXME(author): desc (#issue)` for known bugs. `HACK(author): desc (#issue)` for workarounds (explain the proper fix). `NOTE: desc` for non-obvious context. Never `XXX`, `TEMP`, `REMOVEME`.
 
 ## File Organization
 

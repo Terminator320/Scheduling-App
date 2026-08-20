@@ -61,22 +61,81 @@ alwaysApply: true
   actionable or don't add it.
 - Never log inside list/item builders (rebuild spam) — e.g. CLI-LIST's
   first-page error indicator composes without logging.
-- Existing log tags: APPT-CREATE/SAVE/DEL/LOAD/STATUS, CLI-ADD/SAVE/DEL/ARCH/LIST/SEARCH,
-  HIST-LOAD, EMP-SAVE/STATUS/CREATE/DELETE/LOAD/TODAY, ACCT-DEL/SIGNOUT,
-  ADDR-PLACES, SPLASH, ME-SAVE/EMAIL, MYDET. (CLI-ARCH = archive and
-  un-archive, which share one tag because they are one toggle; CLI-DEL's typed
+- **Existing log tags — this list is meant to be EXHAUSTIVE.** Since notices
+  stopped carrying a support code (2026-08-04) the tag lives ONLY here and in
+  the `logger.warn` label, so a stale registry makes Crashlytics triage
+  guesswork. Regenerate it by grepping `lib/` for the tag literal, not just for
+  `logger.warn('` — four sites pass the tag as a named `tag:` parameter
+  (`LAUNCH-TEL`, `LAUNCH-EMAIL`, `IMG-SAVE`, `IMG-SHARE`), one builds it by
+  interpolation (`wave_settings_section.dart` → `'WAVE-$tag'`), and two spell it
+  inside a ternary (`IMG-LOAD`).
+
+  **Notice-bearing tags** — the site logs AND composes a user-facing notice, so
+  each has an `error_intro*` ARB key:
+
+  | Tag | Intro key |
+  |---|---|
+  | `APPT-CREATE` | `error_introCreateAppointment` |
+  | `APPT-SAVE` | `error_introSaveAppointment` |
+  | `APPT-DEL` | `error_introDeleteAppointment` |
+  | `APPT-LOAD` | `error_introLoadAppointments` |
+  | `APPT-OPEN` | `error_introOpenAppointment` |
+  | `APPT-STATUS` | `error_introUpdateAppointmentStatus` |
+  | `CLI-ADD` | `error_introAddClient` |
+  | `CLI-SAVE` | `error_introSaveClient` |
+  | `CLI-DEL` | `error_introDeleteClient` |
+  | `CLI-ARCH` | `error_introArchiveClient` |
+  | `CLI-LIST` | `error_introLoadClients` |
+  | `HIST-LOAD` | `error_introLoadHistory` |
+  | `DASH-LOAD` | `error_introLoadDashboard` |
+  | `LIVEMAP-LOAD` | `error_introLoadLiveMap` |
+  | `EMP-CREATE` | `error_introSaveEmployee` |
+  | `EMP-STATUS` | `error_introChangeEmployeeStatus` |
+  | `EMP-DELETE` | `error_introRemoveAccount` |
+  | `ME-SAVE` | `error_introSaveMyDetails` · `error_introSaveAvailability` · `error_introSaveTravelAlerts` |
+  | `ME-EMAIL` | `error_introChangeEmail` |
+  | `ACCT-DEL` | `error_introDeleteAccount` |
+  | `APPLOCK` | `error_introSaveAppLock` |
+
+  Four of those carry a per-tag caveat. CLI-ARCH covers archive AND un-archive,
+  which share one tag because they are one toggle. CLI-DEL's typed
   `ClientsFailureHasHistory` branch runs FIRST — "archive it instead" is
-  actionable where the generic cause notice is not — and the composer is
-  the fallback. Both live in the shared `ClientActionsHost` mixin, so the list
-  and the detail can't drift on either tag.) (APPT-STATUS =
-  mark-done/cancel; `event_details_controller` status setters return `Object?` —
-  null on success, the caught error otherwise — so the widget composes the
-  notice. EMP-DELETE = removing a pending account, P4c's replacement for the
-  retired EMP-REVOKE; its typed `EmployeesFailureAccountNoLongerPending` branch
-  runs FIRST and the composer is the fallback.) Log-only tags — no notice intro, so no ARB key — additionally
-  include LAUNCH-TEL/MAPS/URL/EMAIL, CLI-CONTACT-SAVE/SYNC, APPLOCK, IMG-UPLOAD,
-  IMG-LOAD,
-  ACCOUNT-EXIT, DEEP-LINK.
+  actionable where the generic cause notice is not — and the composer is the
+  fallback; both live in the shared `ClientActionsHost` mixin, so the list and
+  the detail can't drift on either tag. APPT-STATUS = mark-done/cancel;
+  `event_details_controller`'s status setters return a sealed
+  `EventDetailsActionOutcome`, so the widget composes the notice. EMP-DELETE =
+  removing a pending account, P4c's replacement for the retired EMP-REVOKE; its
+  typed `EmployeesFailureAccountNoLongerPending` branch runs FIRST and the
+  composer is the fallback. **`EMP-SAVE` is GONE** — the employee save path logs
+  under EMP-CREATE now; don't re-add it from an older copy of this list.
+
+  **Log-only tags** — no notice intro, so no ARB key. Everything else:
+
+  - App shell / lifecycle: `ACCOUNT-EXIT`, `APP-SYNC`, `DEEP-LINK`, `NOTICE`,
+    `SETTINGS`, `SPLASH`, `TOUR`, `ONBOARD-GATE`
+  - Auth / account: `ACCT-SIGNOUT`, `AUTH-SETUP`
+  - Appointments: `APPT-BUSY`, `APPT-COUNT`, `APPT-IMG`, `APPT-RANGE`
+  - Clients / history: `CLI-SEARCH`, `CLI-CONTACT-SAVE`, `CLI-CONTACT-SYNC`,
+    `HIST-SEARCH`
+  - Employees / self: `EMP-EMERGENCY`, `EMP-LOAD`, `EMP-TODAY`, `MYDET`
+  - Presence / map: `LIVEMAP-MARKERS`, `PRESENCE`
+  - Images: `IMG-DEL`, `IMG-DISK`, `IMG-LOAD`, `IMG-PICK`, `IMG-SAVE`,
+    `IMG-SHARE`, `IMG-UPLOAD`, `IMG-URL`
+  - Address / launchers: `ADDR-AUTO`, `ADDR-DETAILS`, `ADDR-PLACES`,
+    `LAUNCH-TEL`, `LAUNCH-EMAIL`, `LAUNCH-MAPS`, `LAUNCH-URL`
+  - Devices / delivery: `FCM`, `PUSH`, `PUSH-TAP`, `LIVE-ACT`, `WIDGET`,
+    `WIDGET-TAP`, `SIRI`
+  - OS permissions: `PERM-LOCATION`, `PERM-MEDIA`
+  - Wave: `WAVE-BOOT`, `WAVE-CONN`, `WAVE-CUST`, `WAVE-RETRY`, `WAVE-SCHED`
+    (all `wave_service.dart`), `WAVE-BADGE` (`wave_sync_badge.dart`), plus the
+    four `WaveSettingsSection` composes by interpolation — `WAVE-CONNECT`,
+    `WAVE-SYNC`, `WAVE-RETRY`, `WAVE-SCHEDULE`. Note `WAVE-RETRY` is spelled at
+    two layers and `WAVE-SCHED`/`WAVE-SCHEDULE` are two DIFFERENT tags for the
+    same feature at two layers; a Crashlytics search for one will not find the
+    other. The Settings-layer four are the `WaveNetwork().toLocalizedMessage`
+    carve-out from `composeErrorNotice`, so they surface a message without an
+    `error_intro*` key.
 - **A user-visible failure notice is not a substitute for a log.** A `catch` that
   only pushes a notice (or only returns `false`) is invisible in Crashlytics —
   every swallowed failure needs a `warn` beside it. The sanctioned exceptions are

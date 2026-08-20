@@ -74,17 +74,22 @@ void main() {
         startTime: DateTime(2026, 6, 6, 9),
         endTime: DateTime(2026, 6, 6, 10),
       );
-      final provider = eventDetailsControllerProvider(EventDetailsKey(appointment));
+      final provider = eventDetailsControllerProvider(
+        EventDetailsKey(appointment),
+      );
       // Keep the autoDispose family's state alive across reads (see testing.md).
       final sub = container.listen(provider, (_, _) {});
       addTearDown(sub.close);
 
-      final error = await container
+      final outcome = await container
           .read(provider.notifier)
           .deleteAppointment(appointment);
 
-      expect(error, isNotNull);
-      expect(error.toString(), contains('boom'));
+      expect(outcome, isA<EventDetailsActionFailed>());
+      expect(
+        (outcome as EventDetailsActionFailed).error.toString(),
+        contains('boom'),
+      );
     },
   );
 
@@ -105,15 +110,17 @@ void main() {
       endTime: DateTime(2026, 6, 6, 10),
       pictures: [_image('appointments/a1/images/p1'), _image('a1/p2')],
     );
-    final provider = eventDetailsControllerProvider(EventDetailsKey(appointment));
+    final provider = eventDetailsControllerProvider(
+      EventDetailsKey(appointment),
+    );
     final sub = container.listen(provider, (_, _) {});
     addTearDown(sub.close);
 
-    final error = await container
+    final outcome = await container
         .read(provider.notifier)
         .deleteAppointment(appointment);
 
-    expect(error, isNull);
+    expect(outcome, isA<EventDetailsActionOk>());
     expect(repo.deletedIds, ['a1']);
     expect(
       storage.deleted.map((i) => i.storagePath),
@@ -164,11 +171,11 @@ void main() {
       final sub = container.listen(provider, (_, _) {});
       addTearDown(sub.close);
 
-      final error = await container
+      final outcome = await container
           .read(provider.notifier)
           .deleteAppointment(deleted, includeFuture: true);
 
-      expect(error, isNull);
+      expect(outcome, isA<EventDetailsActionOk>());
       expect(repo.deletedIds, ['s1', 's2']);
       expect(
         storage.deleted.map((i) => i.storagePath),

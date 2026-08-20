@@ -106,14 +106,21 @@ class LiveActivityRegistrationController with ReentrantSync {
 
   /// The body of [sync], run under the [ReentrantSync] guard.
   Future<void> _syncGuarded() async {
+    // Teardown runs BEFORE signOut(), so a body resuming mid-teardown still
+    // holds a valid credential and its token upsert SUCCEEDS — re-registering
+    // a device that just signed out, with nothing logging an error.
+    final generation = syncGeneration;
     // Wait for ready before reading the preference — on cold start it
     // defaults to true, which would re-register a device that opted out.
     await _ref.read(liveActivityEnabledProvider.notifier).ready;
+    if (isSyncStale(generation)) return;
     if (!_ref.read(liveActivityEnabledProvider)) {
       // A stored opt-out is authoritative, so reconcile by actively removing
       // any stale server rows left behind by an interrupted previous opt-out
-      // rather than only stopping local streams.
-      await unregister();
+      // rather than only stopping local streams. Straight to `_teardown` -
+      // going through `unregister` would invalidate the generation and drop a
+      // preference flip that arrived while this run was in flight.
+      await _teardown();
       return;
     }
     final signedIn = _auth.currentUser != null;
@@ -143,10 +150,11 @@ class LiveActivityRegistrationController with ReentrantSync {
     }
 
     await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
-    if (uid == null) return;
-    if (!await _ensurePlugin()) return;
+    if (uid == null || isSyncStale(generation)) return;
+    if (!await _ensurePlugin() || isSyncStale(generation)) return;
 
     final docId = await _resolveUserDocId();
+    if (isSyncStale(generation)) return;
     if (docId == null) {
       _logger.warn('LIVE-ACT no users doc for uid; skip token upsert');
       return;
@@ -300,6 +308,13 @@ class LiveActivityRegistrationController with ReentrantSync {
   /// live card and deletes this device's token rows. Never throws, so
   /// sign-out is never blocked on this.
   Future<void> unregister() async {
+    invalidateSync();
+    return _teardown();
+  }
+
+  /// The teardown itself, without the sync invalidation — the opt-out
+  /// reconcile in [_syncGuarded] runs this while a sync is legitimately alive.
+  Future<void> _teardown() async {
     try {
       // Ends the cards and drops every per-activity row. The push-to-start
       // row is handled separately just below.

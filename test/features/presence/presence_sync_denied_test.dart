@@ -170,8 +170,13 @@ void main() {
     verifyNever(() => employees.findUserByUid(any()));
   });
 
-  test('a denied write drops the tracked doc, so unregister has nothing to '
-      'delete', () async {
+  test('a denied write still leaves unregister a doc to delete', () async {
+    // The denial clears `_docId`, but a fix stored BEFORE the account was
+    // disabled is still live in Firestore — and a stale pin is visually
+    // identical to a fresh one on the admin map, which the privacy policy
+    // promises sign-out clears. `unregister` therefore re-resolves the doc id
+    // rather than treating a null `_docId` as "nothing to delete". A delete
+    // the rules also reject is swallowed by `deleteLocation`'s own catch.
     when(
       () => presence.upsertLocation(
         userDocId: any(named: 'userDocId'),
@@ -186,8 +191,6 @@ void main() {
     final controller = await trackOneFix(container);
     await controller.unregister();
 
-    verifyNever(
-      () => presence.deleteLocation(userDocId: any(named: 'userDocId')),
-    );
+    verify(() => presence.deleteLocation(userDocId: 'doc-1')).called(1);
   });
 }

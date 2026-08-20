@@ -71,6 +71,10 @@ void main() {
       ],
     );
 
+    // The map is autoDispose, so it needs a live listener BEFORE the stream
+    // emits - reading it afterwards subscribes too late and sees nothing.
+    final nameSub = container.listen(employeeNameMapProvider, (_, _) {});
+
     controller.add(const [
       EmployeeRecord(
         id: 'e1',
@@ -83,6 +87,9 @@ void main() {
 
     expect(container.read(employeeNameMapProvider), {'e1': 'Amy Adams'});
 
+    // Close in order (subscription before container) to avoid the Riverpod 3
+    // teardown race on StreamProvider futures.
+    nameSub.close();
     container.dispose();
   });
 }

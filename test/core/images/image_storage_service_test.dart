@@ -243,7 +243,7 @@ void main() {
     final ref = _MockRef();
     final snapshot = _MockSnapshot();
     when(() => snapshot.ref).thenReturn(ref);
-    when(() => ref.putFile(any(), any())).thenReturn(_FakeUploadTask(snapshot));
+    when(() => ref.putFile(any(), any())).thenAnswer((_) => _FakeUploadTask(snapshot));
     when(ref.getDownloadURL).thenThrow(
       FirebaseException(plugin: 'firebase_storage', code: 'unauthorized'),
     );

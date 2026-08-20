@@ -64,10 +64,6 @@
   "@auth_emailVerified": {
     "description": "Mono chip beside the locked email once the address is verified"
   },
-  "auth_accountReadySignInAgain": "Your account is ready. Sign in with your new password.",
-  "@auth_accountReadySignInAgain": {
-    "description": "Success banner when the profile is not readable yet after setup"
-  },
   "auth_signIn": "Sign In",
   "@auth_signIn": {
     "description": "Sign In"

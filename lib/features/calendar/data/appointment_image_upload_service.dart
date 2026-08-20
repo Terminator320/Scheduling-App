@@ -238,13 +238,18 @@ class AppointmentImageUploadService {
       uploaded: uploaded,
     );
 
-    await _store.remove(entry.id);
     if (outcome.requeue) {
       // Re-queue whatever didn't land — survivor paths to re-upload, plus the
       // already-uploaded images if only their append failed — keeping the
       // original enqueued time so the 7-day pruning still counts from when the
       // batch first showed up.
-      await _store.add(
+      //
+      // ONE `replace`, never `remove` then `add`: a throw between those two
+      // mutations dropped the entry while its staged files stayed on disk, and
+      // nothing walks the staging directory, so those bytes were unreachable
+      // forever. A failed `replace` leaves the original entry in place.
+      await _store.replace(
+        entry.id,
         PendingUpload(
           appointmentId: entry.appointmentId,
           paths: survivors,
@@ -257,14 +262,17 @@ class AppointmentImageUploadService {
         failedCount: outcome.failedCount,
         tooLargeFileNames: tooLargeNames,
       );
-    } else if (outcome.failedCount > 0) {
-      _notifier.reportFailure(
-        entry.appointmentId,
-        failedCount: outcome.failedCount,
-        tooLargeFileNames: tooLargeNames,
-      );
     } else {
-      _notifier.clearFailure(entry.appointmentId);
+      await _store.remove(entry.id);
+      if (outcome.failedCount > 0) {
+        _notifier.reportFailure(
+          entry.appointmentId,
+          failedCount: outcome.failedCount,
+          tooLargeFileNames: tooLargeNames,
+        );
+      } else {
+        _notifier.clearFailure(entry.appointmentId);
+      }
     }
   }
 

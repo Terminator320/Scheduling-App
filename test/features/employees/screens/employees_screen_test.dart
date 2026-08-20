@@ -115,6 +115,10 @@ void _useWideViewport(WidgetTester tester) {
 }
 
 void main() {
+  setUpAll(
+    () => registerFallbackValue(const EmployeeRecord(id: 'fallback')),
+  );
+
   testWidgets('renders employee cards from the stream', (tester) async {
     await tester.pumpWidget(
       _wrap(employees: () => Stream.value(const [_jane, _bob])),
@@ -219,13 +223,20 @@ void main() {
       await tester.tap(find.text('Jane Doe'));
       await tester.pumpAndSettle();
       expect(find.byType(EmployeeProfileCard), findsOneWidget);
-      expect(find.text('Disabled'), findsOneWidget);
+
+      // Scoped to the sheet's own card: the list row behind it carries a
+      // status chip too, so an unscoped finder matches both.
+      Finder statusInSheet(String label) => find.descendant(
+        of: find.byType(EmployeeProfileCard),
+        matching: find.text(label),
+      );
+      expect(statusInSheet('Disabled'), findsOneWidget);
 
       users.emit(const [_activeJane]);
       await tester.pumpAndSettle();
 
-      expect(find.text('Active'), findsOneWidget);
-      expect(find.text('Disabled'), findsNothing);
+      expect(statusInSheet('Active'), findsOneWidget);
+      expect(statusInSheet('Disabled'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

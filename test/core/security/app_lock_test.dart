@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -78,11 +80,39 @@ void main() {
   testWidgets('resume releases a defensive lock once the retry reads off', (
     tester,
   ) async {
+    // The retry is held open so the defensive lock is observable: the widget
+    // fires one from initState, and letting it settle immediately resolves the
+    // flag before backgrounding ever happens.
+    final retry = Completer<bool>();
     var attempt = 0;
-    when(() => storage.readFlag(any())).thenAnswer((_) async {
-      if (attempt++ == 0) throw Exception('keystore');
-      return false;
+    when(() => storage.readFlag(any())).thenAnswer((_) {
+      if (attempt++ == 0) return Future<bool>.error(Exception('keystore'));
+      return retry.future;
     });
+    await pumpLock(tester);
+
+    _lifecycle(AppLifecycleState.inactive);
+    await tester.pumpAndSettle();
+    expect(isLocked(tester), isTrue, reason: 'locked while unresolved');
+
+    _lifecycle(AppLifecycleState.resumed);
+    await tester.pump();
+    retry.complete(false);
+    await tester.pumpAndSettle();
+
+    // Never opted in, so they must not be held behind a biometric prompt.
+    expect(isLocked(tester), isFalse);
+    verifyNever(() => biometrics.authenticate(any()));
+  });
+
+  testWidgets('a PERSISTENTLY unreadable flag still degrades to unlocked', (
+    tester,
+  ) async {
+    // The other half of the tri-state rule, and the one no test pinned: the
+    // defensive lock buys the app-switcher window, not a hard guarantee.
+    // Someone who never enabled biometrics must never be trapped behind a
+    // prompt they cannot satisfy, so a read that NEVER succeeds opens up.
+    when(() => storage.readFlag(any())).thenThrow(Exception('keystore'));
     await pumpLock(tester);
 
     _lifecycle(AppLifecycleState.inactive);
@@ -92,7 +122,6 @@ void main() {
     _lifecycle(AppLifecycleState.resumed);
     await tester.pumpAndSettle();
 
-    // Never opted in, so they must not be held behind a biometric prompt.
     expect(isLocked(tester), isFalse);
     verifyNever(() => biometrics.authenticate(any()));
   });
@@ -115,6 +144,23 @@ void main() {
 
     expect(isLocked(tester), isTrue);
     verify(() => biometrics.authenticate(any())).called(greaterThan(0));
+  });
+
+  testWidgets('unavailable biometrics opens the session WITHOUT disabling the '
+      'stored setting', (tester) async {
+    // `isAvailable()` is `try { isDeviceSupported() } catch { false }`, so it
+    // returns false for the pre-first-unlock `local_auth` channel window this
+    // whole subsystem exists to handle. Persisting that answer turns the
+    // user's app lock off forever after one hiccup.
+    when(() => storage.readFlag(any())).thenAnswer((_) async => true);
+    when(() => storage.writeFlag(any(), value: any(named: 'value')))
+        .thenAnswer((_) async {});
+    when(() => biometrics.isAvailable()).thenAnswer((_) async => false);
+
+    await pumpLock(tester);
+
+    expect(isLocked(tester), isFalse, reason: 'open for THIS session');
+    verifyNever(() => storage.writeFlag(any(), value: any(named: 'value')));
   });
 
   testWidgets('a thrown biometric prompt does not escape the zone handler', (

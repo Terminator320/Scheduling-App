@@ -24,19 +24,7 @@ final currentUserDocProvider = StreamProvider<Map<String, dynamic>>((ref) {
     ).asyncExpand((_) => repository.watchUserDoc(uid));
   }
 
-  final uidState = ref.watch(authUidProvider);
-  if (uidState.hasError) {
-    return Stream.error(
-      uidState.error!,
-      uidState.stackTrace ?? StackTrace.current,
-    );
-  }
-  if (uidState.isLoading) {
-    return Stream.fromFuture(ref.watch(authUidProvider.future)).asyncExpand(
-      watchDoc,
-    );
-  }
-  return watchDoc(uidState.value);
+  return streamForUid(ref, watchDoc);
 });
 
 final accountDisabledProvider = Provider<AsyncValue<bool>>((ref) {
