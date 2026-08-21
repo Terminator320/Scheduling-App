@@ -57,11 +57,11 @@ lib/
 │   └── .gen/                        Auto-generated app_localizations*.dart (gitignored); regenerate with `flutter gen-l10n`
 │
 └── features/
-    ├── auth/                        Sign-in, account setup, password reset, account-status monitoring; activeUserIdentityProvider resolves (role, docId) for the off-screen schedule mirrors (widget + Siri) — null wipes them. Restyled in P4b (2026-08-02) onto the hero-gradient + lifted-card chrome in AuthScaffold. P4c (2026-08-02) replaced invite acceptance with **account_setup_screen.dart**: an admin-created account signs in normally, and a status of 'invited' routes here instead of the hub. It collects a new password + confirm (PasswordStrengthMeter above the PasswordRequirementsChecklist), names, phone, and one combined terms + location-consent checkbox gating the CTA — whose "terms of service" run is a LINK to the hosted terms page (AppUrls.termsOfService), found by locating auth_termsOfServiceLink verbatim inside auth_termsAndLocationConsent, so the two ARB keys must stay consistent per locale or the sentence renders link-less; the password is changed BEFORE activation, which is the whole reason the shared starting password can't survive setup. **create_account_screen.dart, both accept_invite_* screens, CodeEntryBoxes, AuthCodeField and signup_code_policy.dart are all DELETED**
+    ├── auth/                        Sign-in, account setup, password reset, account-status monitoring; activeUserIdentityProvider resolves (role, docId) for the off-screen schedule mirrors (widget + Siri) — null wipes them. Restyled in P4b (2026-08-02) onto the hero-gradient + lifted-card chrome in AuthScaffold. P4c (2026-08-02) replaced invite acceptance with **account_setup_screen.dart**: an admin-created account signs in normally, and a status of 'invited' routes here instead of the hub. It collects a new password + confirm (PasswordStrengthMeter above the PasswordRequirementsChecklist), names, phone, and one combined terms + location-consent checkbox gating the CTA — whose "terms of service" run is a LINK to the hosted terms page (AppUrls.termsOfService), found by locating auth_termsOfServiceLink verbatim inside auth_termsAndLocationConsent, so the two ARB keys must stay consistent per locale or the sentence renders link-less; the password is changed BEFORE activation, which is the whole reason the starting password can't survive setup. **create_account_screen.dart, both accept_invite_* screens, CodeEntryBoxes, AuthCodeField and signup_code_policy.dart are all DELETED**. **2026-08-21 simplified the screen** (`docs/plans/2026-08-21-simplified-auth-design.md`): the email-verification step is gone — `verify_email_panel.dart`, `signed_in_chip.dart`, `AuthService.sendVerificationEmail`/`refreshEmailVerified`/`isEmailVerified` and `AuthFailureEmailNotVerified` are all deleted, so the CTA is gated on the consent checkbox alone. The password policy dropped its symbol requirement the same day (8+ characters with an uppercase, a lowercase and a digit — `PasswordRequirement.symbol` is removed from the enum, and the checklist and strength meter both follow the enum), and `starting_password_policy.dart` / `kDefaultStartingPassword` went with the shared constant it mirrored, taking the "must differ from the starting password" check with it: there is no longer a constant to accidentally re-choose
     ├── calendar/                    Appointments — creation, editing, viewing, repeating series, image uploads (offline-durable via PendingUploadStore), day_route_screen (a day's stops numbered in start order, day picker + employee switcher → multi-stop maps handoff); JobTemplate quick-fill chips seed title/duration on the add form (display-only, never stored). The detail sheet's action bar is role-shaped: an employee gets Mark as complete on any open job — NO clock gate since 2026-08-17, only !isDone && !isCancelled — and, once done, an inert Complete indicator; an admin gets Cancel and, on a finished job, an Edit button — which replaces both the old dead indicator and the header edit chip, hidden by DetailsViewBody when isDone so one screen never offers the same edit twice. **Dates are picked INLINE** (2026-08-14): `AppointmentDateRows` gives the start and end their own rows, each dropping an `InlineMonthCalendar` down beneath itself — it replaced a Cupertino date WHEEL in a modal, which showed three days at a time and hid the form. Only one row's month is open at a time, which is why the pair is one widget, and picking a day deliberately does NOT close it. The picker renders from the same pure `month_grid.dart` helpers the calendar screen uses, and shares the today-ring/selected-circle rule through `calendarDayCircleDecoration` (`widgets/views/calendar_day_circle.dart`) with the month grid and the week strip. **Photos are moving into `appointments/{id}/images`** (phase 1, 2026-08-13): both stores are written in one WriteBatch, the doc id is DERIVED from the photo by `appointmentImageDocId` (hand-mirrored as `functions/appointment_image_ids.js`), and the array stays authoritative until the CONTRACT step. That whole surface lives in `data/appointment_images_store.dart` (`AppointmentImagesStore`), split out of the repository 2026-08-16 so the CONTRACT change is a file to open rather than a diff through a 900-line class; the repository itself is NOT being split
     ├── clients/                     Client management — CRUD, contacts, appointment history; client detail shows a Job history section (ClientJobHistorySection → fetchClientHistory, ordered `startTime` DESC on the SERVER — the `(clientId, startTime DESC)` composite, added 2026-08-13; without the orderBy Firestore fell back to `__name__` order and the limit took an ARBITRARY slice of a busy client's history). **`ClientNamePolicy` (`domain/policies/`) is the one owner of what a client is CALLED**, hand-mirrored as `functions/client_name_utils.js`: `clients/{id}.name` is synced verbatim as the Wave customer name, so a PERSON is named by their phone number and a BUSINESS keeps its name (`looksLikeBusinessName` is the heuristic that catches the untyped Wave imports, deliberately biased toward "business"). Nothing in the app renders a person's raw `name` — every surface reads `ClientRecord.displayName`. **Every save path composes through `composeSave`, never `composeStored`** (2026-08-15): the latter replaces a person's name with their number, so on a doc with no `firstName`/`lastName` it destroyed the only copy — the Name field is required while both halves are optional, so the ordinary add flow reproduced it. `composeSave` returns the stored name plus the halves, splitting the base name into them unless the name was unchanged, a half is already populated, or there is no base. `widgets/fields/client_name_phone_lift.dart` is the interactive half: a number typed or pasted into the Name field lifts into the phone field. History renders through `widgets/lists/history_sliver_list.dart`, extracted so the sticky month bars can be `SliverMainAxisGroup`s
     ├── dashboard/                   Admin dashboard — pure stat reducers (DashboardAggregator) → hero/workload/trends/attention sections + fl_chart WeeklyBarChart. **P7 (2026-08-11) added a Today/Week/Month period control** (`domain/dashboard_period.dart`, `PeriodSummarySection`) plus a jobs-per-day chart (`DailyLoadChart`, capacity-aware via `sundayIndexOf` over each person's `workingDays`), a tappable new-clients section (archived excluded; `domain/new_client_trend.dart` splits the window in half so the headline, the sparkline and the "3 more than the previous 4 weeks" line can never describe different windows) and two Attention flags (never-set-up accounts; people booked outside their availability, through the pure `availabilityConflictPolicy`). **Year is deliberately NOT offered** — `fetchInRange` caps at 1000 docs and a year is ~1,825 jobs even at 5/day, so it could only ever compute every trend over a silent prefix; it is blocked on P7b's aggregate read path, not forgotten. The three periods are **TO-DATE, not calendar spans**, and the control reaches NO query — the fetched window is identical across periods (pinned by a test), so a period tap is a pure recompute. Its 8-week window is **split in two**: `liveRangeAround` (this ISO week onward / the 3-day pending horizon) is a live listener, `historyRangeAround` (the seven settled weeks behind it) is a one-shot `fetchInRange`. Held as one range it was a 70-day business-wide listener capped at the 1000-doc range limit, so above ~14 jobs/day every trend was computed over a silent prefix. The two results are merged by doc id (`mergeById`, live wins) and never concatenated — each query reaches back to its own `fetchStart`, so they overlap by a fortnight
-    ├── employees/                   Team roster + person detail (rebuilt in P4, 2026-08-02). The user doc carries firstName/lastName, jobTitle (JobTitle enum — NOT the access role), a Sunday-indexed workingDays[7] + work start/end minutes, maxJobsPerDay (0 = no cap), onCall, and the emergencyContact/emergencyPhone pair (their own section on both the edit sheet and the detail view, apart from hours and access); `name` is always recomposed through composeEmployeeName so it can never go empty (watchAllUsers orders by it). Roster row shows "<jobTitle> · <n> jobs today" from ONE day-range listener reduced in Dart (employeeJobsTodayProvider), never a query per row. Detail = EmployeeProfileCard (avatar-as-colour-swatch + status/on-call chips + Edit pill) → Call/Email quick actions → KeyValuePanel → EmployeeTodaySection (AppointmentCards, renders "No jobs today" rather than omitting). EmployeeFormSheet split into InvitePersonSheet + EditPersonSheet on FormSheetFrame; disable/enable lives in the edit sheet footer with a future-assignment count caption. **There is no delete** — disable is the only removal (owner decision 2026-08-02). An **invited** person's row is a PendingInviteTile instead (P4c): a dashed avatar and in-place expansion rather than a detail sheet, revealing the SIGN-IN DETAILS block — their email and the shared starting password, with one Copy-both pill — plus Reset password / Remove account. **Expanding is NOT a re-issue** (unlike the retired code flow): the starting password is a fixed shared value, so the row renders it with no server round-trip, and only Reset password re-provisions. EmployeeFormActivity keys its busy state by doc id (savingIds / deletingAccountIds) rather than one app-wide bool, and the row reads its own key through a Riverpod select — so one row's reset can't spin another's credentials away, and the reentrancy guard can't silently swallow a different row's tap; `_credentialsFor` keys any re-issued pair to its account so a recycled State can't cross-render one person's password onto another's row. `widgets/fields/credential_line.dart` owns the whole credential surface shared by that row and NewAccountDialog — `CredentialLine`, `CopyCredentialsButton`, `credentialPanelDecoration` and `copyCredentialsToClipboard` (the ONE sanctioned egress of a starting password); they were separate copies and had drifted on both the confirmed-state icon and the panel fill
+    ├── employees/                   Team roster + person detail (rebuilt in P4, 2026-08-02). The user doc carries firstName/lastName, jobTitle (JobTitle enum — NOT the access role), a Sunday-indexed workingDays[7] + work start/end minutes, maxJobsPerDay (0 = no cap), onCall, and the emergencyContact/emergencyPhone pair (their own section on both the edit sheet and the detail view, apart from hours and access); `name` is always recomposed through composeEmployeeName so it can never go empty (watchAllUsers orders by it). Roster row shows "<jobTitle> · <n> jobs today" from ONE day-range listener reduced in Dart (employeeJobsTodayProvider), never a query per row. Detail = EmployeeProfileCard (avatar-as-colour-swatch + status/on-call chips + Edit pill) → Call/Email quick actions → KeyValuePanel → EmployeeTodaySection (AppointmentCards, renders "No jobs today" rather than omitting). EmployeeFormSheet split into InvitePersonSheet + EditPersonSheet on FormSheetFrame; disable/enable lives in the edit sheet footer with a future-assignment count caption. **There is no delete** — disable is the only removal (owner decision 2026-08-02). An **invited** person's row is a PendingInviteTile instead (P4c): a dashed avatar and in-place expansion rather than a detail sheet, revealing the SIGN-IN DETAILS block — their email and, when the screen still holds the server echo from a create or a reset, the starting password beside it with one Copy-both pill — plus Reset password / Remove account. **Expanding is NOT a re-issue** (unlike the retired code flow): it makes no server round-trip. Since 2026-08-21 the reason for that has inverted, so read it carefully — the starting password used to be a fixed shared constant the row could simply render from memory; it is now **random per account and deliberately persisted nowhere** (a live plaintext credential must not sit in Firestore, where every admin session, backup and export can read it), so a row that holds no echo has nothing to render. It masks the password line, captions it with the hint that Reset password issues a new one, and its Copy pill copies the **email alone**. Right after a create or a reset the row shows and copies the real pair, which is the moment that actually matters. **The create sheet has no admin toggle** (removed 2026-08-21 with `TourStepId.personAccess`): `createEmployeeAccount` always writes `role: 'employee'` and rejects an `isAdmin` key outright, so promotion is a separate edit on EditPersonSheet after the person has finished setup — a pre-empted pending account can never be an admin one. EmployeeFormActivity keys its busy state by doc id (savingIds / deletingAccountIds) rather than one app-wide bool, and the row reads its own key through a Riverpod select — so one row's reset can't spin another's credentials away, and the reentrancy guard can't silently swallow a different row's tap; `_credentialsFor` keys any re-issued pair to its account so a recycled State can't cross-render one person's password onto another's row. `widgets/fields/credential_line.dart` owns the whole credential surface shared by that row and NewAccountDialog — `CredentialLine`, `CopyCredentialsButton`, `credentialPanelDecoration` and `copyCredentialsToClipboard` (the ONE sanctioned egress of a starting password); they were separate copies and had drifted on both the confirmed-state icon and the panel fill
     ├── feature_tour/                In-app guided tours (showcaseview 5.x), 43 steps across 11 scopes as of 2026-08-04. Keyed on the sealed **TourScope**, NOT AppDestination: `DestinationTour` wraps a screen, `FormTour` wraps one of the three create-flow sheets (addAppointment/addClient/invitePerson) — which is the only reason "how do I create an appointment" is expressible at all. `storageKey` is BOTH the showcase scope name and the SharedPreferences entry (a destination's is its bare `.name`, so installed devices don't replay; form keys are namespaced `sheet_*`). One FeatureTourHost per scope registers its own scope and auto-starts once (device-local tourSeenProvider); visibility is gated by the scope's sealed TYPE — a HubTab on HubShellScope, a PushedDestination or FormTour on `ModalRoute.isCurrent`. tourStepsFor is the pure role-aware step catalog; screens wire per-step GlobalKeys and wrap through `TourSteps.stepIf`. `ready:` must be false while ANY target is still absent — a PARTIAL start finishes and marks the WHOLE scope seen, so the dropped steps are gone (paginated Clients/History gate on the views' `onFirstPageSettled`; Team on `allUsersStreamProvider.hasValue`). Settings "Replay app tour" row is the only reset
     ├── home_widget/                 iOS home-screen schedule widget — WidgetSyncService writes a two-day payload (todayJobs + tomorrowJobs + on-device rolloverAt) into the App Group (home_widget); mirrors functions/widget_payload_utils.js; the today bucket is endTime-based for isAllDay records and nextJob prefers a timed job; Android no-op
     ├── live_activity/               iOS "time to leave" Lock Screen / Dynamic Island card — LiveActivityRegistrationController upserts the device push-to-start token + one update token per live card into users/{docId}/liveActivityTokens; canHostCards() is the single capability probe; liveActivityEnabledProvider is the device-local opt-out whose Settings toggle must also unregister(). Cards are push-STARTED by functions/live_activity_dispatch.js; Android no-op
@@ -743,23 +743,40 @@ goes through `_retryOnAuthPropagation` (login) and the appointments stream
 through `retryStream` (`core/utils/retry.dart`), each retrying that one case
 once so the calendar loads on the first try.
 
-### Employee accounts — admin invites, employee sets up (P4c, 2026-08-02)
+### Employee accounts — admin invites, employee sets up (P4c, 2026-08-02; simplified 2026-08-21)
 
 ```
 admin "Invite" → createEmployeeAccount callable (admin-only, assertAdmin)
-  ├── mints the Firebase Auth account on the shared DEFAULT_PASSWORD
-  │     ("Welcome123!") and creates users/{id} with status:'invited' AND the
-  │     real uid already on it (unlike the retired code flow, where uid
-  │     stayed "" until redemption — that is what let a whole /users read
-  │     clause be deleted).
+  ├── generates the starting password: generateStartingPassword(), 12 chars
+  │     drawn with crypto.randomInt from a deliberately unambiguous alphabet
+  │     (no 0/O, no 1/l/I — the admin reads it aloud), one uppercase, one
+  │     lowercase and one digit guaranteed so it satisfies the client policy,
+  │     Fisher-Yates shuffled so those three don't always sit in front.
+  │     RANDOM PER ACCOUNT since 2026-08-21; it was the shared constant
+  │     DEFAULT_PASSWORD ("Welcome123!") from P4c until that date.
+  ├── mints the Firebase Auth account on it and creates users/{id} with
+  │     status:'invited', role:'employee' ALWAYS (the callable stopped
+  │     accepting isAdmin on 2026-08-21 — the key is off the
+  │     assertPayloadShape allowlist, so an older client that still sends it
+  │     gets a clean invalid-argument rather than silently creating an
+  │     admin), AND the real uid already on it (unlike the retired code flow,
+  │     where uid stayed "" until redemption — that is what let a whole
+  │     /users read clause be deleted).
   └── returns {email, password, docId} → NewAccountDialog shows both for the
       admin to hand over out-of-band ("Copy both" is the sanctioned egress).
+      That response is the ONLY time the password leaves the server: it is
+      persisted nowhere, so an admin session that loses the echo cannot get
+      it back — only Reset password can issue another.
 
 admin expands the pending roster row (PendingInviteTile)
-  ├── expanding is NOT a re-issue: the starting password is a fixed shared
-  │     value, so the row renders it with no server round-trip.
+  ├── expanding is NOT a re-issue and makes no server round-trip — but the
+  │     REASON inverted on 2026-08-21. The row used to render a fixed shared
+  │     value it already knew; now there is simply nothing to fetch, so with
+  │     no cached echo it masks the password line, hints that Reset password
+  │     issues a new one, and copies the email alone.
   ├── Reset password → createEmployeeAccount again (re-provision): refreshes
-  │     the editable fields and resets the password to the default. That IS
+  │     the editable fields and issues a FRESH random starting password
+  │     through the same generator. That IS
   │     the "never signed in / lost it" path. Refuses 'email-exists' once the
   │     person HAS set up — checked before touching Auth, so it can never
   │     reset a chosen password and only then find Firestore says no. Every
@@ -784,10 +801,12 @@ acceptance of something the person could actually read)
   └── AuthService.completeAccountSetup(newPassword, firstName, lastName,
   │     phone, termsAccepted, locationConsent)
   ├── User.updatePassword FIRST — ORDER IS THE GUARANTEE. The server cannot
-  │     see a password, so "you must replace the shared default" is true only
-  │     because the callable below is unreachable until this succeeds. Swap
-  │     them and an interrupted setup leaves an ACTIVE account still on the
-  │     default. Pinned by a test.
+  │     see a password, so "you must replace the starting password" is true
+  │     only because the callable below is unreachable until this succeeds.
+  │     Swap them and an interrupted setup leaves an ACTIVE account still on
+  │     the password an admin read aloud. Pinned by a test — and the pin
+  │     survives 2026-08-21 unchanged: making the starting password random
+  │     narrows who could know it, it does not make it fine to keep.
   ├── completeEmployeeSetup callable → resolves the caller's own doc by uid,
   │     flips status:'active', writes the profile, and stamps
   │     termsAcceptedAt/locationConsentAt ONLY when the flags are sent true
@@ -795,9 +814,10 @@ acceptance of something the person could actually read)
   │     [refuses 'setup-not-pending' on a replay; 5/15min per uid]
   └── on failure the password change is deliberately NOT reverted: it is the
         one the person just chose and typed twice, so leaving them 'invited'
-        with a working password beats resetting them to the shared default.
-        Next sign-in routes back here, which never assumes the current
-        password is still the default.
+        with a working password beats winding them back to a starting
+        password that is now nobody's to hand over. Next sign-in routes back
+        here, which never assumes the current password is still the one the
+        admin issued.
         → AuthFailureWeakPassword / AuthFailureSessionExpired /
           AuthFailureSetupAlreadyComplete / AuthFailureNoAccountRecord /
           AuthFailureTooManyRequests / AuthFailureNetwork
@@ -809,16 +829,40 @@ An old `esproschedule://invite?code=…` deep link now falls through to
 someone's messages and must not reach a screen that no longer exists. The
 dispatcher is reduced to the appointment branch.
 
-There is no email-verification step and no client self-activation. **The
-security posture is weaker than the codes it replaced, deliberately and with
-the owner's sign-off:** `Welcome123!` is known to everyone forever, so between
-account creation and first sign-in anyone who knows an employee's email can sign
-in as them and complete setup. What holds instead is that `firestore.rules`
-grants an `invited` user **nothing** — no clients, no appointments, no peers —
-so the window is "can reach the setup screen as this person", not "can read the
-business"; and the admin controls that window by creating the account when they
-hand the credentials over, not weeks ahead. That mitigation is operational, not
-technical, and belongs in the onboarding instructions.
+There is no email-verification step and no client self-activation. Read that
+first clause with its date attached: it was true at P4c, an `email_verified`
+guard on `completeEmployeeSetup` made it false on 2026-08-08, and it is true
+again from **2026-08-21** — for a different reason than the first time, which
+is the next paragraph. Activation being server-side is the part that never
+moved.
+
+**Security posture — restated 2026-08-21.** This paragraph previously stated
+the `Welcome123!` assessment as current ("known to everyone forever, so
+between account creation and first sign-in anyone who knows an employee's
+email can sign in as them"). That is now HISTORY, not a description of the
+system; the design of record for what replaced it is
+`docs/plans/2026-08-21-simplified-auth-design.md`. What is true today:
+
+- The starting password is a **real per-account secret** — randomly generated
+  and returned exactly once, in the `createEmployeeAccount` response, and
+  persisted nowhere. Knowing an employee's email address is no longer
+  sufficient to sign in as them — which is what PAID for removing the
+  `email_verified` guard rather than just dropping it and hoping. Never
+  restore a shared default without reinstating a mailbox check.
+- A pre-empted account can no longer be an **admin** account, because creation
+  always writes `role: 'employee'`. The worst case shrank from "reads the
+  whole `/clients` PII collection" to "occupies one employee seat".
+- `firestore.rules` still grants an `invited` user **nothing** — no clients,
+  no appointments, no peers. That was true under the old model and is
+  unchanged by this one; it remains the real containment, so the window is
+  "can reach the setup screen as this person", not "can read the business".
+
+**The window is NARROWED, NOT CLOSED, and must not be written up as closed.**
+Whoever holds *both* the email address and the generated password can still
+activate the account before the intended employee does. The mitigation for
+that residual is the same operational one it always was, and it belongs in the
+onboarding instructions: **create the account at the moment you hand the
+credentials over, not weeks ahead.**
 `termsAcceptedAt` and `locationConsentAt` are function-owned: they sit on the
 `/users` create AND update denylists beside `uid`, and `EmployeeRecord.toMap()`
 never emits them — nor `uid`/`status`, which the repository's field-scoped
