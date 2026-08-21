@@ -59,7 +59,6 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
 
   JobTitle _jobTitle = JobTitle.unset;
   late int _selectedColor;
-  bool _isAdmin = false;
   final Map<String, String?> errors = {};
 
   // Admin-only surface: the Team tab's FAB is the only way in.
@@ -140,7 +139,8 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
             email: normalizeEmail(_emailController.text),
             phone: _phoneController.text.trim(),
             color: Color(_selectedColor),
-            role: _isAdmin ? 'admin' : 'employee',
+            // role defaults to 'employee'; createEmployeeAccount always
+            // writes it server-side regardless of what the client sends.
             jobTitle: _jobTitle,
           ),
         );
@@ -199,7 +199,6 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
           ..._detailsSection(theme, l10n),
           ..._roleSection(theme, l10n),
           ..._colourSection(theme, l10n),
-          ..._accessSection(theme, l10n),
         ],
       ),
     );
@@ -299,22 +298,8 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
             color: theme.palette.textTertiary,
           ),
         ),
+        WarningNote(message: l10n.employees_invitedNote),
         const SizedBox(height: AppSpacing.sp24),
-      ]);
-
-  List<Widget> _accessSection(ThemeData theme, AppLocalizations l10n) =>
-      _section(TourStepId.personAccess, l10n.employees_sectionAccess, [
-        SwitchListTile.adaptive(
-          key: const Key('adminAccess'),
-          value: _isAdmin,
-          activeTrackColor: theme.colorScheme.primary,
-          contentPadding: EdgeInsets.zero,
-          title: Text(l10n.employees_adminAccess),
-          subtitle: Text(l10n.employees_adminAccessDescription),
-          onChanged: (value) => setState(() => _isAdmin = value),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        WarningNote(message: context.l10n.employees_invitedNote),
       ]);
 }
 

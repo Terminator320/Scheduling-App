@@ -90,8 +90,6 @@ void main() {
     await fillRequired(tester);
     await tester.tap(find.text('Technician'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('adminAccess')));
-    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Send Invite'));
     // Fixed-duration pump: the dialog's SelectableText cursor never settles.
@@ -111,15 +109,13 @@ void main() {
     ).called(1);
   });
 
-  testWidgets('admin access is off by default', (tester) async {
-    useTallViewport(tester);
+  testWidgets('offers no admin toggle — new accounts are always employees', (
+    tester,
+  ) async {
     await tester.pumpWidget(wrap());
     await tester.pumpAndSettle();
 
-    final adminSwitch = tester.widget<SwitchListTile>(
-      find.byKey(const Key('adminAccess')),
-    );
-    expect(adminSwitch.value, isFalse);
+    expect(find.byKey(const Key('adminAccess')), findsNothing);
   });
 
   testWidgets('shows the credentials dialog on success', (tester) async {
