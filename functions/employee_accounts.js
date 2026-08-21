@@ -36,9 +36,21 @@ const {
  * in as them.
  *
  * The alphabet is deliberately unambiguous (no 0/O, no 1/l/I) because the
- * admin reads this out loud, and it carries an uppercase, a lowercase and a
- * digit so it satisfies the client-side policy in
- * lib/core/validators/password_requirements.dart.
+ * admin reads this out loud.
+ *
+ * The uppercase/lowercase/digit mix is belt-and-braces, NOT a policy this
+ * value has to satisfy — be precise about which validator binds here. The
+ * strict `PasswordRequirement.allMetBy` is reached only through
+ * `AuthValidators.newPassword`, which gates the password the EMPLOYEE chooses
+ * on the setup screen; this one is only ever typed into the login screen,
+ * which uses the loose `AuthValidators.password` (non-empty, 8+ chars). What
+ * actually binds is Firebase Auth's own 6-character minimum, plus whatever
+ * Identity Platform password policy is configured console-side. The class mix
+ * is kept so a stricter Auth policy later cannot start rejecting values we
+ * mint. (An earlier version of this comment cited
+ * lib/core/validators/password_requirements.dart as the policy this satisfied.
+ * That was wrong when written: that enum still required a SYMBOL, which this
+ * alphanumeric alphabet can never produce.)
  */
 const PASSWORD_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const PASSWORD_LOWER = "abcdefghijkmnopqrstuvwxyz";
