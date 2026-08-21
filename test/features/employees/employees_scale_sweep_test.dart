@@ -189,7 +189,13 @@ void main() {
         // so pump a fixed span rather than settling.
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 400));
-        expect(find.text('Welcome123!'), findsOneWidget);
+        // Nothing was reset, so the row holds no credential to show: the
+        // masked value and its hint are what must survive the sweep.
+        expect(find.text('••••••••'), findsOneWidget);
+        expect(
+          find.text('Reset password to issue a new one'),
+          findsOneWidget,
+        );
       },
     );
   });

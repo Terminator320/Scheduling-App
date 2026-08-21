@@ -57,7 +57,7 @@ void main() {
     ).thenAnswer(
       (_) async => const NewAccountCredentials(
         email: 'zoe@example.com',
-        password: 'Reset456!',
+        password: 'Pw23456789x',
       ),
     );
     when(() => repo.deleteEmployeeAccount(any())).thenAnswer((_) async {});
@@ -130,6 +130,41 @@ void main() {
     );
   }
 
+  /// Captures whatever the tile puts on the clipboard.
+  List<String?> mockClipboard(WidgetTester tester) {
+    final copied = <String?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied.add((call.arguments as Map)['text'] as String?);
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    return copied;
+  }
+
+  testWidgets('masks the password when the app holds none', (tester) async {
+    useTallViewport(tester);
+    await tester.pumpWidget(wrap(_invited));
+    await tester.pumpAndSettle();
+    await expand(tester);
+
+    // No stored plaintext credential exists to show, and the constant it used
+    // to fall back to is gone.
+    expect(find.text('••••••••'), findsOneWidget);
+    expect(find.text('Reset password to issue a new one'), findsOneWidget);
+    expect(find.text('Copy email'), findsOneWidget);
+    expect(find.text('Copy both'), findsNothing);
+  });
+
   testWidgets('collapsed row shows the person and the Invited chip only', (
     tester,
   ) async {
@@ -141,9 +176,9 @@ void main() {
     expect(find.text('Invited'), findsOneWidget);
     expect(find.text('SIGN-IN DETAILS'), findsNothing);
     // The collapsed body must leave the tree entirely — a cross-fade would
-    // keep the password findable, and readable by a screen reader, on a row
-    // that looks closed.
-    expect(find.text('Welcome123!'), findsNothing);
+    // keep the credentials block findable, and readable by a screen reader, on
+    // a row that looks closed.
+    expect(find.text('••••••••'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -201,10 +236,9 @@ void main() {
     // email, and the credentials block repeats it as the thing they sign in
     // with — copying the password without it loses which account it opens.
     expect(find.text('zoe@example.com'), findsNWidgets(2));
-    expect(find.text('Welcome123!'), findsOneWidget);
-    // The whole point of retiring the code flow: the starting password is a
-    // fixed shared value, so opening a row costs no round-trip and rotates
-    // nothing. The old flow re-minted a code on every expand.
+    // The whole point of retiring the code flow: opening a row costs no
+    // round-trip and rotates nothing. The old flow re-minted a code on every
+    // expand.
     verifyNeverCreated();
     expect(tester.takeException(), isNull);
   });
@@ -221,37 +255,46 @@ void main() {
     expect(find.textContaining('no longer works'), findsNothing);
   });
 
-  testWidgets('Copy puts BOTH halves on the clipboard and relabels', (
+  testWidgets('Copy takes the email alone when no password is held', (
     tester,
   ) async {
     useTallViewport(tester);
-    final copied = <String?>[];
-    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-      SystemChannels.platform,
-      (call) async {
-        if (call.method == 'Clipboard.setData') {
-          copied.add((call.arguments as Map)['text'] as String?);
-        }
-        return null;
-      },
-    );
-    addTearDown(
-      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        SystemChannels.platform,
-        null,
-      ),
-    );
+    final copied = mockClipboard(tester);
 
     await tester.pumpWidget(wrap(_invited));
     await tester.pumpAndSettle();
     await expand(tester);
+
+    await tester.tap(find.text('Copy email'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // The mask is a display literal — it must never reach the clipboard.
+    expect(copied, ['zoe@example.com']);
+    expect(find.text('Copied'), findsOneWidget);
+    expect(find.text('Copy email'), findsNothing);
+  });
+
+  testWidgets('Copy puts BOTH halves on the clipboard after a reset', (
+    tester,
+  ) async {
+    useTallViewport(tester);
+    final copied = mockClipboard(tester);
+
+    await tester.pumpWidget(wrap(_invited));
+    await tester.pumpAndSettle();
+    await expand(tester);
+
+    await tester.tap(find.text('Reset password'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
 
     await tester.tap(find.text('Copy both'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
     // Copying only the password loses which account it opens.
-    expect(copied, ['zoe@example.com\nWelcome123!']);
+    expect(copied, ['zoe@example.com\nPw23456789x']);
     expect(find.text('Copied'), findsOneWidget);
     expect(find.text('Copy both'), findsNothing);
   });
@@ -285,9 +328,7 @@ void main() {
     ).called(1);
   });
 
-  testWidgets('Reset password shows the NEW password the server set', (
-    tester,
-  ) async {
+  testWidgets('shows the real pair after a reset', (tester) async {
     useTallViewport(tester);
     await tester.pumpWidget(wrap(_invited));
     await tester.pumpAndSettle();
@@ -297,9 +338,11 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    // Echoed from the server, never assumed from the client constant.
-    expect(find.text('Reset456!'), findsOneWidget);
-    expect(find.text('Welcome123!'), findsNothing);
+    // Echoed from the server, never assumed from a client constant — and the
+    // mask gives way the moment the app actually holds a credential.
+    expect(find.text('Pw23456789x'), findsOneWidget);
+    expect(find.text('••••••••'), findsNothing);
+    expect(find.text('Reset password to issue a new one'), findsNothing);
     expect(find.textContaining('no longer works'), findsOneWidget);
     expect(find.text('Password reset'), findsOneWidget);
   });
@@ -365,7 +408,7 @@ void main() {
       createCompleter.complete(
         const NewAccountCredentials(
           email: 'zoe@example.com',
-          password: 'Reset456!',
+          password: 'Pw23456789x',
         ),
       );
       await tester.pumpAndSettle();
@@ -453,7 +496,8 @@ void main() {
     await tester.pumpAndSettle();
     await expand(tester);
 
-    expect(find.text('Welcome123!'), findsOneWidget);
+    expect(find.text('••••••••'), findsOneWidget);
+    expect(find.text('Reset password to issue a new one'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

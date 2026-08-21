@@ -56,6 +56,13 @@ void copyCredentialsToClipboard({
   Clipboard.setData(ClipboardData(text: '$email\n$password'));
 }
 
+/// Copies the email alone, for a pending row whose starting password the app
+/// no longer holds. Beside [copyCredentialsToClipboard] so the two clipboard
+/// payloads this feature can produce stay in one place.
+void copyEmailToClipboard(String email) {
+  Clipboard.setData(ClipboardData(text: email));
+}
+
 /// The "Copy both" control, beside the payload it copies.
 ///
 /// Shared for the same reason [copyCredentialsToClipboard] is: the dialog and
@@ -66,18 +73,25 @@ class CopyCredentialsButton extends StatelessWidget {
   const CopyCredentialsButton({
     required this.copied,
     required this.onCopy,
+    this.hasPassword = true,
     super.key,
   });
 
   final bool copied;
   final VoidCallback onCopy;
 
+  /// False on a pending row holding no server echo — there is only an email to
+  /// copy, so the label says so.
+  final bool hasPassword;
+
   @override
   Widget build(BuildContext context) {
     return TextButton.icon(
       onPressed: copied ? null : onCopy,
       icon: Icon(copied ? Icons.check_rounded : Icons.copy_outlined, size: 18),
-      label: Text(copyCredentialsLabel(context, copied: copied)),
+      label: Text(
+        copyCredentialsLabel(context, copied: copied, hasPassword: hasPassword),
+      ),
       style: TextButton.styleFrom(
         minimumSize: const Size(48, 48),
         shape: const StadiumBorder(),
@@ -88,8 +102,16 @@ class CopyCredentialsButton extends StatelessWidget {
 
 /// The button's label, split out for the Cupertino dialog action, which takes
 /// a bare child rather than a Material button.
-String copyCredentialsLabel(BuildContext context, {bool copied = false}) =>
-    copied ? context.l10n.common_copied : context.l10n.employees_copyBoth;
+String copyCredentialsLabel(
+  BuildContext context, {
+  bool copied = false,
+  bool hasPassword = true,
+}) {
+  if (copied) return context.l10n.common_copied;
+  return hasPassword
+      ? context.l10n.employees_copyBoth
+      : context.l10n.employees_copyEmail;
+}
 
 /// The tint behind a credential panel. Shared so the two surfaces showing the
 /// same pair sit on the same surface colour — the dialog wraps each line, the

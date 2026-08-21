@@ -708,6 +708,8 @@
   "employees_temporaryPassword": "MOT DE PASSE TEMPORAIRE",
   "employees_theyWillChooseTheirOwnPassword": "Cette personne choisira son propre mot de passe à la première connexion.",
   "employees_copyBoth": "Tout copier",
+  "employees_copyEmail": "Copier le courriel",
+  "employees_passwordHiddenUntilReset": "Réinitialisez le mot de passe pour en générer un nouveau",
   "employees_signInDetails": "IDENTIFIANTS",
   "employees_resetPassword": "Réinitialiser le mot de passe",
   "employees_passwordReset": "Mot de passe réinitialisé",
