@@ -166,7 +166,6 @@ void main() {
         phone: any(named: 'phone'),
         colorValue: any(named: 'colorValue'),
         jobTitle: any(named: 'jobTitle'),
-        isAdmin: any(named: 'isAdmin'),
       ),
     ).thenAnswer(
       (_) async => const NewAccountCredentials(

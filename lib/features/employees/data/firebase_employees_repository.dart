@@ -116,7 +116,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     required String phone,
     required String colorValue,
     required String jobTitle,
-    required bool isAdmin,
   }) async {
     try {
       final res = await _functions
@@ -132,7 +131,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
             'phone': phone.trim(),
             'colorValue': colorValue,
             'jobTitle': jobTitle,
-            'isAdmin': isAdmin,
           });
       final data = (res.data as Map?)?.cast<String, dynamic>();
       if (data == null) throw const EmployeesFailureUnknown();

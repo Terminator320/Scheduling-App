@@ -200,7 +200,6 @@ class EmployeeFormController extends Notifier<EmployeeFormActivity> {
           phone: employee.phone,
           colorValue: employee.color.toARGB32().toString(),
           jobTitle: employee.jobTitle.raw,
-          isAdmin: employee.isAdmin,
         ),
       ),
     );
