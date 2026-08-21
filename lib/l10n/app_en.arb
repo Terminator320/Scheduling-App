@@ -28,42 +28,6 @@
   "@auth_finishSetup": {
     "description": "Primary button on the account setup screen"
   },
-  "auth_signedInAs": "SIGNED IN",
-  "@auth_signedInAs": {
-    "description": "Mono chip beside the locked email on the setup screen"
-  },
-  "auth_verifyEmailTitle": "Verify your email",
-  "@auth_verifyEmailTitle": {
-    "description": "Heading of the email-verification step on the setup screen"
-  },
-  "auth_verifyEmailBody": "Open the link we email you, then tap Check again. Setup can't finish until your address is verified.",
-  "@auth_verifyEmailBody": {
-    "description": "Explains the email-verification step on the setup screen"
-  },
-  "auth_sendVerificationEmail": "Send verification email",
-  "@auth_sendVerificationEmail": {
-    "description": "Button that sends the verification email for the first time"
-  },
-  "auth_resendVerificationEmail": "Resend email",
-  "@auth_resendVerificationEmail": {
-    "description": "Button that sends the verification email again"
-  },
-  "auth_verificationEmailSent": "Email sent. Check your inbox and your spam folder.",
-  "@auth_verificationEmailSent": {
-    "description": "Confirmation shown after the verification email is sent"
-  },
-  "auth_checkVerification": "Check again",
-  "@auth_checkVerification": {
-    "description": "Button that re-reads the account to pick up a just-clicked verification link"
-  },
-  "auth_emailNotVerifiedYet": "Not verified yet. Open the link in the email, then tap Check again.",
-  "@auth_emailNotVerifiedYet": {
-    "description": "Shown when the verification check ran and the address is still unverified"
-  },
-  "auth_emailVerified": "VERIFIED",
-  "@auth_emailVerified": {
-    "description": "Mono chip beside the locked email once the address is verified"
-  },
   "auth_signIn": "Sign In",
   "@auth_signIn": {
     "description": "Sign In"
@@ -1193,10 +1157,6 @@
   "@error_noAccountRecordContactAdmin": {
     "description": "Shown when the signed-in uid resolves to no users doc during setup"
   },
-  "error_verifyYourEmailBeforeFinishing": "Verify your email address before finishing setup.",
-  "@error_verifyYourEmailBeforeFinishing": {
-    "description": "Setup was attempted before the signed-in address was verified"
-  },
   "error_sessionExpiredSignInAgain": "Your session expired. Sign in again to finish setting up.",
   "@error_sessionExpiredSignInAgain": {
     "description": "Shown when the credential goes stale mid-setup and the person must sign in again"
@@ -1232,10 +1192,6 @@
   "@validation_passwordDoesNotMeetAllRequirements": {
     "description": "Field error on the create-account password when one or more checklist requirements are unmet."
   },
-  "validation_passwordMustDifferFromStarting": "Choose a different password from the one you were given",
-  "@validation_passwordMustDifferFromStarting": {
-    "description": "Field error on the account-setup password when the employee re-enters the shared starting password instead of choosing their own."
-  },
   "validation_passwordReqMinLength": "At least 8 characters",
   "@validation_passwordReqMinLength": {
     "description": "Password requirement checklist row: minimum length."
@@ -1251,10 +1207,6 @@
   "validation_passwordReqNumber": "A number (0–9)",
   "@validation_passwordReqNumber": {
     "description": "Password requirement checklist row: at least one digit."
-  },
-  "validation_passwordReqSymbol": "A symbol (!@#%&*…)",
-  "@validation_passwordReqSymbol": {
-    "description": "Password requirement checklist row: at least one symbol/special character."
   },
   "common_clientAdded": "Client added",
   "@common_clientAdded": {
@@ -2779,14 +2731,6 @@
   "tour_personColourDesc": "Identifies them on job cards and calendar dots. Colours already taken are not offered.",
   "@tour_personColourDesc": {
     "description": "Tour step description: invite form colour picker"
-  },
-  "tour_personAccessTitle": "What they can do",
-  "@tour_personAccessTitle": {
-    "description": "Tour step title: invite form access role toggle"
-  },
-  "tour_personAccessDesc": "This is the real permission switch. An admin manages everything; an employee sees only the jobs they are assigned.",
-  "@tour_personAccessDesc": {
-    "description": "Tour step description: invite form access role toggle, the real permission switch as opposed to the job title"
   },
   "tour_personCreateTitle": "Create the account",
   "@tour_personCreateTitle": {
