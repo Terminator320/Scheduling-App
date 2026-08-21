@@ -16,7 +16,6 @@ const {
   notifyEmailChanged,
   buildActivationPatch,
   generateStartingPassword,
-  DEFAULT_PASSWORD,
 } = require("../employee_accounts");
 const {buildEmailChangedMessage} = require("../notification_messages");
 const crypto = require("crypto");
@@ -32,7 +31,6 @@ const FIELDS = {
   phone: "(514) 555-0100",
   colorValue: "4280391411",
   jobTitle: "technician",
-  isAdmin: false,
 };
 
 /**
@@ -157,16 +155,11 @@ describe("generateStartingPassword", () => {
 });
 
 describe("provisionAuthAccount", () => {
-  test("the shared starting password is the exact mirrored literal", () => {
-    // Pins the Dart-side mirror kDefaultStartingPassword
-    // (lib/features/employees/domain/policies/starting_password_policy.dart),
-    // which the roster row shows as its fallback. Every other assertion here
-    // uses the imported symbol, so without this one the constant could be
-    // rotated on this side alone and the suite would still pass green.
-    expect(DEFAULT_PASSWORD).toBe("Welcome123!");
-  });
+  // These tests are about the plumbing, not the value — a plain literal
+  // stands in for whatever generateStartingPassword() actually produces.
+  const PW = "TestPw23456x";
 
-  test("mints a new account with the shared starting password", async () => {
+  test("mints a new account with the given starting password", async () => {
     const auth = {
       createUser: jest.fn(async () => ({uid: "uid-1"})),
       getUserByEmail: jest.fn(),
@@ -174,12 +167,12 @@ describe("provisionAuthAccount", () => {
     };
 
     const out = await provisionAuthAccount(
-        auth, "new@company.test", "New Employee", DEFAULT_PASSWORD);
+        auth, "new@company.test", "New Employee", PW);
 
     expect(out).toEqual({uid: "uid-1", reused: false});
     expect(auth.createUser).toHaveBeenCalledWith({
       email: "new@company.test",
-      password: DEFAULT_PASSWORD,
+      password: PW,
       displayName: "New Employee",
       emailVerified: false,
     });
@@ -204,7 +197,7 @@ describe("provisionAuthAccount", () => {
         };
 
         const out = await provisionAuthAccount(
-            auth, "new@company.test", "New Employee", DEFAULT_PASSWORD);
+            auth, "new@company.test", "New Employee", PW);
 
         expect(out).toEqual({uid: "uid-existing", reused: true});
         expect(auth.updateUser).not.toHaveBeenCalled();
@@ -217,10 +210,10 @@ describe("provisionAuthAccount", () => {
         const auth = {updateUser: jest.fn(async () => ({}))};
 
         await resetProvisionedPassword(
-            auth, "uid-existing", "New Employee", DEFAULT_PASSWORD);
+            auth, "uid-existing", "New Employee", PW);
 
         expect(auth.updateUser).toHaveBeenCalledWith("uid-existing", {
-          password: DEFAULT_PASSWORD,
+          password: PW,
           displayName: "New Employee",
         });
       });
@@ -237,7 +230,7 @@ describe("provisionAuthAccount", () => {
     };
 
     await expect(provisionAuthAccount(
-        auth, "e@t.test", "N", DEFAULT_PASSWORD)).rejects.toThrow("boom");
+        auth, "e@t.test", "N", PW)).rejects.toThrow("boom");
     expect(auth.getUserByEmail).not.toHaveBeenCalled();
   });
 });
@@ -331,14 +324,18 @@ describe("performCreateAccount", () => {
     expect(ops.some((o) => o.op === "set")).toBe(false);
   });
 
-  test("maps isAdmin onto the role field", async () => {
-    const {db, ops} = fakeDb();
+  test("always writes role employee, even if a caller smuggles isAdmin",
+      async () => {
+        const {db, ops} = fakeDb();
 
-    await performCreateAccount(
-        db, {...FIELDS, isAdmin: true}, {uid: "u", serverTimestamp});
+        await performCreateAccount(
+            db, {...FIELDS, isAdmin: true}, {uid: "u", serverTimestamp});
 
-    expect(ops.find((o) => o.op === "set").data.role).toBe("admin");
-  });
+        // The field is gone from the payload allowlist, but the core must not
+        // read it either — two independent reasons a created account is never
+        // an admin one.
+        expect(ops.find((o) => o.op === "set").data.role).toBe("employee");
+      });
 
   test("reads before it writes", async () => {
     // Firestore transactions forbid a read after a write.

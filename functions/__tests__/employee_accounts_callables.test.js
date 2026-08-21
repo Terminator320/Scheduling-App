@@ -66,7 +66,6 @@ const VALID_CREATE = {
   phone: "(514) 555-1234",
   colorValue: "4280391411",
   jobTitle: "technician",
-  isAdmin: false,
 };
 
 /**
