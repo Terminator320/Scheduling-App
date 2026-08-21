@@ -3239,6 +3239,14 @@
   "@employees_copyBoth": {
     "description": "Copies the email and password together"
   },
+  "employees_copyEmail": "Copy email",
+  "@employees_copyEmail": {
+    "description": "Copy control on a pending-account row that has no password to show"
+  },
+  "employees_passwordHiddenUntilReset": "Reset password to issue a new one",
+  "@employees_passwordHiddenUntilReset": {
+    "description": "Hint under the masked password on a pending-account roster row whose starting password the app no longer holds"
+  },
   "employees_signInDetails": "SIGN-IN DETAILS",
   "@employees_signInDetails": {
     "description": "Mono section label on the expanded pending-account row"
