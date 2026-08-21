@@ -32,7 +32,6 @@ const List<AuthFailure> _allFailures = [
   AuthFailureNotAuthorized(),
   AuthFailureSetupAlreadyComplete(),
   AuthFailureNoAccountRecord(),
-  AuthFailureEmailNotVerified(),
   AuthFailureSessionExpired(),
   AuthFailurePermissionDenied(),
   AuthFailureUnknown(),
