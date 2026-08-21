@@ -24,7 +24,14 @@ actually enforce, not just client code.
   `!employee.isActive`, not `isDisabled` (which misses `invited`/`''`).
 - Employee appointment visibility filter (`employeeIds`) present on every
   appointment query/view.
-- Self-activation / invite flows require `request.auth.token.email_verified`.
+- Self-activation flows: the account must be unreachable to someone who only
+  knows the employee's email address. `completeEmployeeSetup` carried an
+  `email_verified` guard for this until **2026-08-21**; it was removed when the
+  starting password became a random per-account secret
+  (`generateStartingPassword`) and created accounts were forced to
+  `role: "employee"`. **Its absence is not a finding** — check instead that the
+  starting password is still generated per account and never persisted, and
+  that account creation still cannot mint an admin.
 
 ## Firestore / Storage rules
 - Rules are restrictive and deny-by-default; no broad `allow read, write: if
