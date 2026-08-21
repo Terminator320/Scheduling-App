@@ -91,7 +91,7 @@ void main() {
 
     test('never activates when the password change fails', () async {
       // ORDER IS THE GUARANTEE: the server cannot see a password, so
-      // "you must replace the shared default" is true only because activation
+      // "you must replace the temporary default" is true only because activation
       // is unreachable until updatePassword succeeds.
       when(() => user.updatePassword(any())).thenThrow(
         FirebaseAuthException(code: 'weak-password'),
@@ -200,11 +200,14 @@ void main() {
       verifyNever(() => user.reload());
       verifyNever(() => user.sendEmailVerification());
       verifyNever(() => user.getIdToken(any()));
+      // Mocktail matches positional arity, so the one-arg form above does
+      // not cover a re-added bare getIdToken().
+      verifyNever(() => user.getIdToken());
     });
 
     test('does NOT sign out or revert the password on failure', () async {
       // The new password is the one the person just chose and typed twice.
-      // Reverting it to the shared default would be strictly worse than
+      // Reverting it to the temporary default would be strictly worse than
       // leaving them `invited` with a password that works.
       stubSetup().thenThrow(
         FirebaseFunctionsException(code: 'internal', message: 'boom'),

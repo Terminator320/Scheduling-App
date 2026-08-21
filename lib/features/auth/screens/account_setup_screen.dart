@@ -29,7 +29,7 @@ import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 
 /// First-run setup for an employee whose account an admin created.
 ///
-/// They are ALREADY signed in when they get here — with the shared starting
+/// They are ALREADY signed in when they get here — with the temporary starting
 /// password — and their `users` doc is still `invited`, which is what withholds
 /// every rules grant. This screen is the only route out of that state: it
 /// replaces the password and then activates the account, in that order (see
@@ -449,7 +449,7 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       const SizedBox(height: AppSpacing.sp24),
       AnimatedLoadingButton(
         label: l10n.auth_finishSetup,
-        isLoading: _isLoading || _isSigningOut,
+        isLoading: _isTransitionBusy,
         // The checkbox IS the gate — it is on screen and self-explanatory, so
         // a disabled button needs no error copy of its own.
         onPressed: _consented ? _finishSetup : null,
