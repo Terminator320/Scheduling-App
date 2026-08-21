@@ -15,6 +15,7 @@ const {
   performChangeEmail,
   notifyEmailChanged,
   buildActivationPatch,
+  generateStartingPassword,
   DEFAULT_PASSWORD,
 } = require("../employee_accounts");
 const {buildEmailChangedMessage} = require("../notification_messages");
@@ -109,6 +110,35 @@ function fakeDb(opts = {}) {
 function userDoc(data, id = "existing-doc") {
   return {id, ref: {id, _kind: "existingRef"}, data: () => data};
 }
+
+describe("generateStartingPassword", () => {
+  test("is 12 unambiguous characters carrying each required class", () => {
+    for (let i = 0; i < 200; i++) {
+      const pw = generateStartingPassword();
+      expect(pw).toHaveLength(12);
+      expect(pw).toMatch(/[A-Z]/);
+      expect(pw).toMatch(/[a-z]/);
+      expect(pw).toMatch(/[0-9]/);
+      // The admin reads this aloud, so no glyph pair anyone mishears.
+      expect(pw).not.toMatch(/[0O1lI]/);
+    }
+  });
+
+  test("does not repeat across calls", () => {
+    const seen = new Set();
+    for (let i = 0; i < 100; i++) seen.add(generateStartingPassword());
+    expect(seen.size).toBe(100);
+  });
+
+  test("shuffles, so the guaranteed classes are not always in front", () => {
+    // Without the shuffle the first character is ALWAYS the uppercase pick,
+    // so this count would be exactly 200.
+    const upperFirst = Array.from({length: 200}, generateStartingPassword)
+        .filter((pw) => /[A-Z]/.test(pw[0])).length;
+    expect(upperFirst).toBeGreaterThan(20);
+    expect(upperFirst).toBeLessThan(180);
+  });
+});
 
 describe("provisionAuthAccount", () => {
   test("the shared starting password is the exact mirrored literal", () => {
