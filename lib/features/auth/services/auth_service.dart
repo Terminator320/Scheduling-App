@@ -61,7 +61,7 @@ class AuthService {
   ///
   /// ORDER IS THE GUARANTEE. The password is replaced FIRST, then the account
   /// is activated. The server cannot see a password, so "you must replace the
-  /// shared default" is true only because activation is refused until this
+  /// temporary default" is true only because activation is refused until this
   /// method gets past [User.updatePassword]. Swap the two and an interrupted
   /// setup leaves an active account still on the default password.
   ///
@@ -103,7 +103,7 @@ class AuthService {
     } catch (e, st) {
       final failure = _mapSetupError(e);
       // No rollback of the password change: the new password is the one the
-      // person just chose and typed twice. Reverting it to the shared default
+      // person just chose and typed twice. Reverting it to the temporary default
       // would be strictly worse than leaving them `invited` with a password
       // that works.
       _logger.authFailure(

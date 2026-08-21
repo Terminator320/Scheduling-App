@@ -1,7 +1,9 @@
 // Behavioural cover for AccountSetupScreen — the P4c first-sign-in flow where
-// an invited employee replaces the shared starting password and activates
+// an invited employee replaces the temporary starting password and activates
 // their own account. The screen was previously only swept for overflow, so
 // every gate below could be deleted with a green suite.
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,7 +34,8 @@ class _StubSignInController extends SignInController {
   Future<SignInOutcome> resumeAfterSignUp() async => _resumeOutcome;
 }
 
-/// A password that satisfies every requirement and is NOT the shared default.
+/// A password meeting the policy the screen gates on: 8+ characters with an
+/// upper, a lower and a digit.
 const _chosen = 'Chosen1!pass';
 
 Widget _harness({
@@ -208,29 +211,6 @@ void main() {
     });
   });
 
-  group('email verification is no longer a gate', () {
-    testWidgets('an unverified address no longer blocks activation', (
-      tester,
-    ) async {
-      await tester.pumpWidget(_harness(auth: auth));
-      await tester.pumpAndSettle();
-      await _fillForm(tester);
-      await _consent(tester);
-      await _submit(tester);
-
-      verify(
-        () => auth.completeAccountSetup(
-          newPassword: any(named: 'newPassword'),
-          firstName: any(named: 'firstName'),
-          lastName: any(named: 'lastName'),
-          phone: any(named: 'phone'),
-          termsAccepted: true,
-          locationConsent: true,
-        ),
-      ).called(1);
-    });
-  });
-
   group('the offline guard', () {
     testWidgets('does not call the server while offline', (tester) async {
       await tester.pumpWidget(_harness(auth: auth, offline: true));
@@ -268,6 +248,58 @@ void main() {
       await tester.pumpAndSettle();
 
       verify(() => auth.signOut()).called(1);
+      expect(find.text('login screen'), findsOneWidget);
+    });
+
+    // The log-out control and _finishSetup share one _isTransitionBusy gate.
+    // Only the SOURCE of busy-ness changed when the verification round-trips
+    // went away, so the gate is re-pinned against the submit path: without it
+    // a mid-activation sign-out revokes the credential completeAccountSetup is
+    // still using.
+    testWidgets('log out stays disabled while activation is in flight', (
+      tester,
+    ) async {
+      final activation = Completer<void>();
+      when(
+        () => auth.completeAccountSetup(
+          newPassword: any(named: 'newPassword'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          phone: any(named: 'phone'),
+          termsAccepted: any(named: 'termsAccepted'),
+          locationConsent: any(named: 'locationConsent'),
+        ),
+      ).thenAnswer((_) => activation.future);
+
+      // A resume outcome that only sets a banner, so completing the activation
+      // below neither navigates nor reaches the sign-out recovery path.
+      await tester.pumpWidget(
+        _harness(
+          auth: auth,
+          resumeOutcome: const SignInError(AuthFailureUnknown()),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _fillForm(tester);
+      await _consent(tester);
+
+      // Not `_submit`: its pumpAndSettle never returns while the CTA spinner
+      // is running.
+      final cta = find.byType(FilledButton).last;
+      await tester.ensureVisible(cta);
+      await tester.pumpAndSettle();
+      await tester.tap(cta, warnIfMissed: false);
+      await tester.pump();
+
+      final logOut = find.widgetWithText(TextButton, 'Log out');
+      expect(tester.widget<TextButton>(logOut).onPressed, isNull);
+
+      await tester.tap(logOut, warnIfMissed: false);
+      await tester.pump();
+      verifyNever(() => auth.signOut());
+
+      activation.complete();
+      await tester.pumpAndSettle();
     });
 
     testWidgets('shows a recoverable error if sign-out fails', (tester) async {
