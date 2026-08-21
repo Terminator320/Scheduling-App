@@ -77,9 +77,6 @@ void main() {
   setUp(() {
     auth = _MockAuthService();
     repo = _MockRepo();
-    // Unverified, so the setup screen's verification panel is part of every
-    // sweep — its two buttons are the widest row on that screen.
-    when(() => auth.isEmailVerified).thenReturn(false);
   });
 
   for (final scale in _scales) {

@@ -18,13 +18,11 @@ import 'package:scheduling/features/auth/services/auth_service.dart';
 import 'package:scheduling/features/auth/widgets/account_setup/consent_row.dart';
 import 'package:scheduling/features/auth/widgets/account_setup/locked_email_panel.dart';
 import 'package:scheduling/features/auth/widgets/account_setup/setup_banner.dart';
-import 'package:scheduling/features/auth/widgets/account_setup/verify_email_panel.dart';
 import 'package:scheduling/features/auth/widgets/auth_banner.dart';
 import 'package:scheduling/features/auth/widgets/auth_fields.dart';
 import 'package:scheduling/features/auth/widgets/auth_scaffold.dart';
 import 'package:scheduling/features/auth/widgets/password_requirements_checklist.dart';
 import 'package:scheduling/features/auth/widgets/password_strength_meter.dart';
-import 'package:scheduling/features/employees/domain/policies/starting_password_policy.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
@@ -77,17 +75,7 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   bool _consented = false;
   bool _isLoading = false;
   bool _submitted = false;
-
-  /// The second gate beside consent. The account was minted on a password
-  /// every admin knows, so verification is the only thing that proves the
-  /// person on this screen owns the mailbox — and the server refuses to
-  /// activate without it.
-  late bool _emailVerified;
-  bool _isSendingVerification = false;
-  bool _isCheckingVerification = false;
   bool _isSigningOut = false;
-  bool _verificationSent = false;
-  String? _verificationNotice;
 
   String? _firstNameError;
   String? _lastNameError;
@@ -100,7 +88,6 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
     super.initState();
     _firstNameController = TextEditingController(text: widget.firstName);
     _lastNameController = TextEditingController(text: widget.lastName);
-    _emailVerified = _authService.isEmailVerified;
   }
 
   @override
@@ -133,22 +120,11 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
     // The meter beside this field is advisory; the gate stays the strict
     // new-password validator so it can never disagree with the checklist.
     //
-    // The shared starting password satisfies every one of those requirements,
-    // so it has to be rejected by name: without this, someone can "set" their
-    // password to the value the admin just read out and end up permanently
-    // `active` on a constant that is in the source, on every pending roster row
-    // and known to every admin. Replacing it is the whole reason this screen
-    // is reachable, and the only thing that closes the onboarding window.
-    //
     // Validated TRIMMED, because `completeAccountSetup` stores the trimmed
     // value: checking `"Aa1!bcd "` (8) and then setting `"Aa1!bcd"` (7) let a
     // password through that does not meet the policy it was checked against.
     final password = _passwordController.text.trim();
-    final passwordErr =
-        AuthValidators.newPassword(context, password) ??
-        (password == kDefaultStartingPassword
-            ? l10n.validation_passwordMustDifferFromStarting
-            : null);
+    final passwordErr = AuthValidators.newPassword(context, password);
 
     String? confirmErr;
     if (_confirmController.text.trim().isEmpty) {
@@ -190,98 +166,7 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   /// submit button.
   void _onPasswordChanged() => _onFieldChanged();
 
-  bool get _isVerificationBusy =>
-      _isSendingVerification || _isCheckingVerification;
-
-  bool get _isTransitionBusy =>
-      _isLoading || _isSigningOut || _isVerificationBusy;
-
-  /// Sends Firebase's own verification email to the address they signed in
-  /// with. Deliberately user-triggered rather than automatic: an auto-send on
-  /// every visit spends the provider's rate limit on people who already have
-  /// the message open.
-  Future<void> _sendVerificationEmail() async {
-    if (_isTransitionBusy) {
-      return;
-    }
-    // Before the await: the catch logs above its `mounted` guard, and
-    // `ref.read` on an unmounted consumer throws under Riverpod 3.
-    final logger = ref.read(loggerProvider);
-    setState(() {
-      _isSendingVerification = true;
-      _verificationNotice = null;
-      _bannerError = null;
-    });
-    try {
-      await _authService.sendVerificationEmail();
-      if (!mounted) return;
-      setState(() {
-        _isSendingVerification = false;
-        _verificationSent = true;
-        _verificationNotice = context.l10n.auth_verificationEmailSent;
-      });
-    } catch (error, stackTrace) {
-      final failure = AuthErrorMapper.map(error);
-      logger.authFailure(
-        'AUTH-SETUP sendVerificationEmail failed',
-        failure,
-        error,
-        stackTrace,
-      );
-      if (!mounted) return;
-      setState(() {
-        _isSendingVerification = false;
-        _bannerError = failure.toLocalizedMessageInContext(
-          context,
-          AuthErrorContext.register,
-        );
-      });
-    }
-  }
-
-  /// Re-reads the account after they have opened the link.
-  ///
-  /// [AuthService.refreshEmailVerified] also forces a token refresh — the
-  /// callable reads `email_verified` off the token, so without that the server
-  /// would keep refusing an address the person has already verified.
-  Future<void> _checkVerification() async {
-    if (_isTransitionBusy) {
-      return;
-    }
-    final logger = ref.read(loggerProvider);
-    setState(() {
-      _isCheckingVerification = true;
-      _verificationNotice = null;
-      _bannerError = null;
-    });
-    try {
-      final verified = await _authService.refreshEmailVerified();
-      if (!mounted) return;
-      setState(() {
-        _isCheckingVerification = false;
-        _emailVerified = verified;
-        _verificationNotice = verified
-            ? null
-            : context.l10n.auth_emailNotVerifiedYet;
-      });
-    } catch (error, stackTrace) {
-      final failure = AuthErrorMapper.map(error);
-      logger.authFailure(
-        'AUTH-SETUP refreshEmailVerified failed',
-        failure,
-        error,
-        stackTrace,
-      );
-      if (!mounted) return;
-      setState(() {
-        _isCheckingVerification = false;
-        _bannerError = failure.toLocalizedMessageInContext(
-          context,
-          AuthErrorContext.register,
-        );
-      });
-    }
-  }
+  bool get _isTransitionBusy => _isLoading || _isSigningOut;
 
   Future<void> _finishSetup() async {
     // Reentrancy guard, synchronously first: AnimatedLoadingButton only nulls
@@ -290,12 +175,10 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
     // invocations — burning 2 of 5 rate-limit slots and pushing the hub twice.
     if (_isTransitionBusy) return;
     FocusScope.of(context).unfocus();
-    // Consent and email verification are the two gates, and this is where they
-    // are enforced: the confirm-password field's keyboard-submit reaches here
-    // without consulting the disabled button, so gating only at the CTA would
-    // let Done through. Verification is also the SERVER's gate, so submitting
-    // without it can only produce a failure notice.
-    if (!_consented || !_emailVerified) return;
+    // Consent is the gate, and this is where it is enforced: the confirm-
+    // password field's keyboard-submit reaches here without consulting the
+    // disabled button, so gating only at the CTA would let Done through.
+    if (!_consented) return;
 
     setState(() {
       _submitted = true;
@@ -350,9 +233,6 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       }
       setState(() {
         _isLoading = false;
-        // The local flag said verified but the token did not carry the claim,
-        // so put the step back rather than leaving a CTA that can only fail.
-        if (failure is AuthFailureEmailNotVerified) _emailVerified = false;
         _bannerError = failure.toLocalizedMessageInContext(
           context,
           AuthErrorContext.register,
@@ -467,25 +347,13 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
     );
   }
 
-  /// The read-only email and, until it is proven, the verification step.
+  /// The read-only address they signed in with.
   List<Widget> _identityPanels() {
     final email = _authService.currentUser?.email ?? '';
+    if (email.isEmpty) return const [];
     return [
-      if (email.isNotEmpty) ...[
-        const SizedBox(height: AppSpacing.sp16),
-        LockedEmailPanel(email: email, isVerified: _emailVerified),
-      ],
-      if (!_emailVerified) ...[
-        const SizedBox(height: AppSpacing.sp16),
-        VerifyEmailPanel(
-          hasSent: _verificationSent,
-          isSending: _isSendingVerification || _isSigningOut,
-          isChecking: _isCheckingVerification || _isSigningOut,
-          notice: _verificationNotice,
-          onSend: _sendVerificationEmail,
-          onCheck: _checkVerification,
-        ),
-      ],
+      const SizedBox(height: AppSpacing.sp16),
+      LockedEmailPanel(email: email),
     ];
   }
 
@@ -582,10 +450,9 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       AnimatedLoadingButton(
         label: l10n.auth_finishSetup,
         isLoading: _isLoading || _isSigningOut,
-        // The checkbox and the verification panel ARE the gates — both are
-        // on screen and self-explanatory, so a disabled button needs no
-        // error copy of its own.
-        onPressed: _consented && _emailVerified ? _finishSetup : null,
+        // The checkbox IS the gate — it is on screen and self-explanatory, so
+        // a disabled button needs no error copy of its own.
+        onPressed: _consented ? _finishSetup : null,
       ),
       const SizedBox(height: AppSpacing.sp8),
       Center(
