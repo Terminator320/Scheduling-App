@@ -170,10 +170,6 @@ import 'package:scheduling/l10n/l10n.dart';
     title: l.tour_personColourTitle,
     description: l.tour_personColourDesc,
   ),
-  TourStepId.personAccess => (
-    title: l.tour_personAccessTitle,
-    description: l.tour_personAccessDesc,
-  ),
   TourStepId.personCreate => (
     title: l.tour_personCreateTitle,
     description: l.tour_personCreateDesc,

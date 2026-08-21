@@ -45,6 +45,5 @@ enum TourStepId {
   personDetails,
   personJobTitle,
   personColour,
-  personAccess,
   personCreate,
 }
