@@ -43,10 +43,7 @@ sealed class AuthFailure extends Failure {
     // Both are races rather than defects: a replayed setup call, and a
     // credential that went stale mid-setup. Signing in again fixes either.
     AuthFailureSetupAlreadyComplete() ||
-    AuthFailureSessionExpired() ||
-    // Ordinary onboarding state, not a defect: they have not opened the link
-    // yet, or the token predates their doing so.
-    AuthFailureEmailNotVerified() => true,
+    AuthFailureSessionExpired() => true,
     // Console misconfiguration, a rules rejection, an unmapped error, or a
     // signed-in uid with no users doc — all real defects worth a non-fatal.
     AuthFailureOperationNotAllowed() ||
@@ -182,16 +179,6 @@ class AuthFailureNoAccountRecord extends AuthFailure {
       c.l10n.error_noAccountRecordContactAdmin;
 }
 
-// Setup was attempted before the address was verified. The account is minted
-// on a shared starting password, so verification is what proves the person
-// signing in owns the mailbox — see AuthService.isEmailVerified.
-class AuthFailureEmailNotVerified extends AuthFailure {
-  const AuthFailureEmailNotVerified();
-  @override
-  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
-      c.l10n.error_verifyYourEmailBeforeFinishing;
-}
-
 // The credential went stale mid-setup (token expired, or the write needed a
 // recent login). Signing in again is the whole fix.
 class AuthFailureSessionExpired extends AuthFailure {
@@ -250,7 +237,6 @@ extension AuthFailureForgotPassword on AuthFailure {
       AuthFailureRequiresRecentLogin() ||
       AuthFailureSetupAlreadyComplete() ||
       AuthFailureNoAccountRecord() ||
-      AuthFailureEmailNotVerified() ||
       AuthFailureSessionExpired() ||
       AuthFailureUnknown() =>
         context.l10n.error_somethingWentWrongPleaseTryAgain,

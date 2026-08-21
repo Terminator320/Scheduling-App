@@ -184,6 +184,24 @@ void main() {
       );
     });
 
+    test('never asks the user about email verification', () async {
+      stubSetup().thenAnswer((_) async {});
+
+      await service.completeAccountSetup(
+        newPassword: 'Passw0rdAbc',
+        firstName: 'Sam',
+        lastName: 'Lee',
+        termsAccepted: true,
+        locationConsent: true,
+      );
+
+      // The gate is gone: no reload, no forced token refresh, no verification
+      // send anywhere on the setup path.
+      verifyNever(() => user.reload());
+      verifyNever(() => user.sendEmailVerification());
+      verifyNever(() => user.getIdToken(any()));
+    });
+
     test('does NOT sign out or revert the password on failure', () async {
       // The new password is the one the person just chose and typed twice.
       // Reverting it to the shared default would be strictly worse than
@@ -201,20 +219,26 @@ void main() {
   });
 
   group('signOut', () {
-    test('swallows a local sign-out failure once auth state is already cleared', () async {
-      when(() => auth.signOut()).thenThrow(Exception('ios signOut failed'));
-      when(() => auth.currentUser).thenReturn(null);
+    test(
+      'swallows a local sign-out failure once auth state is already cleared',
+      () async {
+        when(() => auth.signOut()).thenThrow(Exception('ios signOut failed'));
+        when(() => auth.currentUser).thenReturn(null);
 
-      await service.signOut();
+        await service.signOut();
 
-      verify(() => auth.signOut()).called(1);
-    });
+        verify(() => auth.signOut()).called(1);
+      },
+    );
 
-    test('rethrows a local sign-out failure when the session is still live', () async {
-      when(() => auth.signOut()).thenThrow(Exception('ios signOut failed'));
-      when(() => auth.currentUser).thenReturn(user);
+    test(
+      'rethrows a local sign-out failure when the session is still live',
+      () async {
+        when(() => auth.signOut()).thenThrow(Exception('ios signOut failed'));
+        when(() => auth.currentUser).thenReturn(user);
 
-      await expectLater(service.signOut(), throwsException);
-    });
+        await expectLater(service.signOut(), throwsException);
+      },
+    );
   });
 }
