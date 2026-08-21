@@ -17,43 +17,62 @@ self-service settings. Root context: `../../CLAUDE.md`.
 - **Employee accounts: the admin invites, the employee sets up** (P4c,
   2026-08-02 — this REPLACED the one-time signup-code flow entirely). The
   admin's person sheet calls `createEmployeeAccount`, which mints a **Firebase
-  Auth account** with the shared starting password `Welcome123!` plus a `users`
-  doc that is `invited` but **already carries the real `uid`**, and returns the
-  email + password for the admin to hand over out-of-band (the `NewAccountDialog`
-  right after creation, or the expanded roster row later). The employee then
+  Auth account** on a **random per-account starting password** —
+  `generateStartingPassword()` in `functions/employee_accounts.js`, drawn once
+  per call, handed to both the create and the re-provision path, returned in the
+  response and **never persisted anywhere** (2026-08-21; until then it was the
+  shared constant `Welcome123!`) — plus a `users` doc that is `invited` but
+  **already carries the real `uid`**, and returns the email + password for the
+  admin to hand over out-of-band (the `NewAccountDialog` right after creation,
+  or the expanded roster row while that echo is still in memory).
+  **The doc is always written `role: "employee"`**: the callable no longer
+  accepts an `isAdmin` field at all, so an older client that still sends one
+  gets a clean `invalid-argument` rather than silently minting an admin.
+  Promotion is a separate, later edit on `edit_person_sheet.dart` once the
+  person has finished setup — you make an admin by creating them normally and
+  then flipping that toggle. The employee then
   signs in normally; both gates see `invited` and route to
   `AccountSetupScreen`, where they **choose their own password** and fill in
   name/phone/consent → `completeEmployeeSetup` flips the doc to `active`.
   **ORDER IS THE APP-LAYER GUARANTEE: the password is replaced FIRST,
   client-side, then the account is activated.** The server cannot see a
-  password, so "you must replace the shared default" holds because
+  password, so "you must replace the starting password" holds because
   `AuthService.completeAccountSetup` calls `User.updatePassword` before the
   callable — swap the two and an interrupted setup leaves an *active* account
-  still on `Welcome123!`. Pinned by a test (`verifyInOrder`, plus the half that
-  matters: a thrown `updatePassword` must `verifyNever` the activation).
+  still on the password the admin read out. Pinned by a test (`verifyInOrder`,
+  plus the half that matters: a thrown `updatePassword` must `verifyNever` the
+  activation).
   **Be precise about how strong this is: it is client-side ordering, NOT a
-  server check.** `completeEmployeeSetup` verifies auth + `email_verified` + a
-  matching doc + `status == 'invited'`; it does not verify that the password
+  server check.** `completeEmployeeSetup` verifies auth + a matching doc +
+  `status == 'invited'`; it does not verify that the password
   actually rotated, so anything reaching the callable directly activates an
-  un-rotated account. `enforceAppCheck: true` plus that mailbox check are what
-  stand in the way there, and App Check is attestation, not authorization.
+  un-rotated account. `enforceAppCheck: true` is all that stands in the way
+  there, and App Check is attestation, not authorization.
   Don't build on the ordering as if the server enforced it.
   **The password itself is validated TRIMMED** — `completeAccountSetup` stores
   `newPassword.trim()`, so checking the raw text let `"Aa1!bcd "` pass the
   8-character rule and set a 7-character password. The strength meter and the
   requirements checklist read the same trimmed value.
-  **The setup screen rejects `kDefaultStartingPassword` by name**
-  (`account_setup_screen.dart`, `validation_passwordMustDifferFromStarting`).
-  That check is load-bearing, not belt-and-braces: `Welcome123!` satisfies every
-  requirement `AuthValidators.newPassword` tests (length, upper, lower, digit,
-  symbol), so without it someone can "choose" the password the admin just read
-  to them and end up permanently `active` on a constant that is in the source,
-  on every pending roster row and known to every admin — with the roster
-  reporting `active` and nothing anywhere flagging it. A failure *after* the password change deliberately does **not** revert
+  **The "must differ from the starting password" check is GONE (2026-08-21),
+  and dropping it is only safe because the constant went with it.** It rejected
+  `kDefaultStartingPassword` by name in `account_setup_screen.dart`
+  (`validation_passwordMustDifferFromStarting`), and it was load-bearing rather
+  than belt-and-braces for as long as the starting password was `Welcome123!`:
+  that value satisfied every requirement `AuthValidators.newPassword` tested, so
+  without it someone could "choose" the password the admin had just read to them
+  and end up permanently `active` on a constant that was in the source, on every
+  pending roster row and known to every admin — with the roster reporting
+  `active` and nothing anywhere flagging it. A per-account random password
+  leaves no constant to re-choose, so the rule now guards nothing and
+  `employees/domain/policies/starting_password_policy.dart` is deleted with it.
+  Don't re-add a name-based check, and don't reintroduce a shared default
+  without reinstating it. (`PasswordRequirement.symbol` went the same day; the
+  policy is 8+ characters with an uppercase, a lowercase and a digit.)
+  A failure *after* the password change deliberately does **not** revert
   it: the new password is the one the person just chose and typed twice, so
   leaving them `invited` with a working password beats resetting them to the
-  shared default (the next sign-in routes back to setup, which never assumes the
-  current password is the default). Re-running create on a still-`invited`
+  starting password (the next sign-in routes back to setup, which never assumes
+  the current password is the starting one). Re-running create on a still-`invited`
   person **resets their password** — that IS the "never signed in / lost it"
   path — but it refuses with `email-exists` once someone has set up. **That
   refusal resolves the target by `uid`, not by email, and the password rotation
@@ -74,7 +93,8 @@ self-service settings. Root context: `../../CLAUDE.md`.
   closed.** Firestore serializes the two transactions, but the Auth call sits
   outside both — a `completeEmployeeSetup` that commits between
   `performCreateAccount` committing and `resetProvisionedPassword` returning
-  still ends with an `active` employee on the shared default. That residue is
+  still ends with an `active` employee on the freshly issued starting password
+  rather than the one they just chose. That residue is
   milliseconds wide instead of a whole round trip, and it cannot be closed
   from here (Auth is not transactional); don't write it up as fixed.
   `deleteEmployeeAccount` likewise
@@ -85,28 +105,34 @@ self-service settings. Root context: `../../CLAUDE.md`.
   *we* just minted it — since an Auth account with no `users` doc is a sign-in
   `SplashScreen` can't resolve and no admin surface can see.
   **The security posture is weaker than the codes it replaced, deliberately and
-  with the owner's sign-off.** `Welcome123!` is known to everyone forever, so
-  between creation and first sign-in anyone who knows an employee's email can
-  sign in as them. **What stops them going further is
-  `completeEmployeeSetup`'s `email_verified` guard (added 2026-08-08): setup
-  requires control of the MAILBOX, not just knowledge of the address.**
-  Before that guard the window was priced here as "can reach the setup screen
-  as this person, not read the business", and that was wrong — the race winner
-  called the callable, landed `active`, and (if the row was provisioned with
-  `isAdmin: true`) landed *admin*, which reaches the whole `/clients` PII
-  collection. Nothing about the code had drifted; the written risk assessment
-  had. Reaching the setup screen is still all an unverified caller gets: an
-  `invited` user is granted **nothing** by `firestore.rules` — no clients, no
-  appointments, no peers. **The residual risk is now "whoever holds the mailbox
-  AND the shared password can activate the account"**, and the window remains
-  under the admin's control (create the account when you are handing the
-  credentials over, not weeks ahead). That last mitigation is operational, not
-  technical, and belongs in the onboarding instructions.
-  Client side, `AccountSetupScreen` sends Firebase's own verification email and
-  gates its CTA on `AuthService.refreshEmailVerified()`, which **forces an ID
-  token refresh** — the callable reads `email_verified` off the token, minted at
-  sign-in, so a bare `User.reload()` would leave the server refusing an address
-  the person had already verified. `create_account_screen.dart`, both `accept_invite_*` screens,
+  with the owner's sign-off — and this assessment has been re-priced twice, so
+  read the date on it.** While the starting password was the shared constant
+  `Welcome123!` it was known to everyone forever, so between creation and first
+  sign-in anyone who merely knew an employee's email address could sign in as
+  them; what stopped the race winner going further was `completeEmployeeSetup`'s
+  `email_verified` guard (added 2026-08-08), which demanded control of the
+  MAILBOX and not just knowledge of the address. **The shared constant and that
+  guard were removed TOGETHER on 2026-08-21** — the random password is what pays
+  for dropping the guard, so never bring back a shared default without
+  reinstating a mailbox check, and never cite this note as precedent for
+  deleting one elsewhere. The address alone now buys nothing, because the
+  password is a real secret.
+  **The residual risk is NOT zero and must not be written up as closed: whoever
+  holds the address AND the generated password can still activate the account
+  before the intended employee does.** What improved is that this is now a
+  secret rather than a value printed in the source and rendered on every pending
+  roster row — the race itself is still there. Two things bound it. The worst
+  case shrank, because a pre-empted account is always a plain `employee` now
+  (it could previously be provisioned `isAdmin: true`, and an admin reads the
+  whole `/clients` PII collection); and an `invited` user is granted **nothing**
+  by `firestore.rules` — no clients, no appointments, no peers — so reaching the
+  setup screen is all a race winner holds until the callable lands. The rest is
+  operational, not technical, and belongs in the onboarding instructions:
+  **create the account at the moment you hand the credentials over, not weeks
+  ahead.** Client side there is no mailbox step left to look for —
+  `verify_email_panel.dart`, `AuthService.sendVerificationEmail` /
+  `refreshEmailVerified` / `isEmailVerified` and `AuthFailureEmailNotVerified`
+  were all deleted on 2026-08-21. `create_account_screen.dart`, both `accept_invite_*` screens,
   `CodeEntryBoxes`, `signup_code_dialog`, `InvitePreview` and the
   `revokeInvite`/`previewInvite` callables are all **deleted** — there is
   nothing left to "accept" in THIS build, which is why sign-in's bottom prompt
@@ -146,13 +172,6 @@ self-service settings. Root context: `../../CLAUDE.md`.
   shared `sendToEmployee`). It is a courtesy, **not** a guarantee — no live FCM
   token, no notice — so the admin still has to tell them; don't write it up as
   if the person is reliably informed.
-- **`kDefaultStartingPassword` is hand-mirrored** in
-  `employees/domain/policies/starting_password_policy.dart` and
-  `DEFAULT_PASSWORD` in `functions/employee_accounts.js`; both carry a pointer to
-  the other. The Dart copy is only ever a **display fallback** for a row whose
-  account was created earlier — any surface that just called the callable shows
-  the password the **server echoed back**, so a drift can't reach the screen
-  where it matters.
 - **A displayed starting password is a CREDENTIAL — state-only, never logged,
   never persisted.** It lives in widget/controller state and dies with the
   surface, keyed to the account it belongs to (`_credentialsFor`, so a recycled
@@ -291,10 +310,16 @@ self-service settings. Root context: `../../CLAUDE.md`.
   signature back to named strings: that shape was a trap that bit the old Show
   code and Resend equally, and a new pending-user field had to be threaded
   through four layers with no compile error if you missed one.
-  Unlike the retired code flow, **expanding the row is NOT a re-issue** — the
-  starting password is a fixed shared value, so the row renders it with no
-  server round-trip. Only **Reset password** re-provisions, and only that
-  rotates what the person was given.
+  Unlike the retired code flow, **expanding the row is NOT a re-issue** — it
+  makes no server round-trip and rotates nothing. As of 2026-08-21 there is also
+  nothing left for it to render: the starting password is random per account and
+  deliberately **not persisted** (a live plaintext credential must not sit in
+  Firestore, where every admin session, backup and export can read it), so a row
+  holding no server echo renders the password masked with a hint that **Reset
+  password** issues a new one, and its Copy pill copies the **email alone**.
+  Only Reset password re-provisions, and only that rotates what the person was
+  given — immediately after a create or a reset the row still holds the echoed
+  pair and shows and copies both, which is the moment that actually matters.
 - **`watchEmployees()`** now filters `status == 'active'` — it no longer returns invited or
   disabled users. Use `watchAllUsers()` (admin-only) if all statuses are needed.
   All three `users` streams are bounded by the shared `_userStreamLimit`

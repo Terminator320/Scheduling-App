@@ -71,7 +71,8 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   **The exception is `invited` (P4c, 2026-08-02): it routes to
   `AccountSetupScreen` and KEEPS the session**, at both gates
   (`splash_controller.dart`, `sign_in_controller.dart`). The admin created that
-  account with the shared starting password and this is the person's first
+  account with a generated starting password and handed it over, and this is the
+  person's first
   sign-in — signing them out makes setup unreachable, since the credential they
   just used is the one it needs. The test is `employee.isInvited`, an **exact**
   match checked BEFORE the active gate, so an empty or unknown status still
@@ -192,13 +193,16 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   they'll be rejected. **Three, not four** — a fourth
   `email_verified && status == 'invited' && email == token.email` clause existed
   only because the retired code flow left `uid` empty until redemption, and it
-  was deleted 2026-08-08 with the rest of the `#compat-1.37.1` shim. P4c mints
+  was deleted 2026-08-08 with the rest of the `#compat-1.37.1` shim. (That was a
+  `firestore.rules` READ clause and is unrelated to `completeEmployeeSetup`'s
+  `email_verified` callable guard, which was removed separately on 2026-08-21 —
+  two different `email_verified` checks, both gone, for different reasons.) P4c mints
   the Auth account up front, so an invited person reads their own doc through
   clause 3; don't re-add an email-matched clause. An ordinary
   employee still cannot see a pending account: clause 2 requires `active`.
 - **Employee, account and `users`-doc rules live in `.claude/rules/employees.md`**
   (moved 2026-08-19) — the P4c invite/setup flow, `changeEmployeeEmail`,
-  `kDefaultStartingPassword` and credential handling, `EmployeeFormActivity`,
+  the generated starting password and credential handling, `EmployeeFormActivity`,
   `watchEmployees`, `users.name` composition, `workingDays`, the rules caps, the
   `private/emergency` subcollection, `MyDetailsScreen`, the two-branch
   `allow update` on `/users`, and `travelAlertsEnabled`. Loads when working under

@@ -206,7 +206,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `placesReverseGeocode` | callable | `onCall` | `places.js` | live staff-location map (admin) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · durable 120/hr |
 | `deleteAccount` | callable | `onCall` | `account.js` | `account_deletion_service.dart` | — | App Check ✓ · reauth ≤5min · durable 5/15min |
 | `createEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (invite sheet, roster row Reset password) | — | App Check ✓ · admin · durable 20/hr·uid |
-| `completeEmployeeSetup` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` → `auth_service.dart` (account setup screen) | — | App Check ✓ · authed (own doc) · `email_verified` ✓ · durable 5/15min·uid |
+| `completeEmployeeSetup` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` → `auth_service.dart` (account setup screen) | — | App Check ✓ · authed (own doc) · durable 5/15min·uid |
 | `deleteEmployeeAccount` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (pending-account row) | — | App Check ✓ · admin · durable 20/hr·uid |
 | `changeEmployeeEmail` | callable | `onCall` | `employee_accounts.js` | `firebase_employees_repository.dart` (inside `updateEmployee`, when the email changed on a doc with a `uid`); `self_email_service.dart` (a person changing their own) | — | App Check ✓ · admin **or self** · non-admin also needs re-auth <5 min · durable 5/hr·uid |
 | `waveBootstrap` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` | `WAVE_FULL_ACCESS_TOKEN`, `WAVE_BUSINESS_NAME` | App Check ✓ · admin · durable 10/hr |
@@ -265,27 +265,46 @@ codebase**; every remaining one requires auth. All four callables
 below share `APP_CHECK = {enforceAppCheck: true}`. Full design:
 `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`.
 
-The shape: the admin creates the account and hands over an email + shared
+The shape: the admin creates the account and hands over an email + a generated
 starting password; the employee signs in, replaces the password, and activates
 themselves. **The security posture is weaker than the codes it replaced, with
-the owner's sign-off** — `Welcome123!` is known to everyone, so between creation
-and first sign-in anyone who knows the email can sign in as that person and
-complete setup. What holds instead is that `firestore.rules` grants an `invited`
-user **nothing**, so the window is "can reach the setup screen as this person",
-not "can read the business" — and that the admin controls the window by creating
-the account when they hand the credentials over. That mitigation is operational,
-not technical.
+the owner's sign-off.** Until 2026-08-21 the starting password was the shared
+constant `Welcome123!`, so anyone who merely knew an employee's email could sign
+in as that person between creation and first sign-in, and
+`completeEmployeeSetup`'s `email_verified` guard was what stopped them finishing
+setup. **Both went on 2026-08-21**: the password is now random per account, so
+the address alone buys nothing — that is what pays for dropping the guard, and
+neither should be restored without the other. **The residual risk is real, not
+closed:** whoever holds the address *and* the generated password can still
+activate the account first. Two things bound it — a pre-empted account is always
+a plain `employee` now, and `firestore.rules` grants an `invited` user
+**nothing** — and the rest is operational: the admin controls the window by
+creating the account at the moment they hand the credentials over, not weeks
+ahead.
 
 ### `createEmployeeAccount` — `employee_accounts.js`
-Admin-only. Mints a Firebase Auth account on the shared `DEFAULT_PASSWORD` plus
-an `invited` `users` doc that **already carries the real `uid`**, and returns
-`{email, password}` so the admin surface shows exactly what the server set
-rather than a constant it hopes still matches (no `docId` — the client already
-has the row it acted on). The duplicate lookup and the doc write share one
+Admin-only. Mints a Firebase Auth account on a **random per-account starting
+password** plus an `invited` `users` doc that **already carries the real `uid`**,
+and returns `{email, password}` (no `docId` — the client already has the row it
+acted on). That response is the **only** time the password is legible: it is
+deliberately not persisted anywhere, because a live plaintext credential in
+Firestore is readable by every admin session, backup and export.
+`generateStartingPassword()` draws 12 characters with `crypto.randomBytes` from
+an alphabet with no `0`/`O` and no `1`/`l`/`I`, because an admin reads it aloud,
+and guarantees an uppercase, a lowercase and a digit so it satisfies the
+client-side setup policy. It is drawn **once per call** and handed to whichever
+path runs — new account or re-provision — so the value echoed back is always the
+value Auth was actually set to. The duplicate lookup and the doc write share one
 transaction, so two admins creating the same person can't both win.
 
+**The payload carries no `isAdmin` field** (removed 2026-08-21, from the
+`assertPayloadShape` key set as well as the write): the doc is always written
+`role: "employee"`, and dropping the key from the allowlist means an older client
+that still sends it gets a clean `invalid-argument` instead of silently creating
+an admin. Promotion is a separate later edit on the employee edit sheet.
+
 Re-running it on a still-`invited` person **re-provisions**: it refreshes the
-doc's editable fields and resets the password back to the default — that IS the
+doc's editable fields and issues a fresh random password — that IS the
 "never signed in / lost the password" path. It refuses `already-exists /
 email-exists` once the person has finished setup, resolving the target **by
 `uid`, not by email** (`users.email` is admin-editable and never synced back to
@@ -317,22 +336,20 @@ one. Flips `status` to `active` and stamps the setup profile. Refuses
 replayed call (or two devices finishing at once) can't rewrite a consent record;
 `not-found / account-not-found` when there's no doc for the uid.
 
-**It refuses an unverified address** — `failed-precondition / email-not-verified`
-unless `req.auth.token.email_verified` is true. That is what prices the shared
-`Welcome123!` window: anyone who knows an employee's email can sign in as them
-and reach the setup screen, but leaving `invited` now needs control of the
-MAILBOX, and `firestore.rules` grants an `invited` user nothing. It is an
-IDENTITY guard, so it sits **above** the rate limiter — an unverified caller
-must not be able to burn the real employee's five slots. The client half is
-`AuthService.refreshEmailVerified()`, which forces `getIdToken(true)`: the claim
-is read off the token minted at sign-in, so a bare `reload()` leaves the server
-refusing an address the person has already verified.
+**It no longer checks `email_verified`** (guard removed 2026-08-21, along with
+the `failed-precondition / email-not-verified` error it raised). That check
+existed to price the shared-`Welcome123!` window — knowing the address was enough
+to sign in, so finishing setup was made to require the MAILBOX — and it was
+removed only because the starting password became a random per-account secret in
+the same change. Don't re-derive it from an old copy of this page, and don't drop
+a comparable check elsewhere on the strength of this precedent alone.
 
 **The caller must have already changed the password.** The server cannot see a
-password, so "you must replace the shared default" is true only because
+password, so "you must replace the starting password" is true only because
 `AuthService.completeAccountSetup` calls `User.updatePassword` first and this
 callable is unreachable until that succeeds. Swap the order and an interrupted
-setup leaves an *active* account still on the default.
+setup leaves an *active* account still on the password the admin read out.
+Nothing server-side verifies the rotation happened.
 
 The patch is built by the pure `buildActivationPatch`: it stamps
 `termsAcceptedAt`/`locationConsentAt` **only when the flags are actually sent
