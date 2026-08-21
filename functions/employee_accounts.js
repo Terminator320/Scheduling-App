@@ -3,6 +3,7 @@ const logger = require("firebase-functions/logger");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {getMessaging} = require("firebase-admin/messaging");
+const crypto = require("crypto");
 const {
   assertPayloadShape,
   requireString,
@@ -24,6 +25,63 @@ const {
   buildEmailChangedMessage,
   buildSelfEmailChangedMessage,
 } = require("./notification_messages");
+
+/**
+ * The starting password a new employee account is created with.
+ *
+ * Random per account, and never stored: it is returned to the admin who
+ * created the account and lives only in that surface's widget state. That is
+ * what makes the onboarding window survivable now that setup no longer
+ * requires a verified email — knowing someone's address is not enough to sign
+ * in as them.
+ *
+ * The alphabet is deliberately unambiguous (no 0/O, no 1/l/I) because the
+ * admin reads this out loud, and it carries an uppercase, a lowercase and a
+ * digit so it satisfies the client-side policy in
+ * lib/core/validators/password_requirements.dart.
+ */
+const PASSWORD_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const PASSWORD_LOWER = "abcdefghijkmnopqrstuvwxyz";
+const PASSWORD_DIGITS = "23456789";
+const PASSWORD_ALPHABET = PASSWORD_UPPER + PASSWORD_LOWER + PASSWORD_DIGITS;
+const PASSWORD_LENGTH = 12;
+
+/**
+ * One uniformly-random character of [alphabet].
+ *
+ * randomInt, not `randomBytes()[0] % length` — the modulo is biased whenever
+ * the alphabet does not divide 256.
+ *
+ * @param {string} alphabet Characters to choose from.
+ * @return {string} One character.
+ */
+function pickChar(alphabet) {
+  return alphabet[crypto.randomInt(alphabet.length)];
+}
+
+/**
+ * Generates a starting password.
+ *
+ * @return {string} 12 unambiguous characters with at least one uppercase, one
+ *   lowercase and one digit.
+ */
+function generateStartingPassword() {
+  const chars = [
+    pickChar(PASSWORD_UPPER),
+    pickChar(PASSWORD_LOWER),
+    pickChar(PASSWORD_DIGITS),
+  ];
+  while (chars.length < PASSWORD_LENGTH) {
+    chars.push(pickChar(PASSWORD_ALPHABET));
+  }
+  // Fisher-Yates: without it the three guaranteed picks always sit in front,
+  // which leaks 3 of the 12 positions' character classes.
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join("");
+}
 
 /**
  * The shared starting password every new employee account is created with.
@@ -756,6 +814,7 @@ const deleteEmployeeAccount = onCall(APP_CHECK, async (req) => {
 
 module.exports = {
   DEFAULT_PASSWORD,
+  generateStartingPassword,
   createEmployeeAccount,
   completeEmployeeSetup,
   deleteEmployeeAccount,
