@@ -95,29 +95,6 @@ function generateStartingPassword() {
   return chars.join("");
 }
 
-/**
- * The shared starting password every new employee account is created with.
- *
- * It is deliberately NOT a secret: the admin reads it off the roster and says
- * it out loud. What makes the account safe is that it stays `status:"invited"`
- * until `completeEmployeeSetup` runs, the rules grant an invited user nothing,
- * AND that callable refuses without a verified email — so a stranger who knows
- * the address can reach the setup screen but cannot get past it, because
- * finishing setup requires control of the mailbox. The setup screen sends the
- * standard Firebase verification email and waits for it.
- *
- * That window is still real: whoever holds the mailbox and the shared password
- * can activate the account. Create it when you are handing the credentials
- * over, not weeks ahead.
- *
- * **Hand-mirrored by `kDefaultStartingPassword` in
- * `lib/features/employees/domain/policies/starting_password_policy.dart`.**
- * This side is the authority; that one is only a display fallback for a row
- * whose account was created earlier. Change one and change the other — both
- * sides pin the literal in a test so a silent drift fails the suite.
- */
-const DEFAULT_PASSWORD = "Welcome123!";
-
 // Account creation is bounded per admin uid — defense-in-depth so a
 // compromised admin session can't mass-create employees (each one is a real
 // Firebase Auth account, not just a Firestore doc).
@@ -149,14 +126,14 @@ const APP_CHECK = {enforceAppCheck: true};
  * Creates (or re-provisions) the Firebase Auth account for an employee.
  *
  * Returns the uid plus whether the account already existed. A pre-existing
- * account has its password reset back to the default — that IS the "they never
- * signed in / they lost the password" path, and it is why this is safe to call
- * again for a still-`invited` person.
+ * account has its password reset to a newly generated starting password —
+ * that IS the "they never signed in / they lost the password" path, and it is
+ * why this is safe to call again for a still-`invited` person.
  *
  * @param {!Object} auth Admin Auth instance.
  * @param {string} email lowercased email.
  * @param {string} displayName composed name.
- * @param {string} password the default starting password.
+ * @param {string} password the starting password generated for this call.
  * @return {!Promise<{uid: string, reused: boolean}>}
  */
 async function provisionAuthAccount(auth, email, displayName, password) {
@@ -181,7 +158,7 @@ async function provisionAuthAccount(auth, email, displayName, password) {
 }
 
 /**
- * Rotates a re-provisioned account back to the shared starting password.
+ * Rotates a re-provisioned account to a newly generated starting password.
  *
  * Split out of provisionAuthAccount so it can run after the transaction: the
  * only safe moment to overwrite someone's password is once the doc read in the
@@ -190,7 +167,7 @@ async function provisionAuthAccount(auth, email, displayName, password) {
  * @param {!Object} auth Admin Auth instance.
  * @param {string} uid the provisioned Auth uid.
  * @param {string} displayName composed name.
- * @param {string} password the default starting password.
+ * @param {string} password the starting password generated for this call.
  * @return {!Promise<void>}
  */
 async function resetProvisionedPassword(auth, uid, displayName, password) {
@@ -206,7 +183,7 @@ async function resetProvisionedPassword(auth, uid, displayName, password) {
  *
  * @param {!Object} db Firestore instance.
  * @param {{name: string, firstName: string, lastName: string, email: string,
- *   phone: string, colorValue: string, jobTitle: string, isAdmin: boolean}}
+ *   phone: string, colorValue: string, jobTitle: string}}
  *   fields Validated fields (email already lowercased).
  * @param {{uid: string, serverTimestamp: !Function}} opts The provisioned Auth
  *   uid and a serverTimestamp factory (injectable for tests).
@@ -215,10 +192,14 @@ async function resetProvisionedPassword(auth, uid, displayName, password) {
  */
 async function performCreateAccount(db, fields, opts) {
   const {
-    name, firstName, lastName, email, phone, colorValue, jobTitle, isAdmin,
+    name, firstName, lastName, email, phone, colorValue, jobTitle,
   } = fields;
   const {uid, serverTimestamp} = opts;
-  const role = isAdmin ? "admin" : "employee";
+  // Never "admin": a created account can be pre-empted by whoever holds the
+  // starting password, so it must never be able to arrive privileged. An
+  // existing admin promotes a person from the edit sheet once they have set
+  // up (lib/features/employees/widgets/sheets/edit_person_sheet.dart).
+  const role = "employee";
 
   return db.runTransaction(async (tx) => {
     const dup = await tx.get(
@@ -281,7 +262,7 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
   // submissions can't lock out a legitimate admin for an hour.
   assertPayloadShape(req.data, new Set([
     "name", "firstName", "lastName", "email", "phone", "colorValue",
-    "jobTitle", "isAdmin",
+    "jobTitle",
   ]));
   // 250, not 100: `name` is the JOIN of the two halves, each capped at 100
   // client- and server-side, so the composed value legitimately reaches 201.
@@ -292,7 +273,6 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
   const phone = optionalString(req.data, "phone", 40);
   const colorValue = requireString(req.data, "colorValue", 40);
   const jobTitle = optionalString(req.data, "jobTitle", 40);
-  const isAdmin = req.data.isAdmin === true;
   // Mirrors the rules' colorValue guard (firestore.rules isValidUserData) —
   // this Admin SDK write bypasses rules, so it's the one path that could
   // otherwise seed a value they'd reject.
@@ -338,9 +318,13 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
   // it — two Auth round trips of pure latency on the reset-password path.
   // Only when the email was NOT found do we go through provisionAuthAccount,
   // whose already-exists branch still covers a racing concurrent create.
+  //
+  // One password per call, shared by the mint path and the reset path so the
+  // value returned to the admin is always the value that was actually set.
+  const startingPassword = generateStartingPassword();
   const provisioned = existingAuth ?
       {uid: existingAuth.uid, reused: true} :
-      await provisionAuthAccount(auth, email, name, DEFAULT_PASSWORD);
+      await provisionAuthAccount(auth, email, name, startingPassword);
 
   // The refusal is raised INSIDE the try so one catch owns the rollback —
   // "when do we un-mint the Auth account" must not have two answers to keep in
@@ -350,10 +334,7 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
   try {
     const outcome = await performCreateAccount(
         db,
-        {
-          name, firstName, lastName, email, phone, colorValue, jobTitle,
-          isAdmin,
-        },
+        {name, firstName, lastName, email, phone, colorValue, jobTitle},
         {
           uid: provisioned.uid,
           serverTimestamp: () => FieldValue.serverTimestamp(),
@@ -365,7 +346,7 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
     // "never signed in / lost the password" path, and this IS that reset.
     if (provisioned.reused) {
       await resetProvisionedPassword(
-          auth, provisioned.uid, name, DEFAULT_PASSWORD);
+          auth, provisioned.uid, name, startingPassword);
     }
   } catch (e) {
     if (!provisioned.reused) {
@@ -385,7 +366,7 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
   }
   // The password is returned so the admin surface shows exactly what was set
   // rather than a constant it hopes still matches the server.
-  return {email, password: DEFAULT_PASSWORD};
+  return {email, password: startingPassword};
 });
 
 /**
@@ -825,7 +806,6 @@ const deleteEmployeeAccount = onCall(APP_CHECK, async (req) => {
 });
 
 module.exports = {
-  DEFAULT_PASSWORD,
   generateStartingPassword,
   createEmployeeAccount,
   completeEmployeeSetup,
