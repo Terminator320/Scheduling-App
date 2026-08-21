@@ -19,6 +19,7 @@ const {
   DEFAULT_PASSWORD,
 } = require("../employee_accounts");
 const {buildEmailChangedMessage} = require("../notification_messages");
+const crypto = require("crypto");
 
 const TS = {__serverTimestamp: true};
 const serverTimestamp = () => TS;
@@ -115,13 +116,28 @@ describe("generateStartingPassword", () => {
   test("is 12 unambiguous characters carrying each required class", () => {
     for (let i = 0; i < 200; i++) {
       const pw = generateStartingPassword();
-      expect(pw).toHaveLength(12);
+      // Positive, not just `toHaveLength(12)` plus a banned-glyph check: a
+      // stray space or quote pasted into an alphabet constant would ship
+      // through a negative assertion.
+      expect(pw).toMatch(/^[A-Za-z0-9]{12}$/);
       expect(pw).toMatch(/[A-Z]/);
       expect(pw).toMatch(/[a-z]/);
       expect(pw).toMatch(/[0-9]/);
       // The admin reads this aloud, so no glyph pair anyone mishears.
       expect(pw).not.toMatch(/[0O1lI]/);
     }
+  });
+
+  test("draws from the CSPRNG, never Math.random", () => {
+    // The whole security value of this function is its randomness SOURCE, and
+    // every other test here passes against a Math.random implementation:
+    // shape, uniqueness and "the shuffle ran" are all satisfied by it. This is
+    // the one assertion that would catch a later pass "simplifying" the crypto
+    // require away.
+    const spy = jest.spyOn(crypto, "randomInt");
+    generateStartingPassword();
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 
   test("does not repeat across calls", () => {
