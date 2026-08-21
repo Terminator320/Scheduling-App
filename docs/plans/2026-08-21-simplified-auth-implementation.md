@@ -34,7 +34,7 @@ Three things the spec did not resolve, decided here rather than left open:
    `passwordStrengthScore` awards one point for `PasswordRequirement.symbol`,
    and `PasswordStrengthMeter` renders **four** segments with "Strong" gated on
    a score of 4. Deleting the symbol requirement without replacing that band
-   makes "Strong" unreachable forever. Task 5 replaces it with an advisory
+   makes "Strong" unreachable forever. Task 4 replaces it with an advisory
    length-≥12 band. It is a meter band, not a requirement — nothing gates on it.
 3. **`completeEmployeeSetup`'s guard removal gets a real test after all.**
    `functions/__tests__/employee_accounts.test.js` says the `onCall` wrappers
