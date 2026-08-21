@@ -38,11 +38,11 @@ Three things the spec did not resolve, decided here rather than left open:
    length-≥12 band. It is a meter band, not a requirement — nothing gates on it.
 3. **`completeEmployeeSetup`'s guard removal gets a real test after all.**
    `functions/__tests__/employee_accounts.test.js` says the `onCall` wrappers
-   "live elsewhere and aren't covered here", but
-   `functions/__tests__/wave_callables.test.js` has a working wrapper harness
-   (`jest.mock("../security")` + `fn.run(request)`). Task 3 adds
-   `functions/__tests__/employee_accounts_callables.test.js` using that same
-   pattern, so the removal is pinned rather than merely done.
+   "live elsewhere and aren't covered here" — and "elsewhere" turns out to be
+   `functions/__tests__/employee_accounts_callables.test.js`, which has existed
+   since 2026-08-11 and already covers `changeEmployeeEmail`. Task 3 APPENDS to
+   it. (This plan first said Task 3 would *create* that file; that was wrong and
+   would have overwritten a live suite. Corrected 2026-08-21.)
 
 ---
 
@@ -54,7 +54,7 @@ Three things the spec did not resolve, decided here rather than left open:
 |---|---|---|
 | `functions/employee_accounts.js` | Modify | `DEFAULT_PASSWORD` → `generateStartingPassword()`; `createEmployeeAccount` drops `isAdmin`; `completeEmployeeSetup` drops the `email_verified` guard |
 | `functions/__tests__/employee_accounts.test.js` | Modify | Pure/transactional cores; password-generator shape assertions replace the pinned literal |
-| `functions/__tests__/employee_accounts_callables.test.js` | Create | `onCall` wrapper guards for the two changed callables |
+| `functions/__tests__/employee_accounts_callables.test.js` | **Modify (it already exists)** | `onCall` wrapper guards; already covers `changeEmployeeEmail` — APPEND the new describes, never overwrite |
 
 **Dart — validation**
 
@@ -399,11 +399,19 @@ git commit -m "feat(functions): per-account starting password, employee-only cre
 
 **Files:**
 - Modify: `functions/employee_accounts.js:626-645`
-- Create: `functions/__tests__/employee_accounts_callables.test.js`
+- Modify: `functions/__tests__/employee_accounts_callables.test.js`
+
+> **CORRECTION (2026-08-21):** this file ALREADY EXISTS — committed since
+> 2026-08-11 (`a90474cc`), and it already covers `changeEmployeeEmail`'s guard
+> order with its own `jest.mock("../security")` harness. The plan originally
+> said "Create", which would have destroyed that suite. **Read it first**,
+> reuse its existing mocks and helpers, and APPEND the two new `describe`
+> blocks below. Do not rewrite the file and do not duplicate a helper it
+> already defines.
 
 - [ ] **Step 1: Write the failing wrapper tests**
 
-Create `functions/__tests__/employee_accounts_callables.test.js`:
+Append to `functions/__tests__/employee_accounts_callables.test.js`. The sketch below is written standalone for clarity — reconcile it with what the file already has (its `jest.mock` calls, its `beforeEach`, and any fake-Firestore helper) rather than adding a second copy of anything:
 
 ```js
 "use strict";
