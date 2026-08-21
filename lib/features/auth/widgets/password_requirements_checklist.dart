@@ -36,7 +36,6 @@ class PasswordRequirementsChecklist extends StatelessWidget {
       PasswordRequirement.uppercase => l10n.validation_passwordReqUppercase,
       PasswordRequirement.lowercase => l10n.validation_passwordReqLowercase,
       PasswordRequirement.number => l10n.validation_passwordReqNumber,
-      PasswordRequirement.symbol => l10n.validation_passwordReqSymbol,
     };
   }
 }

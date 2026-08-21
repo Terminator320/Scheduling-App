@@ -48,31 +48,27 @@ void main() {
     });
   });
 
-  group('PasswordRequirement.symbol', () {
-    test('is unmet without a symbol', () {
-      expect(PasswordRequirement.symbol.isMetBy('Abcdefg7'), isFalse);
-    });
-
-    test('does not count whitespace as a symbol', () {
-      expect(PasswordRequirement.symbol.isMetBy('Abcdef g7'), isFalse);
-    });
-
-    test('is met with a symbol', () {
-      expect(PasswordRequirement.symbol.isMetBy('Abcdefg7#'), isTrue);
-    });
-  });
-
   group('PasswordRequirement.allMetBy', () {
     test('is false when any single rule is unmet', () {
       expect(PasswordRequirement.allMetBy('abcdef1!'), isFalse); // no upper
       expect(PasswordRequirement.allMetBy('ABCDEF1!'), isFalse); // no lower
       expect(PasswordRequirement.allMetBy('Abcdefg!'), isFalse); // no number
-      expect(PasswordRequirement.allMetBy('Abcdefg1'), isFalse); // no symbol
       expect(PasswordRequirement.allMetBy('Abc1!'), isFalse); // too short
     });
 
     test('is true when every rule is met', () {
       expect(PasswordRequirement.allMetBy('Abcdef1!'), isTrue);
+    });
+
+    test('no longer demands a symbol', () {
+      expect(PasswordRequirement.allMetBy('Abcdefg1'), isTrue);
+    });
+
+    test('still demands the other four', () {
+      expect(PasswordRequirement.allMetBy('abcdefg1'), isFalse); // no upper
+      expect(PasswordRequirement.allMetBy('ABCDEFG1'), isFalse); // no lower
+      expect(PasswordRequirement.allMetBy('Abcdefgh'), isFalse); // no number
+      expect(PasswordRequirement.allMetBy('Abc1'), isFalse); // too short
     });
   });
 }
