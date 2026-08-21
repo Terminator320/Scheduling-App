@@ -53,7 +53,6 @@ void main() {
         phone: any(named: 'phone'),
         colorValue: any(named: 'colorValue'),
         jobTitle: any(named: 'jobTitle'),
-        isAdmin: any(named: 'isAdmin'),
       ),
     ).thenAnswer(
       (_) async => const NewAccountCredentials(
@@ -127,7 +126,6 @@ void main() {
         phone: any(named: 'phone'),
         colorValue: any(named: 'colorValue'),
         jobTitle: any(named: 'jobTitle'),
-        isAdmin: any(named: 'isAdmin'),
       ),
     );
   }
@@ -283,7 +281,6 @@ void main() {
         // `_invited` picked no colour, so this is the record's default.
         colorValue: '${AppColors.crewDefault.toARGB32()}',
         jobTitle: 'technician',
-        isAdmin: false,
       ),
     ).called(1);
   });
@@ -334,44 +331,46 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('Reset password disables Remove account while reset is in flight', (
-    tester,
-  ) async {
-    useTallViewport(tester);
-    final createCompleter = Completer<NewAccountCredentials>();
-    when(
-      () => repo.createEmployeeAccount(
-        name: any(named: 'name'),
-        firstName: any(named: 'firstName'),
-        lastName: any(named: 'lastName'),
-        email: any(named: 'email'),
-        phone: any(named: 'phone'),
-        colorValue: any(named: 'colorValue'),
-        jobTitle: any(named: 'jobTitle'),
-        isAdmin: any(named: 'isAdmin'),
-      ),
-    ).thenAnswer((_) => createCompleter.future);
+  testWidgets(
+    'Reset password disables Remove account while reset is in flight',
+    (
+      tester,
+    ) async {
+      useTallViewport(tester);
+      final createCompleter = Completer<NewAccountCredentials>();
+      when(
+        () => repo.createEmployeeAccount(
+          name: any(named: 'name'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          email: any(named: 'email'),
+          phone: any(named: 'phone'),
+          colorValue: any(named: 'colorValue'),
+          jobTitle: any(named: 'jobTitle'),
+        ),
+      ).thenAnswer((_) => createCompleter.future);
 
-    await tester.pumpWidget(wrap(_invited));
-    await tester.pumpAndSettle();
-    await expand(tester);
+      await tester.pumpWidget(wrap(_invited));
+      await tester.pumpAndSettle();
+      await expand(tester);
 
-    await tester.tap(find.text('Reset password'));
-    await tester.pump();
+      await tester.tap(find.text('Reset password'));
+      await tester.pump();
 
-    final removeButton = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Remove account'),
-    );
-    expect(removeButton.onPressed, isNull);
+      final removeButton = tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Remove account'),
+      );
+      expect(removeButton.onPressed, isNull);
 
-    createCompleter.complete(
-      const NewAccountCredentials(
-        email: 'zoe@example.com',
-        password: 'Reset456!',
-      ),
-    );
-    await tester.pumpAndSettle();
-  });
+      createCompleter.complete(
+        const NewAccountCredentials(
+          email: 'zoe@example.com',
+          password: 'Reset456!',
+        ),
+      );
+      await tester.pumpAndSettle();
+    },
+  );
 
   testWidgets('offline Reset notices instead of hanging on the call', (
     tester,

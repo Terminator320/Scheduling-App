@@ -14,9 +14,12 @@ abstract class EmployeesRepository {
   ///
   /// Re-running this for someone who hasn't set up yet is the supported
   /// "they never signed in / they lost the password" path: it refreshes their
-  /// editable fields and resets the password back to the shared default. It
-  /// throws `EmployeesFailureEmailAlreadyExists` once they HAVE set up, so it
-  /// can never reset a password someone chose.
+  /// editable fields and issues a NEW random starting password. It throws
+  /// `EmployeesFailureEmailAlreadyExists` once they HAVE set up, so it can
+  /// never reset a password someone chose.
+  ///
+  /// The account is always created as a plain employee — the callable does not
+  /// accept a role. Promotion to admin is a separate edit, after setup.
   Future<NewAccountCredentials> createEmployeeAccount({
     required String name,
     required String firstName,
@@ -25,7 +28,6 @@ abstract class EmployeesRepository {
     required String phone,
     required String colorValue,
     required String jobTitle,
-    required bool isAdmin,
   });
 
   /// Deletes an employee account that has never been set up — both the `users`

@@ -72,7 +72,6 @@ void main() {
           phone: any(named: 'phone'),
           colorValue: any(named: 'colorValue'),
           jobTitle: any(named: 'jobTitle'),
-          isAdmin: any(named: 'isAdmin'),
         ),
       ).thenAnswer((_) => gate.future);
 
@@ -101,7 +100,6 @@ void main() {
           phone: any(named: 'phone'),
           colorValue: any(named: 'colorValue'),
           jobTitle: any(named: 'jobTitle'),
-          isAdmin: any(named: 'isAdmin'),
         ),
       ).called(1);
     });
@@ -125,7 +123,6 @@ void main() {
             phone: any(named: 'phone'),
             colorValue: any(named: 'colorValue'),
             jobTitle: any(named: 'jobTitle'),
-            isAdmin: any(named: 'isAdmin'),
           ),
         ).thenAnswer((_) => gate.future);
         when(
@@ -137,7 +134,6 @@ void main() {
             phone: any(named: 'phone'),
             colorValue: any(named: 'colorValue'),
             jobTitle: any(named: 'jobTitle'),
-            isAdmin: any(named: 'isAdmin'),
           ),
         ).thenAnswer((_) async => credentials);
 
@@ -216,7 +212,6 @@ void main() {
           phone: any(named: 'phone'),
           colorValue: any(named: 'colorValue'),
           jobTitle: any(named: 'jobTitle'),
-          isAdmin: any(named: 'isAdmin'),
         ),
       ).thenAnswer(
         (_) async => const NewAccountCredentials(
@@ -245,7 +240,6 @@ void main() {
           phone: any(named: 'phone'),
           colorValue: any(named: 'colorValue'),
           jobTitle: any(named: 'jobTitle'),
-          isAdmin: any(named: 'isAdmin'),
         ),
       ).thenAnswer(
         (_) async => const NewAccountCredentials(
@@ -272,7 +266,6 @@ void main() {
           phone: '',
           colorValue: any(named: 'colorValue'),
           jobTitle: any(named: 'jobTitle'),
-          isAdmin: false,
         ),
       ).called(1);
     });
@@ -287,7 +280,6 @@ void main() {
           phone: any(named: 'phone'),
           colorValue: any(named: 'colorValue'),
           jobTitle: any(named: 'jobTitle'),
-          isAdmin: any(named: 'isAdmin'),
         ),
       ).thenThrow(const EmployeesFailureEmailAlreadyExists());
 
@@ -306,7 +298,6 @@ void main() {
           phone: any(named: 'phone'),
           colorValue: any(named: 'colorValue'),
           jobTitle: any(named: 'jobTitle'),
-          isAdmin: any(named: 'isAdmin'),
         ),
       ).thenThrow(boom);
 

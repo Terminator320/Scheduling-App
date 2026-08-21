@@ -366,7 +366,6 @@ void main() {
           phone: any(named: 'phone'),
           colorValue: any(named: 'colorValue'),
           jobTitle: any(named: 'jobTitle'),
-          isAdmin: any(named: 'isAdmin'),
         ),
       ).thenAnswer(
         (_) async => const NewAccountCredentials(
@@ -452,7 +451,10 @@ void main() {
         of: find.byKey(const Key('email')),
         matching: find.byType(EditableText),
       );
-      expect(tester.widget<EditableText>(emailField).controller.text, 'new@example.com');
+      expect(
+        tester.widget<EditableText>(emailField).controller.text,
+        'new@example.com',
+      );
       expect(tester.takeException(), isNull);
     },
   );

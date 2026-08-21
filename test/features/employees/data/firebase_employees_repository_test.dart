@@ -164,7 +164,6 @@ void main() {
         phone: '',
         colorValue: '1',
         jobTitle: 'technician',
-        isAdmin: false,
       );
 
       expect(credentials.email, 'a@b.com');
@@ -178,7 +177,6 @@ void main() {
       expect(captured['email'], 'a@b.com');
       expect(captured['jobTitle'], 'technician');
       expect(captured['firstName'], 'A');
-      expect(captured['isAdmin'], isFalse);
     });
 
     test('rejects a half-blank credential payload', () async {
@@ -207,7 +205,6 @@ void main() {
           phone: '',
           colorValue: '1',
           jobTitle: '',
-          isAdmin: false,
         ),
         throwsA(isA<EmployeesFailureUnknown>()),
       );
@@ -242,7 +239,6 @@ void main() {
             phone: '',
             colorValue: '1',
             jobTitle: '',
-            isAdmin: false,
           ),
           throwsA(isA<EmployeesFailureEmailAlreadyExists>()),
         );
@@ -291,6 +287,29 @@ void main() {
     ).captured.single;
     return (captured as Map).cast<String, dynamic>();
   }
+
+  test(
+    'createEmployeeAccount never sends isAdmin — the server decides the role',
+    () async {
+      final callable = stubCallable(
+        'createEmployeeAccount',
+        data: {'email': 'a@b.test', 'password': 'Pw23456789x'},
+      );
+
+      await repo().createEmployeeAccount(
+        name: 'A B',
+        firstName: 'A',
+        lastName: 'B',
+        email: 'a@b.test',
+        phone: '',
+        colorValue: '1',
+        jobTitle: '',
+      );
+
+      final payload = capturedPayload(callable);
+      expect(payload.containsKey('isAdmin'), isFalse);
+    },
+  );
 
   group('completeEmployeeSetup', () {
     test('always sends all five keys', () async {
@@ -796,7 +815,9 @@ void main() {
       code: 'permission-denied',
     );
 
-    test('watchEmployees constrains role + active status', () async {
+    test(
+      'watchEmployees constrains role + active status',
+      () async {
         when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
         repo().watchEmployees().listen((_) {});
         // retryStream builds the query on subscribe, one microtask later.
@@ -816,7 +837,9 @@ void main() {
       },
     );
 
-    test('watchAssignableUsers constrains active status', () async {
+    test(
+      'watchAssignableUsers constrains active status',
+      () async {
         when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
         repo().watchAssignableUsers().listen((_) {});
         // retryStream builds the query on subscribe, one microtask later.
@@ -827,29 +850,32 @@ void main() {
       },
     );
 
-    test('watchEmployees sorts active users client-side by display name', () async {
-      final zed = _MockQueryDocSnapshot();
-      final amy = _MockQueryDocSnapshot();
-      when(() => zed.id).thenReturn('z');
-      when(() => amy.id).thenReturn('a');
-      when(zed.data).thenReturn(const {
-        'name': 'Zed Roy',
-        'status': 'active',
-        'role': 'employee',
-      });
-      when(amy.data).thenReturn(const {
-        'firstName': 'Amy',
-        'lastName': 'Adams',
-        'status': 'active',
-        'role': 'employee',
-      });
-      when(() => snapshot.docs).thenReturn([zed, amy]);
-      when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+    test(
+      'watchEmployees sorts active users client-side by display name',
+      () async {
+        final zed = _MockQueryDocSnapshot();
+        final amy = _MockQueryDocSnapshot();
+        when(() => zed.id).thenReturn('z');
+        when(() => amy.id).thenReturn('a');
+        when(zed.data).thenReturn(const {
+          'name': 'Zed Roy',
+          'status': 'active',
+          'role': 'employee',
+        });
+        when(amy.data).thenReturn(const {
+          'firstName': 'Amy',
+          'lastName': 'Adams',
+          'status': 'active',
+          'role': 'employee',
+        });
+        when(() => snapshot.docs).thenReturn([zed, amy]);
+        when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
 
-      final records = await repo().watchEmployees().first;
+        final records = await repo().watchEmployees().first;
 
-      expect(records.map((e) => e.id).toList(), ['a', 'z']);
-    });
+        expect(records.map((e) => e.id).toList(), ['a', 'z']);
+      },
+    );
 
     test(
       'watchAssignableUsers sorts active users client-side without requiring orderBy(name)',
@@ -879,32 +905,35 @@ void main() {
     test(
       'watchAllUsers sorts users client-side without requiring orderBy(name)',
       () async {
-      final zed = _MockQueryDocSnapshot();
-      final amy = _MockQueryDocSnapshot();
-      when(() => zed.id).thenReturn('z');
-      when(() => amy.id).thenReturn('a');
-      when(zed.data).thenReturn(const {
-        'name': 'Zed Roy',
-        'status': 'disabled',
-      });
-      when(amy.data).thenReturn(const {
-        'firstName': 'Amy',
-        'lastName': 'Adams',
-        'status': 'invited',
-      });
-      when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
-      when(() => collection.snapshots()).thenAnswer((_) => Stream.value(snapshot));
-      when(() => snapshot.docs).thenReturn([zed, amy]);
+        final zed = _MockQueryDocSnapshot();
+        final amy = _MockQueryDocSnapshot();
+        when(() => zed.id).thenReturn('z');
+        when(() => amy.id).thenReturn('a');
+        when(zed.data).thenReturn(const {
+          'name': 'Zed Roy',
+          'status': 'disabled',
+        });
+        when(amy.data).thenReturn(const {
+          'firstName': 'Amy',
+          'lastName': 'Adams',
+          'status': 'invited',
+        });
+        when(query.snapshots).thenAnswer((_) => Stream.value(snapshot));
+        when(
+          () => collection.snapshots(),
+        ).thenAnswer((_) => Stream.value(snapshot));
+        when(() => snapshot.docs).thenReturn([zed, amy]);
 
-      final records = await repo().watchAllUsers().first;
+        final records = await repo().watchAllUsers().first;
 
-      expect(records.map((e) => e.id).toList(), ['a', 'z']);
-      // No orderBy - it would exclude docs with no `name`, dropping an unnamed
-      // user off the admin roster. The sort happens in Dart instead, which is
-      // also where the cap warn lives.
-      verifyNever(() => collection.orderBy(any()));
-      verify(() => collection.limit(1000)).called(1);
-    });
+        expect(records.map((e) => e.id).toList(), ['a', 'z']);
+        // No orderBy - it would exclude docs with no `name`, dropping an unnamed
+        // user off the admin roster. The sort happens in Dart instead, which is
+        // also where the cap warn lives.
+        verifyNever(() => collection.orderBy(any()));
+        verify(() => collection.limit(1000)).called(1);
+      },
+    );
 
     test('watchEmployees resubscribes past a permission-denied error', () {
       fakeAsync((async) {
@@ -988,34 +1017,39 @@ void main() {
       });
     });
 
-    test('cachedUserDocId is cleared when the authoritative stream goes empty', () {
-      fakeAsync((async) {
-        final userDoc = _MockQueryDocSnapshot();
-        final liveSnapshot = _MockQuerySnapshot();
-        final deletedSnapshot = _MockQuerySnapshot();
-        final deletedMetadata = _MockSnapshotMetadata();
-        when(userDoc.data).thenReturn(const {'role': 'admin'});
-        when(() => userDoc.id).thenReturn('doc-1');
-        when(() => liveSnapshot.docs).thenReturn([userDoc]);
-        when(() => deletedSnapshot.docs).thenReturn(const []);
-        when(() => deletedSnapshot.metadata).thenReturn(deletedMetadata);
-        when(() => deletedMetadata.isFromCache).thenReturn(false);
-        when(
-          query.snapshots,
-        ).thenAnswer((_) => Stream.fromIterable([liveSnapshot, deletedSnapshot]));
+    test(
+      'cachedUserDocId is cleared when the authoritative stream goes empty',
+      () {
+        fakeAsync((async) {
+          final userDoc = _MockQueryDocSnapshot();
+          final liveSnapshot = _MockQuerySnapshot();
+          final deletedSnapshot = _MockQuerySnapshot();
+          final deletedMetadata = _MockSnapshotMetadata();
+          when(userDoc.data).thenReturn(const {'role': 'admin'});
+          when(() => userDoc.id).thenReturn('doc-1');
+          when(() => liveSnapshot.docs).thenReturn([userDoc]);
+          when(() => deletedSnapshot.docs).thenReturn(const []);
+          when(() => deletedSnapshot.metadata).thenReturn(deletedMetadata);
+          when(() => deletedMetadata.isFromCache).thenReturn(false);
+          when(
+            query.snapshots,
+          ).thenAnswer(
+            (_) => Stream.fromIterable([liveSnapshot, deletedSnapshot]),
+          );
 
-        final emissions = <Map<String, dynamic>>[];
-        final repository = repo();
-        repository.watchUserDoc('uid-1').listen(emissions.add);
-        async.flushMicrotasks();
+          final emissions = <Map<String, dynamic>>[];
+          final repository = repo();
+          repository.watchUserDoc('uid-1').listen(emissions.add);
+          async.flushMicrotasks();
 
-        expect(emissions, [
-          {'role': 'admin'},
-          <String, dynamic>{},
-        ]);
-        expect(repository.cachedUserDocId('uid-1'), isNull);
-      });
-    });
+          expect(emissions, [
+            {'role': 'admin'},
+            <String, dynamic>{},
+          ]);
+          expect(repository.cachedUserDocId('uid-1'), isNull);
+        });
+      },
+    );
 
     test('watchUserDoc does not retry a non-permission error', () {
       fakeAsync((async) {

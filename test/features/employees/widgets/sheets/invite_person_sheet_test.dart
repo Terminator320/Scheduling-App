@@ -32,7 +32,6 @@ void main() {
         phone: any(named: 'phone'),
         colorValue: any(named: 'colorValue'),
         jobTitle: any(named: 'jobTitle'),
-        isAdmin: any(named: 'isAdmin'),
       ),
     ).thenAnswer(
       (_) async => const NewAccountCredentials(
@@ -108,7 +107,6 @@ void main() {
         phone: '',
         colorValue: any(named: 'colorValue'),
         jobTitle: 'technician',
-        isAdmin: true,
       ),
     ).called(1);
   });
@@ -152,7 +150,6 @@ void main() {
         phone: any(named: 'phone'),
         colorValue: any(named: 'colorValue'),
         jobTitle: any(named: 'jobTitle'),
-        isAdmin: any(named: 'isAdmin'),
       ),
     ).thenThrow(const EmployeesFailureEmailAlreadyExists());
 
@@ -192,7 +189,6 @@ void main() {
         phone: any(named: 'phone'),
         colorValue: captureAny(named: 'colorValue'),
         jobTitle: any(named: 'jobTitle'),
-        isAdmin: any(named: 'isAdmin'),
       ),
     ).captured.single;
     expect(captured, isNot('${0xFF005CC8}'));
