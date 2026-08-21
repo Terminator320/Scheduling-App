@@ -298,7 +298,7 @@ describe("createEmployeeAccount ordering", () => {
   });
 });
 
-describe("completeEmployeeSetup email verification", () => {
+describe("completeEmployeeSetup activation", () => {
   const SETUP = {
     firstName: "Ada",
     lastName: "Lovelace",
@@ -310,35 +310,52 @@ describe("completeEmployeeSetup email verification", () => {
     d1: {email: "ada@example.com", uid: "emp-uid", status: "invited"},
   });
 
-  test("refuses an unverified caller", async () => {
+  test("activates a caller whose token is NOT email-verified", async () => {
     const trace = [];
     const docs = invitedDocs();
     getFirestore.mockReturnValue(makeDb(docs, trace));
 
-    await expect(completeEmployeeSetup.run({
+    const out = await completeEmployeeSetup.run({
       data: SETUP,
       auth: {uid: "emp-uid", token: {email_verified: false}},
-    })).rejects.toThrow(/email-not-verified/);
+    });
 
-    // The doc must be untouched — activation is what the guard protects.
-    expect(docs.d1.status).toBe("invited");
+    // The mailbox check went with the shared starting password (2026-08-21):
+    // the password is now a random per-account secret, so signing in is itself
+    // the proof that guard used to provide.
+    expect(out).toEqual({ok: true});
+    expect(docs.d1.status).toBe("active");
   });
 
-  test("refuses before consuming a rate-limit slot", async () => {
-    const {enforceDurableRateLimit} = require("../security");
-    getFirestore.mockReturnValue(makeDb(invitedDocs(), []));
+  test("activates a caller whose token carries no email claim", async () => {
+    const docs = invitedDocs();
+    getFirestore.mockReturnValue(makeDb(docs, []));
 
-    await expect(completeEmployeeSetup.run({
+    await completeEmployeeSetup.run({
       data: SETUP,
       auth: {uid: "emp-uid", token: {}},
-    })).rejects.toThrow(/email-not-verified/);
+    });
 
-    // An identity guard sits above the limiter, so a caller who cannot pass it
-    // never burns the real employee's five attempts.
-    expect(enforceDurableRateLimit).not.toHaveBeenCalled();
+    expect(docs.d1.status).toBe("active");
   });
 
-  test("activates a verified caller", async () => {
+  test("refuses an unauthenticated caller before the rate limiter",
+      async () => {
+        const {enforceDurableRateLimit} = require("../security");
+        getFirestore.mockReturnValue(makeDb(invitedDocs(), []));
+
+        await expect(completeEmployeeSetup.run({
+          data: SETUP,
+          auth: null,
+        })).rejects.toThrow(/auth-required/);
+
+        // The guard-order rule outlives the email_verified check that used to
+        // demonstrate it: identity is settled before a caller can burn any of
+        // the real employee's five attempts.
+        expect(enforceDurableRateLimit).not.toHaveBeenCalled();
+      });
+
+  test("still activates a caller whose token IS email-verified", async () => {
     const trace = [];
     const docs = invitedDocs();
     getFirestore.mockReturnValue(makeDb(docs, trace));
@@ -350,6 +367,18 @@ describe("completeEmployeeSetup email verification", () => {
 
     expect(out).toEqual({ok: true});
     expect(docs.d1.status).toBe("active");
+  });
+
+  test("still refuses an account that is no longer invited", async () => {
+    const docs = {
+      d1: {email: "ada@example.com", uid: "emp-uid", status: "active"},
+    };
+    getFirestore.mockReturnValue(makeDb(docs, []));
+
+    await expect(completeEmployeeSetup.run({
+      data: SETUP,
+      auth: {uid: "emp-uid", token: {email_verified: false}},
+    })).rejects.toThrow(/setup-not-pending/);
   });
 });
 

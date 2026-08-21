@@ -678,20 +678,11 @@ const completeEmployeeSetup = onCall(APP_CHECK, async (req) => {
   if (!req.auth || !req.auth.uid) {
     throw new HttpsError("unauthenticated", "auth-required");
   }
-  // The account is created on a SHARED starting password, so signing in proves
-  // nothing about who you are. This is the guard that makes the invite window
-  // survivable: activation requires control of the mailbox, so a stranger who
-  // knows the address can reach the setup screen but cannot leave the `invited`
-  // state — where the rules grant nothing. An identity guard, so it sits above
-  // the rate limiter (a caller who can't pass it must not burn slots).
-  //
-  // Fails CLOSED on a missing token: `req.auth.token && ...` would have let a
-  // caller through by NOT presenting one, which is the wrong direction for the
-  // guard the paragraph above describes. v2 always populates it for an
-  // authenticated call, so this is posture, not a live hole.
-  if (!req.auth.token || req.auth.token.email_verified !== true) {
-    throw new HttpsError("failed-precondition", "email-not-verified");
-  }
+  // No mailbox check: the starting password is random per account and handed
+  // over out-of-band, so signing in is itself the proof this guard provided
+  // when every account was minted on a shared constant. Residual risk is
+  // whoever holds BOTH the address and that password — narrowed, not closed.
+  // See docs/plans/2026-08-21-simplified-auth-design.md.
   assertPayloadShape(req.data, new Set([
     "firstName", "lastName", "phone", "termsAccepted", "locationConsent",
   ]));
