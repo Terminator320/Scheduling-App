@@ -12,6 +12,7 @@ import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/widgets/sheets/invite_person_sheet.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 
 import '../../../../support/tour_test_support.dart';
 
@@ -112,9 +113,16 @@ void main() {
   testWidgets('offers no admin toggle — new accounts are always employees', (
     tester,
   ) async {
+    // Tall viewport: the lazy sheet body must actually build past where the
+    // access section used to sit, or `findsNothing` proves nothing.
+    useTallViewport(tester);
     await tester.pumpWidget(wrap());
     await tester.pumpAndSettle();
 
+    // Positive anchor: the invited note is now the last thing in the body,
+    // so finding it proves the form rendered all the way to where the
+    // deleted toggle would have been.
+    expect(find.byType(WarningNote), findsOneWidget);
     expect(find.byKey(const Key('adminAccess')), findsNothing);
   });
 

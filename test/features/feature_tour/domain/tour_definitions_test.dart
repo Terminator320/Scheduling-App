@@ -136,6 +136,17 @@ void main() {
     ]);
   });
 
+  test('the invite walkthrough is 4 steps in order', () {
+    const scope = FormTour(TourForm.invitePerson);
+    expect(tourStepsFor(scope, isAdmin: true), [
+      TourStepId.personDetails,
+      TourStepId.personJobTitle,
+      TourStepId.personColour,
+      TourStepId.personCreate,
+    ]);
+    expect(tourStepsFor(scope, isAdmin: false), isEmpty);
+  });
+
   test('no catalog anywhere repeats a step', () {
     for (final scope in allTourScopes) {
       final steps = tourStepsFor(scope, isAdmin: true);
