@@ -34,27 +34,23 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   *new* reads. **`AppointmentImageLoader` (`core/images/`, formerly
   `AppointmentImageUrlResolver`) calls `ref.getData()` instead** — an
   authenticated SDK fetch, so `storage.rules` is evaluated on **every fetch**,
-  and nothing shareable is produced ON THE RENDER PATH or left in a cache. Be
-  precise about the three halves — the written guarantee used to carry only
-  the first two and was therefore an overstatement: it does **not** revoke a
-  URL somebody already captured under the old build, it does **not** stop an
-  entitled person screenshotting or sharing a photo they can legitimately see,
-  and — the one that was missing — **`ImageStorageService.uploadImage` still
-  mints and persists one such URL per upload**, into `pictures[]`, which every
-  assigned employee's device receives. So the app is still MANUFACTURING a
-  permanent rules-free link per photo; what ended is doing it *as a side
-  effect of rendering*. That write is deliberate (builds predating this render
-  from it) and goes at the CONTRACT step below. Until then the residual is
-  **covered, not closed**, by `functions/appointment_image_tokens.js`
-  (`rotateAssignedImageTokens`, called from `syncUsersByUid`'s deactivation
-  branch): it rewrites `firebaseStorageDownloadTokens` on every photo of every
-  appointment the departing employee was assigned to — newest first, bounded
-  at `ROTATE_APPOINTMENT_MAX` (500) — and mints the replacement URL into
-  `pictures[]` in the same pass, because rotating alone would blank those
-  photos on exactly the old builds the `url` write exists for. It never throws
-  (it sits inside a `retry: true` trigger) and it is defence-in-depth behind
-  the rules' status gate, never the gate itself. Retire it with the `url`
-  write.
+  and nothing shareable is produced ON THE RENDER PATH or left in a cache.
+  **Nothing mints one ANYWHERE either, as of the CONTRACT step** — that was the
+  last half of this guarantee to land, and it was missing for a while:
+  `ImageStorageService.uploadImage` went on calling `getDownloadURL()` and
+  persisting the result into `pictures[]`, which every assigned employee's
+  device received, so the app kept MANUFACTURING a permanent rules-free link
+  per photo long after it stopped doing so as a side effect of rendering. That
+  write existed for builds that rendered from it, and it went with them; the
+  `rotateAssignedImageTokens` control that covered the gap
+  (`functions/appointment_image_tokens.js`, called from `syncUsersByUid`'s
+  deactivation branch) was deleted at the same time, along with the
+  `(employeeIds CONTAINS, endTime DESC)` composite it needed, because there is
+  no longer a stored link for it to invalidate. Two limits remain and neither
+  is fixable in code: this does **not** revoke a URL somebody captured under an
+  old build (those tokens are still live on their objects unless rotated by
+  hand), and it does **not** stop an entitled person screenshotting or sharing
+  a photo they can legitimately see.
   **Photos render OFFLINE again as of 2026-08-16, and this was never in
   tension with the rule above.** The render-from-bytes change was written up as
   costing the on-disk cache outright — "photos re-download once per session and
@@ -155,15 +151,15 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   photo beside it. The rejection/transport branch survives in the loader only to
   say which happened in the log; **neither result is cached** — entitlement can
   change mid-session, and the network can come back.
-  `ImageStorageService` **still writes `url`**, deliberately: builds that
-  predate this render from it, so dropping the write now would blank photos on
-  any phone that hasn't updated. Retire it once the fleet has moved, the way the
-  1.37.1 shim was retired. `ImageStorageService.downloadUrlFor` is the ONE
-  remaining URL mint and is **not** a render path — the offline queue re-links
-  an already-uploaded image whose doc-link append didn't land, and that
-  `pictures` entry still carries a `url` for those older builds. It lives beside
-  the upload write it reproduces so nothing on the render side has a
-  URL-minting method to reach for.
+  `ImageStorageService` **writes no `url` at all** since the CONTRACT step, and
+  `downloadUrlFor` — the one remaining mint, used by the offline queue when
+  re-linking an already-uploaded image whose doc-link append didn't land — is
+  deleted with it. A photo document carries no url for that re-link to
+  reproduce, so the re-resolve step went too, along with the failure branch
+  that guarded against appending a blank-url duplicate: a carried image is
+  appended as it stands, which also spares a Storage round trip per photo on
+  exactly the offline→online flip where the connection is worst. A stored url
+  is now only ever READ, on documents written before `storagePath` existed.
   **Loaded bytes are POSITIONAL, so they must be carried with the list they
   were loaded for** — `PhotoPickerSection` keys them on `_resolvedFor` and
   serves `const []` until that matches `existingImages`. A Storage round-trip
@@ -185,102 +181,108 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   are written to `getTemporaryDirectory()` for the platform channel — and the
   1×1 refusal stand-in is excluded by identity, or Save/Share would hand over a
   blank pixel as if it were the job.
-- **Photos are MOVING to `appointments/{id}/images`, and phase 1 writes BOTH
-  stores** (2026-08-13). Every appointment document carried its whole photo
-  array — a `url` alone is ~215 of a ~290-byte entry — and the calendar reads
-  up to 1000 appointments at a time while only the detail sheet ever shows a
-  photo. **The `pictures` array is still written and is still authoritative.**
-  The shipped build (1.45.0+72) reads photos off the parent document and knows
-  nothing about the subcollection, so dropping the array now blanks every photo
-  on every phone until it updates; it goes at the CONTRACT step, once no device
-  still runs a build that reads it — the same gate the `#compat-1.37.1` shim
-  waited on. Do not "finish the migration" by deleting the array early.
-  **`appendAppointmentPictures`/`removeAppointmentPictures` write both stores in
-  ONE `WriteBatch`** so they cannot disagree: this path is retried by the
-  offline queue, which has no way to reconcile a half-written state.
+- **Photos live in `appointments/{id}/images`. The `pictures` array is GONE
+  (the CONTRACT step).** Every appointment document used to carry its whole
+  photo array — a `url` alone was ~215 of a ~290-byte entry — while the
+  calendar reads up to 1000 appointments at a time and only the detail sheet
+  ever shows a photo. Phase 1 (2026-08-13) wrote both stores; the array was
+  retired once no device ran a build that read it, the same gate the
+  `#compat-1.37.1` shim waited on. What is left on the parent is
+  `pictureCount`.
+  **`appendAppointmentPictures`/`removeAppointmentPictures` write the
+  subcollection and touch the parent's `updatedAt` only.** They must never
+  write `pictureCount` — `recountAppointmentPictures` owns it and the rules
+  reject a client update that moves it.
   **The subcollection document id is DERIVED from the photo —
   `appointmentImageDocId` (`calendar/domain/policies/`), hand-mirrored as
   `functions/appointment_image_ids.js`.** That is what makes the write
-  idempotent, and it REPLACES the `arrayUnion` dedupe the array form depended
+  idempotent, and it REPLACED the `arrayUnion` dedupe the array form depended
   on (which worked only because every image serialized its exact `uploadedAt`
   and `arrayUnion` compares maps by deep equality — one field serialized a hair
   differently and it silently stopped deduping). It keys on `storagePath`,
-  falling back to `url` for the legacy docs that have no storage path, so those
-  don't all collide on one id. The two implementations share worked examples in
-  their tests; change them together.
+  falling back to `url` for the legacy documents that have no storage path, so
+  those don't all collide on one id. The two implementations share worked
+  examples in their tests; change them together.
   **The subcollection doc omits `url` when `storagePath` is present** — photos
   render from bytes fetched off `storagePath`, so `storage.rules` is evaluated
   on every fetch and a persisted download URL is a permanent rules-free token
-  with no reader here. A LEGACY entry with only a `url` keeps it, or
-  backfilling destroys the one thing that can render it.
-  **Reads are "subcollection first, array fallback", and EMPTY means "use the
-  array", never "this job has no photos"** — a document the backfill hasn't
-  reached yet is exactly that shape. `EventDetailsController._loadStoredPictures`
-  adopts the read only while the list is still what `build()` seeded, so a
-  removal made during the round-trip isn't silently put back.
-  **`pictureCount` is a FUNCTION-OWNED denormalized counter** (`recountAppointmentPictures`,
-  an absolute `count()` aggregate — same discipline as `jobCount`), because
-  `AppointmentCard` renders a photo indicator on every range-query surface and
-  cannot afford a subcollection read each. `toMap()` must never emit it and the
-  rules reject a client write that touches it. The card asks
-  `AppointmentRecord.hasPictures`, which tests BOTH stores — during the
-  migration a doc legitimately has either.
-  **`cascadeDeleteAppointmentImages` is LOAD-BEARING, not cleanup: Firestore
-  does NOT delete a subcollection with its parent.** Without it every
-  appointment delete leaves photo documents orphaned under a parent that no
-  longer exists — invisible in the console, unreachable by every query, with
-  nothing reporting it. It covers all three delete paths (single, series,
-  `purgeExpiredHistory`), rethrows so `retry: true` means something, and is the
-  single reason a subcollection here needs a server component at all.
-  Backfill: `functions/scripts/backfill-appointment-images.js` (copy-only,
-  `--dry-run`, atomic per appointment so the "partially copied" state the read
-  fallback can't detect is unreachable).
-  **THREE THINGS THE ARRAY IS STILL DOING, which the CONTRACT step must replace
-  before it is removed** — each is currently invisible because the array covers
-  it, and each fails silently once it does not:
-  1. **Storage cleanup on delete.** `EventDetailsController.deleteAppointment`
-     enumerates `appointment.pictures` to know which Storage objects to remove.
-     Empty that array and it deletes nothing, and the bytes orphan on every
-     appointment delete — `cascadeDeleteAppointmentImages` removes the
-     Firestore documents only. Either that trigger grows a Storage prefix
-     delete (the way `purgeExpiredHistory` already does it, minding the
-     load-time bucket resolution that forced `maintenance_policy.js` to split)
-     or the client reads the subcollection first.
-  2. **The photo-count bound.** `isValidAppointmentData` caps `pictures` at
-     100; a subcollection has no such ceiling, so that guard goes with the
-     array unless something replaces it. The READ is already bounded —
-     `fetchAppointmentPictures` limits to the same 100 and warns at the cap,
-     deliberately reusing the array's number rather than inventing a second —
-     but a bounded read is not a bounded WRITE, and nothing yet stops a doc
-     growing past it.
-  3. **The `AppointmentImage.url` fallback.** `AppointmentImageLoader` still
-     uses a stored `url` as the fetch HANDLE for legacy entries (through
-     `refFromURL`), and only the backfilled subcollection docs carry one. Keep
-     the fallback.
+  with no reader. A LEGACY entry with only a `url` keeps it: that url is the
+  sole handle on its bytes, and `AppointmentImageLoader` turns it back into a
+  `Reference` through `refFromURL`. **Keep that fallback** — it is the one part
+  of the old shape that is load-bearing rather than compatibility.
+  **`pictureCount` is the only thing left that knows whether a job has photos**,
+  and both the card's indicator and the detail sheet's decision to read the
+  subcollection at all gate on it. That gate is safe only because the counter
+  is COMPLETE, which took three separate things and needs all three:
+  `addAppointments` writes an explicit `0` at create (the one client write the
+  rules allow — `allow create` accepts the key only as 0),
+  `recountAppointmentPictures` owns it from the first photo onwards as an
+  absolute `count()` aggregate, and
+  `functions/scripts/clear-appointment-picture-arrays.js` stamped it on every
+  document that predates the change. Break any one of them and a job renders
+  its photos as none, silently — the exact failure this migration was shaped
+  to avoid. `toMap()` must never emit it, and the rules reject an update that
+  touches it.
+  **`EventDetailsController` seeds the sheet with NO photos and fills it from
+  the subcollection read**, adopting the result only while the list is still
+  what `build()` seeded — a removal made during the round trip must not be
+  silently put back.
+  **`cascadeDeleteAppointmentImages` deletes the Storage BYTES as well as the
+  photo documents, and it is now the ONLY thing that deletes either.** The
+  client used to enumerate `appointment.pictures` on delete to know which
+  objects to remove; with no array to enumerate, a client-side cleanup would
+  delete nothing while looking like cleanup. Removing ONE photo from a job that
+  still exists stays client-side (`EventDetailsSavePipeline.applyPhotoChanges`)
+  — that caller knows exactly which photo it removed.
+  **Nothing bounds how many photos a job can hold, and that is the one thing
+  the array was doing that was NOT replaced by an equivalent.** The rules
+  capped the array at 100 to keep the parent document under its 1 MB ceiling,
+  and moving the photos out is precisely what makes that unreachable, so it was
+  not reinstated as a ceiling — rules cannot count documents in a subcollection
+  anyway. What replaces it is visibility at the same number:
+  `AppointmentImagesStore.scanLimit` (100) bounds the read and warns at the
+  cap, and `PICTURE_COUNT_WARN_CAP` (`functions/appointment_images.js`) makes
+  the recount warn past it. The picker's own
+  `AppointmentFormConcerns.maxImagesPerAppointment` (10) means only a modified
+  client gets near either. Keep the two hundreds equal.
+  Scripts: `functions/scripts/backfill-appointment-images.js` copies an array
+  into the subcollection (copy-only, `--dry-run`, atomic per appointment) and
+  `clear-appointment-picture-arrays.js` deletes the array afterwards. They are
+  deliberately separate: a script that copied and deleted in one pass could not
+  be dry-run meaningfully, since the dry run would report a coverage it was
+  about to create. The clear script REFUSES any appointment whose subcollection
+  does not already cover every array entry, and refuses one holding an entry
+  with no identity at all (no `storagePath`, no url) — unrenderable and
+  uncopyable, so clearing it would destroy the only record it existed.
 - **Offline photo-upload queue:** a failed/incomplete photo batch is persisted
   by `PendingUploadStore` (one JSON list under the SharedPreferences key
   `pending_photo_uploads`, entries pruned after 7 days) so uploads survive
   going offline. `AppointmentImageUploadService.drainPending()` retries the
   queue — it's reentrancy-guarded, re-queues the *unsent*
   paths on a transient failure (preserving `enqueuedAtMs` so a batch can't
-  retry past the prune window), and `arrayUnion`-appends uploaded pictures so a
-  concurrent edit or the batch's other half never clobbers them.
-  **When the uploads land but the `arrayUnion` doc-link append itself throws
-  transiently, the already-uploaded images are carried forward on the queue
-  entry's `uploaded` field for an append-only retry — NOT re-uploaded (their
-  local temp files are already gone), and NEVER dropped, or the Storage bytes
-  orphan invisibly on the job.** That re-link stays idempotent because each
-  carried image serializes its exact `uploadedAt` (ISO-8601 in the JSON,
-  round-tripped by `AppointmentImage.fromMap`), so an append that actually
-  committed server-side dedupes on the next pass. An entry with no paths AND no
-  carried `uploaded` images is the only genuinely-empty one that drains away.
+  retry past the prune window), and appends through
+  `appendAppointmentPictures`, whose derived document ids mean a concurrent
+  edit or the batch's other half is never clobbered.
+  **When the uploads land but the doc-link append itself throws transiently,
+  the already-uploaded images are carried forward on the queue entry's
+  `uploaded` field for an append-only retry — NOT re-uploaded (their local temp
+  files are already gone), and NEVER dropped, or the Storage bytes orphan
+  invisibly on the job.** That re-link is idempotent because the photo's
+  document id is derived from it, so an append that actually committed
+  server-side rewrites the same document rather than adding a second. (Before
+  the subcollection it rested on `arrayUnion`'s deep-equality dedupe, which is
+  why each carried image still serializes its exact `uploadedAt` — ISO-8601 in
+  the JSON, round-tripped by `AppointmentImage.fromMap`.) An entry with no
+  paths AND no carried `uploaded` images is the only genuinely-empty one that
+  drains away.
   **Staging and draining share ONE serialized path** (`drainPending`, guarded
   by `_draining` + `_pendingDrain`): a save that stages a batch does NOT upload
   it directly, because a listener-driven `drainPending()` firing in that window
   would load the just-added entry and upload it concurrently — and since
   `ImageStorageService` mints each file name from `DateTime.now()`, the two
-  passes produce different storage paths that `arrayUnion` can't dedupe, so the
-  photo lands twice. A request arriving mid-drain sets `_pendingDrain` so the
+  passes produce different storage paths, so they derive different document
+  ids and the photo lands twice. No dedupe of any kind catches that: the two
+  really are two different objects. A request arriving mid-drain sets `_pendingDrain` so the
   in-flight pass repeats (coalesce, never drop).
   **`PendingUploadStore`'s mutations are serialized inside the store**
   (`_serialized`, one `_mutations` chain) — `add`/`remove`/`prune` are each
@@ -300,4 +302,4 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
 
 ## Server side
 
-- **`cascadeDeleteAppointmentImages` + `recountAppointmentPictures`** (`appointment_images.js`, added 2026-08-13 with the photo-subcollection move; +2 exports). **The cascade is not cleanup — it is the reason this feature needs a server component at all: Firestore does NOT delete a subcollection when its parent document is deleted.** Without it every appointment delete leaves `appointments/{id}/images/*` orphaned under a parent that no longer exists: invisible in the console, unreachable by every query the app makes, and with nothing anywhere reporting it. It must cover all three delete paths — the client's single delete, its series delete, and `purgeExpiredHistory` (Admin SDK deletes fire triggers too). It uses `recursiveDelete` (the same Admin-SDK bulk writer `syncUsersByUid` already uses for `liveActivityTokens`) and **RETHROWS**, deliberately unlike the best-effort cleanup elsewhere here — a swallowed error leaves exactly the permanent invisible orphans it exists to prevent, and rethrowing is what makes `retry: true` mean anything. `recountAppointmentPictures` maintains the denormalized `pictureCount` on the parent that `AppointmentCard`'s photo indicator reads (the card renders on every range-query surface and cannot afford a subcollection read each): an **absolute `count()` aggregate, never an increment**, same rule and same reason as `recountClientJobs` under `retry: true`, written with `update()` so an appointment deleted in the window is never resurrected as a count-only stub (a `NOT_FOUND` there is the normal path, not an error — the cascade has just removed the photos). **It recounts on EVERY write, including an update that cannot have moved the count, and that is deliberate.** An `if (before.exists && after.exists) return` guard was written and then removed: the only paths it skips are the offline queue replaying `set(..., {merge: true})` on the DERIVED doc id and a backfill re-run, and those two are the ONLY self-heal this counter has — a recount whose parent `update()` keeps failing exhausts its retry window and leaves `pictureCount` wrong forever, where an idempotent replay repairs it silently. It also buys nothing against the real write amplification: `appendAppointmentPictures` writes N image docs in ONE batch, so N recounts hit the SAME parent within milliseconds (against Firestore's ~1 write/sec/document guidance), but those are genuine CREATES that any such guard must let through. **That bit, and the fix was to DEBOUNCE the recount, never to suppress the replay** (2026-08-15): `debouncedRecountPictures` claims the parent in the Admin-SDK-only `appointmentRecountClaims/{appointmentId}` ledger (`create()`-fails-if-exists, same shape as `claimSeriesNotice`), so the first trigger of a batch does the one recount and the other N−1 return having written nothing — which also collapses the second-order fan-out, since every parent write re-fires `notifyAppointmentChanges` (10 photos was 10 recounts AND 11 notification invocations for one user action). **The ORDER is the whole safety argument: the claim is released BEFORE the aggregate runs.** A suppressed sibling's photo was committed before its trigger fired, and its trigger fired before the release, so a strongly-consistent `count()` after the release necessarily sees it — nothing a debounce suppressed can be missed. Count first and release after and a photo written in that gap is both suppressed and uncounted, which is the one way this optimization could corrupt the number it maintains. **The replay self-heal survives because the claim never outlives its batch**: it is deleted on the normal path, `RECOUNT_CLAIM_STALE_MS` (15 s) takes over one abandoned by a killed invocation, and the `expiresAt` TTL policy (`firestore.indexes.json`, offset 0) is housekeeping behind both — so a later, separate write (the offline queue's replay, a backfill re-run) always claims afresh and always recounts. The claim path FAILS OPEN on any ledger error: an extra parent write is exactly the old behaviour, where a skipped recount is a wrong count with nothing left to notice it. Releasing first is also what lets a `retry: true` retry of a failed parent `update()` re-claim instead of suppressing itself. Both bodies (`purgeAppointmentImages`, `recountPictures`) take an injected `db` and are jest-tested. `IMAGES_SUBCOLLECTION` is hand-mirrored by `AppointmentImagesStore.imagesSubcollection` (`calendar/data/appointment_images_store.dart` — the phase-1 photo surface split out of `firebase_appointments_repository.dart` so the CONTRACT step is a file rather than a diff through a 900-line class) AND by the literal `match /images/{imageId}` in `firestore.rules`; renaming one alone points the trigger at a collection nothing writes and the cascade silently stops cascading. The doc-id helper lives in the dependency-free `appointment_image_ids.js`, hand-mirrored from `appointment_image_doc_id.dart` and sharing its worked examples so a divergence fails a test rather than putting one photo at two ids.
+- **`cascadeDeleteAppointmentImages` + `recountAppointmentPictures`** (`appointment_images.js`, added 2026-08-13 with the photo-subcollection move; +2 exports). **The cascade is not cleanup — it is the reason this feature needs a server component at all: Firestore does NOT delete a subcollection when its parent document is deleted.** Without it every appointment delete leaves `appointments/{id}/images/*` orphaned under a parent that no longer exists: invisible in the console, unreachable by every query the app makes, and with nothing anywhere reporting it. It must cover all three delete paths — the client's single delete, its series delete, and `purgeExpiredHistory` (Admin SDK deletes fire triggers too). **It deletes the Storage BYTES too, and that half is not cleanup either**: the client used to enumerate `appointment.pictures` to know which objects to remove, and at the CONTRACT step that array stopped existing — a client that no longer reads the photos cannot list what to delete, so without this every appointment delete orphans its photos in Storage, paid for monthly and reachable by no query. The prefix (`appointments/{id}/images/`) is derived from the appointment id rather than from any stored path, so it also sweeps bytes whose document link never landed. ORDER: bytes first, documents second — the same rule `purgeExpiredHistory` follows, since the documents are the last thing pointing at those objects. It uses `deleteFiles({prefix})` for the bytes and `recursiveDelete` for the documents (the same Admin-SDK bulk writer `syncUsersByUid` already uses for `liveActivityTokens`) and **RETHROWS** on either half, deliberately unlike the best-effort cleanup elsewhere here — a swallowed error leaves exactly the permanent invisible orphans it exists to prevent, and rethrowing is what makes `retry: true` mean anything. `recountAppointmentPictures` maintains the denormalized `pictureCount` on the parent that `AppointmentCard`'s photo indicator reads (the card renders on every range-query surface and cannot afford a subcollection read each): an **absolute `count()` aggregate, never an increment**, same rule and same reason as `recountClientJobs` under `retry: true`, written with `update()` so an appointment deleted in the window is never resurrected as a count-only stub (a `NOT_FOUND` there is the normal path, not an error — the cascade has just removed the photos). **It recounts on EVERY write, including an update that cannot have moved the count, and that is deliberate.** An `if (before.exists && after.exists) return` guard was written and then removed: the only paths it skips are the offline queue replaying `set(..., {merge: true})` on the DERIVED doc id and a backfill re-run, and those two are the ONLY self-heal this counter has — a recount whose parent `update()` keeps failing exhausts its retry window and leaves `pictureCount` wrong forever, where an idempotent replay repairs it silently. It also buys nothing against the real write amplification: `appendAppointmentPictures` writes N image docs in ONE batch, so N recounts hit the SAME parent within milliseconds (against Firestore's ~1 write/sec/document guidance), but those are genuine CREATES that any such guard must let through. **That bit, and the fix was to DEBOUNCE the recount, never to suppress the replay** (2026-08-15): `debouncedRecountPictures` claims the parent in the Admin-SDK-only `appointmentRecountClaims/{appointmentId}` ledger (`create()`-fails-if-exists, same shape as `claimSeriesNotice`), so the first trigger of a batch does the one recount and the other N−1 return having written nothing — which also collapses the second-order fan-out, since every parent write re-fires `notifyAppointmentChanges` (10 photos was 10 recounts AND 11 notification invocations for one user action). **The ORDER is the whole safety argument: the claim is released BEFORE the aggregate runs.** A suppressed sibling's photo was committed before its trigger fired, and its trigger fired before the release, so a strongly-consistent `count()` after the release necessarily sees it — nothing a debounce suppressed can be missed. Count first and release after and a photo written in that gap is both suppressed and uncounted, which is the one way this optimization could corrupt the number it maintains. **The replay self-heal survives because the claim never outlives its batch**: it is deleted on the normal path, `RECOUNT_CLAIM_STALE_MS` (15 s) takes over one abandoned by a killed invocation, and the `expiresAt` TTL policy (`firestore.indexes.json`, offset 0) is housekeeping behind both — so a later, separate write (the offline queue's replay, a backfill re-run) always claims afresh and always recounts. The claim path FAILS OPEN on any ledger error: an extra parent write is exactly the old behaviour, where a skipped recount is a wrong count with nothing left to notice it. Releasing first is also what lets a `retry: true` retry of a failed parent `update()` re-claim instead of suppressing itself. Both bodies (`purgeAppointmentImages`, `recountPictures`) take an injected `db` and are jest-tested. `IMAGES_SUBCOLLECTION` is hand-mirrored by `AppointmentImagesStore.imagesSubcollection` (`calendar/data/appointment_images_store.dart` — the photo surface split out of `firebase_appointments_repository.dart` so the CONTRACT step was a file to open rather than a diff through a 900-line class) AND by the literal `match /images/{imageId}` in `firestore.rules`; renaming one alone points the trigger at a collection nothing writes and the cascade silently stops cascading. The doc-id helper lives in the dependency-free `appointment_image_ids.js`, hand-mirrored from `appointment_image_doc_id.dart` and sharing its worked examples so a divergence fails a test rather than putting one photo at two ids.

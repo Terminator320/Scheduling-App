@@ -4,7 +4,6 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
-import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 
 part 'appointment_record.freezed.dart';
@@ -39,20 +38,23 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     @Default('') String seriesId,
     DateTime? createdAt,
     DateTime? updatedAt,
-    @Default(<AppointmentImage>[]) List<AppointmentImage> pictures,
-    // How many photos live in `appointments/{id}/images`. FUNCTION-OWNED —
-    // `recountAppointmentPictures` recomputes it absolutely from a count()
-    // aggregate, exactly like `jobCount` on a client, so [toMap] must never
-    // emit it and `firestore.rules` rejects a client write that touches it.
+    // How many photos live in `appointments/{id}/images`. FUNCTION-OWNED
+    // after creation: `recountAppointmentPictures` recomputes it absolutely
+    // from a count() aggregate, exactly like `jobCount` on a client, so
+    // [toMap] must never emit it and `firestore.rules` rejects an UPDATE that
+    // touches it.
     //
-    // It exists because moving photos off this document blinds the one thing
-    // that still needs them here: `AppointmentCard` shows a photo indicator,
-    // and it renders on every range-query surface. Reading a subcollection per
-    // card is not an option, so the count is denormalized back. ~15 bytes
-    // against ~290 per photo entry.
+    // Photos live only in that subcollection now, so this is the only thing
+    // left on the parent that knows whether a job has any. `AppointmentCard`
+    // shows a photo indicator and renders on every range-query surface, where
+    // a subcollection read per card is not an option. ~15 bytes against the
+    // ~290 per entry the retired `pictures` array cost.
     //
-    // Absent on a doc the trigger has not reached yet, which reads as 0 —
-    // see [hasPictures] for why that is safe during the migration.
+    // **A create writes an explicit 0**, the one client write the rules allow
+    // (see `addAppointments`). That is what stops "absent" being a state the
+    // app has to interpret: the trigger only fires on a photo write, so
+    // without it every photo-less job would read as count-unknown forever and
+    // neither the card nor the detail sheet could trust this number.
     @Default(0) int pictureCount,
   }) = _AppointmentRecord;
   const AppointmentRecord._();
@@ -78,26 +80,23 @@ abstract class AppointmentRecord with _$AppointmentRecord {
       seriesId: (data['seriesId'] ?? '').toString(),
       createdAt: firestoreDateTime(data['createdAt']),
       updatedAt: firestoreDateTime(data['updatedAt']),
-      pictures: _parseImageList(data['pictures']),
       pictureCount: _parseCount(data['pictureCount']),
     );
   }
 
-  /// Whether this job carries photos, for the card's indicator.
+  /// Whether this job carries photos — the card's indicator, and the detail
+  /// sheet's decision to open the subcollection at all.
   ///
-  /// Reads BOTH stores on purpose, and must keep doing so until the `pictures`
-  /// array is retired. During the migration a document can legitimately be in
-  /// either state: an older doc still has its array and no `pictureCount` (the
-  /// trigger only fires on a photo write, and the backfill is what stamps the
-  /// count on the rest), while a doc whose photos arrived after the move has
-  /// the count. Testing either one alone makes the indicator vanish for half
-  /// the fleet's data, silently — which is the failure mode this whole
-  /// migration is shaped to avoid.
-  bool get hasPictures => pictureCount > 0 || pictures.isNotEmpty;
+  /// [pictureCount] is the only store left: the `pictures` array went at the
+  /// CONTRACT step, and its cleanup script stamped a count on every document
+  /// that predates the change, so no document shape reads 0 while photos
+  /// exist. That completeness is the precondition for gating a READ on this —
+  /// the counter is function-owned, so a job whose recount never landed would
+  /// otherwise hide its own photos with nothing anywhere to say so.
+  bool get hasPictures => pictureCount > 0;
 
-  /// A function-owned counter, absent until its trigger or the backfill has
-  /// reached the doc. Anything unparseable reads as 0 rather than throwing:
-  /// this feeds a display affordance, not a decision.
+  /// Anything unparseable reads as 0 rather than throwing: this feeds a
+  /// display affordance, not a decision.
   static int _parseCount(dynamic value) {
     if (value is int) return value < 0 ? 0 : value;
     if (value is num) return value < 0 ? 0 : value.toInt();
@@ -115,7 +114,6 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     'employeeNames': employeeNames,
     'address': address,
     'notes': notes,
-    'pictures': pictures.map((p) => p.toMap()).toList(),
     'materialsNeeded': materialsNeeded,
     'status': status,
     'isPersonal': isPersonal,
@@ -159,16 +157,6 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     if (value is List) return value.whereType<String>().toList();
     if (value is String && value.isNotEmpty) return [value];
     return const [];
-  }
-
-  static List<AppointmentImage> _parseImageList(dynamic value) {
-    if (value is! List) return const [];
-    return value
-        .whereType<Map<Object?, Object?>>()
-        .map(
-          (item) => AppointmentImage.fromMap(Map<String, dynamic>.from(item)),
-        )
-        .toList();
   }
 }
 

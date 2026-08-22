@@ -4,22 +4,22 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_image_doc_id.dart';
 
-/// The photo half of the appointments repository: the `pictures` array and the
-/// `appointments/{id}/images` subcollection it is moving to.
+/// The photo half of the appointments repository: the
+/// `appointments/{id}/images` subcollection.
 ///
-/// **This is phase 1 of that move, and it writes BOTH stores deliberately.**
-/// The subcollection is the new home; the array is kept in step because the
-/// build in the field (1.45.0+72) reads photos off the parent document and
-/// knows nothing about the subcollection, so dropping it now blanks every
-/// photo on every phone until it updates. It goes at the CONTRACT step, once
-/// no device still runs a build that reads it — the same gate the
-/// `#compat-1.37.1` shim waited on. Do not "finish the migration" early.
+/// **The move off the parent document is COMPLETE (the CONTRACT step).** The
+/// `pictures` array these methods used to dual-write is gone — nothing reads
+/// it, nothing writes it, and `clear-appointment-picture-arrays.js` emptied it
+/// on every document that predates the change. That array made every
+/// appointment read carry its whole photo list (a stored download url alone
+/// was ~215 of a ~290-byte entry) while the calendar reads up to 1000
+/// appointments at a time and only the detail sheet ever shows a photo. What
+/// stays on the parent is `pictureCount`, ~15 bytes, for the card indicator.
 ///
-/// A collaborator rather than more of `FirebaseAppointmentsRepository`
-/// precisely BECAUSE of that pending step: this is the surface the CONTRACT
-/// change rewrites wholesale, and it should be a file to open rather than a
-/// diff scattered through a 900-line class. (The repository as a whole is not
-/// a god file and is not being split — this one block is the exception.)
+/// A collaborator rather than more of `FirebaseAppointmentsRepository` because
+/// that step had to be a file to open rather than a diff scattered through a
+/// 900-line class. (The repository as a whole is not a god file and is not
+/// being split — this one block was the exception.)
 class AppointmentImagesStore {
   AppointmentImagesStore({
     required CollectionReference<Map<String, dynamic>> appointments,
@@ -38,22 +38,28 @@ class AppointmentImagesStore {
   /// `firestore.rules` matches on it literally.
   static const String imagesSubcollection = 'images';
 
-  /// Ceiling on [fetch]. `isValidAppointmentData` caps the `pictures` array at
-  /// 100 and a SUBCOLLECTION has no such ceiling, so this is what keeps the
-  /// read bounded once the array is retired at the CONTRACT step — matching
-  /// the array's cap rather than inventing a second number.
+  /// Ceiling on [fetch], and the only bound left on a job's photos.
+  ///
+  /// A subcollection has no document-size ceiling to run into — that is what
+  /// the move bought, and it is why the array's 100-entry rules cap was not
+  /// reinstated as a ceiling when the array went. It keeps the array's number
+  /// rather than inventing a second one, and `PICTURE_COUNT_WARN_CAP`
+  /// (`functions/appointment_images.js`) is its server-side twin: the recount
+  /// warns past the same figure, because anything beyond it is simply absent
+  /// from the app. The picker's own cap
+  /// (`AppointmentFormConcerns.maxImagesPerAppointment`, 10) means only a
+  /// modified client can get anywhere near this.
   static const int scanLimit = 100;
 
-  /// `appointments/{id}/images` — the subcollection photos are moving to.
+  /// `appointments/{id}/images` — where a job's photos live.
   CollectionReference<Map<String, dynamic>> _imagesOf(String id) =>
       _appointments.doc(id).collection(imagesSubcollection);
 
   Future<void> append(String id, List<AppointmentImage> pictures) async {
     if (pictures.isEmpty) return;
-    // One batch, so the two stores cannot disagree: a partial write here would
-    // leave a photo visible on one surface and absent on the other, and this
-    // path is retried by the offline queue, which would then see an
-    // inconsistent state it has no way to reconcile.
+    // One batch: this path is retried by the offline queue, and a partial
+    // write would put some of a batch on the job and not the rest, with
+    // nothing able to tell which.
     final batch = _appointments.firestore.batch();
     for (final picture in pictures) {
       final docId = appointmentImageDocId(picture);
@@ -63,19 +69,21 @@ class AppointmentImagesStore {
       if (docId.isEmpty) continue;
       // `set`, not `add`: the id is derived from the photo, so the offline
       // queue's append-only retry of an already-uploaded image is a no-op
-      // instead of a duplicate. This is what replaces the array's arrayUnion
-      // deep-equality dedupe. `merge: true` so a retry cannot blank a field
-      // the first pass wrote.
+      // instead of a duplicate. This replaced the array's `arrayUnion` dedupe,
+      // which only ever worked because every image serialized its exact
+      // `uploadedAt`. `merge: true` so a retry cannot blank a field the first
+      // pass wrote.
       batch.set(
         _imagesOf(id).doc(docId),
         _toSubcollectionMap(picture),
         SetOptions(merge: true),
       );
     }
-    // Still arrayUnion, for the same reason it always was: a concurrent edit
-    // or the batch's other half must never clobber photos it never saw.
+    // The parent is touched for `updatedAt` alone now. Keep it: adding a photo
+    // is an edit, and the job's list surfaces sort and reconcile on that
+    // field. `pictureCount` is NOT written here — `recountAppointmentPictures`
+    // owns it, and the rules reject a client write that moves it.
     batch.update(_appointments.doc(id), {
-      'pictures': FieldValue.arrayUnion(pictures.map(toArrayMap).toList()),
       'updatedAt': FieldValue.serverTimestamp(),
     });
     await batch.commit();
@@ -87,17 +95,14 @@ class AppointmentImagesStore {
     for (final picture in pictures) {
       final docId = appointmentImageDocId(picture);
       if (docId.isEmpty) continue;
-      // Deleting a doc that isn't there is a no-op, so this needs no
-      // existence check — and unlike the arrayRemove below it cannot silently
-      // miss. That asymmetry is worth knowing: `arrayRemove` matches by DEEP
-      // EQUALITY of the whole map, so it only works because the caller hands
-      // back images parsed from this very doc. Change what [toArrayMap] emits
-      // and the array half stops removing anything, with no error — one more
-      // reason the array's days are numbered.
+      // Deleting a document that isn't there is a no-op, so this needs no
+      // existence check — and it cannot silently miss the way the retired
+      // `FieldValue.arrayRemove` half could, which matched by DEEP EQUALITY of
+      // the whole entry map and so only removed a photo the caller had parsed
+      // out of this very document.
       batch.delete(_imagesOf(id).doc(docId));
     }
     batch.update(_appointments.doc(id), {
-      'pictures': FieldValue.arrayRemove(pictures.map(toArrayMap).toList()),
       'updatedAt': FieldValue.serverTimestamp(),
     });
     await batch.commit();
@@ -122,41 +127,18 @@ class AppointmentImagesStore {
     ];
   }
 
-  /// The ARRAY's entry shape, on the parent document.
-  ///
-  /// Public because the whole-record serializer needs it too, and having two
-  /// spellings of what an array entry looks like would break `arrayRemove`'s
-  /// deep-equality match in silence.
-  ///
-  /// Built by OVERRIDING `AppointmentImage.toMap()` rather than restating its
-  /// keys, which is what makes that single-owner claim true — the model was
-  /// already a second spelling, reached through `AppointmentRecord.toMap()`
-  /// and `PendingUploadStore` (which composes the same way). Restated here, a
-  /// field added to the model would land in one path and not the other, and
-  /// `arrayRemove` — which matches the whole map by DEEP EQUALITY — would
-  /// quietly stop removing anything. The only difference is the wire type of
-  /// `uploadedAt`: Firestore wants a `Timestamp` where the model holds a
-  /// `DateTime`.
-  static Map<String, dynamic> toArrayMap(AppointmentImage image) => {
-    ...image.toMap(),
-    'uploadedAt': image.uploadedAt == null
-        ? null
-        : Timestamp.fromDate(image.uploadedAt!),
-  };
-
   /// The subcollection's document shape.
   ///
-  /// Deliberately NOT [toArrayMap]. Two differences, both load-bearing:
+  /// Two things about it are load-bearing:
   ///
-  /// `url` is written **only when there is no `storagePath`**. Photos are
-  /// rendered from bytes fetched off `storagePath` by `AppointmentImageLoader`,
-  /// so every read re-evaluates `storage.rules`; the persisted `url` is a
-  /// permanent rules-free token URL kept only for builds predating the loader,
-  /// and those builds read the ARRAY, never this. So a new photo's `url` would be
-  /// a credential stored for no reader — while a LEGACY entry that has only a
-  /// url still needs it, or backfilling it here destroys the one thing that
-  /// can render it. Dropping it is also most of the size win: the url is
-  /// ~215 of a ~290-byte entry.
+  /// `url` is written **only when there is no `storagePath`**. Photos render
+  /// from bytes fetched off `storagePath` by `AppointmentImageLoader`, so every
+  /// read re-evaluates `storage.rules`; a persisted url is a permanent
+  /// rules-free token with no reader left in the app, and `ImageStorageService`
+  /// stopped minting one at the CONTRACT step. What survives is the LEGACY
+  /// entry that has only a url — dropping that one destroys the single thing
+  /// that can render the photo. Omitting it otherwise was also most of the
+  /// size win: the url was ~215 of a ~290-byte entry.
   ///
   /// `fileName` is omitted when absent rather than written as null, so the
   /// document carries no key it has no value for.

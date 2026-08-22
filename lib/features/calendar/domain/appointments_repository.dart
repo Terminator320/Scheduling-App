@@ -34,32 +34,30 @@ abstract class AppointmentsRepository {
   /// Atomically update series to propagate edit across visit and future siblings.
   Future<void> updateAppointments(List<AppointmentRecord> appointments);
 
-  /// Appends [pictures] to the appointment's stored pictures using a
-  /// server-side union instead of rewriting the whole array. That way a
-  /// background upload landing after a concurrent edit can't clobber photos
-  /// it never saw, and the edit can't clobber the upload either.
+  /// Adds [pictures] to `appointments/{id}/images`.
+  ///
+  /// Each document's id is derived from the photo, so a retry of a batch that
+  /// partly landed rewrites the same documents rather than duplicating them —
+  /// which is what a background upload arriving after a concurrent edit needs.
   Future<void> appendAppointmentPictures(
     String id,
     List<AppointmentImage> pictures,
   );
 
-  /// Remove pictures via arrayRemove, leaving concurrent appends intact.
+  /// Deletes [pictures] from `appointments/{id}/images`, by the same derived
+  /// ids, leaving photos this caller never saw untouched.
   Future<void> removeAppointmentPictures(
     String id,
     List<AppointmentImage> pictures,
   );
 
-  /// This appointment's photos, read from the `images` subcollection.
+  /// This appointment's photos.
   ///
-  /// Phase 1 of moving photos off the parent document: every appointment read
-  /// carried its whole photo array, and the calendar reads up to 1000
-  /// appointments at a time while only the detail sheet ever shows a photo.
-  ///
-  /// Returns an EMPTY list both for an appointment with no photos and for one
-  /// whose photos have not been backfilled yet, so a caller must treat empty
-  /// as "ask the array" rather than "there are none" until the backfill has
-  /// run everywhere. [AppointmentRecord.pictures] is still populated and is
-  /// still the fallback.
+  /// The `images` subcollection is the only store — the `pictures` array on the
+  /// parent document went at the CONTRACT step. So an empty list means this job
+  /// has no photos, full stop; during the migration it also meant "not
+  /// backfilled yet, ask the array", and no caller should still be written that
+  /// way.
   Future<List<AppointmentImage>> fetchAppointmentPictures(String id);
 
   Future<void> updateAppointmentStatus({

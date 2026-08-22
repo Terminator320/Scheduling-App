@@ -11,7 +11,6 @@ import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
-import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -55,9 +54,12 @@ AppointmentRecord _appt({
 }
 
 /// The same visit with one photo attached.
-AppointmentRecord _withPhoto({String status = 'pending'}) => _appt(
-  status: status,
-).copyWith(pictures: const [AppointmentImage(storagePath: 'a1/one.jpg')]);
+///
+/// Photos live in the `images` subcollection, so the card reads the
+/// denormalized counter — it renders on every range-query surface and cannot
+/// afford a subcollection read each.
+AppointmentRecord _withPhoto({String status = 'pending'}) =>
+    _appt(status: status).copyWith(pictureCount: 1);
 
 AppointmentRecord _multiDay({
   required DateTime start,

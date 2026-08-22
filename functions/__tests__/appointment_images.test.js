@@ -17,6 +17,7 @@ const {
   recountPictures,
   debouncedRecountPictures,
   IMAGES_SUBCOLLECTION,
+  PICTURE_COUNT_WARN_CAP,
   RECOUNT_CLAIM_COLLECTION,
   RECOUNT_CLAIM_STALE_MS,
   RECOUNT_CLAIM_TTL_MS,
@@ -130,10 +131,28 @@ describe("the subcollection name is a hand-mirror", () => {
   });
 });
 
+/**
+ * Records the Storage prefixes a purge asked to clear.
+ * @param {!Error=} error Thrown by every call when given.
+ * @return {{deleteImages: function(string): !Promise<void>,
+ *   prefixes: !Array<string>}}
+ */
+function makeImageDeleter(error) {
+  const prefixes = [];
+  return {
+    prefixes,
+    deleteImages: async (appointmentId) => {
+      prefixes.push(appointmentId);
+      if (error) throw error;
+    },
+  };
+}
+
 describe("purgeAppointmentImages", () => {
   test("recursively deletes the images subcollection", async () => {
     const {db, state} = makeDb();
-    await purgeAppointmentImages("appt1", {db});
+    const {deleteImages} = makeImageDeleter();
+    await purgeAppointmentImages("appt1", {db, deleteImages});
     expect(state.recursiveDeletes).toEqual(["appointments/appt1/images"]);
   });
 
@@ -142,7 +161,8 @@ describe("purgeAppointmentImages", () => {
     // appointment itself. Worth pinning explicitly — the bug would be silent
     // and catastrophic rather than silent and merely untidy.
     const {db, state} = makeDb();
-    await purgeAppointmentImages("appt1", {db});
+    const {deleteImages} = makeImageDeleter();
+    await purgeAppointmentImages("appt1", {db, deleteImages});
     expect(state.recursiveDeletes[0]).not.toBe("appointments/appt1");
     expect(state.recursiveDeletes[0].endsWith(`/${IMAGES_SUBCOLLECTION}`))
         .toBe(true);
@@ -153,11 +173,79 @@ describe("purgeAppointmentImages", () => {
     // A swallowed failure here leaves permanently invisible orphans; letting it
     // throw is what makes `retry: true` mean anything.
     const {db} = makeDb({deleteError: new Error("boom")});
-    await expect(purgeAppointmentImages("appt1", {db})).rejects.toThrow("boom");
+    const {deleteImages} = makeImageDeleter();
+    await expect(purgeAppointmentImages("appt1", {db, deleteImages}))
+        .rejects.toThrow("boom");
+  });
+
+  test("deletes the appointment's Storage bytes too", async () => {
+    // The CONTRACT step took the `pictures` array away, and with it the list
+    // the client used to enumerate which objects to delete. Nothing else
+    // deletes these bytes now: miss this and every appointment delete orphans
+    // its photos in Storage, invisibly and forever.
+    const {db} = makeDb();
+    const {deleteImages, prefixes} = makeImageDeleter();
+    await purgeAppointmentImages("appt1", {db, deleteImages});
+    expect(prefixes).toEqual(["appt1"]);
+  });
+
+  test("clears the bytes BEFORE the documents", async () => {
+    // Bytes first, docs second — the same ordering rule `purgeExpiredHistory`
+    // follows. The documents are what a human has left to find the objects
+    // with; dropping them first and then failing loses the trail.
+    const order = [];
+    const {db} = makeDb();
+    const baseDelete = db.recursiveDelete;
+    db.recursiveDelete = async (ref) => {
+      order.push("docs");
+      return baseDelete(ref);
+    };
+    await purgeAppointmentImages("appt1", {
+      db,
+      deleteImages: async () => {
+        order.push("bytes");
+      },
+    });
+    expect(order).toEqual(["bytes", "docs"]);
+  });
+
+  test("a Storage failure RETHROWS, leaving the documents alone", async () => {
+    // Same reasoning as the recursiveDelete rethrow: `retry: true` is the only
+    // thing that gets these bytes deleted, and it can only run if this throws.
+    const {db, state} = makeDb();
+    const {deleteImages} = makeImageDeleter(new Error("storage down"));
+    await expect(purgeAppointmentImages("appt1", {db, deleteImages}))
+        .rejects.toThrow("storage down");
+    expect(state.recursiveDeletes).toEqual([]);
   });
 });
 
 describe("recountPictures", () => {
+  test("warns once the count passes what the app can read", async () => {
+    // The only replacement the `pictures` array's 100-entry rules cap has:
+    // photos past the Dart read cap are simply absent from the app, and
+    // without this line nothing anywhere says so.
+    const warns = [];
+    const {db} = makeDb({count: PICTURE_COUNT_WARN_CAP + 1});
+    await recountPictures("appt1", {
+      db,
+      logger: {warn: (msg, ctx) => warns.push({msg, ctx})},
+    });
+    expect(warns).toHaveLength(1);
+    expect(warns[0].ctx).toMatchObject({
+      appointmentId: "appt1",
+      count: PICTURE_COUNT_WARN_CAP + 1,
+    });
+  });
+
+  test("stays quiet at the cap", async () => {
+    const warns = [];
+    const {db} = makeDb({count: PICTURE_COUNT_WARN_CAP});
+    await recountPictures("appt1", {db, logger: {warn: () => warns.push(1)}});
+    expect(warns).toEqual([]);
+  });
+
+
   test("writes the count() aggregate absolutely", async () => {
     // Absolute, never an increment: the trigger runs with retry: true, and a
     // retried FieldValue.increment double-counts. Same rule as

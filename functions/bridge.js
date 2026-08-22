@@ -10,7 +10,6 @@ const {
   shouldHaveBridge,
   bridgeBody,
 } = require("./bridge_policy");
-const {rotateAssignedImageTokens} = require("./appointment_image_tokens");
 
 /**
  * True when the user doc was deleted or an active account was deactivated —
@@ -97,12 +96,14 @@ async function purgeDeliveryState(db, userId) {
 // Mirrors `users` into `usersByUid/{uid}` so security rules can resolve a
 // caller's role from their auth uid alone. `retry: true` is safe here since
 // every path writes absolute values (set/delete on deterministic doc ids).
-// `timeoutSeconds` is raised off the 60 s default for the deactivation path
-// alone: rotating the download tokens of a long-tenured employee's photos is
-// bounded but not fast. A timeout is a ceiling, not a cost — every other
-// write through this trigger still returns in milliseconds.
+//
+// Back on the default 60 s timeout. It was raised to 300 for one step — the
+// Storage download-token rotation, which walked up to 500 appointments' photos
+// — and that step retired with the `url` write it existed to cover. What is
+// left is a handful of deterministic writes and one small `recursiveDelete`,
+// all of which return in milliseconds.
 const syncUsersByUid = onDocumentWritten(
-    {document: "users/{userId}", retry: true, timeoutSeconds: 300},
+    {document: "users/{userId}", retry: true},
     async (event) => {
       const userId = event.params.userId;
       const beforeSnap = event.data?.before;
@@ -256,19 +257,14 @@ const syncUsersByUid = onDocumentWritten(
         }
       }
 
-      // LAST, because it is the only step here that can run for minutes.
-      // Invalidates the permanent, rules-free Storage download links this
-      // person's device received inside every assigned appointment's
-      // `pictures[]`. Those tokens never expire and are served with NO rules
-      // evaluation, so revoking the credential and flipping the status gate do
-      // not reach them — only rotating the object metadata does, and nothing
-      // client-side can. Deliberately OUTSIDE every try above: it never throws
-      // (see the module), so it cannot turn a completed purge or revocation
-      // into a retry, and it is defence-in-depth behind the rules gate rather
-      // than the control itself.
-      if (deactivated) {
-        await rotateAssignedImageTokens({db, logger}, userId);
-      }
+      // NOTE: deactivation used to end by rotating the Storage download token
+      // on every photo of every appointment this person was assigned to. That
+      // existed because `uploadImage` minted a permanent, rules-free download
+      // URL per photo and persisted it into `pictures[]`, which every assigned
+      // device received. The CONTRACT step stopped minting it, stopped storing
+      // it and cleared the arrays, so there is no such link left to invalidate
+      // — photos are fetched through the SDK against `storage.rules`, which
+      // the status gate below already answers for.
     },
 );
 

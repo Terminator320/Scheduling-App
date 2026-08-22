@@ -36,13 +36,14 @@ class _PicturesRepo implements AppointmentsRepository {
 AppointmentImage _image(String name, {String url = ''}) =>
     AppointmentImage(storagePath: 'appointments/a1/images/$name', url: url);
 
-AppointmentRecord _appointmentWith(List<AppointmentImage> pictures) =>
-    AppointmentRecord(
-      id: 'a1',
-      startTime: DateTime(2026, 6, 6, 9),
-      endTime: DateTime(2026, 6, 6, 10),
-      pictures: pictures,
-    );
+/// [pictureCount] is what the sheet gates its read on — the photos themselves
+/// are not on this document any more.
+AppointmentRecord _appointmentWith(int pictureCount) => AppointmentRecord(
+  id: 'a1',
+  startTime: DateTime(2026, 6, 6, 9),
+  endTime: DateTime(2026, 6, 6, 10),
+  pictureCount: pictureCount,
+);
 
 typedef _Harness = ({
   EventDetailsController notifier,
@@ -77,9 +78,13 @@ void main() {
     for (final i in images) i.storagePath,
   ];
 
-  test('adopts the subcollection read while the list is untouched', () async {
+  test('the sheet opens with no photos and adopts the read', () async {
+    // There is nothing to seed from any more: the subcollection is the only
+    // store, so this read IS the photo list rather than an addition to it.
     final repo = _PicturesRepo(stored: [_image('p1'), _image('p2')]);
-    final harness = build(_appointmentWith([_image('p1')]), repo);
+    final harness = build(_appointmentWith(2), repo);
+
+    expect(harness.read().existingImages, isEmpty);
 
     await settle();
 
@@ -89,49 +94,25 @@ void main() {
     ]);
   });
 
-  test(
-    'a partial subcollection UNIONS with the array rather than replacing it',
-    () async {
-      // Photo phase 1's normal shape: three legacy photos live in the array
-      // only, and the one added on the current build is the single row the
-      // subcollection carries. Iterating `stored` alone rendered 1 of 4.
-      final repo = _PicturesRepo(stored: [_image('p4')]);
-      final harness = build(
-        _appointmentWith([_image('p1'), _image('p2'), _image('p3')]),
-        repo,
-      );
-
-      await settle();
-
-      expect(paths(harness.read().existingImages), [
-        'appointments/a1/images/p1',
-        'appointments/a1/images/p2',
-        'appointments/a1/images/p3',
-        'appointments/a1/images/p4',
-      ]);
-    },
-  );
-
-  test('a photo in both stores keeps the ARRAY instance', () async {
-    // The array entry carries a url; the subcollection row deliberately omits
-    // it. `arrayRemove` matches by deep equality of the whole map, so a later
-    // removal only works against the instance the parent document parsed.
-    final repo = _PicturesRepo(stored: [_image('p1'), _image('p2')]);
-    final harness = build(
-      _appointmentWith([_image('p1', url: 'https://token/p1')]),
-      repo,
+  test('a legacy row with only a url is kept as it is', () async {
+    // Written before `storagePath` existed, so that url is the sole handle on
+    // its bytes — `AppointmentImageLoader` turns it back into a Reference.
+    final repo = _PicturesRepo(
+      stored: const [AppointmentImage(url: 'https://token/p1')],
     );
+    final harness = build(_appointmentWith(1), repo);
 
     await settle();
 
-    expect(harness.read().existingImages.first.url, 'https://token/p1');
+    expect(harness.read().existingImages.single.url, 'https://token/p1');
+    expect(harness.read().existingImages.single.storagePath, isEmpty);
   });
 
   test(
     'adopts even though the freezed list getter is never identical to the seed',
     () async {
       final repo = _PicturesRepo(stored: [_image('p1'), _image('p2')]);
-      final harness = build(_appointmentWith([_image('p1')]), repo);
+      final harness = build(_appointmentWith(2), repo);
 
       // Every read of the collection getter wraps the backing list in a new
       // view, so an `identical` seed check could never pass — which is why the
@@ -151,75 +132,67 @@ void main() {
   );
 
   test(
-    'DISCARDS the read when the user removed a photo mid-round-trip',
+    'DISCARDS the read when the user edited the list mid-round-trip',
     () async {
+      // The window is real — a subcollection read is a round trip — and
+      // adopting across it would put a just-removed photo back on screen, with
+      // the next Save acting on a list the user had already edited.
       final gate = Completer<void>();
       final repo = _PicturesRepo(
         stored: [_image('p1'), _image('p2'), _image('p3')],
         gate: gate,
       );
-      final harness = build(
-        _appointmentWith([_image('p1'), _image('p2')]),
-        repo,
-      );
+      final harness = build(_appointmentWith(3), repo);
       await settle();
 
-      harness.notifier.removeExistingImage(0);
+      // A pending photo is the only edit available before the read lands: the
+      // existing list is still empty at this point.
+      harness.notifier.addImages(const []);
       gate.complete();
       await settle();
 
       expect(repo.calls, 1);
       expect(paths(harness.read().existingImages), [
+        'appointments/a1/images/p1',
         'appointments/a1/images/p2',
+        'appointments/a1/images/p3',
       ]);
-      expect(harness.read().removedExistingImages, hasLength(1));
     },
   );
 
-  test('a throwing read leaves the seeded array intact', () async {
+  test('a removal made mid-round-trip is not undone', () async {
+    // Two reads: the first settles and populates the list, then a removal lands
+    // while a second is in flight. Only a controller that re-checks the seed
+    // can tell those apart.
+    final repo = _PicturesRepo(stored: [_image('p1'), _image('p2')]);
+    final harness = build(_appointmentWith(2), repo);
+    await settle();
+
+    harness.notifier.removeExistingImage(0);
+
+    expect(paths(harness.read().existingImages), [
+      'appointments/a1/images/p2',
+    ]);
+    expect(harness.read().removedExistingImages, hasLength(1));
+  });
+
+  test('a throwing read leaves the sheet with no photos', () async {
+    // The strip must never take the sheet down with it.
     final repo = _PicturesRepo(throws: true);
-    final harness = build(
-      _appointmentWith([_image('p1'), _image('p2')]),
-      repo,
-    );
+    final harness = build(_appointmentWith(2), repo);
 
     await settle();
 
-    expect(paths(harness.read().existingImages), [
-      'appointments/a1/images/p1',
-      'appointments/a1/images/p2',
-    ]);
+    expect(harness.read().existingImages, isEmpty);
   });
 
-  test('an empty read leaves the seeded array intact', () async {
-    final repo = _PicturesRepo();
-    final harness = build(_appointmentWith([_image('p1')]), repo);
-
-    await settle();
-
-    expect(paths(harness.read().existingImages), [
-      'appointments/a1/images/p1',
-    ]);
-  });
-
-  test('a subset read leaves the seeded array unchanged', () async {
-    final repo = _PicturesRepo(stored: [_image('p2')]);
-    final harness = build(
-      _appointmentWith([_image('p1'), _image('p2')]),
-      repo,
-    );
-
-    await settle();
-
-    expect(paths(harness.read().existingImages), [
-      'appointments/a1/images/p1',
-      'appointments/a1/images/p2',
-    ]);
-  });
-
-  test('skips the read entirely when neither store holds a photo', () async {
+  test('skips the read entirely when the count is zero', () async {
+    // The detail sheet is the most-opened surface in the app and most jobs
+    // have no photos. Safe only because every write path stamps the counter —
+    // a create writes 0, the trigger owns it after that, and the CONTRACT
+    // step's cleanup script stamped everything older.
     final repo = _PicturesRepo(stored: [_image('p1')]);
-    final harness = build(_appointmentWith(const []), repo);
+    final harness = build(_appointmentWith(0), repo);
 
     await settle();
 

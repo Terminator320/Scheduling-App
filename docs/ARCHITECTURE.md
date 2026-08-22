@@ -1030,24 +1030,30 @@ appointments/{docId}
   clientName, clientPhone  client snapshot (denormalised for display)
   employeeIds: [string]    Firestore doc IDs (not auth UIDs)
   employeeNames: [string]  denormalised for display
-  pictures: [{url, storagePath}]   (field is `pictures`, not `images`).
-                       STILL AUTHORITATIVE, and still what the shipped build
-                       reads — photos are MOVING to the subcollection below and
-                       phase 1 writes BOTH. Capped at 100 by the rules
-                       (isValidAppointmentData); the array is removed only at
-                       the CONTRACT step, once no device runs a build that
-                       reads it.
+  pictures: [{url, storagePath}]   RETIRED at the CONTRACT step. Nothing reads
+                       or writes it, AppointmentRecord no longer parses it, and
+                       clear-appointment-picture-arrays.js deletes it from the
+                       documents that still carry one. The rules keep the
+                       100-entry cap (isValidAppointmentData) for exactly those
+                       documents — a cap, never a ban, or an edit of one would
+                       be refused.
   pictureCount: int    FUNCTION-OWNED denormalized counter (recountAppointmentPictures,
-                       an absolute count() aggregate). AppointmentCard renders a
-                       photo indicator on every range-query surface and cannot
-                       afford a subcollection read each. toMap() must never emit
-                       it and the rules reject a client write that touches it;
-                       AppointmentRecord.hasPictures tests BOTH stores, since
-                       during the migration a doc legitimately has either.
+                       an absolute count() aggregate) — and the ONLY thing left
+                       that knows whether a job has photos. AppointmentCard
+                       renders a photo indicator on every range-query surface
+                       and cannot afford a subcollection read each, and the
+                       detail sheet skips its subcollection read on a 0.
+                       That gate is safe only because the counter is complete:
+                       addAppointments writes an explicit 0 at CREATE (the one
+                       client write the rules allow, and only as 0), the trigger
+                       owns it from the first photo, and the cleanup script
+                       stamped it on everything older. toMap() must never emit
+                       it and the rules reject an UPDATE that touches it.
   createdAt, updatedAt     server timestamps
 
 appointments/{docId}/images/{imageId}
-                       Where photos are moving (phase 1, 2026-08-13). The doc id
+                       Where photos live (moved 2026-08-13, array retired at the
+                       CONTRACT step). The doc id
                        is DERIVED from the photo by `appointmentImageDocId`
                        (hand-mirrored as functions/appointment_image_ids.js),
                        which is what makes the write idempotent and REPLACES the
@@ -1064,7 +1070,9 @@ appointments/{docId}/images/{imageId}
                        Firestore does NOT delete a subcollection with its parent,
                        so cascadeDeleteAppointmentImages is load-bearing rather
                        than cleanup; without it every appointment delete orphans
-                       these permanently.
+                       these permanently. It deletes the Storage BYTES too, and
+                       is the only thing that does — the client used to
+                       enumerate `pictures` to know which objects to remove.
 
 clients/{docId}
   name                         only a name is required; everything else optional

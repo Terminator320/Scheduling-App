@@ -773,7 +773,7 @@ void main() {
       expect(copies[1].startTime, DateTime(2027, 5, 10, 9));
       expect(copies.last.startTime, DateTime(2031, 5, 10, 9));
       expect(copies.every((a) => a.status == 'pending'), isTrue);
-      expect(copies.every((a) => a.pictures.isEmpty), isTrue);
+      expect(copies.every((a) => a.pictureCount == 0), isTrue);
       expect(copies.every((a) => a.seriesId == 'appt-1'), isTrue);
 
       // The rule is now the baseline — a second save is a plain update.

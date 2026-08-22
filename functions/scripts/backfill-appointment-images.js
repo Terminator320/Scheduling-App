@@ -7,16 +7,17 @@
 // appointments at a time while only the detail sheet ever shows a photo.
 //
 // COPY, NEVER MOVE. This script does not touch the `pictures` array, and it
-// must not be changed to. The build in the field (1.45.0+72) reads photos from
-// that array and knows nothing about the subcollection — clearing it here
-// blanks every photo on every phone until it updates. The array is removed at
-// the CONTRACT step, by a separate script, once no device still runs a build
-// that reads it. That is the same gate the `#compat-1.37.1` shim waited on.
+// must not be changed to. Clearing it is `clear-appointment-picture-arrays.js`,
+// and keeping the two apart is what makes either one safe to dry-run: a script
+// that copied and deleted in one pass would report a coverage it was itself
+// about to create. That script REFUSES any appointment this one has not
+// covered, so run this first — including a re-run before the clear, since any
+// build still writing the array will have added to it since the last pass.
 //
-// RUN THIS BEFORE the app build that reads the subcollection ships. The client
-// prefers the subcollection and falls back to the array, so running late is
-// merely a missed optimisation rather than a visible failure — but the counts
-// this stamps are what the card's photo indicator reads once the array goes.
+// RUN THIS BEFORE the app build that reads the subcollection ships. There is
+// no array fallback left in the app, so an appointment this has not reached
+// shows no photos at all — and the counts it stamps are what the card's photo
+// indicator reads.
 //
 // IDEMPOTENT twice over: the document ids are derived from each photo
 // (`appointment_image_ids.js`, hand-mirrored from the Dart original), so a
@@ -141,8 +142,8 @@ async function backfillOne(db, doc, dryRun = false) {
   }
   // Written even at zero, so an array holding nothing but identity-less
   // entries reads as no photos rather than promising one. A photoless
-  // appointment never reaches here and keeps no count — absent already
-  // parses as 0, and `hasPictures` tests both stores during the migration.
+  // appointment never reaches here and keeps no count — absent parses as 0,
+  // which is the right answer for a job that has none.
   batch.update(doc.ref, {pictureCount: count});
   await batch.commit();
   return {copied: count, skipped};
@@ -206,8 +207,8 @@ async function main() {
     console.log("no writes were made; re-run without --dry-run to apply");
   } else {
     console.log(
-        "the `pictures` array was NOT modified — it is still what the " +
-        "shipped build reads");
+        "the `pictures` array was NOT modified — clearing it is " +
+        "clear-appointment-picture-arrays.js");
   }
 }
 

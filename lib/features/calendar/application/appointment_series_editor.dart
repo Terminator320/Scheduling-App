@@ -46,7 +46,9 @@ class AppointmentSeriesEditor {
             copyStart: copyStart,
           ),
           status: 'pending',
-          pictures: const [],
+          // No `pictures` to clear any more, and no `pictureCount` to clear
+          // either: photos live in each document's own `images` subcollection,
+          // which a copy simply does not have. `rewriteSeries` writes the 0.
         ),
     ];
     await _repo.rewriteSeries(

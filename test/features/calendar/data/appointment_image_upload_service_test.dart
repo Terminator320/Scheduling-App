@@ -52,11 +52,6 @@ void main() {
     storage = _MockImageStorageService();
     notifier = PhotoUploadNotifier();
     store = PendingUploadStore();
-    // The queue no longer persists download URLs, so a carried image comes
-    // back with an empty one and the drain re-mints it from storagePath.
-    when(() => storage.downloadUrlFor(any())).thenAnswer(
-      (_) async => 'https://example.com/resolved.jpg',
-    );
     tempRoot = Directory.systemTemp.createTempSync('img_upload_test');
     sourceDir = Directory('${tempRoot.path}/src')..createSync();
     stagingDir = Directory('${tempRoot.path}/staging')..createSync();
@@ -190,13 +185,12 @@ void main() {
       ).called(1);
     });
 
-    test('a carried image whose url cannot be re-minted stays queued '
-        'and is not appended', () async {
-      // Appending with a blank url would write a second, broken array entry
-      // beside the one a partially-committed append already left there —
-      // `arrayUnion` matches by deep equality, so it would not dedupe.
-      when(() => storage.downloadUrlFor(any())).thenAnswer((_) async => '');
-
+    test('a carried image is appended without any Storage round trip', () async {
+      // It used to need one: the queue does not persist download urls, so each
+      // carried image had its url re-minted before the re-link. Photo
+      // documents carry no url now, so the re-link is the append alone — which
+      // matters most here, on the offline→online flip, when the connection is
+      // at its worst.
       await store.add(
         PendingUpload(
           appointmentId: 'a1',
@@ -208,14 +202,12 @@ void main() {
 
       await makeService().drainPending();
 
-      verifyNever(() => appointments.appendAppointmentPictures(any(), any()));
-      final remaining = await store.load();
-      expect(remaining, hasLength(1));
-      expect(remaining.single.uploaded, hasLength(1));
-      expect(
-        remaining.single.uploaded.single.storagePath,
-        'appointments/a1/images/1.jpg',
-      );
+      verifyNever(() => storage.uploadImage(any(), any()));
+      final appended = verify(
+        () => appointments.appendAppointmentPictures(any(), captureAny()),
+      ).captured.single as List<AppointmentImage>;
+      expect(appended.single.storagePath, 'appointments/a1/images/1.jpg');
+      expect(await store.load(), isEmpty);
     });
 
     test('a failed requeue write leaves the original entry queued', () async {
@@ -378,14 +370,12 @@ void main() {
       int permanentFailures = 0,
       bool transientFailure = false,
       List<String> survivors = const [],
-      bool resolveFailed = false,
       bool appendThrew = false,
       List<AppointmentImage> uploaded = const [],
     }) => AttemptOutcome.from(
       permanentFailures: permanentFailures,
       transientFailure: transientFailure,
       survivors: survivors,
-      resolveFailed: resolveFailed,
       appendThrew: appendThrew,
       uploaded: uploaded,
     );
@@ -409,20 +399,6 @@ void main() {
       // No survivor paths: their local files are gone, so the retry is
       // append-only and must never re-upload them.
       expect(result.failedCount, 2);
-    });
-
-    test('an unresolvable carried url keeps the images queued', () {
-      final images = [_img('1.jpg')];
-
-      final result = outcome(
-        transientFailure: true,
-        resolveFailed: true,
-        uploaded: images,
-      );
-
-      expect(result.requeue, isTrue);
-      expect(result.uploadedToCarry, images);
-      expect(result.failedCount, 1);
     });
 
     test('a transient upload failure re-queues the survivors alone', () {

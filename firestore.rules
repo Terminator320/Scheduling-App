@@ -550,10 +550,16 @@ service cloud.firestore {
         // Same reasoning as the ids above: `seriesOpId` is interpolated into
         // the `appointmentSeriesNotices/op_<opId>_<kind>_<emp>` doc id.
         && (!('seriesOpId' in d.keys()) || isValidDocIdField(d.seriesOpId))
-        // Photos are appended by arrayUnion from the offline upload queue, so
-        // nothing client-side bounds the array. A doc has a hard 1 MB ceiling
-        // and hitting it makes the job permanently un-updatable — cap well
-        // clear of any real job's photo count.
+        // LEGACY ONLY. Photos moved to `appointments/{id}/images` at the
+        // CONTRACT step: nothing writes this array any more, and
+        // `clear-appointment-picture-arrays.js` empties it. The cap stays
+        // because a document the script has not reached still carries its
+        // array, and that array rides along in `request.resource.data` on
+        // every ordinary edit — dropping the clause would let an Admin-SDK or
+        // console write grow one past the parent document's 1 MB ceiling and
+        // make the job permanently un-updatable, which is the failure this
+        // number was chosen to stay clear of. It is not a ban: banning the key
+        // outright would refuse every edit of a document still holding one.
         && (!('pictures' in d.keys())
             || (d.pictures is list && d.pictures.size() <= 100))
         // 500 = `_userStreamLimit`, the ceiling on how many employees the
@@ -581,8 +587,19 @@ service cloud.firestore {
       // client write could only ever put it out of step with the photos it
       // claims to count — and it is what `AppointmentCard`'s photo indicator
       // reads. `AppointmentRecord.toMap()` must never emit it.
+      //
+      // **A create may write it, and only as 0.** That is not a loosening for
+      // convenience: since the CONTRACT step the counter is the ONLY thing
+      // saying whether a job has photos, and the detail sheet skips its
+      // subcollection read when it is 0 — so "absent" would be a third state
+      // meaning "nobody knows yet", on every job until its first photo. The
+      // trigger cannot fill that in (it only fires on a photo write), so the
+      // create does, and pinning the value to 0 keeps the client unable to
+      // claim a count it has not earned. `addAppointments` writes it beside
+      // `toMap()`, never through it, so no UPDATE can carry one.
       allow create: if isAdmin()
-        && !('pictureCount' in request.resource.data.keys())
+        && (!('pictureCount' in request.resource.data.keys())
+            || request.resource.data.pictureCount == 0)
         && isValidAppointmentStatus(request.resource.data.status)
         && isValidAppointmentData(request.resource.data)
         // No existing doc to strand, so the span bound and the per-instant
