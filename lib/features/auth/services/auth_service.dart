@@ -210,6 +210,15 @@ class AuthService {
       if (e.message == 'account-not-found') {
         return const AuthFailureNoAccountRecord();
       }
+      // Old-backend compatibility, and ONLY that: the guard was removed
+      // 2026-08-21, so a live backend never sends this. It survives for the
+      // rollout window in docs/DEPLOYMENT.md §3 — a backend rolled back under
+      // a shipped app build — where without it the code falls through to
+      // AuthFailureUnknown, whose isExpected is false, and every retry by a
+      // person who cannot possibly succeed files a Crashlytics non-fatal.
+      if (e.message == 'email-not-verified') {
+        return const AuthFailureSetupNotAvailableYet();
+      }
       if (e.code == 'resource-exhausted') {
         return const AuthFailureTooManyRequests();
       }
