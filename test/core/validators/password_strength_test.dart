@@ -24,7 +24,9 @@ void main() {
     expect(passwordStrengthScore('Aaaaaaa1'), 3);
   });
 
-  test('scores a password meeting every band 4', () {
+  test('a compliant password without a symbol can still reach Strong', () {
+    // The meter renders four segments and gates "Strong" on 4, so the top
+    // band has to be reachable by a password the validator actually accepts.
     expect(passwordStrengthScore('Passw0rdAbcd'), 4);
   });
 
@@ -36,12 +38,6 @@ void main() {
 
   test('never exceeds 4', () {
     expect(passwordStrengthScore(r'AaBb11!!##$$Zz'), 4);
-  });
-
-  test('a compliant password without a symbol can still reach Strong', () {
-    // The meter renders four segments and gates "Strong" on 4, so the top
-    // band has to be reachable by a password the validator actually accepts.
-    expect(passwordStrengthScore('Passw0rdAbcd'), 4);
   });
 
   test('a compliant but short password stops one band below Strong', () {
