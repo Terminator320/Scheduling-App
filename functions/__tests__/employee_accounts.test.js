@@ -117,12 +117,29 @@ describe("generateStartingPassword", () => {
       // Positive, not just `toHaveLength(12)` plus a banned-glyph check: a
       // stray space or quote pasted into an alphabet constant would ship
       // through a negative assertion.
-      expect(pw).toMatch(/^[A-Za-z0-9]{12}$/);
+      expect(pw).toMatch(/^[A-Za-z0-9!@$?*]{12}$/);
       expect(pw).toMatch(/[A-Z]/);
       expect(pw).toMatch(/[a-z]/);
       expect(pw).toMatch(/[0-9]/);
       // The admin reads this aloud, so no glyph pair anyone mishears.
       expect(pw).not.toMatch(/[0O1lI]/);
+    }
+  });
+
+  test("carries exactly one non-alphanumeric character", () => {
+    // Identity Platform's password policy can require a non-alphanumeric
+    // character, and an alphanumeric-only mint is then rejected outright by
+    // createUser -- which is what took account creation down on 2026-08-21,
+    // once the shared `Welcome123!` constant (and its trailing symbol) was
+    // replaced by this generator. The class mix is only policy-proof, as the
+    // constant's comment claims, if a symbol is actually in it.
+    // EXACTLY one, not at least one: the admin dictates this aloud, so the
+    // number of awkward glyphs is bounded on purpose.
+    for (let i = 0; i < 200; i++) {
+      const pw = generateStartingPassword();
+      const symbols = pw.replace(/[A-Za-z0-9]/g, "");
+      expect(symbols).toHaveLength(1);
+      expect(symbols).toMatch(/^[!@$?*]$/);
     }
   });
 

@@ -47,14 +47,30 @@ const {
  * actually binds is Firebase Auth's own 6-character minimum, plus whatever
  * Identity Platform password policy is configured console-side. The class mix
  * is kept so a stricter Auth policy later cannot start rejecting values we
- * mint. (An earlier version of this comment cited
- * lib/core/validators/password_requirements.dart as the policy this satisfied.
- * That was wrong when written: that enum still required a SYMBOL, which this
- * alphanumeric alphabet can never produce.)
+ * mint -- and that policy is not hypothetical. On 2026-08-21 it required a
+ * non-alphanumeric character, so every value minted here came back
+ * PASSWORD_DOES_NOT_MEET_REQUIREMENTS and account creation stopped dead. The
+ * shared `Welcome123!` constant this generator replaced had been satisfying
+ * that policy by accident, through a trailing `!` nobody had read as
+ * load-bearing. PASSWORD_SYMBOLS is what makes the sentence above TRUE rather
+ * than merely intended: a class mix only survives a stricter policy if the
+ * class the policy asks for is in it. (An earlier version of this comment
+ * cited lib/core/validators/password_requirements.dart as the policy this
+ * satisfied. That was wrong when written -- that enum required a SYMBOL this
+ * alphabet could not produce -- and the enum has since dropped the symbol
+ * requirement anyway, which is why the console policy is the only one left
+ * that binds.)
  */
 const PASSWORD_UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const PASSWORD_LOWER = "abcdefghijkmnopqrstuvwxyz";
 const PASSWORD_DIGITS = "23456789";
+// Kept OUT of PASSWORD_ALPHABET on purpose, so a mint carries EXACTLY one
+// symbol: the admin dictates this aloud, and one awkward glyph is a bounded
+// ask where "somewhere between none and twelve" is not. The set is chosen to
+// survive being spoken and retyped -- no bracket pairs, no dash/underscore
+// confusion, and none of the URL- or shell-significant glyphs (% & # + \ | ' ")
+// that get mangled when a credential is pasted somewhere in a hurry.
+const PASSWORD_SYMBOLS = "!@$?*";
 const PASSWORD_ALPHABET = PASSWORD_UPPER + PASSWORD_LOWER + PASSWORD_DIGITS;
 const PASSWORD_LENGTH = 12;
 
@@ -75,19 +91,20 @@ function pickChar(alphabet) {
  * Generates a starting password.
  *
  * @return {string} 12 unambiguous characters with at least one uppercase, one
- *   lowercase and one digit.
+ *   lowercase and one digit, and exactly one symbol.
  */
 function generateStartingPassword() {
   const chars = [
     pickChar(PASSWORD_UPPER),
     pickChar(PASSWORD_LOWER),
     pickChar(PASSWORD_DIGITS),
+    pickChar(PASSWORD_SYMBOLS),
   ];
   while (chars.length < PASSWORD_LENGTH) {
     chars.push(pickChar(PASSWORD_ALPHABET));
   }
-  // Fisher-Yates: without it the three guaranteed picks always sit in front,
-  // which leaks 3 of the 12 positions' character classes.
+  // Fisher-Yates: without it the four guaranteed picks always sit in front,
+  // which leaks 4 of the 12 positions' character classes.
   for (let i = chars.length - 1; i > 0; i--) {
     const j = crypto.randomInt(i + 1);
     [chars[i], chars[j]] = [chars[j], chars[i]];
