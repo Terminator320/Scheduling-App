@@ -185,8 +185,9 @@ final dashboardStatsProvider = Provider.autoDispose<AsyncValue<DashboardStats>>(
 
 /// Accounts an admin created that were never set up.
 ///
-/// The person is still sitting on the shared starting password, which is the
-/// one operational risk the P4c design creates — so the dashboard says so.
+/// The person is still sitting on the starting password they were handed,
+/// which is the one operational risk the P4c design creates — so the dashboard
+/// says so.
 ///
 /// Read from [allUsersStreamProvider], never `employeesStreamProvider`: that
 /// one filters to `status == 'active'`, so this list would be permanently

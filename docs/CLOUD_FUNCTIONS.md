@@ -289,7 +289,7 @@ and returns `{email, password}` (no `docId` — the client already has the row i
 acted on). That response is the **only** time the password is legible: it is
 deliberately not persisted anywhere, because a live plaintext credential in
 Firestore is readable by every admin session, backup and export.
-`generateStartingPassword()` draws 12 characters with `crypto.randomBytes` from
+`generateStartingPassword()` draws 12 characters with `crypto.randomInt` from
 an alphabet with no `0`/`O` and no `1`/`l`/`I`, because an admin reads it aloud,
 and guarantees an uppercase, a lowercase and a digit so it satisfies the
 client-side setup policy. It is drawn **once per call** and handed to whichever

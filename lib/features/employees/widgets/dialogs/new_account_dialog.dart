@@ -10,9 +10,9 @@ import 'package:scheduling/l10n/l10n.dart';
 /// Shows the sign-in credentials after creating an employee account — an
 /// adaptive dialog that picks Cupertino or Material to match the platform.
 ///
-/// The password is the shared starting one the server just set, echoed back
-/// rather than hardcoded here so the dialog can never show something the
-/// account was not actually given.
+/// The password is the per-account starting one the server just generated,
+/// echoed back rather than derived here so the dialog can never show something
+/// the account was not actually given.
 Future<void> showNewAccountDialog(
   BuildContext context, {
   required String name,

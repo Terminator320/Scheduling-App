@@ -4,9 +4,9 @@ import 'package:flutter/foundation.dart';
 /// address the person signs in with, and the starting password the server
 /// actually set.
 ///
-/// The password comes FROM the server rather than from a client constant so
-/// the dialog can't display something the account was never given — the two
-/// would drift silently the first time the default changes on one side.
+/// The password comes FROM the server rather than being derived client-side so
+/// the dialog can't display something the account was never given — it is
+/// generated per account, so the server's value is the only one that exists.
 ///
 /// This is a credential in transit. It lives in widget state and dies with the
 /// surface: never logged, never persisted, never in a notice. The clipboard
