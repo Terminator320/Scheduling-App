@@ -81,6 +81,15 @@ void main() {
       // update must NOT stamp createdAt (only inserts do), or a re-save would
       // reset the original creation time.
       expect(payload.containsKey('createdAt'), isFalse);
+      // Nor `pictureCount`: the recount trigger owns it after creation, and
+      // the rules reject an update that moves it — so emitting the record's
+      // possibly-stale copy here turns every edit of a job with photos into an
+      // opaque permission-denied.
+      expect(payload.containsKey('pictureCount'), isFalse);
+      // Nor the retired `pictures` array. Photos live in the `images`
+      // subcollection; writing the field again would put the whole photo list
+      // back on a document the calendar reads a thousand of at a time.
+      expect(payload.containsKey('pictures'), isFalse);
     });
 
     test('is a no-op when the record has no id', () async {
@@ -116,6 +125,32 @@ void main() {
       expect(payload['status'], 'confirmed');
       expect(payload['createdAt'], isA<FieldValue>());
       expect(payload['updatedAt'], isA<FieldValue>());
+    });
+
+    test('seeds pictureCount at zero — the one client write of it', () async {
+      // A create is the only write the rules let touch this counter, and it
+      // has to: the recount trigger fires on a photo write, so without the
+      // seed every photo-less job would read as count-unknown forever. The
+      // detail sheet skips its subcollection read on a 0, and the card's photo
+      // indicator reads the same number.
+      final doc = _MockDoc();
+      final batch = _MockBatch();
+      when(() => collection.doc('a1')).thenReturn(doc);
+      when(() => firestore.batch()).thenReturn(batch);
+      when(
+        () => batch.set<Map<String, dynamic>>(any(), any()),
+      ).thenReturn(null);
+      when(batch.commit).thenAnswer((_) async {});
+
+      await repo().addAppointment(_record());
+
+      final payload =
+          (verify(
+                    () => batch.set<Map<String, dynamic>>(any(), captureAny()),
+                  ).captured.single
+                  as Map)
+              .cast<String, dynamic>();
+      expect(payload['pictureCount'], 0);
     });
   });
 

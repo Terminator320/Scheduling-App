@@ -70,12 +70,18 @@ void main() {
     // A client write could only ever put it out of step with the photos it
     // claims to count.
 
-    test('create bans the key outright', () {
-      // A create has no existing doc to strand, so the flat ban is safe there.
+    test('create accepts it only as an explicit zero', () {
+      // The one client write allowed, and the reason "absent" is not a third
+      // state the app has to interpret: the trigger only fires on a photo
+      // write, so a job created without it would read as count-unknown until
+      // its first photo — and the detail sheet gates its subcollection read on
+      // this number. Pinning the value keeps a client from claiming a count it
+      // has not earned.
       expect(
         rules,
         contains("!('pictureCount' in request.resource.data.keys())"),
       );
+      expect(rules, contains('request.resource.data.pictureCount == 0'));
     });
 
     test('update is DIFF-based, not a flat ban', () {
@@ -84,6 +90,28 @@ void main() {
       // job that has photos — the same asymmetry as emergencyFieldNotSet.
       final update = rules.substring(rules.indexOf('allow update: if (isAdmin()'));
       expect(update, contains("affectedKeys().hasAny(['pictureCount'])"));
+    });
+  });
+
+  group('the retired pictures array', () {
+    test('the cap survives for documents the cleanup script has not reached',
+        () {
+      // Nothing writes the array now, but a legacy document still carries one
+      // and it rides along in request.resource.data on every ordinary edit.
+      // Dropping the clause would let an Admin-SDK or console write grow one
+      // past the parent's 1 MB ceiling and make the job permanently
+      // un-updatable.
+      expect(rules, contains("!('pictures' in d.keys())"));
+      expect(rules, contains('d.pictures.size() <= 100'));
+    });
+
+    test('it is a cap, never a ban', () {
+      // A flat ban would refuse every edit of a document still holding an
+      // array — the same trap `pictureCount`'s update branch avoids.
+      expect(
+        rules,
+        isNot(contains("!('pictures' in request.resource.data.keys())")),
+      );
     });
   });
 
@@ -97,5 +125,8 @@ void main() {
     final toMap = model.substring(model.indexOf('Map<String, dynamic> toMap()'));
     final body = toMap.substring(0, toMap.indexOf('};'));
     expect(body, isNot(contains('pictureCount')));
+    // Nor the array it replaced: a write that recreated it would grow the
+    // parent document again, which is the whole thing this move undid.
+    expect(body, isNot(contains('pictures')));
   });
 }

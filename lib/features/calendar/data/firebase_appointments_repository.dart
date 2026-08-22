@@ -36,9 +36,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   final CollectionReference<Map<String, dynamic>> _appointments;
   final AppLogger _logger;
 
-  /// The photo half - the `pictures` array plus the `appointments/{id}/images`
-  /// subcollection it is migrating to. A collaborator because that migration's
-  /// contract step rewrites the whole surface; see [AppointmentImagesStore].
+  /// The photo half — the `appointments/{id}/images` subcollection. A
+  /// collaborator because the migration's contract step rewrote that whole
+  /// surface; see [AppointmentImagesStore].
   late final AppointmentImagesStore _images;
 
   /// Lets tests inject a fake clock so the search-cache TTL is testable.
@@ -151,6 +151,12 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
           : _appointments.doc(appointment.id);
       batch.set(doc, {
         ..._toFirestoreMap(appointment),
+        // The one client write of this counter the rules allow, and the reason
+        // "absent" is not a state anything downstream has to interpret: the
+        // recount trigger only fires on a photo write, so a job created without
+        // it would read as count-unknown until its first photo. `hasPictures`
+        // gates the detail sheet's subcollection read on this number.
+        'pictureCount': 0,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -185,7 +191,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     final opId = _newSeriesOpId();
     final batch = _appointments.firestore.batch()
       ..update(_appointments.doc(updated.id), {
-        ..._toFirestoreMap(updated, includePictures: false),
+        ..._toFirestoreMap(updated),
         'seriesOpId': opId,
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -195,6 +201,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     for (final copy in copies) {
       batch.set(_appointments.doc(copy.id), {
         ..._toFirestoreMap(copy),
+        // A copied occurrence is a new document — same reasoning as
+        // `addAppointments`, and photos never come along with one.
+        'pictureCount': 0,
         'seriesOpId': opId,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -208,7 +217,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   Future<void> updateAppointment(AppointmentRecord appointment) async {
     if (appointment.id == null) return;
     await _appointments.doc(appointment.id).update({
-      ..._toFirestoreMap(appointment, includePictures: false),
+      ..._toFirestoreMap(appointment),
       'seriesOpId': _newSeriesOpId(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
@@ -229,7 +238,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       for (var i = 0; i < records.length; i++) {
         if (!snaps[i].exists) continue;
         txn.update(refs[i], {
-          ..._toFirestoreMap(records[i], includePictures: false),
+          ..._toFirestoreMap(records[i]),
           'seriesOpId': opId,
           'updatedAt': FieldValue.serverTimestamp(),
         });
@@ -519,20 +528,17 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     return candidates.where((e) => busyIds.contains(e.id)).toList();
   }
 
-  Map<String, dynamic> _toFirestoreMap(
-    AppointmentRecord appointment, {
-    bool includePictures = true,
-  }) {
+  /// The record as Firestore fields.
+  ///
+  /// Photos are not here and must not come back: they live in
+  /// `appointments/{id}/images`, written through [AppointmentImagesStore]. The
+  /// `includePictures` flag this used to take existed only because every write
+  /// path but the create had to suppress the array half; with the array gone
+  /// there is nothing to suppress.
+  Map<String, dynamic> _toFirestoreMap(AppointmentRecord appointment) {
     final base = Map<String, dynamic>.from(appointment.toMap());
     base['startTime'] = Timestamp.fromDate(appointment.startTime);
     base['endTime'] = Timestamp.fromDate(appointment.endTime);
-    if (includePictures) {
-      base['pictures'] = appointment.pictures
-          .map(AppointmentImagesStore.toArrayMap)
-          .toList();
-    } else {
-      base.remove('pictures');
-    }
     return base;
   }
 }

@@ -72,7 +72,6 @@ AppointmentRecord _build(
   end: _end,
   assignees: (ids: appointment.employeeIds, names: appointment.employeeNames),
   selectedClient: selectedClient,
-  pictures: const [],
   status: 'pending',
   repeat: RepeatInterval.none,
   isPersonal: isPersonal,

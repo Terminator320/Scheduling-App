@@ -88,11 +88,15 @@ void main() {
 
   /// Wires `storage.ref(path)` up to a successful upload, and returns the ref
   /// so a test can inspect what was asked of it.
-  _MockRef stubUpload(String downloadUrl) {
+  ///
+  /// `getDownloadURL` is stubbed even though the upload must never call it —
+  /// that is what lets "never mints a download url" below assert on silence
+  /// rather than on a missing-stub crash.
+  _MockRef stubUpload() {
     final ref = _MockRef();
     final snapshot = _MockSnapshot();
     when(() => snapshot.ref).thenReturn(ref);
-    when(ref.getDownloadURL).thenAnswer((_) async => downloadUrl);
+    when(ref.getDownloadURL).thenAnswer((_) async => 'https://storage/x?token=t');
     when(
       () => ref.putFile(any(), any()),
     ).thenAnswer((_) => _FakeUploadTask(snapshot));
@@ -102,7 +106,7 @@ void main() {
 
   group('the format gate', () {
     test('accepts a JPEG by its magic bytes', () async {
-      stubUpload('https://storage/x?token=t');
+      stubUpload();
 
       final image = await service.uploadImage(
         'j1',
@@ -113,7 +117,7 @@ void main() {
     });
 
     test('accepts a PNG by its magic bytes', () async {
-      stubUpload('https://storage/x?token=t');
+      stubUpload();
 
       final image = await service.uploadImage(
         'j1',
@@ -126,7 +130,7 @@ void main() {
     test('rejects a GIF renamed to .jpg — the extension is not the gate', () {
       // Extension and MIME type are attacker-controlled, so the first four
       // bytes are the real format check on this side.
-      stubUpload('https://storage/x?token=t');
+      stubUpload();
 
       return expectLater(
         service.uploadImage('j1', fileWith('evil.jpg', _gifMagic)),
@@ -139,7 +143,7 @@ void main() {
       // on three bytes and the server required four, the upload succeeded and
       // was then deleted server-side — the photo silently vanished with no
       // error on either side.
-      stubUpload('https://storage/x?token=t');
+      stubUpload();
 
       return expectLater(
         service.uploadImage('j1', fileWith('nearly.png', _almostPngMagic)),
@@ -148,7 +152,7 @@ void main() {
     });
 
     test('never reaches Storage for a rejected file', () async {
-      stubUpload('https://storage/x?token=t');
+      stubUpload();
 
       await expectLater(
         service.uploadImage('j1', fileWith('evil.jpg', _gifMagic)),
@@ -161,7 +165,7 @@ void main() {
 
   group('the 8 MB cap', () {
     test('accepts a file exactly at the cap', () async {
-      stubUpload('https://storage/x?token=t');
+      stubUpload();
 
       final image = await service.uploadImage(
         'j1',
@@ -176,7 +180,7 @@ void main() {
     });
 
     test('rejects a file one byte over the cap', () {
-      stubUpload('https://storage/x?token=t');
+      stubUpload();
 
       return expectLater(
         service.uploadImage(
@@ -219,7 +223,7 @@ void main() {
       // let the picker's temp file be named. So pin the WIRING here and the
       // bound in the test above — together they say the stored name is
       // bounded.
-      stubUpload('https://storage/x?token=t');
+      stubUpload();
       final basename = '${'x' * 120}.jpg';
 
       final image = await service.uploadImage(
@@ -239,24 +243,44 @@ void main() {
     });
   });
 
-  test('a download-url failure deletes the just-uploaded object before rethrowing', () async {
-    final ref = _MockRef();
-    final snapshot = _MockSnapshot();
-    when(() => snapshot.ref).thenReturn(ref);
-    when(() => ref.putFile(any(), any())).thenAnswer((_) => _FakeUploadTask(snapshot));
-    when(ref.getDownloadURL).thenThrow(
-      FirebaseException(plugin: 'firebase_storage', code: 'unauthorized'),
-    );
-    when(ref.delete).thenAnswer(Future<void>.value);
-    when(() => storage.ref(any())).thenReturn(ref);
+  group('the retired download url', () {
+    // `uploadImage` used to call `getDownloadURL()` and persist the result into
+    // `pictures[]`. That link's token is stable per object, never expires and
+    // serves the bytes with no auth and no `storage.rules` evaluation — so
+    // every upload manufactured a permanent rules-free copy of a job photo.
+    // The CONTRACT step removed the write with the array that carried it.
+    test('never mints one', () async {
+      final ref = stubUpload();
 
-    await expectLater(
-      service.uploadImage('j1', fileWith('photo.jpg', _jpegMagic)),
-      throwsA(isA<FirebaseException>()),
-    );
+      final image = await service.uploadImage(
+        'j1',
+        fileWith('photo.jpg', _jpegMagic),
+      );
 
-    verify(ref.delete).called(1);
-    expect(logger.warnings.single, startsWith('IMG-UPLOAD getDownloadURL failed:'));
+      verifyNever(ref.getDownloadURL);
+      expect(image.url, isEmpty);
+      expect(image.storagePath, startsWith('appointments/j1/images/'));
+    });
+
+    test('a legacy url still resolves an object to DELETE', () async {
+      // Reading one is not minting one: documents written before `storagePath`
+      // existed carry only a url, and it is the sole handle on their bytes.
+      final ref = _MockRef();
+      when(
+        () => storage.ref('appointments/j1/images/legacy.jpg'),
+      ).thenReturn(ref);
+      when(ref.delete).thenAnswer((_) async {});
+
+      await service.deleteImages(const [
+        AppointmentImage(
+          url:
+              'https://firebasestorage.googleapis.com/v0/b/b/o/'
+              'appointments%2Fj1%2Fimages%2Flegacy.jpg?alt=media',
+        ),
+      ]);
+
+      verify(ref.delete).called(1);
+    });
   });
 
   group('deleting an image', () {
@@ -361,41 +385,6 @@ void main() {
 
       verify(ok.delete).called(1);
       expect(logger.warnings, hasLength(1));
-    });
-  });
-
-  group('downloadUrlFor', () {
-    // The ONE remaining URL mint, and it is not a render path: the offline
-    // queue carries an already-uploaded image forward when its doc-link append
-    // didn't land, and the `pictures` entry it re-writes still carries a `url`
-    // for builds that predate AppointmentImageLoader.
-    test('mints the url for an already-uploaded object', () async {
-      final ref = _MockRef();
-      when(() => storage.ref('appointments/j1/images/1_a.jpg')).thenReturn(ref);
-      when(ref.getDownloadURL).thenAnswer((_) async => 'https://storage/a');
-
-      expect(
-        await service.downloadUrlFor('appointments/j1/images/1_a.jpg'),
-        'https://storage/a',
-      );
-    });
-
-    test('reports a failure as an empty url rather than throwing', () async {
-      // The caller reads empty as "could not re-link yet" and keeps the image
-      // queued; a throw would abort the whole drain.
-      final ref = _MockRef();
-      when(() => storage.ref(any())).thenReturn(ref);
-      when(ref.getDownloadURL).thenThrow(
-        FirebaseException(plugin: 'firebase_storage', code: 'unauthorized'),
-      );
-
-      expect(await service.downloadUrlFor('appointments/j1/images/a'), isEmpty);
-      expect(logger.warnings.single, startsWith('IMG-URL'));
-    });
-
-    test('never asks Storage for an empty path', () async {
-      expect(await service.downloadUrlFor(''), isEmpty);
-      verifyNever(() => storage.ref(any()));
     });
   });
 }

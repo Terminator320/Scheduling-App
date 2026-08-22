@@ -347,66 +347,84 @@ that repo, byte-identical, when the backend goes out.
 
 ---
 
-## Pending (step 3 of 3): the photo subcollection migration (phase 1)
+## Pending: the photo subcollection CONTRACT step
 
-> **Steps 1 and 2 are DONE. Only the app build is left.**
-> Step 1 (backend + rules + indexes) DEPLOYED 2026-08-14 at `d3e22377`, so
-> `cascadeDeleteAppointmentImages` is live and the subcollection is safe to
-> write to. **Step 2 (the backfill) RAN against prod 2026-08-15** —
-> `copied 13 photos across 10 appointments (41 scanned)`, no unrenderable
-> entries — after the audit fixed its fake `--dry-run` (it parsed the flag into
-> an unused variable and committed every batch anyway). It is copy-only and
-> idempotent, so `pictures` is untouched and 1.45.0+72 still renders from it;
-> do not re-run it to "make sure". The index blocker is also cleared: both
-> `(status, endTime DESC)` and `(clientId, startTime DESC)` were `READY` as of
-> 2026-08-15.
+> **Phase 1 is DONE and shipped.** Its backend deployed 2026-08-14 at
+> `d3e22377`, the copy backfill ran against prod 2026-08-15
+> (`copied 13 photos across 10 appointments (41 scanned)`, no unrenderable
+> entries), and the app build that reads the subcollection shipped in 1.46.
+> This section is the CONTRACT step that follows it: the `pictures` array is
+> removed from the code, from the documents, and from everything that existed
+> only to protect it.
 
-Photos are moving from the `pictures` array on each appointment into
-`appointments/{id}/images`. **Phase 1 is written; its backend half (step 1
-above) deployed 2026-08-14.** It writes BOTH stores; the array stays
-authoritative and is what the shipped build reads.
+The gate this waited on is **cleared**: no device still runs a build that reads
+the array (the fleet is on 1.48). What changes:
 
-The ordering below is the whole safety property — it is an expand/contract
-migration and the steps are not interchangeable:
+- **Dart** — `AppointmentImagesStore` writes the subcollection only;
+  `AppointmentRecord` drops `pictures` and `hasPictures` becomes
+  `pictureCount > 0`; `addAppointments` writes an explicit `pictureCount: 0`;
+  `ImageStorageService` stops minting a download URL (`downloadUrlFor` is
+  deleted with it) and the offline queue's re-resolve step goes with it; the
+  detail sheet reads its photos from the subcollection alone and the delete
+  path stops enumerating Storage objects.
+- **Functions** — `cascadeDeleteAppointmentImages` now deletes the Storage
+  BYTES as well as the photo documents (bytes first, then documents, rethrowing
+  either); `recountPictures` warns past `PICTURE_COUNT_WARN_CAP` (100);
+  `appointment_image_tokens.js` and its `syncUsersByUid` call are **deleted**,
+  and that trigger's `timeoutSeconds: 300` reverts to the default.
+- **Rules** — `allow create` on `/appointments` accepts `pictureCount` when it
+  is exactly 0. The `pictures` size cap STAYS, for documents the cleanup script
+  has not reached; it is a cap, never a ban, or an edit of such a document
+  would be refused.
+- **Indexes** — `(employeeIds CONTAINS, endTime DESC)` is removed from
+  `firestore.indexes.json`; it existed only for the token rotation. Prod will
+  report it as drift. **Delete it in the console if it is worth the noise —
+  never with `--force`**, which is how all five live TTL policies were lost in
+  2026-07-21.
 
-1. **Deploy backend + rules + indexes.** This adds two exports
-   (`cascadeDeleteAppointmentImages`, `recountAppointmentPictures`), so the
-   count moves **24 → 26** and this is *also* the deletion deploy below — see
-   that section for the non-interactive abort.
-   **The cascade trigger MUST be live before any photo reaches the
-   subcollection.** Firestore does not delete a subcollection with its parent,
-   so an appointment deleted while the trigger is absent orphans its photo
-   documents permanently and invisibly. Deploying the app build first is the
-   one ordering that creates unrecoverable litter.
-2. **Run the backfill**, `--dry-run` first — **DONE 2026-08-15**:
+### The ordering, which is the whole safety property
+
+1. **Re-run the COPY backfill** (`--dry-run` first). It ran on 2026-08-15, but
+   every build since has gone on writing the array, so anything added after
+   that pass may exist only there. There is no array fallback left in the app:
+   an appointment this misses shows **no photos at all**.
    ```bash
    node functions/scripts/backfill-appointment-images.js --dry-run
    node functions/scripts/backfill-appointment-images.js
    ```
-   Copy-only — it never touches the `pictures` array, and must not be changed
-   to. Idempotent (ids are derived from each photo) and atomic per appointment.
-3. **Ship the app build — the one step still outstanding.** It prefers the
-   subcollection and falls back to the array, so it is correct whether or not
-   step 2 has run — but the card's photo indicator reads the `pictureCount` the
-   backfill stamps.
+2. **Deploy backend + rules.** No export count change. The rules change is a
+   RELAXATION (`pictureCount == 0` on create) and must be live before the app
+   build that writes it — an appointment create would otherwise fail
+   `permission-denied`. Nothing here breaks 1.48: it neither sends
+   `pictureCount` nor stops writing the array, and the array is still accepted.
+3. **Ship the app build.** From here nothing writes `pictures`.
+4. **Run the clear script**, `--dry-run` first, once the fleet has moved off
+   the builds that still write the array — otherwise it clears a document a
+   1.48 phone then re-populates.
+   ```bash
+   node functions/scripts/clear-appointment-picture-arrays.js --dry-run
+   node functions/scripts/clear-appointment-picture-arrays.js
+   ```
+   It **refuses** any appointment whose subcollection does not already cover
+   every array entry, and reports them — that is the signal to re-run step 1,
+   not to force anything. An entry with no identity at all (no `storagePath`,
+   no url) can never be covered and needs a person: clearing it destroys the
+   only record the photo existed.
 
-**Do NOT delete the `pictures` array as part of this.** That is the CONTRACT
-step, a separate release gated on the same condition the `#compat-1.37.1` shim
-waited on: no device still *runs* a build that reads the array. 1.45.0+72 does.
+Steps 1–3 are safe in one sitting. **Step 4 is the irreversible one** and is
+the only step that should wait.
 
-**Rules validation is a REQUIRED pre-flight for this deploy and could not be
-done locally** — the Firestore emulator needs Java, which is not installed on
-this machine. Validate `firestore.rules` before deploying (Firebase MCP
-`firebase_validate_security_rules`, or the emulator on a machine with a JRE).
-The new `match /images/{imageId}` block declares a nested `function` and calls
-`get()` on the parent appointment; a syntax error there fails the whole rules
-release, and a rules release that fails leaves the deploy half-applied.
+**Rules validation stays a REQUIRED pre-flight** — the Firestore emulator needs
+Java, which is not installed on this machine, so validate through the Firebase
+MCP `firebase_validate_security_rules` before deploying. A rules release that
+fails leaves the deploy half-applied.
 
-Note the cost this block adds, since it is the argument against reaching for a
-subcollection casually: `parentAppointment()` is a document `get()` on top of
-the `usersByUid` one every rule already pays, so an employee listing a job's
-photos evaluates **two** rules reads. It is one per query, cached per request,
-and it buys the far larger saving on the range queries — but it is real.
+Note the cost the `match /images/{imageId}` block adds, since it is the argument
+against reaching for a subcollection casually: `parentAppointment()` is a
+document `get()` on top of the `usersByUid` one every rule already pays, so an
+employee listing a job's photos evaluates **two** rules reads. It is one per
+query, cached per request, and it buys the far larger saving on the range
+queries — but it is real.
 
 ---
 
@@ -505,10 +523,10 @@ refused.
 
 ### 4. Then the photo migration's own ordering
 
-See "Pending (step 3 of 3): the photo subcollection migration" above —
-backend+rules first, then the backfill, then the app build. The first two have
-run; the cascade trigger must be live before any photo reaches the
-subcollection, and it is.
+Phase 1's own ordering, all of it now done: backend+rules first, then the
+backfill, then the app build. The cascade trigger had to be live before any
+photo reached the subcollection, and it was. The array's removal is the
+CONTRACT step — see "Pending: the photo subcollection CONTRACT step" above.
 
 ---
 

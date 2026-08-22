@@ -26,6 +26,10 @@ class ImageStorageService {
   /// an opaque `permission-denied` and takes the valid photos with it. The
   /// millisecond prefix is kept and the basename is what gets trimmed, so the
   /// truncated name stays as unique as the untruncated one.
+  ///
+  /// It is also what makes a storage path write-once: every name carries the
+  /// millisecond it was composed at, so nothing ever overwrites an object, and
+  /// `AppointmentImageDiskCache` can key on the path without revalidating.
   static String composeFileName(String originalName, DateTime now) {
     final name = '${now.millisecondsSinceEpoch}_$originalName';
     return name.length <= TextLimits.imageFileName
@@ -65,59 +69,23 @@ class ImageStorageService {
       cacheControl: 'public, max-age=31536000',
     );
 
-    final snapshot = await ref.putFile(file, metadata);
-    // NOTE: nothing in the current build renders from this URL any more —
-    // AppointmentImageLoader fetches the bytes from storagePath, so no
-    // renderable URL is produced at all. It is still persisted purely so
-    // builds that predate that change keep showing photos uploaded from this
-    // one; drop the write (and the field) once the fleet has moved, the same
-    // way the 1.37.1 shim was retired.
-    final url = await _downloadUrlOrDelete(snapshot.ref, path);
+    await ref.putFile(file, metadata);
 
+    // NO `url`. This used to call `getDownloadURL()` and persist the result,
+    // and **that is the last thing in the app that minted one** — a
+    // `?alt=media&token=…` link whose token is stable per object, never
+    // expires, and serves the bytes over plain HTTPS with no auth and no
+    // `storage.rules` evaluation. Rendering stopped using it when
+    // `AppointmentImageLoader` moved to authenticated SDK fetches off
+    // `storagePath`; the write outlived that only so builds predating the
+    // loader kept showing photos, and it went with them at the CONTRACT step.
+    // Nothing reads a stored url now except the legacy fallback for documents
+    // written before `storagePath` existed. Do not reintroduce this.
     return AppointmentImage(
-      url: url,
       storagePath: path,
       fileName: fileName,
       uploadedAt: DateTime.now(),
     );
-  }
-
-  /// Mints the download URL for an already-uploaded object, or `''` if it
-  /// can't be minted.
-  ///
-  /// This is the ONE place left that produces a URL, and it is not a render
-  /// path: the offline queue carries an already-uploaded image forward when
-  /// its doc-link append didn't land, and the `pictures` array entry it
-  /// re-writes still carries a `url` for builds that predate
-  /// `AppointmentImageLoader`. It lives here beside the [uploadImage] write it
-  /// reproduces, so nothing on the render side has a URL-minting method to
-  /// reach for.
-  Future<String> downloadUrlFor(String storagePath) async {
-    if (storagePath.isEmpty) return '';
-    try {
-      return await _storage.ref(storagePath).getDownloadURL();
-    } catch (e, st) {
-      _logger.warn('IMG-URL downloadUrlFor failed: $storagePath', e, st);
-      return '';
-    }
-  }
-
-  Future<String> _downloadUrlOrDelete(Reference ref, String path) async {
-    try {
-      return await ref.getDownloadURL();
-    } catch (e, st) {
-      try {
-        await ref.delete();
-      } catch (deleteError, deleteStack) {
-        _logger.warn(
-          'IMG-UPLOAD cleanup after download url failure failed: $path',
-          deleteError,
-          deleteStack,
-        );
-      }
-      _logger.warn('IMG-UPLOAD getDownloadURL failed: $path', e, st);
-      rethrow;
-    }
   }
 
   Future<void> _deleteImage(AppointmentImage image) async {

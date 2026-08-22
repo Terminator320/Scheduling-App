@@ -29,6 +29,7 @@ const {onDocumentDeleted, onDocumentWritten} =
   require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const {getFirestore} = require("firebase-admin/firestore");
+const {getStorage} = require("firebase-admin/storage");
 
 /**
  * Hand-mirror of `_imagesSubcollection` in
@@ -69,6 +70,26 @@ const RECOUNT_CLAIM_STALE_MS = 15 * 1000;
  * explicitly. Nothing here relies on the policy for correctness.
  */
 const RECOUNT_CLAIM_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * The photo count past which one appointment's photos stop being fully
+ * readable, and the log line is the only sign of it.
+ *
+ * It REPLACES the `pictures` array's 100-entry rules cap, which the CONTRACT
+ * step removed with the array. That cap guarded a hard failure — the parent
+ * document's 1 MB ceiling, which made an over-full job permanently
+ * un-updatable — and moving photos into a subcollection is precisely what
+ * makes that unreachable, so it did not need reinstating as a ceiling.
+ *
+ * What survives is softer and quieter: `AppointmentImagesStore.fetch` reads at
+ * most `scanLimit` (the same 100) photos, so anything past that is invisible
+ * in the app with only a client-side warn to say so. Rules cannot count
+ * documents in a subcollection, and the picker already caps a job at
+ * `maxImagesPerAppointment` (10), so a job that gets here has a modified
+ * client behind it. Recording it server-side is what makes that visible at
+ * all — keep this number equal to the Dart read cap.
+ */
+const PICTURE_COUNT_WARN_CAP = 100;
 
 /**
  * True for the Firestore ALREADY_EXISTS a losing `create()` raises.
@@ -114,22 +135,54 @@ function defaultSleep(ms) {
 }
 
 /**
- * Deletes every photo document under a deleted appointment.
+ * Deletes every Storage object under one appointment's image prefix.
  *
- * `recursiveDelete` rather than a hand-rolled paged loop: it is the Admin
- * SDK's own bulk writer, it handles the paging, and `syncUsersByUid` already
- * uses it for `liveActivityTokens` — one way of doing this in the codebase.
+ * The bucket is resolved INSIDE the call, never at module load — that is what
+ * keeps this file requirable (and therefore testable) outside the emulator,
+ * the distinction `maintenance.js` had to split a policy module out to get.
+ * @param {string} appointmentId
+ * @return {!Promise<void>} rejects when the prefix could not be cleared.
+ */
+async function deleteAppointmentImageBytes(appointmentId) {
+  const prefix = `appointments/${appointmentId}/${IMAGES_SUBCOLLECTION}/`;
+  await getStorage().bucket().deleteFiles({prefix});
+}
+
+/**
+ * Deletes a deleted appointment's photos — the Storage bytes AND the photo
+ * documents.
+ *
+ * **The bytes half is not housekeeping either.** Until the CONTRACT step the
+ * client deleted them, enumerating `appointment.pictures` to know which
+ * objects to remove; that array is gone, and nothing client-side can
+ * enumerate a subcollection it is no longer reading. So this is now the only
+ * thing standing between an appointment delete and photos orphaned in
+ * Storage — paid for monthly, attached to nothing, with no query that can
+ * find them. The prefix is derived from the appointment id rather than from
+ * any stored path, so it also sweeps up bytes whose document link never
+ * landed.
+ *
+ * `recursiveDelete` for the documents rather than a hand-rolled paged loop: it
+ * is the Admin SDK's own bulk writer, it handles the paging, and
+ * `syncUsersByUid` already uses it for `liveActivityTokens` — one way of doing
+ * this in the codebase.
+ *
+ * ORDER: bytes first, documents second — the same rule `purgeExpiredHistory`
+ * follows. The photo documents are the last thing pointing at those objects,
+ * so dropping them before the bytes are gone loses the trail on a failure.
  *
  * Errors are RETHROWN, unlike most best-effort cleanup here. The trigger runs
  * with `retry: true` and the failure mode it guards against is permanent and
  * invisible; a swallowed error would leave the orphans it exists to prevent
- * with nothing to notice them.
+ * with nothing to notice them. Both halves are idempotent, so a retry that
+ * repeats the successful half is free.
  * @param {string} appointmentId
- * @param {!Object} deps `{db}`.
+ * @param {!Object} deps `{db, deleteImages}`.
  * @return {!Promise<void>}
  */
 async function purgeAppointmentImages(appointmentId, deps) {
-  const {db} = deps;
+  const {db, deleteImages} = deps;
+  await (deleteImages || deleteAppointmentImageBytes)(appointmentId);
   const ref = db
       .collection("appointments")
       .doc(appointmentId)
@@ -154,10 +207,17 @@ async function purgeAppointmentImages(appointmentId, deps) {
  * @return {!Promise<number>} the count written, or -1 when the parent was gone.
  */
 async function recountPictures(appointmentId, deps) {
-  const {db} = deps;
+  const {db, logger: log} = deps;
   const parent = db.collection("appointments").doc(appointmentId);
   const snap = await parent.collection(IMAGES_SUBCOLLECTION).count().get();
   const count = snap.data().count;
+  if (count > PICTURE_COUNT_WARN_CAP && log) {
+    log.warn("appointment holds more photos than the app can read", {
+      appointmentId,
+      count,
+      cap: PICTURE_COUNT_WARN_CAP,
+    });
+  }
   try {
     await parent.update({pictureCount: count});
   } catch (err) {
@@ -282,7 +342,10 @@ const cascadeDeleteAppointmentImages = onDocumentDeleted(
     {document: "appointments/{appointmentId}", retry: true},
     async (event) => {
       const appointmentId = event.params.appointmentId;
-      await purgeAppointmentImages(appointmentId, {db: getFirestore()});
+      await purgeAppointmentImages(appointmentId, {
+        db: getFirestore(),
+        deleteImages: deleteAppointmentImageBytes,
+      });
       logger.info("appointment images purged", {appointmentId});
     },
 );
@@ -305,11 +368,13 @@ const recountAppointmentPictures = onDocumentWritten(
 
 module.exports = {
   cascadeDeleteAppointmentImages,
+  deleteAppointmentImageBytes,
   recountAppointmentPictures,
   purgeAppointmentImages,
   recountPictures,
   debouncedRecountPictures,
   IMAGES_SUBCOLLECTION,
+  PICTURE_COUNT_WARN_CAP,
   RECOUNT_CLAIM_COLLECTION,
   RECOUNT_CLAIM_STALE_MS,
   RECOUNT_CLAIM_TTL_MS,

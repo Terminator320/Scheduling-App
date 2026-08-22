@@ -81,20 +81,16 @@ void main() {
   FirebaseAppointmentsRepository repo() =>
       FirebaseAppointmentsRepository(firestore);
 
-  group('appendAppointmentPictures writes BOTH stores', () {
-    // Phase 1 of moving photos off the parent doc. The array is kept in step
-    // because the build in the field reads photos from it and knows nothing
-    // about the subcollection — dropping it now blanks every photo on every
-    // phone until it updates.
+  group('appendAppointmentPictures writes the subcollection', () {
+    // The CONTRACT step: photos live in `appointments/{id}/images` and nowhere
+    // else. The parent document is touched for `updatedAt` alone.
 
-    test('writes the subcollection doc AND the array, in one batch', () async {
+    test('writes one photo document, in one batch', () async {
       await repo().appendAppointmentPictures('a1', [photo]);
 
       verify(() => batch.set<Map<String, dynamic>>(any(), any(), any())).called(1);
-      verify(() => batch.update(any(), any())).called(1);
-      // One commit: the two stores must not be able to disagree, and this path
-      // is retried by the offline queue, which has no way to reconcile a
-      // half-written state.
+      // One commit: this path is retried by the offline queue, which has no
+      // way to reconcile a half-written batch.
       verify(batch.commit).called(1);
     });
 
@@ -107,13 +103,17 @@ void main() {
       expect(requestedImageIds, [appointmentImageDocId(photo)]);
     });
 
-    test('the array half still uses arrayUnion', () async {
+    test('the parent write is updatedAt alone — no array, no count', () async {
+      // Recreating `pictures` would put the photo list back on a document the
+      // calendar reads a thousand of at a time, and writing `pictureCount`
+      // would be rejected outright: the recount trigger owns it, and the rules
+      // refuse an update that moves it.
       await repo().appendAppointmentPictures('a1', [photo]);
-      // WriteBatch.update takes Map<Object, Object?>, so read the key off the
+      // WriteBatch.update takes Map<Object, Object?>, so read the keys off the
       // raw map rather than casting the whole thing.
       final patch =
           verify(() => batch.update(any(), captureAny())).captured.single as Map;
-      expect(patch['pictures'], isA<FieldValue>());
+      expect(patch.keys, ['updatedAt']);
     });
 
     test('the subcollection doc omits url when storagePath is present',
@@ -156,8 +156,6 @@ void main() {
       ]);
       expect(requestedImageIds, [appointmentImageDocId(photo)]);
       verify(() => batch.set<Map<String, dynamic>>(any(), any(), any())).called(1);
-      // The array half still receives both — it is the compat mirror and its
-      // own dedupe governs it.
       verify(batch.commit).called(1);
     });
 
@@ -167,17 +165,18 @@ void main() {
     });
   });
 
-  group('removeAppointmentPictures removes from BOTH stores', () {
-    test('deletes the subcollection doc and arrayRemoves', () async {
+  group('removeAppointmentPictures deletes from the subcollection', () {
+    test('deletes by the derived id and touches only updatedAt', () async {
+      // By id, so a concurrent upload's own documents are untouched. The
+      // retired array half matched by DEEP EQUALITY of the whole entry map,
+      // which is why it could silently remove nothing.
       await repo().removeAppointmentPictures('a1', [photo]);
 
       expect(requestedImageIds, [appointmentImageDocId(photo)]);
       verify(() => batch.delete(any())).called(1);
-      // WriteBatch.update takes Map<Object, Object?>, so read the key off the
-      // raw map rather than casting the whole thing.
       final patch =
           verify(() => batch.update(any(), captureAny())).captured.single as Map;
-      expect(patch['pictures'], isA<FieldValue>());
+      expect(patch.keys, ['updatedAt']);
       verify(batch.commit).called(1);
     });
 
@@ -197,8 +196,10 @@ void main() {
       final snapshot = _MockQuerySnapshot();
       final doc = _MockDocSnap();
       when(() => images.orderBy('uploadedAt')).thenReturn(query);
-      // Bounded like every other read in this repository — the array's rules
-      // cap is 100 and a subcollection has none of its own.
+      // Bounded like every other read in this repository. A subcollection has
+      // no document-size ceiling of its own, so this cap is the only bound
+      // left on a job's photos — `PICTURE_COUNT_WARN_CAP` is its server-side
+      // twin and must keep the same number.
       when(() => query.limit(any())).thenReturn(bounded);
       when(bounded.get).thenAnswer((_) async => snapshot);
       when(() => snapshot.docs).thenReturn([doc]);
@@ -211,11 +212,10 @@ void main() {
       verify(() => query.limit(100)).called(1);
     });
 
-    test('an empty subcollection returns empty, meaning "use the array"',
-        () async {
-      // Empty must never be read as "this job has no photos" while the array
-      // is still authoritative — a doc the backfill has not reached yet is
-      // exactly this shape.
+    test('an empty subcollection means this job has no photos', () async {
+      // During the migration empty meant "not backfilled yet, use the array".
+      // The array is gone, so it now means exactly what it says — and the
+      // detail sheet skips this read altogether when `pictureCount` is 0.
       final query = _MockQuery();
       final bounded = _MockQuery();
       final snapshot = _MockQuerySnapshot();

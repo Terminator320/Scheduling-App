@@ -86,10 +86,11 @@ void main() {
         final copies = (captured[2] as List).cast<AppointmentRecord>();
         expect(deleteIds, isEmpty);
         expect(copies, hasLength(5));
-        // Copies start fresh — they're pending, have no shared pictures, and keep
+        // Copies start fresh — pending, no photos of their own (each document
+        // has its own `images` subcollection, and a copy simply has none), and
         // the same series id.
         expect(
-          copies.every((c) => c.status == 'pending' && c.pictures.isEmpty),
+          copies.every((c) => c.status == 'pending' && c.pictureCount == 0),
           isTrue,
         );
         expect(copies.every((c) => c.seriesId == 'a1'), isTrue);

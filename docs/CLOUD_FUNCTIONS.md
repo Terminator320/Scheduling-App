@@ -762,40 +762,22 @@ before the Firestore doc, so the trigger's later revoke is a no-op rather than a
 retry loop. Without this the rules' `status == 'active'` gates would still be
 reachable with a stale credential.
 
-Deactivation additionally **rotates the Storage download tokens** on every photo
-of every appointment the person was assigned to (`rotateAssignedImageTokens`,
-`appointment_image_tokens.js`). `ImageStorageService.uploadImage` still persists
-a `getDownloadURL()` link per photo into `pictures[]`; its
-`firebaseStorageDownloadTokens` value is stable per object and never expires,
-and fetching the URL serves the bytes over plain HTTPS with **no auth and no
-`storage.rules` evaluation** — so revoking the credential does not reach the
-links already on that person's device. Rotating the object metadata is the only
-thing that can invalidate one. It rewrites the stored `url` in the same pass
-(rotating alone would blank those photos on the old builds the `url` write
-exists for, and a deactivated employee can no longer read the document to see
-the replacement), is bounded at `ROTATE_APPOINTMENT_MAX` (500) newest-first on
-the **new `(employeeIds CONTAINS, endTime DESC)` composite** — declared
-explicitly rather than leaning on index reversal, because a missing index fails
-`FAILED_PRECONDITION` straight into this module's swallow, i.e. a security
-control that silently stops running; **deploy `firestore:indexes` with it** —
-with a warn at the cap, resolves the bucket lazily so the module stays
-jest-requirable, and
-**never throws** — a rethrow under `retry: true` would re-run the whole handler
-and re-rotate everything already done. `timeoutSeconds` is raised to 300 for it.
-It runs **LAST in the handler, after the Auth disable + `revokeRefreshTokens`**:
-it is the only step here that can take minutes, so ordered ahead of them the
-revocation waited on 500 appointments' worth of Storage writes, and a timeout at
-that ceiling meant it never ran at all that pass. Its appointment and photo
-concurrency bounds MULTIPLY, so the ceiling on in-flight GCS chains is the
-product of the two — the photo loop is bounded for that reason, not because the
-list is long. A second **unordered backstop pass** picks up any appointment
-with no `endTime`, which the ordered query structurally cannot return; it is
-bounded by the same cap, needs no new index, and dedupes by doc id. The parent
-writes fire up to 500 `notifyAppointmentChanges` invocations, each a verified
-no-op that returns before any Firestore read; `recountAppointmentPictures` is
-not fired at all, since it triggers on the images subcollection rather than the
-parent. Defence-in-depth behind the rules' status gate, never the gate
-itself; retires with the `url` write at the photo-subcollection CONTRACT step.
+Deactivation used to additionally **rotate the Storage download tokens** on
+every photo of every appointment the person was assigned to
+(`rotateAssignedImageTokens`, `appointment_image_tokens.js`). **That module was
+deleted at the photo-subcollection CONTRACT step**, together with the
+`(employeeIds CONTAINS, endTime DESC)` composite it needed and this trigger's
+raised `timeoutSeconds` (back on the 60 s default). It existed because
+`ImageStorageService.uploadImage` persisted a `getDownloadURL()` link per photo
+into `pictures[]`: that link's `firebaseStorageDownloadTokens` value is stable
+per object and never expires, and fetching it serves the bytes over plain HTTPS
+with **no auth and no `storage.rules` evaluation**, so revoking the credential
+did not reach the links already on that person's device. The app no longer
+mints or stores one, and the arrays that carried them are cleared, so there is
+nothing left for a rotation to invalidate — photos are fetched through the SDK,
+where this branch's status flip is the gate. Note what that does NOT cover: a
+URL captured under an older build is still live on its object unless someone
+rotates it by hand.
 
 The bridge's pure rules live in `bridge_policy.js` (`shouldHaveBridge`,
 `bridgeBody`, `bridgeMatches`, `classifyBridgeRow`), shared with
@@ -856,13 +838,14 @@ Archive — not delete — is the normal way a client leaves the roster.
 
 ## Appointment photos → subcollection
 
-Photos are moving from the `pictures` array on each appointment into
-`appointments/{id}/images`. Every appointment read carried the whole array (a
-download URL alone is ~215 of a ~290-byte entry) while only the detail sheet
-ever renders one, and the calendar reads up to 1000 appointments at a time.
-**Phase 1 writes BOTH stores** — the array stays authoritative because the
-shipped build reads it — so neither function below may be treated as the sole
-owner of a photo until the CONTRACT release. See the root `CLAUDE.md`.
+Photos live in `appointments/{id}/images`. They were moved off the `pictures`
+array on each appointment because every appointment read carried the whole
+array (a download URL alone was ~215 of a ~290-byte entry) while only the
+detail sheet ever renders one, and the calendar reads up to 1000 appointments
+at a time. Phase 1 (2026-08-13) wrote both stores; **the CONTRACT step retired
+the array**, so the two functions below are now the sole server-side owners of
+a photo, and `pictureCount` on the parent is the only thing that knows a job
+has any. See `.claude/rules/images.md`.
 
 ### `cascadeDeleteAppointmentImages` — `appointment_images.js`
 `appointments/{id}` **delete** trigger that removes the whole `images`
@@ -873,13 +856,26 @@ documents orphaned under a parent that no longer exists: invisible in the
 console, unreachable by every query the app makes, and with nothing anywhere
 reporting it. Covers all three delete paths — the client's single delete, its
 series delete, and `purgeExpiredHistory` (Admin SDK deletes fire triggers too).
-Uses `recursiveDelete`, the same Admin-SDK bulk writer `syncUsersByUid` already
-uses for `liveActivityTokens`. **RETHROWS**, deliberately unlike the
+**It also deletes the Storage BYTES, and that half is not cleanup either.**
+Until the CONTRACT step the client did it, enumerating `appointment.pictures` to
+know which objects to remove; that array is gone, and a client that no longer
+reads the photos cannot list what to delete — so without this every appointment
+delete orphans its photos in Storage, billed monthly and reachable by no query.
+The prefix (`appointments/{id}/images/`) comes from the appointment id rather
+than from any stored path, so it also sweeps bytes whose document link never
+landed. **ORDER: bytes first, documents second**, the same rule
+`purgeExpiredHistory` follows — the documents are the last thing pointing at
+those objects, so dropping them before the bytes are gone loses the trail on a
+failure. Uses `deleteFiles({prefix})` for the bytes and `recursiveDelete` for
+the documents, the same Admin-SDK bulk writer `syncUsersByUid` already uses for
+`liveActivityTokens`. **RETHROWS** on either half, deliberately unlike the
 best-effort cleanup elsewhere in this codebase: a swallowed error leaves exactly
 the permanent invisible orphans it exists to prevent, and rethrowing is what
-makes `retry: true` mean anything. `retry: true` is safe because a second pass
-finds nothing. The pure `purgeAppointmentImages(id, {db})` is exported for jest.
-**Not yet deployed.**
+makes `retry: true` mean anything. `retry: true` is safe because both halves are
+idempotent — a second pass finds nothing. The pure
+`purgeAppointmentImages(id, {db, deleteImages})` is exported for jest.
+Removing ONE photo from a job that still exists stays client-side; only the
+whole-appointment delete is here.
 
 ### `recountAppointmentPictures` — `appointment_images.js`
 `appointments/{id}/images/{imageId}` write trigger maintaining the denormalized
@@ -892,12 +888,21 @@ with a `count()` aggregate and writes **absolutely** — never
 appointment deleted in the window is never resurrected as a count-only stub; a
 Firestore `NOT_FOUND` there is the **normal** path, not an error, because
 `cascadeDeleteAppointmentImages` has just removed the photos. `pictureCount` is
-function-owned: `firestore.rules` rejects a client write that touches it and
-`AppointmentRecord.toMap()` must never emit it. **No loop risk** — this triggers
+function-owned: `firestore.rules` rejects a client UPDATE that touches it and
+`AppointmentRecord.toMap()` must never emit it. **The one exception is the
+create**, which may write it as exactly 0 — since the CONTRACT step this counter
+is the only thing that knows whether a job has photos, and the detail sheet
+skips its subcollection read on a 0, so "absent" would otherwise be a third
+state meaning "nobody has counted yet" on every job until its first photo.
+It also **warns past `PICTURE_COUNT_WARN_CAP` (100)**: the array's rules cap
+guarded the parent document's 1 MB ceiling and a subcollection has none, so the
+cap was not reinstated — but the app reads at most that many photos
+(`AppointmentImagesStore.scanLimit`, the same number), and anything beyond is
+simply absent with nothing else to say so. **No loop risk** — this triggers
 on the subcollection and writes the parent, a different path. The parent write
 does re-fire `notifyAppointmentChanges`, which produces no events for a
 count-only change and returns before any Firestore work. The pure
-`recountPictures(id, {db})` is exported for jest. **Not yet deployed.**
+`recountPictures(id, {db, logger})` is exported for jest.
 
 ## Wave Accounting
 

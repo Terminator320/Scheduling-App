@@ -81,7 +81,6 @@ class EventDetailsSavePipeline {
     required DateTime end,
     required ({List<String> ids, List<String> names}) assignees,
     required ClientRecord? selectedClient,
-    required List<AppointmentImage> pictures,
     required String status,
     required RepeatInterval repeat,
     required bool isPersonal,
@@ -112,9 +111,6 @@ class EventDetailsSavePipeline {
       employeeNames: assignees.names,
       notes: notes.trim(),
       materialsNeeded: materialsNeeded.trim(),
-      // Pictures are included here only for the outcome/UI — actual updates
-      // go through append/remove instead.
-      pictures: pictures,
       status: status,
       repeat: repeat,
       seriesId: appointment.seriesId,
@@ -175,12 +171,17 @@ class EventDetailsSavePipeline {
     required List<File> newImages,
     void Function()? onRecordWritten,
   }) async {
-    // arrayRemove only, so a concurrent upload isn't clobbered.
+    // Deletes the removed photos' documents by their derived ids, so a
+    // concurrent upload's own documents are untouched.
     if (removedImages.isNotEmpty) {
       await repo.removeAppointmentPictures(id, removedImages);
     }
     onRecordWritten?.call();
-    // Bytes are deleted only once the doc has stopped referencing them.
+    // Bytes are deleted only once the documents have stopped referencing them.
+    // This is a REMOVAL from a job that still exists, so it stays client-side;
+    // deleting the whole appointment is the server's job
+    // (`cascadeDeleteAppointmentImages`), which is the only path that can no
+    // longer enumerate its own photos.
     await deleteOrphanedImages(removedImages, tag: 'APPT-SAVE');
     if (newImages.isNotEmpty) {
       uploader?.uploadInBackground(appointmentId: id, newImages: newImages);

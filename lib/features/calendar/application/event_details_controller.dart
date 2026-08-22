@@ -22,7 +22,6 @@ import 'package:scheduling/features/calendar/domain/models/appointment_image.dar
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
-import 'package:scheduling/features/calendar/domain/policies/appointment_image_doc_id.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -104,47 +103,29 @@ class EventDetailsController extends Notifier<EventDetailsState>
       // Seeded synchronously to avoid a race with the async load below — employee
       // visibility depends on employeeIds being set right away.
       selectedEmployees: _assigneesFromRecord(appointment),
-      existingImages: _seededImages = List.of(appointment.pictures),
+      existingImages: _seededImages = const <AppointmentImage>[],
     );
   }
 
-  /// Reads this job's photos from `appointments/{id}/images`, falling back to
-  /// the array the record already carries.
+  /// Reads this job's photos from `appointments/{id}/images`.
   ///
-  /// Photos are moving off the parent document, and this is the read half.
-  /// "Prefer the subcollection, fall back to the array" is safe at every point
-  /// of the migration, which is why it is written this way rather than as a
-  /// switch to be flipped later:
+  /// The sheet opens with none: photos are not on the appointment document any
+  /// more, so there is nothing to seed from and this read is the only source.
+  /// It is skipped entirely for a job whose `pictureCount` is 0 — the detail
+  /// sheet is the most-opened surface in the app and most jobs have no photos.
   ///
-  /// - a document the backfill has not reached yet returns EMPTY here, and the
-  ///   array — still authoritative, still dual-written — is what renders;
-  /// - a backfilled document returns the same photos the array holds;
-  /// - after the array is retired, the subcollection is the only source and
-  ///   the fallback is dead weight rather than wrong.
+  /// That gate is only safe because the counter is COMPLETE: a create writes an
+  /// explicit 0, `recountAppointmentPictures` owns it from the first photo
+  /// onwards, and the CONTRACT step's cleanup script stamped it on every
+  /// document that predates the change. Should any of those stop being true,
+  /// this reads a job's photos as none — silently, which is the failure mode
+  /// the whole migration was shaped to avoid.
   ///
-  /// Empty therefore means "nothing to add", never "this job has no photos" —
-  /// don't rewrite this to trust the subcollection unconditionally before the
-  /// array is gone.
-  ///
-  /// Failure is swallowed to the seeded array for the same reason: this is an
-  /// optimisation of where the photos are read from, and it must never be the
-  /// thing that empties a photo list the record could have rendered.
+  /// Failure falls back to showing nothing rather than throwing: a photo strip
+  /// that fails to load must not take the sheet down with it.
   Future<void> _loadStoredPictures() async {
     final id = appointment.id;
     if (id == null || id.isEmpty) return;
-    // No photos in EITHER store means there is nothing for this read to find,
-    // and the sheet is the most-opened surface in the app.
-    //
-    // TODO(gvogas): revisit at the photo-subcollection CONTRACT step
-    // (`.claude/rules/images.md`, "THREE THINGS THE ARRAY IS STILL DOING").
-    // This is safe ONLY while `pictures` is still dual-written: `hasPictures`
-    // is true if the array is non-empty OR `pictureCount > 0`, so today the
-    // array carries the decision. `pictureCount` is function-owned and reads
-    // as 0 on any doc the trigger or the backfill has not reached — so once
-    // the array is retired, a stale or missing count makes this gate skip the
-    // read and render a job's photos as none, silently. That is the same trap
-    // the docstring above names; when the array goes, this must gate on the
-    // counter ONLY if the backfill is known complete, or not gate at all.
     if (!appointment.hasPictures) return;
     final repo = ref.read(appointmentsRepositoryProvider);
     // Hoisted with `repo`: the `ref.mounted` check below proves disposal here
@@ -169,55 +150,10 @@ class EventDetailsController extends Notifier<EventDetailsState>
     // `EqualUnmodifiableListView` on every access, so an identity test against
     // the plain list `build()` seeded could never be true and this method
     // always returned here — the read ran on every sheet open and was thrown
-    // away. Harmless while the array is authoritative; at the CONTRACT step it
-    // would have shown zero photos on every job.
+    // away.
     final seeded = _seededImages;
     if (seeded == null || !listEquals(state.existingImages, seeded)) return;
-    final adopted = _mergeStoredPictures(seeded, stored);
-    if (listEquals(adopted, seeded)) return;
-    state = state.copyWith(existingImages: _seededImages = adopted);
-  }
-
-  /// Combines the subcollection read with the array [build] seeded, PREFERRING
-  /// the array's instance wherever the same photo is in both.
-  ///
-  /// Which instance wins matters, and not for display — the two render
-  /// identically. `removeAppointmentPictures` takes the array half out with
-  /// `FieldValue.arrayRemove`, which matches by DEEP EQUALITY of the whole
-  /// map, so it only removes an image that was parsed from the parent
-  /// document. A subcollection row deliberately omits `url` when it has a
-  /// `storagePath`, so adopting it wholesale would leave every later removal
-  /// deleting the subcollection doc while the array kept its copy — the photo
-  /// reappearing on the shipped build, and the Storage bytes orphaning.
-  ///
-  /// Identity is [appointmentImageDocId], the same derivation the subcollection
-  /// keys on, so the two halves agree on what "the same photo" means.
-  ///
-  /// It is a UNION, not a replace, and PARTIAL IS THE NORMAL STATE during
-  /// photo phase 1: `appendAppointmentPictures` writes only the NEW photos to
-  /// the subcollection while `arrayUnion`-ing them onto the array, and the
-  /// backfill has not run — so a job with three legacy photos and one added on
-  /// the current build reads back one row here. Iterating [stored] alone
-  /// rendered that job as a single photo, made the other three unremovable and
-  /// stopped them counting toward the photo cap, with nothing logged.
-  ///
-  /// The array's order leads because it is the order the sheet already showed.
-  static List<AppointmentImage> _mergeStoredPictures(
-    List<AppointmentImage> seeded,
-    List<AppointmentImage> stored,
-  ) {
-    final seenIds = <String>{
-      for (final image in seeded) appointmentImageDocId(image),
-    };
-    final merged = [...seeded];
-    for (final image in stored) {
-      final id = appointmentImageDocId(image);
-      // An id-less row carries neither a storage path nor a url, so nothing can
-      // render it and nothing can match it against the array.
-      if (id.isEmpty || !seenIds.add(id)) continue;
-      merged.add(image);
-    }
-    return merged;
+    state = state.copyWith(existingImages: _seededImages = stored);
   }
 
   /// Builds placeholder employees from the stored ids and names. They get
@@ -573,7 +509,6 @@ class EventDetailsController extends Notifier<EventDetailsState>
         end: end,
         assignees: assignees,
         selectedClient: state.selectedClient,
-        pictures: state.existingImages,
         status: state.editingStatus,
         repeat: state.repeat,
         isPersonal: state.isPersonal,
@@ -673,15 +608,24 @@ class EventDetailsController extends Notifier<EventDetailsState>
       );
     }
     // Reject a double-tap on the delete — same reentrancy guard save() and the
-    // status writes use. Without it a second run pays getSeries, the batch
-    // delete and deleteOrphanedImages all over again.
+    // status writes use. Without it a second run pays getSeries and the batch
+    // delete all over again.
     if (state.isSaving) return const EventDetailsActionBusy();
     state = state.copyWith(isSaving: true);
     // Resolve these before the first await, so they survive the sheet being dismissed.
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
     try {
-      final orphanedImages = <AppointmentImage>[...appointment.pictures];
+      // Photos are NOT cleaned up here. Deleting the appointment document fires
+      // `cascadeDeleteAppointmentImages`, which removes both the photo
+      // documents and the Storage objects under
+      // `appointments/{id}/images/`. That moved server-side at the CONTRACT
+      // step for a plain reason: this used to enumerate `appointment.pictures`
+      // to know which objects to delete, and that array no longer exists — a
+      // client that is not reading the subcollection cannot list what to
+      // remove. The trigger also covers the series branch below (each deleted
+      // document fires its own) and the bytes of a photo whose document link
+      // never landed, which the array never could.
       if (includeFuture && appointment.seriesId.isNotEmpty) {
         final series = await repo.getSeries(appointment.seriesId);
         final futureIds = futureSeriesIds(
@@ -689,25 +633,9 @@ class EventDetailsController extends Notifier<EventDetailsState>
           excludeId: id,
           after: appointment.startTime,
         );
-        // Only the visits we're deleting contribute orphaned bytes — the
-        // preserved visits keep their pictures.
-        final futureIdSet = futureIds.toSet();
-        for (final a in series) {
-          if (a.id != null && futureIdSet.contains(a.id)) {
-            orphanedImages.addAll(a.pictures);
-          }
-        }
         await repo.deleteAppointments([id, ...futureIds]);
       } else {
         await repo.deleteAppointment(id);
-      }
-
-      // Delete orphaned images after docs are gone.
-      if (ref.mounted) {
-        await _pipeline().deleteOrphanedImages(
-          orphanedImages,
-          tag: 'APPT-DEL',
-        );
       }
 
       if (ref.mounted) state = state.copyWith(isSaving: false);
