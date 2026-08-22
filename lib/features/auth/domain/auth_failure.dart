@@ -43,7 +43,10 @@ sealed class AuthFailure extends Failure {
     // Both are races rather than defects: a replayed setup call, and a
     // credential that went stale mid-setup. Signing in again fixes either.
     AuthFailureSetupAlreadyComplete() ||
-    AuthFailureSessionExpired() => true,
+    AuthFailureSessionExpired() ||
+    // Choosing the starting password again is an ordinary thing to try,
+    // not a defect — the screen asks for a different one and they retype.
+    AuthFailureStartingPasswordReused() => true,
     // Console misconfiguration, a rules rejection, an unmapped error, or a
     // signed-in uid with no users doc — all real defects worth a non-fatal.
     AuthFailureOperationNotAllowed() ||
@@ -179,6 +182,19 @@ class AuthFailureNoAccountRecord extends AuthFailure {
       c.l10n.error_noAccountRecordContactAdmin;
 }
 
+// The password they chose IS the starting password the admin issued.
+// Detected by [AuthService.completeAccountSetup] reauthenticating with the
+// typed value: if that SUCCEEDS it is still the current credential, so
+// setup would leave the account active on a password the admin holds.
+// Surfaced as a field error on the password, never a banner — it names the
+// one field the person has to change.
+class AuthFailureStartingPasswordReused extends AuthFailure {
+  const AuthFailureStartingPasswordReused();
+  @override
+  String toLocalizedMessageInContext(BuildContext c, AuthErrorContext _) =>
+      c.l10n.validation_passwordMustDifferFromStarting;
+}
+
 // The credential went stale mid-setup (token expired, or the write needed a
 // recent login). Signing in again is the whole fix.
 class AuthFailureSessionExpired extends AuthFailure {
@@ -238,6 +254,7 @@ extension AuthFailureForgotPassword on AuthFailure {
       AuthFailureSetupAlreadyComplete() ||
       AuthFailureNoAccountRecord() ||
       AuthFailureSessionExpired() ||
+      AuthFailureStartingPasswordReused() ||
       AuthFailureUnknown() =>
         context.l10n.error_somethingWentWrongPleaseTryAgain,
     };

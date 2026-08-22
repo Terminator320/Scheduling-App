@@ -279,6 +279,7 @@
   "auth_hidePassword": "Masquer le mot de passe",
   "validation_pleaseConfirmYourPassword": "Veuillez confirmer votre mot de passe",
   "validation_passwordsDoNotMatch": "Les mots de passe ne correspondent pas",
+  "validation_passwordMustDifferFromStarting": "Choisissez un mot de passe différent de celui qui vous a été remis",
   "validation_enterAValidEmail": "Entrez une adresse courriel valide",
   "validation_pleaseSelectAtLeastOneEmployee": "Veuillez sélectionner au moins un employé",
   "common_optional": "facultatif",

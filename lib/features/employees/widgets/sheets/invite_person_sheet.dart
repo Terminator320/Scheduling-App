@@ -199,6 +199,9 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
           ..._detailsSection(theme, l10n),
           ..._roleSection(theme, l10n),
           ..._colourSection(theme, l10n),
+          // Outside every _section: it is advice about the whole form, and
+          // inside one it would sit under that step's tour spotlight.
+          WarningNote(message: l10n.employees_invitedNote),
         ],
       ),
     );
@@ -298,9 +301,6 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
             color: theme.palette.textTertiary,
           ),
         ),
-        WarningNote(message: l10n.employees_invitedNote),
         const SizedBox(height: AppSpacing.sp24),
       ]);
 }
-
-/// The amber advisory under the form. Warning-toned on purpose — the account

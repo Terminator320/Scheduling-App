@@ -332,32 +332,26 @@ describe("completeEmployeeSetup activation", () => {
     d1: {email: "ada@example.com", uid: "emp-uid", status: "invited"},
   });
 
-  test("activates a caller whose token is NOT email-verified", async () => {
+  test("activates a caller presenting no email claim at all", async () => {
     const trace = [];
     const docs = invitedDocs();
     getFirestore.mockReturnValue(makeDb(docs, trace));
 
-    const out = await completeEmployeeSetup.run({
-      data: SETUP,
-      auth: {uid: "emp-uid", token: {email_verified: false}},
-    });
-
     // The mailbox check went with the shared starting password (2026-08-21):
     // the password is now a random per-account secret, so signing in is itself
     // the proof that guard used to provide.
-    expect(out).toEqual({ok: true});
-    expect(docs.d1.status).toBe("active");
-  });
-
-  test("activates a caller whose token carries no email claim", async () => {
-    const docs = invitedDocs();
-    getFirestore.mockReturnValue(makeDb(docs, []));
-
-    await completeEmployeeSetup.run({
+    //
+    // ONE anchor, and deliberately the empty token rather than
+    // `email_verified: false`: the callable can no longer distinguish true,
+    // false and absent, so three tests could not fail independently. The
+    // empty token is the strictest of the three — it also pins that the
+    // removal left no claim-shaped read behind.
+    const out = await completeEmployeeSetup.run({
       data: SETUP,
       auth: {uid: "emp-uid", token: {}},
     });
 
+    expect(out).toEqual({ok: true});
     expect(docs.d1.status).toBe("active");
   });
 
@@ -377,20 +371,6 @@ describe("completeEmployeeSetup activation", () => {
         expect(enforceDurableRateLimit).not.toHaveBeenCalled();
       });
 
-  test("still activates a caller whose token IS email-verified", async () => {
-    const trace = [];
-    const docs = invitedDocs();
-    getFirestore.mockReturnValue(makeDb(docs, trace));
-
-    const out = await completeEmployeeSetup.run({
-      data: SETUP,
-      auth: {uid: "emp-uid", token: {email_verified: true}},
-    });
-
-    expect(out).toEqual({ok: true});
-    expect(docs.d1.status).toBe("active");
-  });
-
   test("still refuses an account that is no longer invited", async () => {
     const docs = {
       d1: {email: "ada@example.com", uid: "emp-uid", status: "active"},
@@ -399,7 +379,7 @@ describe("completeEmployeeSetup activation", () => {
 
     await expect(completeEmployeeSetup.run({
       data: SETUP,
-      auth: {uid: "emp-uid", token: {email_verified: false}},
+      auth: {uid: "emp-uid", token: {}},
     })).rejects.toThrow(/setup-not-pending/);
   });
 });

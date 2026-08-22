@@ -13,11 +13,17 @@ class _MockUser extends Mock implements User {}
 
 class _MockEmployeesRepository extends Mock implements EmployeesRepository {}
 
+class _FakeAuthCredential extends Fake implements AuthCredential {}
+
+class _FakeUserCredential extends Fake implements UserCredential {}
+
 void main() {
   late _MockFirebaseAuth auth;
   late _MockEmployeesRepository employees;
   late _MockUser user;
   late AuthService service;
+
+  setUpAll(() => registerFallbackValue(_FakeAuthCredential()));
 
   setUp(() {
     auth = _MockFirebaseAuth();
@@ -25,9 +31,17 @@ void main() {
     user = _MockUser();
     service = AuthService(firebaseAuth: auth, employeesRepository: employees);
     when(() => user.uid).thenReturn('uid-001');
+    when(() => user.email).thenReturn('ada@example.com');
     when(() => auth.currentUser).thenReturn(user);
     when(() => auth.signOut()).thenAnswer((_) async {});
     when(() => user.updatePassword(any())).thenAnswer((_) async {});
+    // The DEFAULT is the ordinary case: the typed password is not the
+    // account's current one, so the starting-password check refuses to
+    // reauthenticate and setup proceeds. Stubbed here rather than per test
+    // so every existing case exercises the check instead of skipping it.
+    when(() => user.reauthenticateWithCredential(any())).thenThrow(
+      FirebaseAuthException(code: 'wrong-password'),
+    );
   });
 
   /// Mocktail compares the whole invocation, so the stub has to name every
@@ -41,6 +55,101 @@ void main() {
       locationConsent: any(named: 'locationConsent'),
     ),
   );
+
+  group('completeAccountSetup starting-password check', () {
+    test('refuses the starting password and never rotates it', () async {
+      stubSetup().thenAnswer((_) async {});
+      // Reauth SUCCEEDING means the typed value is still the account's
+      // current password, i.e. they retyped what the admin issued.
+      when(
+        () => user.reauthenticateWithCredential(any()),
+      ).thenAnswer((_) async => _FakeUserCredential());
+
+      await expectLater(
+        service.completeAccountSetup(newPassword: 'Wh4tTheyGave'),
+        throwsA(isA<AuthFailureStartingPasswordReused>()),
+      );
+
+      // The half that matters: refused BEFORE the write, so the account is
+      // left `invited` rather than activated on a password the admin holds.
+      verifyNever(() => user.updatePassword(any()));
+      verifyNever(
+        () => employees.completeEmployeeSetup(
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          phone: any(named: 'phone'),
+          termsAccepted: any(named: 'termsAccepted'),
+          locationConsent: any(named: 'locationConsent'),
+        ),
+      );
+    });
+
+    test('is an expected failure, so it files no non-fatal', () {
+      // A person choosing the password they were just handed is ordinary,
+      // not a defect worth a Crashlytics record.
+      expect(const AuthFailureStartingPasswordReused().isExpected, isTrue);
+    });
+
+    test('checks the password it is about to SET, trimmed', () async {
+      stubSetup().thenAnswer((_) async {});
+
+      await service.completeAccountSetup(newPassword: '  N3wPassw0rd  ');
+
+      // Checking an untrimmed value while storing a trimmed one would test a
+      // different string from the one that ends up on the account.
+      final captured = verify(
+        () => user.reauthenticateWithCredential(captureAny()),
+      ).captured.single;
+      expect((captured as EmailAuthCredential).password, 'N3wPassw0rd');
+      verify(() => user.updatePassword('N3wPassw0rd')).called(1);
+    });
+
+    for (final code in [
+      'wrong-password',
+      'invalid-credential',
+      'invalid-login-credentials',
+    ]) {
+      test('treats $code as "different password" and proceeds', () async {
+        stubSetup().thenAnswer((_) async {});
+        when(
+          () => user.reauthenticateWithCredential(any()),
+        ).thenThrow(FirebaseAuthException(code: code));
+
+        await service.completeAccountSetup(newPassword: 'N3wPassw0rd!');
+
+        verify(() => user.updatePassword('N3wPassw0rd!')).called(1);
+      });
+    }
+
+    test('surfaces an unrelated reauth error instead of passing', () async {
+      stubSetup().thenAnswer((_) async {});
+      // The dangerous shape is treating any failure as "looks different":
+      // a network blip would then wave through the case this check exists
+      // for. It must fail loudly rather than silently permit.
+      when(
+        () => user.reauthenticateWithCredential(any()),
+      ).thenThrow(FirebaseAuthException(code: 'network-request-failed'));
+
+      await expectLater(
+        service.completeAccountSetup(newPassword: 'N3wPassw0rd!'),
+        throwsA(isA<AuthFailure>()),
+      );
+
+      verifyNever(() => user.updatePassword(any()));
+    });
+
+    test('skips the check when the account carries no email', () async {
+      stubSetup().thenAnswer((_) async {});
+      when(() => user.email).thenReturn(null);
+
+      await service.completeAccountSetup(newPassword: 'N3wPassw0rd!');
+
+      // Nothing to build a credential from, so setup must still complete
+      // rather than dead-end on a check it cannot perform.
+      verifyNever(() => user.reauthenticateWithCredential(any()));
+      verify(() => user.updatePassword('N3wPassw0rd!')).called(1);
+    });
+  });
 
   group('completeAccountSetup', () {
     test('replaces the password, then activates the account', () async {

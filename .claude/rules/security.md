@@ -6,6 +6,7 @@ alwaysApply: true
 
 - Validate all user input at the system boundary. Never trust data from UI directly.
 - On Cloud Function callables, reject oversized/malformed payloads with `assertPayloadShape` (non-object, >4 KB, or unexpected keys) and validate string fields via `requireString`/`readSessionToken` (trim, length cap, control-char reject) before use.
+- **REMOVING a key from an `assertPayloadShape` allowlist is a BREAKING change, not a tightening.** It throws `unexpected-field` on the first unrecognised key, so a field that any shipped build still sends must stay in the set until that build has aged out — the allowlist has to remain a SUPERSET of the deployed one (`docs/DEPLOYMENT.md` §4a). Neutralize the field where it is USED instead (stop reading it; hard-code the safe value), leave it ACCEPTED AND IGNORED in the set, and tag the entry `#compat-<version>` so the whole carve-out is greppable when it can be retired. `createEmployeeAccount`'s `isAdmin` (`#compat-1.47.0`) is the worked example: the role is hard-coded `"employee"` server-side, and the key survives only so admin builds ≤ 1.47.0 can still create accounts and reset passwords.
 - Never read `isAdmin` or user role from SharedPreferences — always re-read from Firestore.
 - Authentication tokens are managed by FirebaseAuth. Don't cache or store them manually.
 - Never log secrets, API keys, tokens, passwords, or PII.

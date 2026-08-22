@@ -233,6 +233,11 @@ reverting the cap.
 > shared starting password `Welcome123!` with a per-account random one
 > (`generateStartingPassword()`), and stops `createEmployeeAccount` reading an
 > `isAdmin` field. Design: `docs/plans/2026-08-21-simplified-auth-design.md`.
+>
+> **Ships in the app as 1.48.0+77.** 1.47.0 is therefore the last build that
+> sends `isAdmin`, which is what `#compat-1.47.0` in `employee_accounts.js`
+> is pinned to — that key can be retired once no 1.47.0-or-older admin build
+> is still in use.
 
 ### 1. Pre-flight: remediate every `invited` account — REQUIRED
 

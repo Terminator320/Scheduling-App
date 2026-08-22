@@ -160,12 +160,6 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
     if (_bannerError != null) setState(() => _bannerError = null);
   }
 
-  /// No `setState` here: the meter and the checklist listen to the controller
-  /// directly (see `_passwordFeedback`), so a keystroke repaints those two
-  /// widgets instead of rebuilding all five fields, the consent row and the
-  /// submit button.
-  void _onPasswordChanged() => _onFieldChanged();
-
   bool get _isTransitionBusy => _isLoading || _isSigningOut;
 
   Future<void> _finishSetup() async {
@@ -229,6 +223,20 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       // reporting a failure they cannot act on.
       if (failure is AuthFailureSetupAlreadyComplete) {
         await _routeIntoApp();
+        return;
+      }
+      // They retyped the password the admin issued. That is one field's
+      // problem, so it reads as a field error — a banner would name the
+      // failure without pointing at the box to fix.
+      if (failure is AuthFailureStartingPasswordReused) {
+        setState(() {
+          _isLoading = false;
+          _passwordError = failure.toLocalizedMessageInContext(
+            context,
+            AuthErrorContext.register,
+          );
+        });
+        _passwordFocus.requestFocus();
         return;
       }
       setState(() {
@@ -413,7 +421,7 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
       errorText: _passwordError,
       isObscured: _isObscured,
       onSubmitted: _confirmFocus.requestFocus,
-      onChanged: _onPasswordChanged,
+      onChanged: _onFieldChanged,
       onToggleObscured: () => setState(() => _isObscured = !_isObscured),
     ),
     _passwordFeedback(),
@@ -471,7 +479,8 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
   /// every keystroke, and `TextEditingController` is already a
   /// `ValueListenable` — so scoping the listen here keeps a keypress from
   /// rebuilding the five fields, the consent row and the submit button around
-  /// them.
+  /// them. That is why the password field's `onChanged` is the plain
+  /// [_onFieldChanged], with no `setState` of its own.
   Widget _passwordFeedback() => ValueListenableBuilder<TextEditingValue>(
     valueListenable: _passwordController,
     builder: (context, value, _) => Column(
