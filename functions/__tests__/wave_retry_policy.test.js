@@ -22,6 +22,8 @@ const {
   attemptBudgetFor,
   sanitizeError,
   describeWaveError,
+  RECLAIM_REASON,
+  reclaimDecision,
 } = require("../wave/retry_policy");
 const {WaveApiError} = require("../wave/client");
 const {WaveValidationError} = require("../wave/customers");
@@ -303,5 +305,92 @@ describe("describeWaveError", () => {
     expect(out.length).toBeLessThanOrEqual(300);
     expect(out).toContain("CODE_0");
     expect(out).not.toContain("CODE_9");
+  });
+});
+
+/**
+ * The lease-expiry reclaim decision, driven directly rather than through a
+ * transaction mock. All three outcomes destroy something: a skip hands the job
+ * to another path, a retry rewrites its schedule, and a dead-letter ends a real
+ * client edit's journey to Wave permanently.
+ */
+describe("reclaimDecision", () => {
+  const NOW = 1_700_000_000_000;
+  const LEASE = 60_000;
+  const opts = (over) => ({
+    nowMs: NOW,
+    leaseMs: LEASE,
+    maxAttempts: 5,
+    backoffFn: (n) => (n + 1) * 1000,
+    ...over,
+  });
+
+  test("leaves a job that is no longer inflight alone", () => {
+    // Re-enqueued or already dead in the window — someone else owns it.
+    expect(reclaimDecision(
+        {status: "queued", claimedAtMs: NOW - LEASE * 10, attempts: 1},
+        opts())).toBeNull();
+    expect(reclaimDecision(
+        {status: "dead", claimedAtMs: NOW - LEASE * 10, attempts: 9},
+        opts())).toBeNull();
+  });
+
+  test("leaves a job still inside its lease alone", () => {
+    // A fresh re-claim resets claimedAt; reclaiming here would clobber a
+    // worker that is actively dispatching the job.
+    expect(reclaimDecision(
+        {status: "inflight", claimedAtMs: NOW - 1, attempts: 0},
+        opts())).toBeNull();
+  });
+
+  test("reclaims a job whose claimedAt is not a real timestamp", () => {
+    // An unresolved serverTimestamp sentinel. Skipping would strand the job
+    // forever, which is worse than reclaiming one that might be live.
+    const d = reclaimDecision(
+        {status: "inflight", claimedAtMs: NaN, attempts: 0}, opts());
+    expect(d).not.toBeNull();
+    expect(d.dead).toBe(false);
+  });
+
+  test("re-queues with a backed-off schedule below the attempt cap", () => {
+    const d = reclaimDecision(
+        {status: "inflight", claimedAtMs: NOW - LEASE * 2, attempts: 1},
+        opts());
+    expect(d.dead).toBe(false);
+    expect(d.attempts).toBe(2);
+    expect(d.patch.status).toBe("queued");
+    expect(d.patch.lastError).toBe(RECLAIM_REASON);
+    // backoff is indexed off the PREVIOUS attempt count, not the new one.
+    expect(d.patch.nextAttemptAt).toEqual(new Date(NOW + 2000));
+  });
+
+  test("treats a missing attempts field as zero", () => {
+    const d = reclaimDecision(
+        {status: "inflight", claimedAtMs: NOW - LEASE * 2}, opts());
+    expect(d.attempts).toBe(1);
+  });
+
+  test("dead-letters once the attempt cap is reached", () => {
+    const d = reclaimDecision(
+        {status: "inflight", claimedAtMs: NOW - LEASE * 2, attempts: 4},
+        opts());
+    expect(d.dead).toBe(true);
+    expect(d.attempts).toBe(5);
+    expect(d.patch.status).toBe("dead");
+    // A dead job never retries, so it must carry no schedule.
+    expect(d.patch.nextAttemptAt).toBeUndefined();
+  });
+
+  test("honours a narrower attempt budget", () => {
+    // Rate-limited jobs get a smaller budget; the reclaim path has to respect
+    // whatever the caller resolved rather than assuming the default.
+    const d = reclaimDecision(
+        {status: "inflight", claimedAtMs: NOW - LEASE * 2, attempts: 1},
+        opts({maxAttempts: 2}));
+    expect(d.dead).toBe(true);
+  });
+
+  test("refuses a missing job rather than throwing", () => {
+    expect(reclaimDecision(null, opts())).toBeNull();
   });
 });

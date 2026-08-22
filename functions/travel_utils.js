@@ -30,6 +30,8 @@ const {
   endLiveActivity,
 } = require("./live_activity_dispatch");
 const {liveActivityCtx} = require("./live_activity_utils");
+const {recordOf} = require("./notification_policy");
+const {scanAppointmentWindow} = require("./appointment_scan");
 const {dayCountOf} = require("./day_slice_utils");
 const {isTerminalStatus, isCancelledStatus} = require("./time_utils");
 const {
@@ -552,22 +554,23 @@ async function runTravelAwareReminderSweep(deps) {
   const nowDate = now || new Date();
   const nowMs = nowMillis(nowDate);
   const windowEnd = new Date(nowMs + TRAVEL_WINDOW_MS);
-  const snap = await db
-      .collection("appointments")
-      .where("status", "in", PENDING_STATUSES)
-      .where("startTime", ">", nowDate)
-      .where("startTime", "<=", windowEnd)
-      .orderBy("startTime")
-      .limit(TRAVEL_SWEEP_MAX)
-      .get();
-  if (snap && snap.size === TRAVEL_SWEEP_MAX && logger) {
-    logger.warn(
-        "runTravelAwareReminderSweep: candidate cap hit; " +
-        "latest departures deferred to a later run", {cap: TRAVEL_SWEEP_MAX});
-  }
   const candidates = selectTravelCandidates(
-      (((snap && snap.docs) || [])).map(
-          (doc) => ({id: doc.id, ...(doc.data() || {})})),
+      await scanAppointmentWindow(db, {
+        // Deliberately narrower than the other two sweeps' OPEN_STATUSES.
+        statuses: PENDING_STATUSES,
+        field: "startTime",
+        lo: nowDate,
+        loOp: ">",
+        hi: windowEnd,
+        hiOp: "<=",
+        // ASCENDING here, unlike its two siblings: the window is entirely in
+        // the FUTURE, so the cap should keep the departures happening soonest.
+        descending: false,
+        cap: TRAVEL_SWEEP_MAX,
+        logger,
+        label: "runTravelAwareReminderSweep",
+        consequence: "latest departures deferred to a later run",
+      }),
       nowDate,
   );
   // The flip pass must run even with no upcoming candidates. A job stops
@@ -787,8 +790,7 @@ async function loadContextByEmployee(deps, employeeIds, nowMs) {
       }
       contextByEmployee.set(
           employeeDocId,
-          ((ctxSnap && ctxSnap.docs) || []).map(
-              (doc) => ({id: doc.id, ...(doc.data() || {})})));
+          ((ctxSnap && ctxSnap.docs) || []).map(recordOf));
     } catch (err) {
       if (logger) {
         logger.warn("travel: context query failed", {employeeDocId, err});

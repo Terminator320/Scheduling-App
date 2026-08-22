@@ -47,8 +47,6 @@
 // the same invocation — so this pushes to Wave at up to a few hundred
 // mutations against a 60-calls/min ceiling. RUN IT WHEN THE QUEUE IS QUIET.
 
-const {readFileSync} = require("fs");
-
 const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 
@@ -57,6 +55,7 @@ const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
 // The batched-write loop, shared so `--dry-run` cannot be forgotten at a
 // call site — see `_batch.js`.
 const {commitInBatches} = require("./_batch");
+const {printTargetBanner} = require("./_project");
 
 const BATCH_SIZE = 400;
 const SAMPLE_SIZE = 25;
@@ -72,41 +71,6 @@ const EXACT_FLAGS = ["--dry-run"];
  */
 function assertKnownFlags(argv) {
   rejectUnknownFlags(argv, {exact: EXACT_FLAGS});
-}
-
-/**
- * The project this run will write to, for the banner.
- *
- * THE SERVICE-ACCOUNT FILE IS THE CASE THAT MATTERS. `applicationDefault()`
- * reads the project out of that JSON internally and never puts it on
- * `app.options`, so a run authenticated the recommended way printed
- * "(unknown)" — the one line standing between a bulk rewrite and the wrong
- * project, blank precisely when credentials were supplied properly.
- *
- * @param {!Object} app The initialized admin app.
- * @return {string} A project id, or a marker saying it could not be resolved.
- */
-function resolveProjectId(app) {
-  const fromApp = app.options && app.options.projectId;
-  if (fromApp) return fromApp;
-
-  const fromEnv =
-    process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
-  if (fromEnv) return fromEnv;
-
-  const keyFile = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  if (keyFile) {
-    try {
-      const parsed = JSON.parse(readFileSync(keyFile, "utf8"));
-      if (parsed && parsed.project_id) return parsed.project_id;
-    } catch (err) {
-      // Reported, not swallowed: an unreadable key file is worth seeing before
-      // the run rather than inferring from a blank banner.
-      console.error(
-          `could not read the project id out of ${keyFile}: ${err.message}`);
-    }
-  }
-  return "(unknown — check your credentials)";
 }
 
 /**
@@ -168,11 +132,7 @@ async function main() {
 
   // Printed BEFORE anything is read — running a bulk rewrite against the wrong
   // project is the unrecoverable mistake, and this banner is the only defence.
-  const target = resolveProjectId(app);
-  const emulator = process.env.FIRESTORE_EMULATOR_HOST;
-  console.log(
-      `${dryRun ? "[dry-run] " : ""}target: ${target}` +
-      `${emulator ? ` via emulator ${emulator}` : " (LIVE)"}\n`);
+  printTargetBanner(app, {dryRun});
 
   const snap = await db.collection("clients").get();
 
@@ -274,5 +234,4 @@ module.exports = {
   explain,
   formatNanpNumber,
   patchFor,
-  resolveProjectId,
 };

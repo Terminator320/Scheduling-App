@@ -4,6 +4,10 @@ import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 
 import 'package:scheduling/core/images/appointment_image_loader.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
+import 'package:scheduling/features/clients/application/clients_providers.dart';
+import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
@@ -16,6 +20,8 @@ class DeviceDeregistrationDeps {
     required this.presence,
     required this.liveActivity,
     required this.imageLoader,
+    required this.clients,
+    required this.appointments,
   });
 
   /// Takes the read function so `Ref.read` and `WidgetRef.read` share ONE
@@ -28,6 +34,8 @@ class DeviceDeregistrationDeps {
     presence: read(presenceSyncControllerProvider),
     liveActivity: read(liveActivityRegistrationControllerProvider),
     imageLoader: read(appointmentImageLoaderProvider),
+    clients: read(clientsRepositoryProvider),
+    appointments: read(appointmentsRepositoryProvider),
   );
 
   final AppLogger logger;
@@ -35,10 +43,13 @@ class DeviceDeregistrationDeps {
   final PresenceSyncController presence;
   final LiveActivityRegistrationController liveActivity;
   final AppointmentImageLoader imageLoader;
+  final ClientsRepository clients;
+  final AppointmentsRepository appointments;
 }
 
 /// Drops every server-side registration this DEVICE holds, in the one order
-/// that works — and then forgets the session's local photo cache.
+/// that works — and then forgets everything the session cached locally: the
+/// photo bytes, and both repositories' client/appointment search windows.
 ///
 /// Push token, then presence, then the Live Activity tokens — and all three
 /// before whatever revokes the credential (`signOut`, `deleteAccount`, or the
@@ -87,6 +98,9 @@ Future<void> deregisterThisDevice(DeviceDeregistrationDeps deps) async {
   // leaving a deleted account signed in and the cache it exists to clear
   // uncleared.
   final imageLoader = deps.imageLoader;
+  // Same hoist, same reason.
+  final clients = deps.clients;
+  final appointments = deps.appointments;
 
   await _step(logger, 'push de-registration', push.unregisterCurrentDevice);
   await _step(logger, 'presence de-registration', presence.unregister);
@@ -105,6 +119,21 @@ Future<void> deregisterThisDevice(DeviceDeregistrationDeps deps) async {
   // forget. It goes through `step` like the rest now that it touches the file
   // system and can therefore fail.
   await _step(logger, 'imageCache de-registration', imageLoader.clear);
+  // LOCAL too, and for the same reason the photo cache is here: both
+  // repositories are root-scope `Provider`s, so their search windows live for
+  // the whole process — up to 5000 full client records (name, phone, email,
+  // address, contacts) and 5000 raw appointment maps (`clientName`,
+  // `clientPhone`, `address`). The 2-minute TTL decides whether a window is
+  // SERVED; it never evicts one. Nothing here is an access-control hole — the
+  // next signed-in user still needs to be an admin to render any of it — it is
+  // heap residency across sign-out on a shared handset, which is exactly the
+  // argument already accepted for the photo caches above.
+  await _step(logger, 'client cache clear', () async => clients.clearCaches());
+  await _step(
+    logger,
+    'appointment cache clear',
+    () async => appointments.clearCaches(),
+  );
 }
 
 /// Puts the three server-side registrations back after an exit that failed

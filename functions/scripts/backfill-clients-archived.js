@@ -33,6 +33,7 @@
 const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+const {printTargetBanner} = require("./_project");
 // The batched-write loop, shared so `--dry-run` cannot be forgotten at a
 // call site — see `_batch.js`.
 const {commitInBatches} = require("./_batch");
@@ -77,8 +78,14 @@ async function main() {
   assertKnownFlags(argv);
   const dryRun = argv.includes("--dry-run");
 
-  initializeApp({credential: applicationDefault()});
+  const app = initializeApp({credential: applicationDefault()});
   const db = getFirestore();
+
+  // Printed BEFORE the first read — `applicationDefault()` resolves whatever
+  // credentials are in the environment, and nothing on the command line says
+  // which project that is.
+  printTargetBanner(app, {dryRun});
+
   const snap = await db.collection("clients").get();
 
   let patched = 0;

@@ -20,19 +20,10 @@
  */
 
 const {mappedFieldsHash, fromWaveCustomer} = require("./mappers");
+const {adminFirestore} = require("../admin_firestore");
 const {
   readBusinessId, LIST_CUSTOMERS, LIST_CUSTOMERS_SINCE,
 } = require("./customer_queries");
-
-/**
- * Lazily requires `firebase-admin/firestore` so tests that inject `db`/`now`
- * never trigger it.
- * @return {{getFirestore: !Function, FieldValue: !Object}}
- */
-function adminFirestore() {
-  // eslint-disable-next-line global-require
-  return require("firebase-admin/firestore");
-}
 
 /** Firestore WriteBatch hard limit. */
 const BATCH_LIMIT = 500;

@@ -186,17 +186,22 @@ void main() {
     expect(harness.read().existingImages, isEmpty);
   });
 
-  test('skips the read entirely when the count is zero', () async {
-    // The detail sheet is the most-opened surface in the app and most jobs
-    // have no photos. Safe only because every write path stamps the counter —
-    // a create writes 0, the trigger owns it after that, and the CONTRACT
-    // step's cleanup script stamped everything older.
+  test('reads the subcollection even when the count says zero', () async {
+    // THE REGRESSION THIS PINS. The sheet used to skip the read whenever
+    // `pictureCount` was 0, on the reasoning that the counter is complete. It
+    // is not complete in TIME: `debouncedRecountPictures` settles for 2 s
+    // before it even runs the aggregate, so a photo added seconds ago still
+    // reads as 0 — and a parent write that exhausts its retry budget leaves it
+    // at 0 forever. Both cases rendered "No photos" over photos that exist.
     final repo = _PicturesRepo(stored: [_image('p1')]);
     final harness = build(_appointmentWith(0), repo);
 
     await settle();
 
-    expect(repo.calls, 0);
-    expect(harness.read().existingImages, isEmpty);
+    expect(repo.calls, 1);
+    expect(
+      harness.read().existingImages.map((i) => i.storagePath),
+      ['appointments/a1/images/p1'],
+    );
   });
 }

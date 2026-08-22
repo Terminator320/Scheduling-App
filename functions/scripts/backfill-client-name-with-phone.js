@@ -101,6 +101,7 @@ const {
 // rather than renamed. This script rewrites live Wave customers.
 const {toMillis} = require("../time_utils");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+const {printTargetBanner} = require("./_project");
 // The batched-write loop, shared so `--dry-run` cannot be forgotten at a
 // call site — see `_batch.js`.
 const {commitInBatches} = require("./_batch");
@@ -276,13 +277,7 @@ async function main() {
   // Printed BEFORE anything is read. Running a bulk rename against the wrong
   // project is the other unrecoverable mistake here, and the only defence is
   // the operator seeing which one they hit.
-  const target = app.options.projectId ||
-    process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT ||
-    "(unknown — check your credentials)";
-  const emulator = process.env.FIRESTORE_EMULATOR_HOST;
-  console.log(
-      `${dryRun ? "[dry-run] " : ""}target: ${target}` +
-      `${emulator ? ` via emulator ${emulator}` : " (LIVE)"}\n`);
+  printTargetBanner(app, {dryRun});
 
   const snap = await db.collection("clients").get();
 

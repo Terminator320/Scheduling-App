@@ -70,6 +70,7 @@ const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {drainQueue, countQueuedJobs} = require("../wave/worker");
 const {readWaveBusinessId} = require("../wave/sync_run");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+const {printTargetBanner} = require("./_project");
 
 /** Jobs claimed per round. Matches the interactive sync's batch. */
 const BATCH_LIMIT = 20;
@@ -170,13 +171,7 @@ async function main() {
   // Printed BEFORE anything is read or pushed. This one writes to a THIRD
   // party — the wrong project here renames customers in the wrong Wave
   // business, which no amount of re-running fixes.
-  const target = app.options.projectId ||
-    process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT ||
-    "(unknown — check your credentials)";
-  const emulator = process.env.FIRESTORE_EMULATOR_HOST;
-  console.log(
-      `${dryRun ? "[dry-run] " : ""}target: ${target}` +
-      `${emulator ? ` via emulator ${emulator}` : " (LIVE)"}`);
+  printTargetBanner(app, {dryRun});
 
   const depth = await countQueuedJobs();
   console.log(`queued jobs: ${depth}\n`);

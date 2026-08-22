@@ -135,20 +135,24 @@ class AppointmentLinkOpener {
   /// Notification taps open appointment detail on calendar hub.
   void _startPushTaps() {
     final service = ref.read(pushNotificationServiceProvider);
+    // Hoisted like the widget-tap sibling above: neither the `initialMessage`
+    // chain nor the stream's `onError` is cancelled by dispose, so a failure
+    // after teardown would `ref.read` on an unmounted consumer and throw out
+    // of the very call that exists to report it.
+    final logger = ref.read(loggerProvider);
     unawaited(
       service
           .initialMessage()
           .then(handlePushTap)
           .catchError(
-            (Object e, StackTrace st) => ref
-                .read(loggerProvider)
-                .warn('PUSH-TAP initial message failed', e, st),
+            (Object e, StackTrace st) =>
+                logger.warn('PUSH-TAP initial message failed', e, st),
           ),
     );
     _pushTapSubscription = service.onMessageOpenedApp.listen(
       handlePushTap,
       onError: (Object e, StackTrace st) =>
-          ref.read(loggerProvider).warn('PUSH-TAP stream error', e, st),
+          logger.warn('PUSH-TAP stream error', e, st),
     );
   }
 

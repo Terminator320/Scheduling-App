@@ -82,13 +82,10 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
   @override
   void initState() {
     super.initState();
-    // Read the logger here, not lazily: the debounce handler can fire after
-    // this view is gone, and `ref.read` on an unmounted consumer throws.
-    final logger = ref.read(loggerProvider);
-    _searchDebounce = Debouncer(
+    _searchDebounce = Debouncer.tagged(
       kSearchDebounce,
-      onError: (error, stackTrace) =>
-          logger.warn('CLI-SEARCH debounced search failed', error, stackTrace),
+      logger: ref.read(loggerProvider),
+      tag: 'CLI-SEARCH debounced search failed',
     );
   }
 

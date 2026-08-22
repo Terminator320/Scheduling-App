@@ -51,16 +51,10 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
   @override
   void initState() {
     super.initState();
-    // Read the logger here, not lazily: the debounce handler can fire after
-    // this sheet is dismissed, and `ref.read` on an unmounted consumer throws.
-    final logger = ref.read(loggerProvider);
-    _clientSearchDebounce = Debouncer(
+    _clientSearchDebounce = Debouncer.tagged(
       kSearchDebounce,
-      onError: (error, stackTrace) => logger.warn(
-        'CLI-SEARCH debounced client search failed',
-        error,
-        stackTrace,
-      ),
+      logger: ref.read(loggerProvider),
+      tag: 'CLI-SEARCH debounced client search failed',
     );
   }
 

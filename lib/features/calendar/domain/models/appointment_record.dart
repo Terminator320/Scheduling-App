@@ -84,15 +84,16 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     );
   }
 
-  /// Whether this job carries photos — the card's indicator, and the detail
-  /// sheet's decision to open the subcollection at all.
+  /// Whether this job carries photos — the card's photo INDICATOR, and nothing
+  /// else.
   ///
   /// [pictureCount] is the only store left: the `pictures` array went at the
-  /// CONTRACT step, and its cleanup script stamped a count on every document
-  /// that predates the change, so no document shape reads 0 while photos
-  /// exist. That completeness is the precondition for gating a READ on this —
-  /// the counter is function-owned, so a job whose recount never landed would
-  /// otherwise hide its own photos with nothing anywhere to say so.
+  /// CONTRACT step. It is function-owned and debounced, so it trails a fresh
+  /// upload by a couple of seconds and stays wrong indefinitely if the recount
+  /// write never lands. That is tolerable for an indicator and NOT tolerable
+  /// for a read gate — never let this decide whether to open the
+  /// subcollection. The detail sheet reads `appointments/{id}/images`
+  /// unconditionally for exactly that reason.
   bool get hasPictures => pictureCount > 0;
 
   /// Anything unparseable reads as 0 rather than throwing: this feeds a

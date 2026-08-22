@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
+import 'package:scheduling/features/live_activity/application/live_activity_preference.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/live_activity/data/live_activity_token_repository.dart';
 import 'package:scheduling/features/live_activity/domain/live_activity_token.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class _MockAuth extends Mock implements FirebaseAuth {}
 
@@ -17,11 +20,12 @@ class _MockEmployeesRepo extends Mock implements EmployeesRepository {}
 
 class _MockTokenRepo extends Mock implements LiveActivityTokenRepository {}
 
-// NOTE ON COVERAGE / SKIPPED CASES
-// `sync()`/`canHostCards()`/`endLocalCards()` hard-gate on `dart:io Platform.isIOS`,
-// which is unfakeable on this Windows test host, so the cold-start, concurrent-sync,
-// and device-only token-stream paths are untested here — only `unregister()` (fully
-// covered) and the off-iOS no-op path are exercised.
+// NOTE ON COVERAGE
+// The iOS gate is now an INJECTED `isIosPlatform` predicate rather than a bare
+// `dart:io Platform.isIOS`, so `sync()`'s pre-plugin branches are reachable
+// from this host — see the "on-iOS" group below. What stays device-only is
+// everything past `_ensurePlugin()`: the ActivityKit probes and the two token
+// streams have no seam and are not faked here.
 void main() {
   late _MockAuth auth;
   late _MockUser user;
@@ -52,13 +56,24 @@ void main() {
     ).thenAnswer((_) async {});
   });
 
-  ProviderContainer makeContainer() {
+  ProviderContainer makeContainer({
+    bool onIos = false,
+    Map<String, dynamic>? accountDoc,
+  }) {
     final container = ProviderContainer(
       overrides: [
         employeesRepositoryProvider.overrideWithValue(employees),
         liveActivityTokenRepositoryProvider.overrideWithValue(tokenRepo),
+        if (accountDoc != null)
+          currentUserDocProvider.overrideWith(
+            (ref) => Stream<Map<String, dynamic>>.value(accountDoc),
+          ),
         liveActivityRegistrationControllerProvider.overrideWith(
-          (ref) => LiveActivityRegistrationController(ref, auth: auth),
+          (ref) => LiveActivityRegistrationController(
+            ref,
+            auth: auth,
+            isIosPlatform: () => onIos,
+          ),
         ),
       ],
     );
@@ -128,6 +143,81 @@ void main() {
           kind: any(named: 'kind'),
         ),
       );
+    });
+  });
+
+  group('on-iOS, before the plugin', () {
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+    });
+
+    test('a stored opt-out deletes the stale push-to-start rows', () async {
+      // `:117-125`, and untested until the platform gate became injectable: a
+      // stored opt-out is AUTHORITATIVE, so a sync reconciles by actively
+      // removing rows an interrupted previous opt-out left behind. Skip it and
+      // the server goes on push-starting cards on a device that opted out.
+      SharedPreferences.setMockInitialValues({
+        'live_activity_enabled': false,
+      });
+      final container = makeContainer(onIos: true)
+        ..listen(liveActivityEnabledProvider, (_, _) {});
+      await container.read(liveActivityEnabledProvider.notifier).ready;
+
+      await controllerOf(container).sync();
+
+      verify(
+        () => tokenRepo.deleteTokensOfKind(
+          userDocId: 'doc-1',
+          kind: LiveActivityTokenKind.pushToStart,
+        ),
+      ).called(1);
+    });
+
+    test('an unsettled account doc registers nothing and deletes nothing',
+        () async {
+      // Null from `readAccountGateInputs` means "we don't know yet" — leaving
+      // the registration alone, NOT tearing it down. A transient stream error
+      // must never de-register a live device.
+      final container = makeContainer(onIos: true)
+        ..listen(liveActivityEnabledProvider, (_, _) {});
+      await container.read(liveActivityEnabledProvider.notifier).ready;
+
+      await controllerOf(container).sync();
+
+      verifyNever(
+        () => tokenRepo.deleteTokensOfKind(
+          userDocId: any(named: 'userDocId'),
+          kind: any(named: 'kind'),
+        ),
+      );
+      verifyNever(() => employees.findUserByUid(any()));
+    });
+
+    test('a disabled account is refused by the gate, without a teardown',
+        () async {
+      // The `shouldRegisterLiveActivity` arm: cancel local streams and stop.
+      // It must NOT delete server rows — that is the opt-out path's job, and
+      // a deactivated account has its rows purged server-side by
+      // `syncUsersByUid` instead.
+      final container =
+          makeContainer(
+              onIos: true,
+              accountDoc: const {'role': 'employee', 'status': 'disabled'},
+            )
+            ..listen(liveActivityEnabledProvider, (_, _) {})
+            ..listen(currentUserDocProvider, (_, _) {});
+      await container.read(liveActivityEnabledProvider.notifier).ready;
+      await container.read(currentUserDocProvider.future);
+
+      await controllerOf(container).sync();
+
+      verifyNever(
+        () => tokenRepo.deleteTokensOfKind(
+          userDocId: any(named: 'userDocId'),
+          kind: any(named: 'kind'),
+        ),
+      );
+      verifyNever(() => employees.findUserByUid(any()));
     });
   });
 

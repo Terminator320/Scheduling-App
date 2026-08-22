@@ -394,11 +394,23 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   callback, so a throw inside a debounced search had no caller left to catch it
   and the search just returned nothing, with nothing logged and nothing in
   Crashlytics. Requiring it is what makes that omission impossible at a NEW
-  call site. Each site passes a tagged `logger.warn` handler built from a
-  logger resolved where the `Debouncer` is **CONSTRUCTED** (`initState`), never
-  read inside the callback and never a lazy `late final` touching `ref` — the
-  handler can fire after dispose, and Riverpod 3 `ref.read` on an unmounted
-  consumer throws (see `.claude/rules/error-handling.md`).
+  call site.
+  **Build one through `Debouncer.tagged(duration, logger:, tag:)`, not the raw
+  constructor** (2026-08-22). All six sites use it. Requiring `onError` closed
+  the omission case; what it could not close is *where the logger is resolved*
+  — the handler can fire after dispose, and Riverpod 3 `ref.read` on an
+  unmounted consumer throws (see `.claude/rules/error-handling.md`), so the
+  logger has to be read where the `Debouncer` is CONSTRUCTED (`initState`),
+  never inside the callback and never via a lazy `late final` touching `ref`.
+  Prose cannot enforce that; a required `AppLogger` PARAMETER can, because an
+  argument is evaluated at the construction site. Five of the six sites carried
+  a restatement of this paragraph as a comment, and the sixth — the one that
+  deviated — is the one that shipped a FATAL. `tag` is the Crashlytics warn tag.
+  **`kAddressLookupDebounce` (700 ms) lives beside `kSearchDebounce`** for the
+  one caller that needs a different interval: every address lookup is a BILLED
+  Places call behind a per-uid rate limit, where a client search spends a
+  Firestore read the app already pays for. Two dials, compared in one place,
+  rather than a number re-spelled at a call site.
 - Localization (`gen_l10n`):
   - Source of truth: `lib/l10n/app_en.arb` (template) + `lib/l10n/app_fr.arb`.
   - Generated `app_localizations*.dart` live in `lib/l10n/.gen/` and are

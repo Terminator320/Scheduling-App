@@ -19,11 +19,11 @@ class PendingUpload {
   final int enqueuedAtMs;
 
   /// Images already uploaded to Storage on a previous pass whose
-  /// appointment-doc link (the `arrayUnion` append) hasn't landed yet. They're
-  /// re-attempted append-only on the next drain — never re-uploaded, since
-  /// their local files are already gone. Preserving each image's exact
-  /// `uploadedAt` keeps the `arrayUnion` re-link idempotent if the earlier
-  /// append actually committed server-side.
+  /// subcollection link hasn't landed yet. They're re-attempted append-only on
+  /// the next drain — never re-uploaded, since their local files are already
+  /// gone. The re-link is idempotent because the document id is DERIVED
+  /// (`appointmentImageDocId`, from `storagePath`), so a second write of a row
+  /// the earlier pass had committed lands on the same document.
   final List<AppointmentImage> uploaded;
 
   String get id => '${appointmentId}_$enqueuedAtMs';
@@ -70,10 +70,10 @@ class PendingUpload {
   // SharedPreferences (an unencrypted plist on iOS, included in device and
   // iCloud backups), so persisting one there put a stronger credential in a
   // weaker store than the Keychain-backed `SecureStorageService` next to it.
-  // `AppointmentImageUploadService` re-mints it from `storagePath` via
-  // `ImageStorageService.downloadUrlFor` before the re-link, which reproduces
-  // the identical map — the token is stable per object — so the `arrayUnion`
-  // dedupe is unaffected.
+  // Nothing re-mints it: the re-link writes the row at
+  // `appointmentImageDocId(storagePath)`, so the identity that makes the
+  // append idempotent is derived rather than carried, and a dropped `url`
+  // costs nothing.
   //
   // A LEGACY image with no `storagePath` keeps its `url`: there it is the only
   // identity the entry has, and dropping it would strand the bytes.

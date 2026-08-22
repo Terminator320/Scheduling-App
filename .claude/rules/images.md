@@ -45,12 +45,25 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   `rotateAssignedImageTokens` control that covered the gap
   (`functions/appointment_image_tokens.js`, called from `syncUsersByUid`'s
   deactivation branch) was deleted at the same time, along with the
-  `(employeeIds CONTAINS, endTime DESC)` composite it needed, because there is
-  no longer a stored link for it to invalidate. Two limits remain and neither
-  is fixable in code: this does **not** revoke a URL somebody captured under an
-  old build (those tokens are still live on their objects unless rotated by
-  hand), and it does **not** stop an entitled person screenshotting or sharing
-  a photo they can legitimately see.
+  `(employeeIds CONTAINS, endTime DESC)` composite it needed.
+  **That deletion's premise — "there is no stored link left to invalidate" —
+  is TRUE OF NEW PHOTOS ONLY, and the rules say so.** A LEGACY
+  `appointments/*/images` row that never had a `storagePath` still carries its
+  `url`: `backfill-appointment-images.js` preserves it deliberately (dropping
+  it destroys the only thing that can render the photo), `firestore.rules`
+  accepts the field up to 1000 chars, and `AppointmentImageLoader`'s fallback
+  is documented as permanent. Each such string is still a rules-free,
+  non-expiring, transferable link that survives deactivation, and now nothing
+  rotates it. **The deciding fact is a number nobody has yet:** count
+  `appointments/*/images` where `url` is set and `storagePath` is empty. Zero
+  means dropping `url` from the rules allowlist and deleting the loader
+  fallback, which makes the premise true; any at all means re-homing those
+  bytes under a real `storagePath` or reinstating a rotation scoped to them.
+  Two further limits remain and neither is fixable in code: this does **not**
+  revoke a URL somebody captured under an old build (those tokens are still
+  live on their objects unless rotated by hand), and it does **not** stop an
+  entitled person screenshotting or sharing a photo they can legitimately
+  see.
   **Photos render OFFLINE again as of 2026-08-16, and this was never in
   tension with the rule above.** The render-from-bytes change was written up as
   costing the on-disk cache outright — "photos re-download once per session and
@@ -210,19 +223,25 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   sole handle on its bytes, and `AppointmentImageLoader` turns it back into a
   `Reference` through `refFromURL`. **Keep that fallback** — it is the one part
   of the old shape that is load-bearing rather than compatibility.
-  **`pictureCount` is the only thing left that knows whether a job has photos**,
-  and both the card's indicator and the detail sheet's decision to read the
-  subcollection at all gate on it. That gate is safe only because the counter
-  is COMPLETE, which took three separate things and needs all three:
-  `addAppointments` writes an explicit `0` at create (the one client write the
-  rules allow — `allow create` accepts the key only as 0),
-  `recountAppointmentPictures` owns it from the first photo onwards as an
-  absolute `count()` aggregate, and
-  `functions/scripts/clear-appointment-picture-arrays.js` stamped it on every
-  document that predates the change. Break any one of them and a job renders
-  its photos as none, silently — the exact failure this migration was shaped
-  to avoid. `toMap()` must never emit it, and the rules reject an update that
-  touches it.
+  **`pictureCount` backs the card's photo INDICATOR and nothing else. It must
+  never gate a READ, and it briefly did.** The counter is function-owned and
+  DEBOUNCED — `debouncedRecountPictures` settles for 2 s before it even runs
+  the aggregate, and a parent `update()` that exhausts its retry budget leaves
+  it wrong forever with only a server-side log. Gating the detail sheet's
+  subcollection read on it therefore made a just-added photo invisible on
+  reopen and a failed recount invisible permanently, which is the exact failure
+  this migration was shaped to avoid; the sheet now reads unconditionally and
+  pays one bounded `get`. Being a couple of seconds behind costs an indicator
+  nothing, which is why the counter is still worth having.
+  Three things keep it as close to right as it gets: `addAppointments` writes
+  an explicit `0` at create (the one client write the rules allow — `allow
+  create` accepts the key only as 0), `recountAppointmentPictures` owns it from
+  the first photo onwards as an absolute `count()` aggregate, and
+  `functions/scripts/clear-appointment-picture-arrays.js` re-stamps it from the
+  subcollection on **every** document it scans — including the ones carrying no
+  array, which it used to `continue` straight past (`needsRecount`, pinned).
+  `toMap()` must never emit it, and the rules reject an update that touches
+  it.
   **`EventDetailsController` seeds the sheet with NO photos and fills it from
   the subcollection read**, adopting the result only while the list is still
   what `build()` seeded — a removal made during the round trip must not be
@@ -239,7 +258,11 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   capped the array at 100 to keep the parent document under its 1 MB ceiling,
   and moving the photos out is precisely what makes that unreachable, so it was
   not reinstated as a ceiling — rules cannot count documents in a subcollection
-  anyway. What replaces it is visibility at the same number:
+  anyway. **The array clause itself is NOT gone**: `firestore.rules` still
+  enforces `d.pictures.size() <= 100` for documents the clear script has not
+  reached, whose arrays ride along in `request.resource.data` on every ordinary
+  edit. Read "not reinstated" as "no equivalent on the SUBCOLLECTION", never as
+  "the clause was deleted". What replaces it is visibility at the same number:
   `AppointmentImagesStore.scanLimit` (100) bounds the read and warns at the
   cap, and `PICTURE_COUNT_WARN_CAP` (`functions/appointment_images.js`) makes
   the recount warn past it. The picker's own

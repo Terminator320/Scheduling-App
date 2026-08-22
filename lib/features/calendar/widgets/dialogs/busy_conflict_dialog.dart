@@ -14,121 +14,149 @@ Future<bool> showBusyConflictDialog(
 }) async {
   final result = await showDialog<bool>(
     context: context,
-    builder: (dialogCtx) {
-      final theme = Theme.of(dialogCtx);
-      final scheme = theme.colorScheme;
-      final statusColors = theme.statusColors;
-      return Dialog(
-        insetPadding: const EdgeInsets.symmetric(
-          horizontal: 26,
-          vertical: AppSpacing.sp24,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.rDialog),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.sp24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: statusColors.warningContainer,
-                  borderRadius: BorderRadius.circular(AppRadius.r12),
-                ),
-                child: Icon(
-                  Icons.warning_amber_rounded,
-                  color: statusColors.onWarningContainer,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sp16),
-              Text(
-                context.l10n.calendar_scheduleConflict,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sp4),
-              Text(
-                // The clash is a DAILY-window overlap, so the run being
-                // booked must name both its ends — otherwise a Mon–Fri job
-                // reports a Thursday conflict under a headline reading
-                // "MON 3 AUG".
-                DateUtilsHelper.formatWhenLine(
-                  start,
-                  end,
-                  lastDay: lastWorkDayOfWindow(start, end),
-                ),
-                style: theme.monoType.data,
-              ),
-              const SizedBox(height: AppSpacing.sp16),
-              Text(
-                context.l10n.calendar_alreadyBookedThisSlot,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sp12),
-              ...busyEmployees.map((e) => _BusyEmployeeRow(employee: e)),
-              const Divider(height: AppSpacing.sp24),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 1),
-                    child: Icon(
-                      Icons.info_outline_rounded,
-                      size: 14,
-                      color: statusColors.onWarningContainer,
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sp8),
-                  Expanded(
-                    child: Text(
-                      context.l10n.calendar_doubleBookingWarning,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: statusColors.onWarningContainer,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sp24),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 44),
-                      ),
-                      onPressed: () => Navigator.pop(dialogCtx, false),
-                      child: Text(context.l10n.common_cancel),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sp12),
-                  Expanded(
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 44),
-                      ),
-                      onPressed: () => Navigator.pop(dialogCtx, true),
-                      child: Text(context.l10n.calendar_scheduleAnyway),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      );
-    },
+    builder: (dialogCtx) => _BusyConflictDialog(
+      busyEmployees: busyEmployees,
+      start: start,
+      end: end,
+    ),
   );
   return result ?? false;
+}
+
+/// The dialog body as a widget rather than a tree inside the `showDialog`
+/// closure — the same move `_BusyEmployeeRow` below already makes, and what
+/// keeps the launcher above readable as the one thing it does.
+class _BusyConflictDialog extends StatelessWidget {
+  const _BusyConflictDialog({
+    required this.busyEmployees,
+    required this.start,
+    required this.end,
+  });
+
+  final List<EmployeeRecord> busyEmployees;
+  final DateTime start;
+  final DateTime end;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final statusColors = theme.statusColors;
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: 26,
+        vertical: AppSpacing.sp24,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadius.rDialog),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.sp24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: statusColors.warningContainer,
+                borderRadius: BorderRadius.circular(AppRadius.r12),
+              ),
+              child: Icon(
+                Icons.warning_amber_rounded,
+                color: statusColors.onWarningContainer,
+                size: 22,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sp16),
+            Text(
+              context.l10n.calendar_scheduleConflict,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sp4),
+            Text(
+              // The clash is a DAILY-window overlap, so the run being booked
+              // must name both its ends — otherwise a Mon–Fri job reports a
+              // Thursday conflict under a headline reading "MON 3 AUG".
+              DateUtilsHelper.formatWhenLine(
+                start,
+                end,
+                lastDay: lastWorkDayOfWindow(start, end),
+              ),
+              style: theme.monoType.data,
+            ),
+            const SizedBox(height: AppSpacing.sp16),
+            Text(
+              context.l10n.calendar_alreadyBookedThisSlot,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sp12),
+            ...busyEmployees.map((e) => _BusyEmployeeRow(employee: e)),
+            const Divider(height: AppSpacing.sp24),
+            _warningNote(context),
+            const SizedBox(height: AppSpacing.sp24),
+            _actions(context),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _warningNote(BuildContext context) {
+    final theme = Theme.of(context);
+    final statusColors = theme.statusColors;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 1),
+          child: Icon(
+            Icons.info_outline_rounded,
+            size: 14,
+            color: statusColors.onWarningContainer,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sp8),
+        Expanded(
+          child: Text(
+            context.l10n.calendar_doubleBookingWarning,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: statusColors.onWarningContainer,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _actions(BuildContext context) => Row(
+    children: [
+      Expanded(
+        child: OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 44),
+          ),
+          onPressed: () => Navigator.pop(context, false),
+          child: Text(context.l10n.common_cancel),
+        ),
+      ),
+      const SizedBox(width: AppSpacing.sp12),
+      Expanded(
+        child: FilledButton(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(double.infinity, 44),
+          ),
+          onPressed: () => Navigator.pop(context, true),
+          child: Text(context.l10n.calendar_scheduleAnyway),
+        ),
+      ),
+    ],
+  );
 }
 
 class _BusyEmployeeRow extends StatelessWidget {

@@ -97,15 +97,12 @@ const {
   looksLikeBusinessName,
 } = require("../client_name_utils");
 const {toMillis} = require("../time_utils");
-// Shared with the other one-off repairs: `resolveProjectId` prints a real id
-// when credentials came from a service-account JSON (applicationDefault keeps
-// the project internal), and `explain` is the same operator-facing error
-// report. The flag LISTS deliberately stay local to each script — see
-// `_flags.js` — so these scripts share the RULE, not the vocabulary.
-const {
-  explain,
-  resolveProjectId,
-} = require("./backfill-client-phone-formatting");
+// Shared with the other one-off repairs: `explain` is the same
+// operator-facing error report, and the target banner lives in `_project.js`.
+// The flag LISTS deliberately stay local to each script — see `_flags.js` — so
+// these scripts share the RULE, not the vocabulary.
+const {explain} = require("./backfill-client-phone-formatting");
+const {printTargetBanner} = require("./_project");
 // The SAME split the rename itself now applies, imported rather than copied:
 // this script repairs what that one wrote, so a divergence between the two
 // would leave the collection holding two different splits of the same name.
@@ -290,10 +287,7 @@ async function main() {
   // Printed BEFORE anything is read. Running a bulk repair against the wrong
   // project is the unrecoverable mistake here, and this banner is the only
   // thing standing in the way.
-  const emulator = process.env.FIRESTORE_EMULATOR_HOST;
-  console.log(
-      `${dryRun ? "[dry-run] " : ""}target: ${resolveProjectId(app)}` +
-      `${emulator ? ` via emulator ${emulator}` : " (LIVE)"}\n`);
+  printTargetBanner(app, {dryRun});
 
   const snap = await db.collection("clients").get();
 

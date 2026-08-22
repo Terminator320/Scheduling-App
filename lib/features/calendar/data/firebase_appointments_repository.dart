@@ -90,6 +90,16 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     if (!_localWrites.isClosed) _localWrites.add(null);
   }
 
+  /// Unlike [_invalidateSearchCache] this does NOT poke `_localWrites`. Its
+  /// callers are signing the user out, and waking every `onLocalWrite`
+  /// listener on the way would refetch against a credential that is about to
+  /// be revoked.
+  @override
+  void clearCaches() {
+    _searchCache.clear();
+    _scanWindow = null;
+  }
+
   final StreamController<void> _localWrites = StreamController.broadcast();
 
   @override
@@ -558,21 +568,43 @@ List<AppointmentRecord> matchHistoryDocs(HistorySearchScan scan) {
 
   final matches = <AppointmentRecord>[];
   for (final doc in scan.docs) {
-    final a = AppointmentRecord.fromMap(doc.id, doc.data);
+    // The three fields the filter reads come straight off the raw map, and
+    // `fromMap` is paid only for a document that survives. The scan window is
+    // `_historySearchScanLimit` documents and a query keeps a handful, so
+    // building a full record first meant ~20 map reads, four date conversions,
+    // two list parses and a freezed constructor for every document rejected.
+    final data = doc.data;
     final matchesClient =
         normalizedQuery.isNotEmpty &&
-        ClientSearchPolicy.normalize(a.clientName).contains(normalizedQuery);
+        ClientSearchPolicy.normalize(
+          (data['clientName'] ?? '').toString(),
+        ).contains(normalizedQuery);
     final matchesEmployee =
         normalizedQuery.isNotEmpty &&
-        a.employeeNames.any(
+        _rawStrings(data['employeeNames']).any(
           (e) => ClientSearchPolicy.normalize(e).contains(normalizedQuery),
         );
     final matchesPhone =
         queryDigits.isNotEmpty &&
-        ClientSearchPolicy.digitsOnly(a.clientPhone).contains(queryDigits);
-    if (matchesClient || matchesEmployee || matchesPhone) matches.add(a);
+        ClientSearchPolicy.digitsOnly(
+          (data['clientPhone'] ?? '').toString(),
+        ).contains(queryDigits);
+    if (!matchesClient && !matchesEmployee && !matchesPhone) continue;
+    matches.add(AppointmentRecord.fromMap(doc.id, data));
   }
   return matches;
+}
+
+/// The list shape `AppointmentRecord._parseStringList` produces, for the
+/// filter above — which reads `employeeNames` before there is a record.
+///
+/// Deliberately the same two accepted shapes (a list of strings, or a bare
+/// string), so a document the filter rejects is one the record would also have
+/// had nothing to match on.
+List<String> _rawStrings(dynamic value) {
+  if (value is List) return value.whereType<String>().toList();
+  if (value is String && value.isNotEmpty) return [value];
+  return const [];
 }
 
 class _CachedHistorySearch {

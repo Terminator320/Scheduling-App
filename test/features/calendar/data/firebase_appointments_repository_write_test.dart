@@ -131,8 +131,9 @@ void main() {
       // A create is the only write the rules let touch this counter, and it
       // has to: the recount trigger fires on a photo write, so without the
       // seed every photo-less job would read as count-unknown forever. The
-      // detail sheet skips its subcollection read on a 0, and the card's photo
-      // indicator reads the same number.
+      // card's photo indicator reads this number. (The detail sheet no longer
+      // does — gating a READ on a debounced counter is what made a
+      // just-uploaded photo invisible.)
       final doc = _MockDoc();
       final batch = _MockBatch();
       when(() => collection.doc('a1')).thenReturn(doc);
@@ -193,6 +194,75 @@ void main() {
     test('is a no-op (no transaction) when no record has an id', () async {
       await repo().updateAppointments([_record(id: null)]);
       verifyNever(() => firestore.runTransaction<Null>(any()));
+    });
+  });
+
+  group('seriesOpId', () {
+    /// Captures the `seriesOpId` written onto every document of one batch.
+    Future<List<String>> opIdsFromRewrite() async {
+      final batch = _MockBatch();
+      when(() => collection.doc(any())).thenReturn(_MockDoc());
+      when(() => firestore.batch()).thenReturn(batch);
+      when(() => batch.update(any(), any())).thenReturn(null);
+      when(() => batch.delete(any())).thenReturn(null);
+      when(() => batch.set<Map<String, dynamic>>(any(), any())).thenReturn(null);
+      when(batch.commit).thenAnswer((_) async {});
+
+      await repo().rewriteSeries(
+        updated: _record(),
+        deleteIds: const ['a9'],
+        copies: [_record(id: 'a2'), _record(id: 'a3')],
+      );
+
+      final written = <String>[
+        for (final m in verify(
+          () => batch.update(any(), captureAny()),
+        ).captured)
+          ((m as Map).cast<String, dynamic>()['seriesOpId'] as String),
+        for (final m in verify(
+          () => batch.set<Map<String, dynamic>>(any(), captureAny()),
+        ).captured)
+          ((m as Map).cast<String, dynamic>()['seriesOpId'] as String),
+      ];
+      return written;
+    }
+
+    test('is the SAME on every document of one batch', () async {
+      // The producer half of the notification-collapse contract. Every doc a
+      // single series edit touches carries one id, so the server folds the
+      // fan-out into one push per employee. The server half is pinned; nothing
+      // pinned this, which is the half that fixed "cancel Tuesday then
+      // Thursday → second push dropped".
+      final ids = await opIdsFromRewrite();
+
+      expect(ids, hasLength(3));
+      expect(ids.toSet(), hasLength(1));
+      expect(ids.first, isNotEmpty);
+    });
+
+    test('is DIFFERENT across two separate calls', () async {
+      // The other half, and the one that broke: reusing an id across two
+      // independent edits made the server treat the second as a replay of the
+      // first and drop its push entirely.
+      final first = await opIdsFromRewrite();
+      final second = await opIdsFromRewrite();
+
+      expect(first.first, isNot(second.first));
+    });
+
+    test('a plain update stamps one too', () async {
+      final doc = _MockDoc();
+      when(() => collection.doc('a1')).thenReturn(doc);
+      when(() => doc.update(any())).thenAnswer((_) async {});
+
+      await repo().updateAppointment(_record());
+      await repo().updateAppointment(_record());
+
+      final ids = verify(() => doc.update(captureAny())).captured
+          .map((m) => (m as Map).cast<String, dynamic>()['seriesOpId'])
+          .toList();
+      expect(ids, hasLength(2));
+      expect(ids.first, isNot(ids.last));
     });
   });
 }

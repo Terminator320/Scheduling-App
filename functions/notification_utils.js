@@ -56,6 +56,7 @@ const {
   recordOf: _record,
   contextFor: _contextFor,
 } = require("./notification_policy");
+const {scanAppointmentWindow} = require("./appointment_scan");
 
 /**
  * Reads (and caches) one recipient's user doc plus their live token docs.
@@ -661,21 +662,20 @@ async function runOverduePromptSweep(deps) {
   // A doc with no `endTime` is excluded by this filter, where the startTime
   // form read it and dropped it in code (`selectOverdueCandidates` requires a
   // parseable endTime). Same outcome, one less read.
-  const snap = await db
-      .collection("appointments")
-      .where("status", "in", OPEN_STATUSES)
-      .where("endTime", ">", windowStart)
-      .where("endTime", "<=", nowDate)
-      .orderBy("endTime", "desc")
-      .limit(OVERDUE_SWEEP_MAX)
-      .get();
-  if (snap && snap.size === OVERDUE_SWEEP_MAX && deps.logger) {
-    deps.logger.warn(
-        "runOverduePromptSweep: candidate cap hit; " +
-        "oldest jobs deferred to a later run", {cap: OVERDUE_SWEEP_MAX});
-  }
   const candidates = selectOverdueCandidates(
-      ((snap && snap.docs) || []).map(_record),
+      await scanAppointmentWindow(db, {
+        statuses: OPEN_STATUSES,
+        field: "endTime",
+        lo: windowStart,
+        loOp: ">",
+        hi: nowDate,
+        hiOp: "<=",
+        descending: true,
+        cap: OVERDUE_SWEEP_MAX,
+        logger: deps.logger,
+        label: "runOverduePromptSweep",
+        consequence: "oldest jobs deferred to a later run",
+      }),
       nowDate,
   );
   const cache = new Map();
@@ -746,25 +746,22 @@ async function runDailyDigest(deps) {
   // this shape (`runOverduePromptSweep`) orders `endTime` DESC for the same
   // reason. Served by the existing `(status, startTime DESC)` composite — no
   // new index.
-  const snap = await db
-      .collection("appointments")
-      .where("status", "in", OPEN_STATUSES)
-      .where("startTime", ">=", queryStart)
-      .where("startTime", "<", end)
-      .orderBy("startTime", "desc")
-      .limit(DIGEST_SWEEP_MAX)
-      .get();
-  if (snap && snap.size === DIGEST_SWEEP_MAX && deps.logger) {
-    deps.logger.warn(
-        "runDailyDigest: candidate cap hit; " +
-        "some crews may not receive a digest", {cap: DIGEST_SWEEP_MAX});
-  }
+  const window = await scanAppointmentWindow(db, {
+    statuses: OPEN_STATUSES,
+    field: "startTime",
+    lo: queryStart,
+    loOp: ">=",
+    hi: end,
+    hiOp: "<",
+    descending: true,
+    cap: DIGEST_SWEEP_MAX,
+    logger: deps.logger,
+    label: "runDailyDigest",
+    consequence: "some crews may not receive a digest",
+  });
   // Back to ascending before grouping, so the per-employee job lists the
   // digest text renders stay in chronological order.
-  const grouped = groupTomorrowsJobsByEmployee(
-      ((snap && snap.docs) || []).map(_record).reverse(),
-      nowDate,
-  );
+  const grouped = groupTomorrowsJobsByEmployee(window.reverse(), nowDate);
   const cache = new Map();
   // Concurrent per employee — see the note in runOverduePromptSweep. Each
   // employee is ~3 sequential round-trips; serialising the outer loop put the

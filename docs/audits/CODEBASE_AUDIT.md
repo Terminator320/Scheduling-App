@@ -1,5 +1,56 @@
 # Codebase Audit — 2026-08-22
 
+> ## STATUS: IMPLEMENTED 2026-08-22 (same day)
+>
+> **All 34 reported findings were acted on.** `flutter analyze` **No issues
+> found!** · `flutter test` **2667/2667** (was 2608) · `functions` jest
+> **1372/1372 across 58 suites** (was 1343/56) · `npm run lint` clean.
+>
+> **Two things are NOT closed, and neither is a code change:**
+>
+> 1. **🔴 S1 still needs a one-shot prod count** — `appointments/*/images` where
+>    `url` is set and `storagePath` is empty. That number decides between
+>    dropping `url` from the rules allowlist (if zero) and re-homing those bytes
+>    or reinstating a scoped rotation (if any). It cannot be run from this box
+>    (Firebase MCP Firestore reads fail `read_time cannot be in the future` on
+>    local clock skew). What WAS done is the half that was actionable: every
+>    place that claimed "there is no such link left to invalidate" —
+>    `bridge.js`, `functions/CLAUDE.md`, `.claude/rules/images.md`,
+>    `AppointmentImageLoader`'s header — now states the residual accurately, so
+>    the written risk assessment no longer leans on a claim the rules
+>    contradict.
+> 2. **The ⚠️ "Act before release" section is untouched.** All four are
+>    operational and owner-gated, not code: the photo migration's deploy
+>    ordering, the un-rotated download tokens for anyone deactivated
+>    2026-08-16 → 2026-08-19, the 3 orphaned Cloud Scheduler jobs (`gcloud` is
+>    not installed here), and the live `MAPS_API_KEY` in git history that no
+>    doc records as rotated.
+>
+> Two findings changed shape once the code was in hand, and both are worth
+> knowing:
+>
+> - **🟠 B4's suggested fix does not fix its own headline example.** Reordering
+>   the short-page test above the cap test leaves the false warn in place when
+>   `cap` is a multiple of `pageSize` — which `fetchClientHistory` (1000 / 500)
+>   is. `pageToCap` now reads ONE document past the cap instead, which makes
+>   `onCapReached` mean exactly "there are more than `cap`". It costs one extra
+>   1-document round trip, and only in the cap case, which is already the
+>   degraded one.
+> - **🔵 I2's third item needed a code change, not just a test.** Injecting the
+>   platform predicate into `LiveActivityRegistrationController` meant moving
+>   `defaultIsIosPlatform` out of `app_sync_listeners.dart` (which imports that
+>   controller) into `core/platform/ios_platform.dart`, or the default would
+>   have closed an import cycle.
+>
+> Three judgement calls the audit left open were decided rather than changed,
+> with the reasoning written where the code is: `AppRadius.r24` STAYS (a
+> complete rung ladder is the point of the class), the six raw
+> `EdgeInsets.fromLTRB` STAY (the documented sub-4px-nudge decision), and
+> `app_routes.dart`'s `settings.arguments!` asymmetry STAYS (a route whose whole
+> content is its argument should red-screen; the app's home should degrade).
+>
+> Per-finding notes are inline below.
+
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 `firestore.indexes.json`, `test/`, `lib/l10n/*.arb`, `.claude/rules/`, `docs/`).
 Baseline: `7ace6528` on `redesgin`, clean tree.
@@ -17,7 +68,8 @@ Baseline: `7ace6528` on `redesgin`, clean tree.
 - **Auto-fixed (safe, in the diff):** 11 — 3 zero-reference deletions, 1
   orphaned docstring, 7 factually-wrong doc pointers.
 - **Reported for your decision:** 34
-  (⚠️ 4 act-before-release · 🔴 5 security · 🟠 6 bugs · 🔵 19 improvements)
+  (⚠️ 4 act-before-release · 🔴 5 security · 🟠 6 bugs · 🔵 19 improvements) —
+  **all 34 acted on 2026-08-22; see the status banner above.**
 - **Verification:** `flutter analyze` **No issues found!** · `flutter test`
   **2608/2608** · `functions` jest **1343/1343 across 56 suites** ·
   `npm run lint` clean. All match the pre-audit baseline exactly.
@@ -97,6 +149,8 @@ surfaced here because the CONTRACT step makes two of them newly urgent.
 
 ### S1 — Legacy `url` photo docs are permanent rules-free links, and the control that revoked them was deleted on a premise the code contradicts · severity: medium · confidence: high
 
+**[PARTLY DONE 2026-08-22 — the prose is corrected everywhere; the prod count is still owed.]**
+
 - **Where:** `firestore.rules:687` and `:696-701`;
   `functions/scripts/backfill-appointment-images.js:87`;
   `lib/core/images/appointment_image_loader.dart:166-172`;
@@ -130,6 +184,8 @@ surfaced here because the CONTRACT step makes two of them newly urgent.
 
 ### S2 — Process-lifetime repository caches hold client PII across sign-out · severity: low · confidence: high
 
+**[DONE 2026-08-22 — `clearCaches()` on both repositories, two `_step(...)` calls in `deregisterThisDevice`, pinned in `device_deregistration_test.dart`.]**
+
 - **Where:** `lib/features/clients/data/firebase_clients_repository.dart:41-44`
   (up to 5000 full `ClientRecord`s — name, phone, email, address, contacts);
   `lib/features/calendar/data/firebase_appointments_repository.dart:73-89`
@@ -147,6 +203,8 @@ surfaced here because the CONTRACT step makes two of them newly urgent.
 
 ### S3 — `placesAutocomplete`'s rate limit is per-instance and `maxInstances: 10` multiplies it · severity: low · confidence: high
 
+**[DONE 2026-08-22 — the comment now states the real ~200/min ceiling and the cold-start reset, and names the GCP billing alert as an unverified external control rather than an assumed one. The in-memory design stays; it is a deliberate latency trade on a keystroke path.]**
+
 - **Where:** `functions/places.js:24-26, 126-148`; `functions/index.js:4`.
 - **Risk:** every other admin callable uses the durable Firestore limiter; this
   one uses an in-memory `Map` at 20/min per uid. With up to 10 concurrent
@@ -160,6 +218,8 @@ surfaced here because the CONTRACT step makes two of them newly urgent.
 
 ### S4 — `functions/` transitive advisories (informational) · severity: low · confidence: high
 
+**[NO ACTION, as recommended.]**
+
 - **Where:** `functions/package.json` — `firebase-admin ^13.6.0`.
 - **Risk:** `npm audit --omit=dev` reports 9 moderate advisories, all rooted at
   `uuid <11.1.1` (GHSA-w5hq-g745-h8pq) reached via `gaxios`/`google-gax`/
@@ -170,6 +230,8 @@ surfaced here because the CONTRACT step makes two of them newly urgent.
   bumping to admin@14 on functions 7.x. Re-check when the SDK bumps `uuid`.
 
 ### S5 — Note: FCM / Live Activity token doc ids are the raw tokens · severity: low · confidence: low (not exploitable)
+
+**[NO ACTION — recorded, not a finding.]**
 
 - **Where:** `firestore.rules:355-368`, `:372-402`.
 - An active user may `create` a row at any doc id under their own
@@ -207,6 +269,8 @@ variables).
 
 ### B1 — A newly-added photo is invisible until a debounced Cloud Function catches up · severity: medium-high · confidence: high
 
+**[DONE 2026-08-22 — the `hasPictures` short-circuit is gone; the sheet reads unconditionally. `hasPictures`' own docstring now says it backs the card INDICATOR and must never gate a read, and `event_details_stored_pictures_test.dart` pins the new behaviour where it used to pin the gate.]**
+
 - **Where:** `lib/features/calendar/application/event_details_controller.dart:129`
   (`if (!appointment.hasPictures) return;`);
   `lib/features/calendar/domain/models/appointment_record.dart:96`;
@@ -241,6 +305,8 @@ variables).
 
 ### B2 — `ref.read` inside a `catch` after an `await`, in two places, one contradicting its own file's comment · severity: low-medium · confidence: high
 
+**[DONE 2026-08-22 — both hoisted.]**
+
 - **Where:** `lib/main.dart:287`;
   `lib/core/app/appointment_link_opener.dart:142-144` and `:150-151`.
 - **Problem:** under Riverpod 3, `ref.read` on an unmounted consumer **throws a
@@ -266,6 +332,8 @@ variables).
 
 ### B3 — The clear script does not stamp `pictureCount` on documents with no array, contradicting the third leg of the completeness argument · severity: low-medium · confidence: high
 
+**[DONE 2026-08-22 — the script no longer `continue`s past an array-less document; it reconciles the counter against the subcollection. The decision is the pure `needsRecount`, pinned.]**
+
 - **Where:** `functions/scripts/clear-appointment-picture-arrays.js:159`
   (`if (pictures.length === 0) continue;`).
 - **Problem:** `CLAUDE.md`, `.claude/rules/images.md` and the
@@ -284,6 +352,8 @@ variables).
 
 ### B4 — `pageToCap` warns "truncated" on a collection that is exactly `cap` long · severity: low · confidence: high
 
+**[DONE 2026-08-22, but NOT by the suggested fix — see the status banner at the top. `pageToCap` reads one document past the cap so `onCapReached` means exactly "more than cap exist", and returns at most `cap`.]**
+
 - **Where:** `lib/core/data/paged_scan.dart:36`.
 - **Problem:** `if (docs.length >= cap) { onCapReached(); break; }` runs *before*
   the short-page test at `:40`, so a client with exactly 1000 visits
@@ -296,6 +366,8 @@ variables).
   warn), and return `docs.length > cap ? docs.sublist(0, cap) : docs`.
 
 ### B5 — Two comments still assert a security posture that HEAD inverted · severity: low (documentation, but of a security invariant) · confidence: high
+
+**[DONE 2026-08-22 — the loader header, both `pending_upload_store` comments and the stale `notification_utils.test.js` comment are rewritten. S1 was settled first, as the finding asked: the header now names the legacy `url` residual and the open prod count rather than a compensating control that no longer exists.]**
 
 - **Where:** `lib/core/images/appointment_image_loader.dart:32-41`;
   `lib/features/calendar/data/pending_upload_store.dart:22-26` and `:73-76`.
@@ -322,6 +394,8 @@ variables).
   `functions/__tests__/notification_utils.test.js:46` is the third such site.
 
 ### B6 — A lazy `late final` touching `ref`, first accessed from a timer callback · severity: low (latent) · confidence: high
+
+**[DONE 2026-08-22 — assigned in `initState`. Knock-on: making it eager meant every widget test rendering the field now READS `placesRepositoryProvider`, so `GooglePlacesRepository` had to stop resolving `FirebaseFunctions.instance` in its constructor.]**
 
 - **Where:** `lib/features/maps/widgets/address_autocomplete_field.dart:45`.
 - **Problem:** `late final PlacesRepository _service = ref.read(...)` is exactly
@@ -354,6 +428,8 @@ guarded.
 
 ### I1 — Four bulk-write scripts print no target project, including the irreversible one · impact: high · confidence: high
 
+**[DONE 2026-08-22 — `functions/scripts/_project.js` holds `resolveProjectId` + `printTargetBanner`; all ten scripts print it, including the four that had none. The resolver's tests moved with it into `scripts_project.test.js`, plus banner tests.]**
+
 - **Where:** `functions/scripts/clear-appointment-picture-arrays.js` (writes
   `update({pictures: FieldValue.delete()})` at `:181`), `backfill.js`,
   `backfill-appointment-images.js`, `backfill-clients-archived.js` — all four call
@@ -377,6 +453,8 @@ guarded.
 
 ### I2 — Three release-critical paths have no test coverage at all · impact: high · confidence: high
 
+**[DONE 2026-08-22 — the successful-unlock transition plus the `hidden`/`paused` descent and the full background→resume round trip; the two `_runDeletion` rollback arms; and the Live Activity controller's opt-out sweep, unsettled-doc and refused-gate branches behind a new injected platform predicate.]**
+
 - **`lib/core/security/app_lock.dart:162-166`** — the **successful unlock**
   transition never executes under test. `app_lock_test.dart:29` stubs
   `authenticate → false` and no test ever overrides it to `true` (the only other
@@ -399,6 +477,8 @@ guarded.
 
 ### I3 — Client search does ~2.5× the per-document work it needs · impact: medium · confidence: high
 
+**[DONE 2026-08-22 — the match test moved above the scoring inputs.]**
+
 - **Where:** `lib/features/clients/data/firebase_clients_repository.dart:326-350`.
 - **Opportunity:** six normalize/regex-heavy values (`contactSearchText`,
   `displayName` via `stripPhone`'s two regexes, `normalize(rawDisplayName)`,
@@ -416,6 +496,8 @@ guarded.
 
 ### I4 — History search builds a full record for every scanned doc to keep a handful · impact: medium-low · confidence: high
 
+**[DONE 2026-08-22 — the three filter fields are read off `doc.data`; `fromMap` is paid only for survivors.]**
+
 - **Where:** `lib/features/calendar/data/firebase_appointments_repository.dart:561`.
 - **Opportunity:** the three fields the filter reads (`clientName`,
   `employeeNames`, `clientPhone`) are plain values on `doc.data`, but
@@ -426,6 +508,8 @@ guarded.
   move `fromMap` inside the `if`. Same omission as I3 — fix them together.
 
 ### I5 — The appointment sweep query + cap-warn + record-map is spelled out 3 times, and has already drifted · impact: medium · confidence: high
+
+**[DONE 2026-08-22 — `functions/appointment_scan.js`'s `scanAppointmentWindow`; all three sweeps use it, and `travel_utils.js`' two inline mapper copies now call `recordOf`.]**
 
 - **Where:** `functions/notification_utils.js:663-680` (`runOverduePromptSweep`),
   `:749-765` (`runDailyDigest`), `functions/travel_utils.js:555-572`
@@ -442,6 +526,8 @@ guarded.
 
 ### I6 — `Debouncer` + hoisted-logger boilerplate at 5 sites, for a rule that exists because one site got it wrong and shipped a FATAL · impact: medium · confidence: high
 
+**[DONE 2026-08-22 — `Debouncer.tagged(duration, logger:, tag:)`; all six sites use it, and `address_autocomplete_field`'s re-spelled 700 ms interval became `kAddressLookupDebounce` beside `kSearchDebounce`.]**
+
 - **Where:** `main.dart:197`, `add_appointment_sheet.dart:69`,
   `details_edit_body.dart:53`, `appointment_history_view.dart:142`,
   `clients_list_view.dart:84` (plus the deviating
@@ -455,6 +541,8 @@ guarded.
   impossible — and would have prevented 🟠 B2 and 🟠 B6 by construction.
 
 ### I7 — Five `build()`/method splits with an obvious seam · impact: medium · confidence: high
+
+**[DONE 2026-08-22 — all five: `_searchInput`/`_resultsDropdown`/`_subtitleFor`/`_noResults`; `_BusyConflictDialog`; `_EmployeeChip`; `_uploadFiles`/`_appendLinks`; and `reclaimDecision` into `retry_policy.js` (with 8 direct tests it could not have had inside the transaction closure). `event_details_controller.save()` / `add_event_controller.submit()` and `themes.dart` left alone, as the finding says.]**
 
 **45 `build()` methods exceed the project's stated ~60-line ceiling**
 (`.claude/rules/code-quality.md:36`) — the rule is de facto unenforced. **Most
@@ -495,6 +583,8 @@ Leave it.
 
 ### I8 — Two stale git worktrees inside the repo distort every future grep · impact: medium · confidence: high
 
+**[DONE 2026-08-22 — `.claude/worktrees/login-redesign-remaining-4d0400` removed (~17 MB; its branch ref is kept, and `redesgin` contains `fc8d2e34`). `.worktrees/p7b-wave-invoices` KEPT, as recommended.]**
+
 - **Where:** `.claude/worktrees/login-redesign-remaining-4d0400` (17 MB,
   `fc8d2e34`) and `.worktrees/p7b-wave-invoices` (129 MB, `fd234cb8`).
 - **Opportunity:** both are gitignored, so `git status` is clean and they are
@@ -510,6 +600,8 @@ Leave it.
 
 ### I9 — `.claude/worktrees/` is ignored only via `.git/info/exclude`, which is not committed · impact: medium · confidence: high
 
+**[DONE 2026-08-22 — the patterns moved into the committed `.gitignore`, verified with `git check-ignore -v` (and that `.claude/rules/*.md` is still NOT ignored).]**
+
 - **Where:** `.gitignore:143` covers `.worktrees/`; lines 154-158 carry the
   explicit "`.claude/` is SHARED (Windows + Mac)" section. But
   `.claude/worktrees/`, `checkpoints/`, `mailbox/`, `agent-registry.json` are
@@ -522,6 +614,8 @@ Leave it.
   insurance.
 
 ### I10 — Eleven more test-coverage gaps, ranked by risk · impact: medium · confidence: high
+
+**[DONE 2026-08-22 — all eleven. `address_autocomplete_field` got a test file from scratch (8 cases), and writing it surfaced a small real behaviour worth knowing: `controller.text = ` does not fire a `TextField`'s `onChanged`, so neither `_suppressFetch = true` in `_selectSuggestion` is consumed by the programmatic write it guards, and the first user keystroke after picking a suggestion absorbs one instead. Harmless — the flag is a bool, so exactly one is swallowed — and now documented in the test.]**
 
 Verified against lcov line-hit data, not filename mirroring (see the
 methodological note below).
@@ -541,6 +635,8 @@ methodological note below).
 | `firebase_clients_repository.dart:359-376` | The 6-tier relevance ladder has one test covering tiers 1 and 3. **Tiers 0 (exact), 2 (phone-prefix) and 4 (phone/contacts-substring) are untested**, as is the 25-result truncation. Since `clients/{id}.name` **IS the bare phone** for a person, the phone tiers matter most on real data, and a mis-rank silently drops a correct match past position 25. |
 
 ### I11 — Remaining documentation drift that needs a rewrite, not a pointer fix · impact: medium · confidence: high
+
+**[DONE 2026-08-22 — all five, plus both minor items. The log-tag registry's regeneration procedure now describes the four SHAPES that hide a tag from a grep rather than counting sites, which is what let it drift by seven.]**
 
 Seven doc corrections were auto-applied. These five need a judgement call:
 
@@ -586,6 +682,8 @@ actual at HEAD is **2608 / 1343**.
 
 ### I12 — Three `functions/wave/customers_import.js` exports claim a test that does not exist · impact: medium · confidence: high
 
+**[DONE 2026-08-22 — `wave_customers_import_units.test.js`, 13 cases. The exports' comment is now true.]**
+
 - **Where:** `functions/wave/customers_import.js:281-287` — `importOneCustomer`,
   `buildWaveIdIndex`, `BATCH_LIMIT`.
 - **Opportunity:** the export block's comment says *"Exported so the two decisions
@@ -600,6 +698,8 @@ actual at HEAD is **2608 / 1343**.
   deleting the exports.
 
 ### I13 — Smaller duplication and cleanup, each below the "act now" bar
+
+**[DONE 2026-08-22 — `functions/admin_firestore.js`; `readAccountGateInputs(ref, auth)` for the three device-registration preambles; `node:crypto` everywhere; `kAddressLookupDebounce` beside `kSearchDebounce`. The three judgement calls (`AppRadius.r24`, the six raw `EdgeInsets`, `app_routes`' `arguments!` asymmetry) were DECIDED rather than changed — each now carries its reasoning in the code. See the status banner.]**
 
 - **`adminFirestore()` lazy-require, 4 verbatim copies** —
   `client_propagation.js:53`, `wave/customers.js:139`,

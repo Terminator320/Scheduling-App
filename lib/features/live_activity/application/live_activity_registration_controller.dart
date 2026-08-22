@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +7,7 @@ import 'package:live_activities/models/activity_update.dart';
 
 import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/platform/ios_platform.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/core/utils/reentrant_sync.dart';
@@ -57,12 +57,21 @@ class LiveActivityRegistrationController with ReentrantSync {
     this._ref, {
     FirebaseAuth? auth,
     LiveActivities? plugin,
+    this.isIosPlatform = defaultIsIosPlatform,
   }) : _injectedAuth = auth,
        _injectedPlugin = plugin;
 
   final Ref _ref;
   final FirebaseAuth? _injectedAuth;
   final LiveActivities? _injectedPlugin;
+
+  /// Injected for the same reason `AppSyncListeners` takes one: `flutter test`
+  /// runs on the host, so a bare `Platform.isIOS` returns before any injectable
+  /// point and leaves this whole controller unreachable from the harness — on
+  /// the ONLY platform that ships. Everything below the three gates it guards
+  /// (the token upserts, the opt-out sweep that deletes stale server rows, the
+  /// local-card teardown) was untested for exactly that reason.
+  final bool Function() isIosPlatform;
 
   // Resolved lazily rather than in the constructor, since endLocalCards runs
   // in unit tests that don't have Firebase set up.
@@ -90,7 +99,7 @@ class LiveActivityRegistrationController with ReentrantSync {
   /// Idempotent and safe to call on every account-doc emission or language
   /// change. Concurrent calls coalesce, so whichever finishes last wins.
   Future<void> sync() async {
-    if (!Platform.isIOS) return;
+    if (!isIosPlatform()) return;
     await runCoalesced(_runSync);
   }
 
@@ -123,16 +132,13 @@ class LiveActivityRegistrationController with ReentrantSync {
       await _teardown();
       return;
     }
-    final signedIn = _auth.currentUser != null;
-    final docState = _ref.read(currentUserDocProvider);
-    if (docState.isLoading || docState.hasError) return;
-    final doc = docState.value ?? const {};
-    final role = (doc['role'] ?? '').toString().trim();
-    final status = (doc['status'] ?? '').toString().trim();
+    final gate = readAccountGateInputs(_ref, _auth);
+    // Null is "we don't know yet" — leave the registration as it is.
+    if (gate == null) return;
     if (!shouldRegisterLiveActivity(
-      role: role,
-      status: status,
-      signedIn: signedIn,
+      role: gate.role,
+      status: gate.status,
+      signedIn: gate.signedIn,
     )) {
       await _cancelStreams();
       return;
@@ -171,7 +177,7 @@ class LiveActivityRegistrationController with ReentrantSync {
   /// Whether this device can host a push-started card — needs iOS 17.2+,
   /// ActivityKit available, and the user opted in. Never throws.
   Future<bool> canHostCards() async {
-    if (!Platform.isIOS) return false;
+    if (!isIosPlatform()) return false;
     try {
       return await _plugin.areActivitiesSupported() &&
           await _plugin.areActivitiesEnabled() &&
@@ -291,7 +297,7 @@ class LiveActivityRegistrationController with ReentrantSync {
   /// device-wide and can't target a single appointment. Terminal transitions
   /// are ended server-side instead, by `endCardOnTerminal`.
   Future<void> endLocalCards() async {
-    if (!Platform.isIOS || !_pluginReady) return;
+    if (!isIosPlatform() || !_pluginReady) return;
     try {
       await _plugin.endAllActivities();
     } catch (e, st) {

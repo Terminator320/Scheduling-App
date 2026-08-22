@@ -26,15 +26,38 @@ paths:
   `FlutterSecureStorage.setMockInitialValues({})` in `setUp`. `SettingsScreen`
   additionally needs `PackageInfo.setMockInitialValues(...)` and a `ProviderScope`
   (it watches `appInfoProvider` + `appLockEnabledProvider` during build).
-- **Any widget test reaching an account exit must override
-  `appointmentImageLoaderProvider`.** `deregisterThisDevice` clears the on-disk
-  photo cache, which resolves the platform cache directory through
-  `path_provider` — and a method channel never completes under `testWidgets`'
-  fake clock, so the real loader makes the test **HANG until its timeout rather
-  than fail**, with no error naming the cause. Override it with a subclass whose
-  `clear()` is a no-op (see `_StubLoader` in `account_exit_listeners_test.dart`,
-  `_RecordingLoader` in `device_deregistration_test.dart`). Same class of trap
-  as the `FlutterSecureStorage.setMockInitialValues({})` rule above.
+- **Any widget test reaching an account exit must override THREE providers:
+  `appointmentImageLoaderProvider`, `clientsRepositoryProvider` and
+  `appointmentsRepositoryProvider`.** `deregisterThisDevice` forgets everything
+  the session cached locally, and each of the three fails a different way
+  without an override. The image loader resolves the platform cache directory
+  through `path_provider`, and a method channel never completes under
+  `testWidgets`' fake clock, so the real one makes the test **HANG until its
+  timeout rather than fail**, with no error naming the cause. The two
+  repositories resolve `FirebaseFirestore.instance` when their providers are
+  READ — which `DeviceDeregistrationDeps.from` now does — so they fail
+  `[core/no-app]` on construction, before any teardown step runs. Override the
+  loader with a subclass whose `clear()` is a no-op and the repositories with
+  `implements X` + `noSuchMethod` stubs whose only real member is
+  `clearCaches()` (see `_StubLoader`/`_StubClients`/`_StubAppointments` in
+  `account_exit_listeners_test.dart`, the `_Recording*` trio in
+  `device_deregistration_test.dart`, and `_exitOverrides` in
+  `delete_account_flow_test.dart`). Same class of trap as the
+  `FlutterSecureStorage.setMockInitialValues({})` rule above.
+- **A bare `ProviderContainer` does NOT inherit `main()`'s retry override, and
+  that matters for any test asserting an ERROR state.** `main.dart` passes
+  `retry: (retryCount, error) => null` to its `ProviderScope`; without it,
+  Riverpod 3's default exponential retry means an errored `FutureProvider`'s
+  `.future` **never completes** and the test times out at 30 s rather than
+  failing. Pass the same `retry:` to the container (see
+  `widget_payload_provider_test.dart`,
+  `active_user_identity_provider_test.dart`).
+- **A platform gate is an injected predicate, not `dart:io Platform.isIOS`.**
+  `flutter test` runs on the host, so a bare `Platform.isIOS` returns before
+  any injectable point and leaves everything behind it unreachable — on the
+  only platform that ships. `defaultIsIosPlatform` (`core/platform/`) is the
+  default; `AppSyncListeners` and `LiveActivityRegistrationController` both take
+  one. Add the seam rather than writing off the branch as device-only.
 - Overflow regressions: sweep the screen at a small viewport (375×667) across
   text scales 0.8–2.0 and assert no exceptions — reuse the `_scaled` /
   `_pumpAtViewport` harness pattern in
@@ -67,9 +90,15 @@ paths:
   paint errors (overflows, null-checks) go silently to Crashlytics, *not*
   `flutter run` stdout. When chasing a silent UI failure, temporarily add
   `FlutterError.dumpErrorToConsole(details)` in that handler.
-- **Android device verification (package `net.vogas.scheduling`):** screenshot
-  with `adb -s <id> exec-out screencap -p > out.png`; force the first-launch /
-  onboarding path with `adb -s <id> shell pm clear net.vogas.scheduling`; exercise
-  responsive breakpoints with `adb -s <id> shell wm size 1600x900` then
-  `wm size reset`. Clearing app data regenerates the App Check debug token —
-  re-register it in the Firebase Console (see the App Check note in CLAUDE.md).
+- **iOS device/simulator verification.** This app is iOS-only — `android/` was
+  deleted 2026-08-05 and is gitignored precisely so `flutter` cannot regenerate
+  it, so there is no `adb` workflow here and a bullet giving one pushes toward
+  the tree resurrection the root `CLAUDE.md` exists to prevent. Screenshot a
+  simulator with `xcrun simctl io booted screenshot out.png`; force the
+  first-launch / onboarding path with `xcrun simctl uninstall booted
+  <bundle-id>` followed by a fresh `flutter run`; check responsive breakpoints
+  by booting a different device (`xcrun simctl list devices`, then
+  `flutter run -d <udid>`) rather than by resizing, since iOS has no `wm size`
+  equivalent. Reinstalling regenerates the App Attest/App Check debug token —
+  re-register it in the Firebase Console (see the App Check note in
+  `CLAUDE.md`).

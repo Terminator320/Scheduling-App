@@ -18,6 +18,7 @@
  */
 
 const {toWaveCustomerInput, mappedFieldsHash} = require("./mappers");
+const {adminFirestore} = require("../admin_firestore");
 // Safe at module scope: `client.js` requires only `./auth`, lazily, so this
 // closes no cycle. `retry_policy.js` and `errors.js` both already require this
 // module AND that one.
@@ -130,16 +131,6 @@ function sanitizeInputErrors(inputErrors) {
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Lazily requires `firebase-admin/firestore` so tests that inject `db`/`now`
- * never trigger it.
- * @return {{getFirestore: !Function, FieldValue: !Object}}
- */
-function adminFirestore() {
-  // eslint-disable-next-line global-require
-  return require("firebase-admin/firestore");
-}
 
 /**
  * Returns true when a Wave inputError path (an array of segments or a dotted

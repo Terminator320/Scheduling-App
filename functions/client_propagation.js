@@ -36,6 +36,7 @@
  */
 
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {adminFirestore} = require("./admin_firestore");
 const {MAX_APPOINTMENT_SPAN_MS, hasWorkLeft} = require("./time_utils");
 const {clientDisplayName} = require("./client_name_utils");
 
@@ -44,16 +45,6 @@ const BATCH_LIMIT = 500;
 
 /** Page size for the future-appointments query (one batch per page). */
 const PAGE_SIZE = BATCH_LIMIT;
-
-/**
- * Lazily resolves firebase-admin/firestore so unit tests that inject deps
- * never touch it.
- * @return {{getFirestore: !Function, FieldValue: !Object}}
- */
-function adminFirestore() {
-  // eslint-disable-next-line global-require
-  return require("firebase-admin/firestore");
-}
 
 /**
  * Computes what (if anything) a client edit must propagate to appointments.

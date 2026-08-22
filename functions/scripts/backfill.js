@@ -48,6 +48,7 @@
 const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+const {printTargetBanner} = require("./_project");
 // The bridge's pure rules, shared with the `syncUsersByUid` trigger that
 // maintains the same collection — see `../bridge_policy.js`.
 const {
@@ -87,13 +88,11 @@ async function main() {
 
   // When pointed at the emulator, applicationDefault() is unused. The SDK
   // picks up FIRESTORE_EMULATOR_HOST automatically and ignores creds.
+  let app;
   if (process.env.FIRESTORE_EMULATOR_HOST) {
-    initializeApp({
+    app = initializeApp({
       projectId: process.env.GCLOUD_PROJECT || "schedulingapp-88727",
     });
-    console.log(
-        `${tag}Running against emulator at ` +
-        `${process.env.FIRESTORE_EMULATOR_HOST}`);
   } else {
     if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
       console.error(
@@ -101,10 +100,14 @@ async function main() {
           "JSON path (or FIRESTORE_EMULATOR_HOST for the emulator).");
       process.exit(1);
     }
-    initializeApp({credential: applicationDefault()});
-    console.log(
-        `${tag}Running against PROD project from service-account creds`);
+    app = initializeApp({credential: applicationDefault()});
   }
+
+  // Printed BEFORE the first read. This used to say "Running against PROD
+  // project from service-account creds", which names the credential SOURCE and
+  // not the project — the one thing an operator needs to see before a bulk
+  // write to the collection every rules gate resolves a role through.
+  printTargetBanner(app, {dryRun});
 
   const db = getFirestore();
   // `batchSize: 1`, deliberately. This repairs the collection every

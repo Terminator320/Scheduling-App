@@ -15,10 +15,19 @@ const Duration _callableTimeout = Duration(seconds: 10);
 
 class GooglePlacesRepository implements PlacesRepository {
   GooglePlacesRepository({FirebaseFunctions? functions, AppLogger? logger})
-    : _functions = functions ?? FirebaseFunctions.instance,
+    : _injectedFunctions = functions,
       _logger = logger ?? AppLogger();
 
-  final FirebaseFunctions _functions;
+  /// Resolved LAZILY, not in the constructor. `FirebaseFunctions.instance`
+  /// reaches for the default Firebase app, so constructing this repository
+  /// used to require Firebase to be initialized — which made merely BUILDING
+  /// a widget that reads `placesRepositoryProvider` fail in every widget test,
+  /// whether or not that test ever performs a lookup. The same lazy shape
+  /// `AppointmentImageLoader` uses for its Storage handle.
+  final FirebaseFunctions? _injectedFunctions;
+  FirebaseFunctions get _functions =>
+      _injectedFunctions ?? FirebaseFunctions.instance;
+
   final AppLogger _logger;
 
   @override

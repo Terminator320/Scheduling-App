@@ -194,12 +194,10 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   @override
   void initState() {
     super.initState();
-    // Read here, never inside the handler: the timer can fire after dispose.
-    final logger = ref.read(loggerProvider);
-    _settingsSaveDebouncer = Debouncer(
+    _settingsSaveDebouncer = Debouncer.tagged(
       kSettingsSaveDebounce,
-      onError: (error, stackTrace) =>
-          logger.warn('SETTINGS debounced save failed', error, stackTrace),
+      logger: ref.read(loggerProvider),
+      tag: 'SETTINGS debounced save failed',
     );
     _themeMode = widget.settings.themeMode;
     _textScale = widget.settings.textScale;
@@ -277,6 +275,10 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     double? textScale,
     String? language,
   }) async {
+    // Hoisted above the await for the same reason initState hoists one: this
+    // runs from the debounce timer, which can fire after dispose, and
+    // `ref.read` on an unmounted consumer throws.
+    final logger = ref.read(loggerProvider);
     try {
       await _settingsRepository.save(
         themeMode: themeMode,
@@ -284,7 +286,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
         language: language,
       );
     } catch (error, stackTrace) {
-      ref.read(loggerProvider).warn('SETTINGS save failed', error, stackTrace);
+      logger.warn('SETTINGS save failed', error, stackTrace);
     }
   }
 

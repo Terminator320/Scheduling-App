@@ -37,15 +37,11 @@ const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 
 const {digitsOf} = require("../client_name_utils");
-// Shared with the phone-formatting backfill. `resolveProjectId` prints
-// "(unknown)" otherwise — exactly when credentials were supplied the
-// recommended way, since applicationDefault() keeps the project internal — and
-// `assertKnownFlags` is the same "a typo'd --dry-run must not go live" guard,
-// so both scripts must refuse the same arguments.
-const {
-  assertKnownFlags,
-  resolveProjectId,
-} = require("./backfill-client-phone-formatting");
+// `assertKnownFlags` is shared with the phone-formatting backfill: the same
+// "a typo'd --dry-run must not go live" guard, so both scripts must refuse the
+// same arguments. The target banner is shared too — see `_project.js`.
+const {assertKnownFlags} = require("./backfill-client-phone-formatting");
+const {printTargetBanner} = require("./_project");
 
 /**
  * Client doc id -> the business name to restore.
@@ -113,10 +109,7 @@ async function main() {
   const app = initializeApp({credential: applicationDefault()});
   const db = getFirestore();
 
-  const target = resolveProjectId(app);
-  console.log(
-      `${dryRun ? "[dry-run] " : ""}target: ${target}` +
-      `${process.env.FIRESTORE_EMULATOR_HOST ? " via emulator" : " (LIVE)"}\n`);
+  printTargetBanner(app, {dryRun});
 
   let restored = 0;
   const skipped = [];

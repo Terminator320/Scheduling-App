@@ -42,15 +42,10 @@ class AddressAutocompleteField extends ConsumerStatefulWidget {
 
 class _AddressAutocompleteFieldState
     extends ConsumerState<AddressAutocompleteField> {
-  late final PlacesRepository _service = ref.read(placesRepositoryProvider);
+  late final PlacesRepository _service;
   late final AppLogger _logger;
   static const _uuid = Uuid();
-  late final Debouncer _debounce = Debouncer(
-    _debounceDelay,
-    onError: (error, stackTrace) {
-      _logger.warn('ADDR-AUTO debounced action failed', error, stackTrace);
-    },
-  );
+  late final Debouncer _debounce;
   List<AddressSuggestion> _suggestions = [];
   bool _isLoading = false;
   String? _serviceError;
@@ -63,15 +58,22 @@ class _AddressAutocompleteFieldState
   int _requestId = 0;
 
   static const _minQueryLength = 3;
-  static const _debounceDelay = Duration(milliseconds: 700);
 
   @override
   void initState() {
     super.initState();
-    // Eager, not a lazy `late final`: the debounce error handler and the two
-    // post-await catches all run after this field can be gone, and `ref.read`
-    // on an unmounted consumer throws under Riverpod 3.
+    // Both eager, not lazy `late final`s: the debounce error handler and the
+    // two post-await catches all run after this field can be gone, and
+    // `ref.read` on an unmounted consumer throws under Riverpod 3. A lazy
+    // initializer is one moved line away from being first touched below an
+    // await.
     _logger = ref.read(loggerProvider);
+    _service = ref.read(placesRepositoryProvider);
+    _debounce = Debouncer.tagged(
+      kAddressLookupDebounce,
+      logger: _logger,
+      tag: 'ADDR-AUTO debounced action failed',
+    );
   }
 
   @override

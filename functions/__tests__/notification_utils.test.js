@@ -43,16 +43,19 @@ describe("diffAppointmentForNotifications", () => {
   });
 
   test("a pictures-only rewrite emits nothing", () => {
-    // Load-bearing for COST, not just correctness. `rotateAssignedImageTokens`
-    // rewrites `pictures[].url` on up to 500 appointments in one deactivation,
-    // and every one of those parent writes fires `notifyAppointmentChanges`.
-    // That fan-out is only acceptable because each invocation is a genuine
-    // no-op: no events here means `handleAppointmentWrite` returns before any
-    // Firestore read, so 500 writes cost 500 empty invocations rather than
-    // 500 recipient lookups and widget-window queries. (The recount trigger
-    // is on the images SUBcollection, so it is not fired by these writes at
-    // all.) Make the differ sensitive to `pictures` and that stops being
-    // true — which is what this pins.
+    // Load-bearing for COST, not just correctness. The writer that made it so
+    // was `rotateAssignedImageTokens`, which rewrote `pictures[].url` on up to
+    // 500 appointments per deactivation; that function was deleted at the
+    // CONTRACT step, but `clear-appointment-picture-arrays.js` does the same
+    // shape of bulk parent write, and every one of those fires
+    // `notifyAppointmentChanges`. The fan-out is only acceptable because each
+    // invocation is a genuine no-op: no events here means
+    // `handleAppointmentWrite` returns before any Firestore read, so 500
+    // writes cost 500 empty invocations rather than 500 recipient lookups and
+    // widget-window queries. (The recount trigger is on the images
+    // SUBcollection, so it is not fired by these writes at all.) Make the
+    // differ sensitive to `pictures` and that stops being true — which is what
+    // this pins.
     const base = {
       employeeIds: ["e1"],
       startTime: future(3 * HOUR),

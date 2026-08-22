@@ -28,6 +28,8 @@ class EmployeePicker extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final hasError = this.hasError || errorText != null;
+    // In read-only mode the picker is a summary of who is ON the job, so the
+    // unselected staff are not rendered at all.
     final displayEmployees = selectable
         ? allEmployees
         : allEmployees
@@ -44,72 +46,16 @@ class EmployeePicker extends StatelessWidget {
         : Wrap(
             spacing: AppSpacing.sp8,
             runSpacing: AppSpacing.sp8,
-            children: displayEmployees.map((employee) {
-              final isSelected = selectedEmployees.any(
-                (e) => e.id == employee.id,
-              );
-
-              return Semantics(
-                button: selectable,
-                selected: isSelected,
-                label: employee.name,
-                excludeSemantics: true,
-                child: GestureDetector(
+            children: [
+              for (final employee in displayEmployees)
+                _EmployeeChip(
+                  employee: employee,
+                  isSelected: selectedEmployees.any((e) => e.id == employee.id),
+                  selectable: selectable,
+                  hasError: hasError,
                   onTap: selectable ? () => onToggle?.call(employee) : null,
-                  child: Container(
-                    alignment: Alignment.center,
-                    constraints: const BoxConstraints(minHeight: 44),
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.sp8,
-                      AppSpacing.sp4,
-                      AppSpacing.sp12,
-                      AppSpacing.sp4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? scheme.primaryContainer
-                          : scheme.surfaceContainerHighest,
-                      border: Border.all(
-                        color: hasError && !isSelected
-                            ? scheme.error
-                            : isSelected
-                            ? scheme.primary
-                            : scheme.outlineVariant,
-                        width: 1.5,
-                      ),
-                      borderRadius: BorderRadius.circular(AppRadius.rFull),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        AppAvatar(
-                          name: employee.name,
-                          color: employee.color,
-                          size: AvatarSize.xs,
-                        ),
-                        const SizedBox(width: AppSpacing.sp8),
-                        Flexible(
-                          child: Text(
-                            employee.name.split(' ').first,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                              color: isSelected
-                                  ? scheme.primary
-                                  : scheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
-              );
-            }).toList(),
+            ],
           );
 
     if (errorText == null) return content;
@@ -130,6 +76,89 @@ class EmployeePicker extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// One staff chip. Its own widget so a row rebuilds on its own rather than as
+/// part of a 60-line closure body re-evaluated per employee.
+class _EmployeeChip extends StatelessWidget {
+  const _EmployeeChip({
+    required this.employee,
+    required this.isSelected,
+    required this.selectable,
+    required this.hasError,
+    required this.onTap,
+  });
+
+  final EmployeeRecord employee;
+  final bool isSelected;
+  final bool selectable;
+  final bool hasError;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      button: selectable,
+      selected: isSelected,
+      label: employee.name,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          alignment: Alignment.center,
+          constraints: const BoxConstraints(minHeight: 44),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.sp8,
+            AppSpacing.sp4,
+            AppSpacing.sp12,
+            AppSpacing.sp4,
+          ),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? scheme.primaryContainer
+                : scheme.surfaceContainerHighest,
+            border: Border.all(
+              // An unselected chip carries the error outline, since "pick
+              // someone" is what the error is asking for.
+              color: hasError && !isSelected
+                  ? scheme.error
+                  : isSelected
+                  ? scheme.primary
+                  : scheme.outlineVariant,
+              width: 1.5,
+            ),
+            borderRadius: BorderRadius.circular(AppRadius.rFull),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppAvatar(
+                name: employee.name,
+                color: employee.color,
+                size: AvatarSize.xs,
+              ),
+              const SizedBox(width: AppSpacing.sp8),
+              Flexible(
+                child: Text(
+                  employee.name.split(' ').first,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                    color: isSelected
+                        ? scheme.primary
+                        : scheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -113,22 +113,25 @@ class AppointmentImageUploadService {
     }
   }
 
-  /// Uploads one queued batch. Files that are permanently rejected are
-  /// dropped, files that hit a transient failure get re-queued, and anything
-  /// that uploads successfully is removed from the queue.
-  Future<void> _attempt(PendingUpload entry) async {
-    final files = entry.paths
-        .map(File.new)
-        .where((f) => f.existsSync())
-        .toList();
-    if (files.isEmpty && entry.uploaded.isEmpty) {
-      await _store.remove(entry.id);
-      return;
-    }
-
+  /// What one pass over a batch's local files produced.
+  ///
+  /// Split out because `_attempt` has two halves that answer to different
+  /// things: this one talks to Storage and the file system per file, and the
+  /// half below it decides what the batch's fate is — a separation
+  /// `AttemptOutcome.from` already assumes.
+  Future<
+    ({
+      List<AppointmentImage> uploaded,
+      List<String> survivors,
+      List<String> tooLargeNames,
+      int permanentFailures,
+      bool transientFailure,
+    })
+  >
+  _uploadFiles(PendingUpload entry, List<File> files) async {
     var permanentFailures = 0;
-    final tooLargeNames = <String>[];
     var transientFailure = false;
+    final tooLargeNames = <String>[];
     final survivors = <String>[];
 
     // Images uploaded on a prior pass whose doc-link append didn't land are
@@ -167,36 +170,70 @@ class AppointmentImageUploadService {
       }
     }
 
-    var appendThrew = false;
-    if (uploaded.isNotEmpty) {
-      try {
-        // Each photo's document id is derived from it, so an append that
-        // partly committed rewrites the same documents rather than duplicating
-        // them, and a concurrent edit's photos are never clobbered.
-        await _appointments.appendAppointmentPictures(
-          entry.appointmentId,
-          uploaded,
-        );
-      } catch (e, st) {
-        // Uploads landed but the doc-link write didn't. The local files are
-        // already deleted, so re-queue the uploaded images for an append-only
-        // retry rather than dropping them — otherwise the bytes sit orphaned
-        // in Storage, invisible on the appointment.
-        appendThrew = true;
-        _logger.warn(
-          'IMG-UPLOAD append failed for ${entry.appointmentId}',
-          e,
-          st,
-        );
-      }
-    }
-
-    final outcome = AttemptOutcome.from(
+    return (
+      uploaded: uploaded,
+      survivors: survivors,
+      tooLargeNames: tooLargeNames,
       permanentFailures: permanentFailures,
       transientFailure: transientFailure,
+    );
+  }
+
+  /// Links the uploaded photos to the appointment. Returns whether that write
+  /// threw — which is what decides between dropping the batch and re-queuing
+  /// it for an append-only retry.
+  Future<bool> _appendLinks(
+    PendingUpload entry,
+    List<AppointmentImage> uploaded,
+  ) async {
+    if (uploaded.isEmpty) return false;
+    try {
+      // Each photo's document id is derived from it, so an append that partly
+      // committed rewrites the same documents rather than duplicating them,
+      // and a concurrent edit's photos are never clobbered.
+      await _appointments.appendAppointmentPictures(
+        entry.appointmentId,
+        uploaded,
+      );
+      return false;
+    } catch (e, st) {
+      // Uploads landed but the doc-link write didn't. The local files are
+      // already deleted, so re-queue the uploaded images for an append-only
+      // retry rather than dropping them — otherwise the bytes sit orphaned in
+      // Storage, invisible on the appointment.
+      _logger.warn(
+        'IMG-UPLOAD append failed for ${entry.appointmentId}',
+        e,
+        st,
+      );
+      return true;
+    }
+  }
+
+  /// Uploads one queued batch. Files that are permanently rejected are
+  /// dropped, files that hit a transient failure get re-queued, and anything
+  /// that uploads successfully is removed from the queue.
+  Future<void> _attempt(PendingUpload entry) async {
+    final files = entry.paths
+        .map(File.new)
+        .where((f) => f.existsSync())
+        .toList();
+    if (files.isEmpty && entry.uploaded.isEmpty) {
+      await _store.remove(entry.id);
+      return;
+    }
+
+    final upload = await _uploadFiles(entry, files);
+    final appendThrew = await _appendLinks(entry, upload.uploaded);
+    final tooLargeNames = upload.tooLargeNames;
+    final survivors = upload.survivors;
+
+    final outcome = AttemptOutcome.from(
+      permanentFailures: upload.permanentFailures,
+      transientFailure: upload.transientFailure,
       survivors: survivors,
       appendThrew: appendThrew,
-      uploaded: uploaded,
+      uploaded: upload.uploaded,
     );
 
     if (outcome.requeue) {

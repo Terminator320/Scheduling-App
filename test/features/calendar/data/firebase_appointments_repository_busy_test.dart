@@ -170,6 +170,71 @@ void main() {
     },
   );
 
+  group('the daily-window filter is actually WIRED IN', () {
+    // `dailyWindowsOverlap`'s maths is pinned in its own suite, but nothing
+    // ever reached it from here: every fixture above omits parseable times, so
+    // the `docStart != null && docEnd != null` guard short-circuits and the
+    // filter never runs. These three give the docs real instants.
+
+    test('a multi-day run does NOT clash with an evening job inside it',
+        () async {
+      // The phantom clash the helper exists to remove: instant-overlap said a
+      // Mon–Fri 9-5 run collides with Wednesday 19:00, so the admin had to
+      // force every evening job through the conflict dialog.
+      // Built before `thenReturn`: mocktail refuses a `when` inside a stub.
+      final run = doc({
+        'employeeIds': ['e0'],
+        'startTime': Timestamp.fromDate(DateTime(2026, 6, 22, 9)),
+        'endTime': Timestamp.fromDate(DateTime(2026, 6, 26, 17)),
+      }, id: 'run');
+      when(() => snapshot.docs).thenReturn([run]);
+
+      final result = await repo().findBusyEmployees(
+        candidates: employees(1),
+        start: DateTime(2026, 6, 24, 19),
+        end: DateTime(2026, 6, 24, 20),
+      );
+
+      expect(result, isEmpty);
+    });
+
+    test('a genuine same-window clash is still reported', () async {
+      final run = doc({
+        'employeeIds': ['e0'],
+        'startTime': Timestamp.fromDate(DateTime(2026, 6, 22, 9)),
+        'endTime': Timestamp.fromDate(DateTime(2026, 6, 26, 17)),
+      }, id: 'run');
+      when(() => snapshot.docs).thenReturn([run]);
+
+      final result = await repo().findBusyEmployees(
+        candidates: employees(1),
+        start: DateTime(2026, 6, 24, 10),
+        end: DateTime(2026, 6, 24, 11),
+      );
+
+      expect(result.map((e) => e.id), ['e0']);
+    });
+
+    test('a doc with unparseable times is kept, not silently dropped',
+        () async {
+      // Fail toward REPORTING a clash: a legacy or console-written row with no
+      // usable times must not quietly disappear from a booking-conflict check.
+      final legacy = doc({
+        'employeeIds': ['e0'],
+        'startTime': 'not-a-time',
+      }, id: 'legacy');
+      when(() => snapshot.docs).thenReturn([legacy]);
+
+      final result = await repo().findBusyEmployees(
+        candidates: employees(1),
+        start: start,
+        end: end,
+      );
+
+      expect(result.map((e) => e.id), ['e0']);
+    });
+  });
+
   test('still reports a clash with a different appointment', () async {
     final otherDoc = doc({
       'employeeIds': ['e0'],

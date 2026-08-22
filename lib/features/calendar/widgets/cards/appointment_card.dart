@@ -293,9 +293,9 @@ class _CardModel {
     final appointment = card.appointment;
     final status = AppointmentStatus.fromRaw(appointment.displayStatus);
     final timeLabel = card._timeLabel(context);
-    // Both stores, via the model — photos are moving to a subcollection and a
-    // doc can legitimately carry either the array or the denormalized count
-    // during the migration. See AppointmentRecord.hasPictures.
+    // The denormalized count, which trails a fresh upload by the recount
+    // debounce. Fine for an indicator; see AppointmentRecord.hasPictures for
+    // why it must not gate a read.
     final hasPhotos = appointment.hasPictures;
 
     // A personal job has no client, so it names itself in that slot rather

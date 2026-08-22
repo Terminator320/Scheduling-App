@@ -19,8 +19,22 @@ const PLACE_ID_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const INPUT_MAX_LEN = 200;
 
 // Per-uid sliding-window rate limit, in-memory per function instance — a
-// cheap, latency-free guard for the high-volume autocomplete path. Set a GCP
-// billing alert too — other routes use the durable Firestore limiter instead.
+// cheap, latency-free guard for the high-volume autocomplete path, chosen over
+// the durable Firestore limiter the other routes use because this one fires on
+// a keystroke debounce and a round-trip per request would be felt.
+//
+// BE HONEST ABOUT WHAT IT BUYS. The bucket is per INSTANCE and
+// `setGlobalOptions({maxInstances: 10})` (`index.js`) means up to ten of them,
+// so the real per-uid ceiling on a BILLED Google Places endpoint is ~200/min,
+// not 20 — and a cold start resets a bucket, so a caller who spreads requests
+// across new instances is limited by nothing here at all. That is a
+// billing-DoS bound, not a security one: `assertAdmin` + App Check mean it
+// takes a compromised admin session to reach. The real backstop is a GCP
+// billing alert on the Places API, which lives in the console and NOT in this
+// repo — if that alert does not exist, this limiter is the only thing between
+// a stolen admin session and an unbounded bill. Move to
+// `enforceDurableRateLimit` (which `placesGetDetails` below already tolerates)
+// if the latency trade ever stops being worth it.
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const rateBuckets = new Map();

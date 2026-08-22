@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -26,6 +27,31 @@ final currentUserDocProvider = StreamProvider<Map<String, dynamic>>((ref) {
 
   return streamForUid(ref, watchDoc);
 });
+
+/// The three inputs every device-registration gate reads, or null when the
+/// account doc has not settled.
+///
+/// NULL MEANS "RETURN", NOT "NO". The three device-registration controllers
+/// (push, presence, Live Activity) each opened with the same six-line preamble
+/// carrying two decisions that are not obvious from reading it: an unsettled
+/// or errored account doc must leave the current registration ALONE rather
+/// than tear it down — a transient stream error would otherwise de-register a
+/// live device — and `role`/`status` are read as TRIMMED strings, because a
+/// stray space makes an active employee read as neither active nor disabled.
+/// The predicate was already shared; this preamble was not.
+({bool signedIn, String role, String status})? readAccountGateInputs(
+  Ref ref,
+  FirebaseAuth auth,
+) {
+  final docState = ref.read(currentUserDocProvider);
+  if (docState.isLoading || docState.hasError) return null;
+  final doc = docState.value ?? const <String, dynamic>{};
+  return (
+    signedIn: auth.currentUser != null,
+    role: (doc['role'] ?? '').toString().trim(),
+    status: (doc['status'] ?? '').toString().trim(),
+  );
+}
 
 final accountDisabledProvider = Provider<AsyncValue<bool>>((ref) {
   return ref
