@@ -750,8 +750,15 @@ admin "Invite" → createEmployeeAccount callable (admin-only, assertAdmin)
   ├── generates the starting password: generateStartingPassword(), 12 chars
   │     drawn with crypto.randomInt from a deliberately unambiguous alphabet
   │     (no 0/O, no 1/l/I — the admin reads it aloud), one uppercase, one
-  │     lowercase and one digit guaranteed so it satisfies the client policy,
-  │     Fisher-Yates shuffled so those three don't always sit in front.
+  │     lowercase, one digit and EXACTLY one symbol from `!@$?*` guaranteed,
+  │     Fisher-Yates shuffled so those four don't always sit in front.
+  │     The symbol class was added 2026-08-21 after the Identity Platform
+  │     console password policy — which requires a non-alphanumeric character,
+  │     and is the ONLY policy still binding here now that the client enum has
+  │     dropped its own symbol requirement — rejected every alphanumeric mint
+  │     with PASSWORD_DOES_NOT_MEET_REQUIREMENTS, taking account creation down
+  │     entirely. The shared constant below had been satisfying that policy by
+  │     accident, through a trailing `!`.
   │     RANDOM PER ACCOUNT since 2026-08-21; it was the shared constant
   │     DEFAULT_PASSWORD ("Welcome123!") from P4c until that date.
   ├── mints the Firebase Auth account on it and creates users/{id} with
