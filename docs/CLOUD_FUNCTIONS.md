@@ -350,7 +350,14 @@ replayed call (or two devices finishing at once) can't rewrite a consent record;
 `not-found / account-not-found` when there's no doc for the uid.
 
 **It no longer checks `email_verified`** (guard removed 2026-08-21, along with
-the `failed-precondition / email-not-verified` error it raised). That check
+the `failed-precondition / email-not-verified` error it raised). **The CLIENT
+still maps that error**, deliberately: `AuthService._mapSetupError` turns it
+into `AuthFailureSetupNotAvailableYet` so that a backend rolled back under a
+shipped app build (§3 below) tells the person setup is unavailable instead of
+"Something went wrong", and stops filing a Crashlytics non-fatal on every
+retry by someone who cannot succeed. That mapping is old-backend
+compatibility only — retire it once no pre-simplified-auth backend can be
+live — and its presence is NOT evidence this callable still raises the error. That check
 existed to price the shared-`Welcome123!` window — knowing the address was enough
 to sign in, so finishing setup was made to require the MAILBOX — and it was
 removed only because the starting password became a random per-account secret in

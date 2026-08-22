@@ -161,7 +161,13 @@ self-service settings. Root context: `../../CLAUDE.md`.
   ahead.** Client side there is no mailbox step left to look for —
   `verify_email_panel.dart`, `AuthService.sendVerificationEmail` /
   `refreshEmailVerified` / `isEmailVerified` and `AuthFailureEmailNotVerified`
-  were all deleted on 2026-08-21. `create_account_screen.dart`, both `accept_invite_*` screens,
+  were all deleted on 2026-08-21. One deliberate remnant: `_mapSetupError`
+  still maps the callable's `email-not-verified` message onto
+  `AuthFailureSetupNotAvailableYet`, purely so a ROLLED-BACK backend under a
+  shipped build degrades to an `isExpected` failure with a sentence the
+  person can act on, rather than `AuthFailureUnknown` and a non-fatal per
+  retry. It is named for what it means to the user, not for the retired
+  guard, because this build has no verification UI left to satisfy. `create_account_screen.dart`, both `accept_invite_*` screens,
   `CodeEntryBoxes`, `signup_code_dialog`, `InvitePreview` and the
   `revokeInvite`/`previewInvite` callables are all **deleted** — there is
   nothing left to "accept" in THIS build, which is why sign-in's bottom prompt
