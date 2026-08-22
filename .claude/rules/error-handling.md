@@ -121,7 +121,7 @@ alwaysApply: true
   - Employees / self: `EMP-EMERGENCY`, `EMP-LOAD`, `EMP-TODAY`, `MYDET`
   - Presence / map: `LIVEMAP-MARKERS`, `PRESENCE`
   - Images: `IMG-DEL`, `IMG-DISK`, `IMG-LOAD`, `IMG-PICK`, `IMG-SAVE`,
-    `IMG-SHARE`, `IMG-UPLOAD`, `IMG-URL`
+    `IMG-SHARE`, `IMG-UPLOAD`
   - Address / launchers: `ADDR-AUTO`, `ADDR-DETAILS`, `ADDR-PLACES`,
     `LAUNCH-TEL`, `LAUNCH-EMAIL`, `LAUNCH-MAPS`, `LAUNCH-URL`
   - Devices / delivery: `FCM`, `PUSH`, `PUSH-TAP`, `LIVE-ACT`, `WIDGET`,

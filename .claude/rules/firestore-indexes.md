@@ -50,7 +50,7 @@ reaper can ever reach (see the `liveActivityTokens` rule).
 **Firestore TTL policies must use expiration offset `0`.** Every collection that
 writes an `expiresAt` (`appointmentReminders`, `appointmentOverduePrompts`,
 `appointmentSeriesNotices`, `liveActivityTokens`, `liveActivityCards`,
-`rateLimits`) stores
+`rateLimits`, `appointmentRecountClaims`) stores
 the *absolute* deletion instant — the lifetime is already baked in by
 `LEDGER_TTL_MS` / `CARD_TTL_MS` / the limiter window. The
 console's "expiration offset" ADDS to that value, so any non-zero offset

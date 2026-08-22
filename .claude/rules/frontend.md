@@ -212,7 +212,7 @@ Material Design 3 (Flat / Elevation). Use `ColorScheme`, `TextTheme`, and `Theme
 - Do not call `ScaffoldMessenger.showSnackBar` for user feedback — use
   `ref.read(noticeServiceProvider).success/error/info(message)` instead.
   The three sites that must use a SnackBar (account-disabled in
-  `core/app/account_exit_listeners.dart`,
+  `core/app/account_exit_controller.dart`,
   photo-upload in `core/app/photo_upload_failure_listener.dart`, map-launch in
   `features/maps/address_map_launcher.dart`)
   build it through `errorSnackBar(context, message, {action})`

@@ -43,7 +43,7 @@ Loaded when working under `lib/core/navigation/`. Root context: `../../../CLAUDE
   mounts a live `HubShell` as `home:` before pushing, so `_hubRoute` always
   finds one), and `test/routes/hub_route_cold_start_test.dart` (I2, 2026-08-19)
   covers the FALLBACK branch — no live shell, so `_hubRoute`
-  (`lib/core/navigation/app_routes.dart`) must build a fresh `HubShell` with
+  (`lib/routes/app_routes.dart`) must build a fresh `HubShell` with
   `initialTab` set to the tab that was asked for. Before that second file
   `initialTab` appeared nowhere under `test/`, so a push landing on the
   calendar instead of the requested tab (a push-notification tap, or a drawer

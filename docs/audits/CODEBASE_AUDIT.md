@@ -1,815 +1,696 @@
-# Codebase Audit — 2026-08-19
+# Codebase Audit — 2026-08-22
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
-`firestore.indexes.json`, `test/`, `lib/l10n/*.arb`, `docs/`).
-Baseline: `db99d889` on `redesgin`.
+`firestore.indexes.json`, `test/`, `lib/l10n/*.arb`, `.claude/rules/`, `docs/`).
+Baseline: `7ace6528` on `redesgin`, clean tree.
 
-> **Doc references use the NEW rule layout.** The CLAUDE.md → `.claude/rules/`
-> lazy-loading split landed on disk *during* this audit (root CLAUDE.md 2100 →
-> 449 lines; new `appointments.md`, `clients.md`, `employees.md`, `images.md`,
-> `wave.md`, `notifications.md`, `firestore-indexes.md`, plus
-> `lib/core/navigation/CLAUDE.md`). Every citation below was re-located against
-> that new layout and re-verified — none point at the pre-split file.
->
-> **This audit changed no files.** The only working-tree changes are yours (the
-> split itself), so nothing here collides with it.
-
-## Resolution — all 38 findings closed, 2026-08-19
-
-Every finding below was implemented in the working tree the same day. Read the
-findings as the record of what was wrong, not as outstanding work.
-
-**Verified after the fixes (observed, not assumed):**
-
-- `flutter analyze` → **No issues found!**
-- `flutter test` → **2599 passing / 0 failing** (from 2445/41 at the baseline)
-- `functions` ESLint → clean · `functions` jest → **1327/1327 across 56 suites**
-  (from 1308/54)
-- `lib/l10n/.gen/untranslated.json` → `{}` · zero BOMs across every changed file
-
-**The two decisions worth carrying forward:**
-
-- **S1 was resolved as *bounded paging*, not by picking one of the two states
-  the finding described.** Paging and a ceiling are not alternatives: page so a
-  single snapshot cannot truncate the answer, cap so the loop cannot walk the
-  collection, warn so a truncation is visible in Crashlytics. The constants were
-  raised rather than restored — `_rangeStreamLimit` 3000, `_userStreamLimit`
-  1000, `_presenceStreamLimit` 1000, `_historySearchScanLimit` 5000,
-  `_clientScanLimit` 5000, `_clientHistoryScanLimit` 1000 — and every doc claim
-  the finding listed was rewritten to that shape rather than deleted.
-- **B6's prescribed fix was insufficient as written.** Hoisting the provider
-  reads to the top of `_restoreDeviceRegistrations` does not help, because the
-  whole function runs after its caller's three awaits. The deps are now passed
-  in from the caller, which makes a restore-without-deps unrepresentable.
-
-**Where the audit was wrong, corrected during the work:**
-
-- I12 undercounts: **78** log tags in `lib/`, not 63 — the extraction missed
-  tags passed as a named `tag:`, built by interpolation, or spelled in a ternary.
-- I11: `functions/build/` was **already** gitignored (`.gitignore:64`, a bare
-  `build/`, which matches at every depth). Only the `__tests__` entry was needed.
-- I1: `functions/index.js` is **not** requireable outside the emulator as-is —
-  it needs `FIREBASE_CONFIG`, for exactly the reason I12 corrects about
-  `maintenance.js`.
-- I6: `AppointmentCard._body` is 59 lines, not 94. Only `build()` was over 60.
-- I2's Personal/all-day claim is half right: the two controllers are
-  deliberately asymmetric, so the doc was rewritten per-controller rather than
-  deleted.
-- D3: **both** new collections carry a TTL `fieldOverride`, not one.
-
-**Found while closing the audit, not in it:** `login_screen.dart` carried the
-same dead `_bannerSuccess` state as **B7** — assigned `null` at all four sites
-and nothing else, so its success banner was unreachable. Removed.
-
-**Still outstanding, and deliberately not done here** (both are operational, not
-code):
-
-- `docs/legal/privacy-policy.html` is now internally consistent but must be
-  **republished to `gvogas/es-pro-legal`** — `termsAcceptedAt` is stamped against
-  the *published* text, so the live page is the one that matters.
-- `functions/scripts/restore-client-name-halves.js` — **prod dry run DONE
-  2026-08-21, and the repair set is EMPTY**: 703 clients examined, 0 to
-  restore, 0 for the business repair, 507 already carrying halves, 193 never
-  renamed. The live run was never needed. Three docs remain, and none of them
-  is what this script repairs — see the note under **Notes / uncertainties**.
+> **This audit ran the day after HEAD retired the `pictures` array** (the photo
+> subcollection CONTRACT step). That commit is undeployed, and several findings
+> below are specifically about it — one is a user-visible regression, four are
+> comments left pointing at machinery the commit deleted. Read the CONTRACT-step
+> items before running the migration's remaining steps.
 
 ## Summary
 
-- **Scanned:** 389 Dart files / 56k lines in `lib/`, 294 test files, 110 JS files
-  in `functions/`, 722 ARB keys × 2 locales, rules + indexes, `docs/`.
-- **Auto-fixed (safe, in the diff): 0.** The static layer is completely clean and
-  every finding this round is semantic, security-sensitive, or a judgment call —
-  report-only by the skill's own rule. There was nothing safe left to apply.
-- **Reported for your decision: 38**
-  (⚠️ 3 pre-ship · 🔴 7 security · 🟠 9 bugs · 🔵 12 improvements · 🟡 7 code-quality)
-- **Verification (observed, not assumed):**
-  - `flutter analyze` → **No issues found!**
-  - `dart fix --dry-run` → **Nothing to fix!**
-  - `functions` ESLint → clean
-  - `functions` jest → **1308/1308 pass across 54 suites**
-  - `flutter test` → **RED: 2445 pass / 41 fail** (a second run gave 2444/42, so
-    at least one test is also flaky). See **B1** — this is a finding, not a note.
+- **Scanned:** 389 Dart files / 56.5k LOC in `lib/`, 302 test files, 114 JS
+  files / 35.7k LOC in `functions/`, 2 rules files, 711 × 2 ARB keys.
+- **Auto-fixed (safe, in the diff):** 11 — 3 zero-reference deletions, 1
+  orphaned docstring, 7 factually-wrong doc pointers.
+- **Reported for your decision:** 34
+  (⚠️ 4 act-before-release · 🔴 5 security · 🟠 6 bugs · 🔵 19 improvements)
+- **Verification:** `flutter analyze` **No issues found!** · `flutter test`
+  **2608/2608** · `functions` jest **1343/1343 across 56 suites** ·
+  `npm run lint` clean. All match the pre-audit baseline exactly.
 
-### The one-paragraph version
+**The mechanical level of this codebase is exceptionally clean.** `flutter
+analyze` was already at zero, `dart fix --dry-run` had nothing to apply, ESLint
+was clean, there are zero orphaned Dart files, zero orphaned ARB keys, zero
+EN/FR drift, zero removable dependencies, zero commented-out code, zero
+`TODO`/`FIXME`/`HACK`/`XXX` markers and zero debug leftovers. Every documented
+performance invariant in `CLAUDE.md` was re-verified and still holds. The yield
+is therefore concentrated in three places: **the CONTRACT step's loose ends**,
+**documentation that has drifted from the code it governs**, and **test-coverage
+gaps on release-critical paths**.
 
-The static, dead-code and convention layers are **exceptionally clean**: zero
-unused files (verified two ways, including a reachability BFS from `main.dart` —
-0 of 380 unreachable), zero dead public symbols, zero unused dependencies, zero
-BOMs, zero import-order violations, zero unsanctioned SnackBars, zero raw
-`Exception` throws, zero `FirebaseFirestore.instance` in the widget layer, and
-zero widget-disposal leaks across all 123 controller sites. All eight documented
-Dart↔JS hand-mirrors were diffed and **none has drifted**.
+### The top three
 
-The findings concentrate in one place: **the last two commits** (`a06c8e4a`
-"clean up and review of code", `db99d889` "more clean up"). Between them they
-removed every named query ceiling in the data layer and shipped 41 failing
-tests. Nearly everything above 🔵 traces to those two commits or to the new
-image/account-exit code they landed alongside.
+1. **🟠 B1 — a just-added photo is invisible until a Cloud Function catches up.**
+   A HEAD regression on the most-opened surface in the app.
+2. **🔵 I1 — the irreversible migration script prints no target project.** Four
+   bulk-write scripts run under ambient credentials with no banner, including
+   `clear-appointment-picture-arrays.js` — which is the *next* operational step.
+3. **🔴 S1 — legacy `url` photo docs are still permanent, rules-free links**, and
+   the control that used to revoke them was deleted on the premise that none
+   survive. The rules, the backfill and the loader all say otherwise.
 
----
+## Auto-applied cleanups (review the diff)
 
-## ⚠️ Pre-ship checklist (act before release)
+| File:line | Change | Why |
+|---|---|---|
+| `lib/core/providers/firebase_providers.dart:25-27` | Deleted `extension AuthGatedRef on Ref` | Zero references repo-wide. It is a `watch(...).value` tri-state read — exactly what `streamForUid`, declared 6 lines below, exists to replace. A loaded footgun with no users. |
+| `functions/appointment_images.js:371` | Removed `deleteAppointmentImageBytes` from `module.exports` | No external `require`, no test reference. Function and both internal uses (`:185`, `:347`) left intact. |
+| `functions/.eslintrc.js:19-25` | Removed the `**/*.spec.*` mocha `overrides` entry | Zero `*.spec.*` files exist in the repo. |
+| `lib/features/calendar/data/appointment_image_upload_service.dart:116-120` | Deleted orphaned docstring | Documented `_resolveCarriedUrl`, deleted at HEAD. It had glued itself above `_attempt`'s own doc and described a `null` return contract `_attempt` does not have. |
+| `.claude/rules/firestore-indexes.md:53` | Added `appointmentRecountClaims` to the TTL list | The indexes file declares **7** `ttl: true` policies; the list named 6. This is the list guarding the `--force` footgun that wiped all 5 live TTL policies on 2026-07-21. |
+| `.claude/rules/error-handling.md:124` | Removed `IMG-URL` from the log-tag registry | `downloadUrlFor` and its warn were deleted at HEAD. The registry is declared EXHAUSTIVE, and this was its only drift. |
+| `.claude/rules/frontend.md:214` | `account_exit_listeners.dart` → `account_exit_controller.dart` | The SnackBar moved in the 2026-08-19 detect/teardown split. Count (3) was already right. |
+| `lib/core/navigation/CLAUDE.md:46` | `lib/core/navigation/app_routes.dart` → `lib/routes/app_routes.dart` | Cited path does not exist. |
+| `.claude/rules/appointments.md:80` | Dropped deleted `AppointmentTile` from the `showActions` list | `lib/features/calendar/CLAUDE.md:184` already says it is deleted; the two rule files disagreed. |
+| `lib/features/calendar/CLAUDE.md:107` | `_CollapseHandle` → `CollapseHandle` (+ its file) | Made public into `widgets/views/collapse_handle.dart`. |
+| `.claude/rules/clients.md:56` | `functions/wave/customers.js` → `customers_import.js` | The `archived: false` stamp moved 2026-08-19. |
 
-There are **zero `TODO(pre-ship)` markers** in the tree — that scaffolding is
-genuinely gone. These are the launch-gated items that remain:
+> Full detail is in `git diff`. The closed 2026-08-19 report was moved to
+> `docs/archive/CODEBASE_AUDIT_2026-08-19.md`.
+> Nothing below this line was auto-changed.
 
-- [ ] **`flutter test` is red — 41 failures.** Do not cut a build against this.
-  See **B1**; several failures are ambiguous between "test needs updating" and
-  "product regression" and need individual triage.
-- [ ] **`docs/plans/APP_STORE_SUBMISSION.md:607, :741`** — EN and FR "What's New"
-  copy still pinned at **v1.45.0+72 (2026-08-11)** while `pubspec.yaml` is
-  **1.46.2+75**. This is the text pasted into App Store Connect; the failure mode
-  is publishing last release's notes. The doc's own header warns about this.
-- [ ] **`docs/legal/privacy-policy.html:45` vs `:580-581`** — header says
-  *Last updated: August 14, 2026*, footer still says *August 8, 2026*. This is a
-  **consent artefact**: `termsAcceptedAt` is stamped against the published text
-  and §11 makes the date the change-announcement mechanism. Fixing it also
-  requires republishing to `gvogas/es-pro-legal`, or the live site keeps the split.
+## ⚠️ Act before release
 
----
+There are **zero `TODO(pre-ship)` markers** in the tree — verified. These are
+operational items carried forward from `docs/DEPLOYMENT.md` that are still open,
+surfaced here because the CONTRACT step makes two of them newly urgent.
+
+- [ ] **The photo migration's deploy ordering is unstarted, and step 2 gates the
+  app build.** `docs/DEPLOYMENT.md:388-414`. HEAD stopped writing `pictures`,
+  but the rules relaxation that accepts `pictureCount == 0` on create **must be
+  live before the app build ships**, or every appointment create fails
+  `permission-denied`. Step 1 (re-run the copy backfill) must also precede it —
+  there is no array fallback left in the app, so anything the backfill misses
+  shows **no photos at all**. Step 4 is the irreversible one; see 🔵 I1 before
+  running it.
+- [ ] **Download tokens for anyone deactivated 2026-08-16 → 2026-08-19 were
+  never rotated.** `docs/DEPLOYMENT.md:585-600`. `rotateAssignedImageTokens`
+  resolved its bucket into a local while the callee read `deps.bucket`, so the
+  control logged "nothing rotated" while rotating nothing. The fix shipped; it
+  does not act retroactively. Remediation is to flip each affected person to
+  `active` and back. **Note this interacts with 🔴 S1** — the rotation has since
+  been deleted entirely, so this is now the only way to close that window.
+- [ ] **3 orphaned Cloud Scheduler jobs.** `gcloud` is not installed on this
+  box; scheduled functions must land on exactly 3, and only 3 are free.
+- [ ] **A live `MAPS_API_KEY` remains in git history**, committed by the merge
+  that resurrected `android/`
+  (`docs/archive/CODEBASE_AUDIT_2026-08-14-pre-deploy.md:530`). `/android/` is
+  now correctly gitignored and untracked — verified — but **I found no record
+  anywhere in `docs/` that the key was ever rotated.** Rotating it is the fix;
+  history rewriting is not required once the key is dead.
 
 ## 🔴 Security findings (review required)
 
-### S1 — Every named query ceiling and warn-at-cap was removed from the data layer · severity: high · confidence: high
+### S1 — Legacy `url` photo docs are permanent rules-free links, and the control that revoked them was deleted on a premise the code contradicts · severity: medium · confidence: high
 
-**Where (code):**
-- `lib/features/calendar/data/firebase_appointments_repository.dart:291-311` (`_rangeQuery`), `:343-361` (`fetchClientHistory`), `:391-417` (`_historyScanWindow`)
-- `lib/features/clients/data/firebase_clients_repository.dart:129-142` (`fetchClientsCreatedSince`), `:251-281` (`_clientScanWindow`)
-- `lib/features/employees/data/firebase_employees_repository.dart:28-56` (all three `users` streams)
-- `lib/features/presence/data/presence_repository.dart:70-82` (`watchAllPresence`)
+- **Where:** `firestore.rules:687` and `:696-701`;
+  `functions/scripts/backfill-appointment-images.js:87`;
+  `lib/core/images/appointment_image_loader.dart:166-172`;
+  `functions/bridge.js:260-267`; `functions/CLAUDE.md:216`.
+- **Risk:** a `?alt=media&token=…` download URL is served with **no auth and no
+  `storage.rules` evaluation**, and its token is stable per object and never
+  expires. Deactivation (`syncUsersByUid`) disables the Auth account, revokes
+  refresh tokens and flips the `status == 'active'` gate — none of which touches
+  that string. Unlike a cached byte, the URL is *transferable*: an assigned
+  employee can read it out of the image document and paste it anywhere, forever.
+  That is precisely what the deleted `rotateAssignedImageTokens` existed to close.
+- **Why the deletion premise does not hold.** `bridge.js:264` reasons the
+  CONTRACT step "stopped minting it, stopped storing it and cleared the arrays,
+  so there is no such link left to invalidate." Two halves of that are not true
+  today: (a) the **subcollection** still carries `url` — the backfill
+  deliberately preserves it when there is no `storagePath` ("dropping that one
+  destroys the only thing that can render the photo"), the rules explicitly allow
+  it up to 1000 chars, and the loader fallback is documented as *permanent*; and
+  (b) **the arrays are not cleared** — that is step 4 of the runbook and it has
+  not run.
+- **Fix:** count `appointments/*/images` docs where `url` is set and
+  `storagePath` is empty. If **zero**, drop `url` from the rules allowlist and
+  delete the loader fallback, which makes the claim true. If **any exist**,
+  either re-upload those bytes to a real `storagePath` and strip `url`, or
+  reinstate a rotation scoped to just those objects. Until one lands, correct the
+  note in `bridge.js`, `functions/CLAUDE.md:216` and `.claude/rules/images.md:45`
+  so the risk assessment is not leaning on a claim the rules contradict.
+- **Could not verify:** whether any such doc exists in prod. Firebase MCP
+  Firestore reads fail `read_time cannot be in the future` on this box (clock
+  skew), so this needs a one-shot count run by hand.
 
-**What.** `_rangeStreamLimit`, `_userStreamLimit`, `_presenceStreamLimit` and
-`_historySearchScanLimit` no longer exist anywhere in `lib/`.
-`ClientSearchPolicy.serverReadLimit` survives as a declaration with **no call
-site**. Four bounded `.limit(N).get()` reads became `while(true) { … startAfterDocument … }`
-loops that walk the entire result set; three live `snapshots()` listeners lost
-their ceiling outright. Every warn-at-cap went with them.
+### S2 — Process-lifetime repository caches hold client PII across sign-out · severity: low · confidence: high
 
-**This was deliberate, not an accident** — the guard test was inverted in the
-same commit. `test/features/calendar/data/firebase_appointments_repository_cap_warning_test.dart`
-now contains `test('fetchInRange no longer truncates through a hard query limit')`
-asserting `verifyNever(() => query.limit(1000))`, and
-`test('history search walks additional pages instead of warning at a cap')`
-asserting `expect(logger.warnings, isEmpty)`. Notably `countFutureAssignments`
-**kept** its cap and its warn, so the change was selective and considered.
+- **Where:** `lib/features/clients/data/firebase_clients_repository.dart:41-44`
+  (up to 5000 full `ClientRecord`s — name, phone, email, address, contacts);
+  `lib/features/calendar/data/firebase_appointments_repository.dart:73-89`
+  (up to 5000 raw appointment maps with `clientName`/`clientPhone`/`address`,
+  plus 50 result lists); `lib/core/app/device_deregistration.dart:107`.
+- **Risk:** both repositories are root-scope `Provider`s, so they live for the
+  whole process. The 2-minute TTL only gates whether a window is *served*, never
+  evicts. Neither is cleared on sign-out or in the account-exit teardown, which
+  clears the image loader and nothing else. Heap residency on a shared handset —
+  the next signed-in user can only *render* it if they are also an admin, so this
+  is not an access-control hole.
+- **Fix:** add `clearCaches()` to both repositories and two `_step(...)` calls in
+  `deregisterThisDevice`, beside the existing `imageCache de-registration`. Same
+  argument already accepted for the image caches.
 
-**The reasoning is defensible.** Silent truncation is a genuinely bad failure
-mode, and the rules docs argue that case themselves. Paging fixes correctness.
-**The concern is that it went from *bounded* to *unbounded* rather than
-*bounded higher*, and left three things behind:**
+### S3 — `placesAutocomplete`'s rate limit is per-instance and `maxInstances: 10` multiplies it · severity: low · confidence: high
 
-1. **Five doc claims now assert protections the code does not have** — and the
-   split preserved every one of them:
-   - `.claude/rules/employees.md:287` — *"All three `users` streams are bounded by the shared `_userStreamLimit` (500)…"*
-   - `.claude/rules/employees.md:290` — *"The appointment range streams are bounded too (`_rangeStreamLimit`, 1000) and WARN when a snapshot comes back at the cap."*
-   - `.claude/rules/appointments.md:344` — *"Every query in every repository now names a ceiling."*
-   - `CLAUDE.md:275` — *"Both scan windows WARN at their cap."*
-   - `CLAUDE.md:282` — *"Never add a bounded read here without the warn."*
+- **Where:** `functions/places.js:24-26, 126-148`; `functions/index.js:4`.
+- **Risk:** every other admin callable uses the durable Firestore limiter; this
+  one uses an in-memory `Map` at 20/min per uid. With up to 10 concurrent
+  instances the real per-uid ceiling on a **billed** Google Places endpoint is
+  ~200/min, and a cold start resets the bucket. Billing-DoS, not data, and it
+  needs a compromised admin session (it is behind `assertAdmin` + App Check).
+- **Fix:** the in-memory design is a deliberate latency trade — but state the real
+  ceiling in the comment, and confirm the GCP billing alert the comment
+  references actually exists. Or move to `enforceDurableRateLimit`, which
+  `placesGetDetails` already tolerates.
 
-   Plus three inline comments: `lib/features/settings/screens/my_details_screen.dart:409`
-   (asserts the `_userStreamLimit` bound), and `firebase_employees_repository.dart:42`
-   / `employee_name_policy.dart:1-5`, both of which rest on a removed
-   `orderBy('name')` that `watchAllUsers` no longer has.
-2. **The live listeners are a different risk class from the one-shot scans.** An
-   unbounded `snapshots()` over a business-wide range — re-established per month
-   page and held open by the calendar, day route, drawer badge, roster reducer
-   and dashboard — is not the same trade as an unbounded one-shot `.get()` behind
-   a 2-minute TTL cache.
-3. **Cost is now unbounded in business size and grows forever.** History search
-   pages the *entire* terminal-appointment archive (2-year retention) on the
-   first committed keystroke, once per TTL, per user — then copies every raw doc
-   map across the `compute` isolate boundary. Clients search does the same over
-   the whole roster (archived clients are never deleted).
-   `fetchClientHistory(limit: 50)` now returns a client's *whole* history, and
-   `client_job_history_section.dart:62-90` renders it in a **non-lazy `Column`**.
+### S4 — `functions/` transitive advisories (informational) · severity: low · confidence: high
 
-**Risk:** unbounded, client-triggered Firestore read billing; an on-device OOM
-path on large datasets; and — because the warns are gone too — a blow-up or a
-truncation is now invisible in Crashlytics either way.
+- **Where:** `functions/package.json` — `firebase-admin ^13.6.0`.
+- **Risk:** `npm audit --omit=dev` reports 9 moderate advisories, all rooted at
+  `uuid <11.1.1` (GHSA-w5hq-g745-h8pq) reached via `gaxios`/`google-gax`/
+  `teeny-request`. The vulnerable path needs `uuid` v3/v5/v6 called with a
+  caller-supplied buffer; nothing here does that and no attacker input reaches it.
+- **Fix:** none now. **Do not run `npm audit fix --force`** — it downgrades
+  `firebase-admin` to 10.3.0, and the existing project note already forbids
+  bumping to admin@14 on functions 7.x. Re-check when the SDK bumps `uuid`.
 
-**Fix (your call — a product decision, not a mechanical one):** either restore a
-named ceiling + warn on each of the seven queries (raising the constants if
-1000/500 were too low), **or** keep the paging and rewrite the five doc claims
-plus three inline comments so they stop describing a control that no longer
-exists. Right now code and spec disagree, which is the worst of the three
-states. At minimum, put a hard ceiling on the loops so they cannot walk a
-collection without bound, and delete the now-dead `serverReadLimit`.
+### S5 — Note: FCM / Live Activity token doc ids are the raw tokens · severity: low · confidence: low (not exploitable)
 
-### S2 — The image disk-cache generation guard is a no-op for the exact case it documents · severity: medium-high (privacy) · confidence: high
+- **Where:** `firestore.rules:355-368`, `:372-402`.
+- An active user may `create` a row at any doc id under their own
+  `fcmTokens`/`liveActivityTokens`, i.e. plant another device's token. Reading
+  another device's token requires `myDocId() == userId`, so the rules already
+  deny the only in-app way to obtain one. **Not a finding** — recorded because
+  the doc-id-*is*-the-secret shape matters if a future surface ever exposes a
+  token.
 
-**Where:** `lib/core/images/appointment_image_disk_cache.dart:130` +
-`lib/core/images/appointment_image_loader.dart:144`
-**Doc:** `.claude/rules/images.md:121` — *"A disk write whose session ended
-mid-flight is dropped (the cache carries a generation counter): the loader's
-write-back is unawaited, so a fetch resolving just after sign-out would
-otherwise re-seed the cache that was just emptied."*
+### Security checklist verified clean
 
-**Risk.** `write()` captures `final generation = _generation` at **call** time,
-but the loader calls `_disk.write(key, bytes)` only *after* the Storage fetch
-resolves. `clear()` bumps `_generation` synchronously — so by the time `write`
-runs, the captured value already **equals** the current one and the write
-proceeds. The guard only fires for a write queued *before* `clear()`, which the
-`_mutations` chain already orders anyway — the harmless direction.
-
-**Concretely:** an employee opens a job sheet with photos still loading, signs
-out (or is kicked out by the account-deleted listener), `deregisterThisDevice`
-wipes the cache — and the fetch resolves milliseconds later and writes those
-bytes back to disk, where they **survive the process**. On a shared handset the
-next person's session has the previous user's job photos cached. The in-memory
-half *is* protected (by the `identical(_cache[path], pending)` test in `_settle`);
-only the disk half — the half that outlives the process — is exposed.
-
-**Its test asserts the opposite ordering.**
-`test/core/images/appointment_image_disk_cache_test.dart:103` does
-`final write = cache.write(...)` *then* `final cleared = cache.clear()`. Swap
-those two lines and it fails today.
-
-**Fix:** capture the generation where the fetch *starts* and thread it through —
-`_disk.write(key, bytes, generation: g)` with `g` read in the loader before
-`await _fetch` — and reverse the two lines in the test.
-
-### S3 — `AppLock` permanently disables the user's biometric setting on a transient plugin error · severity: medium · confidence: high
-
-**Where:** `lib/core/security/app_lock.dart:136-153` (added in `a06c8e4a`)
-**Doc:** `CLAUDE.md:175` — *"a persistent read failure still degrades to
-unlocked, on purpose."*
-
-**Risk.** `_authenticate()` now calls `service.isAvailable()` and, on `false`,
-**writes `setEnabled(value: false)`** to the persisted Keychain flag, then
-unlocks. But `BiometricAuthService.isAvailable()` (`biometric_auth_service.dart:15-22`)
-is `try { isDeviceSupported() } catch { return false; }` — it returns `false` on
-*any* thrown `PlatformException`, including the pre-first-unlock `local_auth`
-channel window this whole subsystem exists to handle. One hiccup on resume
-silently turns the user's app lock off, **forever**, with no notice.
-
-The doc sanctions degrading to *unlocked for the session*; nothing licenses
-**persisting** that decision over a preference the user explicitly set. The
-`_LockOverlay` "Unlock" button routes to the same `_authenticate`, so a user
-tapping Unlock in that window is the trigger.
-
-**Fix:** unlock for this session only and surface a notice; don't write the flag.
-If a persistent disable is genuinely wanted, gate it on a distinguishable
-"device does not support auth" result rather than the catch-all `false`.
-
-### S4 — `PresenceSyncController.unregister()` deletes nothing when this session never started · severity: medium-high · confidence: high
-
-**Where:** `lib/features/presence/application/presence_sync_controller.dart:291-294`
-
-**Risk.** `_docId` is set only inside `_start()`, which requires `firebaseReady`
-**and** a granted location permission **and** a successful `findUserByUid`. If
-any fails this session, `unregister()` hits `if (docId == null) return;` and
-deletes nothing — leaving a `presence/location` doc from a **previous** launch
-live in Firestore.
-
-**What the user sees:** an employee revokes Location in iOS Settings, opens the
-app (sync bails at the permission gate), signs out — and their last pin stays on
-the admin live map indefinitely. `LiveMapAggregator.join` filters on
-missing/inactive user, never on freshness, and `staff_marker_icon.dart` has no
-staleness branch, so that stale pin is **visually identical to a live one**.
-`docs/legal/privacy-policy.html` §6/§8 promise sign-out clears it.
-
-Its sibling gets this right and says why — `live_activity_registration_controller.dart:309`:
-*"Resolve docId in case `_docId` was never set."*
-
-**Fix:** mirror it — `final docId = _docId ?? await _resolveUserDocId();`
-
-### S5 — `unregister()` races an in-flight `sync()` in all three device-registration controllers · severity: medium-high · confidence: high
-
-**Where:** `lib/core/utils/reentrant_sync.dart:9` · `presence_sync_controller.dart:291` ·
-`push_registration_controller.dart:161` · `live_activity_registration_controller.dart:302`
-
-**Risk.** `ReentrantSync.runCoalesced` guards `sync` against `sync`. It does not
-guard `sync` against `unregister`, and `unregister` doesn't go through it.
-`deregisterThisDevice` runs *before* `signOut()` by design, so a `_syncGuarded`
-resuming mid-teardown still holds a valid credential and **writes successfully**:
-
-- **Presence:** `_start()` re-opens the position stream and re-creates
-  `presence/location` for a user who just signed out, and keeps uploading until
-  the process dies.
-- **Push:** `push_registration_controller.dart:116-124` — if the resumption lands
-  before `service.currentToken()`, FCM mints a *fresh* token (the old one just
-  invalidated by `deleteToken()`) and upserts it. The signed-out device is now
-  registered with a live token and keeps receiving that account's job pushes.
-
-Both writes succeed, so **nothing logs an error**.
-
-**Fix:** route `unregister()` through the same guard, or set an `_unregistering`
-flag that `_syncGuarded` re-checks after each await.
-
-### S6 — The `IMPORT_FIELD_CAPS` mirror test silently skips half the fields it claims to check · severity: medium · confidence: high
-
-**Where:** `test/core/validators/text_limits_test.dart:243-251` vs
-`functions/wave/mappers.js:112-132`
-**Doc:** `.claude/rules/employees.md:380` — *"It reads `functions/wave/mappers.js`
-back too, for `IMPORT_FIELD_CAPS` … Add a new capped import field to that map and
-the test picks it up automatically."*
-
-**Risk.** It does not. The test parses the map dynamically (`:226-238`) and then
-discards most of it through a **hardcoded allowlist of 6 names**, while
-`mappers.js` defines **12**. A new field lands in `caps`, fails
-`checked.contains`, and is silently skipped.
-
-This is the cap mirror where failure is quietest: the Wave import writes with the
-**Admin SDK, which bypasses rules**, so a cap above the rules cap does not fail
-the import — it writes a client doc the app can **never update again**, every
-later save landing as `permission-denied` on a field nobody typed.
-
-**Fix:** iterate `caps.entries` unfiltered with a deny-by-default `switch` that
-`fail()`s on an unrecognised key. Note `rulesCapFor` returns the *minimum* across
-collections, so `address` needs a client-scoped lookup (the appointments
-validator also caps `address`, at 500).
-
-### S7 — `functions/` carries 5 moderate transitive advisories · severity: low · confidence: high
-
-**Where:** `functions/package.json` (`firebase-admin ^13.6.0`)
-
-`npm audit` reports moderate findings in `@google-cloud/firestore`,
-`@google-cloud/storage`, `gaxios`, `google-gax` and `firebase-admin`, all with
-`fixAvailable: firebase-admin@14.3.0 (isSemVerMajor: true)`. Your own notes
-record that admin@14 is incompatible with `firebase-functions` 7.x. **No action
-recommended** — logged for the dependency ledger only.
-
----
+Guard ordering on all 12 callables (auth → `assertAdmin`/identity → payload →
+`assertFreshReauth` → rate limit → work); fail-closed guards (`isReauthStale`
+treats any non-number as stale; `resolveEmailChangeCaller` refuses a null bridge,
+non-`active` status, unknown role); `enforceAppCheck: true` on all 12, no
+`onRequest`/CORS surface; every `assertPayloadShape` allowlist explicit, with
+`createEmployeeAccount`'s `isAdmin` correctly `#compat-1.47.0`
+accepted-and-ignored and the role hard-coded `"employee"` on both branches;
+`generateStartingPassword` uses `crypto.randomInt` (no modulo bias), guarantees
+one char per class, Fisher-Yates shuffles, and is persisted nowhere; zero PII,
+secrets or tokens in any `functions/` log; no raw Firebase codes or stack traces
+returned to clients; rules deny-by-default with no `match /{document=**}`, all
+server-owned collections `if false`, `allow delete` withdrawn on `/users` and
+`/clients`, exactly three `users` read clauses; `liveActivityTokens.expiresAt`
+required and capped at +31d against a 30d client write; every
+non-admin-reachable appointment query carries the `employeeIds` filter; role
+never cached (`AuthCache` stores uid/docId/name/colour only);
+`ClientRecord.toMap` emits no `waveCustomerId`/`wave`; all four credential fields
+pass `kCredentialImePersonalizedLearning`; magic bytes validated on both sides
+with the read-failure branch failing closed; no secrets tracked, `/android/`
+ignored and untracked; no injection surface (Wave GraphQL args all travel as
+variables).
 
 ## 🟠 Bug findings (review required)
 
-### B1 — 41 tests fail at HEAD; the tests added by the last two commits were never run · severity: high · confidence: high
+### B1 — A newly-added photo is invisible until a debounced Cloud Function catches up · severity: medium-high · confidence: high
 
-`flutter test` → **2445 pass / 41 fail** across 15 files. A second run gave
-2444/42, so at least one test is **also flaky**. The last audit closed at
-2352/2352 green.
+- **Where:** `lib/features/calendar/application/event_details_controller.dart:129`
+  (`if (!appointment.hasPictures) return;`);
+  `lib/features/calendar/domain/models/appointment_record.dart:96`;
+  `functions/appointment_images.js:55` (`RECOUNT_SETTLE_MS = 2000`), `:222`.
+- **Problem:** HEAD made the detail sheet seed `existingImages` empty and skip the
+  subcollection read entirely when `pictureCount == 0`. That counter has exactly
+  one writer — `recountPictures`' `parent.update()` — reached only via
+  `debouncedRecountPictures`, which **sleeps 2000 ms before it even runs the
+  aggregate**. The client deliberately does not write it
+  (`appointment_images_store.dart:84-88`) and the rules reject a client update
+  that touches it.
 
-The largest single cause is mechanical and unambiguous: the cleanup commits added
-`when(() => repo.watchInRange(any()))` blocks inside `setUp()` **without a
-`setUpAll(() => registerFallbackValue(...))`** for the custom argument types
-(`AppointmentDateRange`, `DocumentSnapshot<Object?>`). mocktail throws
-immediately, and because the throw is in `setUp` it poisons **every test in the
-file** — including previously-passing ones. That is why 41 failures span 15
-files. `git diff 8ddae0f7..db99d889 -- test/features/calendar/application/appointments_providers_test.dart`
-shows the block added with no fallback registration. **These tests cannot ever
-have been executed.**
+  **Concrete failure:** admin adds a photo → `appendAppointmentPictures` commits
+  → sheet closed → sheet reopened within cold-start + 2 s settle + parent-write
+  latency → `hasPictures` is still false, `_loadStoredPictures` returns at line
+  129, and the sheet renders "No photos" while the card shows no indicator.
+  Before HEAD the same batch `arrayUnion`-ed onto the parent, so the record
+  carried it the moment the write acked.
 
-**The rest are not all mechanical and need individual triage:**
+  **The file convicts itself:** its docstring (`:117-122`) lists exactly three
+  conditions that make the gate safe, then warns *"Should any of those stop being
+  true, this reads a job's photos as none — silently, which is the failure mode
+  the whole migration was shaped to avoid."* Propagation delay is a **fourth**
+  window none of the three cover. The same gate also turns a permanently-failing
+  `parent.update()` (retry budget exhausted) into photos that are invisible
+  *forever*, with only a server-side log.
+- **Fix:** drop the `hasPictures` short-circuit when the sheet is in edit mode —
+  it is one bounded `get`, and the sheet is the only surface that pays it. Or
+  keep the gate for the card indicator only and let the sheet read
+  unconditionally. If the gate stays, at minimum emit a `breadcrumb` when
+  `pictureCount == 0` on a job the user just uploaded to.
 
-| File | Symptom | Reads as |
-|---|---|---|
-| `test/core/animations/tap_scale_test.dart` (2) | `Bad state: Too many elements` | Helper does `tester.widget(find.byType(Transform))`; a widget change added a second `Transform` and the finder was never narrowed |
-| `test/core/images/image_storage_service_test.dart` (8) | `Bad state: Cannot call …` | Harness/stub drift |
-| `test/core/images/appointment_image_loader_test.dart` | `Expected: <4> Actual: <3>` | The **documented** `loadAll` concurrency bound of 4. Possibly a real throughput change from the new disk-read-before-network step |
-| `test/features/auth/account_status_provider_test.dart` (2) | `Expected: 'Theo Roy' Actual: ''` | Real assertion failure in the name/email fallback |
-| `test/features/employees/employee_map_memo_test.dart` | `Expected: {'e1': 'Amy Adams'} Actual: {}` + 30 s timeout | Real |
-| `test/features/settings/data/shared_prefs_settings_repository_test.dart` | `Expected: 'es' Actual: 'en'` | Real |
-| `test/core/security/app_lock_test.dart` | `Expected: true Actual: <false>` | Plausibly **S3**'s new branch |
-| `test/features/auth/application/active_user_identity_provider_test.dart` (3) | `Expected: <1>` | Plausibly the new auth-uid bootstrap gate |
-| `test/features/clients/data/firebase_clients_repository_test.dart` | — | Tests the **new** paging behaviour from **S1**, and fails |
+### B2 — `ref.read` inside a `catch` after an `await`, in two places, one contradicting its own file's comment · severity: low-medium · confidence: high
 
-Several are genuinely ambiguous between "the test needs updating" and "this is a
-product regression the test correctly caught" — which is exactly why none of it
-was auto-fixed. **Suggested order:** register the missing fallbacks first (that
-alone should clear the bulk and reveal what is actually broken underneath), then
-triage the remainder one by one.
+- **Where:** `lib/main.dart:287`;
+  `lib/core/app/appointment_link_opener.dart:142-144` and `:150-151`.
+- **Problem:** under Riverpod 3, `ref.read` on an unmounted consumer **throws a
+  `StateError`** — an unconditional throw, not a debug assert. This is the exact
+  pattern `.claude/rules/error-handling.md` calls "mechanically greppable; treat
+  a new one as a bug", and the shape that already put a **FATAL** in the zone
+  handler from `address_autocomplete_field.dart` once.
+  - `main.dart:197` hoists a logger with the comment *"Read here, never inside
+    the handler: the timer can fire after dispose."* Then `_saveSettings` — the
+    very action that timer runs (`:256-257`) — does `ref.read(loggerProvider)`
+    inside its `catch` at `:287`. The file states the spec and then breaks it.
+    Practically low-risk because this is the root `PaulApp` state, which never
+    unmounts; the greppability argument only works if the count stays 0.
+  - `appointment_link_opener.dart`: `_startWidgetTaps:103` and
+    `handleWidgetTap:125` both hoist correctly, but `_startPushTaps` reads `ref`
+    inside `.catchError` and inside `onError` 40 lines below. The
+    `initialMessage().then(handlePushTap)` chain is not cancellable by dispose,
+    so if the tap handler throws post-teardown, `.catchError` reads `ref` again,
+    throws again, and escapes as an unhandled record attributed to a *logging*
+    call.
+- **Fix:** hoist `final logger = ref.read(loggerProvider);` above the first
+  `await` at both sites, mirroring the correct siblings in the same files.
 
-### B2 — `Debouncer` now swallows the debounced action's errors at 5 of 6 call sites · severity: medium · confidence: high
+### B3 — The clear script does not stamp `pictureCount` on documents with no array, contradicting the third leg of the completeness argument · severity: low-medium · confidence: high
 
-**Where:** `lib/core/utils/debouncer.dart:26-33`
+- **Where:** `functions/scripts/clear-appointment-picture-arrays.js:159`
+  (`if (pictures.length === 0) continue;`).
+- **Problem:** `CLAUDE.md`, `.claude/rules/images.md` and the
+  `event_details_controller` docstring all justify the `pictureCount` gate partly
+  with "the cleanup script stamped it on every document that predates the
+  change." It does not — it `continue`s past any appointment whose `pictures`
+  array is absent or empty, so those are never touched. Benign in the common case
+  (absent → parsed as 0 → correct). The uncovered shape: an appointment whose
+  array was already emptied while its subcollection still holds photos and its
+  `pictureCount` write failed. That document is skipped, and **B1's gate then
+  hides its photos permanently.**
+- **Fix:** don't `continue` on an empty array — read `storedImageIds(doc)` and
+  re-stamp `pictureCount` when it disagrees, clearing the array only when
+  present. Or correct the three prose claims to say "every document that still
+  carried an array."
 
-`run` wraps the action in `Future.sync(...).catchError((e, st) { onError?.call(e, st); })`.
-`onError` is **optional**, and only `address_autocomplete_field.dart:48` passes
-one. The other five — `add_appointment_sheet.dart:53`, `details_edit_body.dart:49`,
-`appointment_history_view.dart:89`, `clients_list_view.dart:67` — construct
-`Debouncer(kSearchDebounce)` bare, so a throw inside a debounced search callback
-now **vanishes entirely**: nothing logged, nothing in Crashlytics, search
-silently returns nothing. Previously the error escaped to the zone handler and
-was recorded. Directly contradicts `.claude/rules/error-handling.md`: *"Never
-swallow errors silently."*
+### B4 — `pageToCap` warns "truncated" on a collection that is exactly `cap` long · severity: low · confidence: high
 
-**Fix:** make `onError` required, or default it to
-`AppLogger().warn('DEBOUNCE action failed', e, st)`, and pass a tagged handler at
-the five sites.
+- **Where:** `lib/core/data/paged_scan.dart:36`.
+- **Problem:** `if (docs.length >= cap) { onCapReached(); break; }` runs *before*
+  the short-page test at `:40`, so a client with exactly 1000 visits
+  (`_clientHistoryScanLimit`, pageSize 500) files a Crashlytics warn claiming
+  "older visits are not listed" when there are none. The function can also return
+  more than `cap` when `cap` is not a multiple of `pageSize` — no current call
+  site hits that, but the contract reads as a ceiling. Log noise only; no
+  user-visible effect.
+- **Fix:** test `snapshot.docs.length < pageSize` first (nothing beyond ⇒ no
+  warn), and return `docs.length > cap ? docs.sublist(0, cap) : docs`.
 
-### B3 — A reentrancy-skipped delete is reported to the user as a successful delete · severity: medium · confidence: high (latent today)
+### B5 — Two comments still assert a security posture that HEAD inverted · severity: low (documentation, but of a security invariant) · confidence: high
 
-**Where:** `lib/features/calendar/application/event_details_controller.dart:669`
+- **Where:** `lib/core/images/appointment_image_loader.dart:32-41`;
+  `lib/features/calendar/data/pending_upload_store.dart:22-26` and `:73-76`.
+- **Problem:** the loader's class docstring — its statement of what guarantee the
+  class does and does not give — says `uploadImage` "**still mints one such URL
+  per upload and persists it**", that "the whole `pictures[]` array reaches every
+  assigned employee's device", and that the residual is "covered … by
+  `functions/appointment_image_tokens.js`". At HEAD the mint is gone, the array is
+  gone, and that module is **deleted**. The paragraph even says the write "goes at
+  the photo-subcollection CONTRACT step" — HEAD *is* that step, so it anticipated
+  its own obsolescence and was not updated. It now sends a reader looking for a
+  compensating control that does not exist. `pending_upload_store.dart` likewise
+  still describes the `arrayUnion` dedupe and a re-mint via
+  `ImageStorageService.downloadUrlFor`; dedupe is now the derived
+  `appointmentImageDocId` and `downloadUrlFor` is deleted.
+- **Fix:** rewrite the loader header to say the mint is gone everywhere and the
+  residual is the cache-hit window already described at `:53-56` — **but settle
+  🔴 S1 first**, because whether the legacy `url` residual is closed determines
+  what that paragraph should say. Point both `pending_upload_store` comments at
+  `appointmentImageDocId`.
+- **Note:** the three deleted symbols (`appointment_image_tokens.js`,
+  `downloadUrlFor`, `rotateAssignedImageTokens`) have **zero live code
+  references** — every surviving mention is a comment.
+  `functions/__tests__/notification_utils.test.js:46` is the third such site.
 
-`deleteAppointment` returns `Object?` where `null` means success — and the guard
-`if (state.isSaving) return null;` returns that same `null`. The caller
-(`details_edit_body.dart:395-404`) treats `error == null` as "deleted", shows
-`common_appointmentDeleted` and calls `widget.onClose()`.
+### B6 — A lazy `late final` touching `ref`, first accessed from a timer callback · severity: low (latent) · confidence: high
 
-This is the **exact shape** `.claude/rules/error-handling.md` records as already
-fixed for the status setters: *"a write skipped by the reentrancy guard was
-indistinguishable from one that committed — the sheet announced 'marked as
-complete' and closed without having written anything."* The rule mandates a
-sealed outcome for any action with more than two states; this one was missed.
+- **Where:** `lib/features/maps/widgets/address_autocomplete_field.dart:45`.
+- **Problem:** `late final PlacesRepository _service = ref.read(...)` is exactly
+  the shape `.claude/rules/error-handling.md` and `debouncer.dart:24-27` warn
+  about, and `_logger` beside it was already made eager for this reason. It
+  degrades safely today — both call sites touch it before their first `await`, and
+  `Future.sync(action).catchError(onError)` would catch the `StateError` with an
+  `onError` that uses `_logger`, not `ref`. It becomes a crash the moment anyone
+  moves the access below an `await`.
+- **Fix:** assign it in `initState` beside `_logger`.
 
-Reachability today is narrow (`_DeleteButton` is disabled while `isSaving`, and
-`_confirmDelete` clears the flag synchronously), so it is latent — but one
-refactor from being real.
+### Verified sound (no finding)
 
-**Fix:** return `EventDetailsActionOutcome` (`Ok`/`Busy`/`Failed`) like
-`_setStatusOnRepo` already does; surface nothing on `Busy`.
-
-### B4 — `TopRouteObserver` gained the `didRemove` override its spec explicitly forbids · severity: low · confidence: medium
-
-**Where:** `lib/core/navigation/top_route_observer.dart:36-41`
-**Doc:** `.claude/rules/employees.md:210-212` — *"`TopRouteObserver` is still
-registered … and still deliberately has no `didRemove` override —
-`pushNamedAndRemoveUntil` (the account-disabled path) pushes *before* it removes,
-so overriding it would overwrite the just-pushed name with a route no longer on
-the stack."*
-
-The new override guards with `route.settings.name != _currentRouteName` —
-**name-based, not identity-based** — so removing an older route that happens to
-share a name passes the guard and overwrites the current one. Impact today is nil
-(`_topRouteObserver` has no reader), which is why this is low.
-
-**Fix:** compare by identity, or revert the override and restore the comment.
-
-### B5 — `PendingUploadStore` remove-then-add is not atomic; a failure strands photo bytes permanently · severity: medium · confidence: medium-high
-
-**Where:** `lib/features/calendar/data/appointment_image_upload_service.dart:241-254`
-
-```dart
-await _store.remove(entry.id);
-if (outcome.requeue) { await _store.add(PendingUpload(... survivors ...)); }
-```
-
-`_serialized` makes each mutation safe individually, but **the pair is two
-separate read-modify-writes**. If `add` throws, the entry is gone while the
-staged files remain on disk — and both `prune` and `drainPending` walk *queue
-entries*, so nothing can ever reach those files again. The throw is caught at
-`:293`, so it logs but **the user is told nothing**: photos attached to a job
-silently never appear, and the staging directory grows permanently.
-
-**Fix:** add `PendingUploadStore.replace(id, entry)` doing both inside one
-`_serialized` mutation.
-
-### B6 — `ref.read` after three awaits in the account-deletion catch path · severity: medium · confidence: high
-
-**Where:** `lib/features/settings/widgets/views/delete_account_flow.dart:199, 209, 210, 213`
-
-`_restoreDeviceRegistrations()` is called from both `catch` arms (`:150`, `:168`)
-**before** their `if (!mounted) return;` guards, and only after
-`reauthenticateWithPassword` + `deregisterThisDevice` + `deleteAccount` have run.
-Under Riverpod 3 `ref.read` on a disposed consumer **throws a `StateError`** — so
-if Settings unmounted during those round trips, the throw replaces the real
-failure, skips the notice *and* the `_isDeletingAccount = false` reset, and
-escapes to the zone handler.
-
-**What the user sees:** a failed account deletion with a spinner stuck on, no
-error message, and a `StateError` in Crashlytics masking the actual cause. Same
-shape that was a **FATAL** in `address_autocomplete_field.dart`.
-
-**Fix:** hoist the three provider reads into locals at `:199`, above the awaits.
-
-### B7 — `_bannerSuccess` is now unreachable state, orphaning an ARB key · severity: low · confidence: high
-
-**Where:** `lib/features/auth/screens/account_setup_screen.dart:97, 573`
-
-`_recoverToLoginAfterSetup` replaced the only assignment. The field is still read
-at `:573` but can only ever be `null`, so the success-banner branch is dead — and
-`auth_accountReadySignInAgain` (`app_en.arb:67`, `app_fr.arb:19`) is now the
-tree's **only** orphaned ARB key.
-
-**Fix:** delete the field and the branch; retire the key in both locales in a
-deliberate l10n pass.
-
-### B8 — `unregisterCurrentDevice` skips the Firestore delete when this session never registered · severity: medium · confidence: high
-
-**Where:** `lib/features/notifications/application/push_registration_controller.dart:163-169`
-
-Same shape as **S4**: `if (docId != null && token != null)` where both are set
-only on a fully-successful `_syncGuarded`. Milder, because the unconditional
-`service.deleteToken()` invalidates the token at FCM — so the residue is a stale
-`fcmTokens` row the server keeps trying to push to, not a live delivery. But it
-accumulates one row per device per incomplete session, and `syncUsersByUid`
-purges these only on *disable*, not on sign-out.
-
-**Fix:** resolve `docId` via `findUserByUid` and delete by uid/kind, the way
-`deleteTokensOfKind` already does for Live Activity.
-
-### B9 — A push tap on a slow cold start is discarded with nothing recording it · severity: low-medium · confidence: high
-
-**Where:** `lib/main.dart:342-350` (`_awaitLiveHub`)
-
-It polls for 10 s then `return null`, and the caller returns silently — **no
-`logger.warn`, no notice**. The user taps a notification, the app opens, and
-nothing happens, with no trace anywhere.
-
-**Fix:** one `logger.warn('PUSH-TAP hub never appeared')` on the null branch.
-
----
+The `invited` carve-out at both gates including the "unknown status still signs
+out" half; `isAccountDeletionSignal`'s populated→empty requirement and its
+`AccountExitListeners` wiring; the awaited `_resolveActiveEmployees` →
+`mergeRetainedAssignees` path and `assigneeNameAt`'s bounds check; the dashboard
+live/history split merged by `mergeById`; both tri-state app-lock gates;
+offline-guard-before-in-flight-flag ordering in all three submit controllers;
+`_invalidateSearchCache()` on all eight appointment write paths; 30-item chunking
+in `findBusyEmployees`; `appointmentImageDocId` vs its JS hand-mirror
+(byte-equivalent); every `Stream.listen` in `lib/` passes `onError` (10 sites);
+`diffAppointmentForNotifications` emits nothing for the new `updatedAt`-only and
+`pictureCount`-only parent writes; no missing `mounted` guards; no floating
+futures; no `late` field readable before init; no non-exhaustive switch on a
+sealed family; no unsafe force-unwrap; all 78 `functions/` `.data()` sites
+guarded.
 
 ## 🔵 Areas to improve (review required)
 
-### I1 — Test-coverage gaps on high-blast-radius logic · impact: high · confidence: high
+### I1 — Four bulk-write scripts print no target project, including the irreversible one · impact: high · confidence: high
 
-Each verified by grepping the **symbol** across `test/`, not the filename (that
-caught ~15 false positives where coverage lives under a caller's file name):
+- **Where:** `functions/scripts/clear-appointment-picture-arrays.js` (writes
+  `update({pictures: FieldValue.delete()})` at `:181`), `backfill.js`,
+  `backfill-appointment-images.js`, `backfill-clients-archived.js` — all four call
+  `initializeApp({credential: applicationDefault()})`.
+- **Opportunity:** the safety convention exists in 6 of 11 scripts and is
+  implemented **two ways** — 3 use the shared `resolveProjectId`, 3 hand-roll a
+  weaker banner, and the 4 above have none at all. So the scripts that write to
+  whatever project ambient credentials resolve to, silently, include the one
+  `docs/DEPLOYMENT.md:414` calls "**the irreversible one**" — and that script is
+  the **next operational step** in the photo migration. The shared resolver also
+  has a third fallback the hand-rolled copies lack (parsing
+  `GOOGLE_APPLICATION_CREDENTIALS`' service-account JSON), so in exactly that
+  credential setup the copies print `target: (unknown — check your credentials)`.
+  It currently lives in `backfill-client-phone-formatting.js:89` — a one-off
+  backfill acting as a shared module for two other scripts.
+- **Suggested improvement:** move `resolveProjectId` + the banner into
+  `functions/scripts/_project.js` as `printTargetBanner(app, {dryRun})`, beside
+  the existing `_flags.js`/`_batch.js` that already set this convention; repoint
+  all 6 and **add it to the 4 that have none**. Do this before running the clear
+  script.
 
-| Where | Gap | Why it matters |
-|---|---|---|
-| `lib/features/calendar/domain/models/repeat_interval.dart:62` (`occurrenceEnd`) | **zero** hits | Writes `endTime` on up to **120 documents atomically** (`add_event_controller.dart:324`, `appointment_series_editor.dart:43,101`). Its whole reason for existing is UTC-midnight arithmetic preserving a multi-day span across DST — neither the multi-day nor the DST branch is asserted. The series test checks `startTime`, `status`, `isAllDay`, `isPersonal`, `seriesId` — never `endTime`. ~6 plain `test()` cases fixes it. |
-| `functions/index.js` (25 exports) | no test requires it | Your own notes record the exact failure this permits: *"export SET changed by 6 at an unchanged count of 25."* A count check cannot catch a rename or a swap. `index.js` **is** requireable outside the emulator — ~15 lines asserting the sorted key list. **Cheapest high-value item here.** |
-| `lib/core/app/account_exit_listeners.dart` | its test imports `account_exit_controller.dart`, not this file | The only runtime session-kill path. The admin-demotion rule (with its empty-string carve-out) exists **only here** and is untested. A regression either leaves a demoted admin holding an admin session, or signs out an invited employee mid-activation. |
-| `lib/core/adaptive/cupertino_time_picker.dart` + `adaptive_pickers.dart` | neither imported by any test | On an iOS-only app this is the **sole** path by which anyone picks an appointment start time, end time, date, or an employee's working hours (5 call sites). Real logic: `firstDate`/`lastDate` clamping, a mutable `tempPicked`, Cancel→`null` vs Done→`onDone()`. |
-| `lib/core/utils/firestore_parsing.dart:22` (`firestoreInt`) | its 26-line sibling has 5 tests, this has 0 | Parses `workStartMinutes`/`workEndMinutes`/`maxJobsPerDay` on every `EmployeeRecord` and `jobCount` on every `ClientRecord`, and exists so one console-written field can't throw **inside `snapshots().map`** and blank a whole snapshot. |
-| `functions/client_job_count.js:68-84` (`recountOne`) | unexported, untested | Two documented decisions, both silent when wrong: `update()` not `set({merge:true})`, and the `NOT_FOUND` swallow with everything else rethrown so `retry: true` means something. |
-| `lib/features/auth/domain/auth_failure.dart` (`toForgotPasswordMessage`) | zero hits | Its `=> null` branch is a **deliberate silence** so the reset screen isn't an account-existence oracle. A well-meaning "improve the error message" change turns it into an email-enumeration endpoint with nothing failing. |
-| `lib/core/security/credential_input.dart` (`kCredentialImePersonalizedLearning`) | zero hits | Nothing asserts the 4 production sites set it, and nothing stops a *new* credential field omitting it — exactly how `AuthPasswordField` and both `DeleteAccountReauthDialog` variants shipped broken before. The repo already has the right pattern: a source-reading test, like `text_limits_test.dart` reading `firestore.rules` back. |
+### I2 — Three release-critical paths have no test coverage at all · impact: high · confidence: high
 
-### I2 — Four "pinned by a test" claims are weaker than written · impact: medium · confidence: high
+- **`lib/core/security/app_lock.dart:162-166`** — the **successful unlock**
+  transition never executes under test. `app_lock_test.dart:29` stubs
+  `authenticate → false` and no test ever overrides it to `true` (the only other
+  stub, `:170`, throws). `paused`/`hidden` lifecycle states are never pumped
+  either. The *lock* side is pinned at both gates, as `CLAUDE.md` requires; the
+  *release* side is entirely unguarded — a regression that never unlocks would
+  ship green.
+- **`lib/features/settings/.../delete_account_flow.dart:66, 152, 168`** —
+  `restoreThisDevice` rollback, **zero references in `test/`**, all three arms
+  unhit. The existing test fails during re-auth, i.e. before deregistration, so
+  `deregistered` is null and the branch short-circuits. A failed deletion silently
+  leaves a signed-in user de-registered from push, presence and Live Activity.
+- **`lib/features/live_activity/.../live_activity_registration_controller.dart:107-303`**
+  — 100 of 146 lines unhit (31.5%). `if (!Platform.isIOS) return;` at `:93`
+  forces every test to bail on **the only platform that ships**. Includes
+  `:117-125`, the opt-out branch that deletes stale server token rows.
+- **Suggested improvement:** for the third, inject a platform predicate — the
+  `WidgetSyncService(isIosPlatform:)` convention already in the repo. The first
+  two need a stub override and a rollback test respectively.
 
-38 such claims were checked across the new rule files; **29 hold, 0 name a
-nonexistent test, 9 are weaker than stated.** The four that matter:
+### I3 — Client search does ~2.5× the per-document work it needs · impact: medium · confidence: high
 
-- **The disk-cache generation test** exercises the harmless ordering — see **S2**
-  (`.claude/rules/images.md:121`).
-- **`lib/core/navigation/CLAUDE.md:30-31`** — *"`_hubRoute` + `HubTabRedirectRoute`
-  survive at three tab routes — they look dead but remain the cold-start fallback
-  and are pinned by `hub_shell_test`."* `test/routes/hub_shell_test.dart:157-185`
-  mounts a live `HubShell` as `home:` *before* pushing, so only the redirect
-  branch runs. `grep -rn "initialTab" test/` → **zero hits**; the cold-start
-  fallback at `app_routes.dart:177-186` is never reached. The pair is pinned; the
-  *reason given for its survival* is not.
-- **`CLAUDE.md:175`** — *"a persistent read failure still degrades to unlocked …
-  Pinned by `app_lock_test.dart`."* The nearest test has the retry **succeed** on
-  the second call. No test leaves `readFlag` throwing every time. The natural
-  "fix" of holding the lock while unresolved would pass all four existing tests
-  and trap a non-biometric user behind a prompt they cannot satisfy.
-- **Emergency-contact caps "are not dead."** Nothing reads back
-  `isBoundedString(d.emergencyContact, 200)` / `d.emergencyPhone, 40`
-  (`firestore.rules:217-220`). Deleting those caps as "unreachable" — the exact
-  mistake the rules comment warns against — passes the whole suite. Two
-  sub-weaknesses: the assertions check only that the field names *appear* (a
-  `hasAny`→`hasAll` flip still passes), and the extraction regex is **unscoped**,
-  hitting `/users` only by accident of file order —
-  `appointment_span_rules_test.dart:80-83` documents this exact trap and scopes
-  its own search.
+- **Where:** `lib/features/clients/data/firebase_clients_repository.dart:326-350`.
+- **Opportunity:** six normalize/regex-heavy values (`contactSearchText`,
+  `displayName` via `stripPhone`'s two regexes, `normalize(rawDisplayName)`,
+  `normalize(personName)`, and two `digitsOnly` calls) are computed for **every**
+  document, then the filter at `:352` `continue`s. Only the scoring ladder at
+  `:360-377` reads them, and that runs for at most 25 results. `normalize` is 8
+  sequential `replaceAll`s. Cost is window size × ~4 redundant passes per
+  committed search that misses the 2-minute cache; the window is 5000 and
+  archive-not-delete means the roster only grows. It runs inside `compute`, so
+  this is search **latency**, not jank: ~20-30 ms at today's ~700 clients,
+  ~150-200 ms at the cap.
+- **Suggested improvement:** move the `entryMatches(index(client), …)` test to
+  immediately after `fromMap`, `continue` on a miss, and compute `:326-350` below
+  it. Five-line move.
 
-**Two further doc claims, both verified false against the new files:**
+### I4 — History search builds a full record for every scanned doc to keep a handful · impact: medium-low · confidence: high
 
-- `.claude/rules/clients.md:280-284` says `splitPersonName` is hand-mirrored by
-  `splitName` in **both** `backfill-client-name-with-phone.js` **and**
-  `restore-client-name-halves.js`, "the three share worked examples". But
-  `restore-client-name-halves.js:112` does
-  `const {splitName} = require("./backfill-client-name-with-phone");` — it
-  **imports** it. There are **two** implementations, not three.
-- `.claude/rules/appointments.md:171` says turning Personal **on** "still defaults
-  an untimed block to all-day", but
-  `test/features/calendar/event_details_controller_test.dart:324` asserts
-  `test('turning Personal on again does not resurrect all-day')` —
-  `setPersonal(value: true)` then `expect(readState().isAllDay, isFalse)`. The
-  source agrees with the test.
+- **Where:** `lib/features/calendar/data/firebase_appointments_repository.dart:561`.
+- **Opportunity:** the three fields the filter reads (`clientName`,
+  `employeeNames`, `clientPhone`) are plain values on `doc.data`, but
+  `AppointmentRecord.fromMap` (≈20 map reads, 4 date conversions, 2 list parses, a
+  freezed constructor) is paid for all 5000 scanned documents. ~15-40 ms per query
+  at the cap.
+- **Suggested improvement:** read the three fields off `doc.data` for the test;
+  move `fromMap` inside the `if`. Same omission as I3 — fix them together.
 
-### I3 — The auth-uid tri-state unwrap is spelled out six times · impact: medium · confidence: high
+### I5 — The appointment sweep query + cap-warn + record-map is spelled out 3 times, and has already drifted · impact: medium · confidence: high
 
-Identical ~15-line `hasError → Stream.error / isLoading → fromFuture().asyncExpand / else build(value)`
-blocks at `appointments_providers.dart:41` and `:68`, `employees_providers.dart:27`
-and `:126`, `account_status_provider.dart:27`, `active_user_identity_provider.dart:31`.
+- **Where:** `functions/notification_utils.js:663-680` (`runOverduePromptSweep`),
+  `:749-765` (`runDailyDigest`), `functions/travel_utils.js:555-572`
+  (`runTravelAwareReminderSweep`).
+- **Opportunity:** the same ~15-line block (status-`in` + two range `where`s +
+  `orderBy` + `limit` + warn-at-cap + map). The first two use the shared
+  `recordOf`; **`travel_utils.js` re-spells the mapper body inline** at `:570`
+  *and* `:791`. The warn-at-cap pair alone appears **5 times** (add
+  `notification_utils.js:859`, `live_activity_registry.js:324`).
+- **Suggested improvement:** `scanAppointmentWindow(db, {statuses, field, lo, hi,
+  desc, cap, logger, label, consequence})`. Each caller keeps its own cap, status
+  set (`PENDING_STATUSES` is deliberately narrower) and consequence sentence —
+  exactly the `pageToCap` precedent this repo already set for the Dart side.
 
-Six instances clears the 3+ bar comfortably. **Owner:** one helper beside
-`authUidProvider` in `lib/core/providers/firebase_providers.dart` —
-`Stream<T> streamForUid<T>(Ref ref, Stream<T> Function(String? uid) build)`. Each
-site's per-null-uid behaviour stays inside its own closure, so nothing is
-flattened away.
+### I6 — `Debouncer` + hoisted-logger boilerplate at 5 sites, for a rule that exists because one site got it wrong and shipped a FATAL · impact: medium · confidence: high
 
-*Explicitly not findings* (below the bar, listed so they aren't re-raised): the
-`_scheduleSearch` debounce block (2 sites), the `_skeleton`/`_errorState`/`_emptyState`
-triad (2 sites), the chunked-concurrency loop in `functions/` (5 sites but 4 lines
-each, and `live_activity_registry.js` already has a local `_chunk`).
+- **Where:** `main.dart:197`, `add_appointment_sheet.dart:69`,
+  `details_edit_body.dart:53`, `appointment_history_view.dart:142`,
+  `clients_list_view.dart:84` (plus the deviating
+  `address_autocomplete_field.dart:48`).
+- **Opportunity:** five restatements of the same rationale comment. Making
+  `onError` required already closed the omission case; the remaining hazard is
+  *where the logger is resolved*, which the prose has to ask for.
+- **Suggested improvement:** `Debouncer.tagged(duration, {required AppLogger
+  logger, required String tag})` in the existing `debouncer.dart`. A required
+  `AppLogger` **parameter** makes lazy/in-callback resolution structurally
+  impossible — and would have prevented 🟠 B2 and 🟠 B6 by construction.
 
-### I4 — `main.dart` holds an untestable external-entry-point router · impact: high · confidence: high
+### I7 — Five `build()`/method splits with an obvious seam · impact: medium · confidence: high
 
-**Where:** `lib/main.dart:220-352` (~132 lines)
+**45 `build()` methods exceed the project's stated ~60-line ceiling**
+(`.claude/rules/code-quality.md:36`) — the rule is de facto unenforced. **Most
+large files here are not god files**: `day_route_screen` (689) memoizes via
+`_prepareBuild` and has four private sub-widgets, `event_details_controller`
+(654) already delegates to `EventDetailsSavePipeline`, and the big JS files are
+guard-clause-first. Size is comment density and widget-tree *width*, not tangle.
+**Do not mass-refactor.** The five worth doing:
 
-`_setupWidgetTapHandling`, `_setupPushTapHandling`, `_handleWidgetTap`,
-`_handlePushTap`, `_openAppointmentDeepLink` and `_awaitLiveHub` live inside
-`_PaulAppState`. Verified zero test hits for any of them. The `app_links` third
-of this **was already extracted** to `core/deep_links/` and *is* tested — the
-other two thirds were left behind.
+1. `client_search_field.dart:40-162` — `build()` **123 lines**, the worst. Three
+   latent seams: `_searchInput()`, `_resultsDropdown()` (with the subtitle ladder
+   as `_subtitleFor(client)`), `_noResults()`.
+2. `busy_conflict_dialog.dart:9-132` — `showBusyConflictDialog()` **124 lines**,
+   one flat tree inside a `showDialog` closure. Move to a private
+   `_BusyConflictDialog extends StatelessWidget` (the file already has
+   `_BusyEmployeeRow`); the launcher drops to ~10 lines.
+3. `employee_picker.dart:28-134` — `build()` **107 lines**; `:52-110` is a
+   self-contained chip. Extract `_EmployeeChip`; build drops to ~35 and the chip
+   becomes const-able per row.
+4. `appointment_image_upload_service.dart:124-243` — `_attempt()` **120 lines**.
+   Split the per-file upload loop into `_uploadFiles(...)` returning a record;
+   `AttemptOutcome.from` already proves the decision half wants to be separate.
+5. `functions/wave/worker.js:344-446` — `reclaimStaleJobs()` **103 lines**. The
+   `runTransaction` body is a **pure** decision; extract `reclaimDecision(...)`
+   into the existing `retry_policy.js`, whose own header argues for exactly this
+   split. All five branches are already tested — the win is moving three
+   data-destructive decisions out of a transaction closure.
 
-**Change:** extract into `lib/core/app/appointment_link_opener.dart`, matching the
-four classes already in `core/app/` that `main.dart` registers. Not a new
-abstraction — the move already made once for deep links. Pairs naturally with **B9**.
+Also worth noting: `event_details_controller.dart:413-547 save()` (135) and
+`add_event_controller.dart:218-348 submit()` (131) share a ~55-line pre-flight
+seam. **These are the two highest-risk methods in the app** — touch only with the
+45 existing `event_details_controller_test.dart` cases green.
 
-### I5 — Live-map marker assembly is an engine buried in a `State` · impact: medium · confidence: high
+**Explicit non-finding:** `themes.dart:50-229`/`:231-409` (180 + 179
+near-parallel lines) looks like the worst offender and is **already guarded** by
+`themes_test.dart:38` pinning that both themes configure the same sub-theme set.
+Leave it.
 
-**Where:** `lib/features/presence/screens/live_map_screen.dart:233-346`
+### I8 — Two stale git worktrees inside the repo distort every future grep · impact: medium · confidence: high
 
-`_assembleMarkers` takes **7 positional parameters**; `_signatureOf` takes 5.
-`_signatureOf` is a pure function that decides *whether the map updates at all* —
-if it ever omits a field, staff markers silently stop moving with no error. It
-cannot be tested where it is, because the surrounding `State` needs a live
-`GoogleMap`.
+- **Where:** `.claude/worktrees/login-redesign-remaining-4d0400` (17 MB,
+  `fc8d2e34`) and `.worktrees/p7b-wave-invoices` (129 MB, `fd234cb8`).
+- **Opportunity:** both are gitignored, so `git status` is clean and they are
+  invisible — but they hold full stale copies of `lib/` and `.claude/rules/*.md`,
+  so an unscoped `grep -rn` returns hits that look live and are not. That is a
+  real hazard for exactly the dead-code and duplication sweeps this repo runs; it
+  was hit twice during this audit. `IMG-URL`, deleted at HEAD, still "exists"
+  there.
+- **Suggested improvement:** `git branch --contains fc8d2e34` shows `redesgin`
+  already contains it → **`git worktree remove` the first one**. The second is 20
+  commits ahead with real unmerged Wave-invoices work → **keep**, but know it is
+  there.
 
-**Change:** move both into `lib/features/presence/domain/staff_marker_assembly.dart`
-taking a small params record.
+### I9 — `.claude/worktrees/` is ignored only via `.git/info/exclude`, which is not committed · impact: medium · confidence: high
 
-### I6 — `AppointmentCard` — the one card on six surfaces — is 182 lines across two methods · impact: medium · confidence: high
+- **Where:** `.gitignore:143` covers `.worktrees/`; lines 154-158 carry the
+  explicit "`.claude/` is SHARED (Windows + Mac)" section. But
+  `.claude/worktrees/`, `checkpoints/`, `mailbox/`, `agent-registry.json` are
+  excluded only in machine-local `.git/info/exclude`.
+- **Opportunity:** on the Mac clone none of those are ignored, so a worktree or
+  agent-registry created there is untracked-and-visible and can be committed into
+  the shared `.claude/`. Given this repo's history with exactly this class of bug
+  (a bare `CLAUDE.md` pattern matching at every depth; a merge resurrecting
+  `android/` with a live key), moving those patterns into `.gitignore` is cheap
+  insurance.
 
-**Where:** `lib/features/calendar/widgets/cards/appointment_card.dart:108` (build,
-88 lines) and `:231` (`_body`, 94 lines, **8 named params**)
+### I10 — Eleven more test-coverage gaps, ranked by risk · impact: medium · confidence: high
 
-`build()` derives eight values before it builds anything, then hands most of them
-to `_body` one at a time; the 8-param signature is the symptom.
+Verified against lcov line-hit data, not filename mirroring (see the
+methodological note below).
 
-**Change:** a private `_CardModel.from(context, ...)` value class; `_body` then
-takes `(theme, model)`. Drops both under 60 lines and makes the three variants
-(normal/collapsed/cancelled) readable side by side.
+| Gap | Why it matters |
+|---|---|
+| `appointment_images_store.dart:158-160` | The `uploadedAt`-always-written invariant — the file's own contract says omitting it "would drop that photo out of the read entirely, with nothing erroring". Fixture leaves it null; **no assertion ever reads `body['uploadedAt']`**. Brand-new code, committed at HEAD. `:119-123` cap warn also unhit. |
+| `firebase_appointments_repository.dart:191, 234` | `seriesOpId` producer. Server half is pinned, but **nothing asserts the id is the SAME across one batch or DIFFERENT across two calls** — the exact property that fixed "cancel Tuesday then Thursday → second push dropped". |
+| `address_autocomplete_field.dart` | 307 lines, **no test file**, 22.5% lines. Unexercised: the known-FATAL post-dispose path, `_lastFetched` dedupe, `_requestId` stale discard, and the Places **session-token lifecycle** — three guards against *billed* API calls. |
+| `firebase_appointments_repository.dart:169-183` | `getSeries` is the one bounded read missing from the cap-warning family; all 9 test hits are mocks. Truncation feeds `rewriteSeries`'s `deleteIds`. |
+| `wave_service.dart:134-161` | `retryFailedJobs` — the only WaveService method with no service-level test, and its own comment says "This is the only way back" from a dead-lettered job. |
+| `app_routes.dart:66` | The fail-closed `isAdmin: args?.isAdmin ?? false` default is unhit, and the whole `dashboard` case is unhit. The comment records the incident it prevents. |
+| `widget_sync_service.dart:229-233` | The "an error is not a settled null" arm is unhit; a transient Firestore error would wipe the home-screen widget. |
+| `firebase_appointments_repository.dart:511-516` | `findBusyEmployees` never reaches `dailyWindowsOverlap` under test (fixtures lack parseable times). The maths is pinned; the *wiring* is not. |
+| `firebase_clients_repository.dart:293-298` | Contact-email normalization loop unhit; only the top-level email is asserted. |
+| `delete_appointment_dialog.dart:8-32` | 0% covered; maps confirm→`thisOnly` vs `null` and routes a series to the scope dialog. Both building blocks are 93-99% covered — only the mapping is unguarded. |
+| `firebase_clients_repository.dart:359-376` | The 6-tier relevance ladder has one test covering tiers 1 and 3. **Tiers 0 (exact), 2 (phone-prefix) and 4 (phone/contacts-substring) are untested**, as is the 25-result truncation. Since `clients/{id}.name` **IS the bare phone** for a person, the phone tiers matter most on real data, and a mis-rank silently drops a correct match past position 25. |
 
-### I7 — 68 of 313 `build()` methods exceed 60 lines; 17 exceed 90 · impact: medium · confidence: high
+### I11 — Remaining documentation drift that needs a rewrite, not a pointer fix · impact: medium · confidence: high
 
-A tail, not a crisis — most are flat declarative trees. The five with a genuinely
-clean extraction:
+Seven doc corrections were auto-applied. These five need a judgement call:
 
-| File:line | Lines | What extracts |
-|---|---|---|
-| `dashboard/widgets/charts/weekly_bar_chart.dart:38` | **124** | ~100 lines are one `BarChartData` literal + a legend → `_chartData(...)` + a `_SeriesLegend`. **Also has no test at all.** |
-| `employees/widgets/views/employee_details_view.dart:43` | **123** | Builds `infoRows`/`emergencyRows` inline → two methods, build drops to ~50. **This is where the emergency-contact entitlement branch lives.** |
-| `clients/widgets/fields/client_search_field.dart:40` | **123** | A 60-line result `ListTile` inside a `.map()` → `_ClientResultTile` |
-| `calendar/widgets/fields/employee_picker.dart:28` | **107** | Same shape → `_EmployeeChip` (also lets it be `const`) |
-| `calendar/widgets/views/details_action_bar.dart:33` | **107** | Three conditional buttons with inline `styleFrom` → one builder each |
+- **`.claude/rules/frontend.md:78, 114, 223-229` — tells you to build new sheets
+  on two DELETED classes, and contradicts itself three ways.**
+  `FormSheetScaffold` and `EntityFormHeader` have **zero declarations and zero
+  call sites**; the only survivors are a tombstone comment in
+  `form_sheet_frame.dart:16` and a stale test comment. Line 78 says
+  "**`FormSheetScaffold` survives**", line 114 says `EntityFormHeader` is deleted,
+  and line 223 says "**Use it for new form sheets**". The live class is
+  `FormSheetFrame`. **This is the highest-value doc fix left** — it actively
+  misdirects new work.
+- **`.claude/rules/error-handling.md:68-71` — the registry's own regeneration
+  procedure is wrong in both directions.** It claims "four sites pass the tag as a
+  named `tag:` parameter (`LAUNCH-TEL`, `LAUNCH-EMAIL`, `IMG-SAVE`,
+  `IMG-SHARE`)". Actual: **12** named `tag:` sites, and `IMG-SAVE`/`IMG-SHARE` are
+  *not* among them (they are positional args to `_runExclusive`). Omitted:
+  `LAUNCH-MAPS`, `LAUNCH-URL`, `LIVE-ACT`, `PUSH`, `PRESENCE`, `APPT-SAVE`, plus
+  the 4 interpolated Wave ones. Following it as written misses seven tags — and
+  this is the procedure that keeps the registry EXHAUSTIVE.
+- **`.claude/rules/testing.md:70-75` — an Android device-verification workflow.**
+  Gives `adb` commands against `net.vogas.scheduling`. Root `CLAUDE.md` makes
+  iOS-only load-bearing and `git ls-files android` → 0. The bullet actively pushes
+  toward the tree resurrection the root file exists to prevent.
+- **`functions/CLAUDE.md` `changeEmployeeEmail` bullet — the guard order omits a
+  guard.** Says "auth → payload → identity → rate limit → work"; there are five,
+  with `assertFreshReauth` between identity and the limiter —
+  `employee_accounts.js:509-511` says so in its own comment. The same file's
+  `security.js` module map omits `hasControlChar`, `isReauthStale` and
+  `assertFreshReauth` — the last being the guard `.claude/rules/security.md:30`
+  holds up as *the shape to copy*.
+- **`functions/appointment_images.js:78-79` — comment contradicts
+  `firestore.rules`.** Says the `pictures` array's 100-entry cap "the CONTRACT step
+  removed"; `firestore.rules:559-564` **still enforces** `d.pictures.size() <= 100`,
+  deliberately, for documents the clear script has not reached.
+  `.claude/rules/images.md:238` words it more carefully but still reads as if the
+  clause is gone.
 
-The top two are worth doing for the reasons noted; treat the rest as background.
+Minor/inverse: `assignee_resolver_test.dart:5` says `assigneeNameAt` has "six call
+sites"; there are 5, and root `CLAUDE.md` correctly says five — the *test comment*
+is the stale one. And `docs/ARCHITECTURE.md:1268` says 2611 flutter / 1348 jest;
+actual at HEAD is **2608 / 1343**.
 
-**Explicitly cohesive, leave alone:** `appointment_form_fields.dart` (631 —
-`build()` is 12 lines delegating to 4 section builders), `photo_picker_section.dart`
-(592), `edit_person_sheet.dart` (613), `edit_client_sheet.dart` (502),
-`firebase_appointments_repository.dart` (553), `event_details_controller.dart`
-(717), and the four large `functions/` modules.
+### I12 — Three `functions/wave/customers_import.js` exports claim a test that does not exist · impact: medium · confidence: high
 
-### I8 — `wave/customers.js` is two things that share nothing · impact: medium · confidence: high
+- **Where:** `functions/wave/customers_import.js:281-287` — `importOneCustomer`,
+  `buildWaveIdIndex`, `BATCH_LIMIT`.
+- **Opportunity:** the export block's comment says *"Exported so the two decisions
+  the page loop delegates can be driven directly from a unit test"* — but no file
+  requires `customers_import` except `wave/customers.js`, which re-exports only
+  `importCustomers`. `buildWaveIdIndex` has exactly one hit repo-wide, **inside a
+  comment** at `wave_customers.test.js:891`. So the exports are inert *and* the
+  comment asserting they are tested is false. This is a **coverage gap wearing a
+  dead-export costume**.
+- **Suggested improvement:** write the tests the comment promises (both decisions
+  are covered today only indirectly, through `importCustomers`), rather than
+  deleting the exports.
 
-**Where:** `functions/wave/customers.js:669-926`
+### I13 — Smaller duplication and cleanup, each below the "act now" bar
 
-The file's own banners mark the seam (`:305` upsert, `:669` import). Across the
-whole 257-line import half, the only push-side symbols referenced are
-`adminFirestore`, `readBusinessId`, `sanitizeInputErrors`, `WaveValidationError`,
-`LIST_CUSTOMERS` and the mappers. **Neither half calls the other**, and the jest
-suite already separates its describes along the same line.
-
-**Change:** move to `wave/customers_import.js` and re-export, so no call site
-changes. *Counter-argument worth weighing:* `importOneCustomer:721-733` reasons
-explicitly about the `lastSyncedHash` the push half writes — a comment-level
-dependency.
-
-### I9 — `day_route_screen._prepareBuild` re-derives the day's slices on every rebuild · impact: low-medium · confidence: high
-
-**Where:** `lib/features/calendar/screens/day_route_screen.dart:186-227`
-
-`where` + `map(sliceFor)` + `sort` + a second `where` + a `Map` build over the
-whole ~21-day range-stream superset, on every `setState` (day switch, employee
-pick), every `currentDayProvider` tick and every `employeeNameMapProvider`
-emission. Its twin on the calendar screen (`_refreshDayIndex`,
-`main_calendar_screen.dart:155`) **is** memoized on list identity; this one is
-not. (N ≈ 100–400 records for a busy shop — noticeable on the ◀/▶ tap, not per
-frame.)
-
-**Change:** memoize the same way.
-
-### I10 — Ten stale documentation items · impact: medium · confidence: high
-
-`docs/CLOUD_FUNCTIONS.md` is otherwise accurate (25 exports, 25 documented rows,
-no ghosts). The ones with real consequences:
-
-| # | Where | Stale claim |
-|---|---|---|
-| D1 | `docs/CLOUD_FUNCTIONS.md:885` + row `:213` | Says `waveGetConnection` has *"No secret, no rate limit."* It **is** durably rate-limited — `wave-connection`, 60/hr (`functions/wave/callables.js:194-199`). This is the per-function security reference; it under-reports a guard, inviting someone to "fix" the gap by adding a second limiter. |
-| D2 | `docs/ARCHITECTURE.md:1049-1051` | `rateLimits.route` presented as a closed union of **4** ids; there are **13**. A reader concludes Places and Wave callables are unlimited. |
-| D3 | `docs/ARCHITECTURE.md:1042` | `appointmentSeriesNotices` and `appointmentRecountClaims` absent from the data model, though both are in `firestore.rules` and one carries a TTL `fieldOverride`. A collection in rules + TTL but not the schema doc is what gets deleted as "unknown" in a cleanup. |
-| D4 | `docs/ARCHITECTURE.md:1134-1136` | A live pre-deploy gate telling you to hold the App Check enforcement deploy for App Distribution testers — contradicted six lines above and by `grep enforceAppCheck: false functions` → 0. Retired ~20 releases ago. |
-| D6 | `docs/cost-breakdown.html:369, :661, :416-417` | Headline still says **six** Cloud Scheduler jobs / ~$0.30 recurring; the doc's own table at `:760` says three / $0. `:416` also mis-reads *"The three schedules were merged down to three."* |
-| D8/D9/D10 | `docs/ARCHITECTURE.md:67, :41, :45, :223`; `docs/archive/2026-07-20-session-handoff.md:38` | `features/navigation/` missing from the Directory Map; `SkeletonLoader` and `SheetHandle` don't exist under those names and `SheetFocusScroll` is omitted; `waveRetryFailedJobs` guard cell says `durable` with no number (actual 10/hr); one broken relative link. |
-
-**The legal pages check out clean** — the repo's known failure mode did *not*
-recur. `support.html` and `terms-of-service.html` both describe the **current**
-admin-provisions flow with no signup-code residue, zero Android/Play hits across
-all four files, and privacy §6/§8 correctly state that revoking location
-permission does not delete the stored reading. (D5, the date mismatch, is in the
-pre-ship list above.)
-
-### I11 — `functions/__tests__/**` is deployed to Cloud Functions · impact: low · confidence: high
-
-`firebase.json:14-22` does not ignore it — ~785 KB of the 1.9 MB source bundle
-uploaded on every deploy. No functional risk. Also `functions/build/.last_build_id`
-is a stray Flutter artifact covered by neither `.gitignore` nor the deploy ignore
-list.
-
-### I12 — The log-tag registry documents 25 of 63 tags in use · impact: low-medium · confidence: high
-
-`.claude/rules/error-handling.md` lists ~25; `lib/` uses **63**. Undocumented:
-`APPT-BUSY`, `LIVEMAP-MARKERS`, `LIVEMAP-LOAD`, `IMG-DISK`, `IMG-DEL`, `IMG-URL`,
-`AUTH-SETUP`, `DASH-LOAD`, `EMP-EMERGENCY`, `ONBOARD-GATE`, `PERM-LOCATION`,
-`PERM-MEDIA`, `PRESENCE`, `SIRI`, `TOUR`, `WIDGET-TAP`, and the whole `WAVE-*`
-family. Since notices stopped carrying support codes (2026-08-04) the registry is
-the **only** place a tag lives, so a stale list makes Crashlytics triage
-guesswork.
-
-**Related, and CORRECTED from an earlier draft of this audit.** `CLAUDE.md:399-401`
-and `functions/CLAUDE.md:199` say `maintenance.js` *"resolves a Storage bucket at
-load and therefore throws on `require()` outside the emulator."* I verified this
-by actually requiring it: **it does still throw**, so the conclusion and the
-`*_policy.js` split rule are correct and load-bearing — but the stated
-**mechanism is wrong**. The throw comes from `onObjectFinalized`'s bucket-name
-resolution at *trigger registration* (`firebase-functions/lib/v2/providers/storage.js:169`,
-"Missing bucket name"), not from an admin `getStorage()` handle:
-`maintenance.js:40` and `:69` both resolve **lazily** inside functions. Worth one
-sentence of precision so nobody goes looking for a load-time `getStorage()` that
-isn't there.
-
----
+- **`adminFirestore()` lazy-require, 4 verbatim copies** —
+  `client_propagation.js:53`, `wave/customers.js:139`,
+  `wave/customers_import.js:32`, `wave/worker.js:113`. Encodes a load-order rule
+  (`functions/CLAUDE.md`: a module touching admin at load can't be tested) and is
+  already drifting — `worker.js`'s JSDoc promises `Timestamp`, the others don't. →
+  `functions/admin_firestore.js`, the precedent `params.js` sets.
+- **Device-registration account gate, 3 controllers** —
+  `push_registration_controller.dart:84`,
+  `live_activity_registration_controller.dart:126`,
+  `presence_sync_controller.dart:108`. Identical 6-line preamble carrying two
+  non-obvious decisions (an unsettled/errored doc is a **return**, not a "no";
+  role/status read as trimmed strings). The *predicate* is already shared; this
+  preamble is not. → `readAccountGateInputs(ref, auth)`.
+- **`AppRadius.r24` (`design_tokens.dart:180`)** — the only zero-usage design
+  token of 31 checked. Arguably a deliberate rung on a scale; your call.
+- **`require("crypto")` vs `require("node:crypto")`** — `employee_accounts.js:6`,
+  `security.js:1`, `wave/mappers.js:10` vs `apns_client.js:23`.
+- **Six raw `EdgeInsets.fromLTRB`** mixing token values with off-scale nudges
+  (`inline_month_calendar.dart:17`, `calendar_header_block.dart:73`,
+  `calendar_month_grid.dart:18`, `app_nav_drawer.dart:68` & `:344`,
+  `app_header_pair.dart:54`). Consistent with the documented "sub-4px nudges are
+  raw on purpose" decision, so partial tokenization would arguably read worse.
+  Listed for completeness, not recommended.
+- **`address_autocomplete_field.dart:66`** re-spells its own `_debounceDelay =
+  700ms` rather than using a shared constant.
+- **`app_routes.dart:74, 86, 96, 105, 114, 124, 140`** — seven
+  `settings.arguments!` while the `dashboard` case above was deliberately made
+  null-tolerant. Unexplained asymmetry: a red screen vs a degraded screen. Worth a
+  decision, not necessarily a change.
 
 ## 🟡 Code-quality suggestions (optional)
 
-- `functions/appointment_images.js:312,313,316` — `claimRecount`, `releaseRecount`,
-  `RECOUNT_SETTLE_MS` exported with no external reader (siblings
-  `RECOUNT_CLAIM_STALE_MS`/`_TTL_MS` *are* test-driven, so this trio is the odd
-  one out).
-- `functions/appointment_image_tokens.js:375` — `defaultBucket` exported, internal
-  fallback only.
-- `functions/bridge_policy.js:105` — `VALID_BRIDGE_STATUS` exported with no reader
-  (sibling `VALID_ROLES` *is* consumed by `bridge.js:136`).
-- `functions/wave/customers.js:924-925` — `isStaleCustomerLink`,
-  `hasNotFoundInputError`. The comment says they are *"exported so the unlink
-  decision can be driven directly"* — but nothing drives them. **The suggested
-  action here is a test, not deletion:** this is the path that rewrites a client's
-  Wave identity (the 2026-08-15 dead-letter fix).
-- `lib/features/calendar/application/event_details_controller.dart:138` — the
-  tree's only marker, `TODO(gvogas): revisit at the photo-subcollection CONTRACT
-  step.` Follows the convention but omits the `(#issue)` suffix. Content is
-  legitimate and load-bearing.
-- `pubspec.yaml:87-90` — `google_maps_flutter_ios_sdk9` sits in `dependencies`,
-  not `dependency_overrides`, and there is no `dependency_overrides` section or
-  `pubspec_overrides.yaml`. Worth a sanity check that the SPM swap actually takes
-  effect — a build question, not dead code.
-- `lib/l10n/app_en.arb:67` / `app_fr.arb:19` — `auth_accountReadySignInAgain`, the
-  tree's only orphaned ARB key (see **B7**). Retire in a deliberate l10n pass, not
-  a code sweep.
+Convention drift came back **almost entirely clean** — each verified, not just
+grepped:
 
----
+- `ScaffoldMessenger.showSnackBar`: exactly **3** sites, all through the shared
+  `errorSnackBar` helper, matching the documented carve-out.
+- `throw Exception(...)`: **0** in `lib/` and `functions/`.
+- `FirebaseFirestore.instance` in a widget/UI file: **0** (all 4 uses are in
+  providers, `AuthService`, or `main()`).
+- Hardcoded `Color(0x…)` outside `lib/core/theme/`: **1**, a decorative
+  `SweepGradient` (`employee_color_grid.dart:200-206`) with an in-line comment
+  stating it deliberately ignores the theme. Not drift.
+- Branching on `isDark` for styling: **0**.
+- `DateFormat` constructed inside a cell/item builder: **0**.
+- Raw `Stream.listen()` without `onError`: **0** (paren-balanced scan).
+- Code markers and commented-out code: **0**. The only markers are 8 conforming
+  `NOTE:` entries. The two `debugPrint` calls in `main.dart:73,83` are the
+  deliberate pre-Firebase-init crash fallback.
+
+The only live drift is 🟠 B2 (`ref.read` in a `catch`), reported as a bug because
+one of the two sites is a genuine latent crash path.
 
 ## Notes / uncertainties
 
-**Verified clean — stated explicitly so it isn't re-audited:**
-
-- **Static layer:** `flutter analyze` "No issues found!", `dart fix` "Nothing to
-  fix!", `functions` ESLint clean.
-- **Dead code:** zero unused files in `lib/` — verified two independent ways
-  (inbound-import scan across all 674 files, **and** a reachability BFS from
-  `main.dart`: 0 of 380 unreachable). Zero dead public symbols across 532 types,
-  166 top-level functions, 180 top-level constants. Zero unused dependencies (all
-  4 heuristic hits confirmed false positives). Zero commented-out code, zero bare
-  `TODO`/`FIXME`/`HACK`/`XXX`, zero `TODO(pre-ship)`.
-- **Conventions — all eleven axes clean:** exactly 3 SnackBar sites and all 3 are
-  the sanctioned ones; zero raw `Exception` throws; zero `FirebaseFirestore.instance`
-  in the widget layer; hardcoded colors confined to the token layer (one documented
-  decorative exception); zero `isDark` styling branches; zero hand-spelled email
-  normalization; zero raw debounce `Timer`s; zero `DateFormat` in a builder; zero
-  hand-spelled `weekday % 7`; **zero BOMs across all 674 files**; zero import-order
-  violations.
-- **Hand-mirrors:** all eight Dart↔JS/CEL pairs diffed line-by-line — **no
-  divergence**, including the 35-token `looksLikeBusinessName` list byte-identical
-  on both sides.
-- **Security:** all 14 callables set `enforceAppCheck: true` with correct guard
-  order; `completeEmployeeSetup` fails **closed** on the token;
-  `changeEmployeeEmail`'s freshness gate is keyed on `isAdmin` not `isSelf` (the
-  past drift stayed fixed); `/users` read has exactly three clauses; the two-branch
-  `allow update` keeps its load-bearing outer parentheses; cap alignment walked
-  field-by-field with no violation; **no hardcoded secrets**; **no PII in any log
-  site**, Dart or JS; the image render path has **no URL-shaped fallback anywhere**.
-- **Resource safety:** zero widget-disposal gaps across 123 construction sites in
-  44 files; zero bare `Stream.listen` (all 10 pass `onError`); zero
-  silently-swallowed catches across 165 sites beyond the three sanctioned ones.
-
-**Not verified / assumptions:**
-
-- The 41 test failures were not individually root-caused — the mocktail
-  `registerFallbackValue` cause is confirmed for the bulk, but ~10 assertion
-  failures need per-test triage to decide test-vs-product. **B1 says which.**
-- `docs/ARCHITECTURE.md:1151-1153` claims 2352 flutter / 1274 jest tests; observed
-  figures are 2445+41 flutter / **1308** jest. Re-count at next release.
-- `functions/scripts/restore-client-name-halves.js` — **dry run RAN against prod
-  2026-08-21 and found nothing to restore** (0 of 703). The 2026-08-14 damage
-  set the script was written for no longer exists in a recoverable form: every
-  renamed client that has a name has its halves. Its three residual docs each
-  fail a DIFFERENT rule, and the script is right about all three:
-  - `o0KcOnJSgjvMHYpmcZ44` — **never had a name to lose.** Its one settled
-    appointment (2026-08-11, `done`) already carries `clientName: "5144586186"`,
-    written before the rename, so the client was created number-only.
-  - `owhMXiJWzDC6CkizVAHH` — a **business** the heuristics cannot see: no
-    `type`, no `businessName`, no appointment. `email:
-    info@garderie123onyva.com` names it. Belongs to
-    `restore-business-client-names.js`, whose `RESTORE` table is HARDCODED, so
-    it gets nothing until the id is added there.
-  - `tNjpCc9DFJtgnzBbwv5Z` — a person, recoverable only from
-    `email: Ismaelandresabarca@gmail.com`.
-
-  **The email is evidence this script deliberately does not read** — rule 4 is
-  a settled appointment's `clientName`, and widening it to parse a local-part
-  would be a guess written into client identity, which then pushes to Wave.
-  Both remaining names are a one-line manual edit in the app, not a script.
-- The CLAUDE.md → `.claude/rules/` split was still landing during this audit
-  (`functions/CLAUDE.md`, `wave.md`, `notifications.md`, `firestore-indexes.md`
-  appeared mid-run). Citations were re-verified against the layout as of the end
-  of the audit; line numbers may shift as the split finishes.
+- **A "no mirrored test file" signal is near-worthless in this repo.** Coverage
+  lives under the *caller's* test name — four candidate gaps were verified away
+  (`matchClientDocs`/`ClientSearchScan` via `searchClients()`;
+  `importOneCustomer`/`buildWaveIdIndex` via 14 tests in
+  `wave_customers.test.js:942-1266`; `importWithWatermark` via
+  `wave_callables.test.js:414-475`; `pageToCap`/`normalizeEmail` at their call
+  sites). Every gap in I2 and I10 was confirmed against lcov line-hit data.
+- **17 CLAUDE.md invariant helpers were spot-checked and every one is pinned**
+  (`mergeRetainedAssignees`, `isAccountDeletionSignal`, `terminalStatusRawValues`,
+  `displayStatusAt`, `runsOn`, `hasWorkLeft`, `liveActivityCtx`,
+  `appointmentImageDocId`, `isValidAppointmentSpan`, …). `maintenance_policy.js` —
+  the only unattended irreversible deletion in the repo — is at **100% lines and
+  branches**.
+- **Complexity: nothing to do.** A nesting scan across `lib/` and `functions/`
+  returned only false positives — chains of flat `if (x) return;` guards. The
+  codebase is consistently guard-clause-first; there is no "rewrite with early
+  returns" work. The one genuine branch-density case,
+  `wave/customers.js:260-386 upsertCustomer()` (127 lines, 5 exits), is a money
+  path whose refactor risk exceeds the readability gain — **leave it**.
+- **Dependencies: nothing removable.** All 4 pubspec heuristic hits are documented
+  false positives (`build_runner`/`freezed` drive 9 live `.freezed.dart` files;
+  `flutter_launcher_icons` has its config block at `pubspec.yaml:179`;
+  `google_maps_flutter_ios_sdk9` is the deliberate SPM override, confirmed by
+  `GeneratedPluginRegistrant.m`). `functions/package.json` is fully used, with no
+  undeclared deps.
+- **l10n: nothing to do.** 711 keys in each ARB, zero drift either way, zero
+  missing `@key` blocks, zero orphans (verified twice — loose identifier index and
+  member-access-only scan), corroborated by an empty
+  `lib/l10n/.gen/untranslated.json`.
+- **Not verifiable from this box:** whether any prod `appointments/*/images` doc
+  carries a `url` with an empty `storagePath` (🔴 S1). Firebase MCP Firestore reads
+  fail `read_time cannot be in the future` due to local clock skew — a known,
+  recorded limitation. This needs a one-shot count run by hand, and it decides both
+  S1's severity and B5's wording.
+- **`IMPORT_FIELD_CAPS` (`wave/mappers.js:512`) is NOT dead** despite looking
+  unreferenced to any JS scan — it is read **as source text** by
+  `test/core/validators/text_limits_test.dart:239`, a JS→Dart reference no grep of
+  `functions/` will find. Recorded so it is not re-derived next time.
