@@ -206,6 +206,28 @@ describe("createEmployeeAccount ordering", () => {
     expect(auth.updateUser).not.toHaveBeenCalled();
   });
 
+  test("accepts an old build's ignored isAdmin field and still writes employee",
+      async () => {
+        const trace = [];
+        const auth = makeAuth(trace);
+        const docs = {};
+        getFirestore.mockReturnValue(makeDb(docs, trace));
+        getAuth.mockReturnValue(auth);
+
+        // The pre-change client sent `isAdmin` unconditionally. Narrowing the
+        // allowlist would fail every create AND every password reset from an
+        // admin device that has not updated yet.
+        await createEmployeeAccount.run({
+          data: {...VALID_CREATE, isAdmin: true},
+          auth: ADMIN,
+        });
+
+        const written = docs["generated-doc-id"];
+        expect(written).toBeDefined();
+        // Accepted, but never honoured — the role is hard-coded downstream.
+        expect(written.role).toBe("employee");
+      });
+
   test("resets a pending account's password only AFTER the doc transaction",
       async () => {
         const trace = [];

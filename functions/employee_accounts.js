@@ -260,9 +260,19 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
   await assertAdmin(req.auth.uid);
   // Validate the payload before consuming a rate-limit slot so malformed
   // submissions can't lock out a legitimate admin for an hour.
+  // `isAdmin` is ACCEPTED AND IGNORED, deliberately. It is never read, never
+  // passed to performCreateAccount, and cannot mint an admin: the role is
+  // hard-coded `"employee"` there. It stays in the set purely to keep this
+  // allowlist a SUPERSET of the deployed one (docs/DEPLOYMENT.md §4a) —
+  // assertPayloadShape throws `unexpected-field` on the first key it does not
+  // recognise, and every admin build shipped before the field was dropped
+  // sends it unconditionally on BOTH create and reset-password. Dropping it
+  // would fail both actions on every such device from the moment the backend
+  // deploys until the last one updates. Remove it once no build in the wild
+  // still sends it.
   assertPayloadShape(req.data, new Set([
     "name", "firstName", "lastName", "email", "phone", "colorValue",
-    "jobTitle",
+    "jobTitle", "isAdmin",
   ]));
   // 250, not 100: `name` is the JOIN of the two halves, each capped at 100
   // client- and server-side, so the composed value legitimately reaches 201.

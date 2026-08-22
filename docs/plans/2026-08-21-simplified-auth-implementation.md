@@ -24,7 +24,9 @@ Node.js 24 Cloud Functions (`firebase-functions` v2 `onCall`, Jest 29),
 
 ## Deviations from the spec (decided while writing this plan)
 
-Three things the spec did not resolve, decided here rather than left open:
+Four things the spec did not resolve, decided here rather than left open.
+(Deviation 4 was decided during implementation, not while writing the plan, so
+Task 2's body below still describes the behaviour it supersedes.)
 
 1. **`crypto.randomInt`, not `crypto.randomBytes`.** The spec named
    `randomBytes`. Reducing a random byte into an alphabet with `%` is modulo-
@@ -43,6 +45,19 @@ Three things the spec did not resolve, decided here rather than left open:
    since 2026-08-11 and already covers `changeEmployeeEmail`. Task 3 APPENDS to
    it. (This plan first said Task 3 would *create* that file; that was wrong and
    would have overwritten a live suite. Corrected 2026-08-21.)
+4. **`isAdmin` stays in `createEmployeeAccount`'s allowlist, accepted and
+   ignored.** Task 2 below says to remove the key and adds a test asserting it
+   is rejected; that test was never written, and the key was kept instead.
+   `assertPayloadShape` throws `unexpected-field` on the first unrecognised
+   key, and every admin build shipped before Task 7 sends `isAdmin`
+   unconditionally on **both** create and Reset password. Removing it would
+   therefore have broken both actions on every admin device until it updated —
+   including the Reset password button that `docs/DEPLOYMENT.md` requires for
+   remediating existing `invited` accounts *before* this deploy. Nothing reads
+   the field: `performCreateAccount` hard-codes `role: "employee"`, which is
+   what the callables suite now pins. This keeps the allowlist a superset of
+   the deployed one, the compatibility contract in `docs/DEPLOYMENT.md` §4a.
+   Drop the key once no build in the wild still sends it.
 
 ---
 
@@ -1773,9 +1788,11 @@ Two windows to be aware of, both self-healing once the app build ships:
 1. An admin on the **old** build who creates an account sees the correct
    password in the new-account dialog (it renders the server echo), but that
    person's roster row afterwards shows `Welcome123!`, which is wrong.
-2. `createEmployeeAccount` now rejects a payload carrying `isAdmin`, so an old
-   admin build's create sheet fails while its toggle is still on screen. If
-   that matters, ship the app build the same day.
+2. An old admin build still sends `isAdmin` on both create and Reset password.
+   `createEmployeeAccount` **accepts and ignores** it — the key was kept in the
+   `assertPayloadShape` allowlist on purpose (see deviation 4), so those builds
+   keep working and the role is still hard-coded `"employee"`. The toggle stays
+   on screen until the app build ships, but it no longer decides anything.
 
 Run `cd functions && npm run lint` before deploying, clear
 `AI_AGENT`/`CLAUDECODE`/`CLAUDE_CODE` from the shell, and never pass `--force`.
