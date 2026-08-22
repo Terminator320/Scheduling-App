@@ -265,6 +265,21 @@ So each such row must be **re-provisioned or deleted before the guard goes**:
 `allow read: if isAdmin()`, i.e. the whole client PII collection. A pre-empted
 `employee` row is bad; a pre-empted `admin` row is a data breach.
 
+**Status 2026-08-21: this step is DONE — the query returns zero rows.** The
+owner deleted the one pending account. Verified two ways, because the
+`runQuery` path was intermittently failing on clock skew and one empty result
+is not evidence: a `status == 'invited'` query returned `{"documents":[]}`, and
+an independent full `ListDocuments` of `users` returned **5 docs, every one
+`status: 'active'`**. Their 5 `uid`s are a 1:1 match with the **5** accounts in
+Firebase Auth, so nothing was orphaned — `deleteEmployeeAccount` deletes the
+doc first and the Auth user second, and a failure between the two would have
+left an Auth account with no doc. There is none. Every remaining account is
+`active`, and activation cannot happen without `completeAccountSetup` having
+replaced the password first, so **no account still holds `Welcome123!`**.
+Re-run the query at deploy time anyway if more than a few days have passed —
+an admin can mint a new pending account at any moment, and the guard this
+deploy removes is what would otherwise protect it.
+
 **If the query returns nothing, say so in the deploy log row** — the same way
 the 2026-08-08 row records "Prod was queried first: **zero `invited` users**,
 so nobody could be stranded mid-onboarding". A row that does not state the
