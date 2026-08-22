@@ -67,8 +67,11 @@ code):
 - `docs/legal/privacy-policy.html` is now internally consistent but must be
   **republished to `gvogas/es-pro-legal`** — `termsAcceptedAt` is stamped against
   the *published* text, so the live page is the one that matters.
-- `functions/scripts/restore-client-name-halves.js` has still had **no prod dry
-  run**.
+- `functions/scripts/restore-client-name-halves.js` — **prod dry run DONE
+  2026-08-21, and the repair set is EMPTY**: 703 clients examined, 0 to
+  restore, 0 for the business repair, 507 already carrying halves, 193 never
+  renamed. The live run was never needed. Three docs remain, and none of them
+  is what this script repairs — see the note under **Notes / uncertainties**.
 
 ## Summary
 
@@ -786,8 +789,26 @@ isn't there.
   failures need per-test triage to decide test-vs-product. **B1 says which.**
 - `docs/ARCHITECTURE.md:1151-1153` claims 2352 flutter / 1274 jest tests; observed
   figures are 2445+41 flutter / **1308** jest. Re-count at next release.
-- `functions/scripts/restore-client-name-halves.js` remains **pending** — its prod
-  dry run has still not been run.
+- `functions/scripts/restore-client-name-halves.js` — **dry run RAN against prod
+  2026-08-21 and found nothing to restore** (0 of 703). The 2026-08-14 damage
+  set the script was written for no longer exists in a recoverable form: every
+  renamed client that has a name has its halves. Its three residual docs each
+  fail a DIFFERENT rule, and the script is right about all three:
+  - `o0KcOnJSgjvMHYpmcZ44` — **never had a name to lose.** Its one settled
+    appointment (2026-08-11, `done`) already carries `clientName: "5144586186"`,
+    written before the rename, so the client was created number-only.
+  - `owhMXiJWzDC6CkizVAHH` — a **business** the heuristics cannot see: no
+    `type`, no `businessName`, no appointment. `email:
+    info@garderie123onyva.com` names it. Belongs to
+    `restore-business-client-names.js`, whose `RESTORE` table is HARDCODED, so
+    it gets nothing until the id is added there.
+  - `tNjpCc9DFJtgnzBbwv5Z` — a person, recoverable only from
+    `email: Ismaelandresabarca@gmail.com`.
+
+  **The email is evidence this script deliberately does not read** — rule 4 is
+  a settled appointment's `clientName`, and widening it to parse a local-part
+  would be a guess written into client identity, which then pushes to Wave.
+  Both remaining names are a one-line manual edit in the app, not a script.
 - The CLAUDE.md → `.claude/rules/` split was still landing during this audit
   (`functions/CLAUDE.md`, `wave.md`, `notifications.md`, `firestore-indexes.md`
   appeared mid-run). Citations were re-verified against the layout as of the end
