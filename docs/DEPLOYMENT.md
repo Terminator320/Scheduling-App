@@ -227,6 +227,92 @@ reverting the cap.
 
 ---
 
+## Pending: the simplified-auth deploy
+
+> Removes the `email_verified` guard from `completeEmployeeSetup`, replaces the
+> shared starting password `Welcome123!` with a per-account random one
+> (`generateStartingPassword()`), and stops `createEmployeeAccount` reading an
+> `isAdmin` field. Design: `docs/plans/2026-08-21-simplified-auth-design.md`.
+
+### 1. Pre-flight: remediate every `invited` account — REQUIRED
+
+Before the backend deploy, query prod:
+
+```
+users where status == 'invited'
+```
+
+Every row this returns is an account minted under the old flow, so **its
+Firebase Auth password is still the shared `Welcome123!`** — a value that is in
+the git history, was rendered on every pending roster row, and is known to
+every admin. The only thing standing between that and a takeover today is
+`completeEmployeeSetup`'s `email_verified` guard, which demands control of the
+mailbox rather than mere knowledge of the address. **This deploy removes that
+guard.** The random password protects accounts minted *afterwards* and does
+nothing for these — it is not a migration.
+
+So each such row must be **re-provisioned or deleted before the guard goes**:
+
+- **Reset password** (the pending roster row's button → `createEmployeeAccount`)
+  issues a fresh random password *and* rewrites the doc's `role` to
+  `"employee"`. Hand the new credentials over at that moment, not ahead of time.
+- **Remove account** (`deleteEmployeeAccount`) if the person is not actually
+  joining.
+
+**Do the `role: 'admin'` rows first.** An `invited` doc is granted nothing by
+`firestore.rules`, but the moment a race winner completes setup the account is
+`active` with whatever role the doc carries — and `/clients` is
+`allow read: if isAdmin()`, i.e. the whole client PII collection. A pre-empted
+`employee` row is bad; a pre-empted `admin` row is a data breach.
+
+**If the query returns nothing, say so in the deploy log row** — the same way
+the 2026-08-08 row records "Prod was queried first: **zero `invited` users**,
+so nobody could be stranded mid-onboarding". A row that does not state the
+count is indistinguishable from one where nobody looked.
+
+### 2. Ordering
+
+The remediation must land **before, or in the same window as, the backend
+deploy** — never after. It is the deploy that drops the mailbox check, so any
+gap between them is the exposure this step exists to close.
+
+It is still *possible* to remediate from an old admin build after the deploy,
+and that is not an accident: `createEmployeeAccount`'s `assertPayloadShape`
+allowlist deliberately keeps `"isAdmin"` as an **accepted-and-ignored** key
+(see §4a — the superset contract). The pre-change client sends that field
+unconditionally on both create and Reset password, so had it been dropped, the
+one tool the remediation runs on would have failed `invalid-argument /
+unexpected-field` on every admin device that had not updated yet. Treat that
+key as load-bearing until no build in the wild still sends it.
+
+### 3. Rollback is NOT safe once the app build ships
+
+Backend-only rollback is safe **only while the old app build is still the one
+installed.** After the new build ships, a backend rollback permanently blocks
+setup:
+
+- The old backend throws `failed-precondition / email-not-verified`.
+- `AuthService._mapSetupError` no longer maps that message, so it falls through
+  to `AuthErrorMapper` → `AuthFailureUnknown` → "Something went wrong."
+- There is no verification UI left to satisfy it — `verify_email_panel.dart`,
+  `sendVerificationEmail`, `refreshEmailVerified` and
+  `AuthFailureEmailNotVerified` were all deleted with this change.
+
+So the employee is stuck behind an unactionable message with nothing to act on,
+and every retry files a Crashlytics non-fatal, because `AuthFailureUnknown`
+is `isExpected: false`. **A backend rollback after the app ships must be paired
+with an app rollback.**
+
+### 4. Republish `docs/legal/support.html`
+
+Part of this deploy, not a follow-up. The **live** page on
+`gvogas/es-pro-legal` still tells employees they cannot finish setup until they
+open a verification link — a link this deploy stops sending. Editing
+`docs/legal/` alone changes nothing anyone can read; the file must be copied to
+that repo, byte-identical, when the backend goes out.
+
+---
+
 ## Pending (step 3 of 3): the photo subcollection migration (phase 1)
 
 > **Steps 1 and 2 are DONE. Only the app build is left.**
