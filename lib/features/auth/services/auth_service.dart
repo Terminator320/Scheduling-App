@@ -61,13 +61,14 @@ class AuthService {
   ///
   /// ORDER IS THE GUARANTEE. The password is replaced FIRST, then the account
   /// is activated. The server cannot see a password, so "you must replace the
-  /// temporary default" is true only because activation is refused until this
+  /// starting password" is true only because activation is refused until this
   /// method gets past [User.updatePassword]. Swap the two and an interrupted
-  /// setup leaves an active account still on the default password.
+  /// setup leaves an active account still on the starting password the admin
+  /// read out.
   ///
   /// A failure after the password change is safe: the account stays `invited`,
   /// so the next sign-in routes back here and simply asks again — the screen
-  /// never assumes the current password is still the default.
+  /// never assumes the current password is still the starting one.
   Future<void> completeAccountSetup({
     required String newPassword,
     String firstName = '',
@@ -103,9 +104,9 @@ class AuthService {
     } catch (e, st) {
       final failure = _mapSetupError(e);
       // No rollback of the password change: the new password is the one the
-      // person just chose and typed twice. Reverting it to the temporary default
-      // would be strictly worse than leaving them `invited` with a password
-      // that works.
+      // person just chose and typed twice. Reverting it to the generated
+      // starting password would be strictly worse than leaving them `invited`
+      // with a password that works.
       _logger.authFailure(
         'completeAccountSetup: completeEmployeeSetup failed',
         failure,

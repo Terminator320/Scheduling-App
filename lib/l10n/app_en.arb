@@ -2185,7 +2185,7 @@
   },
   "dashboard_neverSetUpHeader": "{count, plural, =1{1 account was never set up} other{{count} accounts were never set up}}",
   "@dashboard_neverSetUpHeader": {
-    "description": "Attention group header for accounts an admin created that the person never completed setup for, so they still hold the shared starting password",
+    "description": "Attention group header for accounts an admin created that the person never completed setup for, so they still hold the starting password the admin handed over",
     "placeholders": {
       "count": {
         "type": "int"
