@@ -119,9 +119,14 @@ void main() {
     await tester.pumpWidget(wrap());
     await tester.pumpAndSettle();
 
-    // Positive anchor: the invited note is now the last thing in the body,
-    // so finding it proves the form rendered all the way to where the
-    // deleted toggle would have been.
+    // Positive anchor: the invited note is the LAST widget in the body, at
+    // the tail of the colour section — exactly where the deleted access
+    // section used to begin. Finding it proves the form built past that
+    // point, so the `findsNothing` below is a real absence and not an
+    // unbuilt row. (`FormSheetFrame`'s ListView carries
+    // kTourScrollCacheExtent = 3000px, which with this viewport builds the
+    // whole form anyway — but the anchor is the half that survives someone
+    // shrinking either number.)
     expect(find.byType(WarningNote), findsOneWidget);
     expect(find.byKey(const Key('adminAccess')), findsNothing);
   });
