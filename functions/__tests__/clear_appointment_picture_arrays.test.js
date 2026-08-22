@@ -6,6 +6,7 @@
  */
 const {
   planClear,
+  needsRecount,
   storedImageIds,
 } = require("../scripts/clear-appointment-picture-arrays");
 const {appointmentImageDocId} = require("../appointment_image_ids");
@@ -122,5 +123,43 @@ describe("storedImageIds", () => {
     // `select()` with no fields: the bodies are irrelevant and this runs once
     // per appointment that still carries an array.
     expect(calls).toEqual(["images"]);
+  });
+});
+
+/**
+ * The script's SECOND job, and the one the prose elsewhere leans on: after it
+ * runs, `pictureCount` is supposed to be right on every appointment, not only
+ * on the ones that still carried an array. It used to `continue` past a
+ * document with no array, so an appointment whose array had already been
+ * emptied while its counter write failed kept a wrong count with nothing left
+ * to notice it.
+ */
+describe("needsRecount", () => {
+  test("an absent counter agrees with an empty subcollection", () => {
+    // `undefined` is how the client parses a missing field, so this is the
+    // common shape and must not generate a write.
+    expect(needsRecount({}, 0)).toBe(false);
+  });
+
+  test("an absent counter DISAGREES with photos that exist", () => {
+    // The shape that hid a job's photo indicator forever.
+    expect(needsRecount({}, 3)).toBe(true);
+  });
+
+  test("a matching counter needs nothing, so a re-run writes nothing", () => {
+    expect(needsRecount({pictureCount: 2}, 2)).toBe(false);
+  });
+
+  test("a stale counter is re-stamped in either direction", () => {
+    expect(needsRecount({pictureCount: 5}, 2)).toBe(true);
+    expect(needsRecount({pictureCount: 1}, 4)).toBe(true);
+  });
+
+  test("a non-integer counter is not trusted as a number", () => {
+    // A console edit or a legacy write can leave anything here. Reading "2"
+    // as 2 would skip a document whose stored value is not a number at all.
+    expect(needsRecount({pictureCount: "2"}, 2)).toBe(true);
+    expect(needsRecount({pictureCount: null}, 0)).toBe(false);
+    expect(needsRecount({pictureCount: 1.5}, 0)).toBe(true);
   });
 });

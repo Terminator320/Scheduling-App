@@ -2,6 +2,15 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 
 abstract class ClientsRepository {
+  /// Drops every cached client this repository is holding.
+  ///
+  /// The implementation is a process-scoped singleton, so its search windows
+  /// outlive the session that filled them — full client records, with name,
+  /// phone, email, address and contacts. Sign-out and account exit call this
+  /// through `deregisterThisDevice`, which is the single owner of "forget this
+  /// session".
+  void clearCaches();
+
   Future<ClientRecord?> getClientById(String id);
 
   /// Live stream of one client doc; emits null once the doc is gone.

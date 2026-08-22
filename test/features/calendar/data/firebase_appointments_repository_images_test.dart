@@ -5,9 +5,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/data/firebase_appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_image_doc_id.dart';
+
+class _RecordingLogger extends AppLogger {
+  final warnings = <String>[];
+
+  @override
+  void warn(String message, [Object? error, StackTrace? stack]) {
+    warnings.add(message);
+  }
+}
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
 
@@ -147,6 +157,41 @@ void main() {
       expect(body['url'], legacy.url);
     });
 
+    test('ALWAYS writes uploadedAt, as an explicit null when unknown',
+        () async {
+      // The invariant the file states and nothing asserted. `fetch` orders by
+      // `uploadedAt`, and Firestore EXCLUDES a document missing the field it
+      // orders by — so omitting the key (the way `fileName` legitimately omits
+      // its own) drops that photo out of the read entirely, with nothing
+      // erroring. Same trap as `archived` on clients.
+      await repo().appendAppointmentPictures('a1', [photo]);
+      final body =
+          verify(() => batch.set<Map<String, dynamic>>(any(), captureAny(), any()))
+              .captured
+              .single
+              as Map<String, dynamic>;
+      expect(body.containsKey('uploadedAt'), isTrue);
+      expect(body['uploadedAt'], isNull);
+    });
+
+    test('a known uploadedAt is written as a Timestamp', () async {
+      final stamped = AppointmentImage(
+        storagePath: photo.storagePath,
+        uploadedAt: DateTime.utc(2026, 8, 10, 14, 30),
+      );
+      await repo().appendAppointmentPictures('a1', [stamped]);
+      final body =
+          verify(() => batch.set<Map<String, dynamic>>(any(), captureAny(), any()))
+              .captured
+              .single
+              as Map<String, dynamic>;
+      expect(body['uploadedAt'], isA<Timestamp>());
+      expect(
+        (body['uploadedAt'] as Timestamp).toDate().toUtc(),
+        DateTime.utc(2026, 8, 10, 14, 30),
+      );
+    });
+
     test('skips an entry with no identity rather than failing the batch',
         () async {
       // An empty doc id would throw and take the valid photos down with it.
@@ -212,10 +257,39 @@ void main() {
       verify(() => query.limit(100)).called(1);
     });
 
+    test('a full page warns that photos beyond the cap were not loaded',
+        () async {
+      // The only bound left on a job's photos — a subcollection has no
+      // document-size ceiling of its own — and the warn is the only sign a
+      // job's photo strip is short. The picker caps a job at 10, so reaching
+      // 100 means a modified client, which is exactly what wants recording.
+      final query = _MockQuery();
+      final bounded = _MockQuery();
+      final snapshot = _MockQuerySnapshot();
+      final doc = _MockDocSnap();
+      when(doc.data).thenReturn({'storagePath': photo.storagePath});
+      when(() => images.orderBy('uploadedAt')).thenReturn(query);
+      when(() => query.limit(any())).thenReturn(bounded);
+      when(bounded.get).thenAnswer((_) async => snapshot);
+      when(() => snapshot.docs).thenReturn(List.filled(100, doc));
+
+      final logger = _RecordingLogger();
+      final result = await FirebaseAppointmentsRepository(
+        firestore,
+        logger: logger,
+      ).fetchAppointmentPictures('a1');
+
+      expect(result, hasLength(100));
+      expect(logger.warnings, hasLength(1));
+      expect(logger.warnings.single, startsWith('APPT-IMG'));
+      expect(logger.warnings.single, contains('100'));
+    });
+
     test('an empty subcollection means this job has no photos', () async {
       // During the migration empty meant "not backfilled yet, use the array".
-      // The array is gone, so it now means exactly what it says — and the
-      // detail sheet skips this read altogether when `pictureCount` is 0.
+      // The array is gone, so it now means exactly what it says. The detail
+      // sheet runs this read unconditionally — gating it on `pictureCount`
+      // made a just-uploaded photo invisible until the recount landed.
       final query = _MockQuery();
       final bounded = _MockQuery();
       final snapshot = _MockQuerySnapshot();

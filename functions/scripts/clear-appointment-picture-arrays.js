@@ -36,9 +36,17 @@
 // older build renders from, so clearing it blanks every photo on every phone
 // that has not updated.
 //
-// IDEMPOTENT: an appointment with no array is skipped, so a second run is a
-// scan and nothing else. `pictureCount` is re-stamped from what the
-// subcollection actually holds, absolutely, never as a delta.
+// IDEMPOTENT: `pictureCount` is re-stamped from what the subcollection actually
+// holds, absolutely, never as a delta, so a second run agrees with the first
+// and writes nothing.
+//
+// IT DOES NOT SKIP AN APPOINTMENT THAT CARRIES NO ARRAY. Those are the ones
+// whose counter can be wrong with nothing left to notice it — an appointment
+// whose array was emptied while its `pictureCount` write failed reads as
+// having no photos on every card, forever. The completeness of that counter is
+// this script's second job, and the prose elsewhere that leans on "stamped on
+// every document that predates the change" only became true when this stopped
+// `continue`ing past them.
 //
 // Usage:
 //   For prod:
@@ -59,6 +67,7 @@ const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {appointmentImageDocId} = require("../appointment_image_ids");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+const {printTargetBanner} = require("./_project");
 
 /** Bare switches, matched EXACTLY — see `_flags.js`. */
 const EXACT_FLAGS = ["--dry-run"];
@@ -109,6 +118,28 @@ function planClear(pictures, storedIds) {
 }
 
 /**
+ * Whether an appointment carrying NO array needs its `pictureCount` re-stamped.
+ *
+ * Pure, because it is the second half of this script's completeness claim and
+ * the half that is easy to get wrong. Two shapes have to be told apart: a
+ * field that is ABSENT is the normal state of an appointment that never had a
+ * photo, reads as 0 on the client, and must not generate a write for every
+ * document in the collection; a field that is PRESENT but not an integer is a
+ * console edit or a legacy write that no reader can use, and it gets replaced
+ * whatever the subcollection holds.
+ *
+ * @param {!Object} data The stored appointment document.
+ * @param {number} storedCount How many documents its subcollection holds.
+ * @return {boolean} True when a write would change something.
+ */
+function needsRecount(data, storedCount) {
+  const raw = data.pictureCount;
+  if (raw === undefined || raw === null) return storedCount !== 0;
+  if (!Number.isInteger(raw)) return true;
+  return raw !== storedCount;
+}
+
+/**
  * Reads the ids one appointment's subcollection holds.
  *
  * Ids only (`select()` with no fields) — the bodies are irrelevant here and
@@ -130,14 +161,21 @@ async function main() {
   assertKnownFlags(argv);
   const dryRun = argv.includes("--dry-run");
 
-  initializeApp({credential: applicationDefault()});
+  const app = initializeApp({credential: applicationDefault()});
   const db = getFirestore();
+
+  // Printed BEFORE the first read. This is the only script in the directory
+  // that destroys data the app cannot rebuild, and `applicationDefault()`
+  // resolves whatever credentials happen to be in the environment — nothing
+  // on the command line says which project that is.
+  printTargetBanner(app, {dryRun});
 
   let cursor = null;
   let appointments = 0;
   let withArray = 0;
   let cleared = 0;
   let entriesCleared = 0;
+  let recounted = 0;
   const refused = [];
 
   for (;;) {
@@ -156,10 +194,23 @@ async function main() {
       appointments += 1;
       const data = doc.data() || {};
       const pictures = Array.isArray(data.pictures) ? data.pictures : [];
-      if (pictures.length === 0) continue;
+      // Read for every appointment, array or not — the subcollection is the
+      // store, so it is the only thing that can say whether `pictureCount` is
+      // right. Ids only, so this is the cheapest read Firestore offers.
+      const storedIds = await storedImageIds(doc);
+
+      if (pictures.length === 0) {
+        // No array to clear, so the only question left is whether the counter
+        // agrees with the subcollection. `undefined` parses as 0 on the client
+        // side, so treat it as 0 here too and write only on a real difference.
+        if (!needsRecount(data, storedIds.size)) continue;
+        recounted += 1;
+        if (dryRun) continue;
+        await doc.ref.update({pictureCount: storedIds.size});
+        continue;
+      }
       withArray += 1;
 
-      const storedIds = await storedImageIds(doc);
       const plan = planClear(pictures, storedIds);
       if (!plan.clear) {
         refused.push({
@@ -194,6 +245,13 @@ async function main() {
       `appointments (${withArray} still carried an array, ` +
       `${appointments} scanned)`);
 
+  if (recounted > 0) {
+    const verb = dryRun ? "[dry run] would re-stamp" : "re-stamped";
+    console.log(
+        `${verb} pictureCount on ${recounted} appointment(s) that carried no ` +
+        "array but disagreed with their subcollection");
+  }
+
   if (refused.length > 0) {
     console.warn(
         `REFUSED ${refused.length} appointment(s) whose subcollection does ` +
@@ -222,5 +280,6 @@ if (require.main === module) {
 
 module.exports = {
   planClear,
+  needsRecount,
   storedImageIds,
 };

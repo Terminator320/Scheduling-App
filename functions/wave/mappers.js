@@ -7,7 +7,7 @@
  * @module wave/mappers
  */
 
-const crypto = require("crypto");
+const crypto = require("node:crypto");
 
 const {formatNanpNumber, liftPhoneFromName} =
   require("../client_name_utils");

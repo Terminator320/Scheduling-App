@@ -50,6 +50,7 @@ const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore, Timestamp} = require("firebase-admin/firestore");
 const {appointmentImageDocId} = require("../appointment_image_ids");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+const {printTargetBanner} = require("./_project");
 
 /** Bare switches, matched EXACTLY — see `_flags.js`. */
 const EXACT_FLAGS = ["--dry-run"];
@@ -158,8 +159,13 @@ async function main() {
   assertKnownFlags(argv);
   const dryRun = argv.includes("--dry-run");
 
-  initializeApp({credential: applicationDefault()});
+  const app = initializeApp({credential: applicationDefault()});
   const db = getFirestore();
+
+  // Printed BEFORE the first read — `applicationDefault()` resolves whatever
+  // credentials are in the environment, and nothing on the command line says
+  // which project that is.
+  printTargetBanner(app, {dryRun});
 
   let cursor = null;
   let appointments = 0;

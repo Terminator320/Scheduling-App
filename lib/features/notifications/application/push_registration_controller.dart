@@ -81,13 +81,14 @@ class PushRegistrationController with ReentrantSync {
     // signed-out device registered and still receiving that account's pushes —
     // and the write succeeds, so nothing logs an error.
     final generation = syncGeneration;
-    final signedIn = _auth.currentUser != null;
-    final docState = _ref.read(currentUserDocProvider);
-    if (docState.isLoading || docState.hasError) return;
-    final doc = docState.value ?? const {};
-    final role = (doc['role'] ?? '').toString().trim();
-    final status = (doc['status'] ?? '').toString().trim();
-    if (!shouldRegisterPush(role: role, status: status, signedIn: signedIn)) {
+    final gate = readAccountGateInputs(_ref, _auth);
+    // Null is "we don't know yet" — leave the registration as it is.
+    if (gate == null) return;
+    if (!shouldRegisterPush(
+      role: gate.role,
+      status: gate.status,
+      signedIn: gate.signedIn,
+    )) {
       await _refreshSub?.cancel();
       _refreshSub = null;
       return;

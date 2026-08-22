@@ -4,7 +4,6 @@ const {
   assertKnownFlags,
   formatNanpNumber,
   patchFor,
-  resolveProjectId,
 } = require("../scripts/backfill-client-phone-formatting");
 
 describe("assertKnownFlags", () => {
@@ -111,39 +110,5 @@ describe("patchFor", () => {
   test("skips a client with nothing to format", () => {
     expect(patchFor({name: "Marc Tremblay", phone: "", mobile: ""})).toBeNull();
     expect(patchFor({})).toBeNull();
-  });
-});
-
-describe("resolveProjectId", () => {
-  const env = {...process.env};
-  afterEach(() => {
-    process.env = {...env};
-  });
-
-  test("prefers the id already on the app", () => {
-    expect(resolveProjectId({options: {projectId: "from-app"}}))
-        .toBe("from-app");
-  });
-
-  test("falls back to the environment", () => {
-    process.env.GOOGLE_CLOUD_PROJECT = "from-env";
-    expect(resolveProjectId({options: {}})).toBe("from-env");
-  });
-
-  test("reads it out of the service-account key file", () => {
-    // The case that printed "(unknown)" on a real run: applicationDefault()
-    // resolves the project from this file and never exposes it on the app.
-    delete process.env.GOOGLE_CLOUD_PROJECT;
-    delete process.env.GCLOUD_PROJECT;
-    process.env.GOOGLE_APPLICATION_CREDENTIALS =
-      require("path").join(__dirname, "fixtures", "fake-service-account.json");
-    expect(resolveProjectId({options: {}})).toBe("schedulingapp-88727");
-  });
-
-  test("says so when nothing resolves, rather than guessing", () => {
-    delete process.env.GOOGLE_CLOUD_PROJECT;
-    delete process.env.GCLOUD_PROJECT;
-    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-    expect(resolveProjectId({options: {}})).toMatch(/unknown/);
   });
 });

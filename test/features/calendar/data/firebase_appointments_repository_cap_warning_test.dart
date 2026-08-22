@@ -81,6 +81,9 @@ void main() {
       () => collection.where('clientId', isEqualTo: any(named: 'isEqualTo')),
     ).thenReturn(query);
     when(
+      () => collection.where('seriesId', isEqualTo: any(named: 'isEqualTo')),
+    ).thenReturn(query);
+    when(
       () => query.where(
         'endTime',
         isGreaterThanOrEqualTo: any(named: 'isGreaterThanOrEqualTo'),
@@ -126,6 +129,42 @@ void main() {
       withJobs(199);
 
       await repo().countFutureAssignments('e1');
+      expect(logger.warnings, isEmpty);
+    });
+  });
+
+  group('getSeries warns at its cap', () {
+    void withSiblings(int count) => when(() => snapshot.docs).thenReturn([
+      for (var i = 0; i < count; i++)
+        _FakeDoc('s$i', {
+          'startTime': Timestamp.fromDate(now),
+          'endTime': Timestamp.fromDate(now.add(const Duration(hours: 1))),
+          'status': 'pending',
+          'seriesId': 'ser-1',
+        }),
+    ]);
+
+    test('a full page warns, naming the consequence', () async {
+      // The last bounded read in this repository whose warn nothing exercised.
+      // Truncation here is not cosmetic: the result feeds `rewriteSeries`'
+      // `deleteIds`, so a silently short series edit leaves orphan occurrences
+      // behind with nothing anywhere reporting it.
+      withSiblings(121);
+
+      final result = await repo().getSeries('ser-1');
+
+      expect(result, hasLength(121));
+      expect(logger.warnings, hasLength(1));
+      expect(logger.warnings.single, startsWith('APPT-LOAD'));
+      expect(logger.warnings.single, contains('121'));
+      verify(() => query.limit(121)).called(1);
+    });
+
+    test('a short page is silent', () async {
+      withSiblings(12);
+
+      await repo().getSeries('ser-1');
+
       expect(logger.warnings, isEmpty);
     });
   });
@@ -210,11 +249,44 @@ void main() {
 
     await repo().searchHistory('sophie');
 
-    // 5000 / 500 per page - it must stop paging rather than walk the archive.
-    verify(() => query.get()).called(10);
+    // 5000 / 500 per page, PLUS one 1-document probe past the cap: that read
+    // is the only way to tell an archive of exactly 5000 (nothing hidden) from
+    // a larger one, and it happens only in the cap case. It must stop there
+    // rather than walk the archive.
+    verify(() => query.get()).called(11);
     expect(logger.warnings, hasLength(1));
     expect(logger.warnings.single, startsWith('HIST-SEARCH'));
     expect(logger.warnings.single, contains('5000'));
+  });
+
+  test('a client with EXACTLY the cap many visits does not warn', () async {
+    // The false alarm the probe read exists to remove. `pageToCap` used to
+    // test `docs.length >= cap` before the short-page test, so a client with
+    // exactly 1000 visits filed a Crashlytics warn claiming "older visits are
+    // not listed" when there were none — and this is a scan window whose warn
+    // is the ONLY signal a real truncation gives.
+    final full = [
+      for (var i = 0; i < 500; i++)
+        _FakeDoc('c$i', {
+          'startTime': Timestamp.fromDate(now),
+          'endTime': Timestamp.fromDate(now.add(const Duration(hours: 1))),
+          'status': 'done',
+        }),
+    ];
+    final empty = _MockQuerySnapshot();
+    when(() => snapshot.docs).thenReturn(full);
+    when(() => empty.docs).thenReturn(const []);
+    var call = 0;
+    when(() => query.get()).thenAnswer((_) async {
+      call++;
+      // Two full pages, then the probe finds nothing past the cap.
+      return call <= 2 ? snapshot : empty;
+    });
+
+    final result = await repo().fetchClientHistory(clientId: 'c1');
+
+    expect(result, hasLength(1000));
+    expect(logger.warnings, isEmpty);
   });
 
   test('client history stops at its scan ceiling and warns', () async {
@@ -229,8 +301,9 @@ void main() {
 
     await repo().fetchClientHistory(clientId: 'c1');
 
-    // 1000 / 500 per page - a busy client costs two round-trips, not twenty.
-    verify(() => query.get()).called(2);
+    // 1000 / 500 per page - a busy client costs two round-trips, not twenty,
+    // plus the one 1-document probe past the cap (see the sibling test above).
+    verify(() => query.get()).called(3);
     expect(logger.warnings, hasLength(1));
     expect(logger.warnings.single, startsWith('APPT-LOAD'));
     expect(logger.warnings.single, contains('1000'));

@@ -1,11 +1,11 @@
 import 'dart:async';
-import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/platform/ios_platform.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
@@ -14,15 +14,6 @@ import 'package:scheduling/features/notifications/application/push_registration_
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/siri/application/schedule_snapshot_provider.dart';
 import 'package:scheduling/features/siri/application/schedule_snapshot_service.dart';
-
-/// Whether this device has the two iOS-only mirror surfaces.
-///
-/// The default for [AppSyncListeners.isIosPlatform] — a seam, not a wrapper for
-/// its own sake: `flutter test` runs on the host, so the bare `Platform.isIOS`
-/// gate this replaced returned before any injectable point and left both mirror
-/// listeners (and the [AppSyncListeners.isUnsettled] rule they exist to
-/// enforce) unreachable from the harness.
-bool defaultIsIosPlatform() => Platform.isIOS;
 
 /// Cross-cutting sync wiring — device registration, mirrors, photo drain — pulled out here for testability. Account-lifecycle listeners stay in main.dart, since registration order matters there.
 ///

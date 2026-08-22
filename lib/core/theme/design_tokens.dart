@@ -171,6 +171,12 @@ class AppSpacing {
   static const double cardPaddingY = 12;
 }
 
+/// The corner-radius scale. `r8`–`r24` is a COMPLETE rung ladder on purpose:
+/// an unused rung (`r24` is currently the only one) is what makes the next
+/// design decision a lookup rather than a new hardcoded number, which is the
+/// whole reason this class exists. Don't prune one for being unreferenced.
+/// The `rCard`/`rPanel`/`rSheet`/`rDialog` values below are off-scale by
+/// design — they are the design's own named surfaces, not rungs.
 class AppRadius {
   AppRadius._();
   static const double r8 = 8;

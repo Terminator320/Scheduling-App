@@ -75,11 +75,15 @@ const RECOUNT_CLAIM_TTL_MS = 5 * 60 * 1000;
  * The photo count past which one appointment's photos stop being fully
  * readable, and the log line is the only sign of it.
  *
- * It REPLACES the `pictures` array's 100-entry rules cap, which the CONTRACT
- * step removed with the array. That cap guarded a hard failure — the parent
- * document's 1 MB ceiling, which made an over-full job permanently
- * un-updatable — and moving photos into a subcollection is precisely what
- * makes that unreachable, so it did not need reinstating as a ceiling.
+ * It is what STANDS IN for the `pictures` array's 100-entry rules cap on the
+ * new shape. **That clause is still in `firestore.rules` and still enforced**
+ * — deliberately, for the documents `clear-appointment-picture-arrays.js` has
+ * not reached, whose arrays ride along in `request.resource.data` on every
+ * ordinary edit. What it guarded was a hard failure: the parent document's
+ * 1 MB ceiling, which made an over-full job permanently un-updatable. Moving
+ * photos into a subcollection is precisely what makes that unreachable for a
+ * job written by a current build, so no equivalent CEILING was needed on the
+ * new store.
  *
  * What survives is softer and quieter: `AppointmentImagesStore.fetch` reads at
  * most `scanLimit` (the same 100) photos, so anything past that is invisible

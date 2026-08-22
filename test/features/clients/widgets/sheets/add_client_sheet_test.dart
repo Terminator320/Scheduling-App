@@ -45,9 +45,9 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
   }
 
-  // The sheet is presented via showModalBottomSheet (as in the app) so the
-  // DraggableScrollableSheet inside FormSheetScaffold gets a real sheet route
-  // + Material ancestor, and its post-save Navigator.pop has a route to remove.
+  // The sheet is presented via showModalBottomSheet (as in the app) so
+  // FormSheetFrame gets a real sheet route + Material ancestor, and its
+  // post-save Navigator.pop has a route to remove.
   Future<_FakeClientsRepository> pumpSheet(WidgetTester tester) async {
     await setTallViewport(tester);
     final repo = _FakeClientsRepository();

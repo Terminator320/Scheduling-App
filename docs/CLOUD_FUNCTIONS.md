@@ -784,6 +784,28 @@ The bridge's pure rules live in `bridge_policy.js` (`shouldHaveBridge`,
 `scripts/backfill.js` — the only script here that deletes, and until 2026-08-16
 the only one with no test.
 
+### The shared `functions/scripts/_*.js` trio
+Every one-off script in that directory runs under `applicationDefault()`, so
+nothing on the command line says which project it will write to. Three shared
+modules exist because each of them prevents a specific way a bulk run goes
+wrong, and each was hand-copied (and had drifted) before it was extracted:
+
+- **`_flags.js`** — rejects any argument the script does not know, so a typo'd
+  `--dryrun` fails loudly instead of reading as `false` and going LIVE. The
+  flag LISTS stay local to each script; only the rejection rule is shared.
+- **`_batch.js`** — the batched-write loop, so `--dry-run` cannot be forgotten
+  at a call site.
+- **`_project.js`** (2026-08-22) — `printTargetBanner(app, {dryRun})` and the
+  `resolveProjectId` behind it, printed BEFORE the first read. Four scripts had
+  no banner at all, including the irreversible
+  `clear-appointment-picture-arrays.js`, and three more hand-rolled a weaker
+  copy that stops at the two env vars — which prints `(unknown)` in exactly the
+  credential setup the runbooks recommend (`GOOGLE_APPLICATION_CREDENTIALS`
+  pointing at a service-account JSON, whose project `applicationDefault()`
+  reads internally and never exposes on `app.options`). The banner goes blank
+  precisely when credentials were supplied properly, which is the worst
+  possible time. All ten scripts now print it.
+
 ## Client → appointment propagation
 
 ### `propagateClientEdits` — `client_propagation.js`

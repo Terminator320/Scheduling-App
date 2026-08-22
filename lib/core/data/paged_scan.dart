@@ -7,8 +7,9 @@ typedef PageCursor =
       QueryDocumentSnapshot<Map<String, dynamic>> last,
     );
 
-/// Reads [base] page by page until the collection runs out or [cap] documents
-/// have been collected, calling [onCapReached] when it stops at the cap.
+/// Reads [base] page by page until the collection runs out or more than [cap]
+/// documents exist, returning at most [cap] of them and calling [onCapReached]
+/// only when documents were actually left behind.
 ///
 /// The three parts are one mechanism and none of them is optional. Paging is
 /// what stops a single snapshot truncating the answer at one page; the cap is
@@ -18,6 +19,12 @@ typedef PageCursor =
 /// and the lists that read them. A bounded read added here without a warn, or
 /// a ceiling swapped for an unbounded `while (true)`, reintroduces a failure
 /// nobody reports.
+///
+/// One document past the cap is read on purpose. A collection that is exactly
+/// [cap] long hides nothing, and warning about it sends someone hunting a
+/// truncation that never happened — reading one more is the only way to tell
+/// the two apart, and it costs a single extra round trip in the cap case
+/// alone, which is already the degraded one.
 ///
 /// [advance] defaults to `startAfterDocument`; pass one only for a cursor the
 /// query's `orderBy` fields have to spell out by value.
@@ -29,16 +36,21 @@ Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> pageToCap(
   PageCursor advance = startAfterLastDocument,
 }) async {
   final docs = <QueryDocumentSnapshot<Map<String, dynamic>>>[];
-  var query = base.limit(pageSize);
+  var cursor = base;
   while (true) {
-    final snapshot = await query.get();
+    final remaining = cap + 1 - docs.length;
+    final pageLimit = remaining < pageSize ? remaining : pageSize;
+    if (pageLimit <= 0) break;
+    final snapshot = await cursor.limit(pageLimit).get();
     docs.addAll(snapshot.docs);
-    if (docs.length >= cap) {
-      onCapReached();
-      break;
-    }
-    if (snapshot.docs.length < pageSize) break;
-    query = advance(query, snapshot.docs.last);
+    // A short page means the collection ran out, so nothing was left behind
+    // whatever the count reached.
+    if (snapshot.docs.length < pageLimit) break;
+    cursor = advance(cursor, snapshot.docs.last);
+  }
+  if (docs.length > cap) {
+    onCapReached();
+    return docs.sublist(0, cap);
   }
   return docs;
 }

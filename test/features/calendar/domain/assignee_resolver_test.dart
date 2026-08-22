@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 
 void main() {
-  // I12: `assigneeNameAt` owns the positional bounds check at six call sites,
+  // I12: `assigneeNameAt` owns the positional bounds check at five call sites,
   // and the edit sheet's result flows into `mergeRetainedAssignees` and is
   // WRITTEN BACK to Firestore — yet it had no direct coverage, only whatever
   // its callers happened to exercise.

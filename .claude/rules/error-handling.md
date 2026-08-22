@@ -64,11 +64,28 @@ alwaysApply: true
 - **Existing log tags — this list is meant to be EXHAUSTIVE.** Since notices
   stopped carrying a support code (2026-08-04) the tag lives ONLY here and in
   the `logger.warn` label, so a stale registry makes Crashlytics triage
-  guesswork. Regenerate it by grepping `lib/` for the tag literal, not just for
-  `logger.warn('` — four sites pass the tag as a named `tag:` parameter
-  (`LAUNCH-TEL`, `LAUNCH-EMAIL`, `IMG-SAVE`, `IMG-SHARE`), one builds it by
-  interpolation (`wave_settings_section.dart` → `'WAVE-$tag'`), and two spell it
-  inside a ternary (`IMG-LOAD`).
+  guesswork. **Regenerate it by grepping `lib/` for the TAG LITERAL, never for
+  `logger.warn('`** — most sites do not spell the two together, and the shapes
+  that hide a tag from that grep are:
+
+  - a named `tag:` parameter on a helper that logs for you —
+    `launchExternalUri` (`LAUNCH-TEL`, `LAUNCH-MAPS`, `LAUNCH-URL`,
+    `LAUNCH-EMAIL`), the three device-registration controllers (`PUSH`,
+    `LIVE-ACT`, `PRESENCE`), `deleteOrphanedImages` (`APPT-SAVE`), and every
+    `Debouncer.tagged` call site;
+  - a POSITIONAL first argument to a helper that logs —
+    `image_viewer.dart`'s `_runExclusive` (`IMG-SAVE`, `IMG-SHARE`);
+  - built by interpolation — `wave_settings_section.dart`'s `'WAVE-$tag'`,
+    where the four suffixes are spelled as bare `tag:` values (`CONNECT`,
+    `SYNC`, `RETRY`, `SCHEDULE`) and the prefix is added at the logging site,
+    so neither half greps as the whole tag;
+  - spelled inside a ternary — `appointment_image_loader.dart` (`IMG-LOAD`,
+    twice).
+
+  This paragraph previously claimed there were exactly four `tag:` sites and
+  named two (`IMG-SAVE`/`IMG-SHARE`) that are positional, not named. Following
+  it as written missed seven tags — and it is the procedure that keeps the
+  registry EXHAUSTIVE, so describing the shapes beats counting the sites.
 
   **Notice-bearing tags** — the site logs AND composes a user-facing notice, so
   each has an `error_intro*` ARB key:

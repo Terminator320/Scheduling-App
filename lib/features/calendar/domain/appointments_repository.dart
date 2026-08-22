@@ -3,6 +3,15 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 abstract class AppointmentsRepository {
+  /// Drops every cached appointment this repository is holding.
+  ///
+  /// The implementation is a process-scoped singleton, so its history search
+  /// windows outlive the session that filled them — raw appointment maps
+  /// carrying `clientName`, `clientPhone` and `address`. Sign-out and account
+  /// exit call this through `deregisterThisDevice`, which is the single owner
+  /// of "forget this session".
+  void clearCaches();
+
   String newDocId();
 
   Future<AppointmentRecord?> getAppointmentById(String id);

@@ -246,6 +246,62 @@ function describeWaveError(err) {
   return parts.join(" ").slice(0, DESCRIBE_MAX_LENGTH);
 }
 
+/** The `lastError` a lease-expiry reclaim stamps. Sanitized by construction. */
+const RECLAIM_REASON = "reclaimed: lease expired";
+
+/**
+ * What to do with a job whose lease has expired — retry it or dead-letter it.
+ *
+ * Pure, and here rather than inside the transaction closure it is called from,
+ * because all three of its outcomes DESTROY something: a skip leaves a job for
+ * another path to own, a retry rewrites its schedule, and a dead-letter ends a
+ * real client edit's journey to Wave permanently. A decision reachable only
+ * through a Firestore-transaction mock is a decision nobody re-reads.
+ *
+ * [job] is already NORMALIZED by the caller — `claimedAtMs` resolved to a
+ * number — which is what keeps this module free of Firestore types.
+ *
+ * @param {{status: string, claimedAtMs: number, attempts: *}} job
+ * @param {{nowMs: number, leaseMs: number, maxAttempts: number,
+ *   backoffFn: function(number): number}} options
+ * @return {?{patch: !Object, dead: boolean, attempts: number}} Null to leave
+ *   the job alone.
+ */
+function reclaimDecision(job, options) {
+  const {nowMs, leaseMs, maxAttempts, backoffFn} = options;
+  if (!job || job.status !== "inflight") return null;
+
+  // A fresh re-claim resets `claimedAt`, so a job claimed inside the lease is
+  // somebody else's and gets skipped. A NON-FINITE `claimedAt` (an unresolved
+  // serverTimestamp sentinel) is treated as reclaimable on purpose: skipping
+  // it would strand the job forever, which is the worse of the two failures.
+  if (Number.isFinite(job.claimedAtMs) && job.claimedAtMs > nowMs - leaseMs) {
+    return null;
+  }
+
+  const attempts =
+    (typeof job.attempts === "number" ? job.attempts : 0) + 1;
+
+  if (attempts < maxAttempts) {
+    return {
+      patch: {
+        status: "queued",
+        attempts,
+        nextAttemptAt: new Date(nowMs + backoffFn(attempts - 1)),
+        lastError: RECLAIM_REASON,
+      },
+      dead: false,
+      attempts,
+    };
+  }
+
+  return {
+    patch: {status: "dead", attempts, lastError: RECLAIM_REASON},
+    dead: true,
+    attempts,
+  };
+}
+
 module.exports = {
   DEFAULT_MAX_ATTEMPTS,
   RATE_LIMITED_MAX_ATTEMPTS,
@@ -257,4 +313,6 @@ module.exports = {
   attemptBudgetFor,
   sanitizeError,
   describeWaveError,
+  RECLAIM_REASON,
+  reclaimDecision,
 };

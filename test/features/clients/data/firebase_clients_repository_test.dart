@@ -153,6 +153,48 @@ void main() {
       expect(captured.containsKey('updatedAt'), isTrue);
     });
 
+    test('normalizes EVERY contact email, not just the top-level one',
+        () async {
+      // The loop was unhit: only the top-level address was ever asserted, so a
+      // regression that normalized the client and skipped its contacts would
+      // ship green. Contact emails feed the same `matchesClient` search
+      // matching as the main one, where a stray space or capital means the
+      // person is simply not found.
+      await repo().addClient(
+        client().copyWith(
+          email: '  Owner@Example.COM ',
+          contacts: const [
+            ClientContact(name: 'Site', email: ' Site@Example.COM'),
+            ClientContact(name: 'Billing', email: 'BILLING@example.com  '),
+          ],
+        ),
+      );
+
+      final captured =
+          (verify(() => collection.add(captureAny())).captured.single as Map)
+              .cast<String, dynamic>();
+      expect(captured['email'], 'owner@example.com');
+      final contacts = (captured['contacts'] as List)
+          .map((c) => (c as Map)['email'])
+          .toList();
+      expect(contacts, ['site@example.com', 'billing@example.com']);
+    });
+
+    test('a contact with no email normalizes to empty, not null', () async {
+      // `normalizeEmail` is fed `?? ''`, so the key must survive as a string —
+      // a null here would break the Dart-side matcher that reads it.
+      await repo().addClient(
+        client().copyWith(
+          contacts: const [ClientContact(name: 'Site')],
+        ),
+      );
+
+      final captured =
+          (verify(() => collection.add(captureAny())).captured.single as Map)
+              .cast<String, dynamic>();
+      expect(((captured['contacts'] as List).single as Map)['email'], '');
+    });
+
     test('returns the client with the generated doc id', () async {
       // The input has an empty id (new client); the returned record carries the
       // Firestore-generated id so callers can link to it immediately.
@@ -291,8 +333,11 @@ void main() {
 
       await repo().searchClients('client');
 
-      // 5000 / 500 per page - it must stop rather than walk the collection.
-      verify(() => query.get()).called(10);
+      // 5000 / 500 per page, PLUS one 1-document probe past the cap — the
+      // only way to tell a roster of exactly 5000 (nothing hidden) from a
+      // larger one, and paid only in the cap case. It must stop there rather
+      // than walk the collection.
+      verify(() => query.get()).called(11);
       expect(logger.warnings, hasLength(1));
       expect(logger.warnings.single, startsWith('CLI-SEARCH'));
       expect(logger.warnings.single, contains('5000'));

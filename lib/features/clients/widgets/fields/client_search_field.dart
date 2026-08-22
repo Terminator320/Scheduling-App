@@ -38,126 +38,134 @@ class ClientSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final showAddNew =
         onAddNew != null &&
         !isSearching &&
         selectedClient == null &&
         controller.text.trim().isNotEmpty;
+    final showNoResults =
+        results.isEmpty &&
+        !isSearching &&
+        controller.text.trim().isNotEmpty &&
+        selectedClient == null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextFormField(
-          controller: controller,
-          readOnly: selectedClient != null,
-          textInputAction: TextInputAction.search,
-          decoration:
-              formInputDecoration(
-                context,
-                context.l10n.clients_searchByNameBusinessPhoneEmailAddress,
-              ).copyWith(
-                errorText: errorText,
-                suffixIcon: selectedClient != null
-                    ? IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        tooltip: context.l10n.common_clearText,
-                        onPressed: onClear,
-                      )
-                    : isSearching
-                    ? const Padding(
-                        padding: EdgeInsets.all(AppSpacing.sp12),
-                        child: AdaptiveProgressIndicator(size: 16),
-                      )
-                    // Typed but not yet selected — an "x" to clear the query and results,
-                    // or the search icon if the field's empty.
-                    : ClearTextButton(
-                        controller: controller,
-                        onCleared: () => onChanged(''),
-                        placeholder: const Icon(Icons.search, size: 18),
-                      ),
-              ),
-
-          onChanged: onChanged,
-          onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-        ),
-        if (results.isNotEmpty)
-          Container(
-            margin: const EdgeInsets.only(top: AppSpacing.sp4),
-            constraints: const BoxConstraints(maxHeight: _maxDropdownHeight),
-            decoration: BoxDecoration(
-              border: Border.all(color: scheme.outlineVariant),
-              borderRadius: BorderRadius.circular(AppRadius.r12),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: ListView.builder(
-              shrinkWrap: true,
-              padding: EdgeInsets.zero,
-              itemCount: results.length + (showAddNew ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == results.length) {
-                  return _addNewClientTile(context);
-                }
-                final client = results[index];
-                final String subtitleText;
-                if (client.phone.trim().isNotEmpty) {
-                  subtitleText = client.phone;
-                } else if (client.email.trim().isNotEmpty) {
-                  subtitleText = client.email;
-                } else {
-                  subtitleText = client.address;
-                }
-                return ListTile(
-                  dense: true,
-                  title: Text(
-                    client.displayName,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  subtitle: Text(
-                    subtitleText,
-                    style: Theme.of(context).textTheme.labelLarge,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  onTap: () {
-                    FocusScope.of(context).unfocus();
-                    onSelect(client);
-                  },
-                );
-              },
-            ),
-          ),
-
-        if (results.isEmpty &&
-            !isSearching &&
-            controller.text.trim().isNotEmpty &&
-            selectedClient == null)
-          Padding(
-            padding: const EdgeInsets.only(top: AppSpacing.sp8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  context.l10n.clients_noClientsFound,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: showAddNew ? scheme.onSurfaceVariant : scheme.error,
-                  ),
-                ),
-                if (showAddNew) ...[
-                  const SizedBox(height: AppSpacing.sp4),
-                  Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: scheme.outlineVariant),
-                      borderRadius: BorderRadius.circular(AppRadius.r12),
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: _addNewClientTile(context),
-                  ),
-                ],
-              ],
-            ),
-          ),
+        _searchInput(context),
+        if (results.isNotEmpty) _resultsDropdown(context, showAddNew),
+        if (showNoResults) _noResults(context, showAddNew),
       ],
+    );
+  }
+
+  Widget _searchInput(BuildContext context) => TextFormField(
+    controller: controller,
+    readOnly: selectedClient != null,
+    textInputAction: TextInputAction.search,
+    decoration:
+        formInputDecoration(
+          context,
+          context.l10n.clients_searchByNameBusinessPhoneEmailAddress,
+        ).copyWith(
+          errorText: errorText,
+          suffixIcon: selectedClient != null
+              ? IconButton(
+                  icon: const Icon(Icons.close, size: 18),
+                  tooltip: context.l10n.common_clearText,
+                  onPressed: onClear,
+                )
+              : isSearching
+              ? const Padding(
+                  padding: EdgeInsets.all(AppSpacing.sp12),
+                  child: AdaptiveProgressIndicator(size: 16),
+                )
+              // Typed but not yet selected — an "x" to clear the query and
+              // results, or the search icon if the field's empty.
+              : ClearTextButton(
+                  controller: controller,
+                  onCleared: () => onChanged(''),
+                  placeholder: const Icon(Icons.search, size: 18),
+                ),
+        ),
+    onChanged: onChanged,
+    onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
+  );
+
+  Widget _resultsDropdown(BuildContext context, bool showAddNew) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(top: AppSpacing.sp4),
+      constraints: const BoxConstraints(maxHeight: _maxDropdownHeight),
+      decoration: BoxDecoration(
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ListView.builder(
+        shrinkWrap: true,
+        padding: EdgeInsets.zero,
+        itemCount: results.length + (showAddNew ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == results.length) return _addNewClientTile(context);
+          final client = results[index];
+          return ListTile(
+            dense: true,
+            title: Text(
+              client.displayName,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            subtitle: Text(
+              _subtitleFor(client),
+              style: Theme.of(context).textTheme.labelLarge,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            onTap: () {
+              FocusScope.of(context).unfocus();
+              onSelect(client);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  /// The one identifying line under a result, in falling order of usefulness
+  /// for telling two clients apart.
+  static String _subtitleFor(ClientRecord client) {
+    if (client.phone.trim().isNotEmpty) return client.phone;
+    if (client.email.trim().isNotEmpty) return client.email;
+    return client.address;
+  }
+
+  Widget _noResults(BuildContext context, bool showAddNew) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sp8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.l10n.clients_noClientsFound,
+            style: TextStyle(
+              fontSize: 13,
+              // Not an error when there is something to do about it.
+              color: showAddNew ? scheme.onSurfaceVariant : scheme.error,
+            ),
+          ),
+          if (showAddNew) ...[
+            const SizedBox(height: AppSpacing.sp4),
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: scheme.outlineVariant),
+                borderRadius: BorderRadius.circular(AppRadius.r12),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: _addNewClientTile(context),
+            ),
+          ],
+        ],
+      ),
     );
   }
 

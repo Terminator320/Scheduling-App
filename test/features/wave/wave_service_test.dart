@@ -174,4 +174,109 @@ void main() {
       );
     });
   });
+
+  group('retryFailedJobs', () {
+    // The only WaveService method with no service-level test, and its own
+    // comment calls it "the only way back" from a dead-lettered job — a job
+    // that never retries on its own and surfaces only as an error badge on the
+    // client.
+
+    test('parses the retry counts', () async {
+      bind('waveRetryFailedJobs');
+      final result = _MockResult();
+      when(() => result.data).thenReturn(<String, dynamic>{
+        'requeued': 2,
+        'scanned': 3,
+        'pushed': 2,
+        'failed': 0,
+      });
+      when(
+        () => callable.call<dynamic>(any<Object?>()),
+      ).thenAnswer((_) async => result);
+
+      final retry = await service.retryFailedJobs();
+
+      expect(retry.requeued, 2);
+      expect(retry.scanned, 3);
+      expect(retry.pushed, 2);
+      expect(retry.failed, 0);
+    });
+
+    test('a missing pushed/failed reads as NULL, not as zero', () async {
+      // Null means the follow-up push failed or was skipped; the requeue still
+      // committed, so the jobs are queued and will drain. Reading it as 0
+      // would tell the admin nothing went through when everything did.
+      bind('waveRetryFailedJobs');
+      final result = _MockResult();
+      when(
+        () => result.data,
+      ).thenReturn(<String, dynamic>{'requeued': 1, 'scanned': 1});
+      when(
+        () => callable.call<dynamic>(any<Object?>()),
+      ).thenAnswer((_) async => result);
+
+      final retry = await service.retryFailedJobs();
+
+      expect(retry.requeued, 1);
+      expect(retry.pushed, isNull);
+      expect(retry.failed, isNull);
+    });
+
+    test('tolerates an Android Map<dynamic, dynamic> payload', () async {
+      // The `as Map?` convention — never `as Map<String, dynamic>?`.
+      bind('waveRetryFailedJobs');
+      final result = _MockResult();
+      when(() => result.data).thenReturn(<dynamic, dynamic>{
+        'requeued': 4,
+        'scanned': 4,
+      });
+      when(
+        () => callable.call<dynamic>(any<Object?>()),
+      ).thenAnswer((_) async => result);
+
+      expect((await service.retryFailedJobs()).requeued, 4);
+    });
+
+    test('an empty payload is all-zero rather than a throw', () async {
+      bind('waveRetryFailedJobs');
+      final result = _MockResult();
+      when(() => result.data).thenReturn(null);
+      when(
+        () => callable.call<dynamic>(any<Object?>()),
+      ).thenAnswer((_) async => result);
+
+      final retry = await service.retryFailedJobs();
+
+      expect(retry.requeued, 0);
+      expect(retry.scanned, 0);
+    });
+
+    test('maps a callable failure to a WaveFailure', () async {
+      bind('waveRetryFailedJobs');
+      when(
+        () => callable.call<dynamic>(any<Object?>()),
+      ).thenThrow(Exception('nope'));
+
+      await expectLater(
+        service.retryFailedJobs(),
+        throwsA(isA<WaveFailure>()),
+      );
+    });
+
+    test('maps an unparseable payload to a WaveFailure too', () async {
+      // The second try/catch: a malformed response must not escape as a raw
+      // TypeError into the Settings widget's generic catch.
+      bind('waveRetryFailedJobs');
+      final result = _MockResult();
+      when(() => result.data).thenReturn(<String, dynamic>{'requeued': 'two'});
+      when(
+        () => callable.call<dynamic>(any<Object?>()),
+      ).thenAnswer((_) async => result);
+
+      await expectLater(
+        service.retryFailedJobs(),
+        throwsA(isA<WaveFailure>()),
+      );
+    });
+  });
 }

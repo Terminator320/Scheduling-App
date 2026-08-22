@@ -105,16 +105,13 @@ class PresenceSyncController with ReentrantSync {
     // uploading until the process dies. Every await below re-checks this.
     final generation = syncGeneration;
     try {
-      final signedIn = _auth.currentUser != null;
-      final docState = _ref.read(currentUserDocProvider);
-      if (docState.isLoading || docState.hasError) return;
-      final doc = docState.value ?? const {};
-      final role = (doc['role'] ?? '').toString().trim();
-      final status = (doc['status'] ?? '').toString().trim();
+      final gate = readAccountGateInputs(_ref, _auth);
+      // Null is "we don't know yet" — leave presence tracking as it is.
+      if (gate == null) return;
       if (!shouldTrackPresence(
-        role: role,
-        status: status,
-        signedIn: signedIn,
+        role: gate.role,
+        status: gate.status,
+        signedIn: gate.signedIn,
       )) {
         _stop();
         return;

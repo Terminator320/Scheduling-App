@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:scheduling/core/logging/app_logger.dart';
+
 /// How long a search field waits after the last keystroke before it reads.
 ///
 /// One owner because it is one cost dial, not a per-surface taste: every
@@ -14,6 +16,16 @@ import 'dart:async';
 /// feature's policy is the import this file exists to make unnecessary.
 const Duration kSearchDebounce = Duration(milliseconds: 250);
 
+/// How long the address field waits before asking Google Places.
+///
+/// Deliberately far longer than [kSearchDebounce]: that one spends a Firestore
+/// read against a window this app already pays for, while every request here
+/// is a BILLED third-party call behind a per-uid rate limit. It is a different
+/// cost dial, which is why it is a separate constant rather than a reuse — but
+/// it lives beside its sibling so the two are compared rather than each being
+/// re-spelled at the one call site that uses it.
+const Duration kAddressLookupDebounce = Duration(milliseconds: 700);
+
 /// Coalesces rapid calls into one, firing only the last action within
 /// [duration] (e.g. per-keystroke search). Own one instance per widget state.
 class Debouncer {
@@ -27,6 +39,29 @@ class Debouncer {
   /// touching `ref`) — the handler can fire after dispose, and `ref.read` on
   /// an unmounted consumer throws under Riverpod 3.
   Debouncer(this.duration, {required this.onError});
+
+  /// The shape every call site in `lib/` actually wants: a debounce whose
+  /// failures are logged under one tag.
+  ///
+  /// Prefer this over the raw constructor. Taking the [logger] as a
+  /// PARAMETER is what makes the remaining hazard structurally impossible —
+  /// the constructor's contract above asks callers to resolve it eagerly, and
+  /// a request in prose is a request that gets forgotten. An argument has to
+  /// be evaluated at the construction site, so a lazy `late final` handler
+  /// that reads `ref` from inside the callback cannot be written through this
+  /// door. That exact omission has already put a FATAL in the zone handler
+  /// once, from `address_autocomplete_field.dart`.
+  ///
+  /// [tag] is the Crashlytics warn tag (see `.claude/rules/error-handling.md`);
+  /// it is the only place a tag lives now that notices carry no support code.
+  factory Debouncer.tagged(
+    Duration duration, {
+    required AppLogger logger,
+    required String tag,
+  }) => Debouncer(
+    duration,
+    onError: (error, stackTrace) => logger.warn(tag, error, stackTrace),
+  );
 
   final Duration duration;
   final void Function(Object error, StackTrace stackTrace) onError;

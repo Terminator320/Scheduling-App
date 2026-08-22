@@ -18,7 +18,7 @@ const {
   generateStartingPassword,
 } = require("../employee_accounts");
 const {buildEmailChangedMessage} = require("../notification_messages");
-const crypto = require("crypto");
+const crypto = require("node:crypto");
 
 const TS = {__serverTimestamp: true};
 const serverTimestamp = () => TS;

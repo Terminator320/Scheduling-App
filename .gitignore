@@ -154,8 +154,26 @@ ruvector.db
 # .claude/ is SHARED (private repo, Windows + Mac): rules, skills, agents,
 # commands, hooks and settings.json must reach both machines. Only
 # machine-local files stay ignored.
+#
+# These patterns were in .git/info/exclude, which is NOT committed — so on the
+# Mac clone none of them were ignored at all, and a worktree or an agent
+# registry created there was untracked-and-visible and one `git add .` away
+# from being committed into the shared .claude/. This repo has been bitten by
+# exactly that class of bug twice (a bare `CLAUDE.md` pattern matching at every
+# depth; a merge resurrecting android/ with a live Maps key). Machine-local
+# runtime state belongs here where both clones see the rule.
 .claude/settings.local.json
 .claude/*.local.json
+.claude/worktrees/
+.claude/checkpoints/
+.claude/mailbox/
+.claude/routines/.state/
+.claude/agent-registry.json
+.claude/agent-memory-local/
+.claude/first-run
+.claude/scheduled_tasks.lock
+.claude/scheduled_tasks.json
+.claude/assistant-daemon-state.json
 .superpowers/
 superpowers/
 docs/superpowers/

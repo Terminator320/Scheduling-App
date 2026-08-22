@@ -62,6 +62,15 @@ class AppRoutes {
           // becomes the cards' `showActions`, and a `true` default is what
           // once showed employees Edit/Cancel/Delete affordances the rules
           // then rejected. An argless push is a caller bug, not a licence.
+          //
+          // THE ASYMMETRY WITH THE `settings.arguments!` CASES BELOW IS
+          // DELIBERATE. Those seven bang out to a red screen on an argless
+          // push, which is the right answer for a route whose whole content
+          // is its argument — there is nothing to render. This one is the
+          // app's HOME, reached from a cold start and from every back stack,
+          // so a crash costs the user their session where a
+          // least-privilege degrade costs them a couple of affordances. Don't
+          // "unify" the two: neither shape is the general rule.
           builder: (_) => DashboardScreen(
             isAdmin: args?.isAdmin ?? false,
             employeeId: args?.employeeId ?? '',

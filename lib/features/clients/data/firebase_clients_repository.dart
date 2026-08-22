@@ -92,6 +92,13 @@ class FirebaseClientsRepository implements ClientsRepository {
   static const _pageBoundaryMax = 200;
 
   @override
+  void clearCaches() {
+    _searchCache.clear();
+    _scanWindow = null;
+    _pageBoundaryNames.clear();
+  }
+
+  @override
   Future<List<ClientRecord>> fetchClientsPage({
     required int limit,
     ClientRecord? after,
@@ -323,6 +330,20 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
     final data = doc.data;
     final client = ClientRecord.fromMap(doc.id, data);
 
+    // The MATCH TEST COMES FIRST, and everything the scoring ladder needs is
+    // built below it. The scan window is up to `_clientScanLimit` documents
+    // and a committed search keeps at most 25, so anything computed above this
+    // `continue` is paid ~200× over for nothing — and it is not cheap:
+    // `normalize` is eight sequential `replaceAll`s, `stripPhone` two regexes,
+    // and there were six such values per document.
+    if (!ClientSearchPolicy.entryMatches(
+      ClientSearchPolicy.index(client),
+      queryText: normalizedQuery,
+      queryDigits: queryDigits,
+    )) {
+      continue;
+    }
+
     final contacts = (data['contacts'] as List?) ?? const [];
     final contactSearchText = contacts
         .whereType<Map<Object?, Object?>>()
@@ -348,14 +369,6 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
       '${data['phone'] ?? ''} ${data['mobile'] ?? ''}',
     );
     final contactsDigits = ClientSearchPolicy.digitsOnly(contactSearchText);
-
-    if (!ClientSearchPolicy.entryMatches(
-      ClientSearchPolicy.index(client),
-      queryText: normalizedQuery,
-      queryDigits: queryDigits,
-    )) {
-      continue;
-    }
 
     var score = 100;
     if (displayName == normalizedQuery || phoneDigits == queryDigits) {

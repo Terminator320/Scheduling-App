@@ -163,6 +163,88 @@ void main() {
     verifyNever(() => storage.writeFlag(any(), value: any(named: 'value')));
   });
 
+  testWidgets('a successful unlock clears the gate', (tester) async {
+    // THE RELEASE SIDE, which no test reached: every other case here stubs
+    // `authenticate` to false or to a throw, so the one transition the whole
+    // feature exists to perform never executed under test. A regression that
+    // locked the app and never opened it would have shipped green.
+    when(() => storage.readFlag(any())).thenAnswer((_) async => true);
+    when(() => biometrics.authenticate(any())).thenAnswer((_) async => true);
+
+    await pumpLock(tester);
+
+    expect(isLocked(tester), isFalse);
+    verify(() => biometrics.authenticate(any())).called(1);
+  });
+
+  testWidgets('a refused unlock keeps the gate up and can be retried', (
+    tester,
+  ) async {
+    // The pair to the case above: refusing must leave the overlay in place
+    // AND leave the Unlock button working, or a mistyped passcode strands the
+    // user on a screen with no way forward.
+    when(() => storage.readFlag(any())).thenAnswer((_) async => true);
+    await pumpLock(tester);
+    expect(isLocked(tester), isTrue);
+
+    when(() => biometrics.authenticate(any())).thenAnswer((_) async => true);
+    await tester.tap(find.byIcon(Icons.lock_open_rounded));
+    await tester.pumpAndSettle();
+
+    expect(isLocked(tester), isFalse);
+  });
+
+  testWidgets('stays locked across hidden and paused, not only inactive', (
+    tester,
+  ) async {
+    // All three states are named in the widget's guard and only `inactive` was
+    // ever pumped. They cannot be driven independently — Flutter's binding
+    // enforces resumed → inactive → hidden → paused and silently drops a jump —
+    // so what is pinned here is that the lock SURVIVES the whole descent. A
+    // guard that dropped `paused`/`hidden` would still lock on `inactive`, so
+    // only walking the sequence catches it.
+    when(() => storage.readFlag(any())).thenAnswer((_) async => true);
+    when(() => biometrics.authenticate(any())).thenAnswer((_) async => true);
+    await pumpLock(tester);
+    expect(isLocked(tester), isFalse, reason: 'unlocked at start');
+
+    when(() => biometrics.authenticate(any())).thenAnswer((_) async => false);
+    for (final state in [
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+    ]) {
+      _lifecycle(state);
+      await tester.pumpAndSettle();
+      expect(isLocked(tester), isTrue, reason: 'locked at $state');
+    }
+  });
+
+  testWidgets('resume re-prompts and unlocks a session locked by backgrounding',
+      (tester) async {
+    // The full round trip an ordinary app switch takes, which no test drove
+    // end to end: unlocked → backgrounded → locked → resumed → unlocked.
+    when(() => storage.readFlag(any())).thenAnswer((_) async => true);
+    when(() => biometrics.authenticate(any())).thenAnswer((_) async => true);
+    await pumpLock(tester);
+    expect(isLocked(tester), isFalse);
+
+    when(() => biometrics.authenticate(any())).thenAnswer((_) async => false);
+    _lifecycle(AppLifecycleState.inactive);
+    _lifecycle(AppLifecycleState.hidden);
+    _lifecycle(AppLifecycleState.paused);
+    await tester.pumpAndSettle();
+    expect(isLocked(tester), isTrue);
+
+    when(() => biometrics.authenticate(any())).thenAnswer((_) async => true);
+    _lifecycle(AppLifecycleState.hidden);
+    _lifecycle(AppLifecycleState.inactive);
+    _lifecycle(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(isLocked(tester), isFalse);
+  });
+
   testWidgets('a thrown biometric prompt does not escape the zone handler', (
     tester,
   ) async {

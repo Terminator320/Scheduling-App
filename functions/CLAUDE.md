@@ -19,7 +19,10 @@ on one and would reach the caller as an opaque `internal`. It throws
 `notification_policy.js`'s `toIdList` deliberately does NOT use it — that one
 FILTERS a list rather than throwing, and the policy module must stay free of
 firebase-functions/admin),
-`readSessionToken`, `enforceDurableRateLimit`, `assertAdmin`),
+`readSessionToken`, `enforceDurableRateLimit`, `assertAdmin`, `hasControlChar`,
+`isReauthStale` and **`assertFreshReauth`** — the last being the guard
+`.claude/rules/security.md` holds up as *the shape to copy* for failing closed
+on missing input, and all three were missing from this list),
 `bridge.js` (`syncUsersByUid`), `client_propagation.js`
 (`propagateClientEdits`), `client_job_count.js` (`recountClientJobs`, backed by
 the pure `clientsToRecount`), `clients.js` (`deleteClient` — admin-only, the
@@ -78,7 +81,13 @@ nothing else gets through: disabled (whose Auth credential outlives the status
 flip), invited, unknown role, missing bridge doc, or an employee naming another
 docId. **Widening this callable past admins must never widen WHICH doc a caller
 can reach** — that function exists to make the mistake hard to write. Guard
-order is auth → payload → identity → rate limit → work.
+order is FIVE, not four: auth → payload → identity → **`assertFreshReauth`**
+→ rate limit → work (`employee_accounts.js:509-511` spells it out in its own
+comment). The re-auth step sits between identity and the limiter and is keyed on
+ROLE, not on `isSelf`: a valid ID token alone must not let an EMPLOYEE move
+their own sign-in address, while every ADMIN call arrives through `updateEmployee`,
+which has no re-auth step to satisfy it — gating on self-ness rejected an admin
+editing their own roster row as an opaque `stale-auth`.
 **Who is notified depends on who acted**, and `isSelf` reports whether the
 caller IS the target independent of role, so an admin editing their own row is a
 self change. A self edit pushes the ACTIVE ADMINS instead
@@ -194,6 +203,23 @@ asks `dayCountOf(c)` LAST in its Live-Activity condition
 (`kind === "leaveNow" && delivered > 0 && dayCountOf(c) <= 1`) — hoisted into a
 local, every reminder-only and undelivered candidate paid for a value it
 discards.
+**Three more shared leaves, each extracted from copies that had already
+drifted** (2026-08-22): `admin_firestore.js` (`adminFirestore()` — the lazy
+`require("firebase-admin/firestore")` that keeps a module `require`-able from
+jest; four modules carried a byte-identical private copy and their JSDocs had
+already diverged on whether `Timestamp` came with it), `appointment_scan.js`
+(`scanAppointmentWindow(db, {...})` — the status-`in` + two range `where`s +
+`orderBy` + `limit` + warn-at-cap + map that all three scheduled sweeps spell
+out; each caller keeps its own cap, status set and CONSEQUENCE sentence, and
+`travel_utils.js` had re-spelled the record mapper inline TWICE rather than
+using `recordOf`. The ORDERING argument is the reason it takes `descending`
+explicitly: the overdue and digest sweeps look BACKWARD and must keep the
+newest, the travel sweep looks FORWARD and must keep the soonest, and getting
+it wrong silently spends the cap on the wrong jobs), and `wave/retry_policy.js`'s
+`reclaimDecision` (the lease-expiry retry-or-dead-letter call, moved out of
+`worker.js`'s `runTransaction` closure — all three of its outcomes destroy
+something, and a decision reachable only through a Firestore-transaction mock
+is one nobody re-reads).
 Shared `defineSecret` params live
 in `params.js` (`GOOGLE_MAP_API_KEY`, `APNS_AUTH_KEY`, `APNS_KEY_ID`,
 `APNS_TEAM_ID`), imported by every consumer — a secret
@@ -213,7 +239,7 @@ the handles lazier does not make the module requirable. Extract the pure logic i
 that; `onCall`/`onDocument*` modules load lazily and are safe to `require`
 directly. Jest tests live in **`functions/__tests__/` only** — the parallel
 `functions/test/` directory was merged away 2026-07-19; don't recreate it.
-- `syncUsersByUid` — Firestore trigger: mirrors `users/{id}` into `usersByUid/{uid}` bridge collection so security rules can resolve roles from auth UID alone. **It also owns deactivation:** on `active` → anything else it disables the Firebase Auth account + `revokeRefreshTokens` and purges every delivery artifact (`presence/location`, `fcmTokens`, `liveActivityTokens` via `recursiveDelete`, and the `liveActivityCards` marker); `→ active` symmetrically re-enables the account. This is load-bearing, not cleanup — the rules gates below assume a *live* status check can't be reached with a stale credential, and `deactivateEmployee` only flips the Firestore field. All of it runs AFTER the auth-critical bridge write and is idempotent (`retry: true`; `auth/user-not-found` is swallowed so the delete-account ordering converges). **Deactivation used to also ROTATE the Storage download tokens on that person's job photos** (`rotateAssignedImageTokens`, `appointment_image_tokens.js`) — that module, its trigger's raised `timeoutSeconds`, and the `(employeeIds CONTAINS, endTime DESC)` composite it needed were all **deleted at the photo-subcollection CONTRACT step**, which is what it was always scheduled to retire with. It existed because `ImageStorageService.uploadImage` minted a `getDownloadURL()` link per photo and persisted it into `pictures[]`: that link's `firebaseStorageDownloadTokens` value is stable per object, never expires and is served with no auth and NO `storage.rules` evaluation, so every assigned device held permanent rules-free copies that revoking the credential did not reach. **The app no longer mints or stores one**, and the arrays that carried them are cleared, so there is no such link left to invalidate — photos are fetched through the SDK against `storage.rules`, which this branch's status flip already answers. Don't reintroduce a rotation pass without first reintroducing the write that made one necessary. Two things it taught, worth keeping: a `deps` field resolved after entry is a branch no test can reach (the resolved bucket landed in a local while the callee read `deps.bucket`, so the control reported "nothing rotated" while rotating nothing, 2026-08-16); and a per-appointment parent write fans out to `notifyAppointmentChanges`, which stays a genuine no-op only because `diffAppointmentForNotifications` emits nothing for a photo-only diff — pinned by "a pictures-only rewrite emits nothing" in `notification_utils.test.js`.
+- `syncUsersByUid` — Firestore trigger: mirrors `users/{id}` into `usersByUid/{uid}` bridge collection so security rules can resolve roles from auth UID alone. **It also owns deactivation:** on `active` → anything else it disables the Firebase Auth account + `revokeRefreshTokens` and purges every delivery artifact (`presence/location`, `fcmTokens`, `liveActivityTokens` via `recursiveDelete`, and the `liveActivityCards` marker); `→ active` symmetrically re-enables the account. This is load-bearing, not cleanup — the rules gates below assume a *live* status check can't be reached with a stale credential, and `deactivateEmployee` only flips the Firestore field. All of it runs AFTER the auth-critical bridge write and is idempotent (`retry: true`; `auth/user-not-found` is swallowed so the delete-account ordering converges). **Deactivation used to also ROTATE the Storage download tokens on that person's job photos** (`rotateAssignedImageTokens`, `appointment_image_tokens.js`) — that module, its trigger's raised `timeoutSeconds`, and the `(employeeIds CONTAINS, endTime DESC)` composite it needed were all **deleted at the photo-subcollection CONTRACT step**, which is what it was always scheduled to retire with. It existed because `ImageStorageService.uploadImage` minted a `getDownloadURL()` link per photo and persisted it into `pictures[]`: that link's `firebaseStorageDownloadTokens` value is stable per object, never expires and is served with no auth and NO `storage.rules` evaluation, so every assigned device held permanent rules-free copies that revoking the credential did not reach. **The app no longer mints or stores one**, so no NEW photo carries such a link — those are fetched through the SDK against `storage.rules`, which this branch's status flip already answers. **That is not the same as "nothing is left to invalidate", and this bullet used to claim it was:** legacy `appointments/*/images` rows with a `url` and no `storagePath` still exist (the backfill keeps them on purpose, the rules still accept the field, the client fallback is permanent), and those strings stay live after deactivation with nothing rotating them. Closing it needs a prod count of exactly those rows first — see `.claude/rules/images.md`. Don't reintroduce a broad rotation pass without first reintroducing the write that made one necessary; a scoped one over just those legacy objects is the open option. Two things it taught, worth keeping: a `deps` field resolved after entry is a branch no test can reach (the resolved bucket landed in a local while the callee read `deps.bucket`, so the control reported "nothing rotated" while rotating nothing, 2026-08-16); and a per-appointment parent write fans out to `notifyAppointmentChanges`, which stays a genuine no-op only because `diffAppointmentForNotifications` emits nothing for a photo-only diff — pinned by "a pictures-only rewrite emits nothing" in `notification_utils.test.js`.
 **The bridge's pure rules moved to `bridge_policy.js`** — `shouldHaveBridge`, `bridgeBody`, `bridgeMatches` and `classifyBridgeRow` — shared with `scripts/backfill.js`, which repairs the same collection and had byte-identical copies of the first three under a comment claiming the duplication was deliberate (its stated reason, folding the role check in up front, stopped being a difference once this trigger gained the same check). `classifyBridgeRow` is the three-way decision guarding that script's `--prune-orphans` delete: `current` / `retained` (a uid claimed by a users doc the run SKIPPED — deleting it locks a live employee out of everything) / `orphan`. It was the only script here that deletes and the only one with no test.
 - **Disabled employees must not read their old jobs.** `isAssignedEmployee` (`firestore.rules`) and `isAssignedToAppointment` (`storage.rules`) both gate on `status == 'active'`, NOT on bridge-doc existence — the bridge doc is deliberately retained for `disabled` users, so an existence-only check leaves a terminated tech reading client PII and job photos indefinitely. Keep the two helpers in lockstep.
 - **`cascadeDeleteAppointmentImages` + `recountAppointmentPictures`** — see

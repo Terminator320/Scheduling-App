@@ -1,4 +1,4 @@
-const crypto = require("crypto");
+const crypto = require("node:crypto");
 const {HttpsError} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 const {getFirestore} = require("firebase-admin/firestore");

@@ -13,6 +13,10 @@ import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/images/appointment_image_loader.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
+import 'package:scheduling/features/clients/application/clients_providers.dart';
+import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
@@ -37,6 +41,27 @@ class _MockAuthService extends Mock implements AuthService {}
 class _StubLoader extends AppointmentImageLoader {
   @override
   Future<void> clear() async {}
+}
+
+/// Same reason as `_StubLoader`: the teardown now also clears both
+/// repositories' caches, and the real ones resolve
+/// `FirebaseFirestore.instance` on construction.
+class _StubClients implements ClientsRepository {
+  @override
+  void clearCaches() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
+}
+
+class _StubAppointments implements AppointmentsRepository {
+  @override
+  void clearCaches() {}
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
 }
 
 void main() {
@@ -88,6 +113,8 @@ void main() {
           ),
           authServiceProvider.overrideWithValue(auth),
           appointmentImageLoaderProvider.overrideWithValue(_StubLoader()),
+          clientsRepositoryProvider.overrideWithValue(_StubClients()),
+          appointmentsRepositoryProvider.overrideWithValue(_StubAppointments()),
         ],
         child: MaterialApp(
           navigatorKey: navigatorKey,

@@ -5,6 +5,10 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/images/appointment_image_loader.dart';
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
+import 'package:scheduling/features/clients/application/clients_providers.dart';
+import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
@@ -28,6 +32,34 @@ class _RecordingLoader extends AppointmentImageLoader {
 
   @override
   Future<void> clear() async => calls.add('imageCache');
+}
+
+/// The real repositories resolve `FirebaseFirestore.instance` on construction,
+/// which no widget test can answer — and only the clear is under test.
+class _RecordingClients implements ClientsRepository {
+  _RecordingClients(this.calls);
+
+  final List<String> calls;
+
+  @override
+  void clearCaches() => calls.add('clients');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
+}
+
+class _RecordingAppointments implements AppointmentsRepository {
+  _RecordingAppointments(this.calls);
+
+  final List<String> calls;
+
+  @override
+  void clearCaches() => calls.add('appointments');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
 }
 
 /// `deregisterThisDevice` drops every server-side registration this device
@@ -78,6 +110,12 @@ void main() {
           appointmentImageLoaderProvider.overrideWithValue(
             _RecordingLoader(calls),
           ),
+          clientsRepositoryProvider.overrideWithValue(
+            _RecordingClients(calls),
+          ),
+          appointmentsRepositoryProvider.overrideWithValue(
+            _RecordingAppointments(calls),
+          ),
         ],
         child: Consumer(
           builder: (context, ref, _) {
@@ -91,15 +129,24 @@ void main() {
   }
 
   testWidgets(
-    'tears down push, presence and Live Activity, then the photo cache',
+    'tears down push, presence and Live Activity, then every local cache',
     (tester) async {
       // The ORDER is load-bearing: each server-side step needs the credential
       // that sign-out revokes, and callers run this ahead of the revocation.
-      // The photo cache is purely local, so it goes last — but it must still
-      // GO: its bytes are on disk and outlive the process entirely.
+      // The three local caches are purely local, so they go last — but they
+      // must still GO: the photo bytes are on disk and outlive the process,
+      // and both repository windows hold this user's client and appointment
+      // PII for the life of the process.
       await run(tester);
 
-      expect(calls, ['push', 'presence', 'liveActivity', 'imageCache']);
+      expect(calls, [
+        'push',
+        'presence',
+        'liveActivity',
+        'imageCache',
+        'clients',
+        'appointments',
+      ]);
     },
   );
 
@@ -113,7 +160,13 @@ void main() {
 
     await run(tester);
 
-    expect(calls, ['presence', 'liveActivity', 'imageCache']);
+    expect(calls, [
+      'presence',
+      'liveActivity',
+      'imageCache',
+      'clients',
+      'appointments',
+    ]);
     verify(presence.unregister).called(1);
     verify(liveActivity.unregister).called(1);
   });
@@ -123,7 +176,13 @@ void main() {
 
     await run(tester);
 
-    expect(calls, ['push', 'liveActivity', 'imageCache']);
+    expect(calls, [
+      'push',
+      'liveActivity',
+      'imageCache',
+      'clients',
+      'appointments',
+    ]);
   });
 
   testWidgets('never rethrows, so it cannot block the sign-out behind it', (

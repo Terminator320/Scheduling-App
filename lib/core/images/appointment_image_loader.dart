@@ -29,16 +29,26 @@ final appointmentImageLoaderProvider = Provider<AppointmentImageLoader>(
 /// authenticated SDK call: `storage.rules` is evaluated on **every fetch**,
 /// and a refused reader gets nothing.
 ///
-/// What this does NOT yet mean is "there is nothing shareable to capture".
-/// `ImageStorageService.uploadImage` still mints one such URL per upload and
-/// persists it as `AppointmentImage.url`, and the whole `pictures[]` array
-/// reaches every assigned employee's device — so a permanent, rules-free link
-/// per photo is still being manufactured, just not by this class. That write
-/// is deliberate (builds predating this render from it) and goes at the
-/// photo-subcollection CONTRACT step. Until then the residual is covered, not
-/// closed, by `functions/appointment_image_tokens.js`, which rotates those
-/// tokens when an employee is deactivated. Don't build on a guarantee this
-/// class cannot give on its own.
+/// Nothing mints one any more. The CONTRACT step deleted `downloadUrlFor`,
+/// `uploadImage` persists a `storagePath` alone, and no write path in the app
+/// produces a token URL — so this class is no longer working against a supply
+/// of them.
+///
+/// What it does NOT mean is "there is nothing shareable left to capture".
+/// LEGACY rows still carry a `url` with no `storagePath`: the backfill
+/// preserves it deliberately (dropping it destroys the only thing that can
+/// render the photo), `firestore.rules` still accepts it up to 1000 chars, and
+/// the fallback below is documented as permanent. Such a string is a
+/// rules-free, non-expiring, transferable download link that an assigned
+/// employee can read out of the image document — and the rotation that used to
+/// invalidate it on deactivation (`functions/appointment_image_tokens.js`) was
+/// deleted with the rest of the minting machinery, so nothing covers it now.
+/// The open question is only how many survive in prod: count
+/// `appointments/*/images` where `url` is set and `storagePath` is empty. Zero
+/// closes this for good — drop `url` from the rules allowlist and delete the
+/// fallback. Any at all needs those bytes re-homed under a real `storagePath`,
+/// or a rotation scoped to them. Don't build on a guarantee this class cannot
+/// give on its own.
 ///
 /// **Photos render offline again, and that was never in tension with the
 /// above.** `cached_network_image` cached BYTES too; what made it unacceptable

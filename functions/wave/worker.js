@@ -65,6 +65,7 @@
  */
 
 const {WaveValidationError, upsertCustomer} = require("./customers");
+const {adminFirestore} = require("../admin_firestore");
 const {WaveApiError} = require("./client");
 const {mappedFieldsHash} = require("./mappers");
 const {
@@ -75,6 +76,8 @@ const {
   attemptBudgetFor,
   sanitizeError,
   describeWaveError,
+  RECLAIM_REASON,
+  reclaimDecision,
 } = require("./retry_policy");
 
 // ---------------------------------------------------------------------------
@@ -104,16 +107,6 @@ const DEFAULT_LEASE_MS = 600_000;
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/**
- * Lazily resolves firebase-admin/firestore without touching it at module load
- * (so unit tests that inject deps are never affected).
- * @return {{getFirestore: !Function, FieldValue: !Object, Timestamp: !Object}}
- */
-function adminFirestore() {
-  // eslint-disable-next-line global-require
-  return require("firebase-admin/firestore");
-}
 
 /**
  * Flags the client doc behind a dead-lettered job with a sanitized sync
@@ -377,43 +370,24 @@ async function reclaimStaleJobs(ctx) {
         const fresh = await tx.get(staleDoc.ref);
         if (!fresh || !fresh.exists) return;
         const freshData = fresh.data() || {};
-        // Only reclaim if the job is still inflight and past the lease — a
-        // fresh re-claim resets claimedAt, so it gets skipped here. We treat
-        // a non-finite claimedAt as reclaimable too, since skipping it would
-        // strand the job forever.
-        if (freshData.status !== "inflight") return;
-        const claimedAtMs = timestampToMs(freshData.claimedAt);
-        if (Number.isFinite(claimedAtMs) && claimedAtMs > nowMs - leaseMs) {
-          return;
-        }
+        // The decision itself is pure and lives in `retry_policy.js` — the
+        // transaction owns only the re-read and the write.
+        const decision = reclaimDecision({
+          status: freshData.status,
+          claimedAtMs: timestampToMs(freshData.claimedAt),
+          attempts: freshData.attempts,
+        }, {nowMs, leaseMs, maxAttempts, backoffFn});
+        if (!decision) return;
 
-        const newAttempts =
-          (typeof freshData.attempts === "number" ?
-            freshData.attempts : 0) + 1;
-        const sanitized = "reclaimed: lease expired";
-
-        if (newAttempts < maxAttempts) {
-          const delayMs = backoffFn(newAttempts - 1);
-          tx.update(staleDoc.ref, {
-            status: "queued",
-            attempts: newAttempts,
-            nextAttemptAt: new Date(nowMs + delayMs),
-            lastError: sanitized,
-          });
-          outcome = {dead: false, newAttempts};
-        } else {
-          tx.update(staleDoc.ref, {
-            status: "dead",
-            attempts: newAttempts,
-            lastError: sanitized,
-          });
-          outcome = {
+        tx.update(staleDoc.ref, decision.patch);
+        outcome = decision.dead ?
+          {
             dead: true,
-            newAttempts,
+            newAttempts: decision.attempts,
             refPath: freshData.refPath,
             clientId: clientIdFromRefPath(freshData.refPath),
-          };
-        }
+          } :
+          {dead: false, newAttempts: decision.attempts};
       });
     } catch (txErr) {
       logger.warn("WAVE-WORKER reclaim transaction failed", {
@@ -433,7 +407,7 @@ async function reclaimStaleJobs(ctx) {
         jobId,
         clientId: outcome.clientId,
         attempts: outcome.newAttempts,
-        reason: "reclaimed: lease expired",
+        reason: RECLAIM_REASON,
       });
       // Surface the terminal failure on the client doc, best effort, so the
       // admin UI shows 'error' instead of a forever-'pending' sync state.

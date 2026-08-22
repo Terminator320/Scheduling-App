@@ -75,7 +75,7 @@ Material Design 3 (Flat / Elevation). Use `ColorScheme`, `TextTheme`, and `Theme
   branch** (P2). The design puts a consequence line under each scope option ("12 remaining visits
   through 26 Jan") and an action sheet cannot render one. That is a single exception, not a policy
   change — don't use it to justify dropping other Cupertino branches.
-- **Sheet chrome added by P2** — `FormSheetFrame` (`shared/widgets/sheets/`) is the add/edit form shell: a fixed-height sheet whose white bar carries **Cancel · title · primary verb**, no grabber. It **is** a sheet, so never nest it inside another `DraggableScrollableSheet` — switch chrome above it, the way `EventDetailsSheet` picks the frame by `isEditing`. Destructive actions go in the scroll footer, never the bar. `SheetPanel` (`shared/widgets/cards/`) is the white divided-row container inside a form sheet; `SheetFieldRow` (`shared/widgets/fields/`) is the label-over-value picker row used for dates and times — free-text fields keep `LabeledTextField`, which owns the error shake and the clear button. `SheetPanelRow` (`shared/widgets/cards/`) is the third row shape: label-over-**child** (a chip strip) or label-beside-**trailing** (a switch), for a row that has no picked *value* — a `SheetFieldRow` with an empty value renders a blank second line where the value belongs. It was private to `edit_person_sheet.dart` until the AVAILABILITY panel appeared on My details too (P5, 2026-08-10); both screens must render that panel identically. **Never use a `ListTile` family widget inside a `SheetPanel`** — the panel paints its own decoration, and `ListTile` asserts ("background color or ink splashes may be invisible") when its background sits inside a `DecoratedBox`. `KeyValuePanel` (`shared/widgets/cards/`) is the read-only detail sheet's 70px mono key column. **`FormSheetScaffold` survives** for the client and employee sheets until P3/P4 migrate them, and `InfoCard` is untouched for the same reason — don't "unify" either one early.
+- **Sheet chrome added by P2** — `FormSheetFrame` (`shared/widgets/sheets/`) is the add/edit form shell: a fixed-height sheet whose white bar carries **Cancel · title · primary verb**, no grabber. It **is** a sheet, so never nest it inside another `DraggableScrollableSheet` — switch chrome above it, the way `EventDetailsSheet` picks the frame by `isEditing`. Destructive actions go in the scroll footer, never the bar. `SheetPanel` (`shared/widgets/cards/`) is the white divided-row container inside a form sheet; `SheetFieldRow` (`shared/widgets/fields/`) is the label-over-value picker row used for dates and times — free-text fields keep `LabeledTextField`, which owns the error shake and the clear button. `SheetPanelRow` (`shared/widgets/cards/`) is the third row shape: label-over-**child** (a chip strip) or label-beside-**trailing** (a switch), for a row that has no picked *value* — a `SheetFieldRow` with an empty value renders a blank second line where the value belongs. It was private to `edit_person_sheet.dart` until the AVAILABILITY panel appeared on My details too (P5, 2026-08-10); both screens must render that panel identically. **Never use a `ListTile` family widget inside a `SheetPanel`** — the panel paints its own decoration, and `ListTile` asserts ("background color or ink splashes may be invisible") when its background sits inside a `DecoratedBox`. `KeyValuePanel` (`shared/widgets/cards/`) is the read-only detail sheet's 70px mono key column. **`FormSheetFrame` is the ONLY form-sheet chrome** — the older `FormSheetScaffold` was retired once P3/P4 migrated the last client and employee sheets, and `EntityFormHeader` went with the edit forms that used it. Both have zero declarations and zero call sites; the only survivors are the tombstone comment in `form_sheet_frame.dart:16` and a stale comment in `add_client_sheet_test.dart`. This bullet said "**`FormSheetScaffold` survives**" long after it did not, while the Forms & sheets section below told you to build new sheets on it — so build on `FormSheetFrame`, and treat a mention of either retired class as documentation to correct rather than an API to find. `InfoCard` IS live and untouched.
 - `DetailSheetListView` (`shared/widgets/sheets/`) is the standard scrollable shell for a detail view shown in a bottom sheet (`showHandle: true`) or a master-detail pane — standard padding, optional drag handle, keyboard-inset-aware bottom gap (`handleGap` tunes the post-handle spacing). Use it for new detail views instead of a bare `ListView`.
 - Detail-view building blocks are shared by the client and appointment view
   bodies: `QuickActionsRow` + `QuickActionButton` (`shared/widgets/primitives/`,
@@ -220,12 +220,16 @@ Material Design 3 (Flat / Elevation). Use `ColorScheme`, `TextTheme`, and `Theme
 
 ## Forms & sheets
 
-- `FormSheetScaffold` (`shared/widgets/sheets/`) is the chrome for an add/edit
-  form shown in a bottom sheet — `DraggableSheetFrame` + padded scroll + drag
-  handle + `headlineLarge` title; pass the divider and fields as `children`. Use
-  it for new form sheets (it's the form-sheet sibling of `DetailSheetListView`).
-  `EntityFormHeader` (`shared/widgets/primitives/`) is the avatar + name (+
-  optional status chip) header for the edit forms.
+- `FormSheetFrame` (`shared/widgets/sheets/`) is the chrome for an add/edit
+  form shown in a bottom sheet — a FIXED-HEIGHT sheet whose white bar carries
+  **Cancel · title · primary verb**, and no grabber. Use it for new form
+  sheets (it's the form-sheet sibling of `DetailSheetListView`), and never nest
+  it inside another `DraggableScrollableSheet`: it *is* a sheet. Destructive
+  actions go in the scroll footer, never in the bar.
+  **`FormSheetScaffold` and `EntityFormHeader` are DELETED** (P3/P4, P4b) —
+  this bullet named both as the thing to build on for a long time after. There
+  is no replacement for `EntityFormHeader`; the surfaces that had one now put
+  the name in the frame's title.
 - Text-field length caps live in `lib/core/validators/text_limits.dart`.
   Use the constants via `LabeledTextField(maxLength: TextLimits.x)` —
   don't hardcode integer caps at call sites.

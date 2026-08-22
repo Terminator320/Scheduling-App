@@ -111,22 +111,20 @@ class EventDetailsController extends Notifier<EventDetailsState>
   ///
   /// The sheet opens with none: photos are not on the appointment document any
   /// more, so there is nothing to seed from and this read is the only source.
-  /// It is skipped entirely for a job whose `pictureCount` is 0 — the detail
-  /// sheet is the most-opened surface in the app and most jobs have no photos.
-  ///
-  /// That gate is only safe because the counter is COMPLETE: a create writes an
-  /// explicit 0, `recountAppointmentPictures` owns it from the first photo
-  /// onwards, and the CONTRACT step's cleanup script stamped it on every
-  /// document that predates the change. Should any of those stop being true,
-  /// this reads a job's photos as none — silently, which is the failure mode
-  /// the whole migration was shaped to avoid.
+  /// It runs UNCONDITIONALLY — deliberately, and never gate it on
+  /// `pictureCount`/`hasPictures` again. That counter's only writer is
+  /// `recountAppointmentPictures`, which settles for 2 s before it even runs
+  /// the aggregate, so a photo added seconds ago still reads as 0: the gate
+  /// made a just-added photo invisible on reopen, and made a permanently
+  /// failing parent write hide a job's photos forever. The counter stays the
+  /// card indicator's cheap approximation, where being briefly behind costs
+  /// nothing; the sheet pays one bounded `get` instead.
   ///
   /// Failure falls back to showing nothing rather than throwing: a photo strip
   /// that fails to load must not take the sheet down with it.
   Future<void> _loadStoredPictures() async {
     final id = appointment.id;
     if (id == null || id.isEmpty) return;
-    if (!appointment.hasPictures) return;
     final repo = ref.read(appointmentsRepositoryProvider);
     // Hoisted with `repo`: the `ref.mounted` check below proves disposal here
     // is real, and `ref.read` on a disposed notifier throws a StateError over
