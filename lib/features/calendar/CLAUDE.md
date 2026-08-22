@@ -104,8 +104,9 @@ STAYS in the root `CLAUDE.md`, because those are reachable from
   **Portrait is TWO scroll areas** (owner call, 2026-07-31): the grid is FIXED
   above the agenda, and the jobs have their own `CustomScrollView`, so reading
   down the day never moves the calendar. Collapse is a **drag on the divider
-  between them** — `_CollapseHandle`, which is also a tap-toggle and carries the
-  Hide/Show calendar tooltip that the widget tests find it by.
+  between them** — `CollapseHandle` (`widgets/views/collapse_handle.dart`),
+  which is also a tap-toggle and carries the Hide/Show calendar tooltip that
+  the widget tests find it by.
   `CalendarCollapse` (`domain/collapse_state.dart`) accumulates drag deltas past
   **24px**, resetting on a direction reversal and on `endDrag` so two half-drags
   don't add up. Only `onDragDelta` returns a bool (it means "the flag flipped",

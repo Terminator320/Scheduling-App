@@ -368,7 +368,6 @@ const recountAppointmentPictures = onDocumentWritten(
 
 module.exports = {
   cascadeDeleteAppointmentImages,
-  deleteAppointmentImageBytes,
   recountAppointmentPictures,
   purgeAppointmentImages,
   recountPictures,

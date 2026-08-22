@@ -53,9 +53,9 @@ Root context: `../../CLAUDE.md`.
   while still turning up in search: a partial disappearance with no error
   anywhere. There are exactly two create paths and both stamp it: `_normalizedMap`
   (`firebase_clients_repository.dart`, via `ClientRecord.toMap`) and Wave
-  `importCustomers` (`functions/wave/customers.js`). **The Wave UPDATE branch
-  must never write it**, or every scheduled import un-archives everything; a
-  test pins that half. Existing docs were backfilled by
+  `importCustomers` (`functions/wave/customers_import.js`). **The Wave UPDATE
+  branch must never write it**, or every scheduled import un-archives
+  everything; a test pins that half. Existing docs were backfilled by
   `functions/scripts/backfill-clients-archived.js` (idempotent, `--dry-run`),
   which must run against prod BEFORE the filtered query deploys.
   The filter is server-side **specifically so `fetchClientsPage` keeps returning

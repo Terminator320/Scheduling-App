@@ -77,7 +77,7 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   changed. Don't reintroduce a start-time or "is today" test here.
 - **Admin-only appointment actions are gated by an explicit `showActions`.**
   `showEventDetails(..., showActions:)` is a REQUIRED param, and
-  `AppointmentTile` / `EventDetailsSheet` / `EventDetailsView` all default it
+  `EventDetailsSheet` / `EventDetailsView` both default it
   **CLOSED** (`false`). A default of `true` silently showed employees the
   Edit/Cancel/Delete affordances, which the rules then reject with an opaque
   `permission-denied`. Pass the caller's resolved role; never re-add a `true`

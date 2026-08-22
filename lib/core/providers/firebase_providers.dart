@@ -22,10 +22,6 @@ final authUidProvider = StreamProvider<String?>((ref) {
       .distinct();
 });
 
-extension AuthGatedRef on Ref {
-  String? get authUid => watch(authUidProvider).value;
-}
-
 /// Opens a stream once the auth uid has SETTLED, forwarding a uid error rather
 /// than swallowing it.
 ///

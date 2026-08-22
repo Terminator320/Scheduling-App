@@ -113,11 +113,6 @@ class AppointmentImageUploadService {
     }
   }
 
-  /// Puts the download URL back on a carried image before its re-link.
-  ///
-  /// Returns null when it could not be resolved, which the caller treats as a
-  /// transient failure. An image with no `storagePath` is a legacy entry whose
-  /// `url` the queue still persists, so it is already complete.
   /// Uploads one queued batch. Files that are permanently rejected are
   /// dropped, files that hit a transient failure get re-queued, and anything
   /// that uploads successfully is removed from the queue.
