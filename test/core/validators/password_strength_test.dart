@@ -40,10 +40,6 @@ void main() {
     expect(passwordStrengthScore(r'AaBb11!!##$$Zz'), 4);
   });
 
-  test('a compliant but short password stops one band below Strong', () {
-    expect(passwordStrengthScore('Passw0rd'), 3);
-  });
-
   test('the bonus band is length, not a symbol', () {
     // Eight characters with a symbol used to score 4; it must not any more.
     expect(passwordStrengthScore('Passw0r!'), 3);

@@ -2,7 +2,11 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-19 by auditing the source against the app's call sites and
+refreshed 2026-08-21 (simplified auth: `completeEmployeeSetup` lost its
+`email_verified` guard and `createEmployeeAccount` stopped reading a role,
+keeping `isAdmin` only as an accepted-and-ignored compatibility key — export
+list unchanged at 25). Previously refreshed 2026-08-19 by auditing the source
+against the app's call sites and
 the live deployment (the iOS Live Activity stack added behind
 `notifyAppointmentChanges` / `sendUpcomingJobReminders` — APNs secrets, direct
 HTTP/2 client; `purgeExpiredHistory`'s timeout corrected to the 1800s scheduled
@@ -297,11 +301,20 @@ path runs — new account or re-provision — so the value echoed back is always
 value Auth was actually set to. The duplicate lookup and the doc write share one
 transaction, so two admins creating the same person can't both win.
 
-**The payload carries no `isAdmin` field** (removed 2026-08-21, from the
-`assertPayloadShape` key set as well as the write): the doc is always written
-`role: "employee"`, and dropping the key from the allowlist means an older client
-that still sends it gets a clean `invalid-argument` instead of silently creating
-an admin. Promotion is a separate later edit on the employee edit sheet.
+**No role is read off the payload** (2026-08-21): the doc is always written
+`role: "employee"`, hard-coded in `performCreateAccount`. Promotion is a
+separate later edit on the employee edit sheet.
+
+**But `isAdmin` IS still in the `assertPayloadShape` allowlist, deliberately
+— ACCEPTED AND IGNORED**, tagged `#compat-1.47.0` at the call site. It is
+never destructured, never passed on, and cannot mint an admin. It stays only
+to keep the allowlist a SUPERSET of the deployed one (`docs/DEPLOYMENT.md`
+§4a): `assertPayloadShape` throws `unexpected-field` on the first key it does
+not recognise, and every admin build at or below 1.47.0 sends `isAdmin`
+unconditionally on BOTH create and Reset password — so dropping it would fail
+both actions on every device that had not updated yet, including the Reset
+password button the pre-deploy remediation runs on. Retire the key once no
+such build is in the wild; don't delete it as a leftover.
 
 Re-running it on a still-`invited` person **re-provisions**: it refreshes the
 doc's editable fields and issues a fresh random password — that IS the
@@ -349,7 +362,13 @@ password, so "you must replace the starting password" is true only because
 `AuthService.completeAccountSetup` calls `User.updatePassword` first and this
 callable is unreachable until that succeeds. Swap the order and an interrupted
 setup leaves an *active* account still on the password the admin read out.
-Nothing server-side verifies the rotation happened.
+Nothing server-side verifies the rotation happened — and that is still true
+after 2026-08-21, when the app gained
+`AuthService._refuseIfStillTheStartingPassword`: it reauthenticates with the
+typed password and refuses when that SUCCEEDS (proving it is unchanged), which
+stops an employee retyping what the admin gave them, but it runs on the CLIENT.
+A caller reaching this callable directly still activates an un-rotated account,
+with `enforceAppCheck: true` the only thing in the way.
 
 The patch is built by the pure `buildActivationPatch`: it stamps
 `termsAcceptedAt`/`locationConsentAt` **only when the flags are actually sent

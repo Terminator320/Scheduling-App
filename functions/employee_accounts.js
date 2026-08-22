@@ -260,16 +260,17 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
   await assertAdmin(req.auth.uid);
   // Validate the payload before consuming a rate-limit slot so malformed
   // submissions can't lock out a legitimate admin for an hour.
-  // `isAdmin` is ACCEPTED AND IGNORED, deliberately. It is never read, never
-  // passed to performCreateAccount, and cannot mint an admin: the role is
-  // hard-coded `"employee"` there. It stays in the set purely to keep this
-  // allowlist a SUPERSET of the deployed one (docs/DEPLOYMENT.md §4a) —
-  // assertPayloadShape throws `unexpected-field` on the first key it does not
-  // recognise, and every admin build shipped before the field was dropped
-  // sends it unconditionally on BOTH create and reset-password. Dropping it
-  // would fail both actions on every such device from the moment the backend
-  // deploys until the last one updates. Remove it once no build in the wild
-  // still sends it.
+  // #compat-1.47.0 — `isAdmin` is ACCEPTED AND IGNORED, deliberately. It
+  // is never read, never passed to performCreateAccount, and cannot mint an
+  // admin: the role is hard-coded `"employee"` there. It stays in the set
+  // purely to keep this allowlist a SUPERSET of the deployed one
+  // (docs/DEPLOYMENT.md §4a) — assertPayloadShape throws `unexpected-field`
+  // on the first key it does not recognise, and every admin build shipped
+  // before the field was dropped sends it unconditionally on BOTH create and
+  // reset-password. Dropping it would fail both actions on every such device
+  // from the moment the backend deploys until the last one updates. Retire it
+  // as one unit — `grep -rn "#compat-1.47.0"` — once no build at or below
+  // 1.47.0 is still in the wild, the way `#compat-1.37.1` was retired.
   assertPayloadShape(req.data, new Set([
     "name", "firstName", "lastName", "email", "phone", "colorValue",
     "jobTitle", "isAdmin",
@@ -533,7 +534,11 @@ const changeEmployeeEmail = onCall(APP_CHECK, async (req) => {
   // Auth FIRST, Firestore second, deliberately. The failure being fixed is a
   // doc that moved while Auth did not, so the store that owns sign-in must be
   // the one never left behind — and it is the one that can actually refuse a
-  // duplicate. `emailVerified` resets because the new address is unproven.
+  // duplicate. `emailVerified` is cleared because the new address is unproven.
+  // NOTE: nothing in this codebase READS that flag any more — the
+  // `completeEmployeeSetup` guard that did was removed 2026-08-21. It is
+  // cleared to keep Firebase's own record honest, not to gate anything here;
+  // don't infer a surviving verification-dependent path from this line.
   try {
     await auth.updateUser(uid, {email, emailVerified: false});
   } catch (e) {

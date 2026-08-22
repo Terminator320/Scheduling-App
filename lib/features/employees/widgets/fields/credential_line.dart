@@ -49,19 +49,20 @@ class CredentialLine extends StatelessWidget {
 /// The single owner of that payload format. This is the ONE sanctioned egress
 /// of a starting password, so both surfaces must put the same thing on the
 /// clipboard — never inline `'$email\n$password'` at a call site again.
-void copyCredentialsToClipboard({
-  required String email,
-  required String password,
-}) {
-  Clipboard.setData(ClipboardData(text: '$email\n$password'));
+///
+/// A null [password] is a pending row holding no server echo: there is only
+/// an address to copy. It is the SAME nullable the label and the masked line
+/// read, so a button can never say "Copy both" over an email-only payload.
+void copyCredentialsToClipboard({required String email, String? password}) {
+  Clipboard.setData(
+    ClipboardData(text: password == null ? email : '$email\n$password'),
+  );
 }
 
-/// Copies the email alone, for a pending row whose starting password the app
-/// no longer holds. Beside [copyCredentialsToClipboard] so the two clipboard
-/// payloads this feature can produce stay in one place.
-void copyEmailToClipboard(String email) {
-  Clipboard.setData(ClipboardData(text: email));
-}
+/// Stands in for a starting password the app no longer holds. Named beside
+/// [CredentialLine] so a second masked surface can't re-invent it — it is
+/// the one credential string this feature renders unlocalized.
+const String kMaskedCredential = '••••••••';
 
 /// The "Copy both" control, beside the payload it copies.
 ///
@@ -69,20 +70,26 @@ void copyEmailToClipboard(String email) {
 /// the roster row are the two places an admin reads a starting password, and
 /// they had already drifted on the confirmed-state icon. Disabled once copied
 /// — the label is the whole confirmation.
+///
+/// Takes the [password] itself rather than a "has one" flag so the label and
+/// the copied payload are driven by ONE value — a button cannot say "Copy
+/// both" over an email-only clipboard, and a new surface that holds no
+/// password has to say so rather than inheriting a wrong default.
 class CopyCredentialsButton extends StatelessWidget {
   const CopyCredentialsButton({
     required this.copied,
+    required this.password,
     required this.onCopy,
-    this.hasPassword = true,
     super.key,
   });
 
   final bool copied;
-  final VoidCallback onCopy;
 
-  /// False on a pending row holding no server echo — there is only an email to
-  /// copy, so the label says so.
-  final bool hasPassword;
+  /// Null on a pending row holding no server echo — there is only an email
+  /// to copy, so the label says so.
+  final String? password;
+
+  final VoidCallback onCopy;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +97,7 @@ class CopyCredentialsButton extends StatelessWidget {
       onPressed: copied ? null : onCopy,
       icon: Icon(copied ? Icons.check_rounded : Icons.copy_outlined, size: 18),
       label: Text(
-        copyCredentialsLabel(context, copied: copied, hasPassword: hasPassword),
+        copyCredentialsLabel(context, copied: copied, password: password),
       ),
       style: TextButton.styleFrom(
         minimumSize: const Size(48, 48),
@@ -104,13 +111,13 @@ class CopyCredentialsButton extends StatelessWidget {
 /// a bare child rather than a Material button.
 String copyCredentialsLabel(
   BuildContext context, {
-  bool copied = false,
-  bool hasPassword = true,
+  required bool copied,
+  required String? password,
 }) {
   if (copied) return context.l10n.common_copied;
-  return hasPassword
-      ? context.l10n.employees_copyBoth
-      : context.l10n.employees_copyEmail;
+  return password == null
+      ? context.l10n.employees_copyEmail
+      : context.l10n.employees_copyBoth;
 }
 
 /// The tint behind a credential panel. Shared so the two surfaces showing the

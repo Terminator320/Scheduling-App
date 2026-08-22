@@ -1268,6 +1268,10 @@
   "@validation_passwordsDoNotMatch": {
     "description": "Passwords do not match"
   },
+  "validation_passwordMustDifferFromStarting": "Choose a different password from the one you were given",
+  "@validation_passwordMustDifferFromStarting": {
+    "description": "Field error on the account-setup password when the employee re-enters the starting password the admin issued instead of choosing their own."
+  },
   "validation_enterAValidEmail": "Enter a valid email",
   "@validation_enterAValidEmail": {
     "description": "Enter a valid email"

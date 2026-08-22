@@ -19,6 +19,7 @@ import 'package:scheduling/features/employees/domain/models/employee_record.dart
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
 import 'package:scheduling/features/employees/domain/models/new_account_credentials.dart';
 import 'package:scheduling/features/employees/widgets/cards/pending_invite_tile.dart';
+import 'package:scheduling/features/employees/widgets/fields/credential_line.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 class _MockRepo extends Mock implements EmployeesRepository {}
@@ -159,7 +160,7 @@ void main() {
 
     // No stored plaintext credential exists to show, and the constant it used
     // to fall back to is gone.
-    expect(find.text('••••••••'), findsOneWidget);
+    expect(find.text(kMaskedCredential), findsOneWidget);
     expect(find.text('Reset password to issue a new one'), findsOneWidget);
     expect(find.text('Copy email'), findsOneWidget);
     expect(find.text('Copy both'), findsNothing);
@@ -178,7 +179,7 @@ void main() {
     // The collapsed body must leave the tree entirely — a cross-fade would
     // keep the credentials block findable, and readable by a screen reader, on
     // a row that looks closed.
-    expect(find.text('••••••••'), findsNothing);
+    expect(find.text(kMaskedCredential), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -341,7 +342,7 @@ void main() {
     // Echoed from the server, never assumed from a client constant — and the
     // mask gives way the moment the app actually holds a credential.
     expect(find.text('Pw23456789x'), findsOneWidget);
-    expect(find.text('••••••••'), findsNothing);
+    expect(find.text(kMaskedCredential), findsNothing);
     expect(find.text('Reset password to issue a new one'), findsNothing);
     expect(find.textContaining('no longer works'), findsOneWidget);
     expect(find.text('Password reset'), findsOneWidget);
@@ -496,7 +497,7 @@ void main() {
     await tester.pumpAndSettle();
     await expand(tester);
 
-    expect(find.text('••••••••'), findsOneWidget);
+    expect(find.text(kMaskedCredential), findsOneWidget);
     expect(find.text('Reset password to issue a new one'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

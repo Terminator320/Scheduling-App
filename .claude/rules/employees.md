@@ -25,9 +25,17 @@ self-service settings. Root context: `../../CLAUDE.md`.
   **already carries the real `uid`**, and returns the email + password for the
   admin to hand over out-of-band (the `NewAccountDialog` right after creation,
   or the expanded roster row while that echo is still in memory).
-  **The doc is always written `role: "employee"`**: the callable no longer
-  accepts an `isAdmin` field at all, so an older client that still sends one
-  gets a clean `invalid-argument` rather than silently minting an admin.
+  **The doc is always written `role: "employee"`** (2026-08-21): the callable
+  hard-codes it in `performCreateAccount` and never reads a role off the
+  payload. **`isAdmin` IS still in the `assertPayloadShape` allowlist, on
+  purpose — ACCEPTED AND IGNORED**, tagged `#compat-1.47.0`. Do not delete
+  it to "align the code with this rule": `assertPayloadShape` throws
+  `unexpected-field` on the first key it does not recognise, and every admin
+  build at or below 1.47.0 sends `isAdmin` unconditionally on BOTH create
+  and Reset password — so dropping the key fails both actions on every
+  device that has not updated, including the Reset password button the
+  pre-deploy remediation depends on (`docs/DEPLOYMENT.md` §4a, the superset
+  contract). Retire it once no such build is in the wild.
   Promotion is a separate, later edit on `edit_person_sheet.dart` once the
   person has finished setup — you make an admin by creating them normally and
   then flipping that toggle. The employee then
@@ -46,28 +54,49 @@ self-service settings. Root context: `../../CLAUDE.md`.
   server check.** `completeEmployeeSetup` verifies auth + a matching doc +
   `status == 'invited'`; it does not verify that the password
   actually rotated, so anything reaching the callable directly activates an
-  un-rotated account. `enforceAppCheck: true` is all that stands in the way
+  un-rotated account. The reauth check above is client-side too — it closes
+  the case of an employee retyping their starting password IN THE APP, not
+  the case of someone calling the callable directly. `enforceAppCheck: true` is all that stands in the way
   there, and App Check is attestation, not authorization.
   Don't build on the ordering as if the server enforced it.
   **The password itself is validated TRIMMED** — `completeAccountSetup` stores
   `newPassword.trim()`, so checking the raw text let `"Aa1!bcd "` pass the
   8-character rule and set a 7-character password. The strength meter and the
   requirements checklist read the same trimmed value.
-  **The "must differ from the starting password" check is GONE (2026-08-21),
-  and dropping it is only safe because the constant went with it.** It rejected
-  `kDefaultStartingPassword` by name in `account_setup_screen.dart`
-  (`validation_passwordMustDifferFromStarting`), and it was load-bearing rather
-  than belt-and-braces for as long as the starting password was `Welcome123!`:
-  that value satisfied every requirement `AuthValidators.newPassword` tested, so
-  without it someone could "choose" the password the admin had just read to them
-  and end up permanently `active` on a constant that was in the source, on every
-  pending roster row and known to every admin — with the roster reporting
-  `active` and nothing anywhere flagging it. A per-account random password
-  leaves no constant to re-choose, so the rule now guards nothing and
-  `employees/domain/policies/starting_password_policy.dart` is deleted with it.
-  Don't re-add a name-based check, and don't reintroduce a shared default
-  without reinstating it. (`PasswordRequirement.symbol` went the same day; the
-  policy is 8+ characters with an uppercase, a lowercase and a digit.)
+  **The "must differ from the starting password" rule STILL EXISTS, but it is
+  no longer a string comparison.** It used to reject `kDefaultStartingPassword`
+  by name in `account_setup_screen.dart`. That constant went on 2026-08-21 with
+  the shared password, and the check was deleted with it on the reasoning that
+  "a random password leaves no constant to *accidentally* re-choose". **That
+  reasoning covered only the accidental case and left a real hole**, closed the
+  same day: the employee is reading the starting password off a message while
+  they fill this form, and retyping it is the path of least resistance. Every
+  generated password satisfies `AuthValidators.newPassword` BY CONSTRUCTION —
+  12 characters with an uppercase, a lowercase and a digit is exactly
+  `PasswordRequirement.allMetBy` now that `symbol` is gone — and
+  `updatePassword` accepts a no-op, so setup would complete and leave the
+  account `active` on a credential the admin still holds, while
+  `auth_setUpYourAccountBody` promised them "the temporary one stops working
+  once you finish".
+  **The replacement is `AuthService._refuseIfStillTheStartingPassword`**, which
+  reauthenticates with the typed value BEFORE `updatePassword`: reauth succeeds
+  only while that value is still the account's current credential, so success
+  means they retyped what they were given →
+  `AuthFailureStartingPasswordReused`, surfaced as a FIELD error on the
+  password. The client never sees the generated password, so it cannot compare
+  strings — it tests instead. Three things about it are load-bearing:
+  it lives in the SERVICE, not the screen, because there are two routes into
+  setup (`login_screen.dart`, which holds the typed password, and a cold start
+  through `SplashScreen`, which does not) and a screen-level check would cover
+  only the first; a wrong-password refusal is the PASS case and must accept all
+  three codes (`wrong-password`, `invalid-credential`,
+  `invalid-login-credentials`) or setup dead-ends; and any OTHER reauth error
+  must be rethrown, never treated as "looks different", or a network blip waves
+  through the exact case this exists for. It checks the TRIMMED value, since
+  that is what gets stored. Don't re-add a name-based comparison (there is no
+  constant), and don't reintroduce a shared default.
+  (`PasswordRequirement.symbol` went the same day; the policy is 8+ characters
+  with an uppercase, a lowercase and a digit.)
   A failure *after* the password change deliberately does **not** revert
   it: the new password is the one the person just chose and typed twice, so
   leaving them `invited` with a working password beats resetting them to the
@@ -185,9 +214,17 @@ self-service settings. Root context: `../../CLAUDE.md`.
   (`employees/widgets/fields/credential_line.dart`), which is the single owner
   of that payload format — never re-inline `'$email\n$password'` at a call
   site, or the two surfaces can put different things on the clipboard. The
-  `CredentialLine`, `CopyCredentialsButton` and `credentialPanelDecoration`
-  beside it are shared for the same reason — the whole surface, not just the
-  payload. They were separate copies and had already drifted twice: the two
+  `CredentialLine`, `CopyCredentialsButton`, `kMaskedCredential` and
+  `credentialPanelDecoration` beside it are shared for the same reason — the
+  whole surface, not just the payload. **The "is there a password" fact is
+  ONE nullable `String?`, threaded end to end** (2026-08-21): the same value
+  picks the clipboard payload, the button's label (Copy both / Copy email)
+  and whether the line renders `kMaskedCredential`. It was briefly a
+  `hasPassword` bool defaulting to `true` alongside the nullable, which is
+  the shape to avoid — the two could disagree, so a button could say "Copy
+  both" over an email-only clipboard, and a new surface holding no password
+  inherited the wrong label with no compile error. Both params are REQUIRED
+  for that reason; don't re-add a default. They were separate copies and had already drifted twice: the two
   confirmed-state icons disagreed, and the dialog tinted its panel
   `surfaceContainerHighest`/`r8` against the roster row's `sheetRow`/`r12`, so
   the same credential pair rendered on two different fills in the two places an

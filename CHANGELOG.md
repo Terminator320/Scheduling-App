@@ -10,6 +10,43 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.48.0+77] - 2026-08-21
+
+Setting up a new account is shorter and safer at the same time. The
+email-verification step is gone, and what replaces it is a real one: every
+account an admin creates now gets its own randomly generated starting
+password instead of the one everybody shared.
+
+### Changed
+- **Every new account gets its own starting password.** Accounts used to be
+  created on a single password that was the same for everyone and never
+  changed, so knowing somebody's email address was very nearly enough to sign
+  in as them before they had set up. Each account is now given a fresh random
+  password, shown to the admin once when the account is created so they can
+  pass it on. Hand it over at the moment you create the account, not weeks
+  ahead.
+- **Setting up your account no longer asks you to verify your email.** You
+  used to have to leave the app, find a message, open a link and come back
+  before you could finish. Now you sign in with the password you were given,
+  choose your own, and you are in — the password you were handed is what
+  proves it is you.
+- **You cannot finish setup by re-entering the password you were given.**
+  Choosing it again would have left your account live on a password your
+  admin still has, which is the one thing setting up is meant to end. The
+  form now says so and asks for a different one.
+- **A password no longer has to contain a symbol.** Eight characters with an
+  upper-case letter, a lower-case letter and a number is enough. The strength
+  meter now rewards a longer password instead.
+- **New people are always created as employees.** The admin switch moved off
+  the create form: you make somebody an admin by creating them normally and
+  then turning that on in their profile once they have finished setting up.
+  It means an account nobody has claimed yet can never be an admin one.
+- **A pending person's starting password is only shown while the app still
+  has it.** Because the password is now generated per account and stored
+  nowhere, reopening that row later shows the address with the password
+  hidden, and the Copy button copies just the address. **Reset password**
+  issues a new one and shows it.
+
 ## [1.47.0+76] - 2026-08-19
 
 A full audit pass sits behind this release. Two things you will notice straight

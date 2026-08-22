@@ -155,11 +155,7 @@ class _PendingInviteTileState extends ConsumerState<PendingInviteTile> {
   }
 
   void _copy(String email, String? password) {
-    if (password == null) {
-      copyEmailToClipboard(email);
-    } else {
-      copyCredentialsToClipboard(email: email, password: password);
-    }
+    copyCredentialsToClipboard(email: email, password: password);
     setState(() => _copied = true);
   }
 
@@ -385,7 +381,7 @@ class _CredentialsBlock extends StatelessWidget {
 
     final copyButton = CopyCredentialsButton(
       copied: copied,
-      hasPassword: password != null,
+      password: password,
       onCopy: onCopy,
     );
 
@@ -397,7 +393,7 @@ class _CredentialsBlock extends StatelessWidget {
         const SizedBox(height: AppSpacing.sp8),
         CredentialLine(
           label: l10n.employees_temporaryPassword,
-          value: password ?? '••••••••',
+          value: password ?? kMaskedCredential,
         ),
         if (password == null) ...[
           const SizedBox(height: AppSpacing.sp4),

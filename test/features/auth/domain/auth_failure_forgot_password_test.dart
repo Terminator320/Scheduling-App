@@ -33,6 +33,7 @@ const List<AuthFailure> _allFailures = [
   AuthFailureSetupAlreadyComplete(),
   AuthFailureNoAccountRecord(),
   AuthFailureSessionExpired(),
+  AuthFailureStartingPasswordReused(),
   AuthFailurePermissionDenied(),
   AuthFailureUnknown(),
 ];

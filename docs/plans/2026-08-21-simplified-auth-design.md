@@ -91,6 +91,18 @@ Delete:
   compared against it. With a random password there is no constant left to
   accidentally re-choose, so the rule has nothing to guard.
 
+  **REVISED same day (deviation 5).** That reasoning holds for *accidental*
+  reuse only, and the deletion left a real hole: the employee is looking at
+  the starting password while they fill this form, and retyping it is the
+  easiest thing to do. It passes — every generated password satisfies
+  `AuthValidators.newPassword` by construction, and `updatePassword` accepts
+  a no-op — so setup would complete with the account `active` on a credential
+  the admin still holds, contradicting the screen's own copy. The rule is
+  therefore KEPT, in a form that needs no constant:
+  `AuthService._refuseIfStillTheStartingPassword` reauthenticates with the
+  typed value and refuses when that succeeds. The ARB key is restored;
+  `starting_password_policy.dart` stays deleted.
+
 Change:
 
 - `LockedEmailPanel` loses its `isVerified` parameter — it now says only "you
@@ -221,9 +233,21 @@ the new-account dialog (it renders the server echo), but that person's roster
 row later shows `Welcome123!`, which is wrong. It self-heals when the build
 ships. Worth knowing; not worth blocking on.
 
-`createEmployeeAccount` rejecting `isAdmin` means an old admin build's create
-sheet fails while the toggle is still on screen. If that window matters, ship
-the app build the same day.
+**SUPERSEDED (deviation 4, 2026-08-21):** this paragraph originally said
+`createEmployeeAccount` would REJECT `isAdmin`, so an old admin build's create
+sheet would fail while the toggle was still on screen. The key was instead
+kept in the `assertPayloadShape` allowlist as **accepted-and-ignored**
+(`#compat-1.47.0`), because rejecting it would have broken create AND Reset
+password on every un-updated admin device — including the Reset password
+button the pre-flight remediation runs on (`docs/DEPLOYMENT.md` §4a).
+
+The real rollout behaviour is therefore the opposite, and is worth stating
+plainly: an old admin build's create sheet **succeeds silently** with the
+Admin-access toggle switched on, and mints a plain `employee` anyway — no
+error, no UI signal. That is the intended outcome (a pre-empted account must
+never be an admin one), but an admin using an old build will believe they
+created an admin. Promote from the edit sheet after setup, and prefer
+shipping the app build promptly so the toggle stops being on screen.
 
 ## Out of scope
 

@@ -80,6 +80,8 @@ class AuthService {
     final user = _auth.currentUser;
     if (user == null) throw const AuthFailureSessionExpired();
 
+    await _refuseIfStillTheStartingPassword(user, newPassword.trim());
+
     try {
       await user.updatePassword(newPassword.trim());
     } catch (e, st) {
@@ -116,6 +118,70 @@ class AuthService {
       throw failure;
     }
   }
+
+  /// Refuses a "new" password that is the one the admin issued.
+  ///
+  /// The client never sees the generated starting password, so it cannot be
+  /// compared as a string — but it can be TESTED: reauthenticating with the
+  /// typed value succeeds only while that value is still the account's current
+  /// credential. Success therefore means they retyped what they were given.
+  ///
+  /// Without this, setup completes on an unchanged password and the account
+  /// goes `active` on a credential the admin (and anyone they read it aloud to)
+  /// still holds. Every generated password satisfies the setup validator by
+  /// construction — 12 characters with an uppercase, a lowercase and a digit is
+  /// exactly `PasswordRequirement.allMetBy` now that `symbol` is gone — so
+  /// nothing else on this screen can catch it. It replaces the deleted
+  /// `kDefaultStartingPassword` comparison, which only worked while the
+  /// starting password was a shared constant.
+  ///
+  /// Checked HERE rather than on the screen so it covers both routes into
+  /// setup: sign-in (which holds the typed password) and a cold start through
+  /// `SplashScreen` (which does not).
+  ///
+  /// A wrong-password refusal is the PASS case. Anything else is a real
+  /// failure and is mapped normally — never swallowed into "looks different",
+  /// which would let the case this exists for through whenever the network
+  /// hiccuped.
+  Future<void> _refuseIfStillTheStartingPassword(
+    User user,
+    String candidate,
+  ) async {
+    final email = user.email;
+    if (email == null || email.isEmpty) return;
+    try {
+      await user.reauthenticateWithCredential(
+        EmailAuthProvider.credential(email: email, password: candidate),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (_isWrongPasswordCode(e.code)) return;
+      final failure = _mapSetupError(e);
+      _logger.authFailure(
+        'completeAccountSetup: starting-password check failed',
+        failure,
+        e,
+        StackTrace.current,
+      );
+      throw failure;
+    }
+    // Reauth SUCCEEDED, so the password is unchanged.
+    const failure = AuthFailureStartingPasswordReused();
+    _logger.breadcrumb(
+      'completeAccountSetup: refused the starting password '
+      '(${failure.runtimeType})',
+    );
+    throw failure;
+  }
+
+  /// The codes Firebase uses for "that password is not this account's".
+  /// `invalid-credential` is the modern umbrella code and is what current
+  /// Identity Platform returns; the other two still arrive from older SDK
+  /// paths. Missing one would turn the pass case into a hard failure that
+  /// blocks setup entirely, so all three are listed.
+  static bool _isWrongPasswordCode(String code) =>
+      code == 'wrong-password' ||
+      code == 'invalid-credential' ||
+      code == 'invalid-login-credentials';
 
   /// Only the codes whose meaning CHANGES during setup are handled here;
   /// everything else falls through to the shared [AuthErrorMapper] rather than

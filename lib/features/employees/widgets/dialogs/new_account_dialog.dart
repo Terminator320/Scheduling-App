@@ -99,7 +99,13 @@ class _NewAccountDialogState extends State<_NewAccountDialog> {
         actions: [
           CupertinoDialogAction(
             onPressed: _copied ? null : _copy,
-            child: Text(copyCredentialsLabel(context, copied: _copied)),
+            child: Text(
+              copyCredentialsLabel(
+                context,
+                copied: _copied,
+                password: widget.credentials.password,
+              ),
+            ),
           ),
           CupertinoDialogAction(
             isDefaultAction: true,
@@ -114,7 +120,11 @@ class _NewAccountDialogState extends State<_NewAccountDialog> {
       title: Text(l10n.employees_accountCreatedTitle),
       content: _buildBody(context),
       actions: [
-        CopyCredentialsButton(copied: _copied, onCopy: _copy),
+        CopyCredentialsButton(
+          copied: _copied,
+          password: widget.credentials.password,
+          onCopy: _copy,
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: Text(l10n.common_close),
