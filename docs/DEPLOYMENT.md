@@ -392,6 +392,12 @@ the array (the fleet is on 1.48). What changes:
    node functions/scripts/backfill-appointment-images.js --dry-run
    node functions/scripts/backfill-appointment-images.js
    ```
+   **DONE 2026-08-22 against `schedulingapp-88727` (LIVE)** — dry run and live
+   run agreed exactly: **14 photos copied across 11 appointments, 55 scanned**.
+   That is entirely on top of the 13/10 the 2026-08-15 pass copied, which is
+   the drift this step exists to catch: those 14 lived only in the array, so
+   shipping without this re-run would have shown 11 appointments as having no
+   photos. The array was deliberately NOT modified — that is step 4.
 2. **Deploy backend + rules.** No export count change. The rules change is a
    RELAXATION (`pictureCount == 0` on create) and must be live before the app
    build that writes it — an appointment create would otherwise fail
@@ -585,12 +591,20 @@ what production is running.
 ### RESOLVED 2026-08-19: `functions/` was AHEAD of prod as of 1.46.2+75
 
 **Closed by the 2026-08-19 row above**, which deployed the whole
-`functions/` tree. Everything described below now runs in prod. Kept
-verbatim because one piece of remediation is still owed — see the bold
-note at the end of the next paragraph: **the download tokens of anyone
-deactivated between 2026-08-16 and 2026-08-19 were never rotated**, and
-re-firing the trigger for them (flip to `active` and back) is still
-outstanding. Deploying the fix does not retroactively rotate them.
+`functions/` tree. Everything described below now runs in prod, and the one
+piece of remediation it left owed is **CLOSED as of 2026-08-22**: the download
+tokens of anyone deactivated between 2026-08-16 and 2026-08-19 were never
+rotated (deploying the fix does not act retroactively), but **no account was
+deactivated in that window**, so the affected set is empty and there is nothing
+to re-fire. Kept verbatim below because the failure mode it describes is worth
+recognising again.
+
+**Do not read this as the rotation being safe to lose.** It was deleted from
+the tree in `7ace6528` and disappears from prod on the next `functions` deploy,
+after which deactivating someone rotates nothing — so any legacy
+`appointments/*/images` doc still carrying a `url` remains a permanent,
+rules-free download link. Whether that set is empty is the open 🔴 S1 count in
+`docs/audits/CODEBASE_AUDIT.md`, not a question this paragraph answers.
 
 The 2026-08-16 row above deployed the follow-up audit. The release pass cut
 straight after it (**1.46.2+75**) then changed `functions/` again, so prod is
