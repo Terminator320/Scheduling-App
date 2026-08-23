@@ -182,24 +182,26 @@ class EventDetailsSavePipeline {
     // deleting the whole appointment is the server's job
     // (`cascadeDeleteAppointmentImages`), which is the only path that can no
     // longer enumerate its own photos.
-    await deleteOrphanedImages(removedImages, tag: 'APPT-SAVE');
+    await _deleteOrphanedImages(removedImages);
     if (newImages.isNotEmpty) {
       uploader?.uploadInBackground(appointmentId: id, newImages: newImages);
     }
   }
 
-  /// Best-effort cleanup — orphaned bytes are harmless, so this only logs.
-  Future<void> deleteOrphanedImages(
-    List<AppointmentImage> images, {
-    required String tag,
-  }) async {
+  /// Best-effort: the photo documents are already gone, so a failure here
+  /// costs orphaned bytes rather than a photo the job still points at, and
+  /// taking the save down with it would be the worse trade. The whole-job
+  /// path is NOT best-effort — `cascadeDeleteAppointmentImages` rethrows
+  /// under `retry: true`, because there it is the only thing that can find
+  /// the bytes at all.
+  Future<void> _deleteOrphanedImages(List<AppointmentImage> images) async {
     if (images.isEmpty) return;
     final storage = resolveStorage();
     if (storage == null) return;
     try {
       await storage.deleteImages(images);
     } catch (e, st) {
-      logger.warn('$tag deleteImages failed (orphaned bytes)', e, st);
+      logger.warn('APPT-SAVE deleteImages failed (orphaned bytes)', e, st);
     }
   }
 }

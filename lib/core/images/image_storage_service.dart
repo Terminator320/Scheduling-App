@@ -79,8 +79,9 @@ class ImageStorageService {
     // `AppointmentImageLoader` moved to authenticated SDK fetches off
     // `storagePath`; the write outlived that only so builds predating the
     // loader kept showing photos, and it went with them at the CONTRACT step.
-    // Nothing reads a stored url now except the legacy fallback for documents
-    // written before `storagePath` existed. Do not reintroduce this.
+    // Nothing renders from a stored url now — the loader's fallback went with
+    // the field. `_deleteImage` below is the last reader, and only for a
+    // legacy entry that never had a `storagePath`. Do not reintroduce this.
     return AppointmentImage(
       storagePath: path,
       fileName: fileName,

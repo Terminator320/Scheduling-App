@@ -698,9 +698,16 @@ service cloud.firestore {
         // permanent, rules-free, transferable download link, and the rotation
         // that used to invalidate one on deactivation was deleted with the
         // minting machinery, so accepting the field meant accepting a
-        // credential nothing could revoke. Refusing it here is what makes
-        // "there is no such link left to invalidate" true rather than hoped
-        // for. Do not re-add it to this list to make some future write pass;
+        // credential nothing could revoke. Refusing it here is what stops a
+        // NEW one being stored.
+        //
+        // It does not, on its own, mean none is readable: the parent
+        // `pictures[]` arrays carry a url alongside their storagePath and
+        // survive until `clear-appointment-picture-arrays.js` runs. That
+        // count is the second half of the claim (`countArrayUrls` in the same
+        // script) and it is the one that closes S1.
+        //
+        // Do not re-add it to this list to make some future write pass;
         // re-home those bytes under a real `storagePath` instead.
         allow create, update: if isAdmin()
           && request.resource.data.keys().hasOnly(

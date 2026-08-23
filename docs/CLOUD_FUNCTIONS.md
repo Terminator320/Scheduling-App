@@ -2,7 +2,13 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-21 (simplified auth: `completeEmployeeSetup` lost its
+refreshed 2026-08-22 (the photo-subcollection CONTRACT step: `pictures[]`
+retired, `appointment_image_tokens.js` and its deactivation-time token rotation
+DELETED, `cascadeDeleteAppointmentImages` now deleting the Storage bytes as
+well as the photo documents, the legacy `url` retired on a prod count of zero,
+and `generateStartingPassword` given the symbol class that had account creation
+down — export list unchanged at 25). Previously refreshed 2026-08-21
+(simplified auth: `completeEmployeeSetup` lost its
 `email_verified` guard and `createEmployeeAccount` stopped reading a role,
 keeping `isAdmin` only as an accepted-and-ignored compatibility key — export
 list unchanged at 25). Previously refreshed 2026-08-19 by auditing the source
@@ -58,6 +64,27 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 > wrong before — verify against the live list rather than trusting it.
 
 
+- **DEPLOYED 2026-08-22 (rules only): the images allowlist tightening.** `url`
+  dropped from `appointments/{id}/images` — `storagePath`/`fileName`/`uploadedAt`
+  only. Functions and storage were out of scope because neither changed;
+  `firestore:indexes` stayed out for the same reason as the CONTRACT row below.
+- **DEPLOYED 2026-08-22 (`3f13d50c` tree): the photo-subcollection CONTRACT
+  step** — functions, `firestore:rules` and storage. 25/25 successful updates,
+  0 creates, 0 deletions, so neither known abort fired. It DELETED
+  `appointment_image_tokens.js` (an internal module, never an export, so the
+  count did not move) and with it the only control that could revoke a legacy
+  `url` photo link — which is what made the S1 prod count urgent. It came back
+  zero. `firestore:indexes` was deliberately omitted: the only index change is a
+  REMOVAL, which never applies without `--force`, so the target could only have
+  produced a drift report and pulled the orphaned `signupCodes` TTL policy into
+  scope.
+- **DEPLOYED 2026-08-22 (`d99b6673`): the starting-password symbol class.**
+  `createEmployeeAccount` had been failing outright since `903161e1`; no
+  allowlist, cap or response shape moved, so §4a had nothing to check.
+- **DEPLOYED 2026-08-22 (`903161e1`): simplified auth** — functions, rules and
+  storage. No export change (25 → 25). The required pre-flight was re-queried
+  at deploy time rather than trusted: zero `invited` users, verified two ways,
+  so removing the mailbox guard exposed nobody.
 - **DEPLOYED 2026-08-15 (`6b3fcf7c`, merged as `be56f118`): the Wave stale-link
   relink — the second Wave deploy of that day and the one that actually
   unblocked the two dead-lettered upserts.** A `waveCustomerId` pointing at a
@@ -121,7 +148,8 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   looked clean for three days while prod ran older bodies — check the deploy
   log, not the count.
 - **25 functions defined** in code and **25 deployed**, verified against
-  `functions_list_functions` on 2026-08-15 — an exact match, no orphans and no
+  `functions_list_functions` on 2026-08-22 (the CONTRACT deploy reported 25
+  updates, 0 creates, 0 deletions) — an exact match, no orphans and no
   extras. The retirement deploy has now RUN. P4c added `createEmployeeAccount`,
   `completeEmployeeSetup` and `deleteEmployeeAccount` and kept
   `createEmployeeInvite` / `redeemSignupCode` as the `#compat-1.37.1` shim;
@@ -295,8 +323,17 @@ deliberately not persisted anywhere, because a live plaintext credential in
 Firestore is readable by every admin session, backup and export.
 `generateStartingPassword()` draws 12 characters with `crypto.randomInt` from
 an alphabet with no `0`/`O` and no `1`/`l`/`I`, because an admin reads it aloud,
-and guarantees an uppercase, a lowercase and a digit so it satisfies the
-client-side setup policy. It is drawn **once per call** and handed to whichever
+and guarantees an uppercase, a lowercase, a digit **and exactly one symbol**.
+The symbol class is load-bearing and was MISSING for two days: the Identity
+Platform password policy configured console-side requires a non-alphanumeric,
+the shared `Welcome123!` had been satisfying it by accident, and without it
+every call died at `provisionAuthAccount` with
+`PASSWORD_DOES_NOT_MEET_REQUIREMENTS` — account creation was down outright,
+through four prod failures, with App Check and auth VALID on each (fixed
+`d99b6673`, deployed 2026-08-22). `PASSWORD_SYMBOLS` is deliberately kept OUT
+of `PASSWORD_ALPHABET` so a mint carries exactly ONE symbol — the admin
+dictates the value aloud — and the set avoids bracket pairs, dash/underscore
+confusion and URL- or shell-significant glyphs. It is drawn **once per call** and handed to whichever
 path runs — new account or re-provision — so the value echoed back is always the
 value Auth was actually set to. The duplicate lookup and the doc write share one
 transaction, so two admins creating the same person can't both win.
@@ -772,12 +809,16 @@ raised `timeoutSeconds` (back on the 60 s default). It existed because
 into `pictures[]`: that link's `firebaseStorageDownloadTokens` value is stable
 per object and never expires, and fetching it serves the bytes over plain HTTPS
 with **no auth and no `storage.rules` evaluation**, so revoking the credential
-did not reach the links already on that person's device. The app no longer
-mints or stores one, and the arrays that carried them are cleared, so there is
-nothing left for a rotation to invalidate — photos are fetched through the SDK,
-where this branch's status flip is the gate. Note what that does NOT cover: a
-URL captured under an older build is still live on its object unless someone
-rotates it by hand.
+did not reach the links already on that person's device. The app no longer mints or stores one, the
+subcollection rules now REJECT the field, and the prod count of legacy rows
+that still carried one came back **zero** (2026-08-22,
+`scripts/count-legacy-image-urls.js`), so there is nothing left for a rotation
+to invalidate — photos are fetched through the SDK, where this branch's status
+flip is the gate. Two things that does NOT cover: a URL captured under an older
+build is still live on its object unless someone rotates it by hand, and the
+`pictures[]` arrays themselves are cleared by
+`scripts/clear-appointment-picture-arrays.js`, which is step 4 of the runbook
+in `docs/DEPLOYMENT.md` and is the irreversible one.
 
 The bridge's pure rules live in `bridge_policy.js` (`shouldHaveBridge`,
 `bridgeBody`, `bridgeMatches`, `classifyBridgeRow`), shared with

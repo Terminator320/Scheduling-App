@@ -10,6 +10,7 @@ const {
 } = require("./maintenance_policy");
 // The one owner of the business time zone — never re-inline the literal.
 const {BUSINESS_TIME_ZONE} = require("./time_utils");
+const {deleteAppointmentImageBytes} = require("./appointment_images");
 
 /**
  * Reads the first 8 bytes of a Storage object — enough for every magic-byte
@@ -56,17 +57,21 @@ const validateUploadedImage = onObjectFinalized(async (event) => {
 // this module can't be required outside the emulator.
 
 /**
- * Deletes every Storage object under an appointment's image prefix
- * (`appointments/{id}/images/`) — best effort, so a failure just logs and
- * returns false, and the caller keeps the doc around for the next run to
- * retry.
+ * Deletes every Storage object under an appointment's image prefix — best
+ * effort, so a failure just logs and returns false, and the caller keeps the
+ * doc around for the next run to retry.
+ *
+ * The prefix itself belongs to `appointment_images.js`, which owns
+ * `IMAGES_SUBCOLLECTION` because `firestore.rules` matches that name
+ * literally. Spelled here too, this path would keep deleting an empty prefix
+ * and reporting success if the name ever moved — on the one path that has no
+ * other way to find those bytes.
  * @param {string} appointmentId Firestore doc id of the purged appointment.
  * @return {!Promise<boolean>} true when the prefix was cleared.
  */
 async function deleteAppointmentImages(appointmentId) {
-  const prefix = `appointments/${appointmentId}/images/`;
   try {
-    await getStorage().bucket().deleteFiles({prefix});
+    await deleteAppointmentImageBytes(appointmentId);
     return true;
   } catch (err) {
     logger.warn("purgeExpiredHistory: image cleanup failed", {

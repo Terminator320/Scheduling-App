@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
 
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/platform/ios_platform.dart';
 import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
@@ -140,10 +141,6 @@ Future<void> writeWidgetPayloadJson(String payloadJson) async {
 /// The App Group write itself. A null [payloadJson] wipes the key.
 typedef WidgetPayloadWriter = Future<void> Function(String? payloadJson);
 
-// Declared here rather than imported from `AppSyncListeners` (which already
-// imports this file) so the two don't form a cycle.
-bool _platformIsIos() => Platform.isIOS;
-
 Future<void> _writeToAppGroup(String? payloadJson) async {
   await HomeWidget.setAppGroupId(widgetAppGroupId);
   await HomeWidget.saveWidgetData<String>(_payloadKey, payloadJson);
@@ -159,7 +156,7 @@ class WidgetSyncService {
     bool Function()? isIosPlatform,
     WidgetPayloadWriter? write,
   }) : _logger = logger ?? AppLogger(),
-       _isIos = isIosPlatform ?? _platformIsIos,
+       _isIos = isIosPlatform ?? defaultIsIosPlatform,
        _write = write ?? _writeToAppGroup;
 
   final AppLogger _logger;

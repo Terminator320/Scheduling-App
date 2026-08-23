@@ -235,11 +235,7 @@ const syncUsersByUid = onDocumentWritten(
       }
 
       // The Auth credential comes after the bridge mirror so it never blocks
-      // that write — but BEFORE the token rotation below, which is the one
-      // step here that can run for minutes. Ordered the other way round, the
-      // revocation this whole branch exists to perform waited on up to 500
-      // appointments' worth of Storage metadata writes, and a timeout at the
-      // 300 s ceiling meant it never happened at all that pass.
+      // that write.
       const change = authAccessChange(before, after);
       const authUid = afterUid || beforeUid;
       if (change && authUid) {
@@ -258,23 +254,13 @@ const syncUsersByUid = onDocumentWritten(
       }
 
       // NOTE: deactivation used to end by rotating the Storage download token
-      // on every photo of every appointment this person was assigned to. That
-      // existed because `uploadImage` minted a permanent, rules-free download
-      // URL per photo and persisted it into `pictures[]`, which every assigned
-      // device received. The CONTRACT step stopped minting it and stopped
-      // storing it, so no NEW photo carries such a link — a current photo is
-      // fetched through the SDK against `storage.rules`, which the status gate
-      // below already answers for.
-      //
-      // It does NOT follow that nothing is left to invalidate, and this note
-      // used to say so. LEGACY `appointments/*/images` rows with a `url` and
-      // no `storagePath` still exist: the backfill keeps them on purpose, the
-      // rules still accept the field, and the client's fallback is permanent.
-      // Those strings stay live after deactivation. Closing that means
-      // counting them in prod and then either re-homing the bytes under a real
-      // `storagePath` or reinstating a rotation scoped to just those objects —
-      // see `AppointmentImageLoader`'s header, which carries the same
-      // unresolved question.
+      // on every photo this person was assigned to, because `uploadImage`
+      // minted a permanent rules-free download URL per photo and stored it.
+      // Nothing mints or stores one now, and the prod count of legacy rows
+      // that still carried one came back ZERO (2026-08-22), so the rotation
+      // and the field went with it. A photo is fetched through the SDK
+      // against `storage.rules`, which the status gate above already answers.
+      // Do not reinstate a rotation here without a stored link to rotate.
     },
 );
 

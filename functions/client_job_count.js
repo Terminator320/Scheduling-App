@@ -18,6 +18,7 @@
 
 const {onDocumentWritten} = require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
+const {adminFirestore} = require("./admin_firestore");
 
 /** Firestore `NOT_FOUND` — the client was deleted out from under the job. */
 const NOT_FOUND = 5;
@@ -99,9 +100,7 @@ const recountClientJobs = onDocumentWritten(
       );
       if (ids.length === 0) return;
 
-      // eslint-disable-next-line global-require
-      const {getFirestore} = require("firebase-admin/firestore");
-      const db = getFirestore();
+      const db = adminFirestore().getFirestore();
       // The two ids of a reassignment are independent client docs — run them
       // concurrently rather than paying two serial round trips of billed time.
       await Promise.all(ids.map(async (clientId) => {

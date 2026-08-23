@@ -142,8 +142,9 @@ function needsRecount(data, storedCount) {
 /**
  * Reads the ids one appointment's subcollection holds.
  *
- * Ids only (`select()` with no fields) — the bodies are irrelevant here and
- * this runs once per appointment carrying an array.
+ * Ids only (`select()` with no fields) — the bodies are irrelevant here. It
+ * runs for EVERY appointment, array or not: the subcollection is the store,
+ * so it is the only thing that can say whether `pictureCount` is right.
  * @param {!Object} doc An appointments QueryDocumentSnapshot.
  * @return {!Promise<!Set<string>>}
  */

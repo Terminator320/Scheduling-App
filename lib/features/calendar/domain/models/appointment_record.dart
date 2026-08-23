@@ -68,8 +68,8 @@ abstract class AppointmentRecord with _$AppointmentRecord {
       clientId: (data['clientId'] ?? '').toString(),
       clientName: (data['clientName'] ?? '').toString(),
       clientPhone: (data['clientPhone'] ?? '').toString(),
-      employeeIds: _parseStringList(data['employeeIds']),
-      employeeNames: _parseStringList(data['employeeNames']),
+      employeeIds: firestoreStringList(data['employeeIds']),
+      employeeNames: firestoreStringList(data['employeeNames']),
       address: (data['address'] ?? '').toString(),
       notes: (data['notes'] ?? '').toString(),
       materialsNeeded: (data['materialsNeeded'] ?? '').toString(),
@@ -154,11 +154,6 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     return status;
   }
 
-  static List<String> _parseStringList(dynamic value) {
-    if (value is List) return value.whereType<String>().toList();
-    if (value is String && value.isNotEmpty) return [value];
-    return const [];
-  }
 }
 
 /// How many days beyond today the two off-screen schedule mirrors fetch.

@@ -95,8 +95,10 @@ void main() {
   });
 
   test('a legacy row with only a url is kept as it is', () async {
-    // Written before `storagePath` existed, so that url is the sole handle on
-    // its bytes — `AppointmentImageLoader` turns it back into a Reference.
+    // Written before `storagePath` existed. The READ still round-trips the
+    // field — it is the entry's only identity, so `appointmentImageDocId`
+    // keys on it — but nothing renders from it: the loader's `refFromURL`
+    // fallback was deleted once a prod count found zero such rows.
     final repo = _PicturesRepo(
       stored: const [AppointmentImage(url: 'https://token/p1')],
     );

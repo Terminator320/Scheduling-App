@@ -30,11 +30,19 @@ const {recordOf} = require("./notification_policy");
  * which of those is right differs per sweep. Get it wrong and the cap silently
  * discards exactly the jobs the sweep exists for.
  *
+ * NOTHING here is optional, and that is the point. `descending` had a default
+ * and this docstring argued two paragraphs above that getting it wrong
+ * silently spends the cap on the wrong jobs — a default is exactly how the
+ * next call site gets it wrong without saying anything. `label`,
+ * `consequence` and `logger` are the warn contract: omit `logger` and the
+ * truncation warn vanishes, omit the other two and it prints `undefined`,
+ * which is the silent-truncation failure this module exists to prevent.
+ * `pageToCap` on the Dart side makes its `onCapReached` required for the same
+ * reason.
  * @param {!Object} db Firestore handle.
  * @param {{statuses: !Array<string>, field: string, lo: !Date,
- *   loOp: (string|undefined), hi: !Date, hiOp: (string|undefined),
- *   descending: (boolean|undefined), cap: number, logger: ?Object,
- *   label: string, consequence: string}} options
+ *   loOp: string, hi: !Date, hiOp: string, descending: boolean, cap: number,
+ *   logger: !Object, label: string, consequence: string}} options
  * @return {!Promise<!Array<!Object>>} Plain appointment records.
  */
 async function scanAppointmentWindow(db, options) {
@@ -42,15 +50,26 @@ async function scanAppointmentWindow(db, options) {
     statuses,
     field,
     lo,
-    loOp = ">",
+    loOp,
     hi,
-    hiOp = "<=",
-    descending = false,
+    hiOp,
+    descending,
     cap,
     logger,
     label,
     consequence,
   } = options;
+
+  if (!label || !consequence || !logger) {
+    throw new Error(
+        "scanAppointmentWindow: label, consequence and logger are required " +
+        "— they are the cap-truncation warn");
+  }
+  if (typeof descending !== "boolean" || !loOp || !hiOp) {
+    throw new Error(
+        "scanAppointmentWindow: loOp, hiOp and descending are required " +
+        "— the ordering decides which jobs the cap keeps");
+  }
 
   const snap = await db
       .collection("appointments")
@@ -61,7 +80,7 @@ async function scanAppointmentWindow(db, options) {
       .limit(cap)
       .get();
 
-  if (snap && snap.size === cap && logger) {
+  if (snap && snap.size === cap) {
     logger.warn(`${label}: candidate cap hit; ${consequence}`, {cap});
   }
 

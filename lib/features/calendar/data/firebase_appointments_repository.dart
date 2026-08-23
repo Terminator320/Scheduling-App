@@ -164,8 +164,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         // The one client write of this counter the rules allow, and the reason
         // "absent" is not a state anything downstream has to interpret: the
         // recount trigger only fires on a photo write, so a job created without
-        // it would read as count-unknown until its first photo. `hasPictures`
-        // gates the detail sheet's subcollection read on this number.
+        // it would read as count-unknown until its first photo. It backs the
+        // card's photo indicator only — never gate a subcollection read on it
+        // (see `_loadStoredPictures`).
         'pictureCount': 0,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -581,7 +582,7 @@ List<AppointmentRecord> matchHistoryDocs(HistorySearchScan scan) {
         ).contains(normalizedQuery);
     final matchesEmployee =
         normalizedQuery.isNotEmpty &&
-        _rawStrings(data['employeeNames']).any(
+        firestoreStringList(data['employeeNames']).any(
           (e) => ClientSearchPolicy.normalize(e).contains(normalizedQuery),
         );
     final matchesPhone =
@@ -593,18 +594,6 @@ List<AppointmentRecord> matchHistoryDocs(HistorySearchScan scan) {
     matches.add(AppointmentRecord.fromMap(doc.id, data));
   }
   return matches;
-}
-
-/// The list shape `AppointmentRecord._parseStringList` produces, for the
-/// filter above — which reads `employeeNames` before there is a record.
-///
-/// Deliberately the same two accepted shapes (a list of strings, or a bare
-/// string), so a document the filter rejects is one the record would also have
-/// had nothing to match on.
-List<String> _rawStrings(dynamic value) {
-  if (value is List) return value.whereType<String>().toList();
-  if (value is String && value.isNotEmpty) return [value];
-  return const [];
 }
 
 class _CachedHistorySearch {

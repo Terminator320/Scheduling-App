@@ -154,25 +154,27 @@ void main() {
       },
     );
 
-    test('a url-only photo is written WITHOUT its url', () async {
+    test('a url-only photo is SKIPPED, not written as a handle-less doc', () async {
       // This used to keep the url, as the only thing that could render a
       // LEGACY entry. Both that carve-out and AppointmentImageLoader's
       // matching fallback went on 2026-08-22, once a prod count found zero
       // such documents: the string is a permanent, rules-free, transferable
       // download link that nothing revokes, and `firestore.rules` now rejects
-      // the field outright — so writing it would fail the batch rather than
-      // preserve anything.
+      // the field outright.
+      //
+      // Dropping the url alone was not enough, and this is the half that
+      // matters: the write would still land as `{storagePath: ''}`, a
+      // document that renders nothing AND reads as coverage to
+      // `clear-appointment-picture-arrays.js`, which would then destroy the
+      // array entry holding the only surviving pointer to those bytes. The
+      // backfill skips exactly this shape; so does `append` now.
       const legacy = AppointmentImage(
         url: 'https://firebasestorage.googleapis.com/v0/b/x/o/z?alt=media&t=q',
       );
       await repo().appendAppointmentPictures('a1', [legacy]);
-      final body =
-          verify(
-                () =>
-                    batch.set<Map<String, dynamic>>(any(), captureAny(), any()),
-              ).captured.single
-              as Map<String, dynamic>;
-      expect(body.containsKey('url'), isFalse);
+      verifyNever(
+        () => batch.set<Map<String, dynamic>>(any(), any(), any()),
+      );
     });
 
     test('ALWAYS writes uploadedAt, as an explicit null when unknown', () async {

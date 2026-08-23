@@ -271,6 +271,13 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   read settles. `ClientSearchPolicy.normalize` (accent-fold) + `digitsOnly`
   (phone) are the matching primitives, and `ClientSearchPolicy.matchesClient` is
   the single client-side fallback matcher — route new client matching through it.
+  **A matcher that reads the RAW map to skip building a record must parse list
+  fields through `firestoreStringList`** (`core/utils/firestore_parsing.dart`,
+  beside `firestoreDateTime`/`firestoreInt`), never a private copy: the history
+  filter reads `employeeNames` before there is a record, so a second spelling
+  that accepted less would silently reject documents the record itself would
+  have matched — a search that quietly stops finding a crew member, with
+  nothing logged.
   `FirebaseAppointmentsRepository` keeps a bounded LRU of recent `searchHistory`
   results on the long-lived singleton; every write path clears it via
   `_invalidateSearchCache()`, so a new appointment-write method MUST call it too
