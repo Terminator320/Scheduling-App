@@ -687,18 +687,25 @@ service cloud.firestore {
         allow read: if isAdmin() || isAssignedEmployee(parentAppointment());
 
         // Shape-locked like every other subcollection here. `storagePath` is
-        // what renders and deletes the photo, so it is the one required field;
-        // `url` is optional and present only on backfilled LEGACY rows that
-        // never had a storage path (see AppointmentImageUrlResolver's
-        // fallback) — a new photo must not carry one, since a persisted
-        // download URL is a permanent rules-free token and nothing reads it
-        // here.
+        // what renders and deletes the photo, and it is now the ONLY handle a
+        // photo may carry.
+        //
+        // `url` USED TO BE ACCEPTED, for backfilled LEGACY rows that never had
+        // a storage path. It was dropped 2026-08-22 after a prod count came
+        // back ZERO (`functions/scripts/count-legacy-image-urls.js`: 14 image
+        // documents scanned, 0 with a url and no storagePath). That count is
+        // the whole justification — a `?alt=media&token=…` string is a
+        // permanent, rules-free, transferable download link, and the rotation
+        // that used to invalidate one on deactivation was deleted with the
+        // minting machinery, so accepting the field meant accepting a
+        // credential nothing could revoke. Refusing it here is what makes
+        // "there is no such link left to invalidate" true rather than hoped
+        // for. Do not re-add it to this list to make some future write pass;
+        // re-home those bytes under a real `storagePath` instead.
         allow create, update: if isAdmin()
           && request.resource.data.keys().hasOnly(
-              ['storagePath', 'url', 'fileName', 'uploadedAt'])
+              ['storagePath', 'fileName', 'uploadedAt'])
           && isBoundedString(request.resource.data.storagePath, 500)
-          && (!('url' in request.resource.data.keys())
-              || isBoundedString(request.resource.data.url, 1000))
           && (!('fileName' in request.resource.data.keys())
               || isBoundedString(request.resource.data.fileName, 300))
           && (!('uploadedAt' in request.resource.data.keys())

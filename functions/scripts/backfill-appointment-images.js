@@ -73,19 +73,19 @@ const PAGE_SIZE = 200;
 /**
  * The subcollection document for one stored photo map.
  *
- * `url` is carried ONLY when there is no `storagePath`. Photos render from
- * `storagePath` (see `AppointmentImageUrlResolver`), and a persisted download
- * URL is a permanent rules-free token — so a modern entry's url is a credential
- * with no reader and is dropped. A LEGACY entry that has only a url still needs
- * it: dropping that one destroys the only thing that can render the photo.
+ * **`url` is never carried.** Photos render from bytes fetched off
+ * `storagePath`, so a persisted download URL is a permanent rules-free token
+ * with no reader. A LEGACY entry holding only a url used to keep it, since
+ * that string was the sole handle on its bytes — but a prod count on
+ * 2026-08-22 found zero such rows, `firestore.rules` stopped accepting the
+ * field, and the caller now SKIPS such an entry rather than writing a document
+ * that could never render.
  * @param {!Object} picture A stored `pictures[]` entry.
  * @return {!Object} The subcollection document body.
  */
 function imageDoc(picture) {
   const storagePath = String(picture.storagePath || "").trim();
-  const url = String(picture.url || "").trim();
   const doc = {storagePath};
-  if (storagePath === "" && url !== "") doc.url = url;
   if (picture.fileName != null) doc.fileName = String(picture.fileName);
   // Round-trip whatever shape the array held. A Timestamp stays one; an
   // ISO string (written by the offline queue's carried-forward entries) is
@@ -120,10 +120,20 @@ async function backfillOne(db, doc, dryRun = false) {
   let skipped = 0;
   for (const picture of pictures) {
     const id = appointmentImageDocId(picture);
-    if (id === "") {
-      // No storagePath and no url — nothing to render and no legal document
-      // id. Counted rather than silently dropped: a non-zero total here means
-      // the array holds entries that were already unrenderable.
+    const storagePath = String(picture.storagePath || "").trim();
+    if (id === "" || storagePath === "") {
+      // Nothing this script can write a renderable document for. Two shapes
+      // land here: an entry with no storagePath AND no url (no legal document
+      // id either), and — since 2026-08-22 — an entry with only a url. The
+      // second used to be copied WITH its url, because that string was the
+      // sole handle on its bytes; `firestore.rules` no longer accepts the
+      // field and the loader no longer resolves one, so copying it now would
+      // write a document that can never render, and the Admin SDK bypasses
+      // rules so nothing would report it. A prod count on the day the field
+      // went found ZERO such rows, so this is a guard against reintroduction
+      // rather than a case that fires. Counted, never silently dropped: a
+      // non-zero total here needs a person, because clearing that array entry
+      // afterwards destroys the only record the photo existed.
       skipped += 1;
       continue;
     }

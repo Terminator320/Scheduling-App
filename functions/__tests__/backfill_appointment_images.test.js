@@ -58,10 +58,15 @@ describe("imageDoc", () => {
     expect(doc.url).toBeUndefined();
   });
 
-  test("KEEPS a legacy entry's url when it has no storagePath", () => {
-    // Dropping it destroys the only thing that can render that photo.
+  test("never carries a url, even when there is no storagePath", () => {
+    // This used to KEEP the url, as the only thing that could render a legacy
+    // photo. It went on 2026-08-22, after a prod count found zero such rows:
+    // `firestore.rules` no longer accepts the field and the loader no longer
+    // resolves one, so copying it would write a document that can never
+    // render — and the Admin SDK bypasses rules, so nothing would report it.
+    // `copyOne` skips such an entry outright rather than relying on this.
     const doc = imageDoc({url: "https://firebasestorage/…?alt=media&token=a"});
-    expect(doc.url).toBe("https://firebasestorage/…?alt=media&token=a");
+    expect(doc.url).toBeUndefined();
     expect(doc.storagePath).toBe("");
   });
 
@@ -122,6 +127,27 @@ describe("backfillOne", () => {
 
     return backfillOne({batch: () => batch}, doc).then((result) => {
       expect(result).toEqual({copied: 1, skipped: 1});
+      expect(batch.updates[0].body).toEqual({pictureCount: 1});
+    });
+  });
+
+  test("a url-ONLY entry is SKIPPED, not copied without its url", () => {
+    // The 2026-08-22 change. Such an entry used to be copied WITH its url, as
+    // the only handle on its bytes. Now that the rules reject the field and
+    // the loader cannot resolve one, copying it would write a document that
+    // renders nothing — and because the Admin SDK bypasses rules, nothing
+    // would report it. Skipping keeps the array entry intact, which matters:
+    // the clear script refuses an appointment the subcollection does not
+    // cover, so this surfaces as a refusal there rather than a lost photo.
+    const batch = fakeBatch();
+    const doc = fakeDoc([
+      {storagePath: "appointments/a1/images/1.jpg"},
+      {url: "https://firebasestorage/…?alt=media&token=legacy"},
+    ]);
+
+    return backfillOne({batch: () => batch}, doc).then((result) => {
+      expect(result).toEqual({copied: 1, skipped: 1});
+      expect(batch.sets).toHaveLength(1);
       expect(batch.updates[0].body).toEqual({pictureCount: 1});
     });
   });

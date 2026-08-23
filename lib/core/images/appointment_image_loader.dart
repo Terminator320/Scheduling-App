@@ -34,21 +34,23 @@ final appointmentImageLoaderProvider = Provider<AppointmentImageLoader>(
 /// produces a token URL — so this class is no longer working against a supply
 /// of them.
 ///
-/// What it does NOT mean is "there is nothing shareable left to capture".
-/// LEGACY rows still carry a `url` with no `storagePath`: the backfill
-/// preserves it deliberately (dropping it destroys the only thing that can
-/// render the photo), `firestore.rules` still accepts it up to 1000 chars, and
-/// the fallback below is documented as permanent. Such a string is a
-/// rules-free, non-expiring, transferable download link that an assigned
-/// employee can read out of the image document — and the rotation that used to
-/// invalidate it on deactivation (`functions/appointment_image_tokens.js`) was
-/// deleted with the rest of the minting machinery, so nothing covers it now.
-/// The open question is only how many survive in prod: count
-/// `appointments/*/images` where `url` is set and `storagePath` is empty. Zero
-/// closes this for good — drop `url` from the rules allowlist and delete the
-/// fallback. Any at all needs those bytes re-homed under a real `storagePath`,
-/// or a rotation scoped to them. Don't build on a guarantee this class cannot
-/// give on its own.
+/// **And as of 2026-08-22 there is nothing shareable left to capture either.**
+/// This paragraph used to say the opposite, because LEGACY rows could still
+/// carry a `url` with no `storagePath` — a rules-free, non-expiring,
+/// transferable download link that an assigned employee could read straight
+/// out of the image document, with the rotation that once invalidated it on
+/// deactivation deleted alongside the minting machinery. The open question was
+/// only how many survived in prod, and the answer came back **zero**
+/// (`functions/scripts/count-legacy-image-urls.js`: 14 image documents
+/// scanned, 0 with a url and no storagePath). So the three things that kept
+/// the field alive went with it: `firestore.rules` no longer accepts `url`,
+/// `AppointmentImagesStore` no longer writes it, and the `refFromURL` fallback
+/// below is gone. An entry reaching here without a `storagePath` now has no
+/// handle at all and loads as empty bytes rather than through a permanent
+/// link.
+///
+/// If a url-only row is ever reintroduced, re-home its bytes under a real
+/// `storagePath` — do not re-add the field to make the write pass.
 ///
 /// **Photos render offline again, and that was never in tension with the
 /// above.** `cached_network_image` cached BYTES too; what made it unacceptable
@@ -162,24 +164,17 @@ class AppointmentImageLoader {
 
   /// The cache key for [image], or `''` when it carries no usable handle.
   ///
-  /// A legacy (`url`-only) entry is keyed on its URL rather than skipping the
-  /// cache: two such docs share the empty `storagePath`, so keying on THAT
-  /// would serve the first one's bytes for the second — but the URL is
-  /// already a unique handle, and is already what `_fetch` logs against. The
-  /// `url` fallback is documented as permanent, so a legacy photo bypassing
-  /// the cache re-fetched from Storage on every widget State: every sheet
-  /// open, and again on every View→Edit toggle, which is exactly the cost
-  /// this cache exists to remove. The prefix keeps the two key spaces
-  /// disjoint.
-  static String _cacheKeyFor(AppointmentImage image) {
-    if (image.storagePath.isNotEmpty) return image.storagePath;
-    if (image.url.isNotEmpty) return 'url:${image.url}';
-    return '';
-  }
+  /// `storagePath` is the only handle a photo has, so it is the only key.
+  ///
+  /// There used to be a `url:`-prefixed second key space for legacy url-only
+  /// entries. Both it and the `refFromURL` fetch below went on 2026-08-22,
+  /// when a prod count found zero such documents and `firestore.rules` stopped
+  /// accepting the field — an entry that reaches here without a
+  /// `storagePath` now has no handle at all, which `_fetch` reports rather
+  /// than silently rendering from a permanent rules-free link.
+  static String _cacheKeyFor(AppointmentImage image) => image.storagePath;
 
-  Reference _refFor(AppointmentImage image) => image.storagePath.isNotEmpty
-      ? _storage.ref(image.storagePath)
-      : _storage.refFromURL(image.url);
+  Reference _refFor(AppointmentImage image) => _storage.ref(image.storagePath);
 
   /// Fetches in list order so the returned bytes line up index-for-index with
   /// [images] — the viewer opens at a tapped index, so a reordered result
