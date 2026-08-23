@@ -491,7 +491,23 @@ firebase deploy --only functions,firestore:rules,firestore:indexes  # never --fo
 `functions:delete --force` is **not** `deploy --force` — it only skips the y/n
 prompt for the named functions and touches no index or TTL policy.
 
-### 2. Delete THREE orphaned Cloud Scheduler jobs
+### 2. Delete THREE orphaned Cloud Scheduler jobs — RESOLVED 2026-08-23, there were none
+
+**Checked at last: the Cloud Scheduler console holds exactly the 3 survivors,
+so Firebase did remove the three entries when the functions were deleted.**
+Nothing was deleted and nothing needs to be. The steps below are kept because
+the failure mode they guard against is real and the next scheduled-function
+deletion should still check — but check the **Cloud SCHEDULER** page, not Cloud
+Run. That distinction is why this sat open for eight days: a deleted scheduled
+function's Cloud Run service is gone either way, so the Cloud Run list looks
+correct whether or not the scheduler entry survived, and it was the Cloud Run
+list that kept being consulted.
+
+**Checking it found something else, which is the real value of the exercise —
+see the note directly below this section on `purgeExpiredHistory` being
+PAUSED.**
+
+
 
 Removing a scheduled function does not reliably remove its scheduler entry, and
 **only 3 jobs are free** — leaving these behind bills for three jobs forever and
@@ -512,6 +528,45 @@ gcloud scheduler jobs delete firebase-schedule-sendOverdueJobPrompts-us-central1
 ```
 
 Landing on exactly 3 is the point of the change. Verify the count afterwards.
+
+### `purgeExpiredHistory` was PAUSED and nobody knew (found 2026-08-23)
+
+Found while checking the scheduler item above, and the reason that check was
+worth doing even though it turned up no orphans.
+
+`firebase-schedule-purgeExpiredHistory-us-central1` was **Paused**, with "has
+not run yet", created 2026-07-19. **Nothing in `docs/`, `.claude/` or the
+commit history records it being paused or says why.** It has since been
+**resumed** (owner, 2026-08-23).
+
+**It had not silently missed a purge.** Its schedule is quarterly —
+`0 3 1 1,4,7,10 *`, 03:00 America/Toronto on the 1st of Jan/Apr/Jul/Oct — and
+it was created on 19 July, after that quarter's run. The first time the pause
+would have mattered is **1 October 2026**, so the cost so far is zero and the
+window to notice was closing rather than closed.
+
+**A plausible reason it was paused, worth stating because it no longer
+applies:** this is the only unattended, irreversible deletion in the repo, and
+it had **zero tests until 2026-08-04**. Pausing an untested quarterly delete
+job would have been the right call. `maintenance_policy.js` is now at 100%
+lines and branches, with the three rules that destroy data if they regress each
+pinned — the status gate (only `done`/`cancelled` are ever purged), the
+ordering (images before documents), and loop termination.
+
+**What to expect on 1 October 2026, the first run ever:** `HISTORY_RETENTION_YEARS`
+is 2, so it purges terminal appointments whose `startTime` is older than two
+years. This project's data does not reach back that far — the images backfill
+scanned **55 appointments in the entire collection** on 2026-08-22 — so the
+first run should purge approximately nothing. That is the good case, but it
+also means **the first run that does real work will be the one with the largest
+backlog it will ever have**; the 1800 s timeout and the paging loop are what
+that rests on. Read the `purgeExpiredHistory: done` log line (it reports
+`purged`, `imageFailures` and the `cutoff`) rather than assuming.
+
+**Generalise the check, not the incident:** a scheduled function can be paused
+in the console with no trace in the repo, and a paused job looks identical to a
+healthy one in `functions:list` and in Cloud Run. After any deploy that touches
+a scheduled function, look at the STATE column in Cloud Scheduler.
 
 ### 3. `firestore:indexes` and `firestore:rules` are BOTH required
 

@@ -21,9 +21,9 @@
 >    contradict.
 > 2. **The ⚠️ "Act before release" section is down to THREE open.** All are
 >    operational and owner-gated, not code: the photo migration's deploy
->    ordering, the 3 orphaned Cloud Scheduler jobs (`gcloud` is not installed
->    here), and the live `MAPS_API_KEY` in git history that no doc records as
->    rotated. The fourth — the un-rotated download tokens for anyone deactivated
+>    ordering and the live `MAPS_API_KEY` in git history that no doc records as
+>    rotated. The scheduler item closed 2026-08-23 — there were no orphans —
+>    but checking it found `purgeExpiredHistory` PAUSED; it has been resumed. The fourth — the un-rotated download tokens for anyone deactivated
 >    2026-08-16 → 2026-08-19 — is **CLOSED 2026-08-22**: no account was
 >    deactivated in that window, so the affected set is empty. It was the only
 >    item that had to precede the photo deploy.
@@ -145,8 +145,15 @@ surfaced here because the CONTRACT step makes two of them newly urgent.
   not this one's: from that deploy on, deactivating someone rotates nothing, so
   any legacy `images` doc still carrying a `url` stays a permanent rules-free
   link. The prod count in S1 is what decides whether that set is empty too.
-- [ ] **3 orphaned Cloud Scheduler jobs.** `gcloud` is not installed on this
-  box; scheduled functions must land on exactly 3, and only 3 are free.
+- [x] **3 orphaned Cloud Scheduler jobs — CLOSED 2026-08-23: there were none.**
+  Carried as open since 2026-08-14 on the reasoning that removing a scheduled
+  function does not reliably remove its scheduler entry, and never checked
+  because `gcloud` is not installed here. The Cloud Scheduler console shows
+  **exactly the 3 survivors**, so Firebase did remove the entries with the
+  functions. **The reason it sat open for eight days is a wrong-page error
+  worth remembering: a deleted scheduled function's Cloud RUN service is gone
+  either way, so the Cloud Run list can never answer this — only the Cloud
+  SCHEDULER page can.** Checking it surfaced a real finding instead; see below.
 - [ ] **A live `MAPS_API_KEY` remains in git history**, committed by the merge
   that resurrected `android/`
   (`docs/archive/CODEBASE_AUDIT_2026-08-14-pre-deploy.md:530`). `/android/` is
