@@ -21,9 +21,11 @@
 >    contradict.
 > 2. **The ⚠️ "Act before release" section is down to THREE open.** All are
 >    operational and owner-gated, not code: the photo migration's deploy
->    ordering and the live `MAPS_API_KEY` in git history that no doc records as
->    rotated. The scheduler item closed 2026-08-23 — there were no orphans —
->    but checking it found `purgeExpiredHistory` PAUSED; it has been resumed. The fourth — the un-rotated download tokens for anyone deactivated
+>    ordering — i.e. ship the app build, then the clear script once the fleet
+>    has moved. **The other three all closed 2026-08-23:** the token rotation
+>    had an empty affected set, there were no orphaned scheduler jobs, and the
+>    leaked `MAPS_API_KEY` was deleted outright. Checking the scheduler item
+>    found `purgeExpiredHistory` PAUSED, which is now resumed. The fourth — the un-rotated download tokens for anyone deactivated
 >    2026-08-16 → 2026-08-19 — is **CLOSED 2026-08-22**: no account was
 >    deactivated in that window, so the affected set is empty. It was the only
 >    item that had to precede the photo deploy.
@@ -154,12 +156,30 @@ surfaced here because the CONTRACT step makes two of them newly urgent.
   worth remembering: a deleted scheduled function's Cloud RUN service is gone
   either way, so the Cloud Run list can never answer this — only the Cloud
   SCHEDULER page can.** Checking it surfaced a real finding instead; see below.
-- [ ] **A live `MAPS_API_KEY` remains in git history**, committed by the merge
-  that resurrected `android/`
-  (`docs/archive/CODEBASE_AUDIT_2026-08-14-pre-deploy.md:530`). `/android/` is
-  now correctly gitignored and untracked — verified — but **I found no record
-  anywhere in `docs/` that the key was ever rotated.** Rotating it is the fix;
-  history rewriting is not required once the key is dead.
+- [x] **A live `MAPS_API_KEY` in git history — CLOSED 2026-08-23: the key was
+  DELETED.** It was committed by the merge that resurrected `android/`
+  (`docs/archive/CODEBASE_AUDIT_2026-08-14-pre-deploy.md:530`) inside
+  `android/local.properties`. `/android/` is gitignored and untracked, but the
+  string is still in history — which is why the key itself had to die, and
+  deleting beats rotating: a rotated key leaves the old value dead but the new
+  one live in the same place, while a deleted one cannot be used by anyone
+  holding the history. **History rewriting is not required and should not be
+  done.**
+  **Verified it was safe to delete before closing this:** there are THREE
+  distinct Maps keys and only the deleted one is unreferenced.
+  `IOS_MAPS_API_KEY` (`dev/.env`, read by `AppDelegate.swift` for the live
+  staff map) and the server-side `GOOGLE_MAP_API_KEY` (Secret Manager, read by
+  `notifications.js` for travel-time pushes) both stay. A repo-wide grep for a
+  bare `MAPS_API_KEY` across `lib/` and `ios/` returns only
+  `IOS_MAPS_API_KEY` matches — nothing in the shipping tree read the Android
+  key, which is expected since `android/` was deleted 2026-08-05.
+  **Two things to confirm on device rather than assume**, because neither is
+  provable from here: the live staff map still renders (proves
+  `IOS_MAPS_API_KEY` survived) and a travel-time "leave now" push still fires
+  (proves `GOOGLE_MAP_API_KEY` survived). `sendUpcomingJobReminders` logged
+  zero warnings in the hours after the deletion, but it only geocodes when a
+  job is actually due a push, so a quiet window exercises the key less than the
+  clean log suggests.
 
 ## 🔴 Security findings (review required)
 
