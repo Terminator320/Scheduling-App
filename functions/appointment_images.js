@@ -181,12 +181,14 @@ async function deleteAppointmentImageBytes(appointmentId) {
  * with nothing to notice them. Both halves are idempotent, so a retry that
  * repeats the successful half is free.
  * @param {string} appointmentId
- * @param {!Object} deps `{db, deleteImages}`.
+ * @param {{db: !Object, deleteImages: !Function}} deps Both injected: the
+ *   production caller passes `deleteAppointmentImageBytes` and jest passes a
+ *   fake. No default here, so a caller cannot half-wire it.
  * @return {!Promise<void>}
  */
 async function purgeAppointmentImages(appointmentId, deps) {
   const {db, deleteImages} = deps;
-  await (deleteImages || deleteAppointmentImageBytes)(appointmentId);
+  await deleteImages(appointmentId);
   const ref = db
       .collection("appointments")
       .doc(appointmentId)
@@ -372,6 +374,8 @@ const recountAppointmentPictures = onDocumentWritten(
 
 module.exports = {
   cascadeDeleteAppointmentImages,
+  // Exported for `maintenance.js`, so the image prefix has ONE owner.
+  deleteAppointmentImageBytes,
   recountAppointmentPictures,
   purgeAppointmentImages,
   recountPictures,

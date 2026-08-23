@@ -71,8 +71,11 @@ alwaysApply: true
   - a named `tag:` parameter on a helper that logs for you —
     `launchExternalUri` (`LAUNCH-TEL`, `LAUNCH-MAPS`, `LAUNCH-URL`,
     `LAUNCH-EMAIL`), the three device-registration controllers (`PUSH`,
-    `LIVE-ACT`, `PRESENCE`), `deleteOrphanedImages` (`APPT-SAVE`), and every
-    `Debouncer.tagged` call site;
+    `LIVE-ACT`, `PRESENCE`), and every `Debouncer.tagged` call site. **A
+    `tag:` parameter earns its keep only where the helper has more than one
+    caller** — the save pipeline's photo cleanup took one, lost its second
+    caller when the whole-job delete moved server-side, and the parameter then
+    hid `APPT-SAVE` from the grep for the sake of a single possible value;
   - a POSITIONAL first argument to a helper that logs —
     `image_viewer.dart`'s `_runExclusive` (`IMG-SAVE`, `IMG-SHARE`);
   - built by interpolation — `wave_settings_section.dart`'s `'WAVE-$tag'`,

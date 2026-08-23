@@ -19,10 +19,14 @@ import 'package:scheduling/features/calendar/domain/models/appointment_image.dar
 /// **Keyed on `storagePath`, falling back to `url`.** `storagePath` is the
 /// real identity of a photo — it is what renders it (see
 /// `AppointmentImageLoader`) and what deletes it (`_deleteImage`). The
-/// fallback is for the legacy docs that carry a `url` and no `storagePath`,
-/// the same ones the loader's fallback exists for; without it every one of
-/// them would collide on a single id and a whole appointment's legacy photos
-/// would collapse into one document.
+/// fallback is for the legacy entries that carry a `url` and no
+/// `storagePath`; without it every one of them would collide on a single id
+/// and a whole appointment's legacy photos would collapse into one document.
+/// It is NOT a rendering fallback — the loader's was deleted once the prod
+/// count of such documents came back zero. What still needs it is the
+/// `pictures[]` side: the backfill and the clear script both key legacy array
+/// entries through here, and the clear script REFUSES an appointment on an
+/// entry with no identity at all.
 ///
 /// **Hand-mirrored** by `appointmentImageDocId` in
 /// `functions/appointment_image_ids.js`, which the backfill uses. The two must

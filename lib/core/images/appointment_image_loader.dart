@@ -34,8 +34,8 @@ final appointmentImageLoaderProvider = Provider<AppointmentImageLoader>(
 /// produces a token URL — so this class is no longer working against a supply
 /// of them.
 ///
-/// **And as of 2026-08-22 there is nothing shareable left to capture either.**
-/// This paragraph used to say the opposite, because LEGACY rows could still
+/// **And as of 2026-08-22 this class produces and consumes nothing shareable
+/// at all.** This paragraph used to say the opposite, because LEGACY rows could still
 /// carry a `url` with no `storagePath` — a rules-free, non-expiring,
 /// transferable download link that an assigned employee could read straight
 /// out of the image document, with the rotation that once invalidated it on
@@ -48,6 +48,14 @@ final appointmentImageLoaderProvider = Provider<AppointmentImageLoader>(
 /// below is gone. An entry reaching here without a `storagePath` now has no
 /// handle at all and loads as empty bytes rather than through a permanent
 /// link.
+///
+/// **What that zero does NOT cover, and must not be read as covering:** the
+/// parent `pictures[]` arrays, which are outside this class entirely. A
+/// pre-CONTRACT upload wrote a `url` there ALONGSIDE the `storagePath`, so
+/// those entries are not url-only and the count above never looked at them —
+/// each is still a permanent rules-free link readable off the appointment
+/// document, until `clear-appointment-picture-arrays.js` has run.
+/// `countArrayUrls` in that same script is the count that closes it.
 ///
 /// If a url-only row is ever reintroduced, re-home its bytes under a real
 /// `storagePath` — do not re-add the field to make the write pass.
@@ -170,8 +178,16 @@ class AppointmentImageLoader {
   /// entries. Both it and the `refFromURL` fetch below went on 2026-08-22,
   /// when a prod count found zero such documents and `firestore.rules` stopped
   /// accepting the field — an entry that reaches here without a
-  /// `storagePath` now has no handle at all, which `_fetch` reports rather
-  /// than silently rendering from a permanent rules-free link.
+  /// `storagePath` now has no handle at all, rather than silently rendering
+  /// from a permanent rules-free link.
+  ///
+  /// [load] short-circuits such an entry on the empty key and returns empty
+  /// bytes WITHOUT a warn, deliberately: this is a render path called again on
+  /// every rebuild of the photo, so a log here is the rebuild spam
+  /// `.claude/rules/error-handling.md` carves out. It costs nothing in
+  /// practice because the shape is unreachable from a current write — the
+  /// rules reject `url`, `AppointmentImagesStore.append` skips an entry with
+  /// no `storagePath`, and the prod count of stored ones was zero.
   static String _cacheKeyFor(AppointmentImage image) => image.storagePath;
 
   Reference _refFor(AppointmentImage image) => _storage.ref(image.storagePath);

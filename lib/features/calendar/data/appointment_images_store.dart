@@ -63,10 +63,19 @@ class AppointmentImagesStore {
     final batch = _appointments.firestore.batch();
     for (final picture in pictures) {
       final docId = appointmentImageDocId(picture);
-      // No identity means nothing to render and no legal document id. Skipping
-      // is right: writing it would throw and fail the whole batch, taking the
-      // photos that ARE valid down with it.
-      if (docId.isEmpty) continue;
+      // Two skips, and the SECOND is the load-bearing one. No identity means
+      // no legal document id, and writing it would throw and fail the whole
+      // batch, taking the photos that ARE valid down with it.
+      //
+      // No `storagePath` means no handle: `url` is rejected by the rules and
+      // renders nothing, so the document would be unrenderable — and worse,
+      // it would read as COVERAGE. `clear-appointment-picture-arrays.js`
+      // decides whether an array entry is safe to destroy by looking for its
+      // derived id in the subcollection, so a placeholder written here would
+      // let the clear run delete the array entry whose `url` is the only
+      // thing still pointing at those bytes. Mirrors the same skip in
+      // `backfill-appointment-images.js`, which is where this was caught.
+      if (docId.isEmpty || picture.storagePath.trim().isEmpty) continue;
       // `set`, not `add`: the id is derived from the photo, so the offline
       // queue's append-only retry of an already-uploaded image is a no-op
       // instead of a duplicate. This replaced the array's `arrayUnion` dedupe,

@@ -21,19 +21,20 @@ lib/
 │   ├── data/                        paged_scan.dart — `pageToCap`, the one owner of "read page by page up to a cap, then warn" (2026-08-19). Paging stops one snapshot truncating the answer, the cap stops the loop walking the collection as it grows, and the caller's warn makes a truncation visible in Crashlytics; the four repository scan windows had a hand-written copy each. Cap, page size and warn text stay per-caller — only the loop is shared
 │   ├── deep_links/                  The one app_links consumer — deep_link_target.dart (pure classifyDeepLink(Uri) → sealed DeepLinkTarget: AppointmentLink / IgnoredLink) + deep_link_dispatcher.dart (initial link + stream, onError-guarded; routes by target). IgnoredLink covers any URI carrying `homeWidget` — both plugins observe the same openURL, so without that skip every widget/Live-Activity/Siri tap would open twice. P4c reduced this to the appointment branch ALONE: InviteLink, the /login route race and awaitLoginRoute are deleted, so an old esproschedule://invite?code=… link sitting in someone's messages falls through to IgnoredLink instead of reaching a screen that no longer exists
 │   ├── errors/                      Base Failure class + error_cause.dart (sanitized cause classifier + tagged notice composer)
-│   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service + appointment_image_loader.dart (AppointmentImageLoader — fetches a photo's BYTES from its `storagePath` with `ref.getData()` and renders them from memory, so `storage.rules` is evaluated on every fetch and NO renderable URL is ever produced; the persisted `url` is a permanent tokenized link that bypasses rules entirely and survives only as the fetch handle for legacy docs with no storagePath, and as the field older builds still read. Session cache holds the bytes, byte-budgeted at 24 MB) + appointment_image_disk_cache.dart (AppointmentImageDiskCache — the SECOND cache, on disk in the platform cache directory, budgeted at 128 MB and evicted oldest-first, so a photo fetched once renders offline in every later session; it keys on `storagePath` and stores nothing shareable, which is what separates it from the `cached_network_image` cache this replaced — that one cached bytes too, against a permanent rules-free token URL. A cache hit of either kind is not rules-evaluated, so both are wiped by deregisterThisDevice) + image_magic.dart (hasValidImageMagic — the JPEG/PNG magic-byte test, hand-mirrored by functions/image_magic.js and sharing its worked examples; the two had drifted 3 bytes vs 4, so a file the client accepted was deleted server-side)
+│   ├── images/                      Image picker (native resize/compress at pick time) + Firebase Storage upload service + appointment_image_loader.dart (AppointmentImageLoader — fetches a photo's BYTES from its `storagePath` with `ref.getData()` and renders them from memory, so `storage.rules` is evaluated on every fetch and NO renderable URL is ever produced; the persisted `url` was a permanent tokenized link that bypassed rules entirely; it is RETIRED as of the CONTRACT step (2026-08-22) — nothing mints, stores or renders one, `firestore.rules` rejects the field, and the loader's `refFromURL` fallback is gone, after a prod count of legacy rows carrying one came back zero. Session cache holds the bytes, byte-budgeted at 24 MB) + appointment_image_disk_cache.dart (AppointmentImageDiskCache — the SECOND cache, on disk in the platform cache directory, budgeted at 128 MB and evicted oldest-first, so a photo fetched once renders offline in every later session; it keys on `storagePath` and stores nothing shareable, which is what separates it from the `cached_network_image` cache this replaced — that one cached bytes too, against a permanent rules-free token URL. A cache hit of either kind is not rules-evaluated, so both are wiped by deregisterThisDevice) + image_magic.dart (hasValidImageMagic — the JPEG/PNG magic-byte test, hand-mirrored by functions/image_magic.js and sharing its worked examples; the two had drifted 3 bytes vs 4, so a file the client accepted was deleted server-side)
 │   ├── launchers/                   external_uri_launcher.dart (launchExternalUri — the ONE launch+log+notice implementation; the others are thin wrappers over it) + phone_call_launcher.dart (launchPhoneCall — shared tel: dialer) + web_url_launcher.dart (launchWebUrl — external https: opener for the Settings privacy-policy / terms rows and the setup screen's consent link) + route_map_launcher.dart (launchGoogleMapsRoute — opens a prebuilt multi-stop directions URI); parallel AddressMapLauncher (keeps its own guard — it surfaces a sanctioned SnackBar, not a notice) / EmailComposeLauncher
 │   ├── layout/                      Responsive shell — MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the calendar Split; isTwoPane (shortestSide ≥ 600) for the list master-detail; isCompact / isNarrowWidth for small-phone & large-text row folding)
 │   ├── navigation/                  Sealed AppDestination = HubTab (4 IndexedStack panes) + PushedDestination (plain routes); destinationRoute, navigateToDestination, goHomeToCalendar, HubShellScope; top_route_observer.dart (TopRouteObserver on MaterialApp.navigatorObservers — records the navigator's current top route name; its one caller, the deep-link dispatcher's awaitLoginRoute, went with P4c's invite branch, so it has no in-app caller now and is retained deliberately; its didRemove override (added 2026-08-19) tests `identical` on the Route, never the name — pushNamedAndRemoveUntil pushes BEFORE it removes, so a name test would let a lower route sharing the pushed route's name overwrite the current one; the override earns its place because hub_shell.dart's redirect shim calls removeRoute(this) on ITSELF)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics) — `warn` records a non-fatal, `breadcrumb` only leaves a trail; `unhandled_error_severity.dart` gates the `fatal:` flag on main.dart's two global handlers so an unhandled `permission-denied` (auth teardown racing a live listener) is recorded, not filed as a crash
 │   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
 │   ├── notifications/               fcm_background_handler.dart — the top-level @pragma('vm:entry-point') isolate that rewrites the iOS widget from a content-available push while the app is closed; must stay dependency-light (no Firebase/Riverpod in that isolate)
+│   ├── platform/                    ios_platform.dart — `defaultIsIosPlatform`, the injectable `bool Function()` behind every iOS CAPABILITY gate that guards real logic (push / presence / Live Activity registration, widget sync). A bare `Platform.isIOS` returns first on the host, so `flutter test` can never reach past it — on the only platform that ships. It lives here, not beside a caller, because AppSyncListeners and LiveActivityRegistrationController already import each other. Platform LOOK stays `context.isCupertino`
 │   ├── permissions/                 MediaPermissionService — camera permission gate (permission_handler); LocationPermissionService — location gate for presence tracking (geolocator; whileInUse/always both → granted)
 │   ├── providers/                   firebase_providers.dart — Riverpod providers for Auth/Firestore/Storage instances
 │   ├── security/                    BiometricAuthService (local_auth) + AppLock app-wide biometric gate
 │   ├── storage/                     SecureStorageService + SecureStorageKeys — encrypted local storage (flutter_secure_storage)
 │   ├── theme/                       Design tokens (AppColors, AppSpacing, AppRadius), button_styles (destructiveOutlinedButtonStyle, accentPillButtonStyle — the tinted Edit pill shared by the client and team detail headers), ThemeData, ThemeNotifier
-│   ├── utils/                       l10n_extensions.dart (context.l10n), date helpers, current_day_provider.dart (currentDayProvider — the local calendar day, self-invalidating at midnight; the off-screen schedule mirrors watch it so day buckets can't go stale overnight), language controller, sheet focus, retry.dart (retryAsync/retryStream — one post-sign-in permission-denied retry while the auth token propagates — plus the exported `isAuthPropagationDenied` predicate the three repositories share, which had been three byte-identical private copies), reentrant_sync.dart (ReentrantSync mixin — coalesce-not-drop guard shared by the push/presence/live-activity registration controllers' sync()), debouncer.dart (Debouncer + kSearchDebounce — one cost dial for every debounced search; it lives here rather than on ClientSearchPolicy because the callers span features)
+│   ├── utils/                       l10n_extensions.dart (context.l10n), date helpers, current_day_provider.dart (currentDayProvider — the local calendar day, self-invalidating at midnight; the off-screen schedule mirrors watch it so day buckets can't go stale overnight), language controller, sheet focus, retry.dart (retryAsync/retryStream — one post-sign-in permission-denied retry while the auth token propagates — plus the exported `isAuthPropagationDenied` predicate the three repositories share, which had been three byte-identical private copies), reentrant_sync.dart (ReentrantSync mixin — coalesce-not-drop guard shared by the push/presence/live-activity registration controllers' sync()), debouncer.dart (Debouncer + kSearchDebounce — one cost dial for every debounced search; it lives here rather than on ClientSearchPolicy because the callers span features; build one through `Debouncer.tagged(logger:, tag:)`, whose required params are what force the logger to be resolved at CONSTRUCTION, not inside a timer callback that can fire after dispose), firestore_parsing.dart (firestoreDateTime / firestoreInt / firestoreStringList — the single raw-Firestore-value boundary, so domain models don't import cloud_firestore and a raw-map pre-filter can't accept less than the record it stands in for)
 │   └── validators/                  Auth input validators (email format, password rules), text_limits (TextLimits — the client-side length caps), phone_format (formatPhoneNumber / phoneDigits / PhoneInputFormatter — the `(514) 555-1234` mask every phone field types through; numbers are STORED formatted)
 │
 ├── shared/widgets/                  Reusable UI components used across ≥2 features, grouped by type
@@ -1041,14 +1042,20 @@ appointments/{docId}
                        an absolute count() aggregate) — and the ONLY thing left
                        that knows whether a job has photos. AppointmentCard
                        renders a photo indicator on every range-query surface
-                       and cannot afford a subcollection read each, and the
-                       detail sheet skips its subcollection read on a 0.
-                       That gate is safe only because the counter is complete:
+                       and cannot afford a subcollection read each. It backs
+                       that INDICATOR and nothing else: it must never gate a
+                       READ, and it briefly did — the counter is DEBOUNCED 2 s
+                       and a parent update() that exhausts its retries stays
+                       wrong forever, so the detail sheet's old skip-on-0 made
+                       a just-added photo invisible on reopen and a failed
+                       recount invisible for good. The sheet now reads
+                       unconditionally. It is still kept complete:
                        addAppointments writes an explicit 0 at CREATE (the one
                        client write the rules allow, and only as 0), the trigger
                        owns it from the first photo, and the cleanup script
-                       stamped it on everything older. toMap() must never emit
-                       it and the rules reject an UPDATE that touches it.
+                       reconciles it on everything older — including a document
+                       with no array, which it used to skip. toMap() must never
+                       emit it and the rules reject an UPDATE that touches it.
   createdAt, updatedAt     server timestamps
 
 appointments/{docId}/images/{imageId}
@@ -1058,12 +1065,17 @@ appointments/{docId}/images/{imageId}
                        (hand-mirrored as functions/appointment_image_ids.js),
                        which is what makes the write idempotent and REPLACES the
                        arrayUnion dedupe. It keys on `storagePath`, falling back
-                       to `url` for legacy entries with no storage path.
-  storagePath          the photo; `url` is OMITTED when this is present, since a
-                       persisted download URL is a permanent rules-free token
-                       and photos render from storagePath so storage.rules is
-                       re-evaluated on every read. A LEGACY entry with only a
-                       `url` keeps it.
+                       to `url` for a legacy `pictures[]` entry with no storage
+                       path — an identity fallback for the backfill and the
+                       clear script, NOT a rendering one.
+  storagePath          the photo, and the only handle. `url` is RETIRED
+                       (2026-08-22): a persisted download URL is a permanent
+                       rules-free token, photos render from storagePath so
+                       storage.rules is re-evaluated on every read, and a prod
+                       count found zero legacy rows carrying one — so the rules
+                       allowlist is now storagePath/fileName/uploadedAt and the
+                       loader's refFromURL fallback is gone. A row with no
+                       storagePath has no handle and renders nothing.
   fileName, uploadedAt uploadedAt is written even when NULL — the read orders by
                        it, and Firestore excludes a doc missing its orderBy
                        field.
@@ -1275,9 +1287,9 @@ not default it off.
   `core/platform/`) rather than a bare `Platform.isIOS`, which on the host
   returns before anything injectable and writes the branch off as device-only.
 
-Run: `flutter test` (2667 passing as of 2026-08-22 — that is the runner's count;
-`grep`ing for `test(`/`testWidgets(` gives fewer, since some cases are generated
-inside loops; `functions` adds 1372 jest tests across 58 suites in
+Run: `flutter test` (2665 passing as of 2026-08-22 — that is the runner's count;
+`grep`ing for `test(`/`testWidgets(` gives fewer (2605), since some cases are
+generated inside loops; `functions` adds 1373 jest tests across 58 suites in
 `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0 info
 lints** — see Analysis & Linting below; see

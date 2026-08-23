@@ -24,3 +24,17 @@ int? firestoreInt(dynamic value) {
   if (value is String) return int.tryParse(value.trim());
   return null;
 }
+
+/// Parses a Firestore field value into a list of strings.
+///
+/// Two accepted shapes, a list of strings or a bare non-empty string, because
+/// both occur in stored documents. ONE owner on purpose: the history filter
+/// reads `employeeNames` off the raw map before a record exists, so a second
+/// spelling that accepted less would silently reject documents the record
+/// itself would have matched — a search that quietly stops finding a crew
+/// member, with nothing logged.
+List<String> firestoreStringList(dynamic value) {
+  if (value is List) return value.whereType<String>().toList();
+  if (value is String && value.isNotEmpty) return [value];
+  return const [];
+}

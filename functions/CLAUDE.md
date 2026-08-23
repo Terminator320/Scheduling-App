@@ -215,7 +215,13 @@ out; each caller keeps its own cap, status set and CONSEQUENCE sentence, and
 using `recordOf`. The ORDERING argument is the reason it takes `descending`
 explicitly: the overdue and digest sweeps look BACKWARD and must keep the
 newest, the travel sweep looks FORWARD and must keep the soonest, and getting
-it wrong silently spends the cap on the wrong jobs), and `wave/retry_policy.js`'s
+it wrong silently spends the cap on the wrong jobs. **NOTHING in its options
+bag is optional, and it THROWS on a missing one** — `descending`/`loOp`/`hiOp`
+had defaults and `logger`/`label`/`consequence` were merely read, so a caller
+could omit the ordering and get the wrong jobs, or omit the logger and lose
+the truncation warn entirely, which is the silent-truncation failure the
+module exists to prevent. Same enforcement as `pageToCap`'s required
+`onCapReached` on the Dart side; prose could not hold it), and `wave/retry_policy.js`'s
 `reclaimDecision` (the lease-expiry retry-or-dead-letter call, moved out of
 `worker.js`'s `runTransaction` closure — all three of its outcomes destroy
 something, and a decision reachable only through a Firestore-transaction mock

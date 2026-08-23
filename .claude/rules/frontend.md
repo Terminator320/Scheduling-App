@@ -62,7 +62,13 @@ Material Design 3 (Flat / Elevation). Use `ColorScheme`, `TextTheme`, and `Theme
   `ThemeData(platform:)`). It is the single source of truth for iOS-vs-Android UI branching —
   route new platform branches through it; never scatter `Platform.isIOS` / `defaultTargetPlatform`
   at call sites. The one exception is real device **capability** (not look) — e.g. which map apps
-  exist uses `dart:io Platform.isIOS` in `AddressMapLauncher`. Shared adaptive widgets, all
+  exist uses `dart:io Platform.isIOS` in `AddressMapLauncher`. A capability gate that guards
+  REAL LOGIC takes `defaultIsIosPlatform` (`core/platform/ios_platform.dart`) as an injected
+  `bool Function()` instead, so the harness can reach behind it: `flutter test` runs on the host,
+  where a bare `Platform.isIOS` returns first and leaves everything after it untestable — on the
+  only platform that ships. It lives in `core/` because two of its callers already import each
+  other; don't re-declare a private copy beside a third (`widget_sync_service.dart` carried one
+  until 2026-08-22). Shared adaptive widgets, all
   Android-unchanged: `showAdaptiveActionSheet` (`core/adaptive/adaptive_action_sheet.dart` —
   `CupertinoActionSheet` on iOS, Material bottom sheet on Android; the one "pick one option"
   chooser), `AdaptiveProgressIndicator` (busy spinner — `BusyButtonIcon` / `AnimatedLoadingButton`

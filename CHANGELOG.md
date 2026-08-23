@@ -10,6 +10,52 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.49.0+78] - 2026-08-22
+
+Job photos have finished moving into a store of their own. You will not see
+the move, but two things follow from it that you will: a photo you have just
+added shows up straight away, and nothing hands out a permanent link to a
+photo any more. Alongside that, creating an employee account — which had been
+failing every time since the last release — works again.
+
+### Changed
+- **Job photos no longer travel with the job.** A visit used to carry its
+  photos on the record itself, so every screen that loaded a range of
+  visits — the calendar, the dashboard, history — carried them too, whether
+  or not anything was going to show them. Photos are now fetched only by the
+  job you actually open.
+- **The app no longer creates a shareable link for a photo.** Each photo used
+  to be given a permanent web address that worked for anyone who had it,
+  signed in or not, and kept working after the person holding it left the
+  company. Nothing creates or stores one now, and photos are fetched with your
+  own account and re-checked every single time, so access ends when your
+  access does. Links already recorded against older jobs go when those old
+  records are cleared.
+- **Deleting a job now clears its photos properly.** The clean-up moved to the
+  server, so it finishes even if you close the app straight after deleting —
+  photos used to be left behind, taking up space, if it did not.
+- **Signing out empties the search data the app was holding.** The client and
+  job lists kept in memory to make search instant used to stay there until the
+  app was fully closed, which on a shared phone meant they outlived the
+  session that loaded them.
+
+### Fixed
+- **A photo you had just added could vanish when you reopened the job.** The
+  job's photo counter is updated by a background task a couple of seconds
+  later, and the sheet was skipping the photos entirely whenever that counter
+  still said none — so a photo added seconds earlier read as no photos at all.
+  If that counter update ever failed, the photos stayed hidden for good.
+- **Creating an employee account failed every time.** Since the last release
+  the generated starting password no longer contained a symbol, while the
+  sign-in rules still demanded one, so account creation was refused outright —
+  four attempts failed in a row before it was caught. Generated passwords
+  carry a symbol again.
+- **Setup now says what is wrong when it cannot run.** If the app is newer
+  than the service behind it, finishing setup used to fail with "Something
+  went wrong" — on a screen where the password had already changed, so
+  retrying could not work either. It now says setup is not available yet and
+  to try again shortly or ask an administrator.
+
 ## [1.48.0+77] - 2026-08-21
 
 Setting up a new account is shorter and safer at the same time. The

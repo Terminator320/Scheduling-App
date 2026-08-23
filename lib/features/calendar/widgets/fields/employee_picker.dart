@@ -51,7 +51,6 @@ class EmployeePicker extends StatelessWidget {
                 _EmployeeChip(
                   employee: employee,
                   isSelected: selectedEmployees.any((e) => e.id == employee.id),
-                  selectable: selectable,
                   hasError: hasError,
                   onTap: selectable ? () => onToggle?.call(employee) : null,
                 ),
@@ -86,14 +85,12 @@ class _EmployeeChip extends StatelessWidget {
   const _EmployeeChip({
     required this.employee,
     required this.isSelected,
-    required this.selectable,
     required this.hasError,
     required this.onTap,
   });
 
   final EmployeeRecord employee;
   final bool isSelected;
-  final bool selectable;
   final bool hasError;
   final VoidCallback? onTap;
 
@@ -101,7 +98,8 @@ class _EmployeeChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Semantics(
-      button: selectable,
+      // Non-null onTap IS selectable — the two cannot disagree.
+      button: onTap != null,
       selected: isSelected,
       label: employee.name,
       excludeSemantics: true,

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show listEquals;
+
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -80,12 +81,19 @@ class EventDetailsController extends Notifier<EventDetailsState>
   // Settles when employee enrichment completes, so save() runs on warm data.
   Future<void>? _seedFuture;
 
-  /// The photo list [build] seeded from the record, so the subcollection load
-  /// below can tell "the user has not touched these yet" from "they have".
-  List<AppointmentImage>? _seededImages;
+  /// The photo list this controller last put into [state], so the
+  /// subcollection load can tell "the user has not touched these" from "they
+  /// have". Compared BY VALUE: `existingImages` is a freezed collection getter
+  /// that wraps the backing list in a NEW `EqualUnmodifiableListView` on every
+  /// access, so an identity test could never be true and the read would always
+  /// be discarded.
+  List<AppointmentImage> _lastKnownImages = const [];
 
   @override
   EventDetailsState build() {
+    // Re-seeded per build, so a rebuild while a read is in flight compares
+    // against the list this build actually opened with.
+    _lastKnownImages = const [];
     Future.microtask(() => _loadClientIfNeeded(appointment.clientId));
     Future.microtask(_loadStoredPictures);
     _seedFuture = Future.microtask(_enrichSelectedEmployees);
@@ -103,7 +111,6 @@ class EventDetailsController extends Notifier<EventDetailsState>
       // Seeded synchronously to avoid a race with the async load below — employee
       // visibility depends on employeeIds being set right away.
       selectedEmployees: _assigneesFromRecord(appointment),
-      existingImages: _seededImages = const <AppointmentImage>[],
     );
   }
 
@@ -138,20 +145,15 @@ class EventDetailsController extends Notifier<EventDetailsState>
       return;
     }
     if (stored.isEmpty || !ref.mounted) return;
-    // Only adopt the read while the list is still exactly what build() seeded.
-    // A Storage-backed read is a real window, and the user can have removed a
-    // photo inside it — swapping then would silently put it back on screen,
-    // and the next Save would act on a list they had already edited.
-    //
-    // Compared BY VALUE, not with `identical`. `existingImages` is a freezed
-    // collection getter that wraps the backing list in a NEW
-    // `EqualUnmodifiableListView` on every access, so an identity test against
-    // the plain list `build()` seeded could never be true and this method
-    // always returned here — the read ran on every sheet open and was thrown
-    // away.
-    final seeded = _seededImages;
-    if (seeded == null || !listEquals(state.existingImages, seeded)) return;
-    state = state.copyWith(existingImages: _seededImages = stored);
+    // Only adopt while the list is still exactly what this controller last put
+    // there. A Storage-backed read is a real window, and the user can have
+    // edited inside it - adopting then would silently restore what they
+    // removed, and the next Save would act on a list they had already changed.
+    // An emptiness test is NOT equivalent: with two loads in flight the first
+    // adopts, a delete empties the list, and the second would put every photo
+    // back.
+    if (!listEquals(state.existingImages, _lastKnownImages)) return;
+    state = state.copyWith(existingImages: _lastKnownImages = stored);
   }
 
   /// Builds placeholder employees from the stored ids and names. They get

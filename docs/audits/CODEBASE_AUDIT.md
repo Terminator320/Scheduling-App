@@ -185,7 +185,19 @@ surfaced here because the CONTRACT step makes two of them newly urgent.
 
 ### S1 — Legacy `url` photo docs are permanent rules-free links, and the control that revoked them was deleted on a premise the code contradicts · severity: medium · confidence: high
 
-**[DONE 2026-08-22 — the count came back ZERO and the field is gone.]**
+**[DONE 2026-08-22 for the SUBCOLLECTION — the count came back ZERO and the
+field is gone. REOPENED IN PART the same day, by the release review: that
+count never looked at the parent `pictures[]` arrays, which are the LARGER
+set and are still there. A pre-CONTRACT upload wrote a `url` ALONGSIDE the
+`storagePath` into every array entry, so those entries are not url-ONLY and
+the scan could not see them — each is still a permanent rules-free link
+readable off the appointment document by any assigned employee, with
+`rotateAssignedImageTokens` already deleted. Nothing regressed here; the
+CLAIM was simply broader than the evidence, and it had been copied into
+`firestore.rules`, `AppointmentImageLoader` and the script's own output.
+`countArrayUrls` now counts them, all three claims are scoped to the
+subcollection, and **running `clear-appointment-picture-arrays.js` (step 4)
+is what actually closes S1** — it was already the next operational step.]**
 
 The prod count ran against `schedulingapp-88727` LIVE via the new read-only
 `functions/scripts/count-legacy-image-urls.js`: **14 image documents scanned, 0

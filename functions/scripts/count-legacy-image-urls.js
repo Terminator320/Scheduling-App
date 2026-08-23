@@ -12,6 +12,19 @@
 // question that decides what to do about that, and it is S1 in
 // `docs/audits/CODEBASE_AUDIT.md`.
 //
+// ANSWERED 2026-08-22 for the SUBCOLLECTION: 14 documents scanned, ZERO
+// carrying a url with no storagePath, so the field was retired (rules
+// allowlist, loader fallback, store write) without stranding any bytes.
+//
+// That is NOT the same as "no rules-free link remains", and the two were
+// conflated once. A pre-CONTRACT upload wrote a url alongside the
+// storagePath into the parent `pictures[]` array, and those arrays are still
+// there until `clear-appointment-picture-arrays.js` runs (step 4 of the
+// runbook in docs/DEPLOYMENT.md) - each entry a permanent link readable off
+// the appointment document by any assigned employee. `countArrayUrls` counts
+// exactly those, so the script now answers BOTH questions and the second one
+// is the security claim.
+//
 // What the answer means:
 //   ZERO — the deletion premise holds. Drop `url` from the `images` rules
 //     allowlist and delete `AppointmentImageLoader`'s url fallback, which makes
@@ -60,21 +73,6 @@ function assertKnownFlags(argv) {
 const PAGE_SIZE = 500;
 
 /**
- * Whether one image document is a legacy permanent link.
- *
- * Mirrors `imageDoc` in `backfill-appointment-images.js`, which writes `url`
- * ONLY when `storagePath` is empty — the two conditions are checked separately
- * anyway, so a document written by some other path is still classified right.
- * @param {!Object} data The image document body.
- * @return {boolean} True when it carries a url and no storagePath.
- */
-function isLegacyUrlOnly(data) {
-  const storagePath = String((data && data.storagePath) || "").trim();
-  const url = String((data && data.url) || "").trim();
-  return storagePath === "" && url !== "";
-}
-
-/**
  * Counts the legacy documents across every appointment.
  * @param {!Object} db The Firestore handle.
  * @param {boolean} verbose Whether to list each affected appointment id.
@@ -103,23 +101,25 @@ async function countLegacyUrls(db, verbose) {
       const data = doc.data() || {};
       const storagePath = String(data.storagePath || "").trim();
       const url = String(data.url || "").trim();
+      // Both branches below name the document, so `doc.ref.parent.parent` —
+      // the appointment, which is what an operator needs to act on one of
+      // these — is resolved once for the pair.
+      const appointmentId =
+        doc.ref.parent.parent ? doc.ref.parent.parent.id : "(unknown)";
+      const path = `appointments/${appointmentId}/images/${doc.id}`;
 
-      if (isLegacyUrlOnly(data)) {
+      // The two halves of ONE classification of a document with no
+      // storagePath, spelled side by side so neither can drift from the
+      // other: a url makes it a legacy permanent link, no url makes it
+      // unrenderable, and the clear script refuses an appointment on the
+      // second.
+      if (storagePath !== "") continue;
+      if (url !== "") {
         legacy += 1;
-        // `doc.ref.parent.parent` is the appointment; the id is what an
-        // operator needs to act on one of these.
-        const appointmentId =
-          doc.ref.parent.parent ? doc.ref.parent.parent.id : "(unknown)";
-        if (verbose) {
-          console.log(`  legacy url: appointments/${appointmentId}/` +
-            `images/${doc.id}`);
-        }
-      } else if (storagePath === "" && url === "") {
+        if (verbose) console.log(`  legacy url: ${path}`);
+      } else {
         orphans += 1;
-        const appointmentId =
-          doc.ref.parent.parent ? doc.ref.parent.parent.id : "(unknown)";
-        console.log(`  NO IDENTITY (neither storagePath nor url): ` +
-          `appointments/${appointmentId}/images/${doc.id}`);
+        console.log(`  NO IDENTITY (neither storagePath nor url): ${path}`);
       }
     }
 
@@ -128,6 +128,60 @@ async function countLegacyUrls(db, verbose) {
   }
 
   return {scanned, legacy, orphans};
+}
+
+/**
+ * Counts the `url` strings still sitting in parent `pictures[]` arrays.
+ *
+ * The subcollection scan above CANNOT see these, and they are the larger set:
+ * a pre-CONTRACT upload wrote BOTH `storagePath` and a `getDownloadURL()`
+ * link into every array entry, so an entry is typically not url-ONLY but
+ * still carries a permanent, rules-free, transferable link - readable off the
+ * appointment document by any assigned employee, and unrevocable since
+ * `rotateAssignedImageTokens` was deleted. Nothing writes these any more;
+ * `clear-appointment-picture-arrays.js` is what removes them, and until that
+ * has run "no rules-free link remains" is a statement about the
+ * SUBCOLLECTION only.
+ * @param {!Object} db The Firestore handle.
+ * @param {boolean} verbose Whether to list each affected appointment id.
+ * @return {!Promise<{appointments: number, withArray: number, urls: number}>}
+ *   The tally.
+ */
+async function countArrayUrls(db, verbose) {
+  let appointments = 0;
+  let withArray = 0;
+  let urls = 0;
+  let cursor = null;
+
+  for (;;) {
+    let query = db.collection("appointments")
+        .orderBy("__name__")
+        .limit(PAGE_SIZE);
+    if (cursor) query = query.startAfter(cursor);
+
+    const snap = await query.get();
+    if (snap.empty) break;
+
+    for (const doc of snap.docs) {
+      appointments += 1;
+      const data = doc.data() || {};
+      const pictures = Array.isArray(data.pictures) ? data.pictures : [];
+      if (pictures.length === 0) continue;
+      withArray += 1;
+
+      const carried = pictures.filter(
+          (p) => String((p && p.url) || "").trim() !== "").length;
+      urls += carried;
+      if (carried > 0 && verbose) {
+        console.log(`  ${carried} array url(s): appointments/${doc.id}`);
+      }
+    }
+
+    cursor = snap.docs[snap.docs.length - 1];
+    if (snap.size < PAGE_SIZE) break;
+  }
+
+  return {appointments, withArray, urls};
 }
 
 /**
@@ -145,24 +199,44 @@ async function main() {
 
   const db = getFirestore();
   const {scanned, legacy, orphans} = await countLegacyUrls(db, verbose);
+  const array = await countArrayUrls(db, verbose);
 
   console.log(`\nscanned ${scanned} image documents`);
   console.log(`legacy url-only (url set, no storagePath): ${legacy}`);
   if (orphans > 0) {
     console.log(`no identity at all (neither field): ${orphans}`);
   }
+  console.log(
+      `\nscanned ${array.appointments} appointments; ` +
+      `${array.withArray} still carry a pictures[] array, ` +
+      `holding ${array.urls} url(s)`);
 
   if (legacy === 0) {
     console.log(
-        "\nZERO — no permanent rules-free links remain. S1's fix is now " +
-        "safe: drop `url` from the images rules allowlist and delete the " +
-        "loader's url fallback.");
+        "\nZERO url-only image documents: dropping `url` from the images " +
+        "rules allowlist strands no bytes, which is what S1 asked.");
   } else {
     console.log(
-        `\n${legacy} permanent rules-free link(s) remain, with NO revocation ` +
-        "path since rotateAssignedImageTokens was deleted. Re-home those " +
-        "bytes to a storagePath and strip the url, or restore a rotation " +
-        "scoped to just these objects. Re-run with --verbose to list them.");
+        `\n${legacy} url-only image document(s) remain: those bytes have NO ` +
+        "other handle, so re-home them to a storagePath before the field " +
+        "goes. Re-run with --verbose to list them.");
+  }
+
+  // Deliberately a SECOND sentence. The two counts answer different questions
+  // and only the pair supports the security claim: the first says whether
+  // dropping the field loses any bytes, this one says whether a permanent
+  // rules-free link is still readable ANYWHERE.
+  if (array.urls === 0) {
+    console.log(
+        "ZERO array urls: no permanent rules-free link remains in the " +
+        "database at all.");
+  } else {
+    console.log(
+        `${array.urls} permanent rules-free link(s) STILL READABLE off the ` +
+        "appointment documents, with no revocation path since " +
+        "rotateAssignedImageTokens was deleted. Until " +
+        "clear-appointment-picture-arrays.js has run, any claim that none " +
+        "remains is about the SUBCOLLECTION only.");
   }
 }
 
