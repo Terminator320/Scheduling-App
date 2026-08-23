@@ -19,12 +19,14 @@
 >    `AppointmentImageLoader`'s header — now states the residual accurately, so
 >    the written risk assessment no longer leans on a claim the rules
 >    contradict.
-> 2. **The ⚠️ "Act before release" section is untouched.** All four are
+> 2. **The ⚠️ "Act before release" section is down to THREE open.** All are
 >    operational and owner-gated, not code: the photo migration's deploy
->    ordering, the un-rotated download tokens for anyone deactivated
->    2026-08-16 → 2026-08-19, the 3 orphaned Cloud Scheduler jobs (`gcloud` is
->    not installed here), and the live `MAPS_API_KEY` in git history that no
->    doc records as rotated.
+>    ordering, the 3 orphaned Cloud Scheduler jobs (`gcloud` is not installed
+>    here), and the live `MAPS_API_KEY` in git history that no doc records as
+>    rotated. The fourth — the un-rotated download tokens for anyone deactivated
+>    2026-08-16 → 2026-08-19 — is **CLOSED 2026-08-22**: no account was
+>    deactivated in that window, so the affected set is empty. It was the only
+>    item that had to precede the photo deploy.
 >
 > Two findings changed shape once the code was in hand, and both are worth
 > knowing:
@@ -68,7 +70,8 @@ Baseline: `7ace6528` on `redesgin`, clean tree.
 - **Auto-fixed (safe, in the diff):** 11 — 3 zero-reference deletions, 1
   orphaned docstring, 7 factually-wrong doc pointers.
 - **Reported for your decision:** 34
-  (⚠️ 4 act-before-release · 🔴 5 security · 🟠 6 bugs · 🔵 19 improvements) —
+  (⚠️ 4 act-before-release, 1 since closed · 🔴 5 security · 🟠 6 bugs ·
+  🔵 19 improvements) —
   **all 34 acted on 2026-08-22; see the status banner above.**
 - **Verification:** `flutter analyze` **No issues found!** · `flutter test`
   **2608/2608** · `functions` jest **1343/1343 across 56 suites** ·
@@ -129,13 +132,19 @@ surfaced here because the CONTRACT step makes two of them newly urgent.
   there is no array fallback left in the app, so anything the backfill misses
   shows **no photos at all**. Step 4 is the irreversible one; see 🔵 I1 before
   running it.
-- [ ] **Download tokens for anyone deactivated 2026-08-16 → 2026-08-19 were
-  never rotated.** `docs/DEPLOYMENT.md:585-600`. `rotateAssignedImageTokens`
+- [x] **Download tokens for anyone deactivated 2026-08-16 → 2026-08-19 were
+  never rotated — CLOSED 2026-08-22, nothing was owed.** `rotateAssignedImageTokens`
   resolved its bucket into a local while the callee read `deps.bucket`, so the
-  control logged "nothing rotated" while rotating nothing. The fix shipped; it
-  does not act retroactively. Remediation is to flip each affected person to
-  `active` and back. **Note this interacts with 🔴 S1** — the rotation has since
-  been deleted entirely, so this is now the only way to close that window.
+  control logged "nothing rotated" while rotating nothing; the fix shipped
+  2026-08-19 and does not act retroactively. **Owner confirms no account was
+  deactivated in that window**, so the set of affected people is empty and the
+  flip-to-`active`-and-back remediation has no subject. This was the only item
+  that had to precede the photo-migration deploy (that deploy deletes the
+  rotation), so **the deploy ordering is no longer constrained by it.**
+  What the deletion does change is FORWARD-looking, and it is 🔴 S1's question,
+  not this one's: from that deploy on, deactivating someone rotates nothing, so
+  any legacy `images` doc still carrying a `url` stays a permanent rules-free
+  link. The prod count in S1 is what decides whether that set is empty too.
 - [ ] **3 orphaned Cloud Scheduler jobs.** `gcloud` is not installed on this
   box; scheduled functions must land on exactly 3, and only 3 are free.
 - [ ] **A live `MAPS_API_KEY` remains in git history**, committed by the merge
