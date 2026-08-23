@@ -158,7 +158,24 @@ surfaced here because the CONTRACT step makes two of them newly urgent.
 
 ### S1 — Legacy `url` photo docs are permanent rules-free links, and the control that revoked them was deleted on a premise the code contradicts · severity: medium · confidence: high
 
-**[PARTLY DONE 2026-08-22 — the prose is corrected everywhere; the prod count is still owed.]**
+**[DONE 2026-08-22 — the count came back ZERO and the field is gone.]**
+
+The prod count ran against `schedulingapp-88727` LIVE via the new read-only
+`functions/scripts/count-legacy-image-urls.js`: **14 image documents scanned, 0
+with a url and no storagePath.** So the deletion premise now holds, and the
+three things that kept the field alive went with it — `firestore.rules` accepts
+only `['storagePath', 'fileName', 'uploadedAt']`, `AppointmentImageLoader` keys
+and fetches on `storagePath` alone (the `refFromURL` fallback and the `url:`
+cache key space are deleted), `AppointmentImagesStore` never writes the field,
+and `backfill-appointment-images.js` SKIPS a url-only array entry rather than
+copying a document that could never render. **Verified safe against the fleet
+first:** the shipped build (`903161e1`) carries the same
+`storagePath.isEmpty && url.isNotEmpty` guard and always sets `storagePath` on
+upload, so no shipped build can write the field — this is a rules tightening
+no live client can trip. **Needs a `firestore:rules` deploy to take effect.**
+Two notes worth keeping: `images.url` is index-EXEMPT, so the count had to scan
+and filter in memory rather than `where()`; and the count also proves no ARRAY
+entry is url-only, since the backfill copies every one.
 
 - **Where:** `firestore.rules:687` and `:696-701`;
   `functions/scripts/backfill-appointment-images.js:87`;

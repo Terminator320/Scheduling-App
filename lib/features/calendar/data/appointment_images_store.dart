@@ -131,14 +131,17 @@ class AppointmentImagesStore {
   ///
   /// Two things about it are load-bearing:
   ///
-  /// `url` is written **only when there is no `storagePath`**. Photos render
-  /// from bytes fetched off `storagePath` by `AppointmentImageLoader`, so every
-  /// read re-evaluates `storage.rules`; a persisted url is a permanent
-  /// rules-free token with no reader left in the app, and `ImageStorageService`
-  /// stopped minting one at the CONTRACT step. What survives is the LEGACY
-  /// entry that has only a url — dropping that one destroys the single thing
-  /// that can render the photo. Omitting it otherwise was also most of the
-  /// size win: the url was ~215 of a ~290-byte entry.
+  /// **`url` is never written.** Photos render from bytes fetched off
+  /// `storagePath` by `AppointmentImageLoader`, so every read re-evaluates
+  /// `storage.rules`; a persisted url is a permanent rules-free token with no
+  /// reader left in the app, and `ImageStorageService` stopped minting one at
+  /// the CONTRACT step. A carve-out survived here for the LEGACY entry that
+  /// had only a url, on the reasoning that dropping it destroyed the single
+  /// thing that could render the photo — but a prod count on 2026-08-22 found
+  /// **zero** such documents, `firestore.rules` no longer accepts the field,
+  /// and the loader's fallback is gone, so this write would now be refused
+  /// rather than merely unread. Omitting it was also most of the size win: the
+  /// url was ~215 of a ~290-byte entry.
   ///
   /// `fileName` is omitted when absent rather than written as null, so the
   /// document carries no key it has no value for.
@@ -153,7 +156,6 @@ class AppointmentImagesStore {
   static Map<String, dynamic> _toSubcollectionMap(AppointmentImage image) {
     return {
       'storagePath': image.storagePath,
-      if (image.storagePath.isEmpty && image.url.isNotEmpty) 'url': image.url,
       if (image.fileName != null) 'fileName': image.fileName,
       'uploadedAt': image.uploadedAt == null
           ? null

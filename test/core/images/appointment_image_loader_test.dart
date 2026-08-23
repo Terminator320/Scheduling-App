@@ -7,7 +7,8 @@
 // everything else — and its predecessor, which re-minted that URL at render
 // time, only ever gated the MINT. getData() is an authenticated SDK fetch:
 // storage.rules is evaluated every time, and nothing shareable is produced.
-// The legacy fallback is what keeps that from being a migration.
+// The legacy url fallback that once kept this from being a migration was
+// removed 2026-08-22, after a prod count found zero documents relying on it.
 
 import 'dart:async';
 import 'dart:io';
@@ -89,32 +90,26 @@ void main() {
     },
   );
 
-  test('a doc with no storagePath is fetched through its url', () async {
-    // Legacy docs written before storagePath existed have nothing else to
-    // identify them by — this fallback is why the change needs no migration.
-    // The url is only a HANDLE: it is resolved back to a Reference and fetched
-    // through the SDK, so even here storage.rules is evaluated and the token
-    // url never reaches the network stack.
-    when(() => storage.refFromURL(stored)).thenReturn(ref);
-    whenGetData(ref, () async => photo);
+  test(
+    'a doc with no storagePath resolves to nothing, never through its url',
+    () async {
+      // This used to be the LEGACY fallback: a doc written before storagePath
+      // existed was fetched via refFromURL. It went on 2026-08-22, once a prod
+      // count found zero such documents — the stored string is a permanent,
+      // rules-free, transferable download link and nothing revokes it, so the
+      // loader must not resolve one even when it is the only handle present.
+      // storagePath is now the sole handle, and its absence means "no photo".
+      when(() => storage.refFromURL(any())).thenReturn(ref);
+      whenGetData(ref, () async => photo);
 
-    expect(await loader.load(const AppointmentImage(url: stored)), photo);
-  });
+      expect(await loader.load(const AppointmentImage(url: stored)), isEmpty);
+      verifyNever(() => storage.refFromURL(any()));
+    },
+  );
 
   test('a doc with neither a storagePath nor a url resolves to nothing', () {
     return expectLater(
       loader.load(const AppointmentImage()),
-      completion(isEmpty),
-    );
-  });
-
-  test('a url Storage cannot parse resolves to nothing, not a throw', () {
-    // refFromURL parses, so it throws rather than returning — and it must be
-    // caught here, or the broken future escapes into the widget's setState.
-    when(() => storage.refFromURL(any())).thenThrow(ArgumentError('not ours'));
-
-    return expectLater(
-      loader.load(const AppointmentImage(url: 'not-a-storage-url')),
       completion(isEmpty),
     );
   });
@@ -301,43 +296,28 @@ void main() {
     });
 
     test(
-      'a legacy doc with no storagePath is never cached under a blank key',
+      'two url-only docs both resolve to nothing and neither is cached',
       () async {
-        // Two legacy docs share the empty storagePath, so keying on it would
-        // serve the first doc's bytes for the second — the positional-mixup
-        // shape this whole area has been bitten by. Keying on the URL keeps
-        // them apart AND keeps them cached.
+        // These two used to be cached under a `url:`-prefixed key space, so
+        // that two legacy docs sharing the empty storagePath could not serve
+        // each other's bytes. Both the fallback and that key space went on
+        // 2026-08-22: a url-only doc now has no handle, so it never reaches
+        // Storage and there is nothing to key. The blank-key mixup this
+        // guarded against is unreachable for the same reason — `load` returns
+        // early on an empty key without touching the cache.
         for (final url in const ['legacy-a', 'legacy-b']) {
           final r = _MockRef();
           when(() => storage.refFromURL(url)).thenReturn(r);
           whenGetData(r, () async => _bytes(url));
         }
 
-        expect(
-          await loader.load(const AppointmentImage(url: 'legacy-a')),
-          _bytes('legacy-a'),
-        );
-        expect(
-          await loader.load(const AppointmentImage(url: 'legacy-b')),
-          _bytes('legacy-b'),
-        );
+        expect(await loader.load(const AppointmentImage(url: 'legacy-a')),
+            isEmpty);
+        expect(await loader.load(const AppointmentImage(url: 'legacy-b')),
+            isEmpty);
+        verifyNever(() => storage.refFromURL(any()));
       },
     );
-
-    test('a LEGACY doc is cached too, keyed on its url', () async {
-      // The `url` fallback is documented as permanent, so a legacy photo
-      // bypassing the cache re-fetched from Storage on every widget State —
-      // every sheet open and again on every View->Edit toggle, which is
-      // exactly the cost this cache exists to remove.
-      when(() => storage.refFromURL(stored)).thenReturn(ref);
-      whenGetData(ref, () async => photo);
-      const image = AppointmentImage(url: stored);
-
-      expect(await loader.load(image), photo);
-      expect(await loader.load(image), photo);
-
-      verify(() => ref.getData(any())).called(1);
-    });
 
     test(
       'clear() forgets everything, so bytes do not outlive a session',

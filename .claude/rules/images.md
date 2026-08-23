@@ -47,18 +47,25 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   deactivation branch) was deleted at the same time, along with the
   `(employeeIds CONTAINS, endTime DESC)` composite it needed.
   **That deletion's premise — "there is no stored link left to invalidate" —
-  is TRUE OF NEW PHOTOS ONLY, and the rules say so.** A LEGACY
-  `appointments/*/images` row that never had a `storagePath` still carries its
-  `url`: `backfill-appointment-images.js` preserves it deliberately (dropping
-  it destroys the only thing that can render the photo), `firestore.rules`
-  accepts the field up to 1000 chars, and `AppointmentImageLoader`'s fallback
-  is documented as permanent. Each such string is still a rules-free,
-  non-expiring, transferable link that survives deactivation, and now nothing
-  rotates it. **The deciding fact is a number nobody has yet:** count
-  `appointments/*/images` where `url` is set and `storagePath` is empty. Zero
-  means dropping `url` from the rules allowlist and deleting the loader
-  fallback, which makes the premise true; any at all means re-homing those
-  bytes under a real `storagePath` or reinstating a rotation scoped to them.
+  was TRUE OF NEW PHOTOS ONLY for a while, and is now true outright.** A LEGACY
+  `appointments/*/images` row that never had a `storagePath` used to keep its
+  `url`, and three things kept that alive: the backfill preserved it
+  deliberately, `firestore.rules` accepted the field up to 1000 chars, and
+  `AppointmentImageLoader` had a `refFromURL` fallback documented as permanent.
+  Each such string was a rules-free, non-expiring, transferable link surviving
+  deactivation with nothing left to rotate it. **The deciding fact was a count,
+  and it came back ZERO** (2026-08-22,
+  `functions/scripts/count-legacy-image-urls.js`: 14 image documents scanned,
+  0 with a url and no storagePath), so all three went with it — the rules
+  allowlist is `['storagePath', 'fileName', 'uploadedAt']`, the loader keys and
+  fetches on `storagePath` alone, `AppointmentImagesStore` never writes the
+  field, and the backfill SKIPS a url-only array entry instead of copying a
+  document that could never render. **If a url-only row ever reappears, re-home
+  its bytes under a real `storagePath` — do not re-add the field to make a
+  write pass.** Run that count script again to check; it is read-only.
+  **Note the count script scans rather than queries on purpose:** `images.url`
+  is index-EXEMPT in `firestore.indexes.json`, so a `where("url", ...)` fails
+  outright.
   Two further limits remain and neither is fixable in code: this does **not**
   revoke a URL somebody captured under an old build (those tokens are still
   live on their objects unless rotated by hand), and it does **not** stop an
@@ -95,18 +102,17 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   **Entries never need revalidating, and that is what makes the whole thing
   safe:** `ImageStorageService.uploadImage` composes every file name from
   `DateTime.now()`, so a `storagePath` is written exactly once and never
-  overwritten. A rotated download token mints a different URL, so a legacy
-  `url:`-keyed entry simply becomes unreachable and ages out. Every disk
+  overwritten. Every disk
   operation is best-effort — a failure degrades to a cache miss and a log,
   never to a photo that fails to render — and the resolved directory is
   memoized with its REJECTION explicitly forgotten, or one hiccup at launch
   would silently disable offline photos for the whole process.
   **The session cache holds the BYTES** (`Map<key, Future<Uint8List>>` keyed on
-  `storagePath`, or `'url:<url>'` for a legacy entry that has no storage path —
-  keying THOSE on the shared empty `storagePath` would serve one doc's bytes
-  for another, but the url is already a unique handle, and the legacy branch
-  bypassing the cache entirely meant re-fetching on every widget State for a
-  fallback documented as permanent; the provider is a singleton) — that is what keeps the fetch from being paid
+  `storagePath` alone; there was a second `'url:<url>'` key space for legacy
+  entries with no storage path, and it went with the fallback on 2026-08-22 —
+  such an entry now has no handle to key or fetch, and `load` returns early on
+  the empty key without touching either cache; the provider is a
+  singleton) — that is what keeps the fetch from being paid
   per widget State, i.e. on every sheet open AND again on every View→Edit
   toggle, which is the whole win the URL cache was built for. It is
   **byte-budgeted** (24 MB, oldest evicted first) because bytes are far heavier
@@ -147,11 +153,11 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   Pinned by `test/core/images/appointment_image_disk_cache_test.dart` ("a write
   already in flight when the session ends is dropped" / "a write started after
   the session ended is kept").
-  A doc written before `storagePath` was stored has only its `url`, so **that
-  URL is unavoidably the handle** — but it is turned back into a `Reference`
-  via `refFromURL` and fetched through the SDK like any other, so even the
-  legacy path is rules-evaluated and the token URL never reaches the network
-  stack. That fallback is why this needed no migration; keep it.
+  A doc written before `storagePath` was stored had only its `url`, and that
+  URL was unavoidably the handle — resolved back into a `Reference` via
+  `refFromURL` so even the legacy path stayed rules-evaluated. **That fallback
+  is GONE (2026-08-22, zero such rows in prod)**; an entry reaching the loader
+  without a `storagePath` now has no handle and resolves to empty bytes.
   **A RULES REJECTION MUST NOT FALL BACK** (2026-08-11, still the point): the
   old `catch` was unconditional, so the one error it existed to convert into a
   blank tile — a `permission-denied`/`unauthorized` from the `status ==
@@ -216,13 +222,13 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   falling back to `url` for the legacy documents that have no storage path, so
   those don't all collide on one id. The two implementations share worked
   examples in their tests; change them together.
-  **The subcollection doc omits `url` when `storagePath` is present** — photos
-  render from bytes fetched off `storagePath`, so `storage.rules` is evaluated
-  on every fetch and a persisted download URL is a permanent rules-free token
-  with no reader. A LEGACY entry with only a `url` keeps it: that url is the
-  sole handle on its bytes, and `AppointmentImageLoader` turns it back into a
-  `Reference` through `refFromURL`. **Keep that fallback** — it is the one part
-  of the old shape that is load-bearing rather than compatibility.
+  **The subcollection doc never carries `url` at all** — photos render from
+  bytes fetched off `storagePath`, so `storage.rules` is evaluated on every
+  fetch and a persisted download URL is a permanent rules-free token with no
+  reader. A LEGACY entry with only a `url` used to keep it as the sole handle
+  on its bytes; that carve-out and the loader fallback behind it were removed
+  2026-08-22 once a prod count found zero such rows, and the rules now reject
+  the field.
   **`pictureCount` backs the card's photo INDICATOR and nothing else. It must
   never gate a READ, and it briefly did.** The counter is function-owned and
   DEBOUNCED — `debouncedRecountPictures` settles for 2 s before it even runs

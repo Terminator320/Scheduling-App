@@ -37,7 +37,8 @@ class _MockQuerySnapshot extends Mock
 class _MockDocSnap extends Mock
     implements QueryDocumentSnapshot<Map<String, dynamic>> {}
 
-class _FakeDoc extends Fake implements DocumentReference<Map<String, dynamic>> {}
+class _FakeDoc extends Fake
+    implements DocumentReference<Map<String, dynamic>> {}
 
 class _FakeSetOptions extends Fake implements SetOptions {}
 
@@ -81,8 +82,9 @@ void main() {
     });
 
     when(firestore.batch).thenReturn(batch);
-    when(() => batch.set<Map<String, dynamic>>(any(), any(), any()))
-        .thenReturn(null);
+    when(
+      () => batch.set<Map<String, dynamic>>(any(), any(), any()),
+    ).thenReturn(null);
     when(() => batch.update(any(), any())).thenReturn(null);
     when(() => batch.delete(any())).thenReturn(null);
     when(batch.commit).thenAnswer((_) async {});
@@ -98,20 +100,24 @@ void main() {
     test('writes one photo document, in one batch', () async {
       await repo().appendAppointmentPictures('a1', [photo]);
 
-      verify(() => batch.set<Map<String, dynamic>>(any(), any(), any())).called(1);
+      verify(
+        () => batch.set<Map<String, dynamic>>(any(), any(), any()),
+      ).called(1);
       // One commit: this path is retried by the offline queue, which has no
       // way to reconcile a half-written batch.
       verify(batch.commit).called(1);
     });
 
-    test('the subcollection id is derived from the photo, not generated',
-        () async {
-      // A generated id would make the offline queue's append-only retry of an
-      // already-uploaded photo create a SECOND document, and the photo would
-      // render twice. This is what replaces the array's arrayUnion dedupe.
-      await repo().appendAppointmentPictures('a1', [photo]);
-      expect(requestedImageIds, [appointmentImageDocId(photo)]);
-    });
+    test(
+      'the subcollection id is derived from the photo, not generated',
+      () async {
+        // A generated id would make the offline queue's append-only retry of an
+        // already-uploaded photo create a SECOND document, and the photo would
+        // render twice. This is what replaces the array's arrayUnion dedupe.
+        await repo().appendAppointmentPictures('a1', [photo]);
+        expect(requestedImageIds, [appointmentImageDocId(photo)]);
+      },
+    );
 
     test('the parent write is updatedAt alone — no array, no count', () async {
       // Recreating `pictures` would put the photo list back on a document the
@@ -122,43 +128,54 @@ void main() {
       // WriteBatch.update takes Map<Object, Object?>, so read the keys off the
       // raw map rather than casting the whole thing.
       final patch =
-          verify(() => batch.update(any(), captureAny())).captured.single as Map;
+          verify(() => batch.update(any(), captureAny())).captured.single
+              as Map;
       expect(patch.keys, ['updatedAt']);
     });
 
-    test('the subcollection doc omits url when storagePath is present',
-        () async {
-      // A persisted download URL is a permanent rules-free token, and nothing
-      // reads it here — photos render from storagePath so every read
-      // re-evaluates storage.rules. Dropping it is also most of the size win.
-      await repo().appendAppointmentPictures('a1', [photo]);
-      final body =
-          verify(() => batch.set<Map<String, dynamic>>(any(), captureAny(), any()))
-              .captured
-              .single
-              as Map<String, dynamic>;
-      expect(body.containsKey('url'), isFalse);
-      expect(body['storagePath'], photo.storagePath);
-    });
+    test(
+      'the subcollection doc omits url when storagePath is present',
+      () async {
+        // A persisted download URL is a permanent rules-free token, and nothing
+        // reads it here — photos render from storagePath so every read
+        // re-evaluates storage.rules. Dropping it is also most of the size win.
+        await repo().appendAppointmentPictures('a1', [photo]);
+        final body =
+            verify(
+                  () => batch.set<Map<String, dynamic>>(
+                    any(),
+                    captureAny(),
+                    any(),
+                  ),
+                ).captured.single
+                as Map<String, dynamic>;
+        expect(body.containsKey('url'), isFalse);
+        expect(body['storagePath'], photo.storagePath);
+      },
+    );
 
-    test('a LEGACY photo with no storagePath keeps its url', () async {
-      // That url is the only thing that can render it — the same entries
-      // AppointmentImageLoader's fallback exists for. Dropping it here
-      // would destroy them.
+    test('a url-only photo is written WITHOUT its url', () async {
+      // This used to keep the url, as the only thing that could render a
+      // LEGACY entry. Both that carve-out and AppointmentImageLoader's
+      // matching fallback went on 2026-08-22, once a prod count found zero
+      // such documents: the string is a permanent, rules-free, transferable
+      // download link that nothing revokes, and `firestore.rules` now rejects
+      // the field outright — so writing it would fail the batch rather than
+      // preserve anything.
       const legacy = AppointmentImage(
         url: 'https://firebasestorage.googleapis.com/v0/b/x/o/z?alt=media&t=q',
       );
       await repo().appendAppointmentPictures('a1', [legacy]);
       final body =
-          verify(() => batch.set<Map<String, dynamic>>(any(), captureAny(), any()))
-              .captured
-              .single
+          verify(
+                () =>
+                    batch.set<Map<String, dynamic>>(any(), captureAny(), any()),
+              ).captured.single
               as Map<String, dynamic>;
-      expect(body['url'], legacy.url);
+      expect(body.containsKey('url'), isFalse);
     });
 
-    test('ALWAYS writes uploadedAt, as an explicit null when unknown',
-        () async {
+    test('ALWAYS writes uploadedAt, as an explicit null when unknown', () async {
       // The invariant the file states and nothing asserted. `fetch` orders by
       // `uploadedAt`, and Firestore EXCLUDES a document missing the field it
       // orders by — so omitting the key (the way `fileName` legitimately omits
@@ -166,9 +183,10 @@ void main() {
       // erroring. Same trap as `archived` on clients.
       await repo().appendAppointmentPictures('a1', [photo]);
       final body =
-          verify(() => batch.set<Map<String, dynamic>>(any(), captureAny(), any()))
-              .captured
-              .single
+          verify(
+                () =>
+                    batch.set<Map<String, dynamic>>(any(), captureAny(), any()),
+              ).captured.single
               as Map<String, dynamic>;
       expect(body.containsKey('uploadedAt'), isTrue);
       expect(body['uploadedAt'], isNull);
@@ -181,9 +199,10 @@ void main() {
       );
       await repo().appendAppointmentPictures('a1', [stamped]);
       final body =
-          verify(() => batch.set<Map<String, dynamic>>(any(), captureAny(), any()))
-              .captured
-              .single
+          verify(
+                () =>
+                    batch.set<Map<String, dynamic>>(any(), captureAny(), any()),
+              ).captured.single
               as Map<String, dynamic>;
       expect(body['uploadedAt'], isA<Timestamp>());
       expect(
@@ -192,17 +211,21 @@ void main() {
       );
     });
 
-    test('skips an entry with no identity rather than failing the batch',
-        () async {
-      // An empty doc id would throw and take the valid photos down with it.
-      await repo().appendAppointmentPictures('a1', [
-        const AppointmentImage(),
-        photo,
-      ]);
-      expect(requestedImageIds, [appointmentImageDocId(photo)]);
-      verify(() => batch.set<Map<String, dynamic>>(any(), any(), any())).called(1);
-      verify(batch.commit).called(1);
-    });
+    test(
+      'skips an entry with no identity rather than failing the batch',
+      () async {
+        // An empty doc id would throw and take the valid photos down with it.
+        await repo().appendAppointmentPictures('a1', [
+          const AppointmentImage(),
+          photo,
+        ]);
+        expect(requestedImageIds, [appointmentImageDocId(photo)]);
+        verify(
+          () => batch.set<Map<String, dynamic>>(any(), any(), any()),
+        ).called(1);
+        verify(batch.commit).called(1);
+      },
+    );
 
     test('does nothing at all for an empty list', () async {
       await repo().appendAppointmentPictures('a1', const []);
@@ -220,7 +243,8 @@ void main() {
       expect(requestedImageIds, [appointmentImageDocId(photo)]);
       verify(() => batch.delete(any())).called(1);
       final patch =
-          verify(() => batch.update(any(), captureAny())).captured.single as Map;
+          verify(() => batch.update(any(), captureAny())).captured.single
+              as Map;
       expect(patch.keys, ['updatedAt']);
       verify(batch.commit).called(1);
     });
@@ -257,33 +281,35 @@ void main() {
       verify(() => query.limit(100)).called(1);
     });
 
-    test('a full page warns that photos beyond the cap were not loaded',
-        () async {
-      // The only bound left on a job's photos — a subcollection has no
-      // document-size ceiling of its own — and the warn is the only sign a
-      // job's photo strip is short. The picker caps a job at 10, so reaching
-      // 100 means a modified client, which is exactly what wants recording.
-      final query = _MockQuery();
-      final bounded = _MockQuery();
-      final snapshot = _MockQuerySnapshot();
-      final doc = _MockDocSnap();
-      when(doc.data).thenReturn({'storagePath': photo.storagePath});
-      when(() => images.orderBy('uploadedAt')).thenReturn(query);
-      when(() => query.limit(any())).thenReturn(bounded);
-      when(bounded.get).thenAnswer((_) async => snapshot);
-      when(() => snapshot.docs).thenReturn(List.filled(100, doc));
+    test(
+      'a full page warns that photos beyond the cap were not loaded',
+      () async {
+        // The only bound left on a job's photos — a subcollection has no
+        // document-size ceiling of its own — and the warn is the only sign a
+        // job's photo strip is short. The picker caps a job at 10, so reaching
+        // 100 means a modified client, which is exactly what wants recording.
+        final query = _MockQuery();
+        final bounded = _MockQuery();
+        final snapshot = _MockQuerySnapshot();
+        final doc = _MockDocSnap();
+        when(doc.data).thenReturn({'storagePath': photo.storagePath});
+        when(() => images.orderBy('uploadedAt')).thenReturn(query);
+        when(() => query.limit(any())).thenReturn(bounded);
+        when(bounded.get).thenAnswer((_) async => snapshot);
+        when(() => snapshot.docs).thenReturn(List.filled(100, doc));
 
-      final logger = _RecordingLogger();
-      final result = await FirebaseAppointmentsRepository(
-        firestore,
-        logger: logger,
-      ).fetchAppointmentPictures('a1');
+        final logger = _RecordingLogger();
+        final result = await FirebaseAppointmentsRepository(
+          firestore,
+          logger: logger,
+        ).fetchAppointmentPictures('a1');
 
-      expect(result, hasLength(100));
-      expect(logger.warnings, hasLength(1));
-      expect(logger.warnings.single, startsWith('APPT-IMG'));
-      expect(logger.warnings.single, contains('100'));
-    });
+        expect(result, hasLength(100));
+        expect(logger.warnings, hasLength(1));
+        expect(logger.warnings.single, startsWith('APPT-IMG'));
+        expect(logger.warnings.single, contains('100'));
+      },
+    );
 
     test('an empty subcollection means this job has no photos', () async {
       // During the migration empty meant "not backfilled yet, use the array".
