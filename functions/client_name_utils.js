@@ -43,6 +43,20 @@ const TRAILING_PHONE = /[\s,;:\-–—·|]*(\+?\d[\d\s().+-]{5,}\d)\s*$/;
 const EDGE_SEPARATORS = /^[\s,;:\-–—·|]+|[\s,;:\-–—·|]+$/g;
 
 /**
+ * The number's OWN wrapper, at the seam the lift cut it out of.
+ *
+ * [PHONE_CANDIDATE] starts and ends on a digit, so a number written the way
+ * the app renders it — "(514) 555-1234" — leaves its brackets behind. These
+ * are deliberately NOT folded into [EDGE_SEPARATORS]: that set is shared with
+ * [stripPhone], where a trailing bracket is usually the name's own
+ * ("Depanneur (Nord)"). Only the characters touching the cut are suspect.
+ *
+ * Mirrors `ClientNamePolicy._openSeam` / `._closeSeam`.
+ */
+const OPEN_SEAM = /[\s(]+$/;
+const CLOSE_SEAM = /^[\s)]+/;
+
+/**
  * The doc's number reduced to comparable digits. A NANP number typed with its
  * leading country code ("1-514-555-1234") is the same number as
  * "(514) 555-1234", so the 11-digit form sheds its leading 1.
@@ -407,8 +421,9 @@ function liftPhoneFromName(opts) {
   const match = matchPhoneInName(name);
   if (!match) return null;
 
-  const remaining = trimSeparators(
-      `${name.slice(0, match.start)} ${name.slice(match.end)}`);
+  const before = name.slice(0, match.start).replace(OPEN_SEAM, "");
+  const after = name.slice(match.end).replace(CLOSE_SEAM, "");
+  const remaining = trimSeparators(`${before} ${after}`);
   if (!remaining) return {name, phone: match.formatted};
   return {name: remaining, phone: match.formatted};
 }

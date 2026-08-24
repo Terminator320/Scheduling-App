@@ -95,6 +95,11 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
   void initState() {
     super.initState();
     _nameController.text = widget.initialName ?? '';
+    // The seed is a programmatic write, which never fires the name field's
+    // `onChanged` — so the lift below has to be run by hand here. The inline
+    // booking flow seeds this from the client search, and people are searched
+    // for by phone number, so the seed IS routinely the number.
+    liftPhoneFromNameField(name: _nameController, phone: _phoneController);
   }
 
   @override
