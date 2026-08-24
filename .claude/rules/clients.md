@@ -348,6 +348,26 @@ Root context: `../../CLAUDE.md`.
   field is EMPTY and the name holds a clean 10-digit number, and a name that is
   nothing but the number keeps it (the field is required — emptying it reads as
   the paste having vanished).
+  **`onChanged` is NOT the only entry point — `AddClientSheet.initState` calls
+  it on the SEEDED name too, and must keep doing so.** The seed is a
+  programmatic `controller.text =` write, which fires no `onChanged`, and the
+  inline "add client while booking" flow seeds it from the client-search query
+  — which in this business is routinely the phone number, since people are
+  identified by one. For as long as that call was missing, the most common way
+  a client got added stored a doc whose `name` was a bare number and whose
+  `phone` was EMPTY: nothing could dial it, not the Call button, not the
+  `clientPhone` denormalized onto every appointment, not the Wave payload. A
+  new entry point that seeds the name needs the same call.
+  **The lift trims the number's own brackets at the SEAM it cut, via
+  `_openSeam`/`_closeSeam`** — NOT by widening `_edgeSeparators`, which
+  `stripPhone` shares and where a trailing bracket is usually the name's own
+  ("Depanneur (Nord)"). The candidate run starts and ends on a digit, so
+  "Marc Tremblay (514) 555-1234" — the shape the app itself renders, and the
+  shape a number is pasted in — used to leave "Marc Tremblay (" behind, which
+  `composeSave` then split into a lastName of "(" that every card rendered.
+  Mirrored by `OPEN_SEAM`/`CLOSE_SEAM` in `functions/client_name_utils.js`;
+  the Wave import takes only the phone half, so that mirror is parity, not
+  behaviour.
 - **The street + apt precedence rule has ONE owner: `AddressParser.canonicalFrom`.**
   Both client save paths resolve their stored address through it — the explicit
   apt field wins over an apt embedded in the street text, and a blank one keeps

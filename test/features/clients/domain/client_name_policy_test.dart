@@ -487,6 +487,55 @@ void main() {
       );
     });
 
+    // "(514) 555-1234" is the shape the app itself renders and the shape a
+    // number is pasted in. The candidate run starts at a DIGIT, so the
+    // number's own opening bracket is not part of the match and was left
+    // stranded in the name — a new client saved as firstName "(".
+    test('takes the number own brackets with it', () {
+      expect(
+        ClientNamePolicy.liftPhoneFromName(
+          name: 'Marc Tremblay (514) 555-1234',
+          phone: '',
+        )?.name,
+        'Marc Tremblay',
+      );
+      expect(
+        ClientNamePolicy.liftPhoneFromName(
+          name: '(514) 555-1234 Marc Tremblay',
+          phone: '',
+        )?.name,
+        'Marc Tremblay',
+      );
+      expect(
+        ClientNamePolicy.liftPhoneFromName(
+          name: 'Marc Tremblay (5145551234)',
+          phone: '',
+        )?.name,
+        'Marc Tremblay',
+      );
+    });
+
+    test('a bracketed number alone is still nothing but the number', () {
+      final lifted = ClientNamePolicy.liftPhoneFromName(
+        name: '(514) 555-1234',
+        phone: '',
+      );
+      expect(lifted?.name, '(514) 555-1234');
+      expect(lifted?.phone, '(514) 555-1234');
+    });
+
+    test('a bracket that belongs to the NAME survives', () {
+      // The seam trim must not eat a legitimate bracket, which is why the
+      // shared edge-separator set is deliberately not widened.
+      expect(
+        ClientNamePolicy.liftPhoneFromName(
+          name: 'Depanneur (Nord) 5145551234',
+          phone: '',
+        )?.name,
+        'Depanneur (Nord)',
+      );
+    });
+
     test('does nothing to an ordinary name', () {
       expect(
         ClientNamePolicy.liftPhoneFromName(name: 'Marc Tremblay', phone: ''),

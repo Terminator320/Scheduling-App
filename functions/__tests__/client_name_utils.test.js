@@ -301,6 +301,28 @@ describe("liftPhoneFromName", () => {
         .toBeNull();
   });
 
+  // Worked examples shared with `ClientNamePolicy.liftPhoneFromName` — the
+  // candidate run starts at a DIGIT, so the number's own opening bracket was
+  // stranded in the name.
+  test("takes the number own brackets with it", () => {
+    expect(liftPhoneFromName({name: "Marc Tremblay (514) 555-1234", phone: ""}))
+        .toEqual({name: "Marc Tremblay", phone: "(514) 555-1234"});
+    expect(liftPhoneFromName({name: "(514) 555-1234 Marc Tremblay", phone: ""}))
+        .toEqual({name: "Marc Tremblay", phone: "(514) 555-1234"});
+    expect(liftPhoneFromName({name: "Marc Tremblay (5145551234)", phone: ""}))
+        .toEqual({name: "Marc Tremblay", phone: "(514) 555-1234"});
+  });
+
+  test("a bracketed number alone is still nothing but the number", () => {
+    expect(liftPhoneFromName({name: "(514) 555-1234", phone: ""}))
+        .toEqual({name: "(514) 555-1234", phone: "(514) 555-1234"});
+  });
+
+  test("a bracket that belongs to the NAME survives", () => {
+    expect(liftPhoneFromName({name: "Depanneur (Nord) 5145551234", phone: ""}))
+        .toEqual({name: "Depanneur (Nord)", phone: "(514) 555-1234"});
+  });
+
   test("a name with no number at all", () => {
     expect(liftPhoneFromName({name: "Marc Tremblay", phone: ""})).toBeNull();
   });

@@ -68,6 +68,17 @@ class ClientNamePolicy {
   /// where the number can sit at the FRONT ("514-555-1234 - Marc Tremblay").
   static final _edgeSeparators = RegExp(r'^[\s,;:\-–—·|]+|[\s,;:\-–—·|]+$');
 
+  /// The number's OWN wrapper, at the seam the lift cut it out of.
+  ///
+  /// [_candidate] starts and ends on a digit, so a number written the way the
+  /// app itself renders it — "(514) 555-1234" — leaves its brackets behind,
+  /// and a client pasted in that shape was stored named "(". These are
+  /// deliberately NOT folded into [_edgeSeparators]: that set is shared with
+  /// [stripPhone], where a trailing bracket is usually the name's own
+  /// ("Depanneur (Nord)"). Only the characters touching the cut are suspect.
+  static final _openSeam = RegExp(r'[\s(]+$');
+  static final _closeSeam = RegExp(r'^[\s)]+');
+
   /// The doc's number reduced to comparable digits. A NANP number typed with
   /// its leading country code ("1-514-555-1234") is the same number as
   /// "(514) 555-1234", so the 11-digit form sheds its leading 1.
@@ -428,9 +439,11 @@ class ClientNamePolicy {
     final match = _matchPhone(name);
     if (match == null) return null;
 
-    final remaining = _trimSeparators(
-      '${name.substring(0, match.start)} ${name.substring(match.end)}',
-    );
+    final before = name
+        .substring(0, match.start)
+        .replaceAll(_openSeam, '');
+    final after = name.substring(match.end).replaceAll(_closeSeam, '');
+    final remaining = _trimSeparators('$before $after');
     if (remaining.isEmpty) return (name: name, phone: match.formatted);
     return (name: remaining, phone: match.formatted);
   }
