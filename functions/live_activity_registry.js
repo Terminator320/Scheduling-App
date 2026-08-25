@@ -349,7 +349,7 @@ module.exports = {
   KIND_PUSH_TO_START,
   KIND_UPDATE,
   CARDS_COLLECTION,
-  // The four below are exported for unit tests, which assert against the
+  // The three below are exported for unit tests, which assert against the
   // constants rather than restating their literals — same convention as
   // employee_accounts.js.
   IN_QUERY_MAX,

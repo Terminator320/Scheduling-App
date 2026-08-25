@@ -138,7 +138,6 @@ const JOB_TITLES = [
   "", "lead_tech", "technician", "apprentice", "dispatcher",
 ];
 
-
 /**
  * Creates (or re-provisions) the Firebase Auth account for an employee.
  *

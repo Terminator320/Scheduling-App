@@ -43,7 +43,7 @@ lib/
 │   ├── feedback/                    app_empty_state, centered_error_text (CenteredErrorText — shared centered load-failure message), error_snack_bar (errorSnackBar — shared error SnackBar for the sites that bypass NoticeService), skeleton_loader (shimmer — SkeletonListTile / SkeletonAppointmentRow, plus SkeletonList, the standard N-row list loading state; the shimmering rectangle itself is the PRIVATE _SkeletonBox, so there is no `SkeletonLoader` to reach for — compose one of the three public shapes or add a fourth beside them; deliberately NOT scrollable, since two callers sit inside infinite_scroll_pagination's SliverFillRemaining, which asks its child for intrinsics), warning_note (WarningNote — the amber caveat box; a caveat on a SUCCESS, not a failure), status_pill (shared rounded label + text-scale cap), status_chip (appointment lifecycle + AppointmentStatus.fromRaw the canonical status mapper, and AppointmentStatus.storedRaw the canonical stored-status normalizer — overdue/legacy → pending), user_status_chip (account UserStatus: active/invited/disabled + UserStatus.fromRaw)
 │   ├── fields/                      address_autocomplete_field, labeled_text_field (built-in shake + animated error row), app_search_bar, clear_text_button (ClearTextButton — the one clear-"x" suffix), form_helpers
 │   ├── cards/                       list_item_tile (shared row layout behind client/employee tiles), info_card (InfoCard + InfoCardRow — bordered card of tappable rows with tinted icon chips), sheet_panel_row (SheetPanelRow — the third SheetPanel row shape: label-over-child for a chip strip, or label-beside-trailing for a switch, where a SheetFieldRow with no picked *value* would render a blank second line. Private to edit_person_sheet until the AVAILABILITY panel appeared on My details too (P5); both screens must render that panel identically)
-│   ├── dialogs/                     confirm_dialog (showConfirmDialog — shared Cancel/confirm, destructive variant)
+│   ├── dialogs/                     confirm_dialog (showConfirmDialog — shared Cancel/confirm, destructive variant), app_dialog_frame (AppDialogFrame — the bare dialog SHELL: title, scrollable body, action row. For a dialog that is NOT a Cancel/confirm question, so it neither replaces nor wraps showConfirmDialog; extracted 2026-08-25 from the booking-conflict, series-scope and time-off clash dialogs, which carried the same twelve lines each)
 │   ├── sheets/                      sheet_widgets (DraggableSheetFrame, SheetFocusScroll — the wrapper that scrolls a field back into view when it takes focus behind the keyboard, used at ~20 sites across the appointment and client form sheets, and DetailSheetListView — detail-view scroll shell. The grab handle is the PRIVATE _SheetHandle, drawn by DraggableSheetFrame; there is no public `SheetHandle`), form_sheet_frame (FormSheetFrame — the one add/edit form-sheet chrome), sheet_header_bar (SheetHeaderBar — the one sheet header: Cancel · title · primary verb), app_bottom_sheet (showAppBottomSheet — the shared modal-sheet opener)
 │   └── branding/                    brand_logo (BrandMark — the plumber-mascot app logo from assets/images/brand_mark.png, the 512px derivative of the unbundled icon.png master — see assets/images/README.md + the brandName const; pass decorative:true where a visible wordmark sits beside it)
 │
@@ -318,12 +318,21 @@ and `myUpcomingAppointmentsProvider`, so My details' availability warning and
 the dashboard's flag, which share the one `daysWithBookedWork`, agree that time
 off is not booked work.
 It is also not a CARD: `AppointmentCard` returns `_DayOffStrip` for one — a low
-tinted strip (`<avatar> <name> is off … DAY OFF`, no crew colour bar, no fill,
-no shadow) that names the person rather than the title, since a day off usually
-has none typed. Rendering it there gives every appointment surface the same
-treatment without a call-site change; the detail sheet has its own `_DayOffBody`
-(name, when-line, length, note — no client section, address, materials, photos
-or action bar). **It completes itself at the end of its last day**, derived in
+tinted strip (no fill, no shadow, a `colorScheme.outline` hairline so it has an
+edge against the identically-coloured page in the light theme, and the crew
+colour as a DASHED leading rail). **The typed reason LEADS it** (2026-08-25):
+one layout serves both cases, filling the headline with the reason when there
+is one and the `<name> is off` sentence when there isn't, with only the caption
+beneath conditional. Rendering it there gives every appointment surface the
+same treatment without a call-site change; the detail sheet has its own
+`_DayOffBody` (reason, person, when-line, length, note — no client section,
+address, materials, photos or action bar), which applies the SAME rule through
+the same owner. That owner is the pure `dayOffReason`
+(`calendar/domain/day_off_reason.dart`), which exists because "no reason" has a
+trap on it: an unnamed personal block saves the localized `calendar_personal`
+placeholder rather than a blank, and it is matched across EVERY supported
+locale (`personalTitlePlaceholders`) — the title is written in the author's
+locale and read back in the reader's. **It completes itself at the end of its last day**, derived in
 `displayStatusAt` above the `isPersonal` return and never stored, so there is no
 Mark-as-complete and no Cancel on one — delete it instead. `findBusyEmployees`
 deliberately does NOT filter it: booking time off is how someone is made to read
@@ -1333,9 +1342,9 @@ not default it off.
   `core/platform/`) rather than a bare `Platform.isIOS`, which on the host
   returns before anything injectable and writes the branch off as device-only.
 
-Run: `flutter test` (2753 passing as of 2026-08-24 — that is the runner's count;
-`grep`ing for `test(`/`testWidgets(` gives fewer (2693), since some cases are
-generated inside loops; `functions` adds 1373 jest tests across 58 suites in
+Run: `flutter test` (2808 passing as of 2026-08-25 — that is the runner's count;
+`grep`ing for `test(`/`testWidgets(` gives fewer (2747), since some cases are
+generated inside loops; `functions` adds 1426 jest tests across 63 suites in
 `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0 info
 lints** — see Analysis & Linting below; see

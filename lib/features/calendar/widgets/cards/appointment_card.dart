@@ -6,6 +6,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/day_off_reason.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
@@ -16,6 +17,19 @@ import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 /// always agree. Past this a band is too thin to read and the stack outgrows
 /// the meta line.
 const int _kMaxCrewShown = 4;
+
+/// The day-off strip's dashed rail geometry: inset from the leading edge,
+/// stroke width, and the gap between it and the avatar. Named because the
+/// rail is POSITIONED (from [_kRailInset], [_kRailWidth]) while the content is
+/// PADDED past it by all three — the two spellings have to agree, or the rail
+/// paints under the avatar.
+const double _kRailInset = 9;
+const double _kRailWidth = 3;
+const double _kRailGap = 10;
+
+/// Vertical padding inside the day-off strip. Its 44px floor still wins for a
+/// single-line (untitled) block.
+const double _kStripPaddingY = 9;
 
 /// The colour bar down the card's leading edge: a flat colour for one crew, a
 /// hard-stopped gradient of everyone's colours for more. Deliberately NOT grey
@@ -287,12 +301,26 @@ class AppointmentCard extends StatelessWidget {
 
 /// A day off, in place of the card.
 ///
-/// Reads `<avatar> <name> is off ............ DAY OFF`, and once the last day
-/// has passed, `<name> was off` with the Complete chip a finished job wears —
-/// see [AppointmentRecord.displayStatusAt], which derives that from the clock
-/// rather than from any write. The crew colour survives only as the avatar,
-/// which is identity; the BAR is what says "a crew is on this job", and a day
-/// off has no job to be on.
+/// Reads the typed reason as the headline with `<name> is off` beneath it, and
+/// once the last day has passed `<name> was off` with the Complete chip a
+/// finished job wears — see [AppointmentRecord.displayStatusAt], which derives
+/// that from the clock rather than from any write.
+///
+/// ONE layout serves both cases (owner call, 2026-08-25): the headline slot is
+/// ALWAYS filled — the reason when there is one, the sentence when there isn't
+/// — and only the caption below it is conditional. An untitled block therefore
+/// renders its sentence a little heavier than it used to (`titleSmall` rather
+/// than `bodyMedium`); that is the accepted price of one row shape instead of
+/// two that drift apart. Never render both slots from the same string.
+///
+/// The crew colour comes back as a DASHED rail, reversing what this comment
+/// said until 2026-08-25 — that the colour survived only as the avatar, since
+/// "the BAR is what says a crew is on this job, and a day off has no job to be
+/// on". The dashes are the reason it can: they read as the negative of the
+/// card's solid bar rather than a quieter version of it, and they are what
+/// lets two stacked absences be told apart before any text is read. What still
+/// keeps this from reading as a card holds unchanged — no card fill, no
+/// shadow, and a headline one size below the card's title.
 class _DayOffStrip extends StatelessWidget {
   const _DayOffStrip({
     required this.appointment,
@@ -310,13 +338,19 @@ class _DayOffStrip extends StatelessWidget {
     final l10n = context.l10n;
     final displayStatus = AppointmentStatus.fromRaw(appointment.displayStatus);
     final isOver = displayStatus.isTerminal;
-    // The crew is who the block is FOR, so it names them rather than the
-    // title — a day off usually has none typed, and an untitled one would
+    // The crew is who the block is FOR, so the sentence names them rather than
+    // the title — a day off usually has none typed, and an untitled one would
     // otherwise read "Personal".
-    final name = _crewLabel(context) ?? appointment.title.trim();
+    final crewLabel = _crewLabel(context);
+    final name = crewLabel ?? appointment.title.trim();
     final sentence = isOver
         ? l10n.calendar_dayOffWasOff(name)
         : l10n.calendar_dayOffIsOff(name);
+    final reason = dayOffReason(
+      title: appointment.title,
+      hasSubject: crewLabel != null,
+      placeholders: personalTitlePlaceholders,
+    );
     final lead = crew.isEmpty ? null : crew.first;
 
     return Material(
@@ -325,55 +359,113 @@ class _DayOffStrip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.r12),
         child: Semantics(
-          label: '$sentence, ${l10n.calendar_dayOff}',
+          label: [?reason, sentence, l10n.calendar_dayOff].join(', '),
           excludeSemantics: true,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 44),
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sp12,
-              vertical: AppSpacing.sp8,
-            ),
-            decoration: BoxDecoration(
-              color: theme.statusColors.neutralContainer,
-              borderRadius: BorderRadius.circular(AppRadius.r12),
-            ),
-            child: Row(
-              children: [
-                if (lead != null) ...[
-                  Opacity(
-                    opacity: isOver ? 0.55 : 1,
-                    child: AppAvatar(
-                      name: lead.name,
-                      color: lead.color,
-                      size: AvatarSize.xs,
+          // The rail is positioned rather than laid out in the Row so the
+          // strip keeps sizing to its text — a stretched Row child would need
+          // an IntrinsicHeight to resolve its own height first.
+          child: Stack(
+            children: [
+              Container(
+                constraints: const BoxConstraints(minHeight: 44),
+                padding: EdgeInsets.only(
+                  left: lead == null
+                      ? AppSpacing.sp12
+                      : _kRailInset + _kRailWidth + _kRailGap,
+                  right: AppSpacing.sp12,
+                  top: _kStripPaddingY,
+                  bottom: _kStripPaddingY,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.statusColors.neutralContainer,
+                  borderRadius: BorderRadius.circular(AppRadius.r12),
+                  // Load-bearing: that fill resolves to `AppColors.paper`,
+                  // which is also `scaffoldBackgroundColor`, so in the light
+                  // theme the strip has no container at all without an edge —
+                  // two stacked days off run together.
+                  border: Border.all(color: theme.colorScheme.outline),
+                ),
+                child: Row(
+                  children: [
+                    if (lead != null) ...[
+                      Opacity(
+                        opacity: isOver ? 0.55 : 1,
+                        child: AppAvatar(
+                          name: lead.name,
+                          color: lead.color,
+                          size: AvatarSize.xs,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sp8),
+                    ],
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            reason ?? sentence,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              color: isOver
+                                  ? theme.palette.textTertiary
+                                  : theme.palette.textBody,
+                            ),
+                          ),
+                          if (reason != null) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              sentence,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.palette.textTertiary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.sp8),
-                ],
-                Expanded(
-                  child: Text(
-                    sentence,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: isOver
-                          ? theme.palette.textTertiary
-                          : theme.colorScheme.onSurfaceVariant,
+                    const SizedBox(width: AppSpacing.sp8),
+                    // The finished state borrows the job chip so "done" looks
+                    // the same everywhere; the open state is a caption, not a
+                    // status.
+                    if (isOver)
+                      StatusChip(status: displayStatus)
+                    else
+                      Text(
+                        l10n.calendar_dayOff.toUpperCase(),
+                        style: theme.monoType.groupLabel,
+                      ),
+                  ],
+                ),
+              ),
+              if (lead != null)
+                Positioned(
+                  left: _kRailInset,
+                  top: AppSpacing.sp8,
+                  bottom: AppSpacing.sp8,
+                  width: _kRailWidth,
+                  child: Opacity(
+                    opacity: isOver ? 0.5 : 1,
+                    child: CustomPaint(
+                      // A null stored colour means the assignee no longer
+                      // resolves to an employee — `AppointmentCrew` has the
+                      // call site substitute a neutral, and the card's crew
+                      // bar uses this same one. Never `colorScheme.primary`:
+                      // `crewColorOf` keys on STORED light-theme hues, so the
+                      // dark primary misses the override map and takes the
+                      // generic lift on top of an already-lifted colour.
+                      painter: _DashedRailPainter(
+                        lead.color == null
+                            ? theme.palette.textFaint
+                            : crewColorOf(theme, lead.color!.toARGB32()),
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.sp8),
-                // The finished state borrows the job chip so "done" looks the
-                // same everywhere; the open state is a caption, not a status.
-                if (isOver)
-                  StatusChip(status: displayStatus)
-                else
-                  Text(
-                    l10n.calendar_dayOff.toUpperCase(),
-                    style: theme.monoType.groupLabel,
-                  ),
-              ],
-            ),
+            ],
           ),
         ),
       ),
@@ -387,6 +479,37 @@ class _DayOffStrip extends StatelessWidget {
     if (crew.length == 1) return first;
     return context.l10n.calendar_crewPlusOthers(first, crew.length - 1);
   }
+}
+
+/// The day-off strip's leading rail: 4 on, 4 off, down the full inner height.
+/// See [_DayOffStrip] for why a day off gets dashes where a job gets a bar.
+class _DashedRailPainter extends CustomPainter {
+  const _DashedRailPainter(this.color);
+
+  final Color color;
+
+  static const double _dash = 4;
+  static const double _gap = 4;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    final radius = Radius.circular(size.width / 2);
+    for (var top = 0.0; top < size.height; top += _dash + _gap) {
+      final bottom = (top + _dash).clamp(0.0, size.height);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTRB(0, top, size.width, bottom),
+          radius,
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRailPainter oldDelegate) =>
+      oldDelegate.color != color;
 }
 
 /// Everything `build` derives before it builds anything: the three variant

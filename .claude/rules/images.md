@@ -13,6 +13,15 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
 
 - **Image validation:** Reject uploads where first 4 bytes aren't JPEG
   (`FF D8 FF`) or PNG (`89 50 4E`). Extension alone is not sufficient.
+- **An uploaded photo's `cacheControl` is `private`, never `public`** (2026-08-25).
+  The bytes are fetched with an Authorization header (render-from-bytes via
+  `ref.getData()`), and RFC 9111 §3.5 lets a SHARED cache store an
+  authenticated response only when it is marked `public` — so `public` is
+  precisely the token that re-authorizes an intermediary to keep and reuse one
+  entitled user's photo for the whole `max-age` (it was a year). Nothing is
+  lost by `private`: offline and session reuse are owned by
+  `AppointmentImageDiskCache` and the session map, which key on the write-once
+  `storagePath`. Don't "restore" `public` to fix a perceived cache miss.
 - **Image upload pipeline:** Single stage — `ImagePickerService` resizes +
   JPEG-compresses at pick time (`image_picker` `maxWidth/maxHeight: 1600`,
   `imageQuality: 70`); `ImageStorageService` then validates magic bytes and

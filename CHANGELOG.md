@@ -10,6 +10,57 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.52.0+81] - 2026-08-25
+
+A day off now tells you what it is for. If someone typed a reason when they
+booked it, that reason is what you read on the calendar and on the block
+itself, instead of a row of identical "is off" lines you have to open one by
+one. Alongside it, a round of fixes to booking time off — saving a day off
+could leave the Save button doing nothing, and a day off could send the person
+a "time to leave" reminder for it.
+
+### Added
+- **A day off says what it is for.** The reason typed on the block is now the
+  line you read on the calendar, with the person's name in smaller text
+  underneath — "Vacation", over "Marc is off". A block with nothing typed reads
+  "Marc is off" exactly as it did before. Opening the block shows the same
+  thing: the reason first, the person under it. Until now the reason was
+  stored but shown nowhere, so a week off and a day at the dentist looked
+  identical.
+
+### Changed
+- **A day off is easier to pick out of a day.** The strip now has a visible
+  edge — it was previously the same colour as the page behind it, so two days
+  off in a row ran together — and carries the person's colour down its left
+  side as a dashed line, so you can tell whose absence is whose before reading
+  a word.
+- **Job photos are no longer storable by shared caches.** They were marked
+  publicly cacheable, which allowed a shared cache between the app and Firebase
+  to keep a copy of a photo for up to a year. Photos are unaffected on your own
+  device, where they are still kept for offline viewing.
+
+### Fixed
+- **Saving a day off no longer gets stuck.** Turning on "Day off" after picking
+  a start and end time left Save doing nothing at all, with no message
+  explaining why — the form had hidden the very time fields it was still
+  waiting on. A day off is now set to all day when you mark it, which is what
+  the form was already showing you.
+- **A day off no longer sends a "time to leave" reminder.** A day off that had
+  been saved with times on it counted as a job to drive to, so the person got a
+  travel reminder on their day off.
+- **Closing the time-off clash list while a swap is saving no longer crashes
+  the app.**
+- **Undo on the time-off clash list puts the right person back.** After two
+  swaps on the same job, Undo restored the job as it was before the *first*
+  swap, silently undoing the second one as well.
+- **A day off no longer keeps an address you cleared.** The address field is
+  hidden once a block is marked a day off, but a value typed before that was
+  still saved.
+- **Initials are right for every name.** An avatar for a name beginning with an
+  emoji, an accented letter or a non-Latin script showed a broken square
+  instead of the character.
+- **Searching a long client list is faster.**
+
 ## [1.51.0+80] - 2026-08-24
 
 Booking someone who isn't there is now hard to do by accident. The people

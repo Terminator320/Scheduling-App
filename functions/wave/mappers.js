@@ -110,6 +110,12 @@ const SUBDIVISION_CODES = {
  * is a client nobody can edit at all. It only bites a BUSINESS — a person's
  * name is recomposed from their phone number on save and never carries the
  * imported string forward at all.
+ *
+ * NOT exported: `test/core/validators/text_limits_test.dart` reads this file
+ * back as TEXT and asserts every cap clears its firestore.rules cap. Dart, CEL
+ * and JS cannot share a constant, so that test is the only thing stopping a
+ * tightened rule from letting the import write client docs the app can never
+ * update again.
  * @type {!Object<string, number>}
  */
 const IMPORT_FIELD_CAPS = {
@@ -504,9 +510,4 @@ module.exports = {
   toWaveCustomerInput,
   mappedFieldsHash,
   fromWaveCustomer,
-  // Exported for `test/core/validators/text_limits_test.dart`, which reads
-  // this file back and asserts every cap clears its firestore.rules cap.
-  // Dart, CEL and JS cannot share a constant, so that test is the only thing
-  // stopping a tightened rule from letting the import write client docs the
-  // app can never update again.
 };
