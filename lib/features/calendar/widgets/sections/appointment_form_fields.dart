@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
+import 'package:scheduling/features/calendar/domain/assignee_availability.dart';
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
@@ -143,6 +144,7 @@ class AppointmentFormFields extends StatelessWidget {
     this.onApplyTemplate,
     this.onPersonalChanged,
     this.tourWrap,
+    this.assigneeAvailability = AssigneeAvailability.none,
   });
 
   final AppointmentFormControllers controllers;
@@ -200,6 +202,11 @@ class AppointmentFormFields extends StatelessWidget {
 
   /// The ten always-present pickers. See [AppointmentFormCallbacks].
   final AppointmentFormCallbacks callbacks;
+
+  /// Who can't take the job on the chosen date, resolved by the host — it is
+  /// the host that knows the span and, on an edit, which doc to exclude from
+  /// the conflict scan. Empty until a date is picked.
+  final AssigneeAvailability assigneeAvailability;
 
   /// Edit flow only. When null, the status block is omitted (add flow).
   final String? editingStatus;
@@ -392,6 +399,7 @@ class AppointmentFormFields extends StatelessWidget {
         selectedEmployees: selectedEmployees,
         onToggle: callbacks.onToggleEmployee,
         errorText: _err(context, 'employees'),
+        availability: assigneeAvailability,
       ),
     ),
     const SizedBox(height: AppSpacing.sp16),

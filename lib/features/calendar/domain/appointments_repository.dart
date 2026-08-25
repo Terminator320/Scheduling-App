@@ -124,4 +124,29 @@ abstract class AppointmentsRepository {
     required DateTime end,
     String? excludeAppointmentId,
   });
+
+  /// The live appointments standing in the way of [employeeIds] over
+  /// [start]–[end], read ONCE.
+  ///
+  /// The same overlap scan [findBusyEmployees] runs, answering with the
+  /// CLASHING RECORDS rather than the busy people — the assignee picker needs
+  /// to say why someone can't take the job, and the time-off clash alert needs
+  /// the jobs themselves so it can offer a swap on each.
+  ///
+  /// Both surfaces route through here rather than deciding for themselves: the
+  /// picker reduces a live stream on top of the same rule
+  /// (`clashingAppointments`), and if the two ever disagree the bug is that the
+  /// rule lives in two places.
+  ///
+  /// [clientJobsOnly] drops personal blocks from the result. The alert passes
+  /// it — "swap Marc for Nadia" on Marc's own dentist appointment is nonsense,
+  /// so a personal block is a real clash for busy-ness and never a row in that
+  /// dialog. The picker leaves it off.
+  Future<List<AppointmentRecord>> findClashingAppointments({
+    required List<String> employeeIds,
+    required DateTime start,
+    required DateTime end,
+    String? excludeAppointmentId,
+    bool clientJobsOnly,
+  });
 }

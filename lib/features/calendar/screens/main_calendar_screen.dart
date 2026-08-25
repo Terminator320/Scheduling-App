@@ -59,6 +59,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   late AppointmentDateRange _appointmentRange;
+
+  /// Null for an employee — see [_publishRange]. Captured once so [dispose] can
+  /// clear the range without touching `ref`.
+  OpenCalendarRange? _openRange;
   late DateFormat _monthLabelFormat;
   late DateFormat _monthShortLabelFormat;
   late DateFormat _yearLabelFormat;
@@ -80,13 +84,39 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       focusedDay: _focusedDay,
       selectedDay: _focusedDay,
     );
+    if (widget.isAdmin) {
+      _openRange = ref.read(openCalendarRangeProvider.notifier);
+    }
+    // Post-frame: this runs while the tree is still building, and Riverpod
+    // refuses a provider write from there. Every later publish comes from a
+    // gesture handler, which is already outside the build phase.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _publishRange();
+    });
   }
 
   @override
   void dispose() {
     _agendaController.dispose();
+    // Through the captured notifier, never `ref`: Riverpod 3 throws on an
+    // unmounted consumer. Clearing matters because the provider is keepAlive —
+    // a stale range left behind by a torn-down calendar is one a later sheet
+    // would happily reduce, reopening a listener nothing else holds. Only if
+    // this screen still owns it, or a replacement calendar built before this
+    // teardown loses the range it just published.
+    _openRange?.clearIfHolding(this);
     super.dispose();
   }
+
+  /// Hands the window this screen holds open to whatever is opened FROM it —
+  /// today the add sheet's assignee picker, which reduces this very stream
+  /// rather than forking a second listener for the same documents.
+  ///
+  /// Admin only: `appointmentsInRangeProvider` constrains `startTime` alone, so
+  /// a technician joining that listener is rejected by the rules outright.
+  /// Cleared on the way out, or a torn-down calendar leaves a stale range
+  /// behind that a later sheet would happily reduce.
+  void _publishRange() => _openRange?.publish(this, _appointmentRange);
 
   void _onCollapseDrag(double dy) {
     if (_collapse.onDragDelta(dy)) setState(() {});
@@ -118,6 +148,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         selectedDay: today,
       );
     });
+    _publishRange();
   }
 
   /// Paging to another month (by swipe or from the month picker) lands on that
@@ -134,6 +165,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       _selectedDay = day;
       if (newRange != _appointmentRange) _appointmentRange = newRange;
     });
+    _publishRange();
   }
 
   /// Swiping the collapsed week strip moves one week and selects that week's
@@ -187,6 +219,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       _focusedDay = selectedDay;
       if (newRange != _appointmentRange) _appointmentRange = newRange;
     });
+    _publishRange();
   }
 
   // Only log on the data→error transition — .when would otherwise fire this on every rebuild while the stream stays errored.

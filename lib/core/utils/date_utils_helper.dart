@@ -6,6 +6,7 @@ class DateUtilsHelper {
   static final Map<String, DateFormat> _dateFormats = {};
   static final Map<String, DateFormat> _dayHeaderFormats = {};
   static final Map<String, DateFormat> _whenLineFormats = {};
+  static final Map<String, DateFormat> _dayMonthFormats = {};
 
   static String get _locale => Intl.defaultLocale ?? 'en_CA';
 
@@ -37,6 +38,24 @@ class DateUtilsHelper {
       () => DateFormat.MMMMEEEEd(_locale),
     );
     return format.format(date);
+  }
+
+  /// A run of days as `26 Aug` or `26 – 28 Aug` — the figure beside a day-off
+  /// line in the assignee picker.
+  ///
+  /// Deliberately dateless of any clock: an absence has none, and its stored
+  /// instants are a midnight → 23:59 convention that would read as a
+  /// suspiciously precise workday. [last] names the last day the absence
+  /// covers, so resolve it through `lastWorkDayOf` rather than reading
+  /// `endTime.dateOnly`.
+  static String formatDayRange(DateTime first, DateTime last) {
+    final format = _dayMonthFormats.putIfAbsent(
+      _locale,
+      () => DateFormat('d MMM', _locale),
+    );
+    final from = format.format(first);
+    if (!last.dateOnly.isAfter(first.dateOnly)) return from;
+    return '$from – ${format.format(last)}';
   }
 
   /// The detail sheet's mono when-line: `TUE 4 AUG · 10:30 – 12:00`.

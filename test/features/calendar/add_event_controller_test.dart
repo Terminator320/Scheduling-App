@@ -293,6 +293,44 @@ void main() {
       },
     );
 
+    test(
+      'a PERSONAL save never returns the busy outcome — the clash alert '
+      'handles it after the write',
+      () async {
+        // Both would fire otherwise, giving two dialogs about the same clash
+        // back to back. The alert is strictly more useful: it names the jobs
+        // and offers a swap on each, where this prompt only names the person.
+        when(
+          () => appointments.findBusyEmployees(
+            candidates: any(named: 'candidates'),
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+          ),
+        ).thenAnswer((_) async => const [_employeeA]);
+
+        final c = readNotifier();
+        fillValid(c);
+        c.setPersonal(value: true);
+
+        final outcome = await c.submit(
+          title: 'Dentist',
+          address: '',
+          notes: '',
+          materialsNeeded: '',
+        );
+
+        expect(outcome, isA<AddEventSubmitted>());
+        verifyNever(
+          () => appointments.findBusyEmployees(
+            candidates: any(named: 'candidates'),
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+          ),
+        );
+        verify(() => appointments.addAppointment(any())).called(1);
+      },
+    );
+
     test('writes appointment and kicks off photo upload on success', () async {
       final c = readNotifier();
       fillValid(c);

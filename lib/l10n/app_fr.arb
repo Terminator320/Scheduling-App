@@ -714,5 +714,22 @@
   "wave_retryNoneRecovered": "Rien à réessayer — ces clients étaient déjà de retour dans la file.",
   "wave_retryQueued": "{count, plural, =1{1 client remis en file pour Wave} other{{count} clients remis en file pour Wave}}",
   "wave_retryPushed": "{count, plural, =1{1 client envoyé à Wave} other{{count} clients envoyés à Wave}}",
-  "wave_retryStillFailed": "{count, plural, =1{1 client n’a toujours pas pu être envoyé — ouvrez-le pour voir l’erreur} other{{count} clients n’ont toujours pas pu être envoyés — ouvrez-les pour voir l’erreur}}"
+  "wave_retryStillFailed": "{count, plural, =1{1 client n’a toujours pas pu être envoyé — ouvrez-le pour voir l’erreur} other{{count} clients n’ont toujours pas pu être envoyés — ouvrez-les pour voir l’erreur}}",
+  "calendar_assigneeOnAnotherJob": "{name} est sur un autre travail",
+  "calendar_assigneeOffStillOnJob": "{name} est en congé — toujours sur ce travail",
+  "calendar_assigneeBookedStillOnJob": "{name} est sur un autre travail — toujours sur celui-ci",
+  "calendar_assigneesMoreNotFree": "{count, plural, =1{1 autre n'est pas libre} other{{count} autres ne sont pas libres}}",
+  "calendar_nobodyFreeThen": "Personne n'est libre le {when}. Choisissez un autre moment, ou réservez le travail et assignez quelqu'un plus tard.",
+  "calendar_timeOffClashTitle": "{name} a encore des travaux réservés",
+  "calendar_timeOffClashTitleMany": "{count, plural, =1{1 personne a encore des travaux réservés} other{{count} personnes ont encore des travaux réservés}}",
+  "calendar_personalBlockClashBody": "Le bloc est enregistré. Ces travaux comptent toujours {name}.",
+  "calendar_personalBlockClashBodyMany": "Le bloc est enregistré. Ces travaux comptent toujours l'équipe.",
+  "calendar_clashJobsCount": "{count, plural, =1{1 TRAVAIL} other{{count} TRAVAUX}}",
+  "calendar_swapPersonFor": "Remplacer {name} par",
+  "calendar_swap": "Remplacer",
+  "calendar_takesThisJob": "{name} prend celui-ci",
+  "calendar_everyoneElseBooked": "Tout le monde est occupé",
+  "calendar_openJob": "Ouvrir le travail",
+  "calendar_leaveThem": "Laisser ainsi",
+  "common_undo": "Annuler l'action"
 }

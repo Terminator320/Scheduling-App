@@ -123,6 +123,45 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   the history filter shows nothing), so the helper owns only the LOOKUP and each
   caller keeps its own substitute. The edit-sheet copy is the dangerous one — a
   blank name there flows into `mergeRetainedAssignees` and is written back.
+- **The picker DIMS whoever can't take the job on the chosen date, and the
+  already-assigned test WINS over it.** `assigneeOfferState`
+  (`calendar/domain/assignee_resolver.dart`, beside the two rules above because
+  all three must agree) returns `free` / `unavailable` / `onTheJob`; only
+  `unavailable` dims, and it is dimmed AND untappable, which is precisely why
+  someone already on the job must never be. A chip that can't be tapped can't
+  be taken off, and — worse — an assignee who is active but merely un-offered
+  is NOT retained by `mergeRetainedAssignees`, so they'd be silently
+  unassigned. The "on the job" set is the live selection **union the
+  appointment's STORED `employeeIds`**: keyed on the selection alone,
+  deselecting an unavailable stored assignee dims their own chip on the next
+  rebuild and the toggle is one-way. Same trap as `offerableAssignees`.
+  **ANY clash dims, not just a day off** (owner call, 2026-08-24), and the
+  accepted cost is that deliberate double-booking is no longer reachable from
+  the picker — the Save-time prompt stays as a backstop for races but will
+  rarely fire. If putting two people on one big job turns out to matter, keep
+  BOOKED chips tappable with a warning look and dim only time off.
+  **Availability is date-DERIVED, live where it can be, one-shot where it
+  can't.** `assigneeAvailabilityProvider` reduces the range the calendar
+  ALREADY holds open (`openCalendarRangeProvider`, published by
+  `MainCalendarScreen` and admin-only, since that stream constrains
+  `startTime` alone and the rules reject a technician's query) and falls back
+  to `findClashingAppointments` when the span falls outside it. The fallback is
+  not optional: without it a date past the open range makes every clash
+  invisible and the picker silently reports everyone as free, which is worse
+  than not dimming at all. Forking a listener keyed on a span-derived range is
+  what `forWeekBucketOf` and `forMirrors` carry long comments against.
+  **An undetermined span answers nothing** — a date with no times could still
+  become an 8 pm job, so `watchAssigneeAvailability`
+  (`calendar/utils/assignee_availability_scope.dart`) offers everyone until the
+  span is real, which covers "no date picked yet" too.
+  **A PERSONAL block dims NOBODY, and that carve-out is load-bearing.** Dimming
+  means untappable, and the person a day off is FOR is the one most likely to
+  have jobs that day — so dimming made their absence unbookable, and made the
+  clash alert that exists to clean up afterwards unreachable. It is the same
+  carve-out, for the same reason, as both controllers skipping the Save-time
+  busy prompt when `isPersonal`; both halves take `isPersonal` and must keep
+  agreeing. A clash is never a reason to refuse time off — it is what the
+  alert reports after the write.
 - **Photo and image-upload rules live in `.claude/rules/images.md`** (moved
   2026-08-19) — magic-byte validation, the single-stage pick/compress pipeline,
   render-from-bytes, the two caches, the `appointments/{id}/images` migration

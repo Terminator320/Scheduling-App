@@ -10,7 +10,9 @@ import 'package:scheduling/features/calendar/application/add_event_controller.da
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
+import 'package:scheduling/features/calendar/utils/assignee_availability_scope.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/dialogs/personal_block_clash_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
@@ -226,6 +228,11 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
                     )
                   : context.l10n.common_appointmentCreated,
             );
+        // Raised over this sheet rather than after it closes: the swaps write
+        // immediately, so there is nothing to hand to the calendar, and a
+        // dialog pushed from a context that is already popping is fragile.
+        await showPersonalBlockClashesIfAny(context, ref, block: appointment);
+        if (!mounted) return;
         Navigator.pop(context, appointment);
       case AddEventFailed(:final error):
         ref
@@ -275,6 +282,18 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
             controllers: _controllers,
             tourWrap: _tour.stepIf,
             allEmployees: allEmployees,
+            // Nothing is stored yet, so the live selection is the whole of
+            // "already on this job".
+            assigneeAvailability: watchAssigneeAvailability(
+              ref,
+              date: state.selectedDate,
+              endDate: state.endDate,
+              isAllDay: state.isAllDay,
+              isPersonal: state.isPersonal,
+              startTime: state.selectedStartTime,
+              endTime: state.selectedEndTime,
+              alreadyAssignedIds: const {},
+            ),
             selectedClient: state.selectedClient,
             clientResults: state.clientResults,
             isSearchingClient: state.isSearchingClient,

@@ -14,8 +14,10 @@ import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/domain/series_outlook.dart';
+import 'package:scheduling/features/calendar/utils/assignee_availability_scope.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/dialogs/personal_block_clash_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
@@ -111,6 +113,20 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
         AppointmentFormFields(
           controllers: controllers,
           allEmployees: allEmployees,
+          // Excluding this doc, or its own assignees read as clashing with
+          // themselves. `alreadyAssignedIds` is the STORED crew, so a
+          // deselected assignee who is off keeps a tappable chip.
+          assigneeAvailability: watchAssigneeAvailability(
+            ref,
+            date: state.selectedDate,
+            endDate: state.endDate,
+            isAllDay: state.isAllDay,
+            isPersonal: state.isPersonal,
+            startTime: state.selectedStartTime,
+            endTime: state.selectedEndTime,
+            alreadyAssignedIds: appointment.employeeIds.toSet(),
+            excludeAppointmentId: appointment.id,
+          ),
           selectedClient: state.selectedClient,
           clientResults: state.clientResults,
           isSearchingClient: state.isSearchingClient,
@@ -285,6 +301,13 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       );
       if (!confirmed || !context.mounted) return;
       outcome = await attempt(forceBusy: true);
+      if (!context.mounted) return;
+    }
+    // Editing a day off's DATES re-runs the check on the days that were added
+    // — extending Mon–Tue to Friday is the common case — because the span this
+    // reads is the saved record's, not the one it had before.
+    if (outcome case EventDetailsSaved(:final appointment)) {
+      await showPersonalBlockClashesIfAny(context, ref, block: appointment);
       if (!context.mounted) return;
     }
     _announce(context, ref, outcome);

@@ -8,9 +8,9 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/core/utils/retry.dart';
 import 'package:scheduling/features/calendar/data/appointment_images_store.dart';
-import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
+import 'package:scheduling/features/calendar/domain/assignee_availability.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
@@ -488,10 +488,82 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }) async {
     if (candidates.isEmpty) return const [];
 
-    final ids = candidates.map((e) => e.id).toList();
+    // The busy PEOPLE are the clashing records' assignees: same query, same
+    // rule, one owner. Spelled inline here once, and the two answers drifting
+    // is exactly the bug that would leave the picker dimming someone this
+    // prompt then waves through.
+    final clashes = await findClashingAppointments(
+      employeeIds: candidates.map((e) => e.id).toList(),
+      start: start,
+      end: end,
+      excludeAppointmentId: excludeAppointmentId,
+    );
+    final busyIds = {for (final a in clashes) ...a.employeeIds};
+    return candidates.where((e) => busyIds.contains(e.id)).toList();
+  }
+
+  @override
+  Future<List<AppointmentRecord>> findClashingAppointments({
+    required List<String> employeeIds,
+    required DateTime start,
+    required DateTime end,
+    String? excludeAppointmentId,
+    bool clientJobsOnly = false,
+  }) async {
+    if (employeeIds.isEmpty) return const [];
+
+    // Deduped by doc id: a job assigned to two people in different 30-id
+    // chunks comes back from both queries.
+    final found = <String, AppointmentRecord>{};
+    // Read off the RAW map, which only this layer sees: the record substitutes
+    // a placeholder instant for a time it could not parse, so by the time the
+    // rule runs the two are indistinguishable.
+    final windowUnknownIds = <String>{};
+    for (final snapshot in await _conflictSnapshots(
+      employeeIds: employeeIds,
+      start: start,
+      end: end,
+    )) {
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        found[doc.id] = AppointmentRecord.fromMap(doc.id, data);
+        if (firestoreDateTime(data['startTime']) == null ||
+            firestoreDateTime(data['endTime']) == null) {
+          windowUnknownIds.add(doc.id);
+        }
+      }
+    }
+
+    // The overlap rule itself is the pure `clashingAppointments`, shared with
+    // the picker's live reduction over the calendar's open range.
+    return clashingAppointments(
+      appointments: found.values,
+      start: start,
+      end: end,
+      excludeAppointmentId: excludeAppointmentId,
+      clientJobsOnly: clientJobsOnly,
+      windowUnknownIds: windowUnknownIds,
+    );
+  }
+
+  /// The chunked overlap prefilter both conflict reads run.
+  ///
+  /// `whereArrayContainsAny` caps at 30, so the ids are batched; the query is
+  /// COARSE by design — it tests the raw instants, and the daily-window rule
+  /// that turns those hits into real clashes is applied in Dart afterwards.
+  /// One spelling, so the two readers can't drift on the constraint set, the
+  /// chunk size or the cap warning.
+  Future<List<QuerySnapshot<Map<String, dynamic>>>> _conflictSnapshots({
+    required List<String> employeeIds,
+    required DateTime start,
+    required DateTime end,
+  }) async {
     final queries = <Future<QuerySnapshot<Map<String, dynamic>>>>[];
-    for (var i = 0; i < ids.length; i += 30) {
-      final batch = ids.sublist(i, i + 30 < ids.length ? i + 30 : ids.length);
+    for (var i = 0; i < employeeIds.length; i += 30) {
+      final batch = employeeIds.sublist(
+        i,
+        i + 30 < employeeIds.length ? i + 30 : employeeIds.length,
+      );
       queries.add(
         _appointments
             .where('employeeIds', arrayContainsAny: batch)
@@ -501,42 +573,16 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
             .get(),
       );
     }
-
-    final busyIds = <String>{};
-    for (final snapshot in await Future.wait(queries)) {
+    final snapshots = await Future.wait(queries);
+    for (final snapshot in snapshots) {
       if (snapshot.docs.length >= _conflictScanLimit) {
         _logger.warn(
           'APPT-BUSY conflict query hit the $_conflictScanLimit-doc cap - '
           'clashes beyond it are not reported',
         );
       }
-      for (final doc in snapshot.docs) {
-        if (doc.id == excludeAppointmentId) continue;
-        final data = doc.data();
-        final status = (data['status'] ?? '').toString().toLowerCase();
-        if (isTerminalStatusRaw(status)) continue;
-        final docStart = firestoreDateTime(data['startTime']);
-        final docEnd = firestoreDateTime(data['endTime']);
-        if (docStart != null &&
-            docEnd != null &&
-            !dailyWindowsOverlap(
-              aStart: docStart,
-              aEnd: docEnd,
-              bStart: start,
-              bEnd: end,
-            )) {
-          continue;
-        }
-        final rawIds = data['employeeIds'];
-        if (rawIds is List) {
-          busyIds.addAll(rawIds.whereType<String>());
-        } else if (rawIds is String && rawIds.isNotEmpty) {
-          busyIds.add(rawIds);
-        }
-      }
     }
-
-    return candidates.where((e) => busyIds.contains(e.id)).toList();
+    return snapshots;
   }
 
   /// The record as Firestore fields.
