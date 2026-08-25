@@ -317,26 +317,32 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   }
 
   /// The agenda header's count: the day's total, plus how much of it is behind
-  /// them once anything is closed — `3 JOBS · 1 DONE`.
+  /// them once anything is FINISHED — `3 JOBS · 1 DONE`.
   ///
-  /// Counts `isClosed`, not `done` alone, so the header can't disagree with the
-  /// "Done" rule the agenda draws over the same block below it.
+  /// Neither side counts anything `countsAsWork` rejects. Time off is not work
+  /// at all, and a CANCELLED visit is work that is not happening — so a day
+  /// whose only entry is either reads "0 JOBS" with that card still listed
+  /// under it. The cards themselves stay in [events]; only the COUNT is
+  /// filtered.
   ///
-  /// Time off is not counted on either side — a day whose only entry is a day
-  /// off reads "0 JOBS" with that card still listed under it, which is the
-  /// whole point of the flag. The cards themselves stay in [events]; only the
-  /// COUNT is filtered.
+  /// **Cancelled dropped 2026-08-25 (owner call), reversing the rule that this
+  /// tail counts `isClosed`.** It read "1 JOB · 1 DONE" for a day holding one
+  /// called-off visit, which is wrong twice over: a cancelled job is not a job
+  /// on the day, and it is certainly not DONE. It also put the header at odds
+  /// with the month grid, whose dots have dropped cancelled since 2026-08-17 —
+  /// the same day showed no dot and a full job count. The agenda's own
+  /// "Done · N" rule was moved with it, so the two still agree.
   static String _jobLabel(
     BuildContext context,
     List<AppointmentDaySlice> events,
   ) {
     final l10n = context.l10n;
-    final jobs = events.where((slice) => !slice.appointment.isTimeOff).toList();
+    final jobs = events
+        .where((slice) => countsAsWork(slice.appointment))
+        .toList();
     final total = l10n.calendar_jobsCount(jobs.length);
-    final closed = jobs.where((slice) => slice.appointment.isClosed).length;
-    return closed == 0
-        ? total
-        : '$total · ${l10n.calendar_jobsDoneCount(closed)}';
+    final done = jobs.where((slice) => slice.appointment.isClosed).length;
+    return done == 0 ? total : '$total · ${l10n.calendar_jobsDoneCount(done)}';
   }
 
   @override

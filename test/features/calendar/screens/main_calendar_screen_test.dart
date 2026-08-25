@@ -375,6 +375,69 @@ void main() {
     expect(find.text('2 JOBS'), findsOneWidget);
   });
 
+  testWidgets('a cancelled job is neither counted nor called done', (
+    tester,
+  ) async {
+    // It read "1 JOB · 1 DONE": wrong twice over, and at odds with the month
+    // grid, whose dots have dropped cancelled since 2026-08-17.
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today).copyWith(status: 'cancelled'),
+        ]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('0 JOBS'), findsOneWidget);
+    expect(find.textContaining('DONE'), findsNothing);
+  });
+
+  testWidgets('a cancelled job drops out of a mixed day on both sides', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today),
+          _appointment(2, today).copyWith(status: 'done'),
+          _appointment(3, today).copyWith(status: 'cancelled'),
+        ]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 JOBS · 1 DONE'), findsOneWidget);
+  });
+
+  testWidgets('a day of only cancellations draws no Done rule', (tester) async {
+    // The cards still sink to the tail; the rule would have read "Done · 0".
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today).copyWith(status: 'cancelled'),
+          _appointment(2, today).copyWith(status: 'cancelled'),
+        ]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('0 JOBS'), findsOneWidget);
+    expect(find.textContaining('Done'), findsNothing);
+  });
+
   testWidgets('the header block grows with text scale instead of clipping', (
     tester,
   ) async {

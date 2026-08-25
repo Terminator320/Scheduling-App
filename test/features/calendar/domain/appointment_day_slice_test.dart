@@ -9,6 +9,8 @@ AppointmentRecord _record({
   bool isAllDay = false,
   String id = 'a1',
   String status = 'pending',
+  bool isPersonal = false,
+  bool isDayOff = false,
 }) => AppointmentRecord(
   id: id,
   title: 'Repipe',
@@ -16,9 +18,51 @@ AppointmentRecord _record({
   endTime: end,
   isAllDay: isAllDay,
   status: status,
+  isPersonal: isPersonal,
+  isDayOff: isDayOff,
 );
 
 void main() {
+  group('countsAsWork', () {
+    AppointmentRecord at({
+      String status = 'pending',
+      bool isPersonal = false,
+      bool isDayOff = false,
+    }) => _record(
+      start: DateTime(2026, 8, 1, 9),
+      end: DateTime(2026, 8, 1, 17),
+      status: status,
+      isPersonal: isPersonal,
+      isDayOff: isDayOff,
+    );
+
+    test('an open job is work', () {
+      expect(countsAsWork(at()), isTrue);
+    });
+
+    test('a FINISHED job is still work — that work happened', () {
+      expect(countsAsWork(at(status: 'done')), isTrue);
+      expect(countsAsWork(at(status: 'completed')), isTrue);
+    });
+
+    test('a cancelled job is NOT work — it is not happening', () {
+      expect(countsAsWork(at(status: 'cancelled')), isFalse);
+    });
+
+    test('time off is not work', () {
+      expect(countsAsWork(at(isPersonal: true, isDayOff: true)), isFalse);
+    });
+
+    test('a stray isDayOff on a client visit does not erase it', () {
+      // `isTimeOff` is `isPersonal && isDayOff`, never the stored flag alone.
+      expect(countsAsWork(at(isDayOff: true)), isTrue);
+    });
+
+    test('an ordinary personal block is still work', () {
+      expect(countsAsWork(at(isPersonal: true)), isTrue);
+    });
+  });
+
   group('sliceFor', () {
     test('a single-day job is day 1 of 1', () {
       final a = _record(

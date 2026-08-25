@@ -51,7 +51,12 @@ void main() {
     await initializeDateFormatting('en_CA');
   });
 
-  testWidgets('rules off the closed block and counts it', (tester) async {
+  testWidgets('rules off the closed block and counts the DONE work only', (
+    tester,
+  ) async {
+    // The cancelled card sinks into the same block and renders there, but it
+    // is not counted — a called-off visit is not work behind you (owner call,
+    // 2026-08-25, which reversed counting `isClosed` here).
     await tester.pumpWidget(
       _wrap([
         _slice(id: 'open', status: 'pending'),
@@ -61,8 +66,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('DONE · 2'), findsOneWidget);
+    expect(find.text('DONE · 1'), findsOneWidget);
     expect(find.byType(Divider), findsOneWidget);
+    expect(find.text('cancelled'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -90,10 +96,29 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('DONE · 2'), findsOneWidget);
+    expect(find.text('DONE · 1'), findsOneWidget);
     expect(
-      tester.getTopLeft(find.text('DONE · 2')).dy,
+      tester.getTopLeft(find.text('DONE · 1')).dy,
       lessThan(tester.getTopLeft(find.text('done')).dy),
     );
+  });
+
+  testWidgets('a day of nothing but cancellations draws no rule', (
+    tester,
+  ) async {
+    // Cancelled work still sinks to the tail, so without suppressing the rule
+    // at zero this day would be headed "DONE · 0".
+    await tester.pumpWidget(
+      _wrap([
+        _slice(id: 'one', status: 'cancelled'),
+        _slice(id: 'two', status: 'cancelled'),
+      ]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Divider), findsNothing);
+    expect(find.textContaining('DONE ·'), findsNothing);
+    expect(find.text('one'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }

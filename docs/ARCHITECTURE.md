@@ -311,12 +311,21 @@ shown as a card** — and every consumer asks the derived
 `AppointmentRecord.isTimeOff` (`isPersonal && isDayOff`), never the stored flag,
 so a stray value on a client visit cannot silently drop it from every tally.
 Counts that exclude it: `dottedJobsOn` (month-grid dots and their semantics
-count), `_jobLabel` (the agenda's `N JOBS`), `countsAsLoadOn` (the shared
-predicate behind the drawer badge and the roster's "jobs today") and
+count), `_jobLabel` (the agenda's `N JOBS` **and its `· N DONE` tail**),
+`countsAsLoadOn` (the shared predicate behind the drawer badge and the
+roster's "jobs today") and
 `dashboardRecordsProvider`, which filters once for every dashboard reducer —
 and `myUpcomingAppointmentsProvider`, so My details' availability warning and
 the dashboard's flag, which share the one `daysWithBookedWork`, agree that time
 off is not booked work.
+The first three share one owner as of 2026-08-25 — **`countsAsWork`**
+(`appointment_day_slice.dart`), "not cancelled, not time off"; `countsAsLoadOn`
+is it plus `runsOn`. A **CANCELLED** job is excluded by the same predicate for
+a different reason (owner call: it is work that is not happening), which is
+what finally made the agenda header agree with the dots — the header counted
+`isClosed`, so one called-off visit read `1 JOB · 1 DONE` on a day the month
+grid was already drawing as free. The agenda's `Done · N` rule counts through
+it too and is suppressed at zero, since cancelled cards still sink to the tail.
 It is also not a CARD: `AppointmentCard` returns `_DayOffStrip` for one — a low
 tinted strip (no fill, no shadow, a `colorScheme.outline` hairline so it has an
 edge against the identically-coloured page in the light theme, and the crew
@@ -1342,8 +1351,8 @@ not default it off.
   `core/platform/`) rather than a bare `Platform.isIOS`, which on the host
   returns before anything injectable and writes the branch off as device-only.
 
-Run: `flutter test` (2808 passing as of 2026-08-25 — that is the runner's count;
-`grep`ing for `test(`/`testWidgets(` gives fewer (2747), since some cases are
+Run: `flutter test` (2818 passing as of 2026-08-25 — that is the runner's count;
+`grep`ing for `test(`/`testWidgets(` gives fewer (2758), since some cases are
 generated inside loops; `functions` adds 1426 jest tests across 63 suites in
 `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). `flutter analyze` reports **0 errors, 0 warnings, and 0 info

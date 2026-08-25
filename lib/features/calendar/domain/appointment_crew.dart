@@ -1,6 +1,6 @@
 import 'package:flutter/painting.dart' show Color;
 
-import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
@@ -62,10 +62,7 @@ List<AppointmentCrew> crewFor(
 /// dots nobody can see.
 Iterable<AppointmentRecord> dottedJobsOn(
   Iterable<AppointmentRecord> dayAppointments,
-) => dayAppointments.where(
-  (appointment) =>
-      !isCancelledStatusRaw(appointment.status) && !appointment.isTimeOff,
-);
+) => dayAppointments.where(countsAsWork);
 
 /// The month grid's per-day dots: **one per job** that day, in list order,
 /// capped at [max] (owner call, 2026-08-04 — the dots read as "how busy is this
