@@ -68,3 +68,64 @@ String? assigneeNameAt(List<String> employeeNames, int index) =>
     names: [...selectedNames, ...retainedNames],
   );
 }
+
+/// How the picker must treat one offered assignee on the chosen date.
+enum AssigneeOfferState {
+  /// No clash — an ordinary tappable chip.
+  free,
+
+  /// A clash, and they are not on the job: dimmed, not tappable.
+  unavailable,
+
+  /// A clash, but they are already on the job — tappable, with a line saying
+  /// so. Never dimmed.
+  onTheJob,
+}
+
+/// Whether [employeeId] may be dimmed as unavailable.
+///
+/// Lives beside [mergeRetainedAssignees] and [offerableAssignees] because all
+/// three answer the same question and must agree. The already-assigned test
+/// WINS over the unavailable one, for the reason the merge exists: a chip that
+/// can't be tapped can't be taken off, and an assignee who is active but merely
+/// un-offered is NOT retained by [mergeRetainedAssignees] — they'd be silently
+/// unassigned instead.
+///
+/// [alreadyAssignedIds] is the appointment's STORED assignees, and it is
+/// checked ALONGSIDE the live selection rather than instead of it: keyed on the
+/// selection alone, deselecting an unavailable stored assignee dims their chip
+/// on the next rebuild and the toggle becomes one-way.
+AssigneeOfferState assigneeOfferState({
+  required String employeeId,
+  required Set<String> clashingIds,
+  required Set<String> selectedIds,
+  required Set<String> alreadyAssignedIds,
+}) {
+  if (!clashingIds.contains(employeeId)) return AssigneeOfferState.free;
+  return selectedIds.contains(employeeId) ||
+          alreadyAssignedIds.contains(employeeId)
+      ? AssigneeOfferState.onTheJob
+      : AssigneeOfferState.unavailable;
+}
+
+/// The name a chip and its availability line both show.
+///
+/// First name alone, unless another offered assignee shares it — then a last
+/// initial, in BOTH places, so a chip and the line explaining it are obviously
+/// one person. Two Marcs are exactly the case where a bare first name makes the
+/// explanation useless.
+String shortAssigneeName(String name, {required Iterable<String> among}) {
+  final parts = name.trim().split(_nameGap);
+  final first = parts.first;
+  if (parts.length < 2 || first.isEmpty) return name.trim();
+  var sharers = 0;
+  for (final other in among) {
+    final otherFirst = other.trim().split(_nameGap).first;
+    if (otherFirst.toLowerCase() == first.toLowerCase()) sharers++;
+  }
+  return sharers > 1 ? '$first ${parts.last[0]}.' : first;
+}
+
+/// Hoisted: the picker resolves a short name per chip against every other
+/// chip, so a per-call `RegExp` compiled quadratically on every rebuild.
+final _nameGap = RegExp(r'\s+');

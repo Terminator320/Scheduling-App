@@ -10,6 +10,43 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.51.0+80] - 2026-08-24
+
+Booking someone who isn't there is now hard to do by accident. The people
+picker greys out anyone who can't take the job on the day you've chosen and
+says why underneath, and booking time off over jobs somebody already has now
+tells you which jobs those are and offers to hand each one to a colleague.
+
+### Added
+- **The people picker shows who can't take the job.** Once a date and time are
+  set, anyone who is off or already booked in that window is greyed out and
+  can't be picked, with a line underneath saying why — "Marc is off" with the
+  dates he's away, or "Nadia is on another job" with the hours that job runs,
+  so you can see that moving the visit to the afternoon would free her. Past
+  two of them the rest fold behind "3 more aren't free", which opens on a tap.
+  Nobody free at all? The lines give way to a single note suggesting another
+  time, or booking the job now and assigning someone later.
+- **Somebody already on the job is never greyed out.** If you put Marc on a
+  visit and he later books that day off, his chip stays selected and tappable
+  and the line reads "Marc is off — still on this job". You keep the choice:
+  leave him on it, or take him off yourself.
+- **Booking time off over existing jobs now tells you what it ran into.** Save
+  a day off — or any personal block — for someone who already has jobs inside
+  it, and a list of those jobs appears. Each row offers "Swap", which shows
+  only the colleagues actually free during that job's hours; picking one hands
+  the job over immediately, and "Undo" on the row puts it straight back. A job
+  nobody else can cover says so and offers to open it. The time off is saved
+  either way — closing the list changes nothing, and the jobs simply stay as
+  they were.
+
+### Changed
+- **Saving a day off no longer asks you to confirm a double booking first.**
+  It used to warn "Marc is already booked" and make you push past it, then say
+  nothing about which jobs were affected. That prompt is gone for personal
+  blocks — the new list replaces it, and it names the jobs and offers a fix
+  instead of just naming the person. Ordinary client jobs still warn exactly as
+  before.
+
 ## [1.50.0+79] - 2026-08-24
 
 Time you book off is no longer counted as work. A personal block can now be

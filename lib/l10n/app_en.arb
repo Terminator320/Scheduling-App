@@ -3306,5 +3306,128 @@
         "type": "int"
       }
     }
+  },
+  "calendar_assigneeOnAnotherJob": "{name} is on another job",
+  "@calendar_assigneeOnAnotherJob": {
+    "description": "Assignee-picker line under a dimmed chip: this person is booked on another appointment during the chosen window. {name} is their short name, matching the chip above.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_assigneeOffStillOnJob": "{name} is off — still on this job",
+  "@calendar_assigneeOffStillOnJob": {
+    "description": "Assignee-picker line for someone already assigned who has since booked time off. Their chip stays selected and tappable, so this explains rather than forbids.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_assigneeBookedStillOnJob": "{name} is on another job — still on this one",
+  "@calendar_assigneeBookedStillOnJob": {
+    "description": "Assignee-picker line for someone already on this job who also has another booking in the window — typically because the date was moved after they were picked. Their chip stays selected and tappable, so this explains rather than forbids.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_assigneesMoreNotFree": "{count, plural, =1{1 more isn't free} other{{count} more aren't free}}",
+  "@calendar_assigneesMoreNotFree": {
+    "description": "Tappable row that expands the remaining assignee-availability lines; count is how many are hidden.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_nobodyFreeThen": "Nobody is free on {when}. Try another time, or book the job and assign someone later.",
+  "@calendar_nobodyFreeThen": {
+    "description": "Replaces the per-person availability lines when every offered assignee clashes. {when} is the chosen span, for example '26 Aug, 8:00 AM - 12:00 PM'.",
+    "placeholders": {
+      "when": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_timeOffClashTitle": "{name} still has jobs booked",
+  "@calendar_timeOffClashTitle": {
+    "description": "Title of the dialog shown after saving a personal block for one person who already has client jobs inside it.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_timeOffClashTitleMany": "{count, plural, =1{1 person still has jobs booked} other{{count} people still have jobs booked}}",
+  "@calendar_timeOffClashTitleMany": {
+    "description": "Title of the same dialog when the personal block covers several people; count is how many of them have clashing jobs.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_personalBlockClashBody": "The block is saved. These jobs still have {name} on them.",
+  "@calendar_personalBlockClashBody": {
+    "description": "Body line of the clash dialog for a single person. Says plainly that nothing was blocked. {name} is their short name.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_personalBlockClashBodyMany": "The block is saved. These jobs still have the crew on them.",
+  "@calendar_personalBlockClashBodyMany": {
+    "description": "Body line of the clash dialog when the personal block covers several people."
+  },
+  "calendar_clashJobsCount": "{count, plural, =1{1 JOB} other{{count} JOBS}}",
+  "@calendar_clashJobsCount": {
+    "description": "Mono count in the clash dialog header, beside the dates the block covers. Uppercase to match the mono ramp.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_swapPersonFor": "Swap {name} for",
+  "@calendar_swapPersonFor": {
+    "description": "Label above the free-crew strip in an opened clash row. {name} is the person being taken off that job.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_swap": "Swap",
+  "@calendar_swap": {
+    "description": "Button on a clash row that opens the free-crew strip."
+  },
+  "calendar_takesThisJob": "{name} takes this one",
+  "@calendar_takesThisJob": {
+    "description": "Settled clash row: the swap has been written and {name} is now on that job.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_everyoneElseBooked": "Everyone else is booked",
+  "@calendar_everyoneElseBooked": {
+    "description": "Clash row that cannot be fixed by swapping - no other crew member is free in that job's window."
+  },
+  "calendar_openJob": "Open job",
+  "@calendar_openJob": {
+    "description": "Button on a stuck clash row; opens that appointment's detail sheet."
+  },
+  "calendar_leaveThem": "Leave them",
+  "@calendar_leaveThem": {
+    "description": "Dismiss button on the clash dialog. Never 'Cancel' - nothing here is undone by dismissing."
+  },
+  "common_undo": "Undo",
+  "@common_undo": {
+    "description": "Reverts a single settled swap back to the original assignee, while the clash dialog is open."
   }
 }

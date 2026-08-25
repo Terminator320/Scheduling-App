@@ -4,6 +4,7 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 Future<bool> showBusyConflictDialog(
@@ -107,32 +108,10 @@ class _BusyConflictDialog extends StatelessWidget {
     );
   }
 
-  Widget _warningNote(BuildContext context) {
-    final theme = Theme.of(context);
-    final statusColors = theme.statusColors;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(top: 1),
-          child: Icon(
-            Icons.info_outline_rounded,
-            size: 14,
-            color: statusColors.onWarningContainer,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.sp8),
-        Expanded(
-          child: Text(
-            context.l10n.calendar_doubleBookingWarning,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: statusColors.onWarningContainer,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget _warningNote(BuildContext context) => WarningNote(
+    message: context.l10n.calendar_doubleBookingWarning,
+    filled: false,
+  );
 
   Widget _actions(BuildContext context) => Row(
     children: [

@@ -290,8 +290,14 @@ class AddEventController extends Notifier<AddEventState>
     state = state.copyWith(isSubmitting: true);
 
     try {
-      // Keep the conflict check inside the try block, so an error there still resets the in-flight flag.
-      if (!forceBusy) {
+      // Keep the conflict check inside the try block, so an error there still
+      // resets the in-flight flag.
+      //
+      // A PERSONAL block skips it entirely: the time-off clash alert runs after
+      // the write, and it is strictly more useful — it names the jobs and
+      // offers a swap on each, where this prompt only names the person.
+      // Running both gives two dialogs about the same clash, back to back.
+      if (!forceBusy && !isPersonal) {
         final busy = await repo.findBusyEmployees(
           candidates: selectedEmployees,
           start: start,

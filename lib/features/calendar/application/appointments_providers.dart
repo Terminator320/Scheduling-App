@@ -86,3 +86,49 @@ List<AppointmentRecord> appointmentsOrEmpty(
   }
   return appointments.value ?? const [];
 }
+
+/// The range the calendar screen currently holds a live listener on, or null
+/// when no admin calendar is mounted.
+///
+/// Published so a surface opened FROM that screen can reduce the stream it
+/// already pays for instead of forking a second one — the same rule
+/// `forWeekBucketOf` and `forMirrors` exist to enforce, read from the other
+/// end. The assignee picker's availability lookup is the only consumer.
+///
+/// **Admin only.** An employee's calendar reads `myAppointmentsProvider`, and
+/// `appointmentsInRangeProvider` constrains `startTime` alone — for a LIST
+/// query the rules are evaluated against the constraints, so a technician
+/// joining that listener is rejected outright. `MainCalendarScreen` publishes
+/// only when it is showing the admin stream.
+class OpenCalendarRange extends Notifier<AppointmentDateRange?> {
+  @override
+  AppointmentDateRange? build() => null;
+
+  /// Whoever published the current range. An OBJECT identity, not the range:
+  /// two calendars on the same month publish EQUAL ranges, so a value
+  /// comparison cannot tell "still mine" from "the replacement's".
+  Object? _owner;
+
+  void publish(Object owner, AppointmentDateRange range) {
+    _owner = owner;
+    if (state != range) state = range;
+  }
+
+  /// Clears only while [owner] is still the one that published.
+  ///
+  /// A screen-cache clear builds the replacement calendar before disposing the
+  /// old one, so an unconditional clear on the way out would drop the range
+  /// the NEW screen just published and leave every picker on the one-shot
+  /// fallback — silently, since that path answers correctly and only costs
+  /// reads.
+  void clearIfHolding(Object owner) {
+    if (!identical(_owner, owner)) return;
+    _owner = null;
+    state = null;
+  }
+}
+
+final openCalendarRangeProvider =
+    NotifierProvider<OpenCalendarRange, AppointmentDateRange?>(
+      OpenCalendarRange.new,
+    );

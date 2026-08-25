@@ -252,4 +252,126 @@ void main() {
     // still surfaces.
     expect(result.map((e) => e.id), ['e0']);
   });
+
+  group('findClashingAppointments', () {
+    Map<String, dynamic> jobData({
+      List<String> employeeIds = const ['e0'],
+      String status = 'pending',
+      bool isPersonal = false,
+    }) => {
+      'employeeIds': employeeIds,
+      'status': status,
+      'isPersonal': isPersonal,
+      'startTime': Timestamp.fromDate(DateTime(2026, 6, 24, 9)),
+      'endTime': Timestamp.fromDate(DateTime(2026, 6, 24, 10)),
+    };
+
+    test('returns empty without querying when there are no ids', () async {
+      final result = await repo().findClashingAppointments(
+        employeeIds: const [],
+        start: start,
+        end: end,
+      );
+      expect(result, isEmpty);
+      verifyNever(() => query.get());
+    });
+
+    test('chunks >30 ids the same way findBusyEmployees does', () async {
+      await repo().findClashingAppointments(
+        employeeIds: [for (var i = 0; i < 31; i++) 'e$i'],
+        start: start,
+        end: end,
+      );
+      final captured = verify(
+        () => collection.where(
+          'employeeIds',
+          arrayContainsAny: captureAny(named: 'arrayContainsAny'),
+        ),
+      ).captured;
+      expect(captured.length, 2);
+      expect((captured[0] as List).length, 30);
+      expect((captured[1] as List).length, 1);
+    });
+
+    test('returns the clashing RECORDS, not the busy people', () async {
+      final clashing = doc(jobData(), id: 'a1');
+      when(() => snapshot.docs).thenReturn([clashing]);
+
+      final result = await repo().findClashingAppointments(
+        employeeIds: const ['e0'],
+        start: start,
+        end: end,
+      );
+      expect(result.map((r) => r.id), ['a1']);
+    });
+
+    test('a doc returned by two chunks is deduped by id', () async {
+      final shared = doc(
+        jobData(employeeIds: const ['e0', 'e30']),
+        id: 'a1',
+      );
+      when(() => snapshot.docs).thenReturn([shared]);
+
+      final result = await repo().findClashingAppointments(
+        employeeIds: [for (var i = 0; i < 31; i++) 'e$i'],
+        start: start,
+        end: end,
+      );
+      expect(result.length, 1);
+    });
+
+    test('clientJobsOnly excludes personal blocks', () async {
+      final personal = doc(jobData(isPersonal: true), id: 'block');
+      when(() => snapshot.docs).thenReturn([personal]);
+
+      expect(
+        await repo().findClashingAppointments(
+          employeeIds: const ['e0'],
+          start: start,
+          end: end,
+          clientJobsOnly: true,
+        ),
+        isEmpty,
+      );
+      // Still a real clash for busy-ness purposes — only the swap list drops
+      // it, because a swap on someone else's own block is nonsense.
+      expect(
+        await repo().findClashingAppointments(
+          employeeIds: const ['e0'],
+          start: start,
+          end: end,
+        ),
+        isNotEmpty,
+      );
+    });
+
+    test('a terminal-status job is not a clash', () async {
+      final done = doc(jobData(status: 'done'), id: 'a1');
+      when(() => snapshot.docs).thenReturn([done]);
+
+      expect(
+        await repo().findClashingAppointments(
+          employeeIds: const ['e0'],
+          start: start,
+          end: end,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('excludeAppointmentId drops the record being edited', () async {
+      final self = doc(jobData(), id: 'self');
+      when(() => snapshot.docs).thenReturn([self]);
+
+      expect(
+        await repo().findClashingAppointments(
+          employeeIds: const ['e0'],
+          start: start,
+          end: end,
+          excludeAppointmentId: 'self',
+        ),
+        isEmpty,
+      );
+    });
+  });
 }

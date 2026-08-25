@@ -487,7 +487,10 @@ class EventDetailsController extends Notifier<EventDetailsState>
     final newImages = state.newImages;
 
     try {
-      if (!forceBusy) {
+      // A PERSONAL block skips the prompt — the time-off clash alert handles
+      // that clash after the write, and two dialogs about it in a row is what
+      // running both would give. See the add flow's twin.
+      if (!forceBusy && !state.isPersonal) {
         final busy = await repo.findBusyEmployees(
           candidates: state.selectedEmployees,
           start: start,

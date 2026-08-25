@@ -486,6 +486,76 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   **A form's run length has one owner too, `runLengthDays`** (beside
   `appointmentSpan`): the `end − start + 1` rule was hand-copied into both form
   bodies, which even shared the same five-line comment.
+- **A PERSONAL save skips the Save-time busy prompt entirely** (2026-08-24).
+  Both controllers gate the check on `!isPersonal`, and the time-off clash
+  alert handles that clash AFTER the write instead. This is a change to
+  EXISTING behaviour, not just new surface: booking a day off over Marc's jobs
+  used to pop "Schedule Conflict — Marc is already booked / Book anyway", and
+  adding the alert on top gave two dialogs about the same clash back to back.
+  The alert is strictly more useful — it names the jobs and offers a swap on
+  each, where the old prompt only names the person. The prompt is UNCHANGED for
+  ordinary client jobs. Pinned on both controllers by a test that a personal
+  save no longer returns the busy outcome.
+- **The time-off clash alert is ADVISORY and always AFTER the save**
+  (`calendar/widgets/dialogs/personal_block_clash_dialog.dart`, designed in
+  `docs/plans/2026-08-24-timeoff-clash-alert.md`). Closing it leaves the block
+  saved and the jobs untouched — time off is a fact about a person and the
+  schedule does not get to veto it — so its dismiss button is **"Leave them",
+  never "Cancel"**, which would read as cancelling the time off. Each swap
+  writes IMMEDIATELY, so it survives closing the dialog; Undo is per row and
+  lives only as long as the dialog, after which the swap is an ordinary edit.
+  Three rules that would be bugs the other way: a swap hits **that occurrence
+  only**, never the series (a weekly job's Wednesday slot is what clashes; the
+  person is not off every Wednesday, so this must not route through
+  `appointment_series_editor.dart`); a swap **replaces, never removes**
+  (`appointment_form_validator.dart` rejects an empty crew, so taking the only
+  assignee off would write a state the form itself forbids); and each person's
+  swap list excludes everyone **booked off alongside them**, who are no more
+  available than they are. The candidate scan awaits the roster STREAM rather
+  than reading a lazily-started provider's current value, and it fails CLOSED
+  to the stuck row — offering a name the scan never checked is the failure this
+  dialog exists to undo.
+  **The dialog tracks each clashing job's LIVE record keyed by DOC ID, never
+  per row and never the dialog-open snapshot.** One job appears under every
+  blocked person on it (a team day off), and a swap rewrites the whole crew —
+  so a second swap built from the opening snapshot dropped the first
+  replacement AND put the person who is off back on the job, which is the
+  exact outcome this dialog exists to undo. Keyed per ROW it has the same
+  hole, since two rows are two keys over one document. Pinned by "a SECOND
+  swap on the same job builds on the first".
+  **A swap re-serializes the WHOLE record, so it must normalize the status
+  through `AppointmentStatus.storedRaw`** like every other such write — a
+  legacy `confirmed`/unknown value would otherwise be written back verbatim
+  and rejected by the rules as an opaque `permission-denied` on an
+  ordinary-looking swap.
+- **`findClashingAppointments` is the ONE owner of "what stands in the way",
+  and the clash rule under it is the pure `clashingAppointments`**
+  (`calendar/domain/assignee_availability.dart`). It answers with the clashing
+  RECORDS rather than the busy people, and **`findBusyEmployees` is now
+  expressed in terms of it** — same query, same rule, the busy people being
+  just the union of the results' `employeeIds`. It briefly was not: the query
+  was shared (`_conflictSnapshots`) while the RULE stayed hand-spelled in
+  `findBusyEmployees`' own doc loop, which is the two-owner shape this bullet
+  exists to forbid. The picker reduces a live stream through the same pure
+  rule; if the surfaces ever disagree, the bug is that the rule lives in two
+  places.
+  **A record whose stored times DON'T PARSE clashes unconditionally, and that
+  fail-closed rule survives the collapse only because it is passed IN.**
+  `AppointmentRecord` substitutes a placeholder instant for an unparseable
+  `startTime`/`endTime`, so by the time the pure rule runs, "no usable times"
+  and "a real window that happens not to overlap" are indistinguishable — and
+  the placeholder silently fails the overlap, dropping the row. Only the
+  repository sees the raw map, so it collects those doc ids and hands them to
+  `clashingAppointments` as `windowUnknownIds`; every other test still applies
+  to them. A legacy or console-written row with no usable times must never
+  quietly disappear from a booking check. Pinned by "a doc with unparseable
+  times is kept, not silently dropped".
+  **`clientJobsOnly` is the alert's flag and the picker must never pass it.**
+  It drops personal blocks, because "swap Marc for Nadia" on Marc's own dentist
+  appointment is nonsense — that block belongs to him. The consequence to
+  accept: a personal block overlapping only ANOTHER personal block raises no
+  alert at all, which is correct. The picker leaves it off, since booking time
+  off is exactly how a person is made to read as unavailable.
 - **`findBusyEmployees` must exclude the appointment under edit.** Pass
   `excludeAppointmentId` from any edit-flow conflict check or the job collides
   with itself and reports every one of its own assignees as busy. The exclusion

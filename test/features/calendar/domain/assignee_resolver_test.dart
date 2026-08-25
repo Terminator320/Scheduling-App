@@ -154,4 +154,93 @@ void main() {
       expect(result.names, ['N1', 'N2', 'Olga']);
     });
   });
+
+  group('assigneeOfferState', () {
+    test('nobody clashing is free', () {
+      expect(
+        assigneeOfferState(
+          employeeId: 'e1',
+          clashingIds: const {},
+          selectedIds: const {},
+          alreadyAssignedIds: const {},
+        ),
+        AssigneeOfferState.free,
+      );
+    });
+
+    test('a clash on someone not on the job is unavailable', () {
+      expect(
+        assigneeOfferState(
+          employeeId: 'e1',
+          clashingIds: const {'e1'},
+          selectedIds: const {},
+          alreadyAssignedIds: const {},
+        ),
+        AssigneeOfferState.unavailable,
+      );
+    });
+
+    test('an ALREADY-ASSIGNED clash is never dimmed', () {
+      // Dimming makes them unremovable, and worse: mergeRetainedAssignees
+      // re-appends every original missing from the ACTIVE set, so someone
+      // active but merely un-offered is NOT retained — they would be silently
+      // unassigned instead.
+      expect(
+        assigneeOfferState(
+          employeeId: 'e1',
+          clashingIds: const {'e1'},
+          selectedIds: const {},
+          alreadyAssignedIds: const {'e1'},
+        ),
+        AssigneeOfferState.onTheJob,
+      );
+    });
+
+    test('a SELECTED clash is never dimmed either', () {
+      // The add flow has nothing stored, so the live selection is the whole of
+      // "on this job" there.
+      expect(
+        assigneeOfferState(
+          employeeId: 'e1',
+          clashingIds: const {'e1'},
+          selectedIds: const {'e1'},
+          alreadyAssignedIds: const {},
+        ),
+        AssigneeOfferState.onTheJob,
+      );
+    });
+
+    test('deselecting a stored unavailable assignee is not one-way', () {
+      // Keyed on the selection alone their chip would dim on the next rebuild,
+      // so the tap could only be undone by abandoning the edit.
+      expect(
+        assigneeOfferState(
+          employeeId: 'e1',
+          clashingIds: const {'e1'},
+          selectedIds: const {},
+          alreadyAssignedIds: const {'e1'},
+        ),
+        isNot(AssigneeOfferState.unavailable),
+      );
+    });
+  });
+
+  group('shortAssigneeName', () {
+    test('first name when it is unambiguous', () {
+      expect(
+        shortAssigneeName('Marc Tremblay', among: ['Marc Tremblay', 'Nadia B']),
+        'Marc',
+      );
+    });
+
+    test('two Marcs each take a last initial', () {
+      const roster = ['Marc Tremblay', 'Marc Belanger'];
+      expect(shortAssigneeName('Marc Tremblay', among: roster), 'Marc T.');
+      expect(shortAssigneeName('Marc Belanger', among: roster), 'Marc B.');
+    });
+
+    test('a one-word name is left alone', () {
+      expect(shortAssigneeName('Marc', among: ['Marc', 'Marc']), 'Marc');
+    });
+  });
 }

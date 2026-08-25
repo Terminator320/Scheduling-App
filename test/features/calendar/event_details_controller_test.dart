@@ -1207,6 +1207,43 @@ void main() {
     });
 
     test(
+      'a PERSONAL save never returns the busy outcome — the clash alert '
+      'handles it after the write',
+      () async {
+        // Two dialogs about the same clash, back to back, is what running both
+        // would give. The add flow's twin pins the same rule.
+        await waitForSeed();
+        when(
+          () => appointments.findBusyEmployees(
+            candidates: any(named: 'candidates'),
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+            excludeAppointmentId: any(named: 'excludeAppointmentId'),
+          ),
+        ).thenAnswer((_) async => const [_employeeA]);
+
+        readNotifier().setPersonal(value: true);
+        final outcome = await readNotifier().save(
+          _appointment,
+          title: 'Dentist',
+          address: '',
+          notes: '',
+          materialsNeeded: '',
+        );
+
+        expect(outcome, isA<EventDetailsSaved>());
+        verifyNever(
+          () => appointments.findBusyEmployees(
+            candidates: any(named: 'candidates'),
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+            excludeAppointmentId: any(named: 'excludeAppointmentId'),
+          ),
+        );
+      },
+    );
+
+    test(
       'excludes the appointment being edited from its own conflicts',
       () async {
         await waitForSeed();
