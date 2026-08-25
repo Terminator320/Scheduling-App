@@ -19,7 +19,6 @@ const {
   lastWorkDayMs,
   clampedLastWorkDayMs,
   calendarDaysBetween,
-  isOvernightRecord,
 } = require("../day_slice_utils");
 
 // Epoch ms of a Toronto wall-clock instant given its UTC ISO form.
@@ -133,7 +132,6 @@ describe("day_slice_utils", () => {
         // absent end as "equal times" would make it overnight, count the run
         // backwards to zero days, and drop the job out of every mirror.
         const r = {startTime: at("2026-08-03T13:00:00.000Z")};
-        expect(isOvernightRecord(r)).toBe(false);
         expect(dayCountOf(r)).toBe(1);
         const s = sliceForDay(r, AUG3);
         expect(s.dayIndex).toBe(1);

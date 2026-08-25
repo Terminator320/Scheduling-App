@@ -13,6 +13,13 @@ class EventDetailsInvalid extends EventDetailsSaveOutcome {
   const EventDetailsInvalid();
 }
 
+/// A save the reentrancy guard SKIPPED, distinct from one the validator
+/// rejected — the save-family sibling of [EventDetailsActionBusy], which the
+/// status setters and the delete already return. Surfaces nothing.
+class EventDetailsSaveBusy extends EventDetailsSaveOutcome {
+  const EventDetailsSaveBusy();
+}
+
 class EventDetailsSaved extends EventDetailsSaveOutcome {
   const EventDetailsSaved(
     this.appointment, {

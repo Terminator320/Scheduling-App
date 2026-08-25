@@ -20,9 +20,9 @@ const {
   requireDocId,
   assertAdmin,
   enforceDurableRateLimit,
+  APP_CHECK,
 } = require("./security");
 
-const APP_CHECK = {enforceAppCheck: true};
 const DELETE_RATE_MAX = 20;
 const DELETE_RATE_WINDOW_MS = 60 * 60 * 1000;
 

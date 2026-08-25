@@ -29,12 +29,28 @@ typedef AssigneeClashSpan = ({
 /// free — worse than not dimming at all. It is a one-shot read, so dimming
 /// there re-resolves when the date or the times change rather than streaming.
 ///
+/// **The two paths are not byte-identical on one edge case, deliberately.**
+/// `findClashingAppointments` reads the raw map, so it can see a document whose
+/// `startTime`/`endTime` will not parse and passes those ids as
+/// `windowUnknownIds` — they clash unconditionally, fail-closed. The live path
+/// reduces records the range stream has already built, and
+/// `AppointmentRecord.fromMap` substitutes `DateTime.now()` for an unparseable
+/// time, so by then the two cases are indistinguishable and no such id can be
+/// recovered. A legacy or console-written row missing a usable time is
+/// therefore fail-closed on the fallback and treated as an ordinary job on the
+/// live path. Closing the gap means having the range stream surface those ids
+/// alongside the records, not re-parsing here. Don't read the "same pure rule
+/// on both paths" claim as covering this.
+///
 /// Candidates are the ASSIGNABLE crew, resolved here rather than passed in: a
 /// list in the family key is compared by identity, so every roster emission
 /// would mint a new key. The roster stream re-runs this instead, which is free
 /// on the live path and one small query on the fallback.
 final assigneeAvailabilityProvider = FutureProvider.autoDispose
-    .family<Map<String, AppointmentRecord>, AssigneeClashSpan>((ref, span) async {
+    .family<Map<String, AppointmentRecord>, AssigneeClashSpan>((
+      ref,
+      span,
+    ) async {
       final employeeIds = [
         for (final e
             in ref.watch(assignableEmployeesProvider).value ??

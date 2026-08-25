@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/dialogs/app_dialog_frame.dart';
 
 enum SeriesScopeChoice { thisOnly, thisAndFuture }
 
@@ -68,20 +69,8 @@ class _SeriesScopeDialogState extends State<_SeriesScopeDialog> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(
-        horizontal: 26,
-        vertical: AppSpacing.sp24,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.rDialog),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sp24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return AppDialogFrame(
+      children: [
             if (widget.contextLabel != null) ...[
               Text(widget.contextLabel!, style: theme.monoType.label),
               const SizedBox(height: AppSpacing.sp8),
@@ -135,8 +124,6 @@ class _SeriesScopeDialogState extends State<_SeriesScopeDialog> {
               ],
             ),
           ],
-        ),
-      ),
     );
   }
 }

@@ -13,14 +13,9 @@ class ClientSearchPolicy {
 
   static const int resultDisplayLimit = 25;
 
-  // These are compiled once, since normalize/digitsOnly run per row on every keystroke.
-  static final _accentA = RegExp('[\u00E0\u00E1\u00E2\u00E3\u00E4\u00E5]');
-  static final _accentE = RegExp('[\u00E8\u00E9\u00EA\u00EB]');
-  static final _accentI = RegExp('[\u00EC\u00ED\u00EE\u00EF]');
-  static final _accentO = RegExp('[\u00F2\u00F3\u00F4\u00F5\u00F6]');
-  static final _accentU = RegExp('[\u00F9\u00FA\u00FB\u00FC]');
-  static final _accentC = RegExp('[\u00E7]');
-  static final _nonAlphanumeric = RegExp('[^a-z0-9]+');
+  // Compiled once, since digitsOnly runs per row on every keystroke. The six
+  // accent classes and the `[^a-z0-9]+` collapse that used to sit beside it
+  // are now folded into `_foldAccent`'s single pass; see `normalize`.
   static final _nonDigit = RegExp(r'\D');
 
   // Kicks in on the first letter or digit — blank or punctuation-only input is ignored
@@ -29,17 +24,60 @@ class ClientSearchPolicy {
 
   static String cacheKey(String query) => normalize(query);
 
+  /// Lowercase, accent-folded, non-alphanumerics collapsed to single spaces,
+  /// trimmed.
+  ///
+  /// One pass over the code units rather than a chain of `replaceAll`s. It ran
+  /// per document over a scan window of thousands, and each link in the chain
+  /// scanned the whole string and allocated a new one — nine passes and nine
+  /// intermediate strings for every row, on the order of 10⁷ character copies
+  /// per search. The regexes above are kept because [digitsOnly] and the
+  /// callers of [_foldAccent] below still read as the same rules.
   static String normalize(String value) {
-    return value
-        .toLowerCase()
-        .replaceAll(_accentA, 'a')
-        .replaceAll(_accentE, 'e')
-        .replaceAll(_accentI, 'i')
-        .replaceAll(_accentO, 'o')
-        .replaceAll(_accentU, 'u')
-        .replaceAll(_accentC, 'c')
-        .replaceAll(_nonAlphanumeric, ' ')
-        .trim();
+    final out = StringBuffer();
+    var pendingSpace = false;
+    for (var i = 0; i < value.length; i++) {
+      final folded = _foldAccent(value.codeUnitAt(i));
+      if (folded == null) {
+        // Any run of non-alphanumerics becomes at most one space, and a
+        // trailing run never emits — that is `replaceAll(...)` + `trim()`.
+        pendingSpace = out.isNotEmpty;
+        continue;
+      }
+      if (pendingSpace) {
+        out.writeCharCode(0x20);
+        pendingSpace = false;
+      }
+      out.writeCharCode(folded);
+    }
+    return out.toString();
+  }
+
+  /// The lowercased, accent-folded `a-z0-9` code unit for [unit], or null when
+  /// it is not alphanumeric at all.
+  static int? _foldAccent(int unit) {
+    // ASCII fast path: digits, then upper- and lower-case letters.
+    if (unit >= 0x30 && unit <= 0x39) return unit;
+    if (unit >= 0x41 && unit <= 0x5A) return unit + 0x20;
+    if (unit >= 0x61 && unit <= 0x7A) return unit;
+
+    // Latin-1 accents, upper and lower, folded to their bare letter. Mirrors
+    // the six `_accent*` classes: toLowerCase() ran first there, so the
+    // upper-case ranges fold to the same letters.
+    return switch (unit) {
+      >= 0x00C0 && <= 0x00C5 => 0x61, // À-Å
+      >= 0x00E0 && <= 0x00E5 => 0x61, // à-å
+      0x00C7 || 0x00E7 => 0x63, // Ç ç
+      >= 0x00C8 && <= 0x00CB => 0x65, // È-Ë
+      >= 0x00E8 && <= 0x00EB => 0x65, // è-ë
+      >= 0x00CC && <= 0x00CF => 0x69, // Ì-Ï
+      >= 0x00EC && <= 0x00EF => 0x69, // ì-ï
+      >= 0x00D2 && <= 0x00D6 => 0x6F, // Ò-Ö
+      >= 0x00F2 && <= 0x00F6 => 0x6F, // ò-ö
+      >= 0x00D9 && <= 0x00DC => 0x75, // Ù-Ü
+      >= 0x00F9 && <= 0x00FC => 0x75, // ù-ü
+      _ => null,
+    };
   }
 
   static String digitsOnly(String value) => value.replaceAll(_nonDigit, '');
@@ -83,6 +121,63 @@ class ClientSearchPolicy {
       ].join(' '),
     ),
   );
+
+  /// [entryMatches] against a RAW Firestore map, without building a
+  /// [ClientRecord] first.
+  ///
+  /// The scan window is thousands of documents and a committed search keeps
+  /// [resultDisplayLimit], so building a record per candidate is paid ~200×
+  /// over for nothing — the same reasoning the history matcher already
+  /// follows. It lives beside [index] because the two MUST agree on the field
+  /// set: a spelling that read less would silently stop finding clients the
+  /// record itself would have matched, with nothing logged.
+  ///
+  /// Joining raw `name` and `businessName` reproduces `fromMap`'s fallback for
+  /// matching purposes — when `name` is blank the fallback contributes
+  /// `businessName`, which is in the blob either way — so no legacy doc goes
+  /// invisible here.
+  static bool rawMatches(
+    Map<String, dynamic> data, {
+    required String queryText,
+    required String queryDigits,
+  }) {
+    if (queryText.isEmpty && queryDigits.isEmpty) return false;
+    final contacts = (data['contacts'] as List?) ?? const [];
+
+    if (queryText.isNotEmpty) {
+      final text = normalize(
+        [
+          data['name'] ?? '',
+          data['businessName'] ?? '',
+          data['firstName'] ?? '',
+          data['lastName'] ?? '',
+          data['email'] ?? '',
+          data['address'] ?? '',
+          data['city'] ?? '',
+          data['province'] ?? '',
+          data['postalCode'] ?? '',
+          data['country'] ?? '',
+          for (final c in contacts.whereType<Map<Object?, Object?>>())
+            '${c['name'] ?? ''} ${c['email'] ?? ''}',
+        ].join(' '),
+      );
+      if (text.contains(queryText)) return true;
+    }
+
+    if (queryDigits.isNotEmpty) {
+      final phoneDigits = digitsOnly(
+        [
+          data['phone'] ?? '',
+          data['mobile'] ?? '',
+          for (final c in contacts.whereType<Map<Object?, Object?>>())
+            c['phone'] ?? '',
+        ].join(' '),
+      );
+      if (phoneDigits.contains(queryDigits)) return true;
+    }
+
+    return false;
+  }
 
   /// The cheap half of [matchesClient] — just two substring checks against an
   /// already-normalized entry and query.

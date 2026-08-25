@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
+import 'package:scheduling/core/notices/app_notice.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
@@ -33,6 +35,8 @@ const _me = EmployeeRecord(
 
 void main() {
   late _MockRepo repo;
+  late NoticeService notices;
+  late List<AppNotice> seenNotices;
 
   setUpAll(() {
     registerFallbackValue(EmergencyContact.empty);
@@ -43,6 +47,9 @@ void main() {
 
   setUp(() {
     repo = _MockRepo();
+    notices = NoticeService();
+    seenNotices = [];
+    notices.stream.listen(seenNotices.add);
     when(
       () => repo.saveEmergencyContact(any(), any()),
     ).thenAnswer((_) async {});
@@ -81,6 +88,9 @@ void main() {
         overrides: [
           employeesRepositoryProvider.overrideWithValue(repo),
           isOfflineProvider.overrideWithValue(offline),
+          // There is no NoticeListener in this harness, so a pushed notice
+          // never becomes rendered text - record it at the service instead.
+          noticeServiceProvider.overrideWithValue(notices),
           activeUserIdentityProvider.overrideWith(
             (ref) async => (role: role, docId: 'me-1'),
           ),
@@ -166,6 +176,93 @@ void main() {
         employee: any(named: 'employee'),
       ),
     );
+  });
+
+  group('failure paths', () {
+    // This file had eleven tests and not one `thenThrow`, so `ME-SAVE identity
+    // save failed`, `ME-SAVE availability failed` and the `error_intro*` keys
+    // they compose were entirely unexercised - the largest error-path hole in
+    // lib/, and the only save screen without failure coverage.
+
+    testWidgets('a failed identity save surfaces the cause notice and keeps '
+        'the save bar', (tester) async {
+      when(
+        () => repo.saveEmergencyContact(any(), any()),
+      ).thenThrow(Exception('firestore down'));
+
+      await pump(tester);
+      await tester.enterText(
+        find.byKey(const Key('myEmergencyContact')),
+        'Marie',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('myIdentitySave')));
+      await tester.pumpAndSettle();
+
+      // The intro half of "{intro}. {cause}" - the user is told WHAT failed.
+      expect(seenNotices, hasLength(1));
+      expect(seenNotices.single, isA<NoticeError>());
+      expect(
+        seenNotices.single.message,
+        contains("Couldn't save your details"),
+      );
+      // The bar must survive so the edit is not silently lost.
+      expect(find.byKey(const Key('myIdentitySaveBar')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a failed users-doc write also surfaces, not just the '
+        'emergency one', (tester) async {
+      // Two stores, two ways to fail; only the first was ever plausible to
+      // cover by accident.
+      when(
+        () => repo.updateSelfDetails(any()),
+      ).thenThrow(Exception('permission-denied'));
+
+      await pump(tester);
+      await tester.enterText(
+        find.byKey(const Key('myEmergencyContact')),
+        'Marie',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('myIdentitySave')));
+      await tester.pumpAndSettle();
+
+      expect(seenNotices, hasLength(1));
+      expect(seenNotices.single, isA<NoticeError>());
+      expect(
+        seenNotices.single.message,
+        contains("Couldn't save your details"),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a throwing repository never leaves the button spinning', (
+      tester,
+    ) async {
+      // The reentrancy rule: the in-flight flag must reset on every catch, or
+      // the screen is stuck until it is popped and reopened.
+      when(
+        () => repo.saveEmergencyContact(any(), any()),
+      ).thenThrow(Exception('boom'));
+
+      await pump(tester);
+      await tester.enterText(
+        find.byKey(const Key('myEmergencyContact')),
+        'Marie',
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('myIdentitySave')));
+      await tester.pumpAndSettle();
+
+      // Tapping again must reach the repository a SECOND time; a stuck flag
+      // would swallow it.
+      await tester.tap(find.byKey(const Key('myIdentitySave')));
+      await tester.pumpAndSettle();
+
+      verify(() => repo.saveEmergencyContact('me-1', any())).called(2);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   testWidgets(

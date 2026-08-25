@@ -106,16 +106,6 @@ function resolveWindow(r) {
 }
 
 /**
- * True when the record's daily window crosses midnight.
- * @param {!Object} r
- * @return {boolean}
- */
-function isOvernightRecord(r) {
-  const w = resolveWindow(r);
-  return w != null && w.overnight;
-}
-
-/**
  * The window-taking forms. Every public helper below resolves the window ONCE
  * and threads it down: `resolveWindow` runs `businessMinutesOfDay` twice and
  * each of those formats through `Intl`, so the old record-taking chain
@@ -228,7 +218,6 @@ module.exports = {
   // owner of a constant this module exists to keep in lockstep.
   MAX_APPOINTMENT_SPAN_DAYS,
   calendarDaysBetween,
-  isOvernightRecord,
   lastWorkDayMs,
   clampedLastWorkDayMs,
   dayCountOf,

@@ -88,4 +88,44 @@ void main() {
       expect(firestoreInt('600') ?? fallback, 600);
     });
   });
+
+  group('firestoreStringList', () {
+    // Covered transitively through `AppointmentRecord.fromMap`, but it is the
+    // ONE owner precisely because the history filter reads `employeeNames` off
+    // the RAW map before a record exists - a second spelling accepting less
+    // would silently stop finding a crew member, with nothing logged. Its two
+    // siblings in this file each have explicit unexpected-type cases; this is
+    // the matching set.
+    test('a list of strings passes through', () {
+      expect(firestoreStringList(['Marc', 'Nadia']), ['Marc', 'Nadia']);
+    });
+
+    test('a BARE non-empty string becomes a single-entry list', () {
+      // The second accepted shape, and the one a naive `as List?` drops.
+      expect(firestoreStringList('Marc'), ['Marc']);
+    });
+
+    test('an empty string is not a name', () {
+      expect(firestoreStringList(''), isEmpty);
+    });
+
+    test('non-string entries are dropped, the rest survive', () {
+      // A console-written row can hold anything; one bad entry must not cost
+      // the document every other name on it.
+      expect(firestoreStringList(['Marc', 7, null, 'Nadia']), [
+        'Marc',
+        'Nadia',
+      ]);
+    });
+
+    test('a missing or wrong-typed field is empty, never null', () {
+      expect(firestoreStringList(null), isEmpty);
+      expect(firestoreStringList(42), isEmpty);
+      expect(firestoreStringList(<String, dynamic>{'a': 'b'}), isEmpty);
+    });
+
+    test('an empty list stays empty', () {
+      expect(firestoreStringList(<String>[]), isEmpty);
+    });
+  });
 }

@@ -83,7 +83,14 @@ alwaysApply: true
     `SYNC`, `RETRY`, `SCHEDULE`) and the prefix is added at the logging site,
     so neither half greps as the whole tag;
   - spelled inside a ternary — `appointment_image_loader.dart` (`IMG-LOAD`,
-    twice).
+    twice);
+  - a named `logContext:` parameter on a helper that logs for you —
+    `splash_controller.dart`'s `_guard` (`SPLASH`), whose call sites pass the
+    tag as part of a longer sentence;
+  - a named `label:` parameter on a helper that logs for you —
+    `sign_in_controller.dart`'s `_bestEffortSignOut` (`AUTH-SIGNIN`, twice).
+    Same shape as `tag:` under a different name, which is exactly why the
+    grep has to be for the TAG, not for the parameter.
 
   This paragraph previously claimed there were exactly four `tag:` sites and
   named two (`IMG-SAVE`/`IMG-SHARE`) that are positional, not named. Following
@@ -134,7 +141,12 @@ alwaysApply: true
 
   - App shell / lifecycle: `ACCOUNT-EXIT`, `APP-SYNC`, `DEEP-LINK`, `NOTICE`,
     `SETTINGS`, `SPLASH`, `TOUR`, `ONBOARD-GATE`
-  - Auth / account: `ACCT-SIGNOUT`, `AUTH-SETUP`
+  - Auth / account: `ACCT-SIGNOUT`, `AUTH-SETUP`, `AUTH-SIGNIN`, `AUTH-PREFILL`
+    (the last two added 2026-08-25, replacing six `login.*` dotted-lowercase
+    tags that were in no registry at all — the whole sign-in path was
+    invisible to a Crashlytics search by tag. `AUTH-SETUP` also now covers
+    `resumeAfterSignUp`, which is named for the sign-up flow P4c deleted and
+    actually serves account SETUP.)
   - Appointments: `APPT-BUSY`, `APPT-COUNT`, `APPT-IMG`, `APPT-RANGE`
   - Clients / history: `CLI-SEARCH`, `CLI-CONTACT-SAVE`, `CLI-CONTACT-SYNC`,
     `HIST-SEARCH`

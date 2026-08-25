@@ -4,6 +4,7 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/dialogs/app_dialog_frame.dart';
 import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
@@ -42,20 +43,8 @@ class _BusyConflictDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final statusColors = theme.statusColors;
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(
-        horizontal: 26,
-        vertical: AppSpacing.sp24,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.rDialog),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sp24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return AppDialogFrame(
+      children: [
             Container(
               width: 44,
               height: 44,
@@ -103,8 +92,6 @@ class _BusyConflictDialog extends StatelessWidget {
             const SizedBox(height: AppSpacing.sp24),
             _actions(context),
           ],
-        ),
-      ),
     );
   }
 

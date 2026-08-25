@@ -12,6 +12,7 @@ const {
   assertAdmin,
   enforceDurableRateLimit,
   assertFreshReauth,
+  APP_CHECK,
 } = require("./security");
 // index.js already loads notifications.js in every container, so this costs no
 // extra cold start. sendToEmployee is the one owner of the token fetch, the
@@ -137,7 +138,6 @@ const JOB_TITLES = [
   "", "lead_tech", "technician", "apprentice", "dispatcher",
 ];
 
-const APP_CHECK = {enforceAppCheck: true};
 
 /**
  * Creates (or re-provisions) the Firebase Auth account for an employee.

@@ -154,23 +154,21 @@ async function storedImageIds(doc) {
 }
 
 /**
- * Pages every appointment, clearing the arrays that are safe to clear.
- * @return {!Promise<void>}
+ * The sweep itself, with every side effect injected.
+ *
+ * Split out of `main()` so the paging loop, BOTH `--dry-run` gates and the
+ * `doc.ref.update` that deletes `pictures[]` can be exercised by jest. This is
+ * the only unattended, irreversible deletion in `scripts/`, and this repo has
+ * already shipped a backfill whose `--dry-run` wrote everything and then threw
+ * — the gates are exactly the part that cannot be reviewed into correctness.
+ *
+ * @param {{db: !Object, dryRun: boolean,
+ *   log: (function(string):void|undefined),
+ *   warn: (function(string):void|undefined)}} opts
+ * @return {!Promise<{appointments: number, withArray: number, cleared: number,
+ *   entriesCleared: number, recounted: number, refused: !Array<!Object>}>}
  */
-async function main() {
-  const argv = process.argv.slice(2);
-  assertKnownFlags(argv);
-  const dryRun = argv.includes("--dry-run");
-
-  const app = initializeApp({credential: applicationDefault()});
-  const db = getFirestore();
-
-  // Printed BEFORE the first read. This is the only script in the directory
-  // that destroys data the app cannot rebuild, and `applicationDefault()`
-  // resolves whatever credentials happen to be in the environment — nothing
-  // on the command line says which project that is.
-  printTargetBanner(app, {dryRun});
-
+async function runClear({db, dryRun, log = console.log, warn = console.warn}) {
   let cursor = null;
   let appointments = 0;
   let withArray = 0;
@@ -241,33 +239,56 @@ async function main() {
   }
 
   const prefix = dryRun ? "[dry run] would clear" : "cleared";
-  console.log(
+  log(
       `${prefix} ${entriesCleared} array entries across ${cleared} ` +
       `appointments (${withArray} still carried an array, ` +
       `${appointments} scanned)`);
 
   if (recounted > 0) {
     const verb = dryRun ? "[dry run] would re-stamp" : "re-stamped";
-    console.log(
+    log(
         `${verb} pictureCount on ${recounted} appointment(s) that carried no ` +
         "array but disagreed with their subcollection");
   }
 
   if (refused.length > 0) {
-    console.warn(
+    warn(
         `REFUSED ${refused.length} appointment(s) whose subcollection does ` +
         "not cover the array — run backfill-appointment-images.js and try " +
         "again. An `identityless` entry cannot be covered by any backfill " +
         "and needs a human:");
     for (const row of refused) {
-      console.warn(
+      warn(
           `  ${row.id}: ${row.missing} not copied, ` +
           `${row.identityless} unrenderable`);
     }
   }
   if (dryRun) {
-    console.log("no writes were made; re-run without --dry-run to apply");
+    log("no writes were made; re-run without --dry-run to apply");
   }
+
+  return {appointments, withArray, cleared, entriesCleared, recounted, refused};
+}
+
+/**
+ * Reads the flags, resolves credentials, prints the banner, runs the sweep.
+ * @return {!Promise<void>}
+ */
+async function main() {
+  const argv = process.argv.slice(2);
+  assertKnownFlags(argv);
+  const dryRun = argv.includes("--dry-run");
+
+  const app = initializeApp({credential: applicationDefault()});
+  const db = getFirestore();
+
+  // Printed BEFORE the first read. This is the only script in the directory
+  // that destroys data the app cannot rebuild, and `applicationDefault()`
+  // resolves whatever credentials happen to be in the environment — nothing
+  // on the command line says which project that is.
+  printTargetBanner(app, {dryRun});
+
+  await runClear({db, dryRun});
 }
 
 // Guarded so `planClear` can be required by jest without `main()` reaching for
@@ -283,4 +304,5 @@ module.exports = {
   planClear,
   needsRecount,
   storedImageIds,
+  runClear,
 };

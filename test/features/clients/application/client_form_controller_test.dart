@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -95,6 +96,25 @@ void main() {
       expect(outcome, isA<ClientSaveFailed>());
       expect(refreshCount(), 0);
       expect(container.read(clientFormControllerProvider), isFalse);
+    });
+
+    test('a double-tapped add returns Busy, not a failure', () async {
+      // The three save controllers all used to return
+      // `XSaveFailed(SocketException('in-flight'))` here, and `_classifyError`
+      // keys on the SocketException TYPE — so a double-tap rendered "you
+      // appear to be offline" while perfectly online, with the real save
+      // succeeding behind the error. This was the one Busy member with no
+      // assertion, so it was the one that could regress back.
+      final gate = Completer<ClientRecord>();
+      when(() => repo.addClient(any())).thenAnswer((_) => gate.future);
+
+      final first = notifier().addClient(_client);
+      final second = await notifier().addClient(_client);
+
+      expect(second, isA<ClientSaveBusy>());
+      gate.complete(_client.copyWith(id: 'c1-persisted'));
+      await first;
+      verify(() => repo.addClient(any())).called(1);
     });
 
     test('offline fails fast without touching the repo', () async {

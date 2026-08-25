@@ -54,7 +54,7 @@ class _LoginState extends ConsumerState<Login> {
       if (_emailController.text.isNotEmpty) return;
       _emailController.text = email;
     } catch (e, st) {
-      logger.warn('login.prefill_email', e, st);
+      logger.warn('AUTH-PREFILL remembered email read failed', e, st);
     }
   }
 

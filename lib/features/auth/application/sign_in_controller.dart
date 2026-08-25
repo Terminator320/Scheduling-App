@@ -143,7 +143,7 @@ class SignInController extends Notifier<SignInState> {
         await _bestEffortSignOut(
           auth,
           logger,
-          label: 'login.sign_in.no_profile signOut failed',
+          label: 'AUTH-SIGNIN no-profile signOut failed',
         );
         _settle();
         return const SignInNoProfile();
@@ -168,7 +168,7 @@ class SignInController extends Notifier<SignInState> {
         await _bestEffortSignOut(
           auth,
           logger,
-          label: 'login.sign_in.inactive signOut failed',
+          label: 'AUTH-SIGNIN inactive signOut failed',
         );
         _settle();
         return const SignInAccountDisabled();
@@ -179,21 +179,21 @@ class SignInController extends Notifier<SignInState> {
       // just log if they fail.
       unawaited(
         authCache.save(employee).catchError((Object e, StackTrace st) {
-          logger.warn('login.auth_cache_save', e, st);
+          logger.warn('AUTH-SIGNIN identity cache save failed', e, st);
         }),
       );
       unawaited(
         storage
             .write(SecureStorageKeys.rememberedEmail, normalizeEmail(email))
             .catchError((Object e, StackTrace st) {
-              logger.warn('login.remember_email', e, st);
+              logger.warn('AUTH-SIGNIN remember email failed', e, st);
             }),
       );
 
       return SignInSuccess(employee);
     } catch (error, stackTrace) {
       final failure = AuthErrorMapper.map(error);
-      logger.authFailure('login.sign_in', failure, error, stackTrace);
+      logger.authFailure('AUTH-SIGNIN sign-in failed', failure, error, stackTrace);
       _settle();
       return SignInError(failure);
     }
@@ -223,14 +223,14 @@ class SignInController extends Notifier<SignInState> {
       if (!employee.isActive) return const SignInProfilePending();
       unawaited(
         authCache.save(employee).catchError((Object e, StackTrace st) {
-          logger.warn('login.resume_after_sign_up.auth_cache_save', e, st);
+          logger.warn('AUTH-SETUP resume identity cache save failed', e, st);
         }),
       );
       return SignInSuccess(employee);
     } catch (error, stackTrace) {
       // The account is already created and active server-side, so we just
       // report "pending" here — the user can recover by signing in normally.
-      logger.warn('login.resume_after_sign_up', error, stackTrace);
+      logger.warn('AUTH-SETUP resume after setup failed', error, stackTrace);
       return const SignInProfilePending();
     }
   }

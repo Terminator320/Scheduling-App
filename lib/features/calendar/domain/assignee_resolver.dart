@@ -114,16 +114,29 @@ AssigneeOfferState assigneeOfferState({
 /// initial, in BOTH places, so a chip and the line explaining it are obviously
 /// one person. Two Marcs are exactly the case where a bare first name makes the
 /// explanation useless.
-String shortAssigneeName(String name, {required Iterable<String> among}) {
+/// Takes the tally rather than the names because it is called once PER CHIP
+/// against the same set: re-scanning `among` here split and lowercased every
+/// candidate for every employee, so the pass stayed O(N²) in regex splits even
+/// after the caller hoisted the list itself. Build the tally once with
+/// [firstNameTally] and hand it to every call in that build.
+String shortAssigneeName(String name, {required Map<String, int> among}) {
   final parts = name.trim().split(_nameGap);
   final first = parts.first;
   if (parts.length < 2 || first.isEmpty) return name.trim();
-  var sharers = 0;
-  for (final other in among) {
-    final otherFirst = other.trim().split(_nameGap).first;
-    if (otherFirst.toLowerCase() == first.toLowerCase()) sharers++;
-  }
+  final sharers = among[first.toLowerCase()] ?? 0;
   return sharers > 1 ? '$first ${parts.last[0]}.' : first;
+}
+
+/// How many of [names] share each lowercased first name — the `among` argument
+/// to [shortAssigneeName]. Build it ONCE per build, outside the chip loop.
+Map<String, int> firstNameTally(Iterable<String> names) {
+  final tally = <String, int>{};
+  for (final name in names) {
+    final first = name.trim().split(_nameGap).first.toLowerCase();
+    if (first.isEmpty) continue;
+    tally[first] = (tally[first] ?? 0) + 1;
+  }
+  return tally;
 }
 
 /// Hoisted: the picker resolves a short name per chip against every other

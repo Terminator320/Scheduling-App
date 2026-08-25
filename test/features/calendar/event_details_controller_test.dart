@@ -476,6 +476,41 @@ void main() {
       verifyNever(() => appointments.updateAppointment(any()));
     });
 
+    test('a double-tapped save returns SaveBusy, not Invalid', () async {
+      // The save family's sibling of `EventDetailsActionBusy`, which the
+      // status setters and the delete already return. Reporting a skipped
+      // write as `Invalid` makes it indistinguishable from a form that failed
+      // validation — the same conflation that once let this sheet announce
+      // "marked as complete" without having written anything.
+      readNotifier();
+      await waitForSeed();
+      final gate = Completer<void>();
+      when(
+        () => appointments.updateAppointment(any()),
+      ).thenAnswer((_) => gate.future);
+
+      final c = readNotifier();
+      final first = c.save(
+        _appointment,
+        title: 'Job',
+        address: '',
+        notes: '',
+        materialsNeeded: '',
+      );
+      final second = await c.save(
+        _appointment,
+        title: 'Job',
+        address: '',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(second, isA<EventDetailsSaveBusy>());
+      gate.complete();
+      await first;
+      verify(() => appointments.updateAppointment(any())).called(1);
+    });
+
     test(
       'an all-day edit saves midnight to 23:59, not the picked times',
       () async {

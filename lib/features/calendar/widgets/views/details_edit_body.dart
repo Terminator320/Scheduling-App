@@ -137,9 +137,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           endDate: state.endDate,
           isPersonal: state.isPersonal,
           isDayOff: state.isDayOff,
-          onDayOffChanged: (value) => notifier.setDayOff(value: value),
           isAllDay: state.isAllDay,
-          onAllDayChanged: (value) => notifier.setAllDay(value: value),
           // Offered only on a job that was already personal, so an ordinary
           // client visit can't be converted mid-life (which would wipe its
           // client).
@@ -171,6 +169,8 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
             onSelectRepeat: notifier.selectRepeat,
             onUseCustomAddress: (value) =>
                 notifier.setUseCustomAddress(value: value),
+            onDayOffChanged: (value) => notifier.setDayOff(value: value),
+            onAllDayChanged: (value) => notifier.setAllDay(value: value),
           ),
           photosSection: _EditPhotosSection(appointment: appointment),
         ),
@@ -386,7 +386,12 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     EventDetailsSaveOutcome outcome,
   ) {
     switch (outcome) {
-      case EventDetailsInvalid() || EventDetailsBusyEmployees():
+      // Each surfaces nothing: the form already shows its own field errors,
+      // the conflict prompt owns `BusyEmployees`, and `SaveBusy` is a skipped
+      // duplicate save rather than a failure.
+      case EventDetailsInvalid() ||
+          EventDetailsBusyEmployees() ||
+          EventDetailsSaveBusy():
         return;
       case EventDetailsSaved(
         :final appointment,

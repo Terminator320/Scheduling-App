@@ -128,4 +128,52 @@ void main() {
     expect(week.first, DateTime(2026, 5, 31));
     expect(week.last, DateTime(2026, 6, 6));
   });
+
+  group('DateFormat memoization', () {
+    // Identity, not equality: the point is that no NEW DateFormat is
+    // constructed. Constructing one verifies the locale and parses a skeleton
+    // into pattern fields, and the calendar built a fresh one per day CELL for
+    // a semantics label - 30-90 per rebuild on every day tap and month swipe.
+    // A "simplification" back to a direct constructor produces no test
+    // failure, no lint and no error, only jank, so this is the only thing
+    // standing between that regression and shipping.
+    test('longDateFormatFor returns the same instance per locale', () {
+      expect(
+        identical(longDateFormatFor('en'), longDateFormatFor('en')),
+        isTrue,
+      );
+    });
+
+    test('weekdayAbbrevFormatFor returns the same instance per locale', () {
+      expect(
+        identical(weekdayAbbrevFormatFor('en'), weekdayAbbrevFormatFor('en')),
+        isTrue,
+      );
+    });
+
+    test('monthAbbrevFormatFor returns the same instance per locale', () {
+      expect(
+        identical(monthAbbrevFormatFor('en'), monthAbbrevFormatFor('en')),
+        isTrue,
+      );
+    });
+
+    test('a DIFFERENT locale gets its own instance', () {
+      // The cache is keyed by locale, so memoizing must not collapse the two
+      // shipped locales onto one formatter.
+      expect(
+        identical(longDateFormatFor('en'), longDateFormatFor('fr')),
+        isFalse,
+      );
+      expect(longDateFormatFor('fr').locale, 'fr');
+    });
+
+    test('weekStartForLocale is memoized and still locale-correct', () {
+      // en is Sunday-first (0); intl stores FIRSTDAYOFWEEK Monday-based, so
+      // the +1 %7 conversion is what this pins alongside the cache.
+      expect(weekStartForLocale('en'), 0);
+      expect(weekStartForLocale('en'), 0);
+      expect(weekStartForLocale('fr'), 1);
+    });
+  });
 }

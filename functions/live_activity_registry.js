@@ -43,11 +43,6 @@ const PRUNE_MAX = 400;
 // concurrent deletes at Firestore.
 const PRUNE_CHUNK = 25;
 
-// How long a registered token stays valid without a refresh. No write path
-// actually uses this — `_pruneExpired` reaps by the device's own
-// `expiresAt` field instead.
-const TOKEN_TTL_MS = 3 * 24 * 60 * 60 * 1000;
-
 /**
  * Splits a list into chunks of at most `size`.
  * @param {!Array<*>} list
@@ -74,15 +69,6 @@ function _rows(snap) {
     ref: d.ref,
     ...(d.data() || {}),
   }));
-}
-
-/**
- * Expiry stamp for a freshly written/refreshed token row.
- * @param {(Date|undefined)} now
- * @return {!Date}
- */
-function activityTokenExpiry(now) {
-  return new Date((now ? now.getTime() : Date.now()) + TOKEN_TTL_MS);
 }
 
 /**
@@ -368,9 +354,7 @@ module.exports = {
   // employee_accounts.js.
   IN_QUERY_MAX,
   PRUNE_MAX,
-  TOKEN_TTL_MS,
   CARD_TTL_MS,
-  activityTokenExpiry,
   listPushToStartTokens,
   listUpdateTokens,
   deleteActivityToken,
