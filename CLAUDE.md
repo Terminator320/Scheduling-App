@@ -90,10 +90,23 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
 - **Employee visibility:** Employees see only appointments where their doc id is
   in `employeeIds`. Apply this filter on any new appointment view.
 - **Editing an appointment must preserve assignees not in the active picker.**
-  The employee picker only shows active staff, so a disabled/removed assignee
+  The employee picker never shows a disabled/removed person, so such an assignee
   can't be deselected — saving must re-append original `employeeIds` not in the
   active set, or that staff is silently unassigned (which also changes who can
-  see the visit). The merge itself is the pure, tested `mergeRetainedAssignees`
+  see the visit). **What the picker DOES offer has one owner,
+  `offerableAssignees` (same file as the merge), and it narrows the ACTIVE list
+  rather than unioning onto a pre-filtered one** — active crew, plus anyone
+  active who is already on the job but no longer offerable by title (a
+  dispatcher assigned before that rule existed, so it can be taken off). It
+  keys on the appointment's STORED `employeeIds`, never the live selection —
+  keyed on the selection, deselecting that dispatcher removed their own chip on
+  the next rebuild, so the toggle was one-way and an accidental tap could only
+  be undone by abandoning the edit. The
+  distinction is the trap: a union of "assignable + already selected" also
+  re-offers a DISABLED assignee, whose chip then deselects and is silently
+  put back by the merge below on every save. Narrowing an active-only list
+  cannot express that, which is why the rule lives beside the merge it has to
+  agree with rather than inside `EmployeePicker`. The merge itself is the pure, tested `mergeRetainedAssignees`
   (`calendar/domain/assignee_resolver.dart`) — route the retain logic through it.
   Resolve the active set through the ONE owner, `_resolveActiveEmployees`
   (`event_details_controller.dart`), which awaits `watchEmployees().first` —

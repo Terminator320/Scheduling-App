@@ -420,6 +420,28 @@ self-service settings. Root context: `../../CLAUDE.md`.
   site and gates nothing. `JobTitleChips` therefore has no side effect on the
   ACCESS toggle — conflating them would make picking "Dispatcher" silently
   grant or revoke admin.
+  **One title DOES gate something, and only this: `JobTitle.isAssignable`
+  (2026-08-24) is false for `dispatcher`**, who schedules the work rather than
+  going out on it. `EmployeeRecord.isAssignable` forwards it and
+  `assignableEmployeesProvider` (`employees_providers.dart`) applies it to a
+  set — the assignee pickers and the dashboard's per-person job numbers read
+  THAT provider, never the raw `employeesStreamProvider`, or a dispatcher sits
+  at a permanent zero on the workload list AND adds their `maxJobsPerDay` to
+  every daily-capacity bar. It is deliberately DERIVED rather than filtered
+  inside `employeesStreamProvider` or the repository: `_resolveActiveEmployees`
+  (`event_details_controller.dart`) reads `watchEmployees()` straight for the
+  retain check, so a dispatcher already stored on a job must still read as
+  ACTIVE there or removing them is undone on every save. Still not an access
+  flag — a dispatcher's own visibility is unchanged, and the edit picker still
+  offers one already on a job (see `offerableAssignees`, root `CLAUDE.md`).
+  **The exclusion is ABSOLUTE — there is no personal-block or day-off
+  carve-out** (owner call, 2026-08-24, asked and answered when a review raised
+  it). A dispatcher is not offered on a personal block either, so a day off
+  cannot be booked FOR one; the exclusion is about the person, not about the
+  kind of entry. Consequence to keep in mind rather than "fix": assignees are
+  required on every appointment and an employee sees only appointments whose
+  `employeeIds` contain them, so a dispatcher has nothing on their own
+  calendar. That is the accepted shape.
 - **`workingDays` is Sunday-indexed** (`[0]` = Sunday), matching
   `weekStartForLocale` and `weekdayLabelsForLocale`, which both read intl's
   Sunday-indexed `NARROWWEEKDAYS`. Storing Monday-first would put a `% 7`

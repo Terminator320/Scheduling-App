@@ -181,6 +181,37 @@
   "@calendar_allDay": {
     "description": "Switch in the job form, and the label shown in place of a time range on a job that runs the whole day."
   },
+  "calendar_dayOff": "Day off",
+  "@calendar_dayOff": {
+    "description": "Chip in the job form marking a personal block as time off, and the chip shown in place of the status on that block's card. A day off is never counted as a job."
+  },
+  "calendar_dayOffIsOff": "{name} is off",
+  "@calendar_dayOffIsOff": {
+    "description": "The day-off strip in the agenda, for a block that has not finished yet. {name} is the crew member the time off is for.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_dayOffWasOff": "{name} was off",
+  "@calendar_dayOffWasOff": {
+    "description": "The day-off strip in the agenda once the last day has passed. Past tense, because a day off completes itself at the end of its span.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_dayOffLength": "{count, plural, =1{1 day} other{{count} days}}",
+  "@calendar_dayOffLength": {
+    "description": "How long a day off runs, on its detail view.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendar_closedCount": "Done · {count}",
   "@calendar_closedCount": {
     "description": "Label on the rule that separates the day's remaining work from the jobs that are finished or cancelled, in the calendar agenda. Cancelled visits sink into the same block, so this one word covers both (owner call).",

@@ -137,8 +137,8 @@ class DashboardAggregator {
 
   /// Counts jobs per employee for today and for this ISO week. Cancelled
   /// visits are excluded, and a multi-assignee visit counts once for each
-  /// assignee. [employees] should be the active-only list from
-  /// `employeesStreamProvider`.
+  /// assignee. [employees] should be the active, crew-only list from
+  /// `assignableEmployeesProvider`.
   static List<EmployeeWorkload> computeWorkload(
     List<AppointmentRecord> appointments,
     List<EmployeeRecord> employees,

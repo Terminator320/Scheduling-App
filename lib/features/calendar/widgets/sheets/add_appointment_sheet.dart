@@ -245,8 +245,12 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(_provider);
+    // Crew only — a dispatcher never gets assigned, so they aren't offered.
+    // That holds for a PERSONAL block too, day off included (owner call,
+    // 2026-08-24): the exclusion is about the person, not about the kind of
+    // entry, so there is no carve-out to make here.
     final allEmployees =
-        ref.watch(employeesStreamProvider).asData?.value ?? const [];
+        ref.watch(assignableEmployeesProvider).asData?.value ?? const [];
     // One length feeds both the flag and the label, so they can't disagree:
     // the run-length string is a plain interpolation, and a multi-day flag
     // paired with a length of 1 would render "1 days".
@@ -280,6 +284,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
             selectedDate: state.selectedDate,
             endDate: state.endDate,
             isPersonal: state.isPersonal,
+            isDayOff: state.isDayOff,
+            onDayOffChanged: (value) => _notifier.setDayOff(value: value),
             onPersonalChanged: (value) => _notifier.setPersonal(value: value),
             isAllDay: state.isAllDay,
             onAllDayChanged: (value) => _notifier.setAllDay(value: value),

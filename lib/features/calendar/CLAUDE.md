@@ -55,7 +55,11 @@ STAYS in the root `CLAUDE.md`, because those are reachable from
   instead"), so `countFor` in `main_calendar_screen.dart` reads
   `dottedJobsOn(...).length`, not the raw slice count, or a screen reader
   describes dots nobody can see. Note the count stays UNCAPPED while the dots
-  cap at 3; only the cancelled filter is shared.
+  cap at 3; only the filter is shared. **`dottedJobsOn` drops TIME OFF for the
+  same reason read from the other end** (2026-08-24): a day off is not work at
+  all, so a week of holiday must not paint as a fortnight of booked days. Its
+  card still renders in the agenda below — the split is "never counted, always
+  shown", and its one owner is `AppointmentRecord.isTimeOff`.
   `today` always comes from
   `currentDayProvider`, never `DateTime.now()`, or the circle sticks on
   yesterday in an app left open across midnight.
@@ -178,7 +182,10 @@ STAYS in the root `CLAUDE.md`, because those are reachable from
   must use the same predicate**: `_jobLabel` (`main_calendar_screen.dart`)
   appends `· 1 DONE` to `3 JOBS` by counting `isClosed`, not `done` alone, so
   the header and the rule drawn over that block can never disagree about how
-  much of the day is behind them. Everywhere else (day route, dashboard, employee TODAY panel,
+  much of the day is behind them. **Time off is counted on neither side** — a
+  day whose only entry is a day off reads `0 JOBS` with that card listed under
+  it, which is the whole point of `isTimeOff`; only the COUNT is filtered, the
+  cards are not. Everywhere else (day route, dashboard, employee TODAY panel,
   client job history) keeps its own sort and the plain full-height card.
 - **`AppointmentCard` is the ONE appointment card** — calendar agenda, day
   route, client job history, both dashboard sections and the paginated history

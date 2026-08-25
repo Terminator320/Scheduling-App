@@ -84,6 +84,7 @@ class EventDetailsSavePipeline {
     required String status,
     required RepeatInterval repeat,
     required bool isPersonal,
+    required bool isDayOff,
     required bool isAllDay,
   }) {
     // A personal job carries no client — including when an existing client
@@ -106,6 +107,7 @@ class EventDetailsSavePipeline {
           : pickedClient?.phone ?? appointment.clientPhone,
       address: address.trim(),
       isPersonal: isPersonal,
+      isDayOff: isDayOff,
       isAllDay: isAllDay,
       employeeIds: assignees.ids,
       employeeNames: assignees.names,

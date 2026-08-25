@@ -123,6 +123,8 @@ class AppointmentFormFields extends StatelessWidget {
     required this.selectedDate,
     required this.endDate,
     required this.isPersonal,
+    required this.isDayOff,
+    required this.onDayOffChanged,
     required this.isAllDay,
     required this.onAllDayChanged,
     required this.errors,
@@ -163,6 +165,12 @@ class AppointmentFormFields extends StatelessWidget {
   /// chips, and drops the client and title from validation. The address stays,
   /// marked optional — a personal block can still have somewhere to be.
   final bool isPersonal;
+
+  /// This personal block is time OFF — the crew is away rather than working.
+  /// Rendered as a chip under the switch, and only while [isPersonal] is on.
+  /// Stored, because it is what keeps the block out of every job count; see
+  /// `AppointmentRecord.isTimeOff`.
+  final bool isDayOff;
 
   /// No time was put in, so the block owns the whole day: the start/end rows
   /// are hidden and the record saves midnight → 23:59.
@@ -207,6 +215,11 @@ class AppointmentFormFields extends StatelessWidget {
   /// it on a job that is ALREADY personal, so an ordinary client visit can't be
   /// turned into one halfway through its life.
   final ValueChanged<bool>? onPersonalChanged;
+
+  /// Reports the "Day off" chip. Required and non-null, unlike
+  /// [onPersonalChanged]: the chip is gated on [isPersonal] alone, so there is
+  /// no flow that renders the form without one.
+  final ValueChanged<bool> onDayOffChanged;
 
   String? _err(BuildContext context, String field) {
     final key = errors[field];
@@ -320,6 +333,13 @@ class AppointmentFormFields extends StatelessWidget {
     // --- Personal job ---
     if (onPersonalChanged != null) ...[
       _PersonalJobSwitch(value: isPersonal, onChanged: _setPersonal),
+      // Only under an ON switch: a client visit can never be time off, and the
+      // controllers clear the flag when the switch goes off so a hidden chip
+      // can't leave one behind.
+      if (isPersonal) ...[
+        const SizedBox(height: AppSpacing.sp8),
+        _DayOffChoiceChip(value: isDayOff, onChanged: onDayOffChanged),
+      ],
       const SizedBox(height: AppSpacing.sp16),
     ],
     // --- Service title ---
@@ -379,7 +399,11 @@ class AppointmentFormFields extends StatelessWidget {
 
   /// Start/end date, start/end time, status (edit flow only) and repeat.
   List<Widget> _scheduleSection(BuildContext context, AppLocalizations l10n) {
-    final showStatus = editingStatus != null && onStatusChanged != null;
+    // A DAY OFF has no lifecycle — it is not work, so there is nothing to
+    // start or finish and the picker's three states are all the wrong
+    // question. Its card and detail header show "Day off" in that slot.
+    final showStatus =
+        editingStatus != null && onStatusChanged != null && !isDayOff;
     final isNarrowPhone = context.isNarrowWidth;
 
     // Dates and times are pickers, not text entry, so they render as panel rows
@@ -443,11 +467,17 @@ class AppointmentFormFields extends StatelessWidget {
             // --- All day — first row of the panel, since it decides whether
             // the time rows below it exist at all. Offered on every job: a
             // client visit can genuinely run whole days too.
-            _AllDaySwitch(value: isAllDay, onChanged: onAllDayChanged),
+            //
+            // NOT offered on a DAY OFF, which is all-day by definition: the
+            // switch would be a control whose only useful position is the one
+            // it is already in, and turning it off would ask someone which
+            // hours of their day off they are having.
+            if (!isDayOff)
+              _AllDaySwitch(value: isAllDay, onChanged: onAllDayChanged),
             _dateRows(context, l10n),
             // An all-day block has no times to show — the date rows are the
             // whole schedule.
-            if (!isAllDay) ...timeRows(),
+            if (!isAllDay && !isDayOff) ...timeRows(),
             // --- Repeat: same panel as the date and times, so everything
             // about when the job happens reads as one block. Not offered on a
             // personal job.
@@ -519,15 +549,21 @@ class AppointmentFormFields extends StatelessWidget {
     // dentist appointment or a supply run still happens somewhere, and the
     // crew wants directions to it. Marked optional there so the blank state
     // reads as deliberate rather than unfinished.
-    AppointmentAddressField(
-      selectedClient: selectedClient,
-      useCustomAddress: useCustomAddress,
-      addressController: controllers.address,
-      optional: isPersonal,
-      onSwitchToCustom: _switchToCustomAddress,
-      onUseClientAddress: _useClientAddress,
-    ),
-    const SizedBox(height: AppSpacing.sp16),
+    //
+    // A DAY OFF is the one personal block with nowhere to be, so it drops the
+    // field entirely — and both save paths clear it, since a hidden field must
+    // never keep a value the form no longer shows.
+    if (!isDayOff) ...[
+      AppointmentAddressField(
+        selectedClient: selectedClient,
+        useCustomAddress: useCustomAddress,
+        addressController: controllers.address,
+        optional: isPersonal,
+        onSwitchToCustom: _switchToCustomAddress,
+        onUseClientAddress: _useClientAddress,
+      ),
+      const SizedBox(height: AppSpacing.sp16),
+    ],
     // --- Notes ---
     SheetFocusScroll(
       child: LabeledTextField(
@@ -560,6 +596,30 @@ class AppointmentFormFields extends StatelessWidget {
       photosSection,
     ],
   ];
+}
+
+/// The "Day off" chip under the personal-job switch.
+///
+/// A selectable chip rather than a second switch: it qualifies the switch above
+/// it rather than opening its own field group, and a stack of two switches
+/// reads as two independent settings. `FilterChip` (not the `ActionChip` the
+/// templates use) because this one has a STATE to show — the templates fire and
+/// forget, this is stored on the record.
+class _DayOffChoiceChip extends StatelessWidget {
+  const _DayOffChoiceChip({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: AlignmentDirectional.centerStart,
+    child: FilterChip(
+      label: Text(context.l10n.calendar_dayOff),
+      selected: value,
+      onSelected: onChanged,
+    ),
+  );
 }
 
 /// Marks the job as personal time rather than a client visit. Mirrors the

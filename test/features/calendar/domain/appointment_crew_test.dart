@@ -13,6 +13,8 @@ AppointmentRecord _appt({
   List<String> names = const [],
   int hour = 9,
   String status = 'pending',
+  bool isPersonal = false,
+  bool isDayOff = false,
 }) => AppointmentRecord(
   id: 'a$hour${ids.join()}',
   title: 'Job',
@@ -21,6 +23,8 @@ AppointmentRecord _appt({
   employeeIds: ids,
   employeeNames: names,
   status: status,
+  isPersonal: isPersonal,
+  isDayOff: isDayOff,
 );
 
 void main() {
@@ -176,5 +180,24 @@ void main() {
       _appt(ids: ['e1'], hour: 12),
     ];
     expect(dottedJobsOn(day), hasLength(4));
+  });
+
+  test('a day off gets no dot — it is not work', () {
+    final day = [
+      _appt(ids: ['e1'], isPersonal: true, isDayOff: true),
+      _appt(ids: ['e2'], hour: 10),
+    ];
+    expect(dottedJobsOn(day), hasLength(1));
+    expect(
+      dayJobDotColors(day, const {'e1': _blue, 'e2': _green}),
+      [_green],
+    );
+  });
+
+  test('a stray isDayOff on a CLIENT visit still dots', () {
+    // isTimeOff is `isPersonal && isDayOff`: a console edit or an import must
+    // not be able to hide real work from the day's dots.
+    final day = [_appt(ids: ['e1'], isDayOff: true)];
+    expect(dottedJobsOn(day), hasLength(1));
   });
 }

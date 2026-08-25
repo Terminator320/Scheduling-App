@@ -99,6 +99,7 @@ class AppointmentSeriesEditor {
         // that the edit form can change belongs in this list too.
         isAllDay: updated.isAllDay,
         isPersonal: updated.isPersonal,
+        isDayOff: updated.isDayOff,
         startTime: copyStart,
         endTime: occurrenceEnd(
           originalStart: start,

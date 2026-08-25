@@ -50,8 +50,12 @@ final employeeJobsTodayProvider = Provider.autoDispose<Map<String, int>>((ref) {
   );
   final counts = <String, int>{};
   for (final job in jobs) {
-    if (isCancelledStatusRaw(job.status)) continue;
-    if (!runsOn(job, range.start)) continue;
+    // Cancelled visits and time off are not load — `countsAsLoadOn` owns that,
+    // shared with the drawer badge. The detail's TODAY panel below deliberately
+    // still LISTS a day off: a card wearing a "Day off" chip under a row
+    // reading "0 jobs today" says something true, where hiding it would leave
+    // an admin wondering where the person is.
+    if (!countsAsLoadOn(job, range.start)) continue;
     for (final id in job.employeeIds) {
       counts[id] = (counts[id] ?? 0) + 1;
     }

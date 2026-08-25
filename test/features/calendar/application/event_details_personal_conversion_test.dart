@@ -58,6 +58,7 @@ final _personalBlock = AppointmentRecord(
 AppointmentRecord _build(
   AppointmentRecord appointment, {
   required bool isPersonal,
+  bool isDayOff = false,
   ClientRecord? selectedClient,
   String address = '12 Rue Principale',
   bool isAllDay = false,
@@ -75,6 +76,7 @@ AppointmentRecord _build(
   status: 'pending',
   repeat: RepeatInterval.none,
   isPersonal: isPersonal,
+  isDayOff: isDayOff,
   isAllDay: isAllDay,
 );
 

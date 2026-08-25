@@ -38,6 +38,19 @@ void main() {
     });
   });
 
+  group('JobTitle.isAssignable', () {
+    test('a dispatcher is not crew', () {
+      expect(JobTitle.dispatcher.isAssignable, isFalse);
+    });
+
+    test('every other title is', () {
+      for (final title in JobTitle.values) {
+        if (title == JobTitle.dispatcher) continue;
+        expect(title.isAssignable, isTrue, reason: title.raw);
+      }
+    });
+  });
+
   group('JobTitle.fromRaw', () {
     test('a stored value round-trips', () {
       expect(JobTitle.fromRaw('lead_tech'), JobTitle.leadTech);

@@ -17,6 +17,8 @@ AppointmentRecord _appt({
   required String id,
   required DateTime start,
   String status = 'pending',
+  bool isPersonal = false,
+  bool isDayOff = false,
 }) => AppointmentRecord(
   id: id,
   title: 'Job $id',
@@ -24,6 +26,8 @@ AppointmentRecord _appt({
   endTime: start.add(const Duration(hours: 1)),
   status: status,
   employeeIds: const ['e1'],
+  isPersonal: isPersonal,
+  isDayOff: isDayOff,
 );
 
 ProviderContainer _container({
@@ -70,6 +74,26 @@ void main() {
     addTearDown(container.dispose);
 
     expect((await _records(container)).single.status, 'done');
+  });
+
+  test('time off never reaches the dashboard reducers', () async {
+    // Dropped here rather than in each reducer, so the workload bars, the
+    // daily capacity and the availability flags all agree that a booked
+    // absence is not work.
+    final container = _container(
+      live: [
+        _appt(
+          id: 'off',
+          start: DateTime(2026, 7, 9),
+          isPersonal: true,
+          isDayOff: true,
+        ),
+        _appt(id: 'job', start: DateTime(2026, 7, 9, 9)),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    expect((await _records(container)).map((a) => a.id), ['job']);
   });
 
   test('records unique to either half all survive the merge', () async {

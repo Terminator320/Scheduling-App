@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart' show immutable;
 
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
 /// The longest span a job may be booked for. Guards [expandToDays] against
@@ -129,6 +130,20 @@ int _clampedDayCount(DateTime start, DateTime end) =>
 /// call site, which silently reads a fortnight of history as "today".
 bool runsOn(AppointmentRecord appointment, DateTime day) =>
     _dayIndexOn(appointment, day) != null;
+
+/// True when [appointment] is a job COUNTING as that day's load — it runs on
+/// [day], it was not cancelled, and it is not time off.
+///
+/// One owner because it is asked from two places that cannot share a provider
+/// (the drawer badge reads `myAppointmentsProvider` for a non-admin, the roster
+/// reducer reads the admin range stream) and were keeping in step through a
+/// prose "matching employeeJobsTodayProvider" comment. They had already drifted
+/// on how they spelled the cancelled half. The next term added to "what is
+/// work" lands here once, instead of on one of them.
+bool countsAsLoadOn(AppointmentRecord appointment, DateTime day) =>
+    !isCancelledStatusRaw(appointment.status) &&
+    !appointment.isTimeOff &&
+    runsOn(appointment, day);
 
 /// True when [appointment] works on at least one day in `[start, end)`.
 ///

@@ -398,6 +398,35 @@ void main() {
       expect(readState().isAllDay, isTrue);
     });
 
+    test('a day off saves as time off and never as a job', () async {
+      final c = readNotifier()
+        ..selectDate(DateTime(2026, 5, 10))
+        ..setPersonal(value: true)
+        ..setDayOff(value: true)
+        ..toggleEmployee(_employeeA);
+
+      final outcome = await c.submit(
+        title: 'Vacation',
+        address: '',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      final saved = (outcome as AddEventSubmitted).appointment;
+      expect(saved.isDayOff, isTrue);
+      expect(saved.isTimeOff, isTrue);
+    });
+
+    test('turning Personal off clears the day-off flag', () {
+      // The chip is hidden with the switch, so a surviving flag would be
+      // unreachable — and would drop a real client job out of every count.
+      readNotifier()
+        ..setPersonal(value: true)
+        ..setDayOff(value: true)
+        ..setPersonal(value: false);
+      expect(readState().isDayOff, isFalse);
+    });
+
     test('turning a draft personal clears a chosen repeat', () async {
       readNotifier()
         ..selectRepeat(RepeatInterval.oneYear)

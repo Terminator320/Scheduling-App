@@ -15,7 +15,6 @@ import 'package:scheduling/features/settings/application/app_info_provider.dart'
 import 'package:scheduling/features/settings/domain/role_label.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/branding/brand_logo.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 const double _kDrawerWidth = 284;
@@ -308,15 +307,10 @@ class _NavRow extends ConsumerWidget {
           );
     final today = jobs.value;
     if (today == null) return null;
-    // Re-scoped: the range stream is a 14-day superset - see runsOn. Cancelled
-    // visits aren't load, matching employeeJobsTodayProvider.
-    return today
-        .where(
-          (j) =>
-              !AppointmentStatus.fromRaw(j.status).isCancelled &&
-              runsOn(j, range.start),
-        )
-        .length;
+    // Re-scoped through the shared predicate: the range stream is a 14-day
+    // superset (see runsOn), and cancelled visits and time off are not load.
+    // Shared with employeeJobsTodayProvider rather than restated here.
+    return today.where((j) => countsAsLoadOn(j, range.start)).length;
   }
 
   int? _onTheClockCount(WidgetRef ref) {
