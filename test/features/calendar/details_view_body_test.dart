@@ -261,6 +261,32 @@ void main() {
     expect(find.text('NOTES'), findsOneWidget);
     expect(find.text('Gate code 4821'), findsOneWidget);
   });
+  testWidgets('an untitled day off leads with the person, not "Personal"', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        DetailsViewBody(
+          // What an unnamed personal block actually stores.
+          appointment: _dayOff.copyWith(title: 'Personal'),
+          showActions: true,
+          onClose: () {},
+        ),
+        overrides: [
+          appointmentsRepositoryProvider.overrideWithValue(appointments),
+          clientsRepositoryProvider.overrideWithValue(clients),
+          employeesRepositoryProvider.overrideWithValue(employees),
+          photoUploadNotifierProvider.overrideWithValue(uploadNotifier),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Alex'), findsOneWidget);
+    expect(find.text('Personal'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a day off opens as its own body, not an appointment', (
     tester,
   ) async {
@@ -281,7 +307,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Leads with the PERSON, and says how long.
+    // Leads with the typed REASON, person underneath — the same hierarchy
+    // the agenda strip shows, so tapping "Vacation" cannot open a screen
+    // that has dropped the word.
+    expect(find.text('Vacation'), findsOneWidget);
     expect(find.text('Alex'), findsOneWidget);
     expect(find.text('3 days'), findsOneWidget);
     expect(find.text('Back on the Monday.'), findsOneWidget);

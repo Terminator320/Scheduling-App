@@ -2,7 +2,15 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-22 (the photo-subcollection CONTRACT step: `pictures[]`
+refreshed 2026-08-25 (the 2026-08-25 audit — **no export, trigger, schedule,
+secret or guard changed, and no row below moved**: the edits were dead-code
+removal (`isOvernightRecord`, `TOKEN_TTL_MS`/`activityTokenExpiry`,
+`IMPORT_FIELD_CAPS`'s export), the `{enforceAppCheck: true}` block lifted into
+`security.js` as the shared `APP_CHECK` that `clients.js` and
+`employee_accounts.js` now spread, and new jest coverage for `assertAdmin` —
+the gate on 8 of 14 callables, which had been `jest.mock`'d in every suite, so
+its real predicate had never once executed. Export list unchanged at 25).
+Previously refreshed 2026-08-22 (the photo-subcollection CONTRACT step: `pictures[]`
 retired, `appointment_image_tokens.js` and its deactivation-time token rotation
 DELETED, `cascadeDeleteAppointmentImages` now deleting the Storage bytes as
 well as the photo documents, the legacy `url` retired on a prod count of zero,
@@ -150,7 +158,13 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 - **25 functions defined** in code and **25 deployed**, verified against
   `functions_list_functions` on 2026-08-22 (the CONTRACT deploy reported 25
   updates, 0 creates, 0 deletions) — an exact match, no orphans and no
-  extras. The retirement deploy has now RUN. P4c added `createEmployeeAccount`,
+  extras. **DRIFT OPEN as of 2026-08-25 (1.52.0+81): eight deployable modules
+  changed in the 2026-08-25 audit and have NOT been deployed**, so prod is
+  running older bodies. The count is still 25 and still matches, which is
+  exactly the trap named below — a count check looks clean while the deployed
+  code is behind. Nothing user-visible depends on it (the changes are dead-code
+  removal plus a shared options constant), so it can ride the next deploy; the
+  release runbook is `docs/DEPLOYMENT.md`. The retirement deploy has now RUN. P4c added `createEmployeeAccount`,
   `completeEmployeeSetup` and `deleteEmployeeAccount` and kept
   `createEmployeeInvite` / `redeemSignupCode` as the `#compat-1.37.1` shim;
   `changeEmployeeEmail` landed 2026-08-04 (26 → 27); **the shim was retired

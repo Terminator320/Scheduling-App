@@ -197,29 +197,29 @@ class _PersonalBlockClashDialogState
 
     return AppDialogFrame(
       children: [
-            _header(context, groups: groups, jobCount: jobCount),
-            const SizedBox(height: AppSpacing.sp16),
-            // A fortnight off would otherwise break the dialog: the list
-            // scrolls between a pinned head and footer, and the count sits in
-            // the header rather than being something you scroll to find.
-            Flexible(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final group in groups)
-                      ..._groupRows(
-                        context,
-                        group,
-                        showName: groups.length > 1,
-                      ),
-                  ],
-                ),
-              ),
+        _header(context, groups: groups, jobCount: jobCount),
+        const SizedBox(height: AppSpacing.sp16),
+        // A fortnight off would otherwise break the dialog: the list
+        // scrolls between a pinned head and footer, and the count sits in
+        // the header rather than being something you scroll to find.
+        Flexible(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final group in groups)
+                  ..._groupRows(
+                    context,
+                    group,
+                    showName: groups.length > 1,
+                  ),
+              ],
             ),
-            const SizedBox(height: AppSpacing.sp24),
-            _actions(context, theme),
-          ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+        _actions(context, theme),
+      ],
     );
   }
 
@@ -320,7 +320,7 @@ class _PersonalBlockClashDialogState
           state: _states[_keyFor(group.employeeId, job)] ?? const _RowIdle(),
           onSwap: () => _openRow(group.employeeId, job),
           onPick: (person) => _swap(group.employeeId, job, person),
-          onUndo: () => _undo(group.employeeId, group.name, job),
+          onUndo: () => _undo(group, job),
           onOpenJob: () => showEventDetails(context, job, showActions: true),
         ),
       );
@@ -451,19 +451,18 @@ class _PersonalBlockClashDialogState
   ///
   /// Built on [_live], not on a snapshot taken at swap time, so it composes
   /// with any later swap on the same job the way [_swap] does.
-  Future<void> _undo(
-    String employeeId,
-    String employeeName,
-    AppointmentRecord job,
-  ) async {
-    final key = _keyFor(employeeId, job);
+  /// Takes the whole [_ClashGroup] rather than its id and name as two
+  /// adjacent strings — the one shape where a transposed pair still compiles,
+  /// on a method that writes to Firestore.
+  Future<void> _undo(_ClashGroup group, AppointmentRecord job) async {
+    final key = _keyFor(group.employeeId, job);
     final state = _states[key];
     if (state is! _RowDone) return;
     final reverted = _replaceAssignee(
       _live(job),
       removeId: state.took.id,
-      addId: employeeId,
-      addName: employeeName,
+      addId: group.employeeId,
+      addName: group.name,
     );
     if (await _write(key, reverted, previous: state)) {
       setState(() {

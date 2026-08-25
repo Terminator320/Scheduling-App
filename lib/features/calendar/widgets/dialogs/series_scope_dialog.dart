@@ -71,59 +71,59 @@ class _SeriesScopeDialogState extends State<_SeriesScopeDialog> {
 
     return AppDialogFrame(
       children: [
-            if (widget.contextLabel != null) ...[
-              Text(widget.contextLabel!, style: theme.monoType.label),
-              const SizedBox(height: AppSpacing.sp8),
-            ],
-            Text(widget.title, style: theme.textTheme.headlineMedium),
-            const SizedBox(height: AppSpacing.sp16),
-            _ScopeOption(
-              label: widget.thisOnlyLabel,
-              detail: widget.thisOnlyDetail,
-              selected: _choice == SeriesScopeChoice.thisOnly,
-              onTap: () => setState(() => _choice = SeriesScopeChoice.thisOnly),
-            ),
-            const SizedBox(height: AppSpacing.sp8),
-            _ScopeOption(
-              label: widget.thisAndFutureLabel,
-              detail: widget.thisAndFutureDetail,
-              selected: _choice == SeriesScopeChoice.thisAndFuture,
-              onTap: () =>
-                  setState(() => _choice = SeriesScopeChoice.thisAndFuture),
-            ),
-            const SizedBox(height: AppSpacing.sp24),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 44),
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(context.l10n.common_back),
-                  ),
+        if (widget.contextLabel != null) ...[
+          Text(widget.contextLabel!, style: theme.monoType.label),
+          const SizedBox(height: AppSpacing.sp8),
+        ],
+        Text(widget.title, style: theme.textTheme.headlineMedium),
+        const SizedBox(height: AppSpacing.sp16),
+        _ScopeOption(
+          label: widget.thisOnlyLabel,
+          detail: widget.thisOnlyDetail,
+          selected: _choice == SeriesScopeChoice.thisOnly,
+          onTap: () => setState(() => _choice = SeriesScopeChoice.thisOnly),
+        ),
+        const SizedBox(height: AppSpacing.sp8),
+        _ScopeOption(
+          label: widget.thisAndFutureLabel,
+          detail: widget.thisAndFutureDetail,
+          selected: _choice == SeriesScopeChoice.thisAndFuture,
+          onTap: () =>
+              setState(() => _choice = SeriesScopeChoice.thisAndFuture),
+        ),
+        const SizedBox(height: AppSpacing.sp24),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 44),
                 ),
-                const SizedBox(width: AppSpacing.sp12),
-                Expanded(
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 44),
-                      // dangerFill, never scheme.error — that slot is the
-                      // lifted foreground red and is unreadable as a fill.
-                      backgroundColor: widget.destructive
-                          ? theme.palette.dangerFill
-                          : scheme.primary,
-                      foregroundColor: widget.destructive
-                          ? theme.palette.onDangerFill
-                          : scheme.onPrimary,
-                    ),
-                    onPressed: () => Navigator.pop(context, _choice),
-                    child: Text(widget.primaryLabelFor(_choice)),
-                  ),
+                onPressed: () => Navigator.pop(context),
+                child: Text(context.l10n.common_back),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sp12),
+            Expanded(
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 44),
+                  // dangerFill, never scheme.error — that slot is the
+                  // lifted foreground red and is unreadable as a fill.
+                  backgroundColor: widget.destructive
+                      ? theme.palette.dangerFill
+                      : scheme.primary,
+                  foregroundColor: widget.destructive
+                      ? theme.palette.onDangerFill
+                      : scheme.onPrimary,
                 ),
-              ],
+                onPressed: () => Navigator.pop(context, _choice),
+                child: Text(widget.primaryLabelFor(_choice)),
+              ),
             ),
           ],
+        ),
+      ],
     );
   }
 }

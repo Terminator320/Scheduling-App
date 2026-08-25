@@ -193,7 +193,12 @@ class SignInController extends Notifier<SignInState> {
       return SignInSuccess(employee);
     } catch (error, stackTrace) {
       final failure = AuthErrorMapper.map(error);
-      logger.authFailure('AUTH-SIGNIN sign-in failed', failure, error, stackTrace);
+      logger.authFailure(
+        'AUTH-SIGNIN sign-in failed',
+        failure,
+        error,
+        stackTrace,
+      );
       _settle();
       return SignInError(failure);
     }

@@ -189,14 +189,20 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   work* and a card list answers *what is on this person's day*.
   **A day off is NOT a card and NOT a lifecycle** (owner call, 2026-08-24,
   designed in `docs/plans/2026-08-24-day-off-card.md`). `AppointmentCard`
-  returns `_DayOffStrip` for one — a low tinted strip reading
-  `<avatar> <name> is off … DAY OFF`, with no crew colour BAR (the bar says "a
-  crew is on this job"), no fill and no shadow. It names the PERSON, never the
-  title: a day off usually has none typed and an untitled personal block falls
-  back to the word "Personal". Rendering it inside the card rather than at the
-  call sites is what gives every appointment surface the same treatment for
-  free. The detail sheet has its own `_DayOffBody` — name, when-line, length,
-  note — with no client section, address, materials, photos or action bar.
+  returns `_DayOffStrip` for one — a low tinted strip, no fill and no shadow.
+  Rendering it inside the card rather than at the call sites is what gives
+  every appointment surface the same treatment for free. The detail sheet has
+  its own `_DayOffBody` — when-line, length, note — with no client section,
+  address, materials, photos or action bar.
+  **The strip's own layout rules — the typed reason leading it, the localized
+  "Personal" placeholder trap on the title, and the dashed crew rail — live in
+  `lib/features/calendar/CLAUDE.md`**, which is their one home; they are pure
+  Flutter with no `functions/` twin. Two clauses of this bullet were REVERSED
+  there on 2026-08-25 and are noted here only so an older copy isn't trusted:
+  the strip no longer "names the PERSON, never the title" (the typed reason is
+  the headline now, with the person beneath it), and it is no longer true that
+  it has "no crew colour BAR" (it has a dashed one). Don't restore either from
+  this file.
   **It COMPLETES ITSELF at the end of its last day**, and that branch lives in
   `displayStatusAt` ABOVE the `isPersonal` early return (a day off is personal,
   so it would otherwise never be reached). Derived, never stored: no sweep, no

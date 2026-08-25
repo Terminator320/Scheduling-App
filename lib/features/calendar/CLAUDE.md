@@ -211,3 +211,29 @@ STAYS in the root `CLAUDE.md`, because those are reachable from
   uses `IntrinsicHeight` to stretch the crew bar, so **nothing in its subtree may
   use `LayoutBuilder`, `AutoSizeText` or `FittedBox`** — they cannot report
   intrinsics.
+- **TIME OFF renders as `_DayOffStrip`, and the typed reason LEADS it**
+  (2026-08-25). One layout serves titled and untitled blocks: the headline slot
+  is always filled — the reason when there is one, the `<name> is off` sentence
+  when there isn't — and only the caption beneath is conditional. Never render
+  both slots from the same string. Two traps sit on the reason lookup, both
+  owned by `dayOffReason` (`calendar/domain/day_off_reason.dart`): an unnamed
+  personal block does **not** save blank, it saves the localized
+  `calendar_personal` placeholder (`add_appointment_sheet.dart`,
+  `details_edit_body.dart`), which must not be promoted to the headline; and
+  with no subject to name, the title is already the sentence's subject, so
+  there is no separate reason left. **That placeholder is matched across EVERY
+  supported locale (`personalTitlePlaceholders`), never the reader's alone** —
+  the title is written in the AUTHOR's locale and read back in the reader's, so
+  a single `context.l10n.calendar_personal` test misses a French admin's
+  "Personnel" on an English screen and promotes it to the headline, and misses
+  in reverse. Adding a locale means the new spelling joins that set. **The
+  OPENED view (`_DayOffBody`, `details_view_body.dart`) applies the same rule
+  through the same helper** — tapping a strip that reads "Vacation" must not
+  open a screen that has dropped the word, and the placeholder trap is subtle
+  enough that a second spelling would have drifted. **The dashed crew rail REVERSES the earlier call** that a day off shows
+  its colour only as the avatar — the dashes are what earn it, reading as the
+  negative of the card's solid bar rather than a quieter version of it. The
+  strip also carries a `colorScheme.outline` border, and that is load-bearing,
+  not decoration: its `neutralContainer` fill resolves to `AppColors.paper`,
+  which is ALSO `scaffoldBackgroundColor`, so without an edge the strip has no
+  visible container at all in the light theme.

@@ -20,9 +20,6 @@ class AuthBanner extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final message = this.message;
-    final background = scheme.errorContainer;
-    final foreground = scheme.onErrorContainer;
-    final accent = scheme.error;
 
     return AnimatedSwitcher(
       duration: AppAnimationDurations.banner,
@@ -42,18 +39,18 @@ class AuthBanner extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(AppSpacing.sp12),
                 decoration: BoxDecoration(
-                  color: background,
+                  color: scheme.errorContainer,
                   borderRadius: BorderRadius.circular(AppRadius.r8),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.error_outline, color: accent, size: 16),
+                    Icon(Icons.error_outline, color: scheme.error, size: 16),
                     const SizedBox(width: AppSpacing.sp8),
                     Expanded(
                       child: Text(
                         message,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: foreground,
+                          color: scheme.onErrorContainer,
                         ),
                       ),
                     ),

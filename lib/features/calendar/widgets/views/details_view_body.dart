@@ -7,6 +7,7 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
+import 'package:scheduling/features/calendar/domain/day_off_reason.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_action_bar.dart';
@@ -195,9 +196,17 @@ class DetailsViewBody extends ConsumerWidget {
 /// ref-dependent callbacks stay in `build`.
 /// The opened view of a day off.
 ///
-/// Leads with the PERSON, not the title: a day off usually has none typed, and
-/// an untitled personal block falls back to the word "Personal", which is not
-/// what the reader came for.
+/// Leads with the typed REASON and puts the person under it (2026-08-25), the
+/// same hierarchy `_DayOffStrip` renders on the agenda — tapping a strip that
+/// says "Vacation" must not open a screen that has dropped the word. With no
+/// reason typed the person takes the headline back and the sub-line is
+/// omitted, so there is one header shape rather than two.
+///
+/// What counts as "no reason" is [dayOffReason]'s call, not this widget's:
+/// an untitled personal block saves the localized "Personal" placeholder
+/// rather than a blank, and leading with THAT is the outcome naming the person
+/// exists to avoid. It is matched across EVERY locale, not the reader's — the
+/// title is stored in whichever one the author had.
 class _DayOffBody extends StatelessWidget {
   const _DayOffBody({
     required this.appointment,
@@ -219,7 +228,12 @@ class _DayOffBody extends StatelessWidget {
       for (final name in appointment.employeeNames)
         if (name.trim().isNotEmpty) name.trim(),
     ];
-    final title = names.isNotEmpty ? names.join(', ') : appointment.title;
+    final subject = names.isNotEmpty ? names.join(', ') : appointment.title;
+    final reason = dayOffReason(
+      title: appointment.title,
+      hasSubject: names.isNotEmpty,
+      placeholders: personalTitlePlaceholders,
+    );
     final days = runLengthDays(
       appointment.startTime,
       appointment.endTime,
@@ -240,7 +254,16 @@ class _DayOffBody extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: theme.textTheme.headlineLarge),
+              Text(reason ?? subject, style: theme.textTheme.headlineLarge),
+              if (reason != null) ...[
+                const SizedBox(height: AppSpacing.sp4),
+                Text(
+                  subject,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.palette.textTertiary,
+                  ),
+                ),
+              ],
               const SizedBox(height: AppSpacing.sp8),
               Text(
                 DateUtilsHelper.formatWhenLine(

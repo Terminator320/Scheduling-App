@@ -45,53 +45,53 @@ class _BusyConflictDialog extends StatelessWidget {
     final statusColors = theme.statusColors;
     return AppDialogFrame(
       children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: statusColors.warningContainer,
-                borderRadius: BorderRadius.circular(AppRadius.r12),
-              ),
-              child: Icon(
-                Icons.warning_amber_rounded,
-                color: statusColors.onWarningContainer,
-                size: 22,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sp16),
-            Text(
-              context.l10n.calendar_scheduleConflict,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sp4),
-            Text(
-              // The clash is a DAILY-window overlap, so the run being booked
-              // must name both its ends — otherwise a Mon–Fri job reports a
-              // Thursday conflict under a headline reading "MON 3 AUG".
-              DateUtilsHelper.formatWhenLine(
-                start,
-                end,
-                lastDay: lastWorkDayOfWindow(start, end),
-              ),
-              style: theme.monoType.data,
-            ),
-            const SizedBox(height: AppSpacing.sp16),
-            Text(
-              context.l10n.calendar_alreadyBookedThisSlot,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sp12),
-            ...busyEmployees.map((e) => _BusyEmployeeRow(employee: e)),
-            const Divider(height: AppSpacing.sp24),
-            _warningNote(context),
-            const SizedBox(height: AppSpacing.sp24),
-            _actions(context),
-          ],
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: statusColors.warningContainer,
+            borderRadius: BorderRadius.circular(AppRadius.r12),
+          ),
+          child: Icon(
+            Icons.warning_amber_rounded,
+            color: statusColors.onWarningContainer,
+            size: 22,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        Text(
+          context.l10n.calendar_scheduleConflict,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp4),
+        Text(
+          // The clash is a DAILY-window overlap, so the run being booked
+          // must name both its ends — otherwise a Mon–Fri job reports a
+          // Thursday conflict under a headline reading "MON 3 AUG".
+          DateUtilsHelper.formatWhenLine(
+            start,
+            end,
+            lastDay: lastWorkDayOfWindow(start, end),
+          ),
+          style: theme.monoType.data,
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        Text(
+          context.l10n.calendar_alreadyBookedThisSlot,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp12),
+        ...busyEmployees.map((e) => _BusyEmployeeRow(employee: e)),
+        const Divider(height: AppSpacing.sp24),
+        _warningNote(context),
+        const SizedBox(height: AppSpacing.sp24),
+        _actions(context),
+      ],
     );
   }
 
