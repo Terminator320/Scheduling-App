@@ -131,19 +131,35 @@ int _clampedDayCount(DateTime start, DateTime end) =>
 bool runsOn(AppointmentRecord appointment, DateTime day) =>
     _dayIndexOn(appointment, day) != null;
 
-/// True when [appointment] is a job COUNTING as that day's load — it runs on
-/// [day], it was not cancelled, and it is not time off.
+/// True when [appointment] is WORK: not cancelled, not time off.
+///
+/// **The one owner of "what counts as a job", day-independent half.** A
+/// cancelled visit is work that is not happening and time off is not work at
+/// all, so neither may be counted by anything answering "how much is on this
+/// day" — the month grid's dots, the agenda header's `N JOBS`, the drawer
+/// badge or the roster's jobs-today.
+///
+/// It is split out from [countsAsLoadOn] rather than spelled again because
+/// callers that already hold a DAY-SCOPED slice must not re-derive the day:
+/// the agenda has one slice per rendered row and `runsOn` walks the run. The
+/// pair had drifted on how each spelled the cancelled half once already, and
+/// by 2026-08-25 there were four spellings — this one, `countsAsLoadOn`,
+/// `dottedJobsOn` and the agenda header's own — of which the header's was the
+/// odd one out, counting a cancelled job as a job AND as done.
+bool countsAsWork(AppointmentRecord appointment) =>
+    !isCancelledStatusRaw(appointment.status) && !appointment.isTimeOff;
+
+/// True when [appointment] is a job COUNTING as that day's load — it is
+/// [countsAsWork] and it runs on [day].
 ///
 /// One owner because it is asked from two places that cannot share a provider
 /// (the drawer badge reads `myAppointmentsProvider` for a non-admin, the roster
 /// reducer reads the admin range stream) and were keeping in step through a
 /// prose "matching employeeJobsTodayProvider" comment. They had already drifted
 /// on how they spelled the cancelled half. The next term added to "what is
-/// work" lands here once, instead of on one of them.
+/// work" lands in [countsAsWork] once, instead of on one of them.
 bool countsAsLoadOn(AppointmentRecord appointment, DateTime day) =>
-    !isCancelledStatusRaw(appointment.status) &&
-    !appointment.isTimeOff &&
-    runsOn(appointment, day);
+    countsAsWork(appointment) && runsOn(appointment, day);
 
 /// True when [appointment] works on at least one day in `[start, end)`.
 ///

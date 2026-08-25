@@ -214,7 +214,7 @@
   },
   "calendar_closedCount": "Done · {count}",
   "@calendar_closedCount": {
-    "description": "Label on the rule that separates the day's remaining work from the jobs that are finished or cancelled, in the calendar agenda. Cancelled visits sink into the same block, so this one word covers both (owner call).",
+    "description": "Label on the rule that separates the day's remaining work from the jobs that are finished, in the calendar agenda. Cancelled visits still sink into the same block and render below this rule, but are NOT counted by it (owner call 2026-08-25) — a cancelled job is work that is not happening, so it is not work behind you either. The rule is suppressed entirely when the count would be zero.",
     "placeholders": {
       "count": {
         "type": "int"
@@ -347,7 +347,7 @@
   },
   "calendar_jobsDoneCount": "{count, plural, =1{1 DONE} other{{count} DONE}}",
   "@calendar_jobsDoneCount": {
-    "description": "Appended to the agenda header's job count once some of the day's jobs are closed, reading '3 JOBS · 1 DONE'. Counts finished and cancelled visits alike, matching the 'Done' rule in the list below. Already uppercase in source.",
+    "description": "Appended to the agenda header's job count once some of the day's jobs are FINISHED, reading '3 JOBS · 1 DONE'. Counts finished visits only — a cancelled one is neither a job on the day nor done, and is excluded from this and from the job count beside it (owner call 2026-08-25), matching both the 'Done' rule in the list below and the month grid's dots. Already uppercase in source.",
     "placeholders": {
       "count": {
         "type": "int"

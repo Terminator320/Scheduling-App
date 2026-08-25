@@ -61,15 +61,20 @@ class AgendaSliverList extends StatelessWidget {
       (slice) => slice.appointment.isClosed,
     );
     // The rule's count must answer the header's question, or the two disagree
-    // on the same block: a completed DAY OFF sinks into the closed tail and is
-    // rendered there, but it is not a job, so `_jobLabel` never counted it.
-    // Counted here rather than taken from `length - index` for that reason —
-    // the cards below the rule and the number on it are deliberately allowed
-    // to differ by exactly the time-off entries among them.
+    // on the same block, so it filters through the same `countsAsWork`:
+    // a completed DAY OFF and a CANCELLED visit both sink into the closed tail
+    // and are rendered there, but neither is a job the day's work included, so
+    // `_jobLabel` counts neither. Counted here rather than taken from
+    // `length - index` for that reason — the cards below the rule and the
+    // number on it are deliberately allowed to differ by exactly those.
     final closedJobCount = events
         .skip(firstClosedIndex < 0 ? events.length : firstClosedIndex)
-        .where((slice) => !slice.appointment.isTimeOff)
+        .where((slice) => countsAsWork(slice.appointment))
         .length;
+    // With nothing FINISHED to announce the rule is suppressed entirely rather
+    // than drawn reading "Done · 0" — which is what a day holding only
+    // cancellations would otherwise get, since those still sink to the tail.
+    final showClosedRule = firstClosedIndex >= 0 && closedJobCount > 0;
 
     return SliverMainAxisGroup(
       slivers: [
@@ -128,7 +133,7 @@ class AgendaSliverList extends StatelessWidget {
                 return FadeInItem(
                   key: ValueKey(e.id),
                   index: index,
-                  child: index == firstClosedIndex
+                  child: showClosedRule && index == firstClosedIndex
                       ? Column(
                           children: [
                             _ClosedRule(count: closedJobCount),

@@ -180,12 +180,24 @@ STAYS in the root `CLAUDE.md`, because those are reachable from
   sort guarantees the closed jobs are one contiguous tail — don't reorder them
   at the call site. **The agenda header's count answers the same question and
   must use the same predicate**: `_jobLabel` (`main_calendar_screen.dart`)
-  appends `· 1 DONE` to `3 JOBS` by counting `isClosed`, not `done` alone, so
-  the header and the rule drawn over that block can never disagree about how
-  much of the day is behind them. **Time off is counted on neither side** — a
-  day whose only entry is a day off reads `0 JOBS` with that card listed under
-  it, which is the whole point of `isTimeOff`; only the COUNT is filtered, the
-  cards are not. Everywhere else (day route, dashboard, employee TODAY panel,
+  appends `· 1 DONE` to `3 JOBS`, and BOTH sides filter through
+  **`countsAsWork`** (`appointment_day_slice.dart`) so the header, the rule
+  drawn over that block and the month grid's dots can never disagree about what
+  a job is. **Time off and CANCELLED jobs are counted on neither side** — a day
+  whose only entry is either reads `0 JOBS` with that card listed under it;
+  only the COUNT is filtered, the cards are not.
+  **Cancelled dropped 2026-08-25 (owner call), reversing the `isClosed` tail.**
+  It read `1 JOB · 1 DONE` for a day holding one called-off visit, which is
+  wrong twice — a cancelled job is not a job on the day, and it is certainly
+  not DONE — and it put the header at odds with the dots, which have dropped
+  cancelled since 2026-08-17, so the same day showed no dot beside a full job
+  count. `countsAsWork` ("not cancelled, not time off") is now the ONE owner of
+  that predicate: `countsAsLoadOn` is it plus `runsOn`, and `dottedJobsOn`
+  filters by it. There were FOUR spellings before, and the header's was the odd
+  one out. The DONE tail counts genuinely finished jobs only, and **the
+  `Done · N` rule is suppressed entirely when its count would be zero** —
+  cancelled cards still sink to the tail and render there, so a day of nothing
+  but cancellations would otherwise draw `Done · 0`. Everywhere else (day route, dashboard, employee TODAY panel,
   client job history) keeps its own sort and the plain full-height card.
 - **`AppointmentCard` is the ONE appointment card** — calendar agenda, day
   route, client job history, both dashboard sections and the paginated history

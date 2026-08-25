@@ -170,7 +170,10 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   (`appointment_day_slice.dart` — the shared "is this that day's load"
   predicate behind BOTH the drawer badge and the roster's `jobs today`, which
   had been kept in step by a prose "matching employeeJobsTodayProvider" comment
-  and had already drifted on how each spelled the cancelled half) and
+  and had already drifted on how each spelled the cancelled half; since
+  2026-08-25 it is **`countsAsWork` plus `runsOn`**, and `countsAsWork` — "not
+  cancelled, not time off" — is the one owner every count filters through,
+  the agenda header and the month grid's dots included) and
   `dashboardRecordsProvider` — the dashboard filters ONCE at the records
   provider rather than in each reducer, so the KPI numbers, the workload bars,
   the daily-load capacity and the availability flags all agree that a booked

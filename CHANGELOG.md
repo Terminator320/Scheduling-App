@@ -40,6 +40,12 @@ a "time to leave" reminder for it.
   device, where they are still kept for offline viewing.
 
 ### Fixed
+- **A cancelled job is no longer counted as a job, or called done.** A day
+  holding one called-off visit read "1 JOB · 1 DONE" in the agenda header. It
+  now reads "0 JOBS" — the visit is not happening, so it is neither work on the
+  day nor work behind you — which is also what the dots on the month grid have
+  said all along. The cancelled card still appears in the list, and the "Done"
+  divider above the finished jobs no longer counts cancellations either.
 - **Saving a day off no longer gets stuck.** Turning on "Day off" after picking
   a start and end time left Save doing nothing at all, with no message
   explaining why — the form had hidden the very time fields it was still
