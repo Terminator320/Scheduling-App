@@ -455,6 +455,117 @@ void main() {
       expect(saved.isTimeOff, isTrue);
     });
 
+    test(
+      'ticking Day off forces all-day, so Save can never go inert',
+      () async {
+        // The form hides BOTH the all-day switch and the time rows behind
+        // `isDayOff`, while the validator demands times whenever `!isAllDay`.
+        // Reaching Day off with all-day off therefore left a block that could
+        // neither satisfy the validator nor show the error — Save did nothing,
+        // silently, with no way back that a user would find.
+        final c = readNotifier()
+          ..selectDate(DateTime(2026, 5, 10))
+          ..setPersonal(value: true)
+          ..setAllDay(value: false)
+          ..setDayOff(value: true)
+          ..toggleEmployee(_employeeA);
+
+        expect(readState().isAllDay, isTrue);
+
+        final outcome = await c.submit(
+          title: 'Vacation',
+          address: '',
+          notes: '',
+          materialsNeeded: '',
+        );
+        expect(outcome, isA<AddEventSubmitted>());
+      },
+    );
+
+    test(
+      'a day off picked after times is still all-day, never timed',
+      () async {
+        // The other half of the same hole: times chosen FIRST leave
+        // `setPersonal` with nothing to default, so a timed day off used to be
+        // storable — and `selectTravelCandidates` skips on `isAllDay` alone, so
+        // it fired a "time to leave" push on somebody's day off.
+        final c = readNotifier()
+          ..selectDate(DateTime(2026, 5, 10))
+          ..selectStartTime(const TimeOfDay(hour: 9, minute: 0))
+          ..selectEndTime(const TimeOfDay(hour: 17, minute: 0))
+          ..setPersonal(value: true)
+          ..setDayOff(value: true)
+          ..toggleEmployee(_employeeA);
+
+        expect(readState().isAllDay, isTrue);
+
+        final outcome = await c.submit(
+          title: 'Vacation',
+          address: '',
+          notes: '',
+          materialsNeeded: '',
+        );
+        final saved = (outcome as AddEventSubmitted).appointment;
+        expect(saved.isAllDay, isTrue);
+      },
+    );
+
+    test(
+      'a day off drops a typed address rather than storing it unseen',
+      () async {
+        // The address field is dropped from the form on a day off, so a value
+        // typed before the chip was ticked would be stored where no surface
+        // renders it.
+        final c = readNotifier()
+          ..selectDate(DateTime(2026, 5, 10))
+          ..setPersonal(value: true)
+          ..setDayOff(value: true)
+          ..toggleEmployee(_employeeA);
+
+        final outcome = await c.submit(
+          title: 'Vacation',
+          address: '123 Rue Principale',
+          notes: '',
+          materialsNeeded: '',
+        );
+        expect((outcome as AddEventSubmitted).appointment.address, isEmpty);
+      },
+    );
+
+    test('a double-tapped submit returns Busy, not Invalid', () async {
+      // Both are no-ops at the call site, which is exactly why the difference
+      // has to live in the type: a skipped write reported as `Invalid` is
+      // indistinguishable from a form that failed validation.
+      final gate = Completer<void>();
+      when(
+        () => appointments.addAppointment(any()),
+      ).thenAnswer((_) => gate.future);
+
+      final c = readNotifier()
+        ..selectDate(DateTime(2026, 5, 10))
+        ..setAllDay(value: true)
+        ..selectClient(_aClient)
+        ..toggleEmployee(_employeeA);
+
+      final first = c.submit(
+        title: 'Job',
+        address: '1 Main',
+        notes: '',
+        materialsNeeded: '',
+      );
+      final second = await c.submit(
+        title: 'Job',
+        address: '1 Main',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(second, isA<AddEventBusy>());
+      gate.complete();
+      await first;
+      verify(() => appointments.addAppointment(any())).called(1);
+    });
+
     test('turning Personal off clears the day-off flag', () {
       // The chip is hidden with the switch, so a surviving flag would be
       // unreachable — and would drop a real client job out of every count.

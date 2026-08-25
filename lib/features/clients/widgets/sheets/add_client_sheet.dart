@@ -120,6 +120,11 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     ]) {
       controller.dispose();
     }
+    // A no-op today — this sheet deliberately offers no additional contacts
+    // (see the note above the class) — but the mixin owns those controllers,
+    // so the day someone adds the field for parity there is no compile-time
+    // signal that this line is missing. The edit sheet already calls it.
+    disposeAdditionalContacts();
     super.dispose();
   }
 

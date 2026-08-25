@@ -37,11 +37,27 @@ const {initializeApp, applicationDefault} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 
 const {digitsOf} = require("../client_name_utils");
-// `assertKnownFlags` is shared with the phone-formatting backfill: the same
-// "a typo'd --dry-run must not go live" guard, so both scripts must refuse the
-// same arguments. The target banner is shared too — see `_project.js`.
-const {assertKnownFlags} = require("./backfill-client-phone-formatting");
+// The rejection rule comes from the shared `_flags.js`, like every other
+// script here — the same "a typo'd --dry-run must not go live" guard, with
+// this script's own flag list supplied by the thin wrapper below. It used to
+// import the WRAPPER from a sibling script, so retiring that script would
+// have silently taken this one's flag guard with it. The target banner is
+// shared too — see `_project.js`.
+const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
 const {printTargetBanner} = require("./_project");
+
+/** Bare switches, matched EXACTLY - see `_flags.js`. */
+const EXACT_FLAGS = ["--dry-run"];
+
+/**
+ * Rejects any argument that is not a flag this script knows. The rejection
+ * rule itself lives in the shared `_flags.js`; this wrapper only supplies
+ * THIS script's flag list.
+ * @param {!Array<string>} argv Arguments after the node + script paths.
+ */
+function assertKnownFlags(argv) {
+  rejectUnknownFlags(argv, {exact: EXACT_FLAGS});
+}
 
 /**
  * Client doc id -> the business name to restore.

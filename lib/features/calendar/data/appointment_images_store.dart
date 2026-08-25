@@ -7,14 +7,20 @@ import 'package:scheduling/features/calendar/domain/policies/appointment_image_d
 /// The photo half of the appointments repository: the
 /// `appointments/{id}/images` subcollection.
 ///
-/// **The move off the parent document is COMPLETE (the CONTRACT step).** The
-/// `pictures` array these methods used to dual-write is gone — nothing reads
-/// it, nothing writes it, and `clear-appointment-picture-arrays.js` emptied it
-/// on every document that predates the change. That array made every
-/// appointment read carry its whole photo list (a stored download url alone
-/// was ~215 of a ~290-byte entry) while the calendar reads up to 1000
-/// appointments at a time and only the detail sheet ever shows a photo. What
-/// stays on the parent is `pictureCount`, ~15 bytes, for the card indicator.
+/// **The CODE side of the move off the parent document is complete (the
+/// CONTRACT step); the DATA side is not.** The `pictures` array these methods
+/// used to dual-write is gone from the app — nothing here reads it and nothing
+/// writes it — but it is still ON every document that predates the change, and
+/// `clear-appointment-picture-arrays.js` has NOT run yet. It is step 4 of the
+/// runbook in `docs/DEPLOYMENT.md`, gated on the fleet ageing off builds that
+/// still write the array. Two things depend on that distinction and must stay:
+/// the `pictures` size cap in `firestore.rules`, and the clear script itself.
+/// Those surviving arrays also carry a Storage download url, which is what
+/// keeps 🔴 S1 open. That array made every appointment read carry its whole
+/// photo list (a stored download url alone was ~215 of a ~290-byte entry)
+/// while the calendar reads up to 1000 appointments at a time and only the
+/// detail sheet ever shows a photo. What stays on the parent is
+/// `pictureCount`, ~15 bytes, for the card indicator.
 ///
 /// A collaborator rather than more of `FirebaseAppointmentsRepository` because
 /// that step had to be a file to open rather than a diff scattered through a

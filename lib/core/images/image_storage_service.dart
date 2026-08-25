@@ -66,7 +66,13 @@ class ImageStorageService {
     final ref = _storage.ref(path);
     final metadata = SettableMetadata(
       contentType: _contentTypeFor(originalName),
-      cacheControl: 'public, max-age=31536000',
+      // `private`, not `public`: these bytes are fetched with an Authorization
+      // header (render-from-bytes via `ref.getData()`), and RFC 9111 §3.5 lets
+      // a SHARED cache store an authenticated response only when it is marked
+      // `public` — which would re-authorize an intermediary to keep and reuse
+      // one entitled user's photo for a year. Nothing is lost: the disk cache
+      // owns offline/session reuse and keys on the write-once `storagePath`.
+      cacheControl: 'private, max-age=31536000',
     );
 
     await ref.putFile(file, metadata);

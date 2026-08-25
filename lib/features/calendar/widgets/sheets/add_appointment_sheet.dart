@@ -244,7 +244,11 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
                 error: error,
               ),
             );
-      case AddEventInvalid() || AddEventBusyEmployees():
+      // All three surface nothing. `Invalid` already showed itself as field
+      // errors on the form, `BusyEmployees` was handled by the conflict prompt
+      // above, and `Busy` means the guard skipped a duplicate submit — a
+      // notice there would report a problem the user does not have.
+      case AddEventInvalid() || AddEventBusyEmployees() || AddEventBusy():
         break;
     }
   }
@@ -304,10 +308,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
             endDate: state.endDate,
             isPersonal: state.isPersonal,
             isDayOff: state.isDayOff,
-            onDayOffChanged: (value) => _notifier.setDayOff(value: value),
             onPersonalChanged: (value) => _notifier.setPersonal(value: value),
             isAllDay: state.isAllDay,
-            onAllDayChanged: (value) => _notifier.setAllDay(value: value),
             errors: state.errors,
             employeeLabel: context.l10n.calendar_assignEmployee,
             employeeRequired: true,
@@ -329,6 +331,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
               onSelectRepeat: _notifier.selectRepeat,
               onUseCustomAddress: (value) =>
                   _notifier.setUseCustomAddress(value: value),
+              onDayOffChanged: (value) => _notifier.setDayOff(value: value),
+              onAllDayChanged: (value) => _notifier.setAllDay(value: value),
             ),
             photosSection: PhotoPickerSection(
               existingImages: const [],

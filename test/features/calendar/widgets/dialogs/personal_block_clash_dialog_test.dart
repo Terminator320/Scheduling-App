@@ -288,6 +288,85 @@ void main() {
       expect(written.employeeIds, isNot(contains('e2')));
     });
 
+    testWidgets('Undo on the FIRST of two swaps keeps the second, and never '
+        'puts the person who is off back', (tester) async {
+      // Undo used to write the whole-record snapshot taken when THAT row
+      // swapped. With two people off one job that snapshot predates the second
+      // swap, so undoing the first silently reverted the second AND re-added
+      // someone who is off — while the second row still read "Ines takes this
+      // job". Undo now inverts its own swap against the live record.
+      final ines = _person('e4', 'Ines Colas');
+      when(
+        () => repository.findClashingAppointments(
+          employeeIds: any(named: 'employeeIds'),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          excludeAppointmentId: any(named: 'excludeAppointmentId'),
+          clientJobsOnly: any(named: 'clientJobsOnly'),
+        ),
+      ).thenAnswer(
+        (_) async => [
+          _clashingJob(
+            employeeIds: const ['e1', 'e2'],
+            employeeNames: const ['Marc Tremblay', 'Nadia Berger'],
+          ),
+        ],
+      );
+
+      await pumpAndOpen(
+        tester,
+        roster: [_marc, _nadia, _theo, ines],
+        block: _block.copyWith(
+          employeeIds: const ['e1', 'e2'],
+          employeeNames: const ['Marc Tremblay', 'Nadia Berger'],
+        ),
+      );
+
+      // Row 1: Marc (off) -> Theo.
+      await tester.tap(find.text('Swap').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Theo'));
+      await tester.pumpAndSettle();
+
+      // Row 2: Nadia (off) -> Ines.
+      await tester.tap(find.text('Swap').first);
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Ines'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ines'));
+      await tester.pumpAndSettle();
+
+      // Undo row 1 only.
+      await tester.tap(find.text('Undo').first);
+      await tester.pumpAndSettle();
+
+      final written =
+          verify(
+                () => repository.updateAppointment(captureAny()),
+              ).captured.last
+              as AppointmentRecord;
+      expect(
+        written.employeeIds,
+        contains('e1'),
+        reason: 'the undone row puts Marc back',
+      );
+      expect(
+        written.employeeIds,
+        contains('e4'),
+        reason: "Ines took row 2's job and that swap must survive",
+      );
+      expect(
+        written.employeeIds,
+        isNot(contains('e2')),
+        reason: 'Nadia is off and must not be resurrected by an unrelated undo',
+      );
+      expect(written.employeeIds, isNot(contains('e3')));
+      expect(
+        written.employeeNames,
+        containsAll(<String>['Marc Tremblay', 'Ines Colas']),
+      );
+    });
+
     testWidgets('picking a replacement writes that occurrence, swapping the '
         'id AND the name positionally', (tester) async {
       await pumpAndOpen(tester, roster: [_marc, _nadia]);

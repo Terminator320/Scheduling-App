@@ -54,7 +54,9 @@ class EmployeePicker extends StatelessWidget {
     // naming pass quadratic on a widget that rebuilds on every form keystroke.
     final selectedIds = {for (final e in selectedEmployees) e.id};
     final clashingIds = availability.clashes.keys.toSet();
-    final names = [for (final e in displayEmployees) e.name];
+    // A TALLY, not the raw names: `shortAssigneeName` runs once per chip, and
+    // handing it the list made it re-split every candidate for every employee.
+    final names = firstNameTally([for (final e in displayEmployees) e.name]);
     final offers = [
       for (final employee in displayEmployees)
         (
@@ -340,12 +342,13 @@ class _DashedPillPainter extends BoxPainter {
     final size = configuration.size;
     if (size == null) return;
     final rect = offset & size;
-    final outline = Path()..addRRect(
-      RRect.fromRectAndRadius(
-        rect.deflate(0.75),
-        Radius.circular(size.height / 2),
-      ),
-    );
+    final outline = Path()
+      ..addRRect(
+        RRect.fromRectAndRadius(
+          rect.deflate(0.75),
+          Radius.circular(size.height / 2),
+        ),
+      );
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5

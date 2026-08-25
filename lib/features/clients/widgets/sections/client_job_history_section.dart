@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
@@ -26,6 +27,27 @@ class ClientJobHistorySection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final history = ref.watch(clientJobHistoryProvider(clientId));
 
+    // The data→error transition, NOT `.when`'s error branch, which fires on
+    // every rebuild and would spam Crashlytics. Nothing else logs this read:
+    // `fetchClientHistory` has no try/catch, `pageToCap` has none, and the
+    // provider's own `onError` covers only its invalidate subscription. Until
+    // this existed a missing composite index, a rules rejection or a cold
+    // offline read showed the notice below on every admin client detail while
+    // Crashlytics stayed silent.
+    ref.listen<AsyncValue<List<AppointmentRecord>>>(
+      clientJobHistoryProvider(clientId),
+      (previous, next) {
+        if (!next.hasError || (previous?.hasError ?? false)) return;
+        ref
+            .read(loggerProvider)
+            .warn(
+              'HIST-LOAD client job history failed',
+              next.error,
+              next.stackTrace,
+            );
+      },
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -45,8 +67,9 @@ class ClientJobHistorySection extends ConsumerWidget {
               SkeletonAppointmentRow(),
             ],
           ),
-          // Compose the cause+tag notice without logging — this provider read isn't the
-          // UI-layer catch site, so logging happens elsewhere.
+          // Composes without logging on purpose: a builder runs on every
+          // rebuild, so the log belongs on the transition in the `ref.listen`
+          // above.
           error: (e, _) => _EmptyLine(
             text: composeErrorNotice(
               context,

@@ -143,7 +143,8 @@ class _TopNoticeState extends State<_TopNotice>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<Offset> _slide;
-  late final Animation<double> _fade;
+  late final CurvedAnimation _slideCurve;
+  late final CurvedAnimation _fade;
 
   @override
   void initState() {
@@ -152,14 +153,18 @@ class _TopNoticeState extends State<_TopNotice>
       vsync: this,
       duration: AppAnimationDurations.banner,
     );
-    _slide = Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero)
-        .animate(
-          CurvedAnimation(
-            parent: _controller,
-            curve: AppAnimationCurves.entrance,
-          ),
-        );
+    // Held rather than inlined so both can be disposed: a `CurvedAnimation`
+    // registers a status listener on its parent, and only `dispose()` removes
+    // it. Its sibling `fade_in_item.dart` already does this.
+    _slideCurve = CurvedAnimation(
+      parent: _controller,
+      curve: AppAnimationCurves.entrance,
+    );
     _fade = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, -1),
+      end: Offset.zero,
+    ).animate(_slideCurve);
 
     _controller.forward();
     Future.delayed(widget.duration, () {
@@ -169,6 +174,8 @@ class _TopNoticeState extends State<_TopNotice>
 
   @override
   void dispose() {
+    _slideCurve.dispose();
+    _fade.dispose();
     _controller.dispose();
     super.dispose();
   }

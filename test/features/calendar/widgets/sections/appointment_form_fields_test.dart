@@ -86,12 +86,10 @@ void main() {
               endDate: endDate,
               isPersonal: isPersonal,
               isDayOff: isDayOff,
-              onDayOffChanged: onDayOffChanged ?? (_) {},
               onPersonalChanged: showPersonalSwitch
                   ? (onPersonalChanged ?? (_) {})
                   : null,
               isAllDay: isAllDay,
-              onAllDayChanged: onAllDayChanged ?? (_) {},
               isMultiDay: isMultiDay,
               isOvernight: isOvernight,
               spanLength: spanLength,
@@ -111,6 +109,8 @@ void main() {
                 onPickEndTime: () {},
                 onSelectRepeat: (_) {},
                 onUseCustomAddress: (_) {},
+                onDayOffChanged: onDayOffChanged ?? (_) {},
+                onAllDayChanged: onAllDayChanged ?? (_) {},
               ),
               onRequestAddClient: onRequestAddClient,
               onApplyTemplate: onApplyTemplate,

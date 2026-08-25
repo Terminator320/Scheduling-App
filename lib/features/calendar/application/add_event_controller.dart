@@ -57,6 +57,19 @@ class AddEventInvalid extends AddEventSubmitOutcome {
   const AddEventInvalid();
 }
 
+/// A submit the reentrancy guard SKIPPED, distinct from one the validator
+/// rejected.
+///
+/// Both are no-ops at the call site today, which is exactly why the
+/// distinction had to be made in the type rather than left to a comment: a
+/// skipped write reported as `Invalid` is indistinguishable from a form that
+/// failed validation, and that is the same conflation that once let the detail
+/// sheet announce "marked as complete" without having written anything. A
+/// `Busy` outcome surfaces nothing — neither a success notice nor an error.
+class AddEventBusy extends AddEventSubmitOutcome {
+  const AddEventBusy();
+}
+
 class AddEventBusyEmployees extends AddEventSubmitOutcome {
   const AddEventBusyEmployees({
     required this.busyEmployees,
@@ -182,8 +195,24 @@ class AddEventController extends Notifier<AddEventState>
 
   /// Marks the personal block as time off. Only reachable while the personal
   /// switch is on — see [setPersonal], which clears it on the way off.
+  ///
+  /// Turning it ON forces all-day, because the form hides BOTH the all-day
+  /// switch and the time rows behind `isDayOff` on the premise that a day off
+  /// runs midnight to 23:59. Nothing else enforced that premise: the validator
+  /// still demanded both times whenever `!isAllDay`, so a block that reached
+  /// `isDayOff` with all-day off had no way to satisfy it and no way to show
+  /// the error — Save went permanently inert. Storing one was the other half:
+  /// a timed day off passes `selectTravelCandidates`' `isAllDay` skip and
+  /// fires a "time to leave" push on somebody's day off.
   void setDayOff({required bool value}) {
-    state = state.copyWith(isDayOff: value);
+    state = state.copyWith(
+      isDayOff: value,
+      isAllDay: value || state.isAllDay,
+      errors: withoutKey(
+        withoutKey(state.errors, 'startTime'),
+        'endTime',
+      ),
+    );
   }
 
   /// Turning this on drops any client already picked: the picker is hidden from
@@ -233,8 +262,10 @@ class AddEventController extends Notifier<AddEventState>
     required String materialsNeeded,
     bool forceBusy = false,
   }) async {
-    // Guard against reentrancy: this blocks a double-tap during the conflict check and submit.
-    if (state.isSubmitting) return const AddEventInvalid();
+    // Guard against reentrancy: this blocks a double-tap during the conflict
+    // check and submit. `Busy`, not `Invalid` — nothing is wrong with the
+    // form, the write is simply already in flight.
+    if (state.isSubmitting) return const AddEventBusy();
     final errors = AppointmentFormValidator.validate(
       AppointmentFormInput(
         title: title,
@@ -324,8 +355,10 @@ class AddEventController extends Notifier<AddEventState>
         clientName: client?.displayName ?? '',
         clientPhone: client?.phone ?? '',
         // Kept on a personal job too — the address field stays on screen there
-        // as an optional one, so what saves is what the user can see.
-        address: address.trim(),
+        // as an optional one, so what saves is what the user can see. A DAY
+        // OFF is the exception: the form drops the field entirely, and a
+        // hidden field must never keep a value the form no longer shows.
+        address: isDayOff ? '' : address.trim(),
         isPersonal: isPersonal,
         isDayOff: isDayOff,
         isAllDay: isAllDay,

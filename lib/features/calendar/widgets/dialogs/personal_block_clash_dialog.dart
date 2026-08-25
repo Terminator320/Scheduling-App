@@ -14,6 +14,7 @@ import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/dialogs/app_dialog_frame.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
@@ -104,13 +105,16 @@ class _RowStuck extends _RowState {
 }
 
 class _RowDone extends _RowState {
-  const _RowDone({required this.took, required this.original});
-  final EmployeeRecord took;
+  const _RowDone({required this.took});
 
-  /// The record as it was before the swap — what Undo writes back. Undo lives
-  /// only as long as this dialog; afterwards the swap is an ordinary edit to
-  /// that job and there is nothing here implying otherwise.
-  final AppointmentRecord original;
+  /// Who took the job. Undo INVERTS the swap off this — it puts the person who
+  /// is off back in [took]'s place — rather than writing a whole-record
+  /// snapshot back. A snapshot is only correct until the next swap on the same
+  /// job: two people off one job meant undoing the first row silently reverted
+  /// the second row's swap AND re-added someone who is off, which is precisely
+  /// the outcome this dialog exists to undo. Undo lives only as long as this
+  /// dialog; afterwards the swap is an ordinary edit to that job.
+  final EmployeeRecord took;
 }
 
 class _PersonalBlockClashDialog extends ConsumerStatefulWidget {
@@ -191,20 +195,8 @@ class _PersonalBlockClashDialogState
     final groups = _groups();
     final jobCount = widget.clashes.length;
 
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(
-        horizontal: 26,
-        vertical: AppSpacing.sp24,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.rDialog),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.sp24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return AppDialogFrame(
+      children: [
             _header(context, groups: groups, jobCount: jobCount),
             const SizedBox(height: AppSpacing.sp16),
             // A fortnight off would otherwise break the dialog: the list
@@ -228,8 +220,6 @@ class _PersonalBlockClashDialogState
             const SizedBox(height: AppSpacing.sp24),
             _actions(context, theme),
           ],
-        ),
-      ),
     );
   }
 
@@ -242,7 +232,7 @@ class _PersonalBlockClashDialogState
     final l10n = context.l10n;
     final statusColors = theme.statusColors;
     final soleName = groups.length == 1
-        ? shortAssigneeName(groups.first.name, among: const [])
+        ? shortAssigneeName(groups.first.name, among: const {})
         : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -330,7 +320,7 @@ class _PersonalBlockClashDialogState
           state: _states[_keyFor(group.employeeId, job)] ?? const _RowIdle(),
           onSwap: () => _openRow(group.employeeId, job),
           onPick: (person) => _swap(group.employeeId, job, person),
-          onUndo: () => _undo(group.employeeId, job),
+          onUndo: () => _undo(group.employeeId, group.name, job),
           onOpenJob: () => showEventDetails(context, job, showActions: true),
         ),
       );
@@ -442,24 +432,42 @@ class _PersonalBlockClashDialogState
   ) async {
     final key = _keyFor(employeeId, job);
     final previous = _states[key] ?? const _RowIdle();
-    final current = _live(job);
-    final updated = _replaceAssignee(current, removeId: employeeId, add: person);
+    final updated = _replaceAssignee(
+      _live(job),
+      removeId: employeeId,
+      addId: person.id,
+      addName: person.name,
+    );
     if (await _write(key, updated, previous: previous)) {
       setState(() {
         _jobs[updated.id!] = updated;
-        _states[key] = _RowDone(took: person, original: current);
+        _states[key] = _RowDone(took: person);
         _openKey = null;
       });
     }
   }
 
-  Future<void> _undo(String employeeId, AppointmentRecord job) async {
+  /// Puts the person who is off back in place of whoever took the job.
+  ///
+  /// Built on [_live], not on a snapshot taken at swap time, so it composes
+  /// with any later swap on the same job the way [_swap] does.
+  Future<void> _undo(
+    String employeeId,
+    String employeeName,
+    AppointmentRecord job,
+  ) async {
     final key = _keyFor(employeeId, job);
     final state = _states[key];
     if (state is! _RowDone) return;
-    if (await _write(key, state.original, previous: state)) {
+    final reverted = _replaceAssignee(
+      _live(job),
+      removeId: state.took.id,
+      addId: employeeId,
+      addName: employeeName,
+    );
+    if (await _write(key, reverted, previous: state)) {
       setState(() {
-        _jobs[state.original.id!] = state.original;
+        _jobs[reverted.id!] = reverted;
         _states[key] = const _RowIdle();
       });
     }
@@ -485,6 +493,14 @@ class _PersonalBlockClashDialogState
     setState(() => _states[key] = const _RowBusy());
     try {
       await repository.updateAppointment(record);
+      // Guarded on the way out, not just in the catch below: every caller
+      // calls setState on `true`, and this dialog is barrier-dismissible, so
+      // dismissing it mid-write unmounts the State before that lands. In
+      // release `setState`'s own lifecycle check is an assert, so it falls
+      // through to `_element!.markNeedsBuild()` and is filed as a FATAL.
+      // `use_build_context_synchronously` cannot see it — setState is not a
+      // BuildContext use. The write itself has already committed.
+      if (!mounted) return false;
       return true;
     } on Object catch (e, st) {
       logger.warn('APPT-SAVE personal-block swap failed', e, st);
@@ -502,7 +518,12 @@ class _PersonalBlockClashDialogState
   }
 }
 
-/// [job] with [removeId] swapped out for [add].
+/// [job] with [removeId] swapped out for [addId]/[addName].
+///
+/// Takes the replacement as an id and a name rather than an `EmployeeRecord`
+/// because Undo runs it BACKWARDS — putting the person who is off back in
+/// place of whoever took the job — and this dialog only ever holds that
+/// person's name, never a roster record for them.
 ///
 /// `employeeIds` and `employeeNames` are paired POSITIONALLY, so both lists are
 /// rebuilt in one pass — writing the id and appending the name would silently
@@ -510,7 +531,8 @@ class _PersonalBlockClashDialogState
 AppointmentRecord _replaceAssignee(
   AppointmentRecord job, {
   required String removeId,
-  required EmployeeRecord add,
+  required String addId,
+  required String addName,
 }) {
   // This re-serializes the WHOLE record, so a legacy `confirmed`/unknown
   // status would be written back verbatim and rejected by the rules as an
@@ -520,9 +542,9 @@ AppointmentRecord _replaceAssignee(
   final names = <String>[];
   for (var i = 0; i < job.employeeIds.length; i++) {
     final isTarget = job.employeeIds[i] == removeId;
-    ids.add(isTarget ? add.id : job.employeeIds[i]);
+    ids.add(isTarget ? addId : job.employeeIds[i]);
     names.add(
-      isTarget ? add.name : (assigneeNameAt(job.employeeNames, i) ?? ''),
+      isTarget ? addName : (assigneeNameAt(job.employeeNames, i) ?? ''),
     );
   }
   return job.copyWith(
@@ -563,6 +585,16 @@ class _ClashRow extends StatelessWidget {
       _RowIdle() => (scheme.outlineVariant, scheme.surface),
     };
 
+    // Hoisted out of the chip loop below: built inline it re-tallied the whole
+    // strip for every chip in it, which is the quadratic naming pass the
+    // picker's own comment warns against.
+    final freeFirstNames = switch (state) {
+      _RowOpen(:final free) => firstNameTally([
+        for (final p in free) p.name,
+      ]),
+      _ => const <String, int>{},
+    };
+
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.sp8),
       child: Container(
@@ -599,7 +631,7 @@ class _ClashRow extends StatelessWidget {
                       // is being put on the job.
                       shortName: shortAssigneeName(
                         person.name,
-                        among: [for (final p in free) p.name],
+                        among: freeFirstNames,
                       ),
                       onTap: () => onPick(person),
                     ),

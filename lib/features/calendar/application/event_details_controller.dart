@@ -282,8 +282,22 @@ class EventDetailsController extends Notifier<EventDetailsState>
 
   /// Marks the personal block as time off. Only reachable while the personal
   /// switch is on — see [setPersonal], which clears it on the way off.
+  ///
+  /// Turning it ON forces all-day, for the reason spelled out on the add
+  /// flow's twin: the form hides both the all-day switch and the time rows
+  /// behind `isDayOff`, so a day off that kept `isAllDay: false` could neither
+  /// satisfy the validator nor show why. The edit flow reaches that state in
+  /// ONE tap — open a timed personal block and tick Day off — which is why
+  /// both halves must agree.
   void setDayOff({required bool value}) {
-    state = state.copyWith(isDayOff: value);
+    state = state.copyWith(
+      isDayOff: value,
+      isAllDay: value || state.isAllDay,
+      errors: withoutKey(
+        withoutKey(state.errors, 'startTime'),
+        'endTime',
+      ),
+    );
   }
 
   /// Flipping this on drops the client the same way the add flow does — the
@@ -431,8 +445,9 @@ class EventDetailsController extends Notifier<EventDetailsState>
     bool forceBusy = false,
   }) async {
     // Mark this in-flight before the seed-settle await, so a double-tap can't
-    // start a concurrent save.
-    if (state.isSaving) return const EventDetailsInvalid();
+    // start a concurrent save. `Busy`, not `Invalid` — the form is fine, the
+    // write is already running.
+    if (state.isSaving) return const EventDetailsSaveBusy();
 
     // Bail out early if we're offline, before setting the flag — otherwise
     // Save just spins waiting for a server ack that isn't coming.

@@ -90,7 +90,15 @@ class AppointmentFormCallbacks {
     required this.onPickEndTime,
     required this.onSelectRepeat,
     required this.onUseCustomAddress,
+    required this.onDayOffChanged,
+    required this.onAllDayChanged,
   });
+
+  /// Both are `required` on every flow, so neither carries the nullability
+  /// signal that keeps the four optional callbacks loose on the widget - they
+  /// belong in the group like the other required ones.
+  final ValueChanged<bool> onDayOffChanged;
+  final ValueChanged<bool> onAllDayChanged;
 
   final ValueChanged<String> onSearchClients;
   final ValueChanged<ClientRecord> onSelectClient;
@@ -125,9 +133,7 @@ class AppointmentFormFields extends StatelessWidget {
     required this.endDate,
     required this.isPersonal,
     required this.isDayOff,
-    required this.onDayOffChanged,
     required this.isAllDay,
-    required this.onAllDayChanged,
     required this.errors,
     required this.employeeLabel,
     required this.employeeRequired,
@@ -177,7 +183,6 @@ class AppointmentFormFields extends StatelessWidget {
   /// No time was put in, so the block owns the whole day: the start/end rows
   /// are hidden and the record saves midnight → 23:59.
   final bool isAllDay;
-  final ValueChanged<bool> onAllDayChanged;
 
   /// True when this job runs more than one day — drives the daily-window
   /// qualifier on the time labels and the run length beside the end date.
@@ -222,11 +227,6 @@ class AppointmentFormFields extends StatelessWidget {
   /// it on a job that is ALREADY personal, so an ordinary client visit can't be
   /// turned into one halfway through its life.
   final ValueChanged<bool>? onPersonalChanged;
-
-  /// Reports the "Day off" chip. Required and non-null, unlike
-  /// [onPersonalChanged]: the chip is gated on [isPersonal] alone, so there is
-  /// no flow that renders the form without one.
-  final ValueChanged<bool> onDayOffChanged;
 
   String? _err(BuildContext context, String field) {
     final key = errors[field];
@@ -345,7 +345,10 @@ class AppointmentFormFields extends StatelessWidget {
       // can't leave one behind.
       if (isPersonal) ...[
         const SizedBox(height: AppSpacing.sp8),
-        _DayOffChoiceChip(value: isDayOff, onChanged: onDayOffChanged),
+        _DayOffChoiceChip(
+          value: isDayOff,
+          onChanged: callbacks.onDayOffChanged,
+        ),
       ],
       const SizedBox(height: AppSpacing.sp16),
     ],
@@ -481,7 +484,10 @@ class AppointmentFormFields extends StatelessWidget {
             // it is already in, and turning it off would ask someone which
             // hours of their day off they are having.
             if (!isDayOff)
-              _AllDaySwitch(value: isAllDay, onChanged: onAllDayChanged),
+              _AllDaySwitch(
+                value: isAllDay,
+                onChanged: callbacks.onAllDayChanged,
+              ),
             _dateRows(context, l10n),
             // An all-day block has no times to show — the date rows are the
             // whole schedule.

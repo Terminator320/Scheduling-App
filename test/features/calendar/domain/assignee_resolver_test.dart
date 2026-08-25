@@ -228,19 +228,36 @@ void main() {
   group('shortAssigneeName', () {
     test('first name when it is unambiguous', () {
       expect(
-        shortAssigneeName('Marc Tremblay', among: ['Marc Tremblay', 'Nadia B']),
+        shortAssigneeName(
+          'Marc Tremblay',
+          among: firstNameTally(['Marc Tremblay', 'Nadia B']),
+        ),
         'Marc',
       );
     });
 
     test('two Marcs each take a last initial', () {
-      const roster = ['Marc Tremblay', 'Marc Belanger'];
+      final roster = firstNameTally(['Marc Tremblay', 'Marc Belanger']);
       expect(shortAssigneeName('Marc Tremblay', among: roster), 'Marc T.');
       expect(shortAssigneeName('Marc Belanger', among: roster), 'Marc B.');
     });
 
     test('a one-word name is left alone', () {
-      expect(shortAssigneeName('Marc', among: ['Marc', 'Marc']), 'Marc');
+      expect(
+        shortAssigneeName('Marc', among: firstNameTally(['Marc', 'Marc'])),
+        'Marc',
+      );
+    });
+
+    test('the tally is case-insensitive on the first name', () {
+      // The old per-call scan lowercased both sides; the tally has to key on
+      // the same folded form or two spellings of one name stop sharing.
+      final roster = firstNameTally(['marc Tremblay', 'MARC Belanger']);
+      expect(shortAssigneeName('Marc Tremblay', among: roster), 'Marc T.');
+    });
+
+    test('a blank name contributes nothing to the tally', () {
+      expect(firstNameTally(['', '   ', 'Marc Tremblay']), {'marc': 1});
     });
   });
 }

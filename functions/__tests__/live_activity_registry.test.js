@@ -23,9 +23,7 @@ const {
   CARDS_COLLECTION,
   IN_QUERY_MAX,
   PRUNE_MAX,
-  TOKEN_TTL_MS,
   CARD_TTL_MS,
-  activityTokenExpiry,
   listPushToStartTokens,
   listUpdateTokens,
   deleteActivityToken,
@@ -191,20 +189,6 @@ describe("exported constants", () => {
 
   test("PRUNE_MAX bounds one sweep", () => {
     expect(PRUNE_MAX).toBeGreaterThan(0);
-  });
-});
-
-describe("activityTokenExpiry", () => {
-  test("stamps now + TOKEN_TTL_MS", () => {
-    expect(activityTokenExpiry(NOW).getTime())
-        .toBe(NOW.getTime() + TOKEN_TTL_MS);
-  });
-
-  test("falls back to the wall clock when now is omitted", () => {
-    const before = Date.now();
-    const got = activityTokenExpiry(undefined).getTime();
-    expect(got).toBeGreaterThanOrEqual(before + TOKEN_TTL_MS);
-    expect(got).toBeLessThanOrEqual(Date.now() + TOKEN_TTL_MS);
   });
 });
 

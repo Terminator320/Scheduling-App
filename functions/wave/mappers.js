@@ -509,5 +509,4 @@ module.exports = {
   // Dart, CEL and JS cannot share a constant, so that test is the only thing
   // stopping a tightened rule from letting the import write client docs the
   // app can never update again.
-  IMPORT_FIELD_CAPS,
 };

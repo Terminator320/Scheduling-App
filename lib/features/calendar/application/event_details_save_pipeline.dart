@@ -105,7 +105,10 @@ class EventDetailsSavePipeline {
       clientPhone: isPersonal
           ? ''
           : pickedClient?.phone ?? appointment.clientPhone,
-      address: address.trim(),
+      // Cleared on a day off the same way the client fields are: the form
+      // drops the address field entirely there, so keeping a typed value
+      // would store something invisible on every surface.
+      address: isDayOff ? '' : address.trim(),
       isPersonal: isPersonal,
       isDayOff: isDayOff,
       isAllDay: isAllDay,

@@ -328,21 +328,25 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
 
   for (final doc in scan.docs) {
     final data = doc.data;
-    final client = ClientRecord.fromMap(doc.id, data);
 
     // The MATCH TEST COMES FIRST, and everything the scoring ladder needs is
-    // built below it. The scan window is up to `_clientScanLimit` documents
-    // and a committed search keeps at most 25, so anything computed above this
-    // `continue` is paid ~200× over for nothing — and it is not cheap:
-    // `normalize` is eight sequential `replaceAll`s, `stripPhone` two regexes,
-    // and there were six such values per document.
-    if (!ClientSearchPolicy.entryMatches(
-      ClientSearchPolicy.index(client),
+    // built below it — INCLUDING the record itself. The scan window is up to
+    // `_clientScanLimit` documents and a committed search keeps at most 25, so
+    // anything computed above this `continue` is paid ~200× over for nothing —
+    // and it is not cheap: `normalize` is eight sequential `replaceAll`s,
+    // `stripPhone` two regexes, and there were six such values per document.
+    // `ClientRecord.fromMap` was the most expensive of the lot and sat right
+    // here until 2026-08-25; `rawMatches` is its raw-map twin, beside `index`
+    // so the two field sets cannot drift.
+    if (!ClientSearchPolicy.rawMatches(
+      data,
       queryText: normalizedQuery,
       queryDigits: queryDigits,
     )) {
       continue;
     }
+
+    final client = ClientRecord.fromMap(doc.id, data);
 
     final contacts = (data['contacts'] as List?) ?? const [];
     final contactSearchText = contacts

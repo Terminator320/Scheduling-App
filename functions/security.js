@@ -291,11 +291,19 @@ function assertFreshReauth(auth, route, maxAgeSeconds) {
   }
 }
 
+// The App Check option block every callable spreads. It was declared as an
+// identical private const in two modules; a callable that also sets a region,
+// a timeout or a secret still writes `enforceAppCheck: true` inline beside
+// them, because spreading a one-key constant into a larger options object
+// reads as less explicit, not more, on a security-critical line.
+const APP_CHECK = {enforceAppCheck: true};
+
 // Keep guards inline per callable — a shared helper here would close over
 // the real assertAdmin and break the guard-order mocks in
 // __tests__/places_admin_gate.test.js.
 
 module.exports = {
+  APP_CHECK,
   hasControlChar,
   assertPayloadShape,
   requireString,

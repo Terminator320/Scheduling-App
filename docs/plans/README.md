@@ -161,14 +161,23 @@ item; each is listed so nobody re-runs one.**
   rule's repair is the failure mode. `restore-business-client-names.js` covers
   the businesses the heuristic caught. The read-only damage audit for the
   2026-08-08 run is `docs/audits/audit-client-phone-backfill-damage.js`.
-- **The appointment-images backfill RAN 2026-08-15** —
-  `copied 13 photos across 10 appointments (41 scanned)`. Copy-only and
-  idempotent; `pictures` is untouched. The app build is the only step of that
-  migration still outstanding (`docs/DEPLOYMENT.md`).
-- **Three orphaned Cloud Scheduler jobs are still live** for the scheduled
-  functions deleted 2026-08-14. `gcloud` is not installed on this Windows box,
-  so this one genuinely cannot be done from here. Scheduled functions must land
-  on exactly 3 — the free tier — so this costs money until it is cleaned up.
+- **The appointment-images backfill RAN, and was RE-RUN at the CONTRACT step
+  2026-08-22** — the current figure is `copied 14 photos across 11
+  appointments`, not the superseded `13 / 10` from the 2026-08-15 run. Copy-only
+  and idempotent; `pictures` is untouched. **TWO steps of that migration are
+  still outstanding, not one**: step 3 (ship the app build) and then step 4 (the
+  irreversible clear script, gated on the fleet ageing off builds that still
+  write the array). See the deploy log in `docs/DEPLOYMENT.md`, which is the
+  authority here — and read 🔴 S1 in `docs/audits/CODEBASE_AUDIT.md` before
+  running step 4, because the clear script alone revokes nothing.
+- **The three "orphaned Cloud Scheduler jobs" NEVER EXISTED — RESOLVED
+  2026-08-23.** Checking found exactly the 3 expected scheduled jobs and no
+  orphans; this bullet claimed otherwise for nine days. What the check DID turn
+  up is worth keeping: `purgeExpiredHistory` was sitting **PAUSED** with no
+  record why (resumed 2026-08-23). Only the Cloud **Scheduler** page shows a
+  job's STATE — `functions:list` and Cloud Run both render a paused job
+  identically to a healthy one — so check it there after any deploy that
+  touches a scheduled function.
 - **The `signupCodes` collection and its TTL policy remain in prod**,
   deliberately — the collection was verified empty and rules now deny all
   access. Never `--force` the policy away.
