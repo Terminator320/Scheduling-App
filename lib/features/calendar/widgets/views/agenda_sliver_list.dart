@@ -60,6 +60,16 @@ class AgendaSliverList extends StatelessWidget {
     final firstClosedIndex = events.indexWhere(
       (slice) => slice.appointment.isClosed,
     );
+    // The rule's count must answer the header's question, or the two disagree
+    // on the same block: a completed DAY OFF sinks into the closed tail and is
+    // rendered there, but it is not a job, so `_jobLabel` never counted it.
+    // Counted here rather than taken from `length - index` for that reason —
+    // the cards below the rule and the number on it are deliberately allowed
+    // to differ by exactly the time-off entries among them.
+    final closedJobCount = events
+        .skip(firstClosedIndex < 0 ? events.length : firstClosedIndex)
+        .where((slice) => !slice.appointment.isTimeOff)
+        .length;
 
     return SliverMainAxisGroup(
       slivers: [
@@ -121,7 +131,7 @@ class AgendaSliverList extends StatelessWidget {
                   child: index == firstClosedIndex
                       ? Column(
                           children: [
-                            _ClosedRule(count: events.length - index),
+                            _ClosedRule(count: closedJobCount),
                             card,
                           ],
                         )

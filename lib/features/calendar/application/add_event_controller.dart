@@ -38,6 +38,7 @@ abstract class AddEventState
     @Default(false) bool isSearchingClient,
     @Default(false) bool useCustomAddress,
     @Default(false) bool isPersonal,
+    @Default(false) bool isDayOff,
     @Default(false) bool isAllDay,
     @Default(<EmployeeRecord>[]) List<EmployeeRecord> selectedEmployees,
     @Default(RepeatInterval.none) RepeatInterval repeat,
@@ -179,11 +180,21 @@ class AddEventController extends Notifier<AddEventState>
     state = state.copyWith(repeat: value);
   }
 
+  /// Marks the personal block as time off. Only reachable while the personal
+  /// switch is on — see [setPersonal], which clears it on the way off.
+  void setDayOff({required bool value}) {
+    state = state.copyWith(isDayOff: value);
+  }
+
   /// Turning this on drops any client already picked: the picker is hidden from
   /// here on, so a retained client would be saved invisibly.
   void setPersonal({required bool value}) {
     state = state.copyWith(
       isPersonal: value,
+      // A client visit can never be time off, and the chip is hidden from here
+      // on — a surviving flag would drop a real job out of every job count
+      // with nothing on the form left to explain it.
+      isDayOff: value && state.isDayOff,
       selectedClient: value ? null : state.selectedClient,
       clientResults: value ? const [] : state.clientResults,
       useCustomAddress: !value && state.useCustomAddress,
@@ -254,6 +265,10 @@ class AddEventController extends Notifier<AddEventState>
     // Null for a personal job — the validator only demands a client otherwise.
     final client = state.selectedClient;
     final isPersonal = state.isPersonal;
+    // Snapshotted with it: the chip stays live through the conflict check.
+    // NOT re-ANDed with isPersonal — `setPersonal` already clears it, and
+    // `AppointmentRecord.isTimeOff` owns the conjunction on the read side.
+    final isDayOff = state.isDayOff;
     // The switch stays live through the conflict check, and the instants below
     // are DERIVED from this flag — re-reading it after the round trip could
     // write `isAllDay: true` over a 09:00–17:00 window, which reads as
@@ -306,6 +321,7 @@ class AddEventController extends Notifier<AddEventState>
         // as an optional one, so what saves is what the user can see.
         address: address.trim(),
         isPersonal: isPersonal,
+        isDayOff: isDayOff,
         isAllDay: isAllDay,
         employeeIds: selectedEmployees.map((e) => e.id).toList(),
         employeeNames: selectedEmployees.map((e) => e.name).toList(),

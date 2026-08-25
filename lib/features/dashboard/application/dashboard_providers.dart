@@ -114,10 +114,16 @@ class DashboardPeriodController extends Notifier<DashboardPeriod> {
   }
 }
 
-/// The two halves of the window, merged by doc id.
+/// The two halves of the window, merged by doc id — **jobs only**.
 ///
 /// Split out so the KPI summary and the stats can share one merge, and so
 /// changing the period recomputes four counters rather than every section.
+///
+/// Time off is dropped HERE rather than in each reducer, so every number on
+/// the screen answers the same question: a booked absence is not work done,
+/// not capacity used, and not an availability conflict. The dashboard is all
+/// counts and charts — the surfaces that still show a day off as a card are
+/// the calendar agenda and the team detail's TODAY panel.
 final dashboardRecordsProvider =
     Provider.autoDispose<AsyncValue<List<AppointmentRecord>>>((ref) {
       final liveRange = ref.watch(dashboardLiveRangeProvider);
@@ -132,12 +138,13 @@ final dashboardRecordsProvider =
       // Merged by doc id, not concatenated: each query reaches back to its own
       // `fetchStart` to catch a run already under way, so the live half
       // re-reads the last fortnight of the history half.
-      return AsyncValue.data(
-        DashboardAggregator.mergeById(
+      return AsyncValue.data([
+        for (final record in DashboardAggregator.mergeById(
           appointments.requireValue,
           history.requireValue,
-        ),
-      );
+        ))
+          if (!record.isTimeOff) record,
+      ]);
     });
 
 /// The KPI numbers for the selected period.
@@ -159,11 +166,16 @@ final dashboardPeriodSummaryProvider =
       );
     });
 
-/// Combine appointments range, active employees, and new-clients into dashboard stats.
+/// Combine appointments range, assignable employees, and new-clients into
+/// dashboard stats.
+///
+/// [assignableEmployeesProvider], not the unfiltered active stream: a
+/// dispatcher would sit at a permanent zero in the workload rows and still add
+/// their `maxJobsPerDay` to every daily-capacity bar.
 final dashboardStatsProvider = Provider.autoDispose<AsyncValue<DashboardStats>>(
   (ref) {
     final records = ref.watch(dashboardRecordsProvider);
-    final employees = ref.watch(employeesStreamProvider);
+    final employees = ref.watch(assignableEmployeesProvider);
     final clientDates = ref.watch(newClientDatesProvider);
 
     final failure = _firstFailure<DashboardStats>([
@@ -189,9 +201,12 @@ final dashboardStatsProvider = Provider.autoDispose<AsyncValue<DashboardStats>>(
 /// which is the one operational risk the P4c design creates — so the dashboard
 /// says so.
 ///
-/// Read from [allUsersStreamProvider], never `employeesStreamProvider`: that
-/// one filters to `status == 'active'`, so this list would be permanently
-/// empty and the flag would silently never fire. `watchAllUsers()` is already
+/// Read from [allUsersStreamProvider], never `employeesStreamProvider` or
+/// `assignableEmployeesProvider`: the first filters to `status == 'active'`, so
+/// this list would be permanently empty and the flag would silently never fire,
+/// and the second would additionally hide a pending dispatcher — an account
+/// still sitting on its starting password, which is the whole point of the
+/// flag. `watchAllUsers()` is already
 /// always-on, so this costs no extra listener.
 ///
 /// Sorted oldest-first, and a **null `createdAt` still lists** — the field is
@@ -226,7 +241,7 @@ typedef AvailabilityConflict = ({EmployeeRecord employee, Set<int> days});
 final availabilityConflictsProvider =
     Provider.autoDispose<AsyncValue<List<AvailabilityConflict>>>((ref) {
       final records = ref.watch(dashboardRecordsProvider);
-      final employees = ref.watch(employeesStreamProvider);
+      final employees = ref.watch(assignableEmployeesProvider);
 
       final failure = _firstFailure<List<AvailabilityConflict>>([
         records,

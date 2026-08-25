@@ -26,7 +26,9 @@ void main() {
     ValueChanged<JobTemplate>? onApplyTemplate,
     Map<String, AppointmentFormError> errors = const {},
     bool isPersonal = false,
+    bool isDayOff = false,
     ValueChanged<bool>? onPersonalChanged,
+    ValueChanged<bool>? onDayOffChanged,
     bool showPersonalSwitch = true,
     bool isAllDay = false,
     ValueChanged<bool>? onAllDayChanged,
@@ -83,6 +85,8 @@ void main() {
               selectedDate: selectedDate,
               endDate: endDate,
               isPersonal: isPersonal,
+              isDayOff: isDayOff,
+              onDayOffChanged: onDayOffChanged ?? (_) {},
               onPersonalChanged: showPersonalSwitch
                   ? (onPersonalChanged ?? (_) {})
                   : null,
@@ -284,6 +288,34 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('the Day off chip is offered only on a personal job', (
+    tester,
+  ) async {
+    await pumpAppointmentForm(tester, width: 400);
+    expect(find.widgetWithText(FilterChip, 'Day off'), findsNothing);
+
+    await pumpAppointmentForm(tester, width: 400, isPersonal: true);
+    expect(find.widgetWithText(FilterChip, 'Day off'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('tapping the Day off chip reports the new value', (
+    tester,
+  ) async {
+    final changes = <bool>[];
+    await pumpAppointmentForm(
+      tester,
+      width: 400,
+      isPersonal: true,
+      onDayOffChanged: changes.add,
+    );
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Day off'));
+    await tester.pumpAndSettle();
+
+    expect(changes, [true]);
+  });
 
   testWidgets('a client visit does not mark its address optional', (
     tester,

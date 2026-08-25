@@ -177,12 +177,19 @@ void main() {
               .map((m) => m.group(1)!)
               .toSet();
 
+      // The bools are exempt because the risk this test exists for is an
+      // UNCAPPED STRING riding an ordinary update up against the 1 MB document
+      // ceiling — `isDayOff` joins `isPersonal`/`isAllDay` on exactly that
+      // reasoning, not because anything type-checks it. (Nothing does: adding
+      // `d.isDayOff is bool` would be a real, small hardening, but it belongs
+      // with a clause for all three and a rules deploy.)
       const handledElsewhere = {
         'startTime',
         'endTime',
         'status',
         'isPersonal',
         'isAllDay',
+        'isDayOff',
       };
       final emitted = AppointmentRecord(
         id: 'a',

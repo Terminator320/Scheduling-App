@@ -288,13 +288,19 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   ///
   /// Counts `isClosed`, not `done` alone, so the header can't disagree with the
   /// "Done" rule the agenda draws over the same block below it.
+  ///
+  /// Time off is not counted on either side — a day whose only entry is a day
+  /// off reads "0 JOBS" with that card still listed under it, which is the
+  /// whole point of the flag. The cards themselves stay in [events]; only the
+  /// COUNT is filtered.
   static String _jobLabel(
     BuildContext context,
     List<AppointmentDaySlice> events,
   ) {
     final l10n = context.l10n;
-    final total = l10n.calendar_jobsCount(events.length);
-    final closed = events.where((slice) => slice.appointment.isClosed).length;
+    final jobs = events.where((slice) => !slice.appointment.isTimeOff).toList();
+    final total = l10n.calendar_jobsCount(jobs.length);
+    final closed = jobs.where((slice) => slice.appointment.isClosed).length;
     return closed == 0
         ? total
         : '$total · ${l10n.calendar_jobsDoneCount(closed)}';

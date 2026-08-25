@@ -5,8 +5,10 @@ import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_action_bar.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_leaf_widgets.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -52,6 +54,20 @@ class DetailsViewBody extends ConsumerWidget {
             address: appointment.address,
           )
         : null;
+
+    // TIME OFF is its own body: it has no client, no address, no materials and
+    // no photos, and no lifecycle to act on — so it renders who it is for,
+    // which days, and the note, and nothing else. The edit chip above it is
+    // the only action, because a day off completes itself and is undone by
+    // deleting it.
+    if (appointment.isTimeOff) {
+      return _DayOffBody(
+        appointment: appointment,
+        notes: data.notes,
+        showActions: showActions,
+        onEdit: notifier.enterEditing,
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -177,6 +193,88 @@ class DetailsViewBody extends ConsumerWidget {
 /// Pure-data derivations for [DetailsViewBody]. These are computed once per
 /// build and don't need a context — the layout flag (`compactHeader`) and any
 /// ref-dependent callbacks stay in `build`.
+/// The opened view of a day off.
+///
+/// Leads with the PERSON, not the title: a day off usually has none typed, and
+/// an untitled personal block falls back to the word "Personal", which is not
+/// what the reader came for.
+class _DayOffBody extends StatelessWidget {
+  const _DayOffBody({
+    required this.appointment,
+    required this.notes,
+    required this.showActions,
+    required this.onEdit,
+  });
+
+  final AppointmentRecord appointment;
+  final String notes;
+  final bool showActions;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final names = [
+      for (final name in appointment.employeeNames)
+        if (name.trim().isNotEmpty) name.trim(),
+    ];
+    final title = names.isNotEmpty ? names.join(', ') : appointment.title;
+    final days = runLengthDays(
+      appointment.startTime,
+      appointment.endTime,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (showActions)
+          Align(
+            alignment: context.isCompact
+                ? Alignment.centerLeft
+                : Alignment.centerRight,
+            child: DetailsEditChip(onTap: onEdit),
+          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sp4),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: theme.textTheme.headlineLarge),
+              const SizedBox(height: AppSpacing.sp8),
+              Text(
+                DateUtilsHelper.formatWhenLine(
+                  appointment.startTime,
+                  appointment.endTime,
+                  allDayLabel: l10n.calendar_dayOff,
+                  lastDay: appointment.endTime,
+                ),
+                style: theme.monoType.data,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sp16),
+        const Divider(height: 1),
+        const SizedBox(height: AppSpacing.sp16),
+        KeyValuePanel(
+          rows: [
+            KeyValueRow(
+              label: l10n.calendar_dayOff.toUpperCase(),
+              value: l10n.calendar_dayOffLength(days),
+            ),
+            if (notes.trim().isNotEmpty)
+              KeyValueRow(
+                label: l10n.calendar_notes.toUpperCase(),
+                value: notes.trim(),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _DetailsViewData {
   const _DetailsViewData({
     required this.displayStatus,

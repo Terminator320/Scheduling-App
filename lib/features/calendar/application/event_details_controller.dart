@@ -64,6 +64,7 @@ abstract class EventDetailsState
     @Default(false) bool isSearchingClient,
     @Default(false) bool useCustomAddress,
     @Default(false) bool isPersonal,
+    @Default(false) bool isDayOff,
     @Default(false) bool isAllDay,
     // Set when the user explicitly removes the client, so we don't fall back to a placeholder.
     @Default(false) bool clientCleared,
@@ -107,6 +108,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
       repeat: appointment.repeat,
       savedRepeat: appointment.repeat,
       isPersonal: appointment.isPersonal,
+      isDayOff: appointment.isDayOff,
       isAllDay: appointment.isAllDay,
       // Seeded synchronously to avoid a race with the async load below — employee
       // visibility depends on employeeIds being set right away.
@@ -278,12 +280,21 @@ class EventDetailsController extends Notifier<EventDetailsState>
     state = state.copyWith(repeat: value);
   }
 
+  /// Marks the personal block as time off. Only reachable while the personal
+  /// switch is on — see [setPersonal], which clears it on the way off.
+  void setDayOff({required bool value}) {
+    state = state.copyWith(isDayOff: value);
+  }
+
   /// Flipping this on drops the client the same way the add flow does — the
   /// picker is hidden from here on, and `clientCleared` keeps `save()` from
   /// falling back to the stored one.
   void setPersonal({required bool value}) {
     state = state.copyWith(
       isPersonal: value,
+      // Cleared on the way off for the same reason as the add flow: the chip
+      // goes with the switch, so a surviving flag would be unreachable.
+      isDayOff: value && state.isDayOff,
       selectedClient: value ? null : state.selectedClient,
       client: value ? null : state.client,
       clientCleared: value || state.clientCleared,
@@ -512,6 +523,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
         status: state.editingStatus,
         repeat: state.repeat,
         isPersonal: state.isPersonal,
+        isDayOff: state.isDayOff,
         isAllDay: isAllDay,
       );
 

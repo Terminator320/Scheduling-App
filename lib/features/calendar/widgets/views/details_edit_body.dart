@@ -10,6 +10,7 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
+import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/domain/series_outlook.dart';
@@ -88,8 +89,13 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     );
     final state = ref.watch(provider);
     final notifier = ref.read(provider.notifier);
-    final allEmployees =
-        ref.watch(employeesStreamProvider).asData?.value ?? const [];
+    // Crew, plus anyone already on the job who is active but no longer
+    // offerable by title — see `offerableAssignees`, which owns the rule and
+    // the reason a DISABLED assignee must stay unoffered.
+    final allEmployees = offerableAssignees(
+      active: ref.watch(employeesStreamProvider).asData?.value ?? const [],
+      alreadyAssignedIds: appointment.employeeIds,
+    );
     // One length feeds both the flag and the label, so they can't disagree:
     // the run-length string is a plain interpolation, and a multi-day flag
     // paired with a length of 1 would render "1 days".
@@ -114,6 +120,8 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           selectedDate: state.selectedDate,
           endDate: state.endDate,
           isPersonal: state.isPersonal,
+          isDayOff: state.isDayOff,
+          onDayOffChanged: (value) => notifier.setDayOff(value: value),
           isAllDay: state.isAllDay,
           onAllDayChanged: (value) => notifier.setAllDay(value: value),
           // Offered only on a job that was already personal, so an ordinary

@@ -10,6 +10,52 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.50.0+79] - 2026-08-24
+
+Time you book off is no longer counted as work. A personal block can now be
+marked as a day off, which keeps it off every job tally in the app while still
+showing on the day it covers. Alongside that, dispatchers stopped being offered
+as people you can send to a job, and adding a client from the booking screen no
+longer loses their phone number.
+
+### Added
+- **A personal block can be marked "Day off".** Turn on "Personal job" and a
+  Day off chip appears beside it. A block marked that way stops being counted
+  as a job everywhere the app counts them — the dots on the month grid, the
+  day's job count above the schedule, the badge in the menu, each person's
+  "jobs today" on the team list, and every number on the dashboard, including
+  how full a day looks. Booking one still makes that person show as busy if you
+  try to put them on a job at the same time — that was always the point of
+  blocking the time.
+- **A day off looks like time off, not like a job.** It appears on the day as a
+  quiet strip reading "Marc Tremblay is off" rather than as a job card, and it
+  names the person instead of whatever the block was called. Opening it shows
+  who is away, which days, and your note — nothing else. The form drops
+  everything a day off has no use for: no address, no materials or photos, no
+  start and end times, and no status.
+- **A day off finishes by itself at the end of the last day.** There is no
+  "Mark as complete" to remember and no "Cancel" — once the day is over the
+  strip reads "Marc Tremblay was off" and shows as complete on its own. If you
+  booked one by mistake, delete it.
+
+### Changed
+- **Dispatchers are no longer offered when you assign someone to a job.** They
+  schedule the work rather than go out on it, so they were only ever there to
+  be scrolled past. They have also left the dashboard's per-person numbers,
+  where each one sat at a permanent zero on the workload list and quietly added
+  their daily job limit to how much capacity the day appeared to have — so the
+  load-against-capacity chart was reading low. Anyone already assigned to a job
+  keeps their place on it and can still be taken off by hand.
+
+### Fixed
+- **Adding a client while booking a job now keeps their phone number.** Clients
+  are searched for by number, and adding one straight from that search carried
+  the number into the name and left the phone field empty — so nothing could
+  dial them afterwards: not the Call button, not the job they were booked for,
+  not the copy sent to Wave. The number now moves into the phone field on that
+  path too, and a number written with brackets no longer leaves a stray
+  bracket behind in the name.
+
 ## [1.49.0+78] - 2026-08-22
 
 Job photos have finished moving into a store of their own. You will not see

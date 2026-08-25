@@ -152,6 +152,74 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   it on clears the hidden text controllers and, in the ADD flow only, resets
   `repeat` — the edit flow keeps its repeat, where clearing it would rewrite a
   live series.
+- **A personal block can be marked TIME OFF (`isDayOff`, 2026-08-24), and time
+  off is NEVER COUNTED AS A JOB but is ALWAYS STILL SHOWN AS A CARD.** That
+  sentence is the whole rule, and both halves are load-bearing. The stored flag
+  is written by the "Day off" chip under the personal switch on both forms; the
+  question every consumer asks is the derived `AppointmentRecord.isTimeOff`
+  (`isPersonal && isDayOff`), **never the raw flag** — a client visit carrying a
+  stray `isDayOff` from a console edit or an import must not be able to vanish
+  from every tally with nothing on screen explaining why. Both controllers clear
+  it when the personal switch goes OFF (the chip goes with the switch, so a
+  surviving flag would be unreachable), and `AppointmentSeriesEditor` copies it
+  onto every sibling for the same reason it copies `isAllDay` — a week of
+  holiday booked as a series would otherwise go back to counting as work from
+  the second occurrence on.
+  The COUNT side: `dottedJobsOn` (month grid dots + the cell's semantics
+  count), `_jobLabel` (the agenda header's `N JOBS`), `countsAsLoadOn`
+  (`appointment_day_slice.dart` — the shared "is this that day's load"
+  predicate behind BOTH the drawer badge and the roster's `jobs today`, which
+  had been kept in step by a prose "matching employeeJobsTodayProvider" comment
+  and had already drifted on how each spelled the cancelled half) and
+  `dashboardRecordsProvider` — the dashboard filters ONCE at the records
+  provider rather than in each reducer, so the KPI numbers, the workload bars,
+  the daily-load capacity and the availability flags all agree that a booked
+  absence is neither work done nor capacity used. The CARD side: the agenda,
+  the detail sheet and the employee detail's TODAY panel all still render it,
+  wearing a `DayOffChip` in place of the status (time off is not a point in the
+  pending → done lifecycle, which is also why it is not an `AppointmentStatus`
+  member — one would force a branch into `storedRaw`, the picker and the rules
+  allowlist for a value nothing stores). (A short-lived
+  `appointmentChip`/`appointmentChipLabel` resolver and a `DayOffChip` existed
+  between those two steps, for a day off that still rendered AS a card; the
+  strip made both unreachable and they were deleted. Don't reintroduce one from
+  an older diff.) The roster is the one place the two
+  sides meet and the asymmetry is DELIBERATE: the row reads "0 jobs today"
+  above a panel listing a "Day off" card, because a count answers *how much
+  work* and a card list answers *what is on this person's day*.
+  **A day off is NOT a card and NOT a lifecycle** (owner call, 2026-08-24,
+  designed in `docs/plans/2026-08-24-day-off-card.md`). `AppointmentCard`
+  returns `_DayOffStrip` for one — a low tinted strip reading
+  `<avatar> <name> is off … DAY OFF`, with no crew colour BAR (the bar says "a
+  crew is on this job"), no fill and no shadow. It names the PERSON, never the
+  title: a day off usually has none typed and an untitled personal block falls
+  back to the word "Personal". Rendering it inside the card rather than at the
+  call sites is what gives every appointment surface the same treatment for
+  free. The detail sheet has its own `_DayOffBody` — name, when-line, length,
+  note — with no client section, address, materials, photos or action bar.
+  **It COMPLETES ITSELF at the end of its last day**, and that branch lives in
+  `displayStatusAt` ABOVE the `isPersonal` early return (a day off is personal,
+  so it would otherwise never be reached). Derived, never stored: no sweep, no
+  write, and it cannot be late — the same contract `overdue` has. Consequences
+  worth keeping straight: there is no **Mark as complete** and no **Cancel** on
+  a day off (delete it instead), so nothing can put it into a STORED terminal
+  status; `_agendaOrder` and `isClosed` read the stored status and are
+  deliberately clock-free, so a finished day off stays in date order rather than
+  sinking into the day's closed block; and the agenda's closed rule counts only
+  the JOBS below it (`closedJobCount`) so a legacy stored-done one cannot make
+  the header and the rule disagree. The stored status stays `pending` forever,
+  so `purgeExpiredHistory` never purges a day off — accepted, at a handful per
+  person per year.
+  **`findBusyEmployees` is deliberately NOT filtered** — booking time off is
+  exactly how someone is made to read as unavailable, which is the most
+  valuable thing the P6 stopgap buys (see
+  `docs/plans/2026-07-29-redesign-program.md`; this flag closes that stopgap's
+  "counts as a job in the dashboard" limitation, and nothing more — it is not
+  P6). No rules change was needed: the appointment validator is a per-key
+  bounded check, not a `hasOnly` allowlist, and it type-checks neither
+  `isPersonal` nor `isAllDay`. The off-screen mirrors (push text, widget, Siri,
+  Live Activities) are UNCHANGED and still treat a day off as any other
+  personal block.
 - **An all-day block (`isAllDay`) stores real instants**, midnight → 23:59, so
   every range query, `orderBy('startTime')` and sweep keeps working unchanged —
   the flag only changes how it is SHOWN (`allDaySpan` builds the pair).

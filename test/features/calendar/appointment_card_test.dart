@@ -127,6 +127,47 @@ void main() {
     expect(find.byType(AppAvatar), findsOneWidget);
   });
 
+  testWidgets('a day off renders the strip, not the card', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        AppointmentCard(
+          appointment: _appt(
+            title: 'Vacation',
+          ).copyWith(isPersonal: true, isDayOff: true),
+          crew: _theo,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // It names the PERSON, not the title — an untitled day off would
+    // otherwise read "Personal".
+    expect(find.text('Theo Bell is off'), findsOneWidget);
+    expect(find.text('Vacation'), findsNothing);
+    // No status chip and no crew colour bar: it is not a job.
+    expect(find.byType(StatusChip), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a day off that has passed reads as complete', (tester) async {
+    final today = DateTime.now();
+    final finished = _appt(title: 'Vacation').copyWith(
+      isPersonal: true,
+      isDayOff: true,
+      startTime: DateTime(today.year, today.month, today.day - 3),
+      endTime: DateTime(today.year, today.month, today.day - 3, 23, 59),
+    );
+    await tester.pumpWidget(
+      _wrap(AppointmentCard(appointment: finished, crew: _theo)),
+    );
+    await tester.pumpAndSettle();
+
+    // Derived from the clock — nothing was written and no button was pressed.
+    expect(find.text('Theo Bell was off'), findsOneWidget);
+    expect(find.byType(StatusChip), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('every assignee gets an avatar, the text stays the client', (
     tester,
   ) async {

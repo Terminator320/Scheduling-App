@@ -42,12 +42,17 @@ List<AppointmentCrew> crewFor(
 }
 
 /// The jobs a day's dots stand for: everything running that day **except
-/// cancelled visits** (owner call, 2026-08-17).
+/// cancelled visits** (owner call, 2026-08-17) **and time off**.
 ///
 /// A cancelled job is work that is not happening, so counting it towards "how
 /// busy is this day" is the one thing the dots must not say — a day whose only
 /// visit was called off has to read as free at a glance, not as booked.
 /// `done` still dots: that work happened, and the day was busy.
+///
+/// A **day off** is dropped for the same reason read from the other end: it is
+/// not work at all, so a week of holiday must not paint as a fortnight of
+/// booked days. The block still renders its card in the agenda below — see
+/// [AppointmentRecord.isTimeOff], which every job count filters on.
 ///
 /// One owner, and the reason it is a function rather than a `where` at each
 /// call site: [dayJobDotColors] paints the dots while `CalendarDayCell`'s
@@ -58,7 +63,8 @@ List<AppointmentCrew> crewFor(
 Iterable<AppointmentRecord> dottedJobsOn(
   Iterable<AppointmentRecord> dayAppointments,
 ) => dayAppointments.where(
-  (appointment) => !isCancelledStatusRaw(appointment.status),
+  (appointment) =>
+      !isCancelledStatusRaw(appointment.status) && !appointment.isTimeOff,
 );
 
 /// The month grid's per-day dots: **one per job** that day, in list order,

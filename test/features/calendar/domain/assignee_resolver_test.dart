@@ -1,7 +1,63 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/job_title.dart';
+
+EmployeeRecord _person(String id, {JobTitle title = JobTitle.technician}) =>
+    EmployeeRecord(
+      id: id,
+      name: 'Person $id',
+      status: 'active',
+      jobTitle: title,
+    );
 
 void main() {
+  group('offerableAssignees', () {
+    final tech = _person('e1');
+    final dispatcher = _person('e2', title: JobTitle.dispatcher);
+
+    test('a dispatcher is not offered', () {
+      final offered = offerableAssignees(
+        active: [tech, dispatcher],
+        alreadyAssignedIds: const [],
+      );
+      expect(offered.map((e) => e.id), ['e1']);
+    });
+
+    test(
+      'a dispatcher ALREADY on the job is offered, so it can be removed',
+      () {
+        final offered = offerableAssignees(
+          active: [tech, dispatcher],
+          alreadyAssignedIds: const ['e2'],
+        );
+        expect(offered.map((e) => e.id), ['e1', 'e2']);
+      },
+    );
+
+    test('keyed on the STORED assignees, so deselecting is not one-way', () {
+      // Keyed on the live selection instead, deselecting the dispatcher took
+      // their own chip away on the next rebuild, so the tap could only be
+      // undone by abandoning the whole edit.
+      final offered = offerableAssignees(
+        active: [tech, dispatcher],
+        alreadyAssignedIds: const ['e2'],
+      );
+      expect(offered.map((e) => e.id), contains('e2'));
+    });
+
+    test('a DISABLED assignee is never offered, even though it is stored', () {
+      // The dangerous case: a disabled assignee is absent from the active
+      // stream, so a chip for one would deselect and then be silently
+      // re-appended by mergeRetainedAssignees on save.
+      final offered = offerableAssignees(
+        active: [tech],
+        alreadyAssignedIds: const ['gone'],
+      );
+      expect(offered.map((e) => e.id), ['e1']);
+    });
+  });
+
   // I12: `assigneeNameAt` owns the positional bounds check at five call sites,
   // and the edit sheet's result flows into `mergeRetainedAssignees` and is
   // WRITTEN BACK to Firestore — yet it had no direct coverage, only whatever

@@ -626,8 +626,13 @@ the jobs.
 > non-overlapping daily windows — it has no opinion about personal or all-day. It also renders on
 > every day of the run, is visible to the employee, and is deliberately spared both the travel push
 > and the "job finished?" nag. Its limits: the **14-day cap** means a three-week holiday is two
-> blocks; only an admin can book it (the appointment forms are admin-only), so there is no request
-> step; and it counts as a job in the dashboard's workload bars and jobs-per-day.
+> blocks; and only an admin can book it (the appointment forms are admin-only), so there is no
+> request step. **The third limitation — "it counts as a job in the dashboard's workload bars and
+> jobs-per-day" — was CLOSED on 2026-08-24** by the `isDayOff` chip on the personal form: a block
+> marked time off is dropped from every job count (dots, agenda header, drawer badge, roster
+> "jobs today", the whole dashboard) while still rendering its card wearing a "Day off" chip. It
+> is not P6 and does not stand in for one — there is still no request/approve flow, no allowance,
+> no `timeOff` collection.
 >
 > **P5's availability is NOT a substitute and must not be sold as one.** `workingDays` /
 > `workStartMinutes` / `workEndMinutes` / `onCall` describe a *repeating weekly pattern*, so

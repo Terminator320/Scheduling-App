@@ -107,6 +107,20 @@ class AppointmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    // TIME OFF is not a job, so it is not a card: no crew colour bar, no fill,
+    // no shadow — a low strip that reads as a fact about the day rather than
+    // an item in the list. It lives HERE rather than at the call sites because
+    // `AppointmentCard` is the one appointment card, so every surface that
+    // renders appointments gets the same treatment for free.
+    if (appointment.isTimeOff) {
+      return _DayOffStrip(
+        appointment: appointment,
+        crew: crew,
+        onTap: onTap,
+      );
+    }
+
     final model = _CardModel.from(context, this);
 
     final card = TapScale(
@@ -189,6 +203,7 @@ class AppointmentCard extends StatelessWidget {
     final titleRow = _TitleRow(
       title: appointment.title,
       status: model.status,
+      isTimeOff: model.isTimeOff,
       compact: model.compact,
       isCancelled: model.isCancelled,
       hasPhotos: model.hasPhotos,
@@ -270,6 +285,110 @@ class AppointmentCard extends StatelessWidget {
   }
 }
 
+/// A day off, in place of the card.
+///
+/// Reads `<avatar> <name> is off ............ DAY OFF`, and once the last day
+/// has passed, `<name> was off` with the Complete chip a finished job wears —
+/// see [AppointmentRecord.displayStatusAt], which derives that from the clock
+/// rather than from any write. The crew colour survives only as the avatar,
+/// which is identity; the BAR is what says "a crew is on this job", and a day
+/// off has no job to be on.
+class _DayOffStrip extends StatelessWidget {
+  const _DayOffStrip({
+    required this.appointment,
+    required this.crew,
+    required this.onTap,
+  });
+
+  final AppointmentRecord appointment;
+  final List<AppointmentCrew> crew;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final l10n = context.l10n;
+    final displayStatus = AppointmentStatus.fromRaw(appointment.displayStatus);
+    final isOver = displayStatus.isTerminal;
+    // The crew is who the block is FOR, so it names them rather than the
+    // title — a day off usually has none typed, and an untitled one would
+    // otherwise read "Personal".
+    final name = _crewLabel(context) ?? appointment.title.trim();
+    final sentence = isOver
+        ? l10n.calendar_dayOffWasOff(name)
+        : l10n.calendar_dayOffIsOff(name);
+    final lead = crew.isEmpty ? null : crew.first;
+
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+        child: Semantics(
+          label: '$sentence, ${l10n.calendar_dayOff}',
+          excludeSemantics: true,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sp12,
+              vertical: AppSpacing.sp8,
+            ),
+            decoration: BoxDecoration(
+              color: theme.statusColors.neutralContainer,
+              borderRadius: BorderRadius.circular(AppRadius.r12),
+            ),
+            child: Row(
+              children: [
+                if (lead != null) ...[
+                  Opacity(
+                    opacity: isOver ? 0.55 : 1,
+                    child: AppAvatar(
+                      name: lead.name,
+                      color: lead.color,
+                      size: AvatarSize.xs,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sp8),
+                ],
+                Expanded(
+                  child: Text(
+                    sentence,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: isOver
+                          ? theme.palette.textTertiary
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sp8),
+                // The finished state borrows the job chip so "done" looks the
+                // same everywhere; the open state is a caption, not a status.
+                if (isOver)
+                  StatusChip(status: displayStatus)
+                else
+                  Text(
+                    l10n.calendar_dayOff.toUpperCase(),
+                    style: theme.monoType.groupLabel,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// `Marc Tremblay` for one assignee, `Marc Tremblay +1` for more.
+  String? _crewLabel(BuildContext context) {
+    if (crew.isEmpty) return null;
+    final first = crew.first.name.trim();
+    if (crew.length == 1) return first;
+    return context.l10n.calendar_crewPlusOthers(first, crew.length - 1);
+  }
+}
+
 /// Everything `build` derives before it builds anything: the three variant
 /// flags (compact / collapsed / cancelled), the two composed strings and the
 /// spoken label.
@@ -280,6 +399,7 @@ class AppointmentCard extends StatelessWidget {
 class _CardModel {
   const _CardModel({
     required this.status,
+    required this.isTimeOff,
     required this.compact,
     required this.collapsed,
     required this.isCancelled,
@@ -306,6 +426,7 @@ class _CardModel {
 
     return _CardModel(
       status: status,
+      isTimeOff: appointment.isTimeOff,
       compact: context.isCompact,
       collapsed: card.collapseWhenClosed && appointment.isClosed,
       isCancelled: card.dimWhenCancelled && status.isCancelled,
@@ -329,6 +450,11 @@ class _CardModel {
   }
 
   final AppointmentStatus status;
+
+  /// Time off wears a "Day off" chip where the status normally sits — the card
+  /// still renders in full, it just isn't work. See
+  /// [AppointmentRecord.isTimeOff].
+  final bool isTimeOff;
   final bool compact;
   final bool collapsed;
   final bool isCancelled;
@@ -342,6 +468,7 @@ class _TitleRow extends StatelessWidget {
   const _TitleRow({
     required this.title,
     required this.status,
+    required this.isTimeOff,
     required this.compact,
     required this.isCancelled,
     required this.hasPhotos,
@@ -349,6 +476,7 @@ class _TitleRow extends StatelessWidget {
 
   final String title;
   final AppointmentStatus status;
+  final bool isTimeOff;
   final bool compact;
   final bool isCancelled;
   final bool hasPhotos;

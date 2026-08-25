@@ -33,6 +33,13 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     // range query, sort and index keeps working — this flag only changes how
     // the day is SHOWN.
     @Default(false) bool isAllDay,
+    // Time off rather than work: a personal block the crew is AWAY for. Only
+    // meaningful alongside `isPersonal` — read it through [isTimeOff], never
+    // raw. Until P6 ships a real `timeOff` collection, a personal all-day
+    // block is how an absence is booked (see the P6 stopgap in
+    // `docs/plans/2026-07-29-redesign-program.md`), and this flag is what
+    // stops that stopgap counting as work in the job tallies.
+    @Default(false) bool isDayOff,
     @Default(RepeatInterval.none) RepeatInterval repeat,
     // Links the occurrences of one repeat series (the first visit's doc id).
     @Default('') String seriesId,
@@ -76,6 +83,7 @@ abstract class AppointmentRecord with _$AppointmentRecord {
       status: (data['status'] ?? 'pending').toString(),
       isPersonal: data['isPersonal'] == true,
       isAllDay: data['isAllDay'] == true,
+      isDayOff: data['isDayOff'] == true,
       repeat: RepeatInterval.fromRaw((data['repeat'] ?? '').toString()),
       seriesId: (data['seriesId'] ?? '').toString(),
       createdAt: firestoreDateTime(data['createdAt']),
@@ -95,6 +103,22 @@ abstract class AppointmentRecord with _$AppointmentRecord {
   /// subcollection. The detail sheet reads `appointments/{id}/images`
   /// unconditionally for exactly that reason.
   bool get hasPictures => pictureCount > 0;
+
+  /// This block is time off, not work — the ONE owner of that question.
+  ///
+  /// Every job COUNT filters on this (the month grid's dots and their
+  /// semantics count, the agenda header, the drawer badge, the roster's "jobs
+  /// today", the dashboard's reducers) while every CARD surface still renders
+  /// it, wearing a "Day off" chip in place of its status. That split is the
+  /// whole feature: an absence must not read as billable work, and must still
+  /// be visible to whoever is looking at the day.
+  ///
+  /// It is `isPersonal && isDayOff`, never the stored flag alone: a client
+  /// visit carrying a stray `isDayOff` (a console edit, a future import) would
+  /// otherwise vanish from every tally with nothing on screen explaining why.
+  /// Deliberately NOT filtered out of `findBusyEmployees` — booking time off is
+  /// exactly how someone is made to read as unavailable.
+  bool get isTimeOff => isPersonal && isDayOff;
 
   /// Anything unparseable reads as 0 rather than throwing: this feeds a
   /// display affordance, not a decision.
@@ -119,6 +143,7 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     'status': status,
     'isPersonal': isPersonal,
     'isAllDay': isAllDay,
+    'isDayOff': isDayOff,
     'repeat': repeat.raw,
     'seriesId': seriesId,
   };
@@ -144,6 +169,15 @@ abstract class AppointmentRecord with _$AppointmentRecord {
   /// Scheduled on its card and Overdue on the dashboard.
   String displayStatusAt(DateTime now) {
     if (isClosed) return status;
+    // TIME OFF completes itself at the end of its last day. It has no
+    // "Mark as complete" button — nothing about a day off is finished by a
+    // person — so without this it would read as upcoming forever, including in
+    // the past. Derived, never stored, exactly like `overdue`: no sweep, no
+    // write, and it cannot be late or wrong.
+    //
+    // ABOVE the isPersonal return below, which a day off would otherwise hit
+    // first and leave on its stored status.
+    if (isTimeOff) return now.isAfter(endTime) ? 'done' : status;
     // A personal block is not a job being worked: it stays on its stored
     // status (which reads "Scheduled") instead of flipping to In Progress at
     // its start and Overdue at its end. The server's overdue sweep skips these
@@ -153,7 +187,6 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     if (now.isAfter(startTime)) return 'in_progress';
     return status;
   }
-
 }
 
 /// How many days beyond today the two off-screen schedule mirrors fetch.

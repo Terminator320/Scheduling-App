@@ -133,6 +133,10 @@ abstract class EmployeeRecord with _$EmployeeRecord {
   );
 
   bool get isAdmin => role == 'admin';
+
+  /// Crew — someone a job can be assigned to. See [JobTitle.isAssignable].
+  bool get isAssignable => jobTitle.isAssignable;
+
   bool get isActive => status == 'active';
   bool get isDisabled => status == 'disabled';
 

@@ -110,6 +110,64 @@ void main() {
       expect(restored.seriesId, 'series-1');
     });
 
+    test('toMap → fromMap roundtrip preserves the day-off flag', () {
+      final original = AppointmentRecord(
+        id: 'a1',
+        startTime: start,
+        endTime: end,
+        isPersonal: true,
+        isDayOff: true,
+      );
+      final restored = AppointmentRecord.fromMap('a1', original.toMap());
+      expect(restored.isDayOff, isTrue);
+      expect(restored.isTimeOff, isTrue);
+    });
+
+    test('a day off completes itself once its last day has passed', () {
+      // Derived, never stored — there is no Complete button on a day off, so
+      // the end of the span is what closes it.
+      final dayOff = AppointmentRecord(
+        id: 'a1',
+        startTime: DateTime(2026, 5, 10),
+        endTime: DateTime(2026, 5, 10, 23, 59),
+        isPersonal: true,
+        isDayOff: true,
+      );
+      expect(dayOff.displayStatusAt(DateTime(2026, 5, 10, 12)), 'pending');
+      expect(dayOff.displayStatusAt(DateTime(2026, 5, 11)), 'done');
+      // The STORED status never moves.
+      expect(dayOff.status, 'pending');
+    });
+
+    test('an ordinary personal block still never derives a status', () {
+      // The day-off branch must not swallow the isPersonal carve-out beneath
+      // it: a dentist appointment past its end is not "done", and asking
+      // "job finished?" about one is the wrong question.
+      final personal = AppointmentRecord(
+        id: 'a1',
+        startTime: DateTime(2026, 5, 10, 9),
+        endTime: DateTime(2026, 5, 10, 10),
+        isPersonal: true,
+      );
+      expect(personal.displayStatusAt(DateTime(2026, 5, 11)), 'pending');
+    });
+
+    test('isTimeOff needs BOTH flags', () {
+      // A client visit carrying a stray isDayOff — a console edit, an import —
+      // must not vanish from the job counts with nothing on screen saying why.
+      final strayFlag = AppointmentRecord(
+        id: 'a1',
+        startTime: start,
+        endTime: end,
+        isDayOff: true,
+      );
+      expect(strayFlag.isTimeOff, isFalse);
+      expect(
+        strayFlag.copyWith(isPersonal: true, isDayOff: false).isTimeOff,
+        isFalse,
+      );
+    });
+
     test('fromMap defaults missing or unknown repeat to none', () {
       expect(
         AppointmentRecord.fromMap('a1', const {}).repeat,

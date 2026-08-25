@@ -91,10 +91,12 @@ final employeeNameMapProvider = Provider<Map<String, String>>(
 
 /// Active employees only.
 ///
-/// `autoDispose`, because its consumers are transient — the two appointment
-/// sheets and the Dashboard. Without it, opening the add-appointment sheet
-/// ONCE attached a second live `users` listener (alongside the always-on
-/// `watchAllUsers()`) for the rest of the session.
+/// `autoDispose`, because its consumers are transient — the appointment edit
+/// sheet directly, and the add sheet plus the Dashboard through
+/// [assignableEmployeesProvider], which derives from this one and so keeps its
+/// subscription. Without it, opening the add-appointment sheet ONCE attached a
+/// second live `users` listener (alongside the always-on `watchAllUsers()`) for
+/// the rest of the session.
 ///
 /// Deliberately NOT derived from `allUsersStreamProvider`: that one includes
 /// invited and disabled accounts for admin roster surfaces, while this one is
@@ -107,6 +109,30 @@ final employeesStreamProvider =
         return ref.watch(employeesRepositoryProvider).watchEmployees();
       });
     });
+
+/// Active employees a job can actually be assigned to — [employeesStreamProvider]
+/// minus the titles that aren't crew (today: dispatcher).
+///
+/// The assignee picker and the dashboard's per-person job numbers read THIS
+/// one; anything that manages accounts rather than crew keeps reading the
+/// unfiltered stream. Deliberately derived rather than filtered inside
+/// `employeesStreamProvider`: "active" and "assignable" are two questions, and
+/// the retain path in `EventDetailsController._resolveActiveEmployees` asks
+/// the first one straight from the repository — a dispatcher already stored on
+/// a job must still read as ACTIVE there, or `mergeRetainedAssignees` would
+/// treat a deliberate removal as an assignee the picker couldn't show and put
+/// them straight back.
+final assignableEmployeesProvider =
+    Provider.autoDispose<AsyncValue<List<EmployeeRecord>>>(
+      (ref) => ref
+          .watch(employeesStreamProvider)
+          .whenData(
+            (employees) => [
+              for (final e in employees)
+                if (e.isAssignable) e,
+            ],
+          ),
+    );
 
 typedef _EmployeeSearchEntry = ({
   EmployeeRecord employee,
