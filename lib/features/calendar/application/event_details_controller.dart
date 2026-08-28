@@ -378,10 +378,49 @@ class EventDetailsController extends Notifier<EventDetailsState>
     return _setStatusOnRepo(appointment, 'done');
   }
 
+  /// Writes `status: 'cancelled'`. With [includeFuture], also cancels the
+  /// non-terminal days of this RUN that come after it, in one batch.
+  ///
+  /// [markAsDone] deliberately has no such option: closing one day and leaving
+  /// the rest open is the entire reason a multi-day job is separate documents.
   Future<EventDetailsActionOutcome> cancelAppointment(
-    AppointmentRecord appointment,
-  ) {
-    return _setStatusOnRepo(appointment, 'cancelled');
+    AppointmentRecord appointment, {
+    bool includeFuture = false,
+  }) async {
+    final id = appointment.id;
+    if (id == null) {
+      return EventDetailsActionFailed(StateError('appointment has no id'));
+    }
+    if (!includeFuture || appointment.seriesId.isEmpty) {
+      return _setStatusOnRepo(appointment, 'cancelled');
+    }
+    // Same reentrancy guard the single-document path uses, set synchronously
+    // before the first await — without it a double-tap pays for getSeries and
+    // the batch twice.
+    if (state.isSaving) return const EventDetailsActionBusy();
+    state = state.copyWith(isSaving: true);
+    // Resolved before the first await: Riverpod 3 throws on `ref.read` from an
+    // unmounted consumer, and the sheet can be dismissed mid-flight.
+    final repo = ref.read(appointmentsRepositoryProvider);
+    final logger = ref.read(loggerProvider);
+    try {
+      final series = await repo.getSeries(appointment.seriesId);
+      final futureIds = futureSeriesIds(
+        series,
+        excludeId: id,
+        after: appointment.startTime,
+      );
+      await repo.updateAppointmentStatuses(
+        ids: [id, ...futureIds],
+        status: 'cancelled',
+      );
+      if (ref.mounted) state = state.copyWith(isSaving: false);
+      return const EventDetailsActionOk();
+    } catch (e, st) {
+      logger.warn('APPT-STATUS cancel run tail failed', e, st);
+      if (ref.mounted) state = state.copyWith(isSaving: false);
+      return EventDetailsActionFailed(e);
+    }
   }
 
   Future<EventDetailsActionOutcome> _setStatusOnRepo(

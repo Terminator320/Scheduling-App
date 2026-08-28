@@ -1326,4 +1326,88 @@ void main() {
       );
     });
   });
+
+  group('per-day completion', () {
+    List<AppointmentRecord> runOf(int days) => [
+      for (var i = 1; i <= days; i++)
+        AppointmentRecord(
+          id: 'd$i',
+          seriesId: 'd1',
+          dayIndex: i,
+          dayCount: days,
+          startTime: DateTime(2026, 8, 2 + i, 9),
+          endTime: DateTime(2026, 8, 2 + i, 17),
+        ),
+    ];
+
+    EventDetailsController notifierFor(AppointmentRecord a) =>
+        container.read(eventDetailsControllerProvider(EventDetailsKey(a)).notifier);
+
+    test('marking one day done leaves the rest of the run untouched', () async {
+      final run = runOf(5);
+      final outcome = await notifierFor(run[2]).markAsDone(run[2]);
+
+      expect(outcome, isA<EventDetailsActionOk>());
+      // THE regression this whole change exists to prevent: one document, one
+      // status. Do not delete.
+      verify(
+        () => appointments.updateAppointmentStatus(id: 'd3', status: 'done'),
+      ).called(1);
+      verifyNever(
+        () => appointments.updateAppointmentStatuses(
+          ids: any(named: 'ids'),
+          status: any(named: 'status'),
+        ),
+      );
+    });
+
+    test('cancelling with the run scope closes this day and the ones after',
+        () async {
+      final run = runOf(5);
+      when(() => appointments.getSeries('d1')).thenAnswer((_) async => run);
+      when(
+        () => appointments.updateAppointmentStatuses(
+          ids: any(named: 'ids'),
+          status: any(named: 'status'),
+        ),
+      ).thenAnswer((_) async {});
+
+      final outcome = await notifierFor(
+        run[2],
+      ).cancelAppointment(run[2], includeFuture: true);
+
+      expect(outcome, isA<EventDetailsActionOk>());
+      final ids = verify(
+        () => appointments.updateAppointmentStatuses(
+          ids: captureAny(named: 'ids'),
+          status: 'cancelled',
+        ),
+      ).captured.single as List<String>;
+      expect(ids, ['d3', 'd4', 'd5']);
+    });
+
+    test('cancelling without the run scope closes only this day', () async {
+      final run = runOf(3);
+      final outcome = await notifierFor(run.first).cancelAppointment(run.first);
+
+      expect(outcome, isA<EventDetailsActionOk>());
+      verify(
+        () =>
+            appointments.updateAppointmentStatus(id: 'd1', status: 'cancelled'),
+      ).called(1);
+      verifyNever(() => appointments.getSeries(any()));
+    });
+
+    test('a run cancel is skipped while one is already in flight', () async {
+      final run = runOf(3);
+      when(() => appointments.getSeries('d1')).thenAnswer((_) async => run);
+      final notifier = notifierFor(run.first)..setSaving(busy: true);
+
+      expect(
+        await notifier.cancelAppointment(run.first, includeFuture: true),
+        isA<EventDetailsActionBusy>(),
+      );
+      verifyNever(() => appointments.getSeries(any()));
+    });
+  });
 }
