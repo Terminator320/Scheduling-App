@@ -3,6 +3,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
+import 'package:scheduling/features/maps/domain/address_parser.dart';
 
 part 'client_record.freezed.dart';
 
@@ -123,6 +124,35 @@ abstract class ClientRecord with _$ClientRecord {
       waveSyncError: wave?['syncError']?.toString(),
     );
   }
+
+  /// The whole address on one line, rebuilt from the street plus the
+  /// structured locality fields — what every surface that shows an address or
+  /// hands one to a maps app wants.
+  ///
+  /// The owner exists because the composition takes FIVE fields off this
+  /// record and is needed at six call sites; spelled by hand it is six chances
+  /// to omit one and silently ship an address missing its city. Safe on both
+  /// stored shapes — see [AddressParser.composeFull].
+  String get fullAddress => AddressParser.composeFull(
+    address,
+    city: city,
+    province: province,
+    postalCode: postalCode,
+    country: country,
+  );
+
+  /// Just the street line, apt rendered as "#4" — for the two places that own
+  /// the locality fields separately and must not repeat them: the edit form's
+  /// address box and the exported contact card.
+  String get streetLine => AddressParser.canonicalToDisplay(
+    AddressParser.streetOnly(
+      address,
+      city: city,
+      province: province,
+      postalCode: postalCode,
+      country: country,
+    ),
+  );
 
   /// User-owned fields only. `waveCustomerId`/`wave`/`jobCount` are function-owned
   /// and get rejected by the update rule, so they're left out here.

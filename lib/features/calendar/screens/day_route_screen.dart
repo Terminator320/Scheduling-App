@@ -34,10 +34,10 @@ import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// A job is still "to drive to" — it gets a number and a spot in the route — as long as its status isn't terminal yet.
+/// True while a job still belongs in the driving route.
 bool _isOpen(String status) => !AppointmentStatus.fromRaw(status).isTerminal;
 
-/// Shows a day's jobs as a numbered route timeline with per-stop navigation. Admins can also pick which employee's route to view.
+/// Shows a day's jobs as a numbered route timeline.
 class DayRouteScreen extends ConsumerStatefulWidget {
   const DayRouteScreen({
     required this.isAdmin,
@@ -67,7 +67,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     _selectedEmployeeId = widget.employeeId;
   }
 
-  // Fall back to the first assignee if switching days leaves the selection empty. Non-admins always view their own jobs anyway.
+  // Keep admin selection valid for the current day.
   String _resolveEmployeeId(List<String> assigneeIds) {
     if (!widget.isAdmin) return widget.employeeId;
     if (assigneeIds.isEmpty) return _selectedEmployeeId;
@@ -76,7 +76,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         : assigneeIds.first;
   }
 
-  // Only fire on the data→error transition — .when would otherwise re-fire this on every rebuild while the stream stays errored.
+  // Report only the first data-to-error transition.
   void _onAppointmentsAsyncChange(
     AsyncValue<List<AppointmentRecord>>? previous,
     AsyncValue<List<AppointmentRecord>> next,
@@ -109,12 +109,10 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // A WEEK window, not a day: `_prepareBuild` re-scopes to `_day` with
-    // `sliceFor` regardless, and a per-day range would mint a new provider key
-    // — and a new 15-day Firestore query — on every ◀/▶ tap.
+    // Use a week bucket so day switching reuses the same range listener.
     final range = AppointmentDateRange.forWeekBucketOf(_day);
 
-    // Admins read the whole day's appointments so the employee picker has something to show. Employees just read their own visible jobs.
+    // Admins need the whole day for the employee picker.
     final provider = widget.isAdmin
         ? appointmentsInRangeProvider(range)
         : myAppointmentsProvider((employeeId: widget.employeeId, range: range));
@@ -130,8 +128,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
       scope: _tour.scope,
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
-      // Gated on the data: an ungated start would target the loading
-      // skeletons and mark the screen seen against them.
+      // Wait for real rows before starting the tour.
       ready: async is AsyncData<List<AppointmentRecord>>,
       child: _buildScaffold(async, data),
     );
@@ -156,17 +153,14 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         TourStepId.dayRouteNavigate,
         _routeButton(data.stops),
       ),
-      // A pushed route sits above the hub tabs' scopes, so it needs its own
-      // or it attaches to the root PrimaryScrollController alongside any
-      // other pushed route.
+      // Pushed routes need their own primary scroll scope.
       body: PrimaryScrollScope(
         child: SafeArea(
           top: false,
           child: Column(
             children: [
               _tour.stepIf(TourStepId.dayRouteDaySwitcher, _daySwitcher()),
-              // Absent on a day with no assignees, and for employees —
-              // isTargetRendered skips the step rather than failing.
+              // Missing steps are skipped by the tour host.
               if (widget.isAdmin && data.assigneeEntries.isNotEmpty)
                 _tour.stepIf(
                   TourStepId.dayRouteEmployee,
@@ -186,20 +180,13 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
   }
 
   _DayRouteData? _preparedData;
-  // What _preparedData was last derived from. Everything _prepareBuild reads
-  // is remembered here, so adding an input means adding a field.
+  // Inputs used to derive _preparedData.
   List<AppointmentRecord>? _preparedSource;
   Map<String, String>? _preparedNameMap;
   DateTime? _preparedDay;
   String? _preparedEmployeeId;
 
-  // Derives the render-ready slice of the day from the raw appointments:
-  // filter+sort into driving order, resolve which assignee's route to show,
-  // then the jobs for that assignee and their navigable stops.
-  //
-  // Memoized on its inputs the same way `_refreshDayIndex` is on the calendar
-  // screen: the source is the ~14-day range-stream superset, and every
-  // setState, `currentDayProvider` tick and name-map emission rebuilds.
+  // Derives and memoizes the render-ready route data.
   _DayRouteData _prepareBuild(
     List<AppointmentRecord> source,
     Map<String, String> nameMap,
@@ -213,8 +200,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
       return cached;
     }
 
-    // Re-scoped to `_day`: the range stream is a 14-day superset — see runsOn.
-    // Slices, not records, so a continuing job carries THAT day's window.
+    // Re-scope the range stream to this day.
     final daySlices =
         source
             .where((a) => !AppointmentStatus.fromRaw(a.status).isCancelled)
@@ -224,7 +210,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
           // Sort defensively to keep numbering and the route in driving order.
           ..sort((a, b) => a.windowStart.compareTo(b.windowStart));
 
-    // Collect the distinct employees assigned that day, falling back to the denormalized names for anyone who's since been removed.
+    // Include removed employees by falling back to denormalized names.
     final assigneeEntries = widget.isAdmin
         ? _assigneesWithJobs(daySlices, nameMap)
         : const <MapEntry<String, String>>[];
@@ -232,7 +218,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
       for (final e in assigneeEntries) e.key,
     ]);
 
-    // For admins, filter the whole-day list down to the picked assignee. The employee's own query is already scoped, so nothing more to do there.
+    // Admins filter the day list to the picked assignee.
     final jobs = widget.isAdmin
         ? daySlices
               .where((s) => s.appointment.employeeIds.contains(employeeId))
@@ -259,7 +245,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     );
   }
 
-  // Distinct id → display name for every employee assigned to a job that day.
+  // Distinct assignees for the selected day.
   List<MapEntry<String, String>> _assigneesWithJobs(
     List<AppointmentDaySlice> daySlices,
     Map<String, String> nameMap,
@@ -297,11 +283,9 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
   Widget _daySwitcher() {
     final l10n = context.l10n;
     final theme = Theme.of(context);
-    // The one day-header formatter, memoized per locale — the calendar agenda,
-    // history day groups and dashboard hero all render through it too.
+    // Shared day-header formatter.
     final label = DateUtilsHelper.formatDayHeader(_day);
-    // `currentDayProvider`, never `DateTime.now()` — otherwise the jump-to-today
-    // control below sticks on yesterday in an app left open across midnight.
+    // Watch currentDayProvider so midnight updates the button.
     final isToday = _day == ref.watch(currentDayProvider);
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -471,7 +455,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
       );
     }
 
-    // Number only open stops, in time (list) order; done stops get a ✓ badge.
+    // Number only open stops.
     final numbers = <int?>[];
     var open = 0;
     for (final j in jobs) {
@@ -533,12 +517,11 @@ class _StopTile extends StatelessWidget {
     required this.isAdmin,
   });
 
-  /// This stop as it runs on the day being shown — day 3 of a run carries that
-  /// day's own window, not the run's first morning.
+  /// This stop as it runs on the selected day.
   final AppointmentDaySlice slice;
   final int? number;
 
-  /// The route's own employee — the rail badge, not the card's crew bar.
+  /// The route employee color for the rail badge.
   final Color employeeColor;
   final List<AppointmentCrew> crew;
   final bool showConnector;

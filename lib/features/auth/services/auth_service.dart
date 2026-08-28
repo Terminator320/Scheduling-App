@@ -57,18 +57,7 @@ class AuthService {
     return _auth.sendPasswordResetEmail(email: normalizeEmail(email));
   }
 
-  /// Completes the signed-in employee's own account setup.
-  ///
-  /// ORDER IS THE GUARANTEE. The password is replaced FIRST, then the account
-  /// is activated. The server cannot see a password, so "you must replace the
-  /// starting password" is true only because activation is refused until this
-  /// method gets past [User.updatePassword]. Swap the two and an interrupted
-  /// setup leaves an active account still on the starting password the admin
-  /// read out.
-  ///
-  /// A failure after the password change is safe: the account stays `invited`,
-  /// so the next sign-in routes back here and simply asks again — the screen
-  /// never assumes the current password is still the starting one.
+  /// Replaces the starting password before activating the signed-in employee.
   Future<void> completeAccountSetup({
     required String newPassword,
     String firstName = '',
@@ -105,10 +94,7 @@ class AuthService {
       );
     } catch (e, st) {
       final failure = _mapSetupError(e);
-      // No rollback of the password change: the new password is the one the
-      // person just chose and typed twice. Reverting it to the generated
-      // starting password would be strictly worse than leaving them `invited`
-      // with a password that works.
+      // Keep the chosen password even if activation fails.
       _logger.authFailure(
         'completeAccountSetup: completeEmployeeSetup failed',
         failure,
@@ -119,30 +105,7 @@ class AuthService {
     }
   }
 
-  /// Refuses a "new" password that is the one the admin issued.
-  ///
-  /// The client never sees the generated starting password, so it cannot be
-  /// compared as a string — but it can be TESTED: reauthenticating with the
-  /// typed value succeeds only while that value is still the account's current
-  /// credential. Success therefore means they retyped what they were given.
-  ///
-  /// Without this, setup completes on an unchanged password and the account
-  /// goes `active` on a credential the admin (and anyone they read it aloud to)
-  /// still holds. Every generated password satisfies the setup validator by
-  /// construction — 12 characters with an uppercase, a lowercase and a digit is
-  /// exactly `PasswordRequirement.allMetBy` now that `symbol` is gone — so
-  /// nothing else on this screen can catch it. It replaces the deleted
-  /// `kDefaultStartingPassword` comparison, which only worked while the
-  /// starting password was a shared constant.
-  ///
-  /// Checked HERE rather than on the screen so it covers both routes into
-  /// setup: sign-in (which holds the typed password) and a cold start through
-  /// `SplashScreen` (which does not).
-  ///
-  /// A wrong-password refusal is the PASS case. Anything else is a real
-  /// failure and is mapped normally — never swallowed into "looks different",
-  /// which would let the case this exists for through whenever the network
-  /// hiccuped.
+  /// Refuses a setup password that is still the admin-issued credential.
   Future<void> _refuseIfStillTheStartingPassword(
     User user,
     String candidate,
@@ -173,27 +136,17 @@ class AuthService {
     throw failure;
   }
 
-  /// The codes Firebase uses for "that password is not this account's".
-  /// `invalid-credential` is the modern umbrella code and is what current
-  /// Identity Platform returns; the other two still arrive from older SDK
-  /// paths. Missing one would turn the pass case into a hard failure that
-  /// blocks setup entirely, so all three are listed.
+  /// Firebase codes that mean the candidate is not the current password.
   static bool _isWrongPasswordCode(String code) =>
       code == 'wrong-password' ||
       code == 'invalid-credential' ||
       code == 'invalid-login-credentials';
 
-  /// Only the codes whose meaning CHANGES during setup are handled here;
-  /// everything else falls through to the shared [AuthErrorMapper] rather than
-  /// being re-tabulated. A second copy of that table would silently bucket any
-  /// code it forgot into `AuthFailureUnknown`, which is `isExpected: false` and
-  /// so files a Crashlytics non-fatal for an ordinary user mistake.
+  /// Maps setup-only auth failures before falling back to the shared mapper.
   AuthFailure _mapSetupError(Object e) {
     if (e is FirebaseAuthException) {
       switch (e.code) {
-        // The shared mapper calls these "requires recent login" / "no such
-        // user"; mid-setup they all mean the same thing to the person, which
-        // is that the session backing this screen is gone.
+        // Mid-setup, these all mean the setup session is gone.
         case 'requires-recent-login':
         case 'user-token-expired':
         case 'user-not-found':
@@ -201,21 +154,14 @@ class AuthService {
       }
     }
     if (e is FirebaseFunctionsException) {
-      // The account was already activated — a replayed call, or two devices
-      // finishing setup at once. The password change above still landed, so
-      // this is not something to make the person fix.
+      // Replayed setup completion is already successful for the user.
       if (e.message == 'setup-not-pending') {
         return const AuthFailureSetupAlreadyComplete();
       }
       if (e.message == 'account-not-found') {
         return const AuthFailureNoAccountRecord();
       }
-      // Old-backend compatibility, and ONLY that: the guard was removed
-      // 2026-08-21, so a live backend never sends this. It survives for the
-      // rollout window in docs/DEPLOYMENT.md §3 — a backend rolled back under
-      // a shipped app build — where without it the code falls through to
-      // AuthFailureUnknown, whose isExpected is false, and every retry by a
-      // person who cannot possibly succeed files a Crashlytics non-fatal.
+      // Old-backend compatibility for the setup availability guard.
       if (e.message == 'email-not-verified') {
         return const AuthFailureSetupNotAvailableYet();
       }

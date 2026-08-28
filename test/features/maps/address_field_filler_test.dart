@@ -42,11 +42,15 @@ void main() {
 
   const full = '123 Rue Principale, Montreal, QC H3Z 2Y7, Canada';
 
-  // Note `AddressParser` only reports a `street` when there is an apt to split
-  // out of it; on a plain address it returns null and the street controller is
-  // left as-is. That is the parser's contract, not this function's, but it is
-  // what makes the street cases below use the apt-bearing input.
+  // `AddressParser.parse` only reports a `street` when there is an apt to split
+  // out of it — on a plain address it returns null. This function no longer
+  // leans on that: it falls back to the raw text and reduces either one through
+  // `streetOnly`, because that null is exactly what used to leave the whole
+  // picked string sitting in the address box.
   const withApt = '123 Rue Principale, Apt 12, Montreal, QC H3Z 2Y7, Canada';
+
+  // What both fixtures reduce to once the locality is in its own boxes.
+  const street = '123 Rue Principale';
 
   test('fills every empty field from a picked address', () {
     fill(full);
@@ -82,17 +86,32 @@ void main() {
     expect(apt.text, '12');
   });
 
+  test('STRIPS the locality the other boxes are about to receive', () {
+    // The bug this function had: the street box kept the whole picked string
+    // while city/province/postal/country each got a copy of their part, so
+    // every locality value was stored twice and the two could drift apart.
+    fill(full);
+    expect(address.text, street);
+    expect(city.text, 'Montreal');
+  });
+
+  test('strips it on an apt-bearing address too', () {
+    // Different parser path — `parse` reports a street here — same result.
+    fill(withApt);
+    expect(address.text, street);
+    expect(apt.text, '12');
+  });
+
   test('leaves the street controller alone when it already matches', () {
     // Rewriting it would move the caret in a field being edited.
-    const parsedStreet = '123 Rue Principale,, Montreal, QC H3Z 2Y7, Canada';
     address.value = const TextEditingValue(
-      text: parsedStreet,
+      text: street,
       selection: TextSelection.collapsed(offset: 4),
     );
 
     fill(withApt);
 
-    expect(address.text, parsedStreet);
+    expect(address.text, street);
     expect(address.selection.baseOffset, 4);
   });
 

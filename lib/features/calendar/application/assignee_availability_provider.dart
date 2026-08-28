@@ -6,46 +6,14 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
-/// The span an assignee picker is asking about. A record, so the family key is
-/// compared by value and two identical asks share one entry.
+/// Value-keyed span an assignee picker is checking.
 typedef AssigneeClashSpan = ({
   DateTime start,
   DateTime end,
   String? excludeAppointmentId,
 });
 
-/// Who can't take a job running over [AssigneeClashSpan], keyed by employee doc
-/// id.
-///
-/// **Live where it can be, one-shot where it can't.** When the span sits inside
-/// the range the calendar already holds open (`openCalendarRangeProvider`) this
-/// reduces THAT stream in Dart — zero extra reads and genuinely live, the way
-/// `employeeJobsTodayProvider` reduces a range it does not own. Forking a
-/// second listener keyed on a span-derived range is exactly what
-/// `forWeekBucketOf` and `forMirrors` carry long comments against.
-///
-/// The fallback is not optional. Without it, picking a date past the open range
-/// makes every clash invisible and the picker silently reports everyone as
-/// free — worse than not dimming at all. It is a one-shot read, so dimming
-/// there re-resolves when the date or the times change rather than streaming.
-///
-/// **The two paths are not byte-identical on one edge case, deliberately.**
-/// `findClashingAppointments` reads the raw map, so it can see a document whose
-/// `startTime`/`endTime` will not parse and passes those ids as
-/// `windowUnknownIds` — they clash unconditionally, fail-closed. The live path
-/// reduces records the range stream has already built, and
-/// `AppointmentRecord.fromMap` substitutes `DateTime.now()` for an unparseable
-/// time, so by then the two cases are indistinguishable and no such id can be
-/// recovered. A legacy or console-written row missing a usable time is
-/// therefore fail-closed on the fallback and treated as an ordinary job on the
-/// live path. Closing the gap means having the range stream surface those ids
-/// alongside the records, not re-parsing here. Don't read the "same pure rule
-/// on both paths" claim as covering this.
-///
-/// Candidates are the ASSIGNABLE crew, resolved here rather than passed in: a
-/// list in the family key is compared by identity, so every roster emission
-/// would mint a new key. The roster stream re-runs this instead, which is free
-/// on the live path and one small query on the fallback.
+/// Returns employee ids blocked for the checked span.
 final assigneeAvailabilityProvider = FutureProvider.autoDispose
     .family<Map<String, AppointmentRecord>, AssigneeClashSpan>((
       ref,
@@ -88,9 +56,5 @@ final assigneeAvailabilityProvider = FutureProvider.autoDispose
     });
 
 /// Whether [range]'s live query already covers [span].
-///
-/// The range query reaches back `fetchStart` — `maxAppointmentSpanDays` before
-/// its start — so any job overlapping a span inside the window is already in
-/// the stream; only the span's own ends have to fall within it.
 bool _covers(AppointmentDateRange range, AssigneeClashSpan span) =>
     !span.start.isBefore(range.start) && !span.end.isAfter(range.end);

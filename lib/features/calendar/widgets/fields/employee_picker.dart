@@ -28,34 +28,28 @@ class EmployeePicker extends StatelessWidget {
   final bool selectable;
   final bool hasError;
 
-  /// When this is non-null, an error row is rendered below the chips and their borders get highlighted.
+  /// Error text that also highlights chip borders.
   final String? errorText;
   final void Function(EmployeeRecord)? onToggle;
 
-  /// Who can't take the job on the chosen date, and why. Empty until a date is
-  /// picked and the lookup settles — no dimming and no divider until then, so
-  /// an unanswered question never reads as "everyone is free".
+  /// Crew conflicts for the chosen date/span.
   final AssigneeAvailability availability;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final hasError = this.hasError || errorText != null;
-    // In read-only mode the picker is a summary of who is ON the job, so the
-    // unselected staff are not rendered at all.
+    // Read-only mode shows selected staff only.
     final displayEmployees = selectable
         ? allEmployees
         : allEmployees
               .where((e) => selectedEmployees.any((s) => s.id == e.id))
               .toList();
 
-    // Hoisted, not rebuilt per chip: both inputs are the same for every
-    // employee, and `among` re-scans the roster, so inlining them made the
-    // naming pass quadratic on a widget that rebuilds on every form keystroke.
+    // Hoist shared inputs used by every chip.
     final selectedIds = {for (final e in selectedEmployees) e.id};
     final clashingIds = availability.clashes.keys.toSet();
-    // A TALLY, not the raw names: `shortAssigneeName` runs once per chip, and
-    // handing it the list made it re-split every candidate for every employee.
+    // Tally names once for short-name disambiguation.
     final names = firstNameTally([for (final e in displayEmployees) e.name]);
     final offers = [
       for (final employee in displayEmployees)

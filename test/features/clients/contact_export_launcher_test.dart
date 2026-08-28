@@ -37,7 +37,30 @@ void main() {
       expect(address.state, 'IL');
       expect(address.postalCode, '62704');
       expect(address.country, 'USA');
-      expect(address.formatted, '123 Main St, Springfield, IL, 62704, USA');
+      // Province and postal share a segment, the way an address is written —
+      // `formatted` is now the same composed string every screen shows, rather
+      // than a second hand-rolled join beside it.
+      expect(address.formatted, '123 Main St, Springfield, IL 62704, USA');
+    });
+
+    test('a legacy full-string address is not exported twice', () {
+      // The doubled vCard: `address` used to hold the locality AND the four
+      // fields held it again, so this composed every part in twice —
+      // "…, Springfield, IL 62704, USA, Springfield, IL 62704, USA".
+      const client = ClientRecord(
+        id: '9',
+        name: 'Acme Co',
+        address: '123 Main St, Springfield, IL 62704, USA',
+        city: 'Springfield',
+        province: 'IL',
+        postalCode: '62704',
+        country: 'USA',
+      );
+
+      final address = clientToContact(client).addresses.single;
+
+      expect(address.street, '123 Main St');
+      expect(address.formatted, '123 Main St, Springfield, IL 62704, USA');
     });
 
     test('falls back to the display name when there is no first/last name', () {

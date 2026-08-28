@@ -150,7 +150,7 @@ describe("patchFor leaves a BUSINESS alone", () => {
   test("by its type", () => {
     expect(patchFor(client({name: "Vogas Plumbing", type: "commercial"}),
         SINCE)).toBeNull();
-    expect(patchFor(client({name: "Les Immeubles X", type: "property_mgmt"}),
+    expect(patchFor(client({name: "Les Immeubles X", type: "building"}),
         SINCE)).toBeNull();
   });
 

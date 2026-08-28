@@ -541,9 +541,24 @@
   "@clients_typeCommercial": {
     "description": "Client type chip for a business customer"
   },
-  "clients_typePropertyManagement": "Property mgmt",
-  "@clients_typePropertyManagement": {
-    "description": "Client type chip for a property-management company"
+  "clients_filterByAddress": "Address",
+  "@clients_filterByAddress": {
+    "description": "Label on the clients list menu that filters to one shared street address"
+  },
+  "clients_buildingUnits": "{count, plural, =1{1 unit} other{{count} units}}",
+  "@clients_buildingUnits": {
+    "description": "How many clients share one street address - a pill on the client row and the subtitle of each address in the filter menu",
+    "placeholders": {
+      "count": { "type": "int" }
+    }
+  },
+  "clients_noClientsAtAddress": "No clients at this address.",
+  "@clients_noClientsAtAddress": {
+    "description": "Empty state when the address filter matches nothing"
+  },
+  "clients_typeBuilding": "Building",
+  "@clients_typeBuilding": {
+    "description": "Client type chip for an apartment or condo building customer"
   },
   "common_save": "Save",
   "@common_save": {

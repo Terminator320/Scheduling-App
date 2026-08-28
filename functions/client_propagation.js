@@ -16,6 +16,17 @@
  *   - `address` follows the client only when the appointment's stored address
  *     still equals the client's previous (non-empty) address — a differing
  *     or empty address is treated as custom/none and left untouched.
+ *     Both sides are the COMPOSED address (`composeFullAddress`), never the
+ *     stored `clients/{id}.address`, and that is load-bearing twice over.
+ *     An appointment carries ONE address string and no city/province/postal
+ *     of its own, so fanning the stored street line onto it would strip the
+ *     locality off a live job with nothing left to rebuild it from — and
+ *     normalizing the client field (street-only) has to stay a NO-OP here,
+ *     which it is, because both shapes compose to the same string. It also
+ *     fixes a matching bug that predates the split: the app books the
+ *     composed address while the doc stores the canonical `4-1234 …`, so an
+ *     apt-bearing client never matched `from` and its appointments silently
+ *     never took an address correction at all.
  *   - Only appointments with WORK LEFT are rewritten — history records what
  *     was true at the time of the visit. That is `endTime >= now`, NOT
  *     `startTime >= now`: under the daily-window model a run started up to
@@ -39,6 +50,7 @@ const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const {adminFirestore} = require("./admin_firestore");
 const {MAX_APPOINTMENT_SPAN_MS, hasWorkLeft} = require("./time_utils");
 const {clientDisplayName} = require("./client_name_utils");
+const {composeFullAddress} = require("./client_address_utils");
 
 /** Firestore WriteBatch hard limit. */
 const BATCH_LIMIT = 500;
@@ -78,8 +90,9 @@ function relevantClientChange(before, after) {
     any = true;
   }
 
-  const addrBefore = typeof b.address === "string" ? b.address.trim() : "";
-  const addrAfter = typeof a.address === "string" ? a.address.trim() : "";
+  // Composed, never the raw stored field — see the address note in the header.
+  const addrBefore = composeFullAddress(b);
+  const addrAfter = composeFullAddress(a);
   // Only propagate when the OLD address was non-empty — appointments with
   // an empty address are custom/none, and matching against "" would clobber
   // them.

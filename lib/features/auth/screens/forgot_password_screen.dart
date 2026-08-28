@@ -27,8 +27,8 @@ class ForgotPasswordScreen extends ConsumerStatefulWidget {
 }
 
 class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
-  late final AuthService _authService =
-      widget.authService ?? ref.read(authServiceProvider);
+  late final AuthService _authService;
+  late final AppLogger _logger;
   late final TextEditingController _emailController;
 
   bool _isLoading = false;
@@ -38,9 +38,13 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
   String _errorMessage = '';
   int _restartTick = 0;
 
+  String? get _feedbackMessage => _errorMessage.isEmpty ? null : _errorMessage;
+
   @override
   void initState() {
     super.initState();
+    _authService = widget.authService ?? ref.read(authServiceProvider);
+    _logger = ref.read(loggerProvider);
     _emailController = TextEditingController(text: widget.initialEmail ?? '');
   }
 
@@ -75,7 +79,7 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
       await _authService.sendPasswordResetEmail(email);
     } catch (error, st) {
       final failure = AuthErrorMapper.map(error);
-      AppLogger().authFailure(
+      _logger.authFailure(
         'auth.forgot_password reset failed',
         failure,
         error,
@@ -91,13 +95,20 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
       if (systemError != null) {
         _errorMessage = systemError;
       } else {
-        // Only the first send re-keys the switcher — a resend relabels the
-        // panel in place instead of cross-fading the whole card again.
+        // Only the first send restarts the success transition.
         if (!_emailSent) _restartTick++;
         _emailSent = true;
       }
     });
     return systemError == null;
+  }
+
+  void _clearFeedback() {
+    if (_emailError == null && _errorMessage.isEmpty) return;
+    setState(() {
+      _emailError = null;
+      _errorMessage = '';
+    });
   }
 
   Future<void> _resendEmail() async {
@@ -115,7 +126,7 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return AuthScaffold(
-      // The sent state is a flat card that stands on its own — no hero.
+      // The sent state stands on its own without a hero.
       hero: _emailSent
           ? null
           : AuthHero(
@@ -150,17 +161,10 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
           hint: context.l10n.auth_youExampleCom,
           textInputAction: TextInputAction.done,
           onSubmitted: _sendResetEmail,
-          onChanged: () {
-            if (_emailError != null || _errorMessage.isNotEmpty) {
-              setState(() {
-                _emailError = null;
-                _errorMessage = '';
-              });
-            }
-          },
+          onChanged: _clearFeedback,
         ),
         AuthBanner(
-          message: _errorMessage.isEmpty ? null : _errorMessage,
+          message: _feedbackMessage,
         ),
         const SizedBox(height: AppSpacing.sp16),
         WarningNote(
@@ -231,7 +235,7 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
             ],
           ),
           AuthBanner(
-            message: _errorMessage.isEmpty ? null : _errorMessage,
+            message: _feedbackMessage,
           ),
           const SizedBox(height: AppSpacing.sp16),
           _SentPanel(
@@ -250,8 +254,7 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
   }
 }
 
-/// Amber attention note — warning tokens, never the success palette.
-/// The two things worth knowing about a reset link, as a divided list.
+/// The two reset-link facts shown in the success state.
 class _FactPanel extends StatelessWidget {
   const _FactPanel({required this.facts});
 
@@ -300,8 +303,7 @@ class _FactPanel extends StatelessWidget {
   }
 }
 
-/// Bordered SENT panel holding the one in-place resend. Firebase throttles the
-/// rest, so the row relabels and greys after a single use rather than counting.
+/// The one in-place resend action shown after the first reset email.
 class _SentPanel extends StatelessWidget {
   const _SentPanel({
     required this.resent,

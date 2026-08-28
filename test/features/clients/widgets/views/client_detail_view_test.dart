@@ -476,7 +476,7 @@ void main() {
         ClientRecord(
           id: 'c1',
           name: 'Gestion Beauchemin',
-          type: ClientType.propertyManagement,
+          type: ClientType.building,
           createdAt: DateTime(2023, 4, 2),
         ),
       ),
@@ -484,7 +484,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Gestion Beauchemin'), findsOneWidget);
-    expect(find.text('Property mgmt · since Apr 2023'), findsOneWidget);
+    expect(find.text('Building · since Apr 2023'), findsOneWidget);
     expect(find.text('Edit'), findsOneWidget);
   });
 

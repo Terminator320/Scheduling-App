@@ -274,7 +274,7 @@ void main() {
           name: 'Gestion Immobiliere ABC',
           firstName: 'Marc',
           lastName: 'Tremblay',
-          type: ClientType.propertyManagement,
+          type: ClientType.building,
         ),
         'Gestion Immobiliere ABC',
       );
@@ -414,7 +414,7 @@ void main() {
     test('the two organization types', () {
       expect(ClientNamePolicy.isBusiness(type: ClientType.commercial), isTrue);
       expect(
-        ClientNamePolicy.isBusiness(type: ClientType.propertyManagement),
+        ClientNamePolicy.isBusiness(type: ClientType.building),
         isTrue,
       );
     });

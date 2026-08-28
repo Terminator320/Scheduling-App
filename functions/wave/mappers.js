@@ -11,6 +11,10 @@ const crypto = require("node:crypto");
 
 const {formatNanpNumber, liftPhoneFromName} =
   require("../client_name_utils");
+// The street/locality rule has ONE owner, shared with `client_propagation.js`
+// and the backfill script — it started here, and moved out when a module that
+// must not import from `wave/` needed the same answer.
+const {streetFromAddress} = require("../client_address_utils");
 
 // ---------------------------------------------------------------------------
 // Country name ↔ ISO-3166-1 alpha-2 tables
@@ -255,47 +259,6 @@ function fromCountry(country) {
 // ---------------------------------------------------------------------------
 // Exported functions
 // ---------------------------------------------------------------------------
-
-/**
- * Extracts the street line (Wave `addressLine1`) from the app's full display
- * `address` string. We strip only the trailing segments that duplicate the
- * doc's structured locality fields, rather than naively splitting on the
- * first comma — a naive split would break a street like
- * "100 Main St, Building A". Legacy docs with no locality fields keep the
- * old first-segment behavior.
- * @param {string} fullAddress Trimmed stored address display string.
- * @param {!Object} f The client document fields (for city/province/etc.).
- * @return {string} The street line.
- */
-function streetFromAddress(fullAddress, f) {
-  if (!fullAddress) return "";
-  const segments = fullAddress.split(",")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-  if (segments.length <= 1) return segments[0] || "";
-
-  const norm = (s) => s.replace(/\s+/g, " ").trim().toLowerCase();
-  const city = typeof f.city === "string" ? norm(f.city) : "";
-  const province = typeof f.province === "string" ? norm(f.province) : "";
-  const postalCode = typeof f.postalCode === "string" ?
-    norm(f.postalCode) : "";
-  const country = typeof f.country === "string" ? norm(f.country) : "";
-  const localityTails = new Set([
-    city, province, postalCode, country,
-    province && postalCode ? `${province} ${postalCode}` : "",
-  ].filter(Boolean));
-
-  // No structured locality fields to identify a tail (legacy docs): keep the
-  // historical behaviour (first segment) so a full display address doesn't
-  // dump the city into line1.
-  if (localityTails.size === 0) return segments[0];
-
-  let end = segments.length;
-  while (end > 1 && localityTails.has(norm(segments[end - 1]))) {
-    end -= 1;
-  }
-  return segments.slice(0, end).join(", ");
-}
 
 /**
  * Converts a Firestore client doc's fields to a Wave customer input for

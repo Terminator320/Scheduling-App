@@ -7,6 +7,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/application/appointment_conflict_checker.dart';
 import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
@@ -28,8 +29,7 @@ abstract class AddEventState
     DateTime? selectedDate,
     DateTime? endDate,
 
-    /// The user picked an end date explicitly, so it no longer mirrors the
-    /// start — moving the start now SHIFTS it instead of collapsing the run.
+    /// Whether the end date should move with later start-date changes.
     @Default(false) bool endDateTouched,
     TimeOfDay? selectedStartTime,
     TimeOfDay? selectedEndTime,
@@ -58,15 +58,7 @@ class AddEventInvalid extends AddEventSubmitOutcome {
   const AddEventInvalid();
 }
 
-/// A submit the reentrancy guard SKIPPED, distinct from one the validator
-/// rejected.
-///
-/// Both are no-ops at the call site today, which is exactly why the
-/// distinction had to be made in the type rather than left to a comment: a
-/// skipped write reported as `Invalid` is indistinguishable from a form that
-/// failed validation, and that is the same conflation that once let the detail
-/// sheet announce "marked as complete" without having written anything. A
-/// `Busy` outcome surfaces nothing — neither a success notice nor an error.
+/// A submit skipped by the reentrancy guard.
 class AddEventBusy extends AddEventSubmitOutcome {
   const AddEventBusy();
 }
@@ -145,12 +137,7 @@ class AddEventController extends Notifier<AddEventState>
     );
   }
 
-  /// Where the end date lands when the start moves to [date].
-  ///
-  /// Untouched, it simply mirrors the start. Touched, the run keeps its
-  /// LENGTH — a 5-day job stays 5 days rather than collapsing to one — which
-  /// is why `endDateTouched` is tracked explicitly rather than inferred from
-  /// the two dates being equal.
+  /// Returns the end date after moving the start to [date].
   DateTime _shiftedEndDate(DateTime date) {
     final previousStart = state.selectedDate;
     final previousEnd = state.endDate;
@@ -194,17 +181,7 @@ class AddEventController extends Notifier<AddEventState>
     state = state.copyWith(repeat: value);
   }
 
-  /// Marks the personal block as time off. Only reachable while the personal
-  /// switch is on — see [setPersonal], which clears it on the way off.
-  ///
-  /// Turning it ON forces all-day, because the form hides BOTH the all-day
-  /// switch and the time rows behind `isDayOff` on the premise that a day off
-  /// runs midnight to 23:59. Nothing else enforced that premise: the validator
-  /// still demanded both times whenever `!isAllDay`, so a block that reached
-  /// `isDayOff` with all-day off had no way to satisfy it and no way to show
-  /// the error — Save went permanently inert. Storing one was the other half:
-  /// a timed day off passes `selectTravelCandidates`' `isAllDay` skip and
-  /// fires a "time to leave" push on somebody's day off.
+  /// Marks a personal block as all-day time off.
   void setDayOff({required bool value}) {
     state = state.copyWith(
       isDayOff: value,
@@ -216,26 +193,18 @@ class AddEventController extends Notifier<AddEventState>
     );
   }
 
-  /// Turning this on drops any client already picked: the picker is hidden from
-  /// here on, so a retained client would be saved invisibly.
+  /// Toggles personal mode and clears hidden client-only fields.
   void setPersonal({required bool value}) {
     state = state.copyWith(
       isPersonal: value,
-      // A client visit can never be time off, and the chip is hidden from here
-      // on — a surviving flag would drop a real job out of every job count
-      // with nothing on the form left to explain it.
+      // Client visits cannot keep a hidden day-off flag.
       isDayOff: value && state.isDayOff,
       selectedClient: value ? null : state.selectedClient,
       clientResults: value ? const [] : state.clientResults,
       useCustomAddress: !value && state.useCustomAddress,
-      // The repeat picker is hidden for a personal job, so a value chosen
-      // before the switch was flipped would silently pre-book a whole series.
-      // Safe here because nothing is saved yet; the edit flow deliberately
-      // keeps its repeat, where clearing it would rewrite a live series.
+      // Personal drafts cannot carry a hidden repeat rule.
       repeat: value ? RepeatInterval.none : state.repeat,
-      // Turning Personal ON defaults an untimed block to all-day. Turning it
-      // OFF leaves the flag alone — the switch is on every job now, so an
-      // all-day CLIENT visit is a legitimate, reachable, repairable state.
+      // Untimed personal drafts default to all-day.
       isAllDay: value
           ? state.selectedStartTime == null && state.selectedEndTime == null
           : state.isAllDay,
@@ -263,9 +232,7 @@ class AddEventController extends Notifier<AddEventState>
     required String materialsNeeded,
     bool forceBusy = false,
   }) async {
-    // Guard against reentrancy: this blocks a double-tap during the conflict
-    // check and submit. `Busy`, not `Invalid` — nothing is wrong with the
-    // form, the write is simply already in flight.
+    // Double-taps are busy, not invalid form submissions.
     if (state.isSubmitting) return const AddEventBusy();
     final errors = AppointmentFormValidator.validate(
       AppointmentFormInput(
@@ -283,29 +250,23 @@ class AddEventController extends Notifier<AddEventState>
     state = state.copyWith(errors: errors);
     if (errors.isNotEmpty) return const AddEventInvalid();
 
-    // Bail out early if we're offline — otherwise Save just spins waiting for a server ack that never comes.
+    // Offline writes would wait forever for a server ack.
     if (ref.read(isOfflineProvider)) {
       return const AddEventFailed(SocketException('offline'));
     }
 
     final repo = ref.read(appointmentsRepositoryProvider);
-    // Resolve these before any awaits, so we don't crash if the notifier gets disposed mid-await (Riverpod 3).
+    // Read dependencies before any await.
     final logger = ref.read(loggerProvider);
     final uploader = ref.read(appointmentImageUploadProvider);
-    // Snapshot the state before the awaits, so it survives if the sheet gets dismissed mid-submit.
+    // Snapshot form state before async work starts.
     final images = state.selectedImages;
-    // Null for a personal job — the validator only demands a client otherwise.
+    // Personal jobs do not need a client.
     final client = state.selectedClient;
     final isPersonal = state.isPersonal;
-    // Snapshotted with it: the chip stays live through the conflict check.
-    // NOT re-ANDed with isPersonal — `setPersonal` already clears it, and
-    // `AppointmentRecord.isTimeOff` owns the conjunction on the read side.
+    // `setPersonal` already clears invalid day-off state.
     final isDayOff = state.isDayOff;
-    // The switch stays live through the conflict check, and the instants below
-    // are DERIVED from this flag — re-reading it after the round trip could
-    // write `isAllDay: true` over a 09:00–17:00 window, which reads as
-    // "All day" on the card while the travel sweep skips it and the crew gets
-    // no "time to leave" push.
+    // Times below are derived from this all-day snapshot.
     final isAllDay = state.isAllDay;
     final selectedEmployees = state.selectedEmployees;
     final repeat = state.repeat;
@@ -318,34 +279,10 @@ class AddEventController extends Notifier<AddEventState>
       endTime: state.selectedEndTime,
     );
 
-    // Set the flag before the conflict check, so the Save button disables right away.
+    // Disable Save before the conflict check starts.
     state = state.copyWith(isSubmitting: true);
 
     try {
-      // Keep the conflict check inside the try block, so an error there still
-      // resets the in-flight flag.
-      //
-      // A PERSONAL block skips it entirely: the time-off clash alert runs after
-      // the write, and it is strictly more useful — it names the jobs and
-      // offers a swap on each, where this prompt only names the person.
-      // Running both gives two dialogs about the same clash, back to back.
-      if (!forceBusy && !isPersonal) {
-        final busy = await repo.findBusyEmployees(
-          candidates: selectedEmployees,
-          start: start,
-          end: end,
-        );
-        if (busy.isNotEmpty) {
-          // This isn't an error — let the user decide whether to force through the conflicts.
-          if (ref.mounted) state = state.copyWith(isSubmitting: false);
-          return AddEventBusyEmployees(
-            busyEmployees: busy,
-            start: start,
-            end: end,
-          );
-        }
-      }
-
       final docId = repo.newDocId();
       final appointment = AppointmentRecord(
         id: docId,
@@ -355,10 +292,7 @@ class AddEventController extends Notifier<AddEventState>
         clientId: client?.id ?? '',
         clientName: client?.displayName ?? '',
         clientPhone: client?.phone ?? '',
-        // Kept on a personal job too — the address field stays on screen there
-        // as an optional one, so what saves is what the user can see. A DAY
-        // OFF is the exception: the form drops the field entirely, and a
-        // hidden field must never keep a value the form no longer shows.
+        // Day off hides the address field, so it saves blank.
         address: isDayOff ? '' : address.trim(),
         isPersonal: isPersonal,
         isDayOff: isDayOff,
@@ -371,19 +305,7 @@ class AddEventController extends Notifier<AddEventState>
         seriesId: repeat == RepeatInterval.none ? '' : docId,
       );
 
-      // A multi-day JOB books one document per day, so each day carries its own
-      // status and marking day 1 complete cannot close the rest. A PERSONAL
-      // block does not split: nothing marks a day off complete, and a fortnight
-      // of holiday fanned into 14 independently-cancellable rows makes the
-      // clash alert and the availability reducer read 14 documents where they
-      // now read one span.
-      //
-      // The run is linked by `seriesId` = day 1's doc id, the SAME field a
-      // repeat uses. Safe only because the repeat picker is hidden on a
-      // multi-day form, and it earns the push dedupe for free:
-      // `diffAppointmentForNotifications` suppresses the "assigned" push for
-      // any created document whose seriesId is not its own id, so a 5-day run
-      // notifies the crew ONCE.
+      // Multi-day client jobs split into daily documents; personal blocks stay wide.
       final runWindows = isPersonal
           ? [(start: start, end: end)]
           : expandRunWindows(start, end);
@@ -395,21 +317,15 @@ class AddEventController extends Notifier<AddEventState>
             id: i == 0 ? docId : repo.newDocId(),
             startTime: runWindows[i].start,
             endTime: runWindows[i].end,
-            // Overrides the repeat seed above only for a real run; a one-day
-            // job keeps whatever the repeat picker chose.
+            // Real runs use day one as their series id.
             seriesId: dayCount > 1 ? docId : appointment.seriesId,
-            // Zero on a single-day job, so its document is written exactly as
-            // it always was and `sliceFor` keeps deriving its label.
+            // Single-day jobs derive their slice label.
             dayIndex: dayCount > 1 ? i + 1 : 0,
             dayCount: dayCount > 1 ? dayCount : 0,
           ),
       ];
 
-      // A one-day job may still repeat; a multi-day one cannot, so these two
-      // never both produce documents. The conflict check above already covered
-      // every day of the run — it takes the whole span and filters through
-      // `dailyWindowsOverlap` — but it still only covers the FIRST repeat
-      // occurrence, exactly as before.
+      // Only single-day client jobs can repeat.
       final repeatCopies = dayCount > 1
           ? const <AppointmentRecord>[]
           : [
@@ -426,14 +342,31 @@ class AddEventController extends Notifier<AddEventState>
             ];
 
       final toWrite = [...days, ...repeatCopies];
+      // Personal clashes are handled by the time-off alert after write.
+      if (!forceBusy && !isPersonal) {
+        final conflict = await findFirstAppointmentConflict(
+          repo: repo,
+          candidates: selectedEmployees,
+          bookings: toWrite,
+        );
+        if (conflict != null) {
+          // Conflicts return to the sheet for a force-through choice.
+          if (ref.mounted) state = state.copyWith(isSubmitting: false);
+          return AddEventBusyEmployees(
+            busyEmployees: conflict.busyEmployees,
+            start: conflict.start,
+            end: conflict.end,
+          );
+        }
+      }
+
       if (toWrite.length == 1) {
         await repo.addAppointment(toWrite.single);
       } else {
         await repo.addAppointments(toWrite);
       }
 
-      // Photos stay on day 1: `images` is a per-document subcollection, and
-      // photos taken on day 3 attach to day 3's own document afterwards.
+      // Draft photos attach to day one.
       if (images.isNotEmpty) {
         uploader.uploadInBackground(appointmentId: docId, newImages: images);
       }

@@ -12,11 +12,7 @@ import 'package:scheduling/features/calendar/widgets/views/appointment_image_car
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
-/// The appointment photo strip / carousel.
-///
-/// Stateful only because the existing photos' BYTES are fetched from their
-/// `storagePath` at render time rather than rendered from the persisted URL —
-/// see [AppointmentImageLoader] for why no URL is used.
+/// The appointment photo strip and carousel.
 class PhotoPickerSection extends ConsumerStatefulWidget {
   const PhotoPickerSection({
     required this.existingImages,
@@ -47,17 +43,10 @@ class PhotoPickerSection extends ConsumerStatefulWidget {
 class _PhotoPickerSectionState extends ConsumerState<PhotoPickerSection> {
   List<Uint8List> _loadedBytes = const [];
 
-  /// The exact list [_loadedBytes] was loaded for. The bytes are positional,
-  /// so they are only meaningful against this list — after a removal the
-  /// widget rebuilds with a shorter `existingImages` while the old bytes are
-  /// still in hand, and index 0 would render the photo just deleted.
+  /// The image list [_loadedBytes] was loaded for.
   List<AppointmentImage> _resolvedFor = const [];
 
-  /// The existing photos' bytes, or empty while a load is outstanding.
-  ///
-  /// Empty rather than partial on purpose: every consumer indexes it
-  /// positionally beside `newImages`, so a short list silently shifts the new
-  /// photos' indices. Empty renders placeholders and is unambiguous.
+  /// The existing photos' bytes, or empty while stale/loading.
   List<Uint8List> get _existingBytes =>
       listEquals(_resolvedFor, widget.existingImages) ? _loadedBytes : const [];
 
@@ -89,8 +78,7 @@ class _PhotoPickerSectionState extends ConsumerState<PhotoPickerSection> {
     final bytes = await ref
         .read(appointmentImageLoaderProvider)
         .loadAll(images);
-    // The load outlives a fast edit-and-close, and the sheet is disposed
-    // under it more often than not.
+    // Ignore loads that finish after close or list changes.
     if (!mounted || !listEquals(images, widget.existingImages)) return;
     setState(() {
       _loadedBytes = bytes;
@@ -107,7 +95,7 @@ class _PhotoPickerSectionState extends ConsumerState<PhotoPickerSection> {
     ImageViewer.open(context, images: providers, initialIndex: tappedIndex);
   }
 
-  // A read-only swipeable carousel. Returns an empty box when there are no real images, so the failure banner can stand alone.
+  // Empty lets the failure banner stand alone.
   Widget _readOnlyGallery() {
     final providers = buildImageProviders(
       bytes: _existingBytes,
@@ -189,15 +177,7 @@ class _EditablePhotoStrip extends StatelessWidget {
     );
     final thumbCache = (90 * MediaQuery.devicePixelRatioOf(context)).round();
 
-    // `.builder`, not `ListView(children:)`: the strip is capped at 100 photos
-    // and rebuilds on any edit-sheet form change, so eagerly materialising a
-    // subtree per photo was ~600 widget allocations per rebuild for the few
-    // thumbnails actually on screen. (Decode was never the issue —
-    // `cacheWidth`/`cacheHeight` bound that below.)
-    // Section boundaries, named once. This strip has a history of index bugs
-    // — an offset composed from the wrong length opened the wrong photo and
-    // ran the viewer's `initialIndex` off the end — so each boundary is
-    // derived from the one before it rather than re-added at each test.
+    // Build only visible thumbnails and derive boundaries once.
     final newStart = existingImages.length;
     final failedStart = newStart + newImages.length;
     final addButtonIndex = failedStart + failedCount;
@@ -260,17 +240,11 @@ class _EditablePhotoStrip extends StatelessWidget {
     MapEntry<int, AppointmentImage> entry,
     int thumbCache,
   ) {
-    // Null until the bytes have been fetched from storagePath — a placeholder,
-    // not an error. It is a Storage round-trip per photo, so this is a real
-    // window, not a frame or two: a placeholder must not be tappable, or the
-    // tap opens whatever provider happens to sit at this index (a NEW photo,
-    // since the viewer is only handed the files until the load lands).
+    // Loading placeholders are not tappable.
     final bytes = entry.key < existingBytes.length
         ? existingBytes[entry.key]
         : null;
-    // EMPTY bytes are a REFUSAL, not a pending load — a rules rejection or a
-    // fetch that failed, with no URL to fall back to by design. Show the error
-    // tile and keep it untappable rather than opening nothing.
+    // Empty bytes mean a refused photo.
     final refused = bytes != null && bytes.isEmpty;
     return Stack(
       children: [

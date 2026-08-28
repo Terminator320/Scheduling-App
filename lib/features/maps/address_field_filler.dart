@@ -18,6 +18,13 @@ import 'package:scheduling/features/maps/domain/address_parser.dart';
 ///   value must win.
 /// - **`street`** is skipped when it already equals the parsed value, so the
 ///   caret isn't yanked to the end of a field the user may still be editing.
+///   It is written **street-only** — `AddressParser.streetOnly` strips the
+///   trailing city/province/postal/country this same call is about to put in
+///   their own boxes. Without that the address box keeps the whole picked
+///   string and every locality field is stored twice; `ParsedAddressFields
+///   .street` is `null` whenever the address has no apt, so the field was
+///   skipped entirely and kept whatever Places returned. That null was the
+///   root cause.
 /// - **`country`** keeps an existing value against a parsed `Canada`, which is
 ///   what the parser falls back to when it recognizes nothing better.
 ///
@@ -38,10 +45,19 @@ void fillAddressControllersFromText(
   if (fields.apt != null && apt.text.trim().isEmpty) {
     apt.text = fields.apt!;
   }
-  if (fields.street != null && address.text.trim() != fields.street) {
+  // Reduced against the values this call is about to write, not the ones the
+  // controllers still hold.
+  final street = AddressParser.streetOnly(
+    fields.street ?? rawAddress,
+    city: fields.city ?? '',
+    province: fields.province ?? '',
+    postalCode: fields.postalCode ?? '',
+    country: fields.country ?? '',
+  );
+  if (street.isNotEmpty && address.text.trim() != street) {
     address.value = TextEditingValue(
-      text: fields.street!,
-      selection: TextSelection.collapsed(offset: fields.street!.length),
+      text: street,
+      selection: TextSelection.collapsed(offset: street.length),
     );
   }
   if (fields.postalCode != null) {

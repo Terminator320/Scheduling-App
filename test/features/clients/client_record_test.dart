@@ -74,7 +74,7 @@ void main() {
           name: 'Rive-Sud Gestion',
           firstName: 'Luc',
           lastName: 'Roy',
-          type: ClientType.propertyManagement,
+          type: ClientType.building,
         ).displayName,
         'Rive-Sud Gestion',
       );
@@ -331,14 +331,14 @@ void main() {
       final map = const ClientRecord(
         id: 'c4',
         name: 'Acme',
-        type: ClientType.propertyManagement,
+        type: ClientType.building,
         accessNotes: 'Side door',
         onSiteManager: 'Dana',
         billingTerms: 'Net 15',
         autoInvoice: true,
       ).toMap();
 
-      expect(map['type'], 'property_mgmt');
+      expect(map['type'], 'building');
       expect(map['accessNotes'], 'Side door');
       expect(map['onSiteManager'], 'Dana');
       expect(map['billingTerms'], 'Net 15');

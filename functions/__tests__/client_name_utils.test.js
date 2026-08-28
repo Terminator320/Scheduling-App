@@ -208,7 +208,7 @@ describe("clientDisplayName — a BUSINESS shows its business name", () => {
       name: "Gestion Immobiliere ABC",
       firstName: "Marc",
       lastName: "Tremblay",
-      type: "property_mgmt",
+      type: "building",
     })).toBe("Gestion Immobiliere ABC");
   });
 
@@ -240,7 +240,7 @@ describe("clientDisplayName — a BUSINESS shows its business name", () => {
 describe("isBusiness", () => {
   test("the two organization types", () => {
     expect(isBusiness({type: "commercial"})).toBe(true);
-    expect(isBusiness({type: "property_mgmt"})).toBe(true);
+    expect(isBusiness({type: "building"})).toBe(true);
   });
 
   test("a residential or untyped client is a person", () => {

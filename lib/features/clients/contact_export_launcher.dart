@@ -6,7 +6,6 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/features/clients/data/contact_link_store.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
-import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 /// The contact properties the client sync owns. Updating only these keeps everything
@@ -135,14 +134,10 @@ Contact clientToContact(ClientRecord client) {
 
   Address? address;
   if (!client.noFixedAddress && client.address.trim().isNotEmpty) {
-    final street = AddressParser.canonicalToDisplay(client.address);
-    final formatted = [
-      street,
-      client.city.trim(),
-      client.province.trim(),
-      client.postalCode.trim(),
-      client.country.trim(),
-    ].where((part) => part.isNotEmpty).join(', ');
+    // `street` must NOT carry the locality — the fields below repeat it, and
+    // a stored full address put every part in the card twice.
+    final street = client.streetLine;
+    final formatted = client.fullAddress;
 
     address = Address(
       formatted: formatted,

@@ -5,6 +5,7 @@ import 'package:scheduling/features/clients/data/firebase_clients_repository.dar
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/policies/client_building.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 
 final clientsRepositoryProvider = Provider<ClientsRepository>((ref) {
@@ -61,6 +62,32 @@ final clientsByTypeProvider = FutureProvider.autoDispose
       ref.watch(clientsRefreshProvider);
       return ref.watch(clientsRepositoryProvider).fetchClientsByType(type);
     });
+
+/// Clients at one building, from the same cached window as the type filter.
+final clientsByBuildingProvider = FutureProvider.autoDispose
+    .family<List<ClientRecord>, String>((ref, key) async {
+      ref.watch(clientsRefreshProvider);
+      return ref.watch(clientsRepositoryProvider).fetchClientsByBuilding(key);
+    });
+
+/// Every address two or more clients share — the Building menu's options.
+final clientBuildingsProvider =
+    FutureProvider.autoDispose<List<ClientBuilding>>((ref) async {
+      ref.watch(clientsRefreshProvider);
+      return ref.watch(clientsRepositoryProvider).fetchBuildings();
+    });
+
+/// How many clients sit at each building, for the per-row pill.
+///
+/// ONE reduction the whole list shares, never a lookup per row — the same
+/// shape as `employeeJobsTodayProvider`. An empty map while the window is
+/// still loading simply means no row shows a pill yet.
+final clientBuildingCountsProvider = Provider.autoDispose<Map<String, int>>((
+  ref,
+) {
+  final buildings = ref.watch(clientBuildingsProvider).value ?? const [];
+  return {for (final b in buildings) b.key: b.clientCount};
+});
 
 /// Archived clients, read from the same bounded cached window as search and
 /// the type filter — so the Archived chip costs no extra read inside the TTL.

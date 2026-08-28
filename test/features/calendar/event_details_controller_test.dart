@@ -117,6 +117,13 @@ void main() {
         excludeAppointmentId: any(named: 'excludeAppointmentId'),
       ),
     ).thenAnswer((_) async => const <EmployeeRecord>[]);
+    when(
+      () => appointments.findClashingAppointments(
+        employeeIds: any(named: 'employeeIds'),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+      ),
+    ).thenAnswer((_) async => const <AppointmentRecord>[]);
 
     container =
         ProviderContainer(
@@ -889,6 +896,80 @@ void main() {
       expect(copies.every((a) => a.seriesId == 'series-1'), isTrue);
     });
 
+    test('stops a repeat rewrite when a future copy conflicts', () async {
+      var nextId = 0;
+      when(appointments.newDocId).thenAnswer((_) => 'copy-${++nextId}');
+
+      final repeating = _appointment.copyWith(
+        repeat: RepeatInterval.fourMonths,
+        seriesId: 'series-1',
+      );
+      when(() => appointments.getSeries('series-1')).thenAnswer(
+        (_) async => [
+          repeating,
+          repeating.copyWith(id: 'old-1', startTime: DateTime(2026, 9, 10, 9)),
+          repeating.copyWith(id: 'old-2', startTime: DateTime(2027, 1, 10, 9)),
+        ],
+      );
+      when(
+        () => appointments.findClashingAppointments(
+          employeeIds: any(named: 'employeeIds'),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+        ),
+      ).thenAnswer((invocation) async {
+        final start = invocation.namedArguments[#start] as DateTime;
+        if (start != DateTime(2027, 5, 10, 9)) {
+          return const <AppointmentRecord>[];
+        }
+        return [
+          AppointmentRecord(
+            id: 'external',
+            startTime: start,
+            endTime: start.add(const Duration(hours: 1)),
+            employeeIds: const ['e1'],
+            employeeNames: const ['Alex'],
+          ),
+        ];
+      });
+
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(repeating)),
+        (_, _) {},
+      );
+      final c = container.read(
+        eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
+      );
+      await waitForSeed();
+      c.selectRepeat(RepeatInterval.oneYear);
+
+      final outcome = await c.save(
+        repeating,
+        title: 'x',
+        address: 'y',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(outcome, isA<EventDetailsBusyEmployees>());
+      final busy = outcome as EventDetailsBusyEmployees;
+      expect(busy.busyEmployees, const [_employeeA]);
+      expect(busy.start, DateTime(2027, 5, 10, 9));
+      verifyNever(
+        () => appointments.rewriteSeries(
+          updated: any(named: 'updated'),
+          deleteIds: any(named: 'deleteIds'),
+          copies: any(named: 'copies'),
+        ),
+      );
+      expect(
+        container
+            .read(eventDetailsControllerProvider(EventDetailsKey(repeating)))
+            .isSaving,
+        isFalse,
+      );
+    });
+
     test(
       'applyToSeries propagates details + time of day to future visits, '
       'keeping each visit date',
@@ -980,6 +1061,63 @@ void main() {
         );
       },
     );
+
+    test('applyToSeries reports a conflict on a future sibling', () async {
+      final repeating = _appointment.copyWith(
+        id: 'series-1',
+        seriesId: 'series-1',
+        repeat: RepeatInterval.sixMonths,
+      );
+      when(() => appointments.getSeries('series-1')).thenAnswer(
+        (_) async => [
+          repeating,
+          repeating.copyWith(
+            id: 'fut-1',
+            startTime: DateTime(2026, 11, 10, 9),
+          ),
+        ],
+      );
+      when(
+        () => appointments.findBusyEmployees(
+          candidates: any(named: 'candidates'),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          excludeAppointmentId: any(named: 'excludeAppointmentId'),
+        ),
+      ).thenAnswer((invocation) async {
+        final start = invocation.namedArguments[#start] as DateTime;
+        return start == DateTime(2026, 11, 10, 8)
+            ? const [_employeeA]
+            : const <EmployeeRecord>[];
+      });
+
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(repeating)),
+        (_, _) {},
+      );
+      final c = container.read(
+        eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
+      );
+      await waitForSeed();
+      c
+        ..selectStartTime(const TimeOfDay(hour: 8, minute: 0))
+        ..selectEndTime(const TimeOfDay(hour: 9, minute: 0));
+
+      final outcome = await c.save(
+        repeating,
+        title: 'New title',
+        address: 'New address',
+        notes: '',
+        materialsNeeded: '',
+        applyToSeries: true,
+      );
+
+      expect(outcome, isA<EventDetailsBusyEmployees>());
+      final busy = outcome as EventDetailsBusyEmployees;
+      expect(busy.start, DateTime(2026, 11, 10, 8));
+      expect(busy.end, DateTime(2026, 11, 10, 9));
+      verifyNever(() => appointments.updateAppointments(any()));
+    });
 
     test('applyToSeries false edits only this visit', () async {
       final repeating = _appointment.copyWith(
@@ -1340,8 +1478,9 @@ void main() {
         ),
     ];
 
-    EventDetailsController notifierFor(AppointmentRecord a) =>
-        container.read(eventDetailsControllerProvider(EventDetailsKey(a)).notifier);
+    EventDetailsController notifierFor(AppointmentRecord a) => container.read(
+      eventDetailsControllerProvider(EventDetailsKey(a)).notifier,
+    );
 
     test('marking one day done leaves the rest of the run untouched', () async {
       final run = runOf(5);
@@ -1361,30 +1500,34 @@ void main() {
       );
     });
 
-    test('cancelling with the run scope closes this day and the ones after',
-        () async {
-      final run = runOf(5);
-      when(() => appointments.getSeries('d1')).thenAnswer((_) async => run);
-      when(
-        () => appointments.updateAppointmentStatuses(
-          ids: any(named: 'ids'),
-          status: any(named: 'status'),
-        ),
-      ).thenAnswer((_) async {});
+    test(
+      'cancelling with the run scope closes this day and the ones after',
+      () async {
+        final run = runOf(5);
+        when(() => appointments.getSeries('d1')).thenAnswer((_) async => run);
+        when(
+          () => appointments.updateAppointmentStatuses(
+            ids: any(named: 'ids'),
+            status: any(named: 'status'),
+          ),
+        ).thenAnswer((_) async {});
 
-      final outcome = await notifierFor(
-        run[2],
-      ).cancelAppointment(run[2], includeFuture: true);
+        final outcome = await notifierFor(
+          run[2],
+        ).cancelAppointment(run[2], includeFuture: true);
 
-      expect(outcome, isA<EventDetailsActionOk>());
-      final ids = verify(
-        () => appointments.updateAppointmentStatuses(
-          ids: captureAny(named: 'ids'),
-          status: 'cancelled',
-        ),
-      ).captured.single as List<String>;
-      expect(ids, ['d3', 'd4', 'd5']);
-    });
+        expect(outcome, isA<EventDetailsActionOk>());
+        final ids =
+            verify(
+                  () => appointments.updateAppointmentStatuses(
+                    ids: captureAny(named: 'ids'),
+                    status: 'cancelled',
+                  ),
+                ).captured.single
+                as List<String>;
+        expect(ids, ['d3', 'd4', 'd5']);
+      },
+    );
 
     test('cancelling without the run scope closes only this day', () async {
       final run = runOf(3);

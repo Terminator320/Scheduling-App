@@ -32,8 +32,7 @@ class AddEventSheet extends ConsumerStatefulWidget {
 
   final DateTime? initialDate;
 
-  /// Pre-seeds the client, for "Add and book a job" and the client detail's
-  /// Book job tile.
+  /// Pre-seeds the client for book-job flows.
   final ClientRecord? initialClient;
 
   @override
@@ -56,8 +55,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   late final Debouncer _clientSearchDebounce;
   late final _provider = addEventControllerProvider(widget.initialDate);
 
-  // Admin-only surface: this sheet is only reachable from the calendar FAB
-  // and the client detail's Book job, both admin-gated.
+  // This sheet is only reachable from admin-gated surfaces.
   final _tour = TourSteps(
     const FormTour(TourForm.addAppointment),
     isAdmin: true,
@@ -81,8 +79,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     final client = widget.initialClient;
     if (client != null) {
       _controllers.clientSearch.text = client.displayName;
-      // Deferred: the controller is a family provider that must be built before
-      // the first read, and selectClient also settles the address field.
+      // Defer until the family provider is built.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _notifier.selectClient(client);
@@ -106,17 +103,12 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     _clientSearchDebounce.run(() => _notifier.searchClients(query));
   }
 
-  /// The date rows drop an inline month calendar down beneath themselves, so a
-  /// date arrives already picked — there is no modal to await and no cancelled
-  /// outcome to handle. The bounds the picker enforces live on the row.
+  /// Handles already-picked inline calendar dates.
   void _onStartDateSelected(DateTime picked) {
-    // No setState around the controller writes: the body watches the
-    // controller provider and `selectDate` always emits a new state, so the
-    // rebuild is already coming. This matches `_pickStartTime` below.
+    // selectDate emits the rebuild after controller updates.
     _controllers.date.text = DateUtilsHelper.formatDate(picked);
     _notifier.selectDate(picked);
-    // selectDate mirrors or shifts the end date, and the end row renders the
-    // controller text — so it has to follow, or it goes stale.
+    // Keep the end-date controller synced after selectDate.
     final shifted = ref.read(_provider).endDate;
     if (shifted != null) {
       _controllers.endDate.text = DateUtilsHelper.formatDate(shifted);
@@ -154,7 +146,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     _notifier.selectEndTime(picked);
   }
 
-  // Quick-fills the title from the job type, and the end time from the template's duration if a start time has already been picked.
+  // Applies the template title and optional duration.
   void _applyTemplate(JobTemplate template) {
     _controllers.title.text = jobTemplateLabel(context.l10n, template);
     final start = ref.read(_provider).selectedStartTime;
@@ -180,17 +172,13 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
 
   Future<void> _pickImages() async {
     final picked = await pickAppointmentImages(context, ref);
-    // The longest await in the app — an OS action sheet and then the
-    // camera/Photos picker. The notifier is autoDispose.family, so calling it
-    // after the sheet was torn down under the picker throws a StateError out
-    // of an unawaited callback, which is filed as FATAL.
+    // The picker can outlive this sheet.
     if (!mounted) return;
     if (picked.isNotEmpty) _notifier.addImages(picked);
   }
 
   Future<void> _submit() async {
-    // An unnamed personal block saves as "Personal" — the stored title is what
-    // the card, the widget, Siri and the push text all read.
+    // Blank personal titles save as "Personal".
     final title = _controllers.title.text.trim().isEmpty
         ? (ref.read(_provider).isPersonal ? context.l10n.calendar_personal : '')
         : _controllers.title.text;
@@ -228,9 +216,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
                     )
                   : context.l10n.common_appointmentCreated,
             );
-        // Raised over this sheet rather than after it closes: the swaps write
-        // immediately, so there is nothing to hand to the calendar, and a
-        // dialog pushed from a context that is already popping is fragile.
+        // Show clashes before closing this sheet.
         await showPersonalBlockClashesIfAny(context, ref, block: appointment);
         if (!mounted) return;
         Navigator.pop(context, appointment);
@@ -244,10 +230,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
                 error: error,
               ),
             );
-      // All three surface nothing. `Invalid` already showed itself as field
-      // errors on the form, `BusyEmployees` was handled by the conflict prompt
-      // above, and `Busy` means the guard skipped a duplicate submit — a
-      // notice there would report a problem the user does not have.
+      // These outcomes already surfaced or intentionally stay silent.
       case AddEventInvalid() || AddEventBusyEmployees() || AddEventBusy():
         break;
     }
@@ -256,15 +239,10 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(_provider);
-    // Crew only — a dispatcher never gets assigned, so they aren't offered.
-    // That holds for a PERSONAL block too, day off included (owner call,
-    // 2026-08-24): the exclusion is about the person, not about the kind of
-    // entry, so there is no carve-out to make here.
+    // Crew only; dispatchers are not assignable.
     final allEmployees =
         ref.watch(assignableEmployeesProvider).asData?.value ?? const [];
-    // One length feeds both the flag and the label, so they can't disagree:
-    // the run-length string is a plain interpolation, and a multi-day flag
-    // paired with a length of 1 would render "1 days".
+    // One span length feeds both the flag and label.
     final spanLength = _spanLength(state);
 
     return FeatureTourHost(

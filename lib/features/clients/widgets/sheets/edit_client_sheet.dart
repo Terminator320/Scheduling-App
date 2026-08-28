@@ -107,7 +107,9 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
     _billingTermsController = TextEditingController(text: c.billingTerms);
     final parsed = AddressParser.splitApt(c.address);
     _addressController = TextEditingController(
-      text: parsed?.street ?? c.address,
+      // Street-only, so opening a legacy doc doesn't put the locality back in
+      // the box and write it straight back on the next save.
+      text: c.streetLine,
     );
     _aptController = TextEditingController(
       text: c.apt.isNotEmpty ? c.apt : (parsed?.apt ?? ''),

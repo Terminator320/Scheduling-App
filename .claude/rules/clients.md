@@ -114,6 +114,44 @@ Root context: `../../CLAUDE.md`.
   fields only, so a plain substitution drops the function-owned `jobCount` and
   `createdAt` and blanks the count on every search and type-filter result until
   the TTL expires. Any new field `toMap()` doesn't emit inherits this.
+- **Clients are GROUPED BY BUILDING, and the key is DERIVED, never stored**
+  (2026-08-28). `buildingKeyFor` / `buildingsIn` / `buildingCountsIn`
+  (`clients/domain/policies/client_building.dart`) reduce the street line down
+  to the address without its unit — "914-4450 Prom. Paton" and
+  "1207-4450 Prom. Paton" are two units of one building. Same discipline as the
+  display-only `overdue` status: nothing is written, so there is no field to
+  backfill and no field the console can corrupt.
+  **The CITY is part of the key.** Two towns hold the same civic number, and
+  without it a Laval client turns up under a Montréal address with nothing on
+  screen explaining why.
+  **It reduces through `AddressParser.streetOnly` first**, so a legacy doc
+  whose `address` still carries the locality lands on the same key as one the
+  backfill has normalized. Skip that and the grouping breaks on exactly the
+  buildings with the most history. `noFixedAddress` and a blank address answer
+  null — a client with nowhere to go is not a building of one.
+  **The floor is TWO clients.** An entry per address is the client list under
+  another name, and the menu has to stay readable.
+  **It is a MENU, not a chip** (`ClientAddressFilterMenu`), and that is the one
+  place the clients filter bar departs from its own rule: the type options are
+  the fixed `ClientType.pickable` set with no vocabulary to discover, while
+  addresses are discovered from the data and there can be dozens, which a
+  horizontally-scrolling chip row cannot hold. It is still a peer — one sealed
+  `ClientsFilterBuilding(key)`, so selecting one clears whichever chip was on,
+  and picking the selected one clears back to `ClientsFilterAll`. It renders
+  NOTHING when no address is shared; an empty menu is a control that looks
+  broken, and on a small roster that is the normal state.
+  **The per-row "18 units" pill is ONE reduction the list shares**
+  (`clientBuildingCountsProvider`), passed into `ClientTile` as
+  `buildingCount` — never a provider watch per row, the same rule
+  `employeeJobsTodayProvider` keeps. It is deliberately NOT tappable: the whole
+  row is one `InkWell`, so a tappable pill inside it is a nested gesture on a
+  48px target, and the menu is where filtering belongs. `ClientTile` is reused
+  by the booking flow's client picker, which passes nothing and shows no pill.
+  **`fetchClientsByBuilding` / `fetchBuildings` read the SAME bounded cached
+  window as the type filter**, so the whole feature costs no extra Firestore
+  read inside the TTL and needs no index. It inherits that window's bound: past
+  the cap the menu sees a prefix of the roster. Archived clients are excluded,
+  the same rule the type filter keeps.
 - **The Wave sync badge needs a LIVE doc read, and `ClientDetailView` is the one
   surface that has one** (2026-08-07). Every other client surface is a one-shot
   read — a paginated page, or the repository's cached scan window — and
@@ -251,7 +289,7 @@ Root context: `../../CLAUDE.md`.
   on a business they are only its contact person), so preferring them
   everywhere renders "Vogas Plumbing" as "Marc Tremblay" on the card for a
   commercial job. `ClientNamePolicy.isBusiness` owns the test: the
-  `commercial`/`propertyManagement` types, **plus any doc carrying the legacy
+  `commercial`/`building` types, **plus any doc carrying the legacy
   `businessName`** — those predate the `type` field, so they arrive `unset` and
   would otherwise be read as people. Every branch ends at the same three
   fallbacks in a different order, so a client missing the field its own branch
@@ -373,6 +411,61 @@ Root context: `../../CLAUDE.md`.
   apt field wins over an apt embedded in the street text, and a blank one keeps
   the embedded value. It was a verbatim copy in each sheet, which is two owners
   for a rule whose two answers must agree on the same typed input.
+- **`clients/{id}.address` is the STREET LINE, and every read composes the rest
+  back on** (2026-08-28). `city`/`province`/`postalCode`/`country` are their own
+  fields, so an `address` that also carries them stores each one twice and lets
+  the two copies drift. The pair that owns this is
+  `AddressParser.streetOnly` / `composeFull`, and `ClientRecord` exposes them as
+  `streetLine` / `fullAddress` so the five-field call cannot be spelled wrong at
+  one of its six sites. **`composeFull` reduces through `streetOnly` FIRST, and
+  that is not defensive tidying** — the collection holds BOTH shapes and always
+  will: the Wave import writes a street line, the app wrote the whole picked
+  string until this change, and the console can write either. Skip the reduce
+  and a legacy doc renders its city twice. `streetOnly` strips from the TAIL, so
+  `100 Main St, Building A` keeps its second segment, and it never strips the
+  last one — a street that IS the city name must not reduce to nothing. It
+  hand-mirrors `streetFromAddress` (`functions/wave/mappers.js`), which the Wave
+  push has needed all along for the same reason; keep the two in step.
+  **Booking must compose, not copy.** `AppointmentRecord.address` is a lone
+  string with no locality fields of its own, denormalized once and kept forever,
+  so handing it `streetLine` costs every job on the calendar its city — and with
+  it the directions and the day route. Same for anything handed to
+  `AddressMapLauncher`.
+  Wave is unaffected by the shape: `mappedFieldsHash` hashes the OUTPUT of
+  `toWaveCustomerInput`, which already ran `streetFromAddress`, so both shapes
+  produce the same `addressLine1` and the same hash —
+  `shouldEnqueueClientWrite` Rule 1 refuses the write. A backfill normalizing
+  the field therefore pushes NOTHING to Wave. Don't re-derive that conclusion
+  from the raw field; it holds because of where the hash is taken.
+  The stored field still drifts back without the source fix:
+  `fillAddressControllersFromText` writes the reduced street, because
+  `ParsedAddressFields.street` is `null` on an address with no apt and the
+  controller was left holding whatever Places returned. That null was the root
+  cause — don't reintroduce a `fields.street != null` guard around the write.
+  **The JS half is `functions/client_address_utils.js`**
+  (`streetFromAddress` / `composeFullAddress`), and **`propagateClientEdits`
+  compares the COMPOSED address, never the raw field.** That is the rule the
+  whole migration hangs off, in both directions: an appointment carries ONE
+  address string and no locality fields of its own, so fanning a stored street
+  line onto it destroys the city on a live job unrecoverably — and because both
+  shapes compose to the same string, normalizing the client field propagates
+  NOTHING. `functions/scripts/backfill-client-address-street.js` is safe to run
+  only while that holds; if the comparison ever regresses to the raw field,
+  that script becomes destructive. Pinned by "normalizing `address` to the
+  street line propagates NOTHING" in `client_propagation.test.js`. The composed
+  comparison also fixed a bug that predated the split: the app books the
+  composed address while the doc stores the canonical `4-1234 …`, so an
+  apt-bearing client never matched `from` and its appointments silently never
+  took an address correction — nor did a city-only edit, which never touches
+  `address` at all.
+  The backfill is HYGIENE, not a fix — every read already composes, so nothing
+  user-visible changes. It **cannot lose information**: it only removes
+  trailing segments that match fields still on the same doc, so the old string
+  is rebuildable from the doc exactly. It skips a doc with NO locality fields
+  rather than guessing (there `streetFromAddress` falls back to the first
+  segment, which is right for the Wave push and wrong for a write), and it
+  never writes an empty address. Wave gets nothing: `mappedFieldsHash` hashes
+  `toWaveCustomerInput`'s OUTPUT, which already ran `streetFromAddress`.
 - **Inline add-client while booking:** `ClientsRepository.addClient` returns the
   created `ClientRecord` with its generated Firestore doc id (NOT `void`) — the
   appointment form's "Add new client" flow links the appointment to that id.
