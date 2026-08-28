@@ -72,16 +72,12 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
         : AppMotion.noticeCycle;
     final theme = Theme.of(context);
 
-    // The surface is the same dark ink for all three kinds now; only the
-    // status dot carries the meaning.
     final dot = switch (notice) {
       NoticeSuccess() => theme.palette.noticeMint,
       NoticeInfo() => theme.palette.noticeInfo,
       NoticeError() => theme.palette.noticeRed,
     };
 
-    // Fire off a haptic cue alongside the visual notice too — best effort,
-    // doesn't need to succeed.
     unawaited(switch (notice) {
       NoticeError() => HapticFeedback.mediumImpact(),
       NoticeSuccess() || NoticeInfo() => HapticFeedback.lightImpact(),

@@ -159,8 +159,8 @@ class GooglePlacesRepository implements PlacesRepository {
     }
 
     try {
-      // NOTE: loose `as Map?` is required — Android callables return
-      // Map<dynamic, dynamic>, so a direct Map<String, dynamic> cast throws.
+      // Android callables can return Map<dynamic, dynamic>, so loosen before
+      // casting to the app's expected shape.
       final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
       return data['address']?.toString();
     } catch (e, st) {

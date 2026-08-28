@@ -23,10 +23,18 @@
  *     locality off a live job with nothing left to rebuild it from — and
  *     normalizing the client field (street-only) has to stay a NO-OP here,
  *     which it is, because both shapes compose to the same string. It also
- *     fixes a matching bug that predates the split: the app books the
- *     composed address while the doc stores the canonical `4-1234 …`, so an
- *     apt-bearing client never matched `from` and its appointments silently
- *     never took an address correction at all.
+ *     fixes a matching bug that predates the split, in BOTH its halves: a city
+ *     or postal edit never touched `address` and so reached no appointment at
+ *     all; and an apt-bearing client never matched `from`, because the app
+ *     books the DISPLAY spelling ("1234 Rue X #4, …") while this side composed
+ *     the canonical one ("4-1234 Rue X, …").
+ *     The apt half needed `composeFullAddress` to re-spell the apt the way the
+ *     app does — it does now, via `canonicalToDisplay`, and that is required
+ *     rather than cosmetic BECAUSE the comparison below is verbatim. Composing
+ *     on both sides was necessary but not sufficient; the two composers also
+ *     have to agree character for character. Their tests share worked examples
+ *     for exactly this reason — each side used to assert its own composer
+ *     against itself, which is how the divergence survived a release.
  *   - Only appointments with WORK LEFT are rewritten — history records what
  *     was true at the time of the visit. That is `endTime >= now`, NOT
  *     `startTime >= now`: under the daily-window model a run started up to

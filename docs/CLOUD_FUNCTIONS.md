@@ -2,7 +2,16 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-25 (the 2026-08-25 audit — **no export, trigger, schedule,
+refreshed 2026-08-28 (release 1.53.0+82 — **the export list is unchanged at 25
+and no row below moved**, but two behaviour changes here matter: the client
+`jobCount` recount is now DEBOUNCED through the shared `recount_claim.js`
+ledger and GATED on `mayShareABatch`, because a per-day run lands up to 16
+writes carrying one `clientId`; and `client_address_utils.js` is a new pure
+module owning `streetFromAddress`, which moved out of `wave/mappers.js` now
+that `client_propagation.js` and the address backfill read it too. A
+`firestore.rules` change rides with them — see the deployment-status note
+below, it is NOT a ride-along deploy).
+Previously refreshed 2026-08-25 (the 2026-08-25 audit — **no export, trigger, schedule,
 secret or guard changed, and no row below moved**: the edits were dead-code
 removal (`isOvernightRecord`, `TOKEN_TTL_MS`/`activityTokenExpiry`,
 `IMPORT_FIELD_CAPS`'s export), the `{enforceAppCheck: true}` block lifted into

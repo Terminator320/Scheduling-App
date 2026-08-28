@@ -809,7 +809,11 @@ void main() {
       );
 
       expect(outcome, isA<AddEventSubmitted>());
-      expect((outcome as AddEventSubmitted).futureBookings, 2);
+      // A run's later days are NOT repeat occurrences: `futureBookings` counts
+      // repeat copies only, and the run's length is reported separately. Held
+      // as one number, a 3-day booking announced "2 future visits booked".
+      expect((outcome as AddEventSubmitted).futureBookings, 0);
+      expect(outcome.runDays, 3);
 
       final captured = verify(
         () => appointments.addAppointments(captureAny()),

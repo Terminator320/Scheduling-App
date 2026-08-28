@@ -286,6 +286,14 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     'cancelled',
   };
 
+  // NOT delegated to `updateAppointmentStatuses([id])`, though the bodies look
+  // duplicated: this writes the document DIRECTLY while the plural commits a
+  // WriteBatch. The single write is the employee mark-done path, which the
+  // rules gate with `affectedKeys().hasOnly(['status', 'updatedAt'])` — the
+  // most security-sensitive write in the app — and it is pinned field-by-field
+  // by `firebase_appointments_repository_status_test.dart`. Collapsing the two
+  // buys ~18 lines and pays for them by routing that path through a different
+  // Firestore mechanism.
   @override
   Future<void> updateAppointmentStatus({
     required String id,
@@ -436,7 +444,17 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         'older visits are not listed',
       ),
     );
-    return docs.map((doc) => _recordFrom(doc.id, doc.data())).toList();
+    // A multi-day run is ONE visit stored as one document per work day, so
+    // listing every document rendered a Monday-to-Friday job as five identical
+    // rows — and burned five of the section's 50-row render bound. Day 1
+    // carries the run and is the row worth showing; the card already says
+    // "Day 1 of 5". Filtered HERE rather than in the query: only a run member
+    // stores `dayIndex`, so a server-side inequality would need a second
+    // composite AND would drop every document that predates the field.
+    return docs
+        .map((doc) => _recordFrom(doc.id, doc.data()))
+        .where((record) => record.dayIndex <= 1)
+        .toList();
   }
 
   static const int _futureAssignmentScanLimit = 200;

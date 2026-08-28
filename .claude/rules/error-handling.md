@@ -123,8 +123,9 @@ alwaysApply: true
   | `ME-EMAIL` | `error_introChangeEmail` |
   | `ACCT-DEL` | `error_introDeleteAccount` |
   | `APPLOCK` | `error_introSaveAppLock` |
+  | `ACCT-SIGNOUT` | `error_introSignOut` |
 
-  Four of those carry a per-tag caveat. CLI-ARCH covers archive AND un-archive,
+  Five of those carry a per-tag caveat. CLI-ARCH covers archive AND un-archive,
   which share one tag because they are one toggle. CLI-DEL's typed
   `ClientsFailureHasHistory` branch runs FIRST — "archive it instead" is
   actionable where the generic cause notice is not — and the composer is the
@@ -134,14 +135,14 @@ alwaysApply: true
   `EventDetailsActionOutcome`, so the widget composes the notice. EMP-DELETE =
   removing a pending account, P4c's replacement for the retired EMP-REVOKE; its
   typed `EmployeesFailureAccountNoLongerPending` branch runs FIRST and the
-  composer is the fallback. **`EMP-SAVE` is GONE** — the employee save path logs
+  composer is the fallback. ACCT-SIGNOUT is spelled at TWO layers and only one of them composes a notice: `delete_account_flow.dart` surfaces `error_introSignOut`, while `auth_service.dart`'s two sites are log-only (a sign-out failing during teardown has no screen left to notify). It is listed here rather than below because the intro key exists; don't move it back on the strength of the service's uses alone. **`EMP-SAVE` is GONE** — the employee save path logs
   under EMP-CREATE now; don't re-add it from an older copy of this list.
 
   **Log-only tags** — no notice intro, so no ARB key. Everything else:
 
   - App shell / lifecycle: `ACCOUNT-EXIT`, `APP-SYNC`, `DEEP-LINK`, `NOTICE`,
     `SETTINGS`, `SPLASH`, `TOUR`, `ONBOARD-GATE`
-  - Auth / account: `ACCT-SIGNOUT`, `AUTH-SETUP`, `AUTH-SIGNIN`, `AUTH-PREFILL`
+  - Auth / account: `AUTH-SETUP`, `AUTH-SIGNIN`, `AUTH-PREFILL`
     (the last two added 2026-08-25, replacing six `login.*` dotted-lowercase
     tags that were in no registry at all — the whole sign-in path was
     invisible to a Crashlytics search by tag. `AUTH-SETUP` also now covers

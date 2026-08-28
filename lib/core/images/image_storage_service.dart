@@ -29,7 +29,6 @@ class ImageStorageService {
   Future<bool> _isValidImageFile(File file) async {
     final raf = await file.open();
     try {
-      // The shared signature test mirrors the server-side check.
       return hasValidImageMagic(await raf.read(4));
     } finally {
       await raf.close();
@@ -60,7 +59,6 @@ class ImageStorageService {
 
     await ref.putFile(file, metadata);
 
-    // Store only `storagePath`; rendering never uses token URLs.
     return AppointmentImage(
       storagePath: path,
       fileName: fileName,

@@ -101,7 +101,6 @@ class AppointmentLinkOpener {
   void _startWidgetTaps() {
     if (!Platform.isIOS) return;
     final logger = ref.read(loggerProvider);
-    // Register App Group before first widget read.
     unawaited(() async {
       try {
         await HomeWidget.setAppGroupId(widgetAppGroupId);
@@ -191,7 +190,6 @@ class AppointmentLinkOpener {
             return null;
           });
 
-    // Wait for hub on terminated-launch cold start.
     final shell = await _awaitLiveHub();
     if (!isMounted()) return;
     if (shell == null) {

@@ -2,6 +2,39 @@
 
 **Date:** 2026-08-27
 **Status:** implemented 2026-08-27; rules NOT yet deployed, app NOT yet shipped
+(cut as 1.53.0+82 on 2026-08-28)
+
+## Release-review gaps, CLOSED in 1.53.0+82
+
+All three were found by the release review and fixed before the cut.
+
+1. **Only the ADD path split a run.** `showEndDate` was gated on `isRunMember`
+   alone, so opening a ONE-day client job and widening its end date wrote the
+   single wide document this design exists to eliminate — indistinguishable
+   from a real run on screen, but marking one day complete closed the week.
+   `AppointmentFormFields.canSpanDays` now gates the end-date row, and
+   `details_edit_body` passes `appointment.isPersonal`: a client job's shape is
+   fixed at booking, while personal blocks and time off keep the row because
+   they legitimately stay one wide document.
+2. **Run scope was ordered by `startTime`, but a run's identity is
+   `dayIndex`.** A run member's start date stays editable, so moving day 1 past
+   its siblings made "cancel this and the following days" select NOTHING and
+   report success, while the same action on day 4 swept the moved day up.
+   `futureSeriesRecords` now takes an `anchor` and compares day positions when
+   that anchor carries a coherent run pair, falling back to `startTime` for a
+   repeat series or a legacy document.
+3. **A run day counted as a job.** `recountClientJobs` counted documents, so a
+   5-day booking made the client's `jobCount` badge read 5 and rendered 5 rows
+   in the client's job history. `recountOne` now subtracts a second aggregate
+   over `dayIndex > 1` — the inequality naturally excludes single-day jobs
+   (no field) and day 1 (stores 1), so no backfill was needed — served by a new
+   `(clientId ASC, dayIndex ASC)` composite. `fetchClientHistory` filters to
+   `dayIndex <= 1` in Dart rather than in the query, because a server-side
+   inequality would drop every document written before the field existed.
+
+**Still open (cosmetic):** nothing renumbers `dayIndex`/`dayCount` after a
+this-day-only delete, so the survivors of a 5-day run keep reading "of 5".
+The scope actions are correct — only the label is stale.
 
 ## The problem
 

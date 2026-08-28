@@ -103,10 +103,20 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     'isDayOff': isDayOff,
     'repeat': repeat.raw,
     'seriesId': seriesId,
-    // Single-day jobs omit run labels.
-    if (isRunMember) 'dayIndex': dayIndex,
-    if (isRunMember) 'dayCount': dayCount,
+    // Single-day jobs omit run labels. Both halves are gated on the PAIR being
+    // coherent, not on `isRunMember` alone: `dayIndex` defaults to 0 when the
+    // source doc had none, and the rules bound it at `>= 1`, so a doc carrying
+    // `dayCount: 5` with no `dayIndex` would re-serialize as `dayIndex: 0` and
+    // be refused — permanently, on every edit including the cancel that would
+    // clear it. Only a console or Admin-SDK write can produce that pair, and
+    // dropping the labels repairs it where emitting a rejected value strands
+    // it. Same asymmetry as `appointmentSpanNotWidened`.
+    if (hasRunLabels) 'dayIndex': dayIndex,
+    if (hasRunLabels) 'dayCount': dayCount,
   };
+
+  /// Whether the stored run pair is coherent enough to write back.
+  bool get hasRunLabels => isRunMember && dayIndex >= 1 && dayIndex <= dayCount;
 
   /// One day of a multi-day run, whose length is fixed at booking.
   bool get isRunMember => dayCount > 1;

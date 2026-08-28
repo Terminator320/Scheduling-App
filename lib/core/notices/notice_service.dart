@@ -11,19 +11,15 @@ class NoticeService {
 
   Stream<AppNotice> get stream => _controller.stream;
 
-  void success(String message) {
-    if (_disposed) return;
-    _controller.add(AppNotice.success(message));
-  }
+  void success(String message) => _emit(AppNotice.success(message));
 
-  void info(String message) {
-    if (_disposed) return;
-    _controller.add(AppNotice.info(message));
-  }
+  void info(String message) => _emit(AppNotice.info(message));
 
-  void error(String message) {
+  void error(String message) => _emit(AppNotice.error(message));
+
+  void _emit(AppNotice notice) {
     if (_disposed) return;
-    _controller.add(AppNotice.error(message));
+    _controller.add(notice);
   }
 
   void dispose() {

@@ -10,6 +10,81 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.53.0+82] - 2026-08-28
+
+A job that runs over several days is now booked as one visit per day, so the
+crew can finish Tuesday without closing Wednesday and Thursday with it.
+Alongside it, client addresses stop repeating themselves, and clients who share
+a building can finally be seen as a group.
+
+### Added
+- **A multi-day job is now one visit per day.** Booking Monday to Friday
+  creates five visits, one per day, still shown as a single job on the calendar
+  and still reading "Day 3 of 5". Each day carries its own status and its own
+  photos, so marking Monday complete no longer marks the whole week complete —
+  which was the only way it could work before, and meant the office lost sight
+  of what had actually been done. Editing, cancelling or deleting one day asks
+  whether you mean that day or the rest of the run, the same question repeating
+  visits already ask. Booked time off is unchanged and stays a single block.
+- **A crew that finishes early can call off the rest of the run.** Cancelling
+  one day of a multi-day job offers to cancel the following days too, in one
+  action, and the crew gets a single notification rather than one per day.
+- **Clients who share a building can be filtered as a group.** The clients list
+  gains an Address menu listing every street address more than one client sits
+  at, busiest first, and each row shows how many units are at that address.
+  Eighteen customers in one condo tower were previously scattered through the
+  whole roster with no way to see them together. The menu stays hidden when no
+  address is shared.
+- **"Building" is now a client type,** replacing "Property mgmt" on the filter
+  chips and the client form.
+
+### Changed
+- **A client's address is stored once, not twice.** The address box held the
+  whole address while the city, province, postal code and country sat in their
+  own boxes underneath repeating it — so editing the city in one place left the
+  two copies disagreeing. The address box now holds the street line alone, and
+  every screen that needs the whole address composes it. Existing clients are
+  unaffected and read correctly either way.
+- **Photos taken on a later day of a job stay with that day.** They previously
+  all landed in one pile on the job as a whole.
+- **A multi-day job can no longer be given a repeat rule,** and the length of a
+  run is fixed once booked — shorten it by cancelling the tail, extend it by
+  booking another job. A weekly three-day job would have made "this and the
+  following" mean two different things at once.
+
+### Fixed
+- **An exported contact card no longer repeats the city and postal code.**
+  A client saved in the app exported as "1234 Rue Principale, Montréal, QC H2X
+  1Y4, Canada, Montréal, QC, H2X 1Y4, Canada."
+- **Opening a job no longer forgets which client's address it uses.** Every
+  appointment opened in "custom address" mode and never offered the client's
+  own address back, because the stored address and the client's address were
+  being compared in two different forms.
+- **A map that fails to open now leaves a record.** It showed the error but
+  logged nothing, so a phone with no map app installed was invisible to
+  support.
+- **Booking a multi-day job no longer calls its days "future visits".** A
+  Monday-to-Friday job announced "4 future visits booked", borrowing the
+  wording for a repeating appointment — it is one job over five days. It now
+  reads "Job booked — 5 days".
+- **A job with a damaged day-of-run marker can be repaired instead of getting
+  stuck.** Such a job could only have been produced by editing the database
+  directly, but once it existed every save was refused with no way back.
+- **A multi-day job counts as one job, not one per day.** A client booked for
+  Monday to Friday had their job count read five, and their job history listed
+  the same visit five times over.
+- **Correcting a client's address now reaches their booked jobs when the
+  address has a unit number.** The apartment was written one way on the client
+  and another on the job, so the two never matched and the correction reached
+  nothing — silently, for exactly the clients most likely to have one.
+- **Editing a job can no longer stretch it across several days.** Doing so
+  produced a job that looked like a multi-day run but closed every day at once
+  the moment one was marked complete. Multi-day work is booked as such from the
+  start; time off is unaffected.
+- **"Cancel this and the following days" now follows the run, not the
+  calendar.** If a day of a run had been moved to a later date, cancelling from
+  it could quietly cancel nothing, or take days it should not have.
+
 ## [1.52.0+81] - 2026-08-25
 
 A day off now tells you what it is for. If someone typed a reason when they

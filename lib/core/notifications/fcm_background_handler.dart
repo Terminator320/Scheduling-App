@@ -10,12 +10,10 @@ import 'package:scheduling/features/home_widget/application/widget_sync_service.
 /// only, no Firebase or Riverpod.
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  // Only iOS ships the home-screen widget.
   if (!Platform.isIOS) return;
   final payload = message.data['widgetPayload'];
   if (payload is! String || payload.isEmpty) return;
-  // This runs in a fresh isolate, so we need to init the binding for the
-  // method channel.
+  // Background isolates need a binding before method-channel calls.
   WidgetsFlutterBinding.ensureInitialized();
   await writeWidgetPayloadJson(payload);
 }

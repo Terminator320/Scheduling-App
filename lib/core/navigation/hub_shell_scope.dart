@@ -94,7 +94,6 @@ void navigateToDestination(
     case final HubTab tab:
       final scoped = HubShellScope.maybeOf(context);
       if (scoped != null) {
-        // Inside the shell subtree — nothing is stacked above the shell.
         scoped.select(
           tab,
           isAdmin: isAdmin,
@@ -106,7 +105,6 @@ void navigateToDestination(
       }
       final live = HubShellScope.liveSelector;
       if (live != null) {
-        // A pushed route — collapse to the shell, then switch.
         live.selectAndReveal(
           tab,
           isAdmin: isAdmin,
@@ -136,7 +134,6 @@ void navigateToDestination(
         userName: userName,
         userEmail: userEmail,
       );
-      // Re-tapping the drawer row for the screen you are on is a no-op.
       if (ModalRoute.settingsOf(context)?.name == target.route) return;
       Navigator.pushNamed(context, target.route, arguments: target.arguments);
   }

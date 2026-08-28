@@ -309,7 +309,6 @@ async function endCardOnTerminal(id, before, after, deps, now) {
   const statusOf = (d) => (d || {}).status;
   const targets = new Set();
   if (before && !after) {
-    // Deleted.
     for (const e of toIdList(before.employeeIds)) targets.add(e);
   } else if (before && after) {
     // Through the shared owners rather than a literal "done": this tested

@@ -155,6 +155,14 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           // One day of a multi-day RUN: the end date goes away, because the
           // run's length is fixed at booking.
           isRunMember: widget.appointment.isRunMember,
+          // Editing may not widen a ONE-DAY client job into a multi-day one:
+          // only the ADD path splits a span into per-day documents, so this
+          // would write the wide document that closes every day at once.
+          // A job that is ALREADY multi-day keeps the row — a legacy wide
+          // document has to stay visible and shortenable, and hiding it there
+          // strands the very records this split is migrating away from.
+          // Personal blocks keep it too: they legitimately stay wide.
+          canSpanDays: widget.appointment.isPersonal || spanLength > 1,
           isOvernight:
               !state.isAllDay &&
               isOvernightWindow(state.selectedStartTime, state.selectedEndTime),

@@ -25,8 +25,8 @@ void main() {
   test('a pop falls back to the route beneath', () {
     observer
       ..didPush(_route('/login'), null)
-      ..didPush(_route('/accept-invite/code'), _route('/login'))
-      ..didPop(_route('/accept-invite/code'), _route('/login'));
+      ..didPush(_route('/settings'), _route('/login'))
+      ..didPop(_route('/settings'), _route('/login'));
 
     expect(observer.currentRouteName, '/login');
   });

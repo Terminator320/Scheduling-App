@@ -75,6 +75,15 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   write `status:'done'` with no date restriction (pinned by
   `appointment_employee_update_rules_test.dart`), so nothing server-side
   changed. Don't reintroduce a start-time or "is today" test here.
+  **That branch now also pins `updatedAt == request.time`** (2026-08-28).
+  `updatedAt` has to be in the `hasOnly(['status', 'updatedAt'])` diff, and
+  admitting it unpinned let a modified client stamp an arbitrary — future,
+  past or non-timestamp — value while closing a job it is assigned to. Nothing
+  server-side branches on an appointment's `updatedAt`, so this is audit-trail
+  integrity rather than a closed exploit. Safe to pin because BOTH client write
+  paths (`updateAppointmentStatus`, `updateAppointmentStatuses`) send
+  `FieldValue.serverTimestamp()` unconditionally — a new status-write path that
+  omits it will be refused here.
 - **Admin-only appointment actions are gated by an explicit `showActions`.**
   `showEventDetails(..., showActions:)` is a REQUIRED param, and
   `EventDetailsSheet` / `EventDetailsView` both default it
@@ -339,6 +348,15 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   holds a resolved pair and no record yet: the booking-conflict dialog).
   Never re-derive a day index or a run length at a call site, the way the
   `displayStatusAt` ladder and `_who` were re-derived and drifted.
+  **The per-work-day window fan-out has ONE loop, `expandRunWindows`**, and
+  the private `_windowsOf` behind `dailyWindowsOverlap` delegates to it
+  (2026-08-28). They were the same body twice in this one file, differing only
+  in the incoherent-pair answer — `const []` for "nothing to check" versus one
+  window for "still something to book". That split matters: the windows a run
+  is WRITTEN with and the windows it is CHECKED against for clashes have to be
+  the same arithmetic, or a DST or overnight change lands on the booking path
+  and not the conflict path and surfaces as phantom or missed clashes on
+  multi-day jobs alone. Keep the delegation; don't re-inline the loop.
   **The end date names the last day the crew STARTS work**, never the morning an
   overnight run finishes, so the length is `end − start + 1` for day jobs and
   night shifts alike. A window whose end time is at or before its start time
@@ -412,11 +430,46 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   a stored pair on a legacy wide doc cannot print one day's label on all of
   them. Hand-mirrored by `storedRunLabel` in `functions/day_slice_utils.js`; the
   two suites share worked examples.
+  **`toMap` emits the pair only when it is COHERENT** (`hasRunLabels` =
+  `isRunMember && 1 <= dayIndex <= dayCount`), not on `isRunMember` alone.
+  `dayIndex` parses to 0 when the source doc has none, and the rules bound
+  it at `>= 1`, so a console-written doc carrying `dayCount: 5` with no
+  `dayIndex` would re-serialize as `dayIndex: 0` and be refused on EVERY
+  later edit — including the cancel that would clear it. Dropping the
+  labels repairs such a doc where emitting a rejected value strands it;
+  same asymmetry as `appointmentSpanNotWidened`.
   **`AppointmentDaySlice` is NOT legacy.** It stays the live representation for
   time off and personal blocks, which deliberately do not split — nothing marks
   a day off complete, and a fortnight of holiday fanned into 14
   independently-cancellable rows makes the clash alert and the availability
   reducer read 14 documents where they now read one span.
+  **A run's SCOPE is selected by `dayIndex`, not `startTime`.**
+  `futureSeriesRecords`/`futureSeriesIds` (`event_series_helpers.dart`) take an
+  `anchor` and compare stored day positions when it carries a coherent run
+  pair; a repeat series (and any legacy document) still compares `startTime`.
+  Both axes live in one helper because a run member's START date stays
+  editable: moving day 1 past its siblings made "cancel this and the following
+  days" select NOTHING and report success, while the same action on day 4 swept
+  the moved day up. Pass the anchor at every run-scoped call site.
+  **Only the ADD path splits a span into per-day documents**, so the EDIT form
+  must not be able to widen a client job: `AppointmentFormFields.canSpanDays`
+  gates the end-date row and `details_edit_body` passes `isPersonal`. Without
+  it an edit wrote the single WIDE document this design exists to eliminate —
+  it renders "Day 3 of 5" through the derived branch, so it is
+  indistinguishable from a real run, but marking one day complete closes every
+  day of it. Personal blocks and time off KEEP the row; they legitimately stay
+  one wide document.
+  **A run is ONE job everywhere a job is COUNTED or LISTED.**
+  `recountClientJobs` subtracts a second `count()` over `dayIndex > 1` (the
+  inequality excludes a single-day job, which has no such field, and day 1,
+  which stores 1 — so no backfill was needed), served by the
+  `(clientId ASC, dayIndex ASC)` composite; `fetchClientHistory` filters
+  `dayIndex <= 1` in DART, because a server-side inequality would drop every
+  document written before the field existed. A document count made a
+  Monday-to-Friday booking read as five jobs on a badge captioned "jobs".
+  Known and accepted: nothing renumbers the pair after a this-day-only delete,
+  so survivors keep reading "of 5" — the scope actions stay correct, only the
+  label is stale.
   **A run's LENGTH is fixed at booking** (the end-date row is hidden on a run
   member, via `AppointmentFormFields.isRunMember` →
   `AppointmentDateRows.showEndDate`): shortening is cancelling the tail through

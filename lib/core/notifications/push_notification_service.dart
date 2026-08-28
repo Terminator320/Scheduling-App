@@ -49,7 +49,8 @@ class PushNotificationService {
       status == AuthorizationStatus.authorized ||
       status == AuthorizationStatus.provisional;
 
-  /// Opens the OS Settings page to re-enable notifications after the one-time prompt.
+  /// Opens the OS Settings page to re-enable notifications after the one-time
+  /// prompt.
   Future<bool> openSystemSettings() async {
     try {
       return await openAppSettings();

@@ -17,6 +17,7 @@
 
 const {
   toMillis,
+  nowMillis,
   businessDayStartMs,
   businessMinutesOfDay,
   hasWorkLeft,
@@ -149,17 +150,6 @@ function toIdList(value) {
 }
 
 /**
- * Epoch ms for a `now` that may be a Date or a number.
- * @param {(Date|number)} now
- * @return {number}
- */
-function nowMillis(now) {
-  // Delegates to the shared coercion: the private copy this replaced returned
-  // NaN for a Firestore Timestamp and skipped the finite check.
-  return toMillis(now) ?? NaN;
-}
-
-/**
  * Adds `kind` for `employeeDocId` to the accumulator, keeping the
  * higher-priority kind if the employee already has one.
  * @param {!Object<string, string>} acc
@@ -204,7 +194,6 @@ function diffAppointmentForNotifications(before, after, now, id) {
   const stillLive = (d) => hasWorkLeft(d, nowMs);
 
   if (!before && after) {
-    // Created.
     if (isCancelled(after) || !stillLive(after)) return [];
     // Only the anchor (id === seriesId) sends the assignment push, so a
     // repeating series notifies once instead of once per pre-booked
@@ -216,13 +205,11 @@ function diffAppointmentForNotifications(before, after, now, id) {
       _accumulate(acc, eid, "assigned");
     }
   } else if (before && !after) {
-    // Deleted.
     if (!stillLive(before)) return [];
     for (const id of toIdList(before.employeeIds)) {
       _accumulate(acc, id, "cancelled");
     }
   } else if (before && after) {
-    // Updated.
     if (isCancelled(after) && !isCancelled(before)) {
       if (!stillLive(after)) return [];
       for (const id of toIdList(before.employeeIds)) {

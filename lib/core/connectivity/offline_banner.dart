@@ -23,7 +23,6 @@ class OfflineBanner extends ConsumerWidget {
       child: SafeArea(
         top: false,
         child: Semantics(
-          // Announce appearing/disappearing to screen readers.
           liveRegion: true,
           child: Padding(
             padding: const EdgeInsets.symmetric(

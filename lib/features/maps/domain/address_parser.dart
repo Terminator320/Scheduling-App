@@ -154,9 +154,12 @@ class AddressParser {
   /// The street line alone — [stored] with any trailing segments that merely
   /// repeat the structured locality fields removed.
   ///
-  /// Hand-mirrors `streetFromAddress` (`functions/wave/mappers.js`), which the
-  /// Wave push has always needed because `clients/{id}.address` carries more
-  /// than a street. Keep the two in step; their tests share worked examples.
+  /// Hand-mirrors `streetFromAddress` (`functions/client_address_utils.js`),
+  /// which the Wave push has always needed because `clients/{id}.address`
+  /// carries more than a street. It moved out of `wave/mappers.js` when
+  /// `client_propagation.js` and the address backfill became callers too, so
+  /// the rule now has three readers rather than one. Keep the two in step;
+  /// their tests share worked examples.
   ///
   /// It strips from the TAIL rather than splitting on the first comma, so a
   /// street like "100 Main St, Building A" keeps its second segment. With no
@@ -182,12 +185,14 @@ class AddressParser {
         .toList();
     if (segments.length <= 1) return segments.isEmpty ? '' : segments.first;
 
-    final tails = <String>{
-      for (final part in [city, province, postalCode, country])
-        if (_localityKey(part).isNotEmpty) _localityKey(part),
-      if (province.trim().isNotEmpty && postalCode.trim().isNotEmpty)
-        _localityKey('$province $postalCode'),
-    };
+    final tails = <String>{};
+    for (final part in [city, province, postalCode, country]) {
+      final key = _localityKey(part);
+      if (key.isNotEmpty) tails.add(key);
+    }
+    if (province.trim().isNotEmpty && postalCode.trim().isNotEmpty) {
+      tails.add(_localityKey('$province $postalCode'));
+    }
     if (tails.isEmpty) return segments.first;
 
     var end = segments.length;

@@ -58,13 +58,15 @@ void main() {
         final appointment = _appt(id: 'a1', start: start); // seriesId is empty
         final updated = appointment.copyWith(repeat: RepeatInterval.oneYear);
 
-        final result = await editor.rewrite(
-          updated: updated,
-          appointment: appointment,
-          id: 'a1',
-          start: start,
-          end: start.add(const Duration(hours: 1)),
-          repeat: RepeatInterval.oneYear,
+        final result = await editor.commitRewrite(
+          await editor.planRewrite(
+            updated: updated,
+            appointment: appointment,
+            id: 'a1',
+            start: start,
+            end: start.add(const Duration(hours: 1)),
+            repeat: RepeatInterval.oneYear,
+          ),
         );
 
         // oneYear across the 60-month horizon books 5 future occurrences.
@@ -119,13 +121,15 @@ void main() {
         ];
         when(() => repo.getSeries('s1')).thenAnswer((_) async => series);
 
-        final result = await editor.rewrite(
-          updated: appointment.copyWith(repeat: RepeatInterval.oneYear),
-          appointment: appointment,
-          id: 'a2',
-          start: start,
-          end: start.add(const Duration(hours: 1)),
-          repeat: RepeatInterval.oneYear,
+        final result = await editor.commitRewrite(
+          await editor.planRewrite(
+            updated: appointment.copyWith(repeat: RepeatInterval.oneYear),
+            appointment: appointment,
+            id: 'a2',
+            start: start,
+            end: start.add(const Duration(hours: 1)),
+            repeat: RepeatInterval.oneYear,
+          ),
         );
 
         expect(result.removedBookings, 1);
@@ -171,12 +175,14 @@ void main() {
           endTime: DateTime(2026, 1, 15, 12),
         );
 
-        final count = await editor.propagate(
-          updated: updated,
-          appointment: appointment,
-          id: 'p1',
-          start: editedStart,
-          end: DateTime(2026, 1, 15, 12),
+        final count = await editor.commitPropagate(
+          await editor.planPropagate(
+            updated: updated,
+            appointment: appointment,
+            id: 'p1',
+            start: editedStart,
+            end: DateTime(2026, 1, 15, 12),
+          ),
         );
 
         expect(count, 1);
@@ -222,12 +228,14 @@ void main() {
           endTime: allDayEnd,
         );
 
-        await editor.propagate(
-          updated: updated,
-          appointment: appointment,
-          id: 'p1',
-          start: allDayStart,
-          end: allDayEnd,
+        await editor.commitPropagate(
+          await editor.planPropagate(
+            updated: updated,
+            appointment: appointment,
+            id: 'p1',
+            start: allDayStart,
+            end: allDayEnd,
+          ),
         );
 
         final written =

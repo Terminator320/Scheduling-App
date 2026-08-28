@@ -134,19 +134,34 @@ describe("relevantClientChange", () => {
     expect(change).toBeNull();
   });
 
-  test("an apt-bearing client now MATCHES the booked address", () => {
-    // Predates the split: the app books the composed address while the doc
-    // stores the canonical `4-1234 ...`, so `from` never equalled what the
-    // appointment held and an apt-bearing client silently never took an
-    // address correction.
+  test("an apt-bearing client MATCHES what the app actually books", () => {
+    // The values below are the DISPLAY spelling, which is what the app writes
+    // into `appointments.address` (it seeds `client.fullAddress`, and did the
+    // equivalent before the split). `buildAppointmentPatch` compares `from`
+    // to that string verbatim, so this is the case that decides whether an
+    // apt-bearing client's address correction reaches their jobs at all.
+    // Until 2026-08-28 this composed "4-1234 ..." and asserted it against
+    // itself, so it passed while the propagation silently matched nothing.
     const locality = {city: "Montréal", province: "QC"};
     const change = relevantClientChange(
         {address: "4-1234 Rue Principale", ...locality},
         {address: "4-1234 Rue Sherbrooke", ...locality});
     expect(change.address.from)
-        .toBe("4-1234 Rue Principale, Montréal, QC");
+        .toBe("1234 Rue Principale #4, Montréal, QC");
     expect(change.address.to)
-        .toBe("4-1234 Rue Sherbrooke, Montréal, QC");
+        .toBe("1234 Rue Sherbrooke #4, Montréal, QC");
+  });
+
+  test("an apt-bearing client's booked address is PATCHED, end to end", () => {
+    // The regression this whole pair exists for: the appointment holds the
+    // display spelling, so the patch must fire.
+    const locality = {city: "Montréal", province: "QC"};
+    const change = relevantClientChange(
+        {address: "4-1234 Rue Principale", ...locality},
+        {address: "4-1234 Rue Sherbrooke", ...locality});
+    const patch = buildAppointmentPatch(
+        change, {address: "1234 Rue Principale #4, Montréal, QC"});
+    expect(patch).toEqual({address: "1234 Rue Sherbrooke #4, Montréal, QC"});
   });
 
   test("a CITY edit alone now reaches the appointment", () => {

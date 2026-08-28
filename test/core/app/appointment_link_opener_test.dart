@@ -225,7 +225,7 @@ void main() {
     tester,
   ) async {
     // B9: this branch used to return silently, so a tap on a slow cold start
-    // vanished with no trace. It now logs `PUSH-TAP hub never appeared`.
+    // vanished with no trace. It now logs the missing hub.
     when(
       () => repository.getAppointmentById('a1'),
     ).thenAnswer((_) async => job);

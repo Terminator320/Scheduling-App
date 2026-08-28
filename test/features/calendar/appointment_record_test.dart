@@ -230,6 +230,26 @@ void main() {
         expect(member.toMap()['dayIndex'], 3);
         expect(member.toMap()['dayCount'], 5);
       });
+
+      test(
+        'toMap drops an INCOHERENT pair rather than writing a rejected one',
+        () {
+          // A console-written doc can carry dayCount with no dayIndex, which
+          // parses to 0. The rules bound dayIndex at >= 1, so emitting it would
+          // make every later edit — including the cancel that would clear it —
+          // fail as an opaque permission-denied. Dropping the labels repairs the
+          // doc instead of stranding it.
+          final base = AppointmentRecord(startTime: start, endTime: end);
+
+          final noIndex = base.copyWith(dayCount: 5);
+          expect(noIndex.toMap().containsKey('dayIndex'), isFalse);
+          expect(noIndex.toMap().containsKey('dayCount'), isFalse);
+
+          final pastEnd = base.copyWith(dayIndex: 9, dayCount: 5);
+          expect(pastEnd.toMap().containsKey('dayIndex'), isFalse);
+          expect(pastEnd.toMap().containsKey('dayCount'), isFalse);
+        },
+      );
     });
   });
 
@@ -351,7 +371,5 @@ void main() {
       final restored = AppointmentImage.fromMap(original.toMap());
       expect(restored, equals(original));
     });
-
-
   });
 }

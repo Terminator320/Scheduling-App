@@ -70,12 +70,19 @@ function clientsToRecount(beforeData, afterData) {
  * @return {!Promise<void>}
  */
 async function recountOne(db, clientId) {
-  const snapshot = await db
-      .collection("appointments")
-      .where("clientId", "==", clientId)
-      .count()
-      .get();
-  const jobCount = snapshot.data().count;
+  const base = db.collection("appointments").where("clientId", "==", clientId);
+  // A multi-day run is ONE job stored as one document per work day, so a
+  // document count would read 5 for a Monday-to-Friday booking — on a badge
+  // captioned "jobs". The later days are exactly the documents carrying
+  // `dayIndex > 1`: a single-day job omits the field entirely and day 1 stores
+  // 1, and an inequality filter excludes a document missing the field, so this
+  // subtraction needs no backfill and no per-document read. Served by the
+  // (clientId ASC, dayIndex ASC) composite.
+  const [total, laterRunDays] = await Promise.all([
+    base.count().get(),
+    base.where("dayIndex", ">", 1).count().get(),
+  ]);
+  const jobCount = total.data().count - laterRunDays.data().count;
   try {
     // update(), not set({merge:true}) — a client removed out-of-band (the app
     // has no delete path, but the Admin SDK and console bypass that) must not

@@ -86,6 +86,83 @@ function streetFromAddress(stored, f) {
   return segments.slice(0, end).join(", ");
 }
 
+// Hand-mirrors `AddressParser`'s four apt patterns, IN ORDER — the order is
+// the rule, since a value can match more than one. Compiled once at module
+// load like the Dart side, which compiles them as `static final` for the same
+// reason.
+const SAVED_APT = /^Apt-?\s*([^-]+)\s*-\s*(.+)$/i;
+// eslint-disable-next-line max-len
+const LABELED_APT = /^\s*(?:apt|apartment|unit|suite|ste|#)\s*[-#: ]*\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*[-,]\s*(.+)$/i;
+const DASH_APT = /^\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*-\s*(\d+.+)$/;
+// eslint-disable-next-line max-len
+const TRAILING_APT = /^\s*(.+?)\s+(?:#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*([A-Za-z0-9][A-Za-z0-9 /]*)\s*(,.*)?$/i;
+const LEADING_HASHES = /^#+/;
+const EMBEDDED_APT_TOKEN =
+    /\s+(#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*[A-Za-z0-9 /]+/i;
+
+/**
+ * Splits a street line into its apt and street halves, or null when it has no
+ * apt. Hand-mirrors `AddressParser.splitApt`.
+ * @param {string} rawAddress
+ * @return {?{apt: string, street: string}}
+ */
+function splitApt(rawAddress) {
+  const value = (rawAddress || "").trim();
+  if (!value) return null;
+
+  const saved = SAVED_APT.exec(value);
+  if (saved) return {apt: saved[1].trim(), street: saved[2].trim()};
+
+  const labeled = LABELED_APT.exec(value);
+  if (labeled) return {apt: labeled[1].trim(), street: labeled[2].trim()};
+
+  const dash = DASH_APT.exec(value);
+  if (dash) return {apt: dash[1].trim(), street: dash[2].trim()};
+
+  const trailing = TRAILING_APT.exec(value);
+  if (trailing) {
+    const beforeUnit = trailing[1].trim();
+    const afterUnit = (trailing[3] || "").trim();
+    return {
+      apt: trailing[2].trim(),
+      street: afterUnit ? `${beforeUnit}${afterUnit}` : beforeUnit,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Renders the apt the way the APP does — "1234 Rue X #4", never "4-1234 Rue X".
+ * Hand-mirrors `AddressParser.formatForDisplay`.
+ * @param {string} street
+ * @param {string} apt
+ * @return {string}
+ */
+function formatAptForDisplay(street, apt) {
+  const cleanStreet = (street || "").replace(EMBEDDED_APT_TOKEN, "").trim();
+  const cleanApt = (apt || "").trim().replace(LEADING_HASHES, "");
+  if (!cleanStreet || !cleanApt) return cleanStreet;
+
+  const commaIndex = cleanStreet.indexOf(",");
+  if (commaIndex === -1) return `${cleanStreet} #${cleanApt}`;
+
+  const firstLine = cleanStreet.slice(0, commaIndex).trim();
+  const rest = cleanStreet.slice(commaIndex);
+  return `${firstLine} #${cleanApt}${rest}`;
+}
+
+/**
+ * The stored canonical spelling rendered the way the app shows it.
+ * Hand-mirrors `AddressParser.canonicalToDisplay`.
+ * @param {string} stored
+ * @return {string}
+ */
+function canonicalToDisplay(stored) {
+  const parts = splitApt(stored);
+  return parts ? formatAptForDisplay(parts.street, parts.apt) : stored;
+}
+
 /**
  * The whole address on one line, rebuilt from the street plus the structured
  * fields — "1234 Rue Principale, Montréal, QC H2X 1Y4, Canada".
@@ -94,9 +171,16 @@ function streetFromAddress(stored, f) {
  * what makes this answer the same string for both stored shapes, and therefore
  * what makes normalizing the field a NO-OP everywhere this is compared.
  *
- * Unlike the Dart twin this does NOT re-render the apt as "#4" — the server
- * has no display concern and must not rewrite a stored appointment address
- * into a different spelling of itself.
+ * It DOES re-render the apt as "#4", matching `AddressParser.composeFull`, and
+ * that is load-bearing rather than cosmetic. This value is compared verbatim
+ * against what an appointment holds (`buildAppointmentPatch`), and the app has
+ * always booked the DISPLAY spelling — before the split it seeded
+ * `canonicalToDisplay(client.address)`. Composing the canonical `4-1234 …`
+ * here instead meant `from` never equalled what any apt-bearing client's
+ * appointments actually contained, so their address corrections silently
+ * reached none of their jobs. This header claimed the opposite until
+ * 2026-08-28: that the server "has no display concern". It does, because it
+ * compares against a string the client wrote.
  *
  * @param {!Object} f The client document fields.
  * @return {string} The composed address, or "" when there is nothing to show.
@@ -104,7 +188,7 @@ function streetFromAddress(stored, f) {
 function composeFullAddress(f) {
   const d = f || {};
   const stored = typeof d.address === "string" ? d.address.trim() : "";
-  const street = streetFromAddress(stored, d);
+  const street = canonicalToDisplay(streetFromAddress(stored, d));
   const text = (value) => (typeof value === "string" ? value.trim() : "");
   // Province and postal code share a segment, the way an address is written.
   const region = [text(d.province), text(d.postalCode)]
@@ -116,4 +200,6 @@ function composeFullAddress(f) {
 module.exports = {
   streetFromAddress,
   composeFullAddress,
+  splitApt,
+  canonicalToDisplay,
 };

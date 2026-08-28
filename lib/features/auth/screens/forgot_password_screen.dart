@@ -39,6 +39,8 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
   int _restartTick = 0;
 
   String? get _feedbackMessage => _errorMessage.isEmpty ? null : _errorMessage;
+  bool get _canSubmit => !_isLoading;
+  bool get _canResend => _emailSent && !_resentOnce && !_isLoading;
 
   @override
   void initState() {
@@ -54,8 +56,12 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
     super.dispose();
   }
 
+  void _submitResetEmail() {
+    _sendResetEmail();
+  }
+
   Future<bool> _sendResetEmail() async {
-    if (_isLoading) return false;
+    if (!_canSubmit) return false;
     FocusScope.of(context).unfocus();
     final email = normalizeEmail(_emailController.text);
     final emailError = AuthValidators.email(context, email);
@@ -72,9 +78,12 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
       _isLoading = true;
       _emailError = null;
       _errorMessage = '';
+      if (_emailController.text != email) {
+        _emailController.text = email;
+      }
     });
 
-    String? systemError;
+    String? resetError;
     try {
       await _authService.sendPasswordResetEmail(email);
     } catch (error, st) {
@@ -86,21 +95,23 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
         st,
       );
       if (!mounted) return false;
-      systemError = failure.toForgotPasswordMessage(context);
+      resetError = failure.toForgotPasswordMessage(context);
     }
 
-    if (!mounted) return systemError == null;
+    final wasSent = resetError == null;
+    if (!mounted) return wasSent;
     setState(() {
       _isLoading = false;
-      if (systemError != null) {
-        _errorMessage = systemError;
+      if (resetError != null) {
+        _errorMessage = resetError;
       } else {
-        // Only the first send restarts the success transition.
-        if (!_emailSent) _restartTick++;
+        if (!_emailSent) {
+          _restartTick++;
+        }
         _emailSent = true;
       }
     });
-    return systemError == null;
+    return wasSent;
   }
 
   void _clearFeedback() {
@@ -112,7 +123,7 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
   }
 
   Future<void> _resendEmail() async {
-    if (_resentOnce || _isLoading) return;
+    if (!_canResend) return;
     if (await _sendResetEmail()) {
       if (!mounted) return;
       setState(() => _resentOnce = true);
@@ -160,7 +171,7 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
           errorText: _emailError,
           hint: context.l10n.auth_youExampleCom,
           textInputAction: TextInputAction.done,
-          onSubmitted: _sendResetEmail,
+          onSubmitted: _submitResetEmail,
           onChanged: _clearFeedback,
         ),
         AuthBanner(
@@ -176,7 +187,7 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
         AnimatedLoadingButton(
           label: context.l10n.auth_sendResetEmail,
           isLoading: _isLoading,
-          onPressed: _sendResetEmail,
+          onPressed: _submitResetEmail,
         ),
         const SizedBox(height: AppSpacing.sp8),
         Center(
@@ -246,7 +257,8 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
           const SizedBox(height: AppSpacing.sp24),
           AnimatedLoadingButton(
             label: context.l10n.auth_backToSignIn,
-            onPressed: _backToSignIn,
+            isLoading: _isLoading,
+            onPressed: _isLoading ? () {} : _backToSignIn,
           ),
         ],
       ),
@@ -264,6 +276,9 @@ class _FactPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final textStyle = theme.textTheme.bodySmall?.copyWith(
+      color: theme.palette.textBody,
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(AppRadius.r12),
@@ -288,9 +303,7 @@ class _FactPanel extends StatelessWidget {
                   Expanded(
                     child: Text(
                       facts[i].text,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.palette.textBody,
-                      ),
+                      style: textStyle,
                     ),
                   ),
                 ],

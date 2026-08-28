@@ -283,6 +283,21 @@ function businessDayStartMs(instant, offsetDays = 0) {
   return businessMidnight(y, m, d + offsetDays).getTime();
 }
 
+/**
+ * Epoch ms for a `now` that may be a Date, a number or a Firestore Timestamp.
+ *
+ * The `?? NaN` is deliberate and load-bearing: every window comparison against
+ * NaN is false, so a bad `now` makes a sweep return EMPTY rather than throw or,
+ * worse, treat every record as due. Two modules carried a byte-identical
+ * private copy that returned NaN for a Timestamp and skipped the finite check,
+ * and both had to be found and fixed twice.
+ * @param {(Date|number|Object)} now
+ * @return {number}
+ */
+function nowMillis(now) {
+  return toMillis(now) ?? NaN;
+}
+
 module.exports = {
   BUSINESS_TIME_ZONE,
   MAX_APPOINTMENT_SPAN_DAYS,
@@ -294,6 +309,7 @@ module.exports = {
   isCompletedStatus,
   businessMinutesOfDay,
   toMillis,
+  nowMillis,
   hasWorkLeft,
   formatBusinessTime,
   formatTimeOfDay,

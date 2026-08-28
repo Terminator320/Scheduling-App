@@ -1,8 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-class Breakpoints {
-  Breakpoints._();
-
+abstract final class Breakpoints {
   /// Two-pane threshold for master-detail + nav rail on genuinely large screens.
   static const double tablet = 840;
 

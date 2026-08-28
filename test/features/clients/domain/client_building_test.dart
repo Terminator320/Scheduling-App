@@ -95,10 +95,16 @@ void main() {
     });
   });
 
+  // `buildingsIn` takes the shared key map the repository's scan window
+  // memoizes; these cases care about the grouping, not about where keys
+  // come from.
+  List<ClientBuilding> buildingsOf(List<ClientRecord> clients) =>
+      buildingsIn(clients, keys: buildingKeysIn(clients));
+
   group('buildingsIn', () {
     test('an address with only one client is not a building', () {
       // Otherwise the menu is the client list under another name.
-      final buildings = buildingsIn([
+      final buildings = buildingsOf([
         _client('a', address: '1 Rue Un'),
         _client('b', address: '2 Rue Deux'),
       ]);
@@ -106,7 +112,7 @@ void main() {
     });
 
     test('groups units and counts them', () {
-      final buildings = buildingsIn([
+      final buildings = buildingsOf([
         _client('a', address: '914-4450 Prom. Paton'),
         _client('b', address: '1207-4450 Prom. Paton'),
         _client('c', address: '601-4450 Prom. Paton'),
@@ -118,7 +124,7 @@ void main() {
     });
 
     test('busiest building first', () {
-      final buildings = buildingsIn([
+      final buildings = buildingsOf([
         _client('a', address: '1-100 Rue A'),
         _client('b', address: '2-100 Rue A'),
         _client('c', address: '1-200 Rue B'),
@@ -129,7 +135,7 @@ void main() {
     });
 
     test('ties order by street so the menu is stable between rebuilds', () {
-      final buildings = buildingsIn([
+      final buildings = buildingsOf([
         _client('a', address: '1-200 Rue B'),
         _client('b', address: '2-200 Rue B'),
         _client('c', address: '1-100 Rue A'),
@@ -140,30 +146,12 @@ void main() {
 
     test('clients with no address are skipped, not grouped together', () {
       // They all derive a null key; grouping them would invent a building.
-      final buildings = buildingsIn([
+      final buildings = buildingsOf([
         _client('a'),
         _client('b'),
         _client('c'),
       ]);
       expect(buildings, isEmpty);
-    });
-  });
-
-  group('buildingCountsIn', () {
-    test('maps every grouped client key to its count', () {
-      final counts = buildingCountsIn([
-        _client('a', address: '914-4450 Prom. Paton'),
-        _client('b', address: '1207-4450 Prom. Paton'),
-        _client('c', address: '7 Rue Seule'),
-      ]);
-      final shared = buildingKeyFor(_client('x', address: '4450 Prom. Paton'))!;
-      expect(counts[shared], 2);
-      expect(counts, hasLength(1));
-    });
-
-    test('a lone client has no entry, so its row shows no pill', () {
-      final counts = buildingCountsIn([_client('a', address: '7 Rue Seule')]);
-      expect(counts, isEmpty);
     });
   });
 }
