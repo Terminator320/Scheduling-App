@@ -550,16 +550,21 @@ service cloud.firestore {
         // Same reasoning as the ids above: `seriesOpId` is interpolated into
         // the `appointmentSeriesNotices/op_<opId>_<kind>_<emp>` doc id.
         && (!('seriesOpId' in d.keys()) || isValidDocIdField(d.seriesOpId))
-        // LEGACY ONLY. Photos moved to `appointments/{id}/images` at the
-        // CONTRACT step: nothing writes this array any more, and
-        // `clear-appointment-picture-arrays.js` empties it. The cap stays
-        // because a document the script has not reached still carries its
-        // array, and that array rides along in `request.resource.data` on
-        // every ordinary edit — dropping the clause would let an Admin-SDK or
-        // console write grow one past the parent document's 1 MB ceiling and
-        // make the job permanently un-updatable, which is the failure this
-        // number was chosen to stay clear of. It is not a ban: banning the key
-        // outright would refuse every edit of a document still holding one.
+        // LEGACY ONLY, and as of 2026-08-27 no document carries one:
+        // photos moved to `appointments/{id}/images` at the CONTRACT step,
+        // nothing has written this array since 1.49.0+78, and
+        // `clear-appointment-picture-arrays.js` emptied the last of them
+        // (14 entries across 11 appointments, 67 scanned — every appointment).
+        //
+        // The cap STAYS anyway, and the reason changed rather than expired.
+        // It used to be "a document the script has not reached still carries
+        // its array"; now it is that `firestore.rules` reaches CLIENT writes
+        // only, so an Admin-SDK or console write is still free to put one
+        // back — and an unbounded array there grows the parent past its 1 MB
+        // ceiling and makes the job permanently un-updatable, which is the
+        // failure this number was chosen to stay clear of. It is not a ban:
+        // banning the key outright would refuse every edit of a document that
+        // somehow held one, which is the un-updatable state itself.
         && (!('pictures' in d.keys())
             || (d.pictures is list && d.pictures.size() <= 100))
         // 500 = `_userStreamLimit`, the ceiling on how many employees the
