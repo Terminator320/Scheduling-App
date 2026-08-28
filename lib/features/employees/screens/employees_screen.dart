@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -287,7 +288,7 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     // Only log on the data-to-error transition - otherwise this would re-log
     // on every rebuild while the stream stays errored.
     ref.listen(allUsersStreamProvider, (previous, next) {
-      if (next is! AsyncError || previous is AsyncError) return;
+      if (!isFirstAsyncError(previous, next)) return;
       ref.read(loggerProvider).warn(
         'EMP-LOAD allUsersStreamProvider error',
         next.error,

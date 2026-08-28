@@ -18,26 +18,32 @@ Future<AppointmentConflictHit?> findFirstAppointmentConflict({
 }) async {
   if (candidates.isEmpty) return null;
 
-  for (final booking in bookings) {
-    final ownId = excludeOwnBookingIds ? booking.id : null;
-    final exclusions = {
-      ...excludeAppointmentIds,
-      if (ownId != null) ownId,
-    };
-    final busy = await _findBusyEmployees(
-      repo: repo,
-      candidates: candidates,
-      start: booking.startTime,
-      end: booking.endTime,
-      excludeAppointmentIds: exclusions,
-    );
-    if (busy.isNotEmpty) {
-      return (
-        busyEmployees: busy,
+  // Checked in parallel, then read back in order. A run books one document per
+  // day and a repeat rule up to fifteen copies, so awaiting each in turn made
+  // one Save cost that many sequential round-trips; the reported window still
+  // has to be the FIRST clashing one, which the ordered read back preserves.
+  final planned = bookings.toList();
+  final busyPerBooking = await Future.wait([
+    for (final booking in planned)
+      _findBusyEmployees(
+        repo: repo,
+        candidates: candidates,
         start: booking.startTime,
         end: booking.endTime,
-      );
-    }
+        excludeAppointmentIds: {
+          ...excludeAppointmentIds,
+          if (excludeOwnBookingIds) ?booking.id,
+        },
+      ),
+  ]);
+  for (var i = 0; i < planned.length; i++) {
+    final busy = busyPerBooking[i];
+    if (busy.isEmpty) continue;
+    return (
+      busyEmployees: busy,
+      start: planned[i].startTime,
+      end: planned[i].endTime,
+    );
   }
   return null;
 }
@@ -90,7 +96,7 @@ Future<List<EmployeeRecord>> _findBusyEmployeesWithExclusions({
   for (final clash in clashes) {
     final id = clash.id;
     if (id != null && excludeAppointmentIds.contains(id)) continue;
-    busyIds.addAll(clash.employeeIds.where((id) => candidateIds.contains(id)));
+    busyIds.addAll(clash.employeeIds.where(candidateIds.contains));
   }
   return [
     for (final employee in candidates)

@@ -19,6 +19,19 @@ class AddressParser {
     caseSensitive: false,
   );
   static final _leadingHashes = RegExp('^#+');
+  // `_localityKey` runs ~6-10x per `streetOnly`, and `streetOnly` runs per row
+  // in the clients list builder AND once per client in `buildingsIn` — so a
+  // per-call constructor here cost thousands of compilations per window fetch.
+  static final _whitespaceRun = RegExp(r'\s+');
+  static final _postalCode = RegExp(
+    r'\b[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][ -]?\d[ABCEGHJ-NPRSTV-Z]\d\b',
+    caseSensitive: false,
+  );
+  static final _province = RegExp(
+    r'\b(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)\b',
+    caseSensitive: false,
+  );
+  static final _anyDigit = RegExp(r'\d');
   static final _embeddedAptToken = RegExp(
     r'\s+(#|apt\.?|apartment|unit|suite|ste\.?)\s*[-#: ]*\s*[A-Za-z0-9 /]+',
     caseSensitive: false,
@@ -223,7 +236,7 @@ class AddressParser {
   /// Collapses inner whitespace and case so two spellings of the same locality
   /// compare equal. Mirrors the JS `norm`.
   static String _localityKey(String value) =>
-      value.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+      value.replaceAll(_whitespaceRun, ' ').trim().toLowerCase();
 
   static String toCanonical(String text) {
     final trimmed = text.trim();
@@ -249,10 +262,7 @@ class AddressParser {
         .where((p) => p.isNotEmpty)
         .toList();
 
-    final postalMatch = RegExp(
-      r'\b[ABCEGHJ-NPRSTVXY]\d[ABCEGHJ-NPRSTV-Z][ -]?\d[ABCEGHJ-NPRSTV-Z]\d\b',
-      caseSensitive: false,
-    ).firstMatch(value);
+    final postalMatch = _postalCode.firstMatch(value);
     final postalCode = postalMatch?.group(0)?.toUpperCase();
 
     String? country;
@@ -268,10 +278,7 @@ class AddressParser {
 
     String? province;
     for (final part in parts) {
-      final m = RegExp(
-        r'\b(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)\b',
-        caseSensitive: false,
-      ).firstMatch(part);
+      final m = _province.firstMatch(part);
       if (m != null) {
         province = m.group(0)!.toUpperCase();
         break;
@@ -281,10 +288,10 @@ class AddressParser {
     String? city;
     if (parts.length >= 3) {
       final candidate = parts[parts.length - 3];
-      if (!RegExp(r'\d').hasMatch(candidate)) city = candidate;
+      if (!_anyDigit.hasMatch(candidate)) city = candidate;
     } else if (parts.length >= 2) {
       final candidate = parts[parts.length - 2];
-      if (!RegExp(r'\d').hasMatch(candidate)) city = candidate;
+      if (!_anyDigit.hasMatch(candidate)) city = candidate;
     }
 
     return ParsedAddressFields(

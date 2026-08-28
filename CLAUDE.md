@@ -264,7 +264,7 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   the 3-day pending horizon) is watched; `historyRangeAround` (the seven
   settled weeks behind it) is read once through
   `AppointmentsRepository.fetchInRange`. Held as one range it was a **70-day**
-  business-wide live listener capped at `_rangeStreamLimit`, so above ~14
+  business-wide live listener capped at `_rangeStreamLimit` (3000), so above ~42
   jobs/day the 8-week trends, busiest-weekday and Attention list were computed
   over a silent PREFIX. The two results **must be merged by doc id**
   (`DashboardAggregator.mergeById`, live wins) and never concatenated — each

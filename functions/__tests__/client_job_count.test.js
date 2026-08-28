@@ -1,7 +1,35 @@
 "use strict";
 
-const {clientsToRecount, recountOne, NOT_FOUND} =
-  require("../client_job_count");
+// The trigger resolves its Firestore handle and its claim ledger through these
+// two modules, so both are replaced to run `recountClientJobs` itself. The
+// `mock` prefix is what lets jest's hoisted factory close over the handle.
+let mockDb = null;
+jest.mock("../admin_firestore", () => ({
+  adminFirestore: () => ({getFirestore: () => mockDb}),
+}));
+jest.mock("../recount_claim", () => ({
+  debounceRecount: jest.fn(async (collection, key, recount) => ({
+    skipped: false,
+    result: await recount(),
+  })),
+}));
+jest.mock("firebase-functions/logger", () => ({
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+}));
+
+const {debounceRecount} = require("../recount_claim");
+const logger = require("firebase-functions/logger");
+const {
+  clientsToRecount,
+  mayShareABatch,
+  recountClientJobs,
+  recountOne,
+  CLIENT_RECOUNT_CLAIMS,
+  RECOUNT_SETTLE_MS,
+  NOT_FOUND,
+} = require("../client_job_count");
 
 describe("clientsToRecount", () => {
   test("a create recounts the new client", () => {
@@ -42,6 +70,19 @@ describe("clientsToRecount", () => {
 
   test("surrounding whitespace does not fake a reassignment", () => {
     expect(clientsToRecount({clientId: " c1 "}, {clientId: "c1"})).toEqual([]);
+  });
+
+  test("ids that would make doc() throw synchronously are dropped", () => {
+    // "/", "." and ".." are all rejected by `.doc()` BEFORE any promise
+    // exists, and this trigger is retry:true — one poisoned document written
+    // by the console or the Admin SDK would otherwise become a permanent
+    // redelivery storm. Rules screen these on the app's own write paths, but
+    // rules do not apply to either of those callers.
+    for (const bad of ["a/b", ".", "..", " .. "]) {
+      expect(clientsToRecount(null, {clientId: bad})).toEqual([]);
+    }
+    // Not over-broad: an id merely CONTAINING a dot is perfectly legal.
+    expect(clientsToRecount(null, {clientId: "..a"})).toEqual(["..a"]);
   });
 });
 
@@ -143,4 +184,153 @@ describe("recountOne", () => {
     const {db} = fakeDb({count: 3, updateError: {code: "not-found"}});
     await expect(recountOne(db, "c1")).rejects.toEqual({code: "not-found"});
   });
+});
+
+// ---------------------------------------------------------------------------
+// mayShareABatch — the gate that decides whether the debounce is worth paying
+// ---------------------------------------------------------------------------
+
+describe("mayShareABatch", () => {
+  test("an ordinary single-day job is never part of a batch", () => {
+    // The overwhelmingly common write. Debouncing it buys nothing and costs
+    // 2 s of billed wall-clock plus a claim create() AND delete() — taking the
+    // path from 2 Firestore writes to 4.
+    expect(mayShareABatch({clientId: "c1"})).toBe(false);
+    expect(mayShareABatch({clientId: "c1", seriesId: "", dayCount: 0}))
+        .toBe(false);
+  });
+
+  test("a multi-day run day-document is", () => {
+    expect(mayShareABatch({dayCount: 14, dayIndex: 3})).toBe(true);
+  });
+
+  test("a repeat-series occurrence is", () => {
+    expect(mayShareABatch({seriesId: "root1"})).toBe(true);
+  });
+
+  test("the series ROOT is too, even though seriesId is its own id", () => {
+    // add_event_controller.dart writes the root in the SAME WriteBatch as its
+    // siblings and stamps it with its own id. Excluding it would leave the root
+    // recounting alone while the siblings collapse to a second recount — two
+    // aggregates where the whole point is one.
+    expect(mayShareABatch({seriesId: "a1"})).toBe(true);
+  });
+
+  test("a missing document is not a batch", () => {
+    expect(mayShareABatch(null)).toBe(false);
+  });
+
+  test("junk in either marker degrades to the un-debounced path", () => {
+    expect(mayShareABatch({dayCount: "many", seriesId: 42})).toBe(false);
+    expect(mayShareABatch({dayCount: NaN})).toBe(false);
+    expect(mayShareABatch({seriesId: "   "})).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// recountClientJobs — the debounce adapter
+// ---------------------------------------------------------------------------
+
+/**
+ * A Firestore-written event carrying the given before/after document fields.
+ * @param {?Object} before
+ * @param {?Object} after
+ * @param {string=} appointmentId
+ * @return {!Object}
+ */
+function writeEvent(before, after, appointmentId = "a1") {
+  return {
+    params: {appointmentId},
+    data: {
+      before: {exists: before != null, data: () => before},
+      after: {exists: after != null, data: () => after},
+    },
+  };
+}
+
+describe("recountClientJobs", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockDb = null;
+  });
+
+  test("a plain create recounts DIRECTLY, with no claim and no settle",
+      async () => {
+        const {db, calls} = fakeDb({count: 4});
+        mockDb = db;
+
+        await recountClientJobs.run(writeEvent(null, {clientId: "c1"}));
+
+        expect(debounceRecount).not.toHaveBeenCalled();
+        expect(calls.update).toEqual([{jobCount: 4}]);
+      });
+
+  test("a run day-document debounces in the right ledger, at the right window",
+      async () => {
+        // All three arguments are silent when wrong. A collection name that
+        // does not match the deny-all block in firestore.rules AND the TTL
+        // policy in firestore.indexes.json yields a ledger the claim can never
+        // write: claimRecount then fails open on every call and the debounce
+        // simply never engages — no error, no log, just the old cost profile.
+        const {db, calls} = fakeDb({count: 9});
+        mockDb = db;
+
+        await recountClientJobs.run(
+            writeEvent(null, {clientId: "c1", dayCount: 14, dayIndex: 2}));
+
+        expect(debounceRecount).toHaveBeenCalledTimes(1);
+        const [collection, key, , deps] = debounceRecount.mock.calls[0];
+        expect(collection).toBe(CLIENT_RECOUNT_CLAIMS);
+        expect(CLIENT_RECOUNT_CLAIMS).toBe("clientRecountClaims");
+        expect(key).toBe("c1");
+        expect(deps.settleMs).toBe(RECOUNT_SETTLE_MS);
+        expect(calls.update).toEqual([{jobCount: 9}]);
+      });
+
+  test("a DELETE reads the batch markers off `before`", async () => {
+    // There is no `after` to read them from, and a run delete is exactly the
+    // batch worth collapsing.
+    const {db} = fakeDb({count: 0});
+    mockDb = db;
+
+    await recountClientJobs.run(
+        writeEvent({clientId: "c1", dayCount: 5}, null));
+
+    expect(debounceRecount).toHaveBeenCalledTimes(1);
+  });
+
+  test("a reassignment recounts both clients on the same path", async () => {
+    const {db} = fakeDb({count: 1});
+    mockDb = db;
+
+    await recountClientJobs.run(
+        writeEvent({clientId: "c1"}, {clientId: "c2", seriesId: "root"}));
+
+    expect(debounceRecount.mock.calls.map((c) => c[1]).sort())
+        .toEqual(["c1", "c2"]);
+  });
+
+  test("an unrelated edit does no work at all", async () => {
+    mockDb = null; // any Firestore access would throw
+    await recountClientJobs.run(
+        writeEvent({clientId: "c1", title: "Old"}, {clientId: "c1"}));
+    expect(debounceRecount).not.toHaveBeenCalled();
+  });
+
+  test("RETHROWS a failing recount, so retry: true still means something",
+      async () => {
+        // Swallowing here would turn every transient UNAVAILABLE into a
+        // jobCount that silently stops updating.
+        const denied = {code: 7};
+        const {db} = fakeDb({count: 2, updateError: denied});
+        mockDb = db;
+
+        await expect(
+            recountClientJobs.run(writeEvent(null, {clientId: "c1"})),
+        ).rejects.toEqual(denied);
+        expect(logger.error).toHaveBeenCalledWith(
+            "recountClientJobs failed",
+            expect.objectContaining({clientId: "c1"}),
+        );
+      });
 });

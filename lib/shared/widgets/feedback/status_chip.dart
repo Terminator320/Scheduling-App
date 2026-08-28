@@ -1,57 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_pill.dart';
 
-/// Appointment states run pending → in_progress → done, plus cancelled.
-/// Overdue is display-only — it's never actually stored.
-enum AppointmentStatus {
-  pending,
-  inProgress,
-  overdue,
-  done,
-  cancelled;
-
-  /// Maps a stored status string to the enum. Unrecognized values default to pending.
-  static AppointmentStatus fromRaw(String raw) => switch (raw.toLowerCase()) {
-    'done' || 'completed' => done,
-    'cancelled' => cancelled,
-    'overdue' => overdue,
-    'in_progress' || 'inprogress' => inProgress,
-    _ => pending,
-  };
-
-  /// Pickable statuses (excludes display-only overdue).
-  static const appointmentValues = [pending, inProgress, done];
-
-  /// Normalizes a stored status to the allowlist — legacy, unknown, and
-  /// overdue values all collapse to pending.
-  static String storedRaw(String raw) {
-    final status = fromRaw(raw);
-    return status == overdue ? pending.raw : status.raw;
-  }
-
-  /// The stored raw string for this status. overdue throws here, to catch
-  /// an accidental write early.
-  String get raw => switch (this) {
-    inProgress => 'in_progress',
-    overdue => throw StateError(
-      'overdue is display-only; it has no stored raw',
-    ),
-    _ => name,
-  };
-
-  bool get isDone => this == done;
-  bool get isCancelled => this == cancelled;
-
-  /// Terminal states exit the active workflow.
-  ///
-  /// The enum-level mirror of `terminalStatusRawValues`
-  /// (`features/calendar/domain/appointment_status_values.dart`), which owns
-  /// the raw-string vocabulary the History query and `AppointmentRecord`
-  /// share. `appointment_status_values_test.dart` pins the two together.
-  bool get isTerminal => isDone || isCancelled;
-}
+// Re-exported so the widget layer keeps one import for the chip and its enum.
+// The enum itself now lives in the Material-free domain owner, so the pure
+// reducers (`dashboard_aggregator`, `schedule_snapshot`) no longer pull a
+// widget file — and its Flutter import — into their graph.
+export 'package:scheduling/features/calendar/domain/appointment_status_values.dart'
+    show AppointmentStatus;
 
 /// Localized status label.
 String statusLabel(AppLocalizations l10n, AppointmentStatus status) =>

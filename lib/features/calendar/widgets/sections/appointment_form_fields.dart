@@ -430,8 +430,12 @@ class AppointmentFormFields extends StatelessWidget {
             _dateRows(context, l10n),
             // All-day schedules show dates only.
             if (!isAllDay && !isDayOff) ...timeRows(),
-            // Repeat is hidden for personal and multi-day jobs.
-            if (!isPersonal && !isMultiDay)
+            // Repeat is hidden for personal and multi-day jobs, and for one
+            // day of a run: a run member's own window is a single day, so
+            // `isMultiDay` is false for it and cannot carry this on its own.
+            // Letting the picker through would rewrite the series and delete
+            // the run's trailing days.
+            if (!isPersonal && !isMultiDay && !isRunMember)
               RepeatIntervalPicker(
                 current: repeat,
                 onChanged: callbacks.onSelectRepeat,

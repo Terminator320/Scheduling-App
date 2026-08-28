@@ -38,15 +38,33 @@ nothing left to rebuild from. It is also what keeps normalizing the client
 field a no-op, and it fixed a matching bug that predated the split — the app
 books the composed address while the doc stores the canonical `4-1234 …`, so
 an apt-bearing client silently never took an address correction at all), `client_job_count.js` (`recountClientJobs`, backed by
-the pure `clientsToRecount`), `clients.js` (`deleteClient` — admin-only, the
+the pure `clientsToRecount`), `recount_claim.js` (the ONE owner of the
+claim-ledger protocol that collapses a batch's N recount triggers into one
+aggregate — `claimRecount`/`releaseRecount`/`debounceRecount`, `db` injected
+like `maintenance_policy.js`. **Both counters route through it**:
+`recountClientJobs` for client `jobCount` and `appointment_images.js`'s
+`debouncedRecountPictures` for appointment `pictureCount`, which carried a
+byte-identical second copy of all six bodies until 2026-08-28 — the drift the
+module exists to prevent, live in the module's own sibling. Its
+release-BEFORE-aggregate ORDER is the whole design and is silent when wrong;
+never re-spell it at a call site. Do NOT fold in `claimSeriesNotice`
+(`notification_utils.js`, a third ledger): it claims-and-HOLDS for dedupe
+rather than releasing before an aggregate, and looks similar precisely because
+it is deliberately different. The two adapters differ in one place on purpose:
+the client counter GATES the debounce on `mayShareABatch` — a multi-day run
+day-document or a repeat-series member — because the 2 s settle plus a claim
+create AND delete doubles the writes on the overwhelmingly common single
+create/delete, where a photo write is always part of a batch), `clients.js` (`deleteClient` — admin-only, the
 ONLY client-delete path now that `allow delete` on `/clients` is withdrawn;
 refuses `client-has-history` on a **live `count()` aggregate**, deliberately not
 the lazily-backfilled `jobCount`, since deleting on a stale zero orphans the
 visits this gate exists to protect; pure `performDeleteClient` exported for
 jest), `places.js`, `account.js`,
 `employee_accounts.js` (the whole employee-account lifecycle, P4c 2026-08-02 —
-`createEmployeeAccount` (admin-only: mints the Firebase Auth account on the
-shared `DEFAULT_PASSWORD` and the `invited` `users` doc carrying its real
+`createEmployeeAccount` (admin-only: mints the Firebase Auth account on a
+random per-account starting password (`generateStartingPassword`, 12
+unambiguous chars, `crypto.randomInt`, never persisted) and the `invited`
+`users` doc carrying its real
 `uid`, rolls the Auth account back if the Firestore write fails, and refuses
 `email-exists` for an email that has already finished setup. **That refusal
 resolves the target by `uid`, not by email** — `users.email` is admin-editable
@@ -59,8 +77,9 @@ an existing account; `resetProvisionedPassword` runs after
 — which NARROWS the window in which a setup committing mid-call has its chosen
 password reverted, but does not close it: the Auth call is outside both
 transactions, so a `completeEmployeeSetup` landing between the commit and the
-rotation still leaves an `active` employee on the shared default. Auth is not
-transactional; don't record this as fixed.
+rotation still leaves an `active` employee on a password the admin was handed
+rather than the one they chose. Auth is not transactional; don't record this as
+fixed.
 The transaction additionally refuses when the uid already belongs to another
 doc — without that, a second doc carrying a live employee's uid made
 `syncUsersByUid` delete their `usersByUid` bridge and locked them out.

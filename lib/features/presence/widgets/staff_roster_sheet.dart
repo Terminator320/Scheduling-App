@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/maps/application/maps_providers.dart';
 import 'package:scheduling/features/presence/application/live_map_providers.dart';
 import 'package:scheduling/features/presence/domain/live_map_aggregator.dart';
@@ -212,7 +213,7 @@ class StaffRosterRow extends ConsumerWidget {
     final geoKey = ReverseGeocodeQuery(
       lat: point.lat,
       lng: point.lng,
-      locale: lang == 'fr' ? 'fr' : 'en',
+      locale: serverLocaleOf(lang),
     );
     final geo = ref.watch(reverseGeocodeProvider(geoKey));
     final city = LiveMapAggregator.cityFromAddress(geo.value);

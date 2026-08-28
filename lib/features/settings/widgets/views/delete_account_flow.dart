@@ -69,7 +69,7 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       notices.error(
         composeErrorNotice(
           context,
-          intro: context.l10n.error_somethingWentWrong,
+          intro: context.l10n.error_introSignOut,
           error: e,
         ),
       );
@@ -86,7 +86,13 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       logger.warn('ACCT-SIGNOUT navigation failed', e, st);
       if (!mounted) return;
       setState(() => _isSigningOut = false);
-      notices.error(context.l10n.error_somethingWentWrong);
+      notices.error(
+        composeErrorNotice(
+          context,
+          intro: context.l10n.error_introSignOut,
+          error: e,
+        ),
+      );
     }
   }
 
@@ -187,10 +193,14 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       );
       notices.success(message);
     } catch (e, st) {
+      // The account is already gone; only the route swap failed. Reporting an
+      // error here would name a failure for an operation that committed, so
+      // the honest notice is still the success one and the nav failure is
+      // log-only.
       logger.warn('ACCT-DEL navigation failed', e, st);
       if (!mounted) return;
       setState(() => _isDeletingAccount = false);
-      notices.error(context.l10n.error_somethingWentWrong);
+      notices.success(message);
     }
   }
 }

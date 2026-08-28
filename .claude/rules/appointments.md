@@ -427,8 +427,9 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   the same `SeriesScopeDialog` with run-flavoured copy — and cancel is the one
   that needed a new write path, `updateAppointmentStatuses` (one batch, one
   shared `seriesOpId`, so a run cancels with ONE push).
-  Photos stay on day 1 of a run (`images` is a per-document subcollection);
-  photos taken on day 3 attach to day 3's own document.
+  Photos are per day: `images` is a per-document subcollection, so photos
+  taken on day 3 attach to day 3's own document. There is no day-1
+  redirection.
   **The push fan-out needed NO work**: `diffAppointmentForNotifications`
   already suppresses the `assigned` push for any created document whose
   `seriesId` is not its own id, and day 1's doc id IS the `seriesId`, so a
@@ -436,8 +437,8 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   prompt and the tomorrow digest now speak per day, so a 5-day job produces
   five "job tomorrow" lines across five nights instead of one. That is correct
   and is the point, but it is a real increase in message volume.
-  **Live Activities start working on long jobs** — `travel_utils.js` skips them
-  at `dayCountOf(c) <= 1`, and every split day is one day, so each day of a run
+  **Live Activities start working on long jobs** — `travel_utils.js` starts a
+  card only at `dayCountOf(c) <= 1`, and every split day is one day, so each day of a run
   now gets its own Lock Screen card. The guard stays as-is for the wide
   documents time off still writes.
   No migration was needed: prod held ZERO open multi-day jobs on 2026-08-27
@@ -468,8 +469,9 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   `AppointmentStatus.fromRaw(status).isTerminal` explicitly, or a visit
   completed this morning still tells the admin to reassign it before disabling
   the person. Check every bound relaxed this way for the same gap.
-  **That query asks `endTime >= now` and nothing else** (2026-08-13), on the
-  existing `(employeeIds CONTAINS, endTime ASC)` index — "has work left" is a
+  **That query asks `endTime >= now` and nothing else** (2026-08-13), served
+  by the `(employeeIds CONTAINS, endTime ASC, startTime ASC)` index — "has
+  work left" is a
   test on `endTime`, so the query states it rather than approximating it with
   `startTime >= now - maxAppointmentSpanDays` and re-testing in Dart. The old
   form had **no upper bound**: it read every job this person was assigned to
@@ -478,6 +480,15 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   `whereIn` over the open statuses would need a third index field and would
   silently drop any status the allowlist doesn't name, and this caption must
   err towards telling the admin to reassign.
+  **A dedicated `(employeeIds CONTAINS, endTime ASC)` index existed for it and
+  was DELETED 2026-08-28** — a strict prefix of the three-field composite
+  above, which Firestore serves for the same query, so it only ever cost index
+  storage and per-write latency. One caveat that came with it: that composite
+  is `SPARSE_ALL`, so it omits any document with no `startTime`, where the
+  two-field index did not. The Dart model always writes one, so only a legacy
+  or console-written row could go missing from this count — and this is the
+  caption that must err towards over-reporting, so if such rows ever turn up,
+  restore the two-field index rather than reasoning about it again.
   **It is also `.limit`ed** (`_futureAssignmentScanLimit`, 200, added
   2026-08-13) — `endTime >= now` still has no upper bound of its own, and a
   repeat series pre-books up to `RepeatInterval.maxOccurrences` (120)
@@ -526,7 +537,8 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   no separate departure time and the crew is already on site), and the second
   gates on the run's real `endTime`. **Live Activities deliberately skip
   multi-day jobs** — a four-day Lock Screen countdown is worse than no card.
-  That skip is `dayCountOf(c) > 1` in `resolveReminderForAssignee`
+  That skip is the `dayCountOf(c) <= 1` START condition in `resolveReminderForAssignee`
+  (a card is begun only for a single-day window; there is no `> 1` predicate)
   (`functions/travel_utils.js`), and it was BUILT 2026-08-11: this bullet
   asserted it as fact from 2026-08-10 while no such gate existed anywhere, so
   the card really did carry the run's `endTime` into

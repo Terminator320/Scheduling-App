@@ -93,15 +93,20 @@ String? _buildingStreetOf(ClientRecord client) {
 /// Ordered by count descending because the reason to open this menu is "which
 /// addresses do we have a lot of work at"; ties fall back to the street so the
 /// order is stable between rebuilds rather than depending on iteration order.
+/// Pass [keys] — a `buildingKeysIn` result over the SAME clients — to reuse
+/// keys already computed instead of deriving them a second time. It carries an
+/// entry per client, `null` included, so an absent id means "not from this
+/// set" rather than "no building".
 List<ClientBuilding> buildingsIn(
   Iterable<ClientRecord> clients, {
   int minimumClients = 2,
+  Map<String, String?>? keys,
 }) {
   final counts = <String, int>{};
   final labels = <String, ({String street, String city})>{};
 
   for (final client in clients) {
-    final key = buildingKeyFor(client);
+    final key = keys == null ? buildingKeyFor(client) : keys[client.id];
     if (key == null) continue;
     counts[key] = (counts[key] ?? 0) + 1;
     // First spelling seen wins — the key is already accent- and case-folded,
@@ -128,6 +133,19 @@ List<ClientBuilding> buildingsIn(
       });
   return buildings;
 }
+
+/// Every client's building key by client id, `null` where there isn't one.
+///
+/// [buildingKeyFor] is not cheap — `AddressParser.streetOnly`, `splitApt` and
+/// two per-codeunit `normalize` passes each — and THREE surfaces want the same
+/// answer per client: the Building menu's counts, the building filter, and the
+/// per-row pill. Computing it once and handing this map to each of them is what
+/// keeps a client write from re-deriving the whole window three times over on
+/// the UI isolate. Every client gets an entry, so a caller can tell "no
+/// building" from "not in this window" with `containsKey`.
+Map<String, String?> buildingKeysIn(Iterable<ClientRecord> clients) => {
+  for (final client in clients) client.id: buildingKeyFor(client),
+};
 
 /// How many clients sit at each building, keyed by [buildingKeyFor].
 ///

@@ -2,8 +2,6 @@ import 'dart:io';
 
 import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
-import 'package:scheduling/features/calendar/application/appointment_series_editor.dart';
-import 'package:scheduling/features/calendar/application/event_details_outcome.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
@@ -12,7 +10,6 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 /// Builds appointment save records and applies photo changes.
 class EventDetailsSavePipeline {
@@ -88,49 +85,15 @@ class EventDetailsSavePipeline {
       status: status,
       repeat: repeat,
       seriesId: appointment.seriesId,
+      // Carried like `seriesId`: the run label is fixed at booking and the
+      // edit form cannot change it. Dropping it here rebuilt the record as a
+      // plain single-day job, so the returned record disagreed with the stored
+      // one and anything rendering it lost "Day 3 of 5". The stored fields
+      // themselves survived only because `toMap` omits them and `update()`
+      // leaves an omitted field alone — which is luck, not a guarantee.
+      dayIndex: appointment.dayIndex,
+      dayCount: appointment.dayCount,
     );
-  }
-
-  /// Applies the edit: rewrite the series if the repeat changed, propagate it
-  /// if [applyToSeries] is set, or otherwise update the single appointment.
-  Future<EventDetailsSaved> applySeriesChange(
-    AppointmentRecord appointment, {
-    required AppointmentRecord updated,
-    required String id,
-    required DateTime start,
-    required DateTime end,
-    required bool applyToSeries,
-    required RepeatInterval repeat,
-    required RepeatInterval savedRepeat,
-  }) async {
-    final seriesEditor = AppointmentSeriesEditor(repo);
-    if (repeat != savedRepeat) {
-      final result = await seriesEditor.rewrite(
-        updated: updated,
-        appointment: appointment,
-        id: id,
-        start: start,
-        end: end,
-        repeat: repeat,
-      );
-      return EventDetailsSaved(
-        result.updated,
-        futureBookings: result.futureBookings,
-        removedBookings: result.removedBookings,
-      );
-    }
-    if (applyToSeries && appointment.seriesId.isNotEmpty) {
-      final updatedSiblings = await seriesEditor.propagate(
-        updated: updated,
-        appointment: appointment,
-        id: id,
-        start: start,
-        end: end,
-      );
-      return EventDetailsSaved(updated, updatedSiblings: updatedSiblings);
-    }
-    await repo.updateAppointment(updated);
-    return EventDetailsSaved(updated);
   }
 
   /// Applies photo changes after the record write.

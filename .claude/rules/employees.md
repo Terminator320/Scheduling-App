@@ -1,6 +1,7 @@
 ---
 paths:
   - "lib/features/employees/**"
+  - "lib/features/auth/**"
   - "lib/features/settings/**"
   - "functions/employee_accounts.js"
   - "functions/bridge.js"

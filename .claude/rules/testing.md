@@ -75,9 +75,11 @@ paths:
 
 ## Device-only verification
 
-- `ImagePickerService` has no unit tests — it is a thin wrapper over a
-  method-channel plugin with no logic of its own. Verify picker fixes via
-  `flutter run` on a device. **`ImageStorageService` is NOT in that category**
+- `ImagePickerService` is thin — a wrapper over a method-channel plugin — but
+  it DOES have unit tests (`test/core/images/image_picker_service_test.dart`,
+  4 tests; corrected 2026-08-28, this bullet previously said it had none and
+  told you not to write any). Only the plugin round-trip itself needs a device;
+  verify picker fixes there via `flutter run`. **`ImageStorageService` is NOT in that category**
   (corrected 2026-08-15): it takes an injected `FirebaseStorage` and `AppLogger`,
   and its magic-byte rejection, 8 MB cap, `composeFileName` bound, legacy
   `_pathFromUrl` fallback and `object-not-found` swallow are all covered by

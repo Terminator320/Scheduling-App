@@ -33,7 +33,9 @@ class WaveErrorMapper {
       return const WaveValidation();
     }
 
-    if (msg == 'wave/not-bootstrapped') {
+    // `wave/not-connected` is the retired spelling of the same state; a
+    // backend older than the canonicalization still sends it.
+    if (msg == 'wave/not-bootstrapped' || msg == 'wave/not-connected') {
       return const WaveValidation(reason: 'notConnected');
     }
 

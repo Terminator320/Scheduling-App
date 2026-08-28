@@ -316,32 +316,10 @@ class _DayOffStrip extends StatelessWidget {
                       const SizedBox(width: AppSpacing.sp8),
                     ],
                     Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            reason ?? sentence,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              color: isOver
-                                  ? theme.palette.textTertiary
-                                  : theme.palette.textBody,
-                            ),
-                          ),
-                          if (reason != null) ...[
-                            const SizedBox(height: 3),
-                            Text(
-                              sentence,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.palette.textTertiary,
-                              ),
-                            ),
-                          ],
-                        ],
+                      child: _DayOffText(
+                        reason: reason,
+                        sentence: sentence,
+                        isOver: isOver,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sp8),
@@ -362,17 +340,7 @@ class _DayOffStrip extends StatelessWidget {
                   top: AppSpacing.sp8,
                   bottom: AppSpacing.sp8,
                   width: _kRailWidth,
-                  child: Opacity(
-                    opacity: isOver ? 0.5 : 1,
-                    child: CustomPaint(
-                      // Null stored color falls back to the neutral rail.
-                      painter: _DashedRailPainter(
-                        lead.color == null
-                            ? theme.palette.textFaint
-                            : crewColorOf(theme, lead.color!.toARGB32()),
-                      ),
-                    ),
-                  ),
+                  child: _DayOffRail(lead: lead, isOver: isOver),
                 ),
             ],
           ),
@@ -387,6 +355,81 @@ class _DayOffStrip extends StatelessWidget {
     final first = crew.first.name.trim();
     if (crew.length == 1) return first;
     return context.l10n.calendar_crewPlusOthers(first, crew.length - 1);
+  }
+}
+
+/// The headline and caption of a day-off strip.
+///
+/// The headline slot is ALWAYS filled — the typed reason when there is one,
+/// the `<name> is off` sentence when there isn't — and only the caption
+/// beneath is conditional. Never render both slots from the same string.
+class _DayOffText extends StatelessWidget {
+  const _DayOffText({
+    required this.reason,
+    required this.sentence,
+    required this.isOver,
+  });
+
+  final String? reason;
+  final String sentence;
+  final bool isOver;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          reason ?? sentence,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: isOver ? theme.palette.textTertiary : theme.palette.textBody,
+          ),
+        ),
+        if (reason != null) ...[
+          const SizedBox(height: 3),
+          Text(
+            sentence,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.palette.textTertiary,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The strip's dashed leading rail — the negative of a job card's solid bar.
+///
+/// Its `Positioned` stays at the call site: this is painted inside a `Stack`
+/// deliberately, so the rail can span the strip's height without forcing
+/// intrinsic layout on it.
+class _DayOffRail extends StatelessWidget {
+  const _DayOffRail({required this.lead, required this.isOver});
+
+  final AppointmentCrew lead;
+  final bool isOver;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Opacity(
+      opacity: isOver ? 0.5 : 1,
+      child: CustomPaint(
+        // Null stored color falls back to the neutral rail.
+        painter: _DashedRailPainter(
+          lead.color == null
+              ? theme.palette.textFaint
+              : crewColorOf(theme, lead.color!.toARGB32()),
+        ),
+      ),
+    );
   }
 }
 

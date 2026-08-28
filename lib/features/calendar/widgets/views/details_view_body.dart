@@ -149,7 +149,7 @@ class DetailsViewBody extends ConsumerWidget {
     final choice = await showCancelAppointmentDialog(
       context,
       // One day of a run offers the tail; anything else is a plain confirm.
-      isRun: appointment.dayCount > 1,
+      isRun: appointment.isRunMember,
     );
     if (choice == null || !context.mounted) return;
     final outcome = await notifier.cancelAppointment(

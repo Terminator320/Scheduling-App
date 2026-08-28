@@ -202,12 +202,21 @@ Map<DateTime, List<AppointmentDaySlice>> expandToDays(
     if (count != rawCount) onSpanClamped?.call(appointment, rawCount);
 
     final startDate = appointment.startTime.dateOnly;
+    // A split run day carries its own position, the same substitution
+    // `sliceFor` makes. Only the emitted label is substituted — the range
+    // test above stays derived from the record's own one-day window.
+    final stored = _storedRunLabel(appointment);
     for (var i = 0; i < count; i++) {
       final day = addCalendarDays(startDate, i);
       if (day.isBefore(range.start) || !day.isBefore(range.end)) continue;
       // Use the clamped count so `isLastDay` remains reachable.
       (slicesByDay[day] ??= <AppointmentDaySlice>[]).add(
-        _sliceAt(appointment, day: day, index: i + 1, count: count),
+        _sliceAt(
+          appointment,
+          day: day,
+          index: stored?.dayIndex ?? i + 1,
+          count: stored?.dayCount ?? count,
+        ),
       );
     }
   }

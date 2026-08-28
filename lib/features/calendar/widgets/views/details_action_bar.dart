@@ -31,111 +31,124 @@ class DetailsActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final compact = context.isCompact;
-    // The design's complete action is a filled GREEN button, so it reads as
-    // the success it is rather than as the generic secondary.
-    final successFill = theme.statusColors.success;
-    final onSuccessFill = contrastingForegroundFor(successFill);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: AppSpacing.sp24),
-        // Offered for the whole life of an open job — there is no
-        // "has it started yet" gate (owner call, 2026-08-17). A crew that
-        // finishes early, or an admin closing a job booked for later today,
-        // had no affordance at all until the start time passed, while the
-        // rules have always allowed an assignee's `status:'done'` write with
-        // no date restriction.
-        if (!isDone && !isCancelled)
-          FilledButton(
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(double.infinity, 48),
-              backgroundColor: successFill,
-              foregroundColor: onSuccessFill,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppRadius.r16),
-              ),
-            ),
-            onPressed: isSaving ? null : onMarkDone,
-            child: _ActionButtonContent(
-              compact: compact,
-              icon: BusyButtonIcon(
-                isBusy: isSaving,
-                icon: Icons.check,
-                color: onSuccessFill,
-              ),
-              label: context.l10n.calendar_markAsDone,
-            ),
+        if (!isDone && !isCancelled) _markDoneButton(context, compact),
+        if (isDone) ..._doneSlot(context, compact),
+        if (showCancel && !isCancelled && !isDone)
+          ..._cancelSlot(
+            context,
+            compact,
           ),
-        // A done job has no mark-done or cancel action left, so this slot is
-        // where its Edit lives — the read view's top chip is hidden for it.
-        // Without an edit callback (a read-only surface) it stays the inert
-        // "Complete" indicator it has always been.
-        if (isDone) ...[
-          const SizedBox(height: AppSpacing.sp8),
-          if (onEdit != null)
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
-              ),
-              onPressed: onEdit,
-              child: _ActionButtonContent(
-                compact: compact,
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                label: context.l10n.common_edit,
-              ),
-            )
-          else
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 48),
-                foregroundColor: scheme.secondary,
-                side: BorderSide(color: scheme.secondary),
-              ),
-              onPressed: null,
-              child: _ActionButtonContent(
-                compact: compact,
-                icon: Icon(
-                  Icons.check_circle_outline,
-                  size: 18,
-                  color: scheme.secondary,
-                ),
-                label: context.l10n.calendar_completed,
-              ),
-            ),
-        ],
-        if (showCancel && !isCancelled && !isDone) ...[
-          // The complete button is always above this on an open job, so the
-          // gap is unconditional.
-          const SizedBox(height: AppSpacing.sp8),
-          OutlinedButton(
-            style: destructiveOutlinedButtonStyle(
-              context,
-              minimumSize: const Size(double.infinity, 48),
-            ),
-            onPressed: isSaving ? null : onCancel,
-            child: _ActionButtonContent(
-              compact: compact,
-              icon: const Icon(Icons.close, size: 15),
-              label: context.l10n.calendar_cancelAppointment,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.sp4),
-          Center(
-            child: Text(
-              context.l10n.calendar_cancelledJobsAreSavedToHistory,
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-          ),
-        ],
       ],
     );
+  }
+
+  /// Offered for the whole life of an open job — there is no "has it started
+  /// yet" gate (owner call, 2026-08-17). A crew that finishes early, or an
+  /// admin closing a job booked for later today, had no affordance at all
+  /// until the start time passed, while the rules have always allowed an
+  /// assignee's `status:'done'` write with no date restriction.
+  Widget _markDoneButton(BuildContext context, bool compact) {
+    // The design's complete action is a filled GREEN button, so it reads as
+    // the success it is rather than as the generic secondary.
+    final successFill = Theme.of(context).statusColors.success;
+    final onSuccessFill = contrastingForegroundFor(successFill);
+    return FilledButton(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(double.infinity, 48),
+        backgroundColor: successFill,
+        foregroundColor: onSuccessFill,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.r16),
+        ),
+      ),
+      onPressed: isSaving ? null : onMarkDone,
+      child: _ActionButtonContent(
+        compact: compact,
+        icon: BusyButtonIcon(
+          isBusy: isSaving,
+          icon: Icons.check,
+          color: onSuccessFill,
+        ),
+        label: context.l10n.calendar_markAsDone,
+      ),
+    );
+  }
+
+  /// A done job has no mark-done or cancel action left, so this slot is where
+  /// its Edit lives — the read view's top chip is hidden for it. Without an
+  /// edit callback (a read-only surface) it stays the inert "Complete"
+  /// indicator it has always been.
+  List<Widget> _doneSlot(BuildContext context, bool compact) {
+    final scheme = Theme.of(context).colorScheme;
+    return [
+      const SizedBox(height: AppSpacing.sp8),
+      if (onEdit != null)
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 48),
+          ),
+          onPressed: onEdit,
+          child: _ActionButtonContent(
+            compact: compact,
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: context.l10n.common_edit,
+          ),
+        )
+      else
+        OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 48),
+            foregroundColor: scheme.secondary,
+            side: BorderSide(color: scheme.secondary),
+          ),
+          onPressed: null,
+          child: _ActionButtonContent(
+            compact: compact,
+            icon: Icon(
+              Icons.check_circle_outline,
+              size: 18,
+              color: scheme.secondary,
+            ),
+            label: context.l10n.calendar_completed,
+          ),
+        ),
+    ];
+  }
+
+  List<Widget> _cancelSlot(BuildContext context, bool compact) {
+    final theme = Theme.of(context);
+    return [
+      // The complete button is always above this on an open job, so the gap is
+      // unconditional.
+      const SizedBox(height: AppSpacing.sp8),
+      OutlinedButton(
+        style: destructiveOutlinedButtonStyle(
+          context,
+          minimumSize: const Size(double.infinity, 48),
+        ),
+        onPressed: isSaving ? null : onCancel,
+        child: _ActionButtonContent(
+          compact: compact,
+          icon: const Icon(Icons.close, size: 15),
+          label: context.l10n.calendar_cancelAppointment,
+        ),
+      ),
+      const SizedBox(height: AppSpacing.sp4),
+      Center(
+        child: Text(
+          context.l10n.calendar_cancelledJobsAreSavedToHistory,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    ];
   }
 }
 

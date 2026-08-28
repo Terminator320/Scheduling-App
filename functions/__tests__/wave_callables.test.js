@@ -1030,7 +1030,10 @@ describe("waveRetryFailedJobs", () => {
         const err = await expectThrows(waveRetryFailedJobs, req(ADMIN_UID, {}));
 
         expect(err.code).toBe("failed-precondition");
-        expect(err.message).toBe("wave/not-connected");
+        // Canonical across all three connection gates. This threw
+        // `wave/not-connected`, which no shipped Flutter mapper knows, so the
+        // admin saw a generic error instead of "Wave isn't connected".
+        expect(err.message).toBe("wave/not-bootstrapped");
         expect(waveWorker.requeueDeadJobs).not.toHaveBeenCalled();
       });
 

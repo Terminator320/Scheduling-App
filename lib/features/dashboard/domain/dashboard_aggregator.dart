@@ -1,11 +1,11 @@
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_period.dart';
 import 'package:scheduling/features/dashboard/domain/dashboard_stats.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 /// Pure reducer functions over the dashboard's appointment range, keyed on
 /// `now` so tests can control the clock.
@@ -33,7 +33,7 @@ class DashboardAggregator {
   ///
   /// **This is the half that gets a live listener.** The other seven weeks are
   /// closed history — [historyRangeAround] reads them once. Splitting drops the
-  /// live document set by roughly 85% and takes the 1000-doc stream cap off the
+  /// live document set by roughly 85% and takes the 3000-doc stream cap off the
   /// trend charts, which above ~14 jobs/day were being computed over a prefix
   /// of the window with nothing on screen saying so.
   static AppointmentDateRange liveRangeAround(DateTime now) {
@@ -392,10 +392,10 @@ class DashboardAggregator {
   );
 
   static bool _isCancelled(AppointmentRecord a) =>
-      AppointmentStatus.fromRaw(a.status).isCancelled;
+      isCancelledStatusRaw(a.status);
 
   static bool _isTerminal(AppointmentRecord a) =>
-      AppointmentStatus.fromRaw(a.status).isTerminal;
+      isTerminalStatusRaw(a.status);
 
   static DateTime _weekAfter(DateTime weekStart) =>
       DateTime(weekStart.year, weekStart.month, weekStart.day + 7);

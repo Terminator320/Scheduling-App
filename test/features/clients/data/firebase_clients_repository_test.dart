@@ -122,11 +122,11 @@ void main() {
 
   FirebaseClientsRepository repo({DateTime Function()? clock}) =>
       FirebaseClientsRepository(
-    firestore,
-    functions: functions,
-    clock: clock,
-    logger: logger,
-  );
+        firestore,
+        functions: functions,
+        clock: clock,
+        logger: logger,
+      );
 
   ClientRecord client({String id = 'c1', String name = 'Test Client'}) =>
       ClientRecord(
@@ -153,8 +153,7 @@ void main() {
       expect(captured.containsKey('updatedAt'), isTrue);
     });
 
-    test('normalizes EVERY contact email, not just the top-level one',
-        () async {
+    test('normalizes EVERY contact email, not just the top-level one', () async {
       // The loop was unhit: only the top-level address was ever asserted, so a
       // regression that normalized the client and skipped its contacts would
       // ship green. Contact emails feed the same `matchesClient` search
@@ -566,6 +565,43 @@ void main() {
       final docs = paton();
       when(() => snapshot.docs).thenReturn(docs);
       expect(await repo().fetchClientsByBuilding(''), isEmpty);
+    });
+
+    test(
+      'fetchBuildingKeys answers for every live client, null included',
+      () async {
+        // The row builder's half of the pill. An entry per client is what lets a
+        // caller tell "no building" from "not in the scan window" — the archived
+        // rows the list still renders fall in the second bucket and derive their
+        // own key.
+        final docs = [
+          ...paton(),
+          doc('c4', {'name': 'Nowhere'}),
+        ];
+        when(() => snapshot.docs).thenReturn(docs);
+        final r = repo();
+
+        final keys = await r.fetchBuildingKeys();
+
+        expect(keys.keys, containsAll(['c1', 'c2', 'c3', 'c4']));
+        expect(keys['c1'], keys['c2']); // two units of one building
+        expect(keys['c3'], isNot(keys['c1']));
+        expect(keys.containsKey('c4'), isTrue);
+        expect(keys['c4'], isNull); // no address at all
+      },
+    );
+
+    test('the keys agree with the buildings the menu offers', () async {
+      // They come off one cached window and one derivation; a disagreement
+      // between them would show a pill on a row the filter cannot select.
+      final docs = paton();
+      when(() => snapshot.docs).thenReturn(docs);
+      final r = repo();
+
+      final key = (await r.fetchBuildings()).single.key;
+      final keys = await r.fetchBuildingKeys();
+
+      expect(keys.values.where((k) => k == key), hasLength(2));
     });
   });
 

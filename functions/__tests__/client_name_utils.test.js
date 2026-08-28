@@ -9,6 +9,7 @@ const {
   isBusiness,
   liftPhoneFromName,
   stripPhone,
+  looksLikeBusinessName,
 } = require("../client_name_utils");
 
 /**
@@ -325,5 +326,49 @@ describe("liftPhoneFromName", () => {
 
   test("a name with no number at all", () => {
     expect(liftPhoneFromName({name: "Marc Tremblay", phone: ""})).toBeNull();
+  });
+});
+
+describe("looksLikeBusinessName word boundary", () => {
+  // The NEGATIVES are the point. If this boundary ever degrades to a bare
+  // substring test, every Prince/Vince keeps a typed name instead of their
+  // phone number — the direct inverse of the `clients/{id}.name` rule, and
+  // the same shape as the destroyed-names incident in this repo's history.
+  test.each([
+    ["Prince Adjei"],
+    ["Princess Ncube"],
+    ["Vince Carter"],
+    ["Incze Gabor"],
+    ["Vincent Leblanc"],
+    ["Lincoln Reyes"],
+  ])("%s is a PERSON, not a business", (name) => {
+    expect(looksLikeBusinessName(name)).toBe(false);
+  });
+
+  test.each([
+    ["Groupe ABC"],
+    ["Residences Soleil"],
+    ["Ltee Inc"],
+    ["Plomberie Inc."],
+    ["Gestion Immobilier"],
+  ])("%s reads as a BUSINESS", (name) => {
+    expect(looksLikeBusinessName(name)).toBe(true);
+  });
+
+  test("an accented residence still matches after folding", () => {
+    expect(looksLikeBusinessName("Résidences du Parc")).toBe(true);
+  });
+
+  test("any digit reads as a business", () => {
+    expect(looksLikeBusinessName("3101-5696 qc")).toBe(true);
+  });
+
+  test("a blank or non-string name is not a business", () => {
+    // `str()` rejects a non-string before the digit test runs, so a numeric
+    // name is NOT treated as a business.
+    expect(looksLikeBusinessName("")).toBe(false);
+    expect(looksLikeBusinessName(null)).toBe(false);
+    expect(looksLikeBusinessName(undefined)).toBe(false);
+    expect(looksLikeBusinessName(42)).toBe(false);
   });
 });

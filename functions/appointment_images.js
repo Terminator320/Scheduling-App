@@ -17,9 +17,10 @@
  * 2. `recountAppointmentPictures` — maintains the denormalized `pictureCount`
  *    the card's photo indicator reads, since the card renders on every
  *    range-query surface and cannot afford a subcollection read each. It is
- *    DEBOUNCED per parent through a short-lived claim ledger; see
- *    `debouncedRecountPictures` for why the release/aggregate ORDER is the
- *    whole design.
+ *    DEBOUNCED per parent through the shared claim ledger in
+ *    `recount_claim.js`, which owns the release/aggregate ORDER for both
+ *    counters; see `debouncedRecountPictures` for what is photo-specific
+ *    about this one.
  *
  * The orchestration lives here rather than in the trigger wiring so it is
  * testable: every body takes an injected `db`, in the same shape as
@@ -29,6 +30,7 @@ const {onDocumentDeleted, onDocumentWritten} =
   require("firebase-functions/v2/firestore");
 const logger = require("firebase-functions/logger");
 const {getFirestore} = require("firebase-admin/firestore");
+const {debounceRecount} = require("./recount_claim");
 const {getStorage} = require("firebase-admin/storage");
 
 /**
@@ -48,28 +50,11 @@ const RECOUNT_CLAIM_COLLECTION = "appointmentRecountClaims";
 /**
  * How long the claiming invocation waits before recounting, to absorb the
  * rest of its batch's triggers. Correctness never depends on this number —
- * see `debouncedRecountPictures` — so it is tuned purely for how much of a
- * batch one recount swallows. A sibling arriving after the window simply
- * recounts again, which is the old behaviour.
+ * see `debounceRecount` in `recount_claim.js` — so it is tuned purely for how
+ * much of a batch one recount swallows. A sibling arriving after the window
+ * simply recounts again, which is the old behaviour.
  */
 const RECOUNT_SETTLE_MS = 2000;
-
-/**
- * A claim older than this is presumed abandoned (an invocation killed between
- * claiming and releasing) and is taken over. Deliberately a handful of
- * seconds: a claim that outlives its usefulness would suppress the offline
- * queue's replay, which is this counter's ONLY self-heal.
- */
-const RECOUNT_CLAIM_STALE_MS = 15 * 1000;
-
-/**
- * Absolute lifetime stamped on `expiresAt` for the Firestore TTL policy
- * (declared in `firestore.indexes.json`, expiration offset 0). TTL is
- * housekeeping only — the claim is inert after `RECOUNT_CLAIM_STALE_MS`
- * whether or not the policy has swept it, and the normal path deletes it
- * explicitly. Nothing here relies on the policy for correctness.
- */
-const RECOUNT_CLAIM_TTL_MS = 5 * 60 * 1000;
 
 /**
  * The photo count past which one appointment's photos stop being fully
@@ -96,46 +81,18 @@ const RECOUNT_CLAIM_TTL_MS = 5 * 60 * 1000;
 const PICTURE_COUNT_WARN_CAP = 100;
 
 /**
- * True for the Firestore ALREADY_EXISTS a losing `create()` raises.
- * @param {*} err
- * @return {boolean}
+ * The Storage prefix holding one appointment's photo bytes.
+ *
+ * **The TRAILING SLASH is load-bearing and is why this is its own function.**
+ * `deleteFiles({prefix})` matches by string prefix, so without it, deleting
+ * appointment `12` would also sweep `appointments/123/...` — a silent
+ * cross-appointment data loss, not merely an orphan. Pinned by
+ * `__tests__/appointment_images.test.js`.
+ * @param {string} appointmentId
+ * @return {string} Prefix ending in `/`.
  */
-function isAlreadyExists(err) {
-  return !!err && (err.code === 6 || err.code === "already-exists");
-}
-
-/**
- * Milliseconds from a Firestore Timestamp, a Date or a raw number.
- * @param {*} value
- * @return {?number} null when there is no usable timestamp.
- */
-function toMillis(value) {
-  if (!value) return null;
-  if (typeof value === "number") return value;
-  if (value instanceof Date) return value.getTime();
-  if (typeof value.toMillis === "function") return value.toMillis();
-  return null;
-}
-
-/**
- * The body every recount claim is written with.
- * @param {!Date} nowDate
- * @return {{claimedAt: !Date, expiresAt: !Date}}
- */
-function claimBody(nowDate) {
-  return {
-    claimedAt: nowDate,
-    expiresAt: new Date(nowDate.getTime() + RECOUNT_CLAIM_TTL_MS),
-  };
-}
-
-/**
- * Sleeps `ms` — the default injectable so tests never wait.
- * @param {number} ms
- * @return {!Promise<void>}
- */
-function defaultSleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function appointmentImagePrefix(appointmentId) {
+  return `appointments/${appointmentId}/${IMAGES_SUBCOLLECTION}/`;
 }
 
 /**
@@ -148,8 +105,9 @@ function defaultSleep(ms) {
  * @return {!Promise<void>} rejects when the prefix could not be cleared.
  */
 async function deleteAppointmentImageBytes(appointmentId) {
-  const prefix = `appointments/${appointmentId}/${IMAGES_SUBCOLLECTION}/`;
-  await getStorage().bucket().deleteFiles({prefix});
+  await getStorage()
+      .bucket()
+      .deleteFiles({prefix: appointmentImagePrefix(appointmentId)});
 }
 
 /**
@@ -234,70 +192,9 @@ async function recountPictures(appointmentId, deps) {
 }
 
 /**
- * Claims the right to recount one parent (first writer wins).
- *
- * FAILS OPEN everywhere: any error other than a live claim returns true and
- * recounts. Failing open costs one extra parent write — exactly the old
- * behaviour — while failing closed would leave `pictureCount` wrong with
- * nothing left to notice it.
- * @param {string} appointmentId
- * @param {!Object} deps `{db, logger, now}`.
- * @return {!Promise<boolean>} True when this invocation owns the recount.
- */
-async function claimRecount(appointmentId, deps) {
-  const {db, logger: log, now} = deps;
-  const nowDate = now || new Date();
-  const ref = db.collection(RECOUNT_CLAIM_COLLECTION).doc(appointmentId);
-  try {
-    await ref.create(claimBody(nowDate));
-    return true;
-  } catch (err) {
-    if (!isAlreadyExists(err)) {
-      if (log) log.warn("recount claim failed; recounting anyway", {err});
-      return true;
-    }
-  }
-  // A claim exists. Take over one older than the window so an invocation
-  // killed between claiming and releasing can't suppress recounts until the
-  // TTL policy gets round to it — and so a genuinely later write (the offline
-  // queue's replay, a backfill re-run) always recounts.
-  try {
-    const snap = await ref.get();
-    const claimedMs = toMillis(snap.get("claimedAt"));
-    if (claimedMs != null &&
-        nowDate.getTime() - claimedMs < RECOUNT_CLAIM_STALE_MS) {
-      return false;
-    }
-    await ref.set(claimBody(nowDate));
-    return true;
-  } catch (err) {
-    if (log) {
-      log.warn("recount claim takeover failed; recounting anyway", {err});
-    }
-    return true;
-  }
-}
-
-/**
- * Releases this invocation's claim. Best-effort: a failed delete leaves a
- * claim the staleness takeover above already treats as inert.
- * @param {string} appointmentId
- * @param {!Object} deps `{db, logger}`.
- * @return {!Promise<void>}
- */
-async function releaseRecount(appointmentId, deps) {
-  const {db, logger: log} = deps;
-  try {
-    await db.collection(RECOUNT_CLAIM_COLLECTION).doc(appointmentId).delete();
-  } catch (err) {
-    if (log) log.warn("recount claim release failed", {err});
-  }
-}
-
-/**
- * Debounces the recount per parent: the first trigger of a photo batch claims
- * the parent, settles, and performs ONE recount; the rest return having done
- * nothing.
+ * Debounces the recount per parent through the shared claim ledger: the first
+ * trigger of a photo batch claims the parent, settles, and performs ONE
+ * recount; the rest return having done nothing.
  *
  * WHY: `appendAppointmentPictures` writes N image docs in ONE batch, so N
  * triggers land on the SAME parent within milliseconds — against Firestore's
@@ -306,13 +203,10 @@ async function releaseRecount(appointmentId, deps) {
  * notification invocations for a single user action, multiplied again by
  * `retry: true` contention retries.
  *
- * **THE ORDER IS THE DESIGN: release the claim BEFORE running the aggregate.**
- * A suppressed sibling's document was committed before its trigger fired, and
- * its trigger fired before the release; the aggregate runs after the release,
- * so a strongly-consistent `count()` necessarily sees it. Nothing a debounce
- * suppressed can be missed. Count first and release after, and a photo written
- * in that gap would be both suppressed and uncounted — the one way this
- * optimisation could corrupt the number it maintains.
+ * The claim protocol itself — and the release-BEFORE-aggregate ordering that
+ * is the whole safety argument — belongs to `recount_claim.js`, which the
+ * client `jobCount` counter shares. Don't re-spell it here: that is precisely
+ * the second copy the module was extracted to prevent.
  *
  * **IT STILL RECOUNTS ON EVERY WRITE, INCLUDING AN UPDATE THAT CANNOT HAVE
  * MOVED THE COUNT.** `event.data` is deliberately never consulted. An
@@ -325,21 +219,22 @@ async function releaseRecount(appointmentId, deps) {
  * preserves that: a claim lives seconds and is deleted on the normal path, so
  * a later, separate write always claims afresh and always recounts. Suppress a
  * sibling of the batch in flight, never a replay.
+ *
+ * Unconditional, unlike `recountClientJobs`: a photo write is ALWAYS part of a
+ * batch worth collapsing (`appendAppointmentPictures` commits N image docs at
+ * once), so there is no cheap single-write path to gate the settle on.
  * @param {string} appointmentId
  * @param {!Object} deps `{db, logger, now, sleep, settleMs}`.
  * @return {!Promise<{skipped: boolean, count: ?number}>}
  */
 async function debouncedRecountPictures(appointmentId, deps) {
-  const mine = await claimRecount(appointmentId, deps);
-  if (!mine) return {skipped: true, count: null};
-  const sleep = deps.sleep || defaultSleep;
-  const settleMs = deps.settleMs == null ? RECOUNT_SETTLE_MS : deps.settleMs;
-  await sleep(settleMs);
-  await releaseRecount(appointmentId, deps);
-  // Released first (see above), so a recount that throws is also free to
-  // re-claim on the trigger's retry rather than suppressing itself.
-  const count = await recountPictures(appointmentId, deps);
-  return {skipped: false, count};
+  const {skipped, result} = await debounceRecount(
+      RECOUNT_CLAIM_COLLECTION,
+      appointmentId,
+      () => recountPictures(appointmentId, deps),
+      {settleMs: RECOUNT_SETTLE_MS, ...deps},
+  );
+  return {skipped, count: result};
 }
 
 // `retry: true` is safe and wanted: recursiveDelete is idempotent (a second
@@ -376,6 +271,7 @@ module.exports = {
   cascadeDeleteAppointmentImages,
   // Exported for `maintenance.js`, so the image prefix has ONE owner.
   deleteAppointmentImageBytes,
+  appointmentImagePrefix,
   recountAppointmentPictures,
   purgeAppointmentImages,
   recountPictures,
@@ -383,6 +279,5 @@ module.exports = {
   IMAGES_SUBCOLLECTION,
   PICTURE_COUNT_WARN_CAP,
   RECOUNT_CLAIM_COLLECTION,
-  RECOUNT_CLAIM_STALE_MS,
-  RECOUNT_CLAIM_TTL_MS,
+  RECOUNT_SETTLE_MS,
 };

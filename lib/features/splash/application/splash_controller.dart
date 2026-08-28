@@ -66,7 +66,6 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
   try {
     match = await retryAsync(
       () => employeesRepo.findUserByUid(user.uid),
-      delays: const [Duration(milliseconds: 500), Duration(milliseconds: 1500)],
       onRetry: (attempt, e, st) =>
           logger.warn('SPLASH findUserByUid retry $attempt', e, st),
     );

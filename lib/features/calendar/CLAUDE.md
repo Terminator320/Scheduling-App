@@ -176,9 +176,11 @@ STAYS in the root `CLAUDE.md`, because those are reachable from
   (`calendar_closedCount`, which reads **"Done"** — owner call 2026-08-08,
   reversing the earlier "Closed"; a cancelled visit sinks into the same block
   and is counted by it, so the label is deliberately looser than the set) at
-  `_firstClosedIndex`, and its `length - index` count is only valid because the
-  sort guarantees the closed jobs are one contiguous tail — don't reorder them
-  at the call site. **The agenda header's count answers the same question and
+  `firstClosedIndex` — and the count is deliberately NOT `length - index`: it
+  re-filters the closed tail through `countsAsWork`, so a cancelled visit and a
+  completed day off sink into the block and are rendered there without being
+  counted. The sort still has to keep the closed jobs one contiguous tail, so
+  don't reorder them at the call site. **The agenda header's count answers the same question and
   must use the same predicate**: `_jobLabel` (`main_calendar_screen.dart`)
   appends `· 1 DONE` to `3 JOBS`, and BOTH sides filter through
   **`countsAsWork`** (`appointment_day_slice.dart`) so the header, the rule

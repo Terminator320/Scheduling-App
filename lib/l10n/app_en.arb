@@ -549,7 +549,9 @@
   "@clients_buildingUnits": {
     "description": "How many clients share one street address - a pill on the client row and the subtitle of each address in the filter menu",
     "placeholders": {
-      "count": { "type": "int" }
+      "count": {
+        "type": "int"
+      }
     }
   },
   "clients_noClientsAtAddress": "No clients at this address.",
@@ -750,31 +752,83 @@
     "description": "Body of the delete dialog for a repeating appointment, stating that the delete-all option removes every future visit in the series"
   },
   "calendar_runDayLabel": "DAY {index} OF {count}",
-  "@calendar_runDayLabel": {"description": "Mono all-caps context label at the top of the scope dialog for one day of a multi-day run, e.g. DAY 3 OF 5.", "placeholders": {"index": {"type": "int"}, "count": {"type": "int"}}},
+  "@calendar_runDayLabel": {
+    "description": "Mono all-caps context label at the top of the scope dialog for one day of a multi-day run, e.g. DAY 3 OF 5.",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendar_editThisDayOnly": "Save this day only",
-  "@calendar_editThisDayOnly": {"description": "Edit dialog option: apply the edit to only the opened day of a multi-day run"},
+  "@calendar_editThisDayOnly": {
+    "description": "Edit dialog option: apply the edit to only the opened day of a multi-day run"
+  },
   "calendar_editThisAndFollowingDays": "Save this and the following days",
-  "@calendar_editThisAndFollowingDays": {"description": "Edit dialog option: apply the edit to the opened day plus the rest of the run"},
+  "@calendar_editThisAndFollowingDays": {
+    "description": "Edit dialog option: apply the edit to the opened day plus the rest of the run"
+  },
   "calendar_thisDayKeepsRun": "{date} — the rest of the run keeps its old details",
-  "@calendar_thisDayKeepsRun": {"description": "Consequence line under the this-day-only option in the run-scope dialog.", "placeholders": {"date": {"type": "String"}}},
+  "@calendar_thisDayKeepsRun": {
+    "description": "Consequence line under the this-day-only option in the run-scope dialog.",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "calendar_remainingDaysThrough": "{count, plural, =1{1 remaining day through {date}} other{{count} remaining days through {date}}}",
-  "@calendar_remainingDaysThrough": {"description": "Consequence line under the this-and-following option in the run-scope dialog.", "placeholders": {"count": {"type": "int"}, "date": {"type": "String"}}},
+  "@calendar_remainingDaysThrough": {
+    "description": "Consequence line under the this-and-following option in the run-scope dialog.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
   "calendar_saveThisDay": "Save this day",
-  "@calendar_saveThisDay": {"description": "Primary button label in the run-scope dialog when only this day is selected."},
+  "@calendar_saveThisDay": {
+    "description": "Primary button label in the run-scope dialog when only this day is selected."
+  },
   "calendar_saveNDays": "{count, plural, =1{Save 1 day} other{Save {count} days}}",
-  "@calendar_saveNDays": {"description": "Primary button label in the run-scope dialog when this day and the following ones are selected.", "placeholders": {"count": {"type": "int"}}},
+  "@calendar_saveNDays": {
+    "description": "Primary button label in the run-scope dialog when this day and the following ones are selected.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendar_deleteThisDayOnly": "Delete this day only",
-  "@calendar_deleteThisDayOnly": {"description": "Delete dialog option: delete only the opened day of a multi-day run"},
+  "@calendar_deleteThisDayOnly": {
+    "description": "Delete dialog option: delete only the opened day of a multi-day run"
+  },
   "calendar_deleteThisAndFollowingDays": "Delete this and the following days",
-  "@calendar_deleteThisAndFollowingDays": {"description": "Delete dialog option: delete the opened day plus the rest of the run"},
+  "@calendar_deleteThisAndFollowingDays": {
+    "description": "Delete dialog option: delete the opened day plus the rest of the run"
+  },
   "calendar_deleteRunScopeMessage": "Delete this day only, or this day and the rest of the run?",
-  "@calendar_deleteRunScopeMessage": {"description": "Body of the delete dialog for one day of a multi-day run"},
+  "@calendar_deleteRunScopeMessage": {
+    "description": "Body of the delete dialog for one day of a multi-day run"
+  },
   "calendar_cancelThisDayOnly": "Cancel this day only",
-  "@calendar_cancelThisDayOnly": {"description": "Cancel dialog option: cancel only the opened day of a multi-day run"},
+  "@calendar_cancelThisDayOnly": {
+    "description": "Cancel dialog option: cancel only the opened day of a multi-day run"
+  },
   "calendar_cancelThisAndFollowingDays": "Cancel this and the following days",
-  "@calendar_cancelThisAndFollowingDays": {"description": "Cancel dialog option: cancel the opened day plus the rest of the run"},
+  "@calendar_cancelThisAndFollowingDays": {
+    "description": "Cancel dialog option: cancel the opened day plus the rest of the run"
+  },
   "calendar_cancelRunScopeMessage": "Cancel this day only, or this day and the rest of the run?",
-  "@calendar_cancelRunScopeMessage": {"description": "Body of the cancel dialog for one day of a multi-day run"},
+  "@calendar_cancelRunScopeMessage": {
+    "description": "Body of the cancel dialog for one day of a multi-day run"
+  },
   "calendar_deleteThisVisitOnly": "Delete this visit only",
   "@calendar_deleteThisVisitOnly": {
     "description": "Delete dialog option: delete only the opened occurrence of a repeating appointment"
@@ -1891,6 +1945,10 @@
     "description": "Error intro for APPT-OPEN"
   },
   "error_introDeleteAccount": "Couldn't delete your account",
+  "error_introSignOut": "Couldn't sign out",
+  "@error_introSignOut": {
+    "description": "Error notice intro shown when signing out fails."
+  },
   "@error_introDeleteAccount": {
     "description": "Error intro for ACCT-DEL"
   },

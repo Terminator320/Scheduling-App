@@ -77,6 +77,16 @@ final clientBuildingsProvider =
       return ref.watch(clientsRepositoryProvider).fetchBuildings();
     });
 
+/// Each client's building key by id — the row builder's half of the pill.
+///
+/// Reads the SAME cached window as [clientBuildingsProvider], so pairing the
+/// two costs no extra Firestore read and cannot disagree with the counts.
+final clientBuildingKeysProvider =
+    FutureProvider.autoDispose<Map<String, String?>>((ref) async {
+      ref.watch(clientsRefreshProvider);
+      return ref.watch(clientsRepositoryProvider).fetchBuildingKeys();
+    });
+
 /// How many clients sit at each building, for the per-row pill.
 ///
 /// ONE reduction the whole list shares, never a lookup per row — the same

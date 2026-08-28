@@ -33,12 +33,16 @@ final historySearchProvider = FutureProvider.autoDispose
       query,
     ) async {
       final repo = ref.watch(appointmentsRepositoryProvider);
+      // Resolved HERE, not inside the callback: this is autoDispose, so the
+      // `Ref` is gone the moment the last listener does, and Riverpod 3's
+      // `ref.read` THROWS on a disposed one. Same rule, same reason, as the
+      // hoist in `error_cause.dart`'s catch sites.
+      final logger = ref.read(loggerProvider);
       // Invalidate on local write so deleted visits don't linger in cached results.
       final sub = repo.onLocalWrite.listen(
         (_) => ref.invalidateSelf(),
-        onError: (Object e, StackTrace st) => ref
-            .read(loggerProvider)
-            .warn('HIST-SEARCH invalidate error', e, st),
+        onError: (Object e, StackTrace st) =>
+            logger.warn('HIST-SEARCH invalidate error', e, st),
       );
       ref.onDispose(sub.cancel);
       return repo.searchHistory(query);
@@ -49,10 +53,12 @@ final historySearchProvider = FutureProvider.autoDispose
 final clientJobHistoryProvider = FutureProvider.autoDispose
     .family<List<AppointmentRecord>, String>((ref, clientId) async {
       final repo = ref.watch(appointmentsRepositoryProvider);
+      // Hoisted for the same reason as `historySearchProvider` above.
+      final logger = ref.read(loggerProvider);
       final sub = repo.onLocalWrite.listen(
         (_) => ref.invalidateSelf(),
         onError: (Object e, StackTrace st) =>
-            ref.read(loggerProvider).warn('HIST-LOAD invalidate error', e, st),
+            logger.warn('HIST-LOAD invalidate error', e, st),
       );
       ref.onDispose(sub.cancel);
       return repo.fetchClientHistory(clientId: clientId);

@@ -28,6 +28,11 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
   @override
   void initState() {
     super.initState();
+    // Resolved here rather than inside the handler: a stream error can arrive
+    // after this consumer is unmounted, and Riverpod 3's `ref.read` throws on
+    // an unmounted consumer — which would replace the logged notice failure
+    // with a StateError escaping to the zone handler as a FATAL.
+    final logger = ref.read(loggerProvider);
     // Without onError a stream failure escapes to the zone handler and is
     // recorded as a FATAL crash — for a notice we could not display.
     _sub = ref
@@ -36,7 +41,7 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
         .listen(
           _show,
           onError: (Object e, StackTrace st) =>
-              ref.read(loggerProvider).warn('NOTICE stream error', e, st),
+              logger.warn('NOTICE stream error', e, st),
         );
   }
 

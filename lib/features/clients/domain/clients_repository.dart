@@ -75,4 +75,12 @@ abstract class ClientsRepository {
   /// Every address shared by two or more clients, busiest first — the Building
   /// menu's options and the per-row pill's counts.
   Future<List<ClientBuilding>> fetchBuildings();
+
+  /// Each scanned client's building key by id, `null` where there is none.
+  ///
+  /// The list's row builder needs one key per row and cannot afford
+  /// `buildingKeyFor` per rebuild and per scroll-in; this is the same map the
+  /// window already derived for [fetchBuildings], so it costs no extra read
+  /// and no extra pass. An id absent from it was never in the scan window.
+  Future<Map<String, String?>> fetchBuildingKeys();
 }

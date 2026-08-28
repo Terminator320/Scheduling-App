@@ -92,7 +92,7 @@ Root context: `../../CLAUDE.md`.
   separate because the detail view must STAY OPEN after archiving (to offer
   Unarchive) and dismiss after deleting.
 - **The clients type filter is a SEPARATE bounded read, never a filter over the
-  paginated list.** `fetchClientsByType` scans the same cached 1000-doc window
+  paginated list.** `fetchClientsByType` scans the same cached 5000-doc window
   `searchClients` uses, so the chip row and its results cost no extra Firestore
   read inside the 2-minute TTL and need no composite index. `fetchArchivedClients`
   (the Archived chip) is the same shape over the same window, and the chips are
@@ -104,7 +104,7 @@ Root context: `../../CLAUDE.md`.
   Dart, shortening a page the server actually filled — which is exactly what
   stops `ClientsListView` paging early and hides every client below the first
   non-matching one. The window bound is the same one search already lives with:
-  past ~1000 clients the filter sees a prefix, not the whole roster. The chips
+  past ~5000 clients the filter sees a prefix, not the whole roster. The chips
   offer the fixed `ClientType.pickable` set, so there is no vocabulary to
   discover and no spelling to reconcile — searching *within* an active filter
   runs in Dart over that same bounded list via `ClientSearchPolicy`, indexed
