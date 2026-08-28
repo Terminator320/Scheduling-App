@@ -152,6 +152,9 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           onStatusChanged: notifier.setStatus,
           onRequestAddClient: requestAddClient,
           isMultiDay: spanLength > 1,
+          // One day of a multi-day RUN: the end date goes away, because the
+          // run's length is fixed at booking.
+          isRunMember: widget.appointment.dayCount > 1,
           isOvernight:
               !state.isAllDay &&
               isOvernightWindow(state.selectedStartTime, state.selectedEndTime),

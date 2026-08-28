@@ -7,6 +7,7 @@ import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
+import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -33,6 +34,7 @@ void main() {
     bool isAllDay = false,
     ValueChanged<bool>? onAllDayChanged,
     bool isMultiDay = false,
+    bool isRunMember = false,
     bool isOvernight = false,
     int spanLength = 1,
     DateTime? selectedDate,
@@ -91,6 +93,7 @@ void main() {
                   : null,
               isAllDay: isAllDay,
               isMultiDay: isMultiDay,
+              isRunMember: isRunMember,
               isOvernight: isOvernight,
               spanLength: spanLength,
               errors: errors,
@@ -462,5 +465,29 @@ void main() {
 
     // The row surfaces the validator's message inline, not a bare red border.
     expect(find.text('Please select a date'), findsOneWidget);
+  });
+
+  testWidgets('the repeat picker is hidden once the job spans days', (
+    tester,
+  ) async {
+    await pumpAppointmentForm(tester, width: 400, isMultiDay: true);
+    expect(find.byType(RepeatIntervalPicker), findsNothing);
+  });
+
+  testWidgets('the repeat picker is offered on a one-day job', (tester) async {
+    await pumpAppointmentForm(tester, width: 400);
+    expect(find.byType(RepeatIntervalPicker), findsOneWidget);
+  });
+
+  testWidgets('a run member does not offer an end date', (tester) async {
+    // Each day of a run IS one appointment, so its length is not editable.
+    await pumpAppointmentForm(tester, width: 400, isRunMember: true);
+    expect(find.text('End date'), findsNothing);
+    expect(find.text('Start date'), findsOneWidget);
+  });
+
+  testWidgets('an ordinary job still offers an end date', (tester) async {
+    await pumpAppointmentForm(tester, width: 400);
+    expect(find.text('End date'), findsOneWidget);
   });
 }
