@@ -142,6 +142,7 @@ class AppointmentFormFields extends StatelessWidget {
     required this.callbacks,
     super.key,
     this.isMultiDay = false,
+    this.isRunMember = false,
     this.isOvernight = false,
     this.spanLength = 1,
     this.editingStatus,
@@ -187,6 +188,20 @@ class AppointmentFormFields extends StatelessWidget {
   /// True when this job runs more than one day — drives the daily-window
   /// qualifier on the time labels and the run length beside the end date.
   final bool isMultiDay;
+
+  /// This appointment is one DAY of a multi-day run — N documents sharing a
+  /// `seriesId`, each carrying its own status.
+  ///
+  /// The edit form then hides the END DATE: a run's length is fixed at booking
+  /// (owner call 2026-08-27). Shortening one is cancelling its tail through the
+  /// scope dialog; extending it is a second booking. Letting a day reshape the
+  /// run would delete and recreate the trailing documents, destroying exactly
+  /// the per-day statuses and photos the split exists to create.
+  ///
+  /// Distinct from [isMultiDay], which describes the SPAN the form currently
+  /// has selected: the add flow can be multi-day and is never a run member,
+  /// and a run member's own day is one day long so it is never multi-day.
+  final bool isRunMember;
 
   /// True when the daily window crosses midnight, so the run counts nights.
   final bool isOvernight;
@@ -495,7 +510,16 @@ class AppointmentFormFields extends StatelessWidget {
             // --- Repeat: same panel as the date and times, so everything
             // about when the job happens reads as one block. Not offered on a
             // personal job.
-            if (!isPersonal)
+            //
+            // Nor on a MULTI-DAY one. A run's days are linked by `seriesId`,
+            // the same field a repeat uses, so a repeating multi-day job would
+            // make that field mean two things at once and force a third state
+            // into the scope dialog ("the rest of this run" vs "this and
+            // future weeks"). Owner call 2026-08-27: the business does not book
+            // repeating multi-day work, so the ambiguity is removed rather than
+            // modelled. Adding it back means a separate `runId`, never another
+            // meaning for `seriesId`.
+            if (!isPersonal && !isMultiDay)
               RepeatIntervalPicker(
                 current: repeat,
                 onChanged: callbacks.onSelectRepeat,
@@ -536,6 +560,7 @@ class AppointmentFormFields extends StatelessWidget {
             : (isOvernight
                   ? l10n.calendar_spanNights(spanLength)
                   : l10n.calendar_spanDays(spanLength)),
+        showEndDate: !isRunMember,
         onStartDateSelected: callbacks.onSelectStartDate,
         onEndDateSelected: callbacks.onSelectEndDate,
       );

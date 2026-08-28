@@ -33,6 +33,7 @@ class AppointmentDateRows extends StatefulWidget {
     this.startError,
     this.endError,
     this.endTrailingLabel,
+    this.showEndDate = true,
   });
 
   /// The formatted text each row renders — the form's controllers stay the one
@@ -56,6 +57,14 @@ class AppointmentDateRows extends StatefulWidget {
 
   /// Muted run length beside the end date ("5 days"), or null on a one-day job.
   final String? endTrailingLabel;
+
+  /// Whether the END date row is offered at all.
+  ///
+  /// False on a member of a multi-day RUN: each day is its own appointment, so
+  /// there is no end date to move — the run's length is fixed at booking (owner
+  /// call 2026-08-27). Shortening a run is cancelling its tail through the
+  /// scope dialog; extending it is a second booking.
+  final bool showEndDate;
 
   final ValueChanged<DateTime> onStartDateSelected;
   final ValueChanged<DateTime> onEndDateSelected;
@@ -134,7 +143,13 @@ class _AppointmentDateRowsState extends State<AppointmentDateRows> {
         // Start and end share one row until the screen is too narrow to read
         // both. The dropdown spans the full panel either way — it belongs to
         // the pair, not to one half of the row.
-        if (context.isNarrowWidth) ...[
+        //
+        // A run member has no end row in EITHER layout, so that test comes
+        // first: each day of a run is its own appointment and its length is not
+        // editable.
+        if (!widget.showEndDate)
+          startRow
+        else if (context.isNarrowWidth) ...[
           startRow,
           divider,
           endRow,
