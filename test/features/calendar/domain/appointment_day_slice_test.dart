@@ -597,4 +597,71 @@ void main() {
       expect(sliceFor(wide, DateTime(2026, 8, 5))!.dayIndex, 3);
     });
   });
+
+  group('expandRunWindows', () {
+    test('a one-day window yields one pair unchanged', () {
+      final windows = expandRunWindows(
+        DateTime(2026, 8, 3, 9),
+        DateTime(2026, 8, 3, 17),
+      );
+      expect(windows, hasLength(1));
+      expect(windows.single.start, DateTime(2026, 8, 3, 9));
+      expect(windows.single.end, DateTime(2026, 8, 3, 17));
+    });
+
+    test('a 5-day 9-to-5 window yields five one-day windows', () {
+      final windows = expandRunWindows(
+        DateTime(2026, 8, 3, 9),
+        DateTime(2026, 8, 7, 17),
+      );
+      expect(windows, hasLength(5));
+      expect(windows.first.start, DateTime(2026, 8, 3, 9));
+      expect(windows.first.end, DateTime(2026, 8, 3, 17));
+      expect(windows.last.start, DateTime(2026, 8, 7, 9));
+      expect(windows.last.end, DateTime(2026, 8, 7, 17));
+    });
+
+    test('a night shift yields one window per NIGHT, ending the morning after', () {
+      // 22:00 Aug 3 -> 06:00 Aug 5 is two nights: the end date names the last
+      // day the crew STARTS work, so the run is Aug 3 and Aug 4.
+      final windows = expandRunWindows(
+        DateTime(2026, 8, 3, 22),
+        DateTime(2026, 8, 5, 6),
+      );
+      expect(windows, hasLength(2));
+      expect(windows.first.start, DateTime(2026, 8, 3, 22));
+      expect(windows.first.end, DateTime(2026, 8, 4, 6));
+      expect(windows.last.start, DateTime(2026, 8, 4, 22));
+      expect(windows.last.end, DateTime(2026, 8, 5, 6));
+    });
+
+    test('an all-day multi-day block yields a midnight-to-23:59 window a day', () {
+      final windows = expandRunWindows(
+        DateTime(2026, 8, 3),
+        DateTime(2026, 8, 4, 23, 59),
+      );
+      expect(windows, hasLength(2));
+      expect(windows.first.start, DateTime(2026, 8, 3));
+      expect(windows.first.end, DateTime(2026, 8, 3, 23, 59));
+      expect(windows.last.start, DateTime(2026, 8, 4));
+      expect(windows.last.end, DateTime(2026, 8, 4, 23, 59));
+    });
+
+    test('a span past the cap clamps to maxAppointmentSpanDays', () {
+      final windows = expandRunWindows(
+        DateTime(2026, 8, 3, 9),
+        DateTime(2027, 3, 12, 17),
+      );
+      expect(windows, hasLength(maxAppointmentSpanDays));
+    });
+
+    test('a corrupt pair whose end precedes its start yields one window', () {
+      final windows = expandRunWindows(
+        DateTime(2026, 8, 7, 9),
+        DateTime(2026, 8, 3, 17),
+      );
+      expect(windows, hasLength(1));
+      expect(windows.single.start, DateTime(2026, 8, 7, 9));
+    });
+  });
 }

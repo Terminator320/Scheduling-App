@@ -381,3 +381,32 @@ int _agendaOrder(AppointmentDaySlice a, AppointmentDaySlice b) {
   if (aAllDay != bAllDay) return aAllDay ? -1 : 1;
   return a.windowStart.compareTo(b.windowStart);
 }
+
+/// A booked daily window split into ONE window per work day.
+///
+/// The create path's half of the day-scoping rules: [sliceFor] takes a wide
+/// document apart for RENDERING, this takes a form's resolved span apart for
+/// WRITING, and the two have to agree about what a day of a run is. It lives
+/// here for that reason — a second spelling of "which days does this run on"
+/// at a call site is the drift this file exists to prevent.
+///
+/// Each window carries the same time of day as the original, composed as LOCAL
+/// wall clock, so a run crossing a DST shift stays 9-to-5 on every day rather
+/// than sliding an hour. An overnight window ends the following calendar
+/// morning, which is why such a run counts nights rather than days.
+///
+/// Always returns at least one window and never more than
+/// [maxAppointmentSpanDays] — a corrupt pair whose end precedes its start books
+/// the single day it started on rather than nothing at all.
+List<({DateTime start, DateTime end})> expandRunWindows(
+  DateTime start,
+  DateTime end,
+) {
+  final count = _clampedDayCount(start, end);
+  final days = count < 1 ? 1 : count;
+  final firstDay = start.dateOnly;
+  return [
+    for (var i = 0; i < days; i++)
+      _windowOn(addCalendarDays(firstDay, i), start, end),
+  ];
+}
