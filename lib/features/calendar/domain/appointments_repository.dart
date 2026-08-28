@@ -74,6 +74,17 @@ abstract class AppointmentsRepository {
     required String status,
   });
 
+  /// Writes one status across several appointments in a single batch.
+  ///
+  /// The run half of a cancel: cancelling day 3 of a 5-day job with "this and
+  /// the following days" has to close days 3, 4 and 5 together. One batch, so
+  /// a run can never be left half-cancelled, and one shared `seriesOpId`, so
+  /// the crew gets ONE push rather than one per day.
+  Future<void> updateAppointmentStatuses({
+    required List<String> ids,
+    required String status,
+  });
+
   Future<void> deleteAppointment(String id);
 
   /// Deletes every appointment in [ids] atomically (all-or-nothing).
