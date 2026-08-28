@@ -428,6 +428,7 @@
   "error_introLoadAppointments": "Impossible de charger les rendez-vous",
   "error_introOpenAppointment": "Impossible d’ouvrir le rendez-vous",
   "error_introDeleteAccount": "Impossible de supprimer votre compte",
+  "error_introSignOut": "Impossible de se déconnecter",
   "error_introAddClient": "Impossible d’ajouter le client",
   "error_introSaveClient": "Impossible d’enregistrer les modifications du client",
   "error_introLoadHistory": "Impossible de charger l’historique des rendez-vous",

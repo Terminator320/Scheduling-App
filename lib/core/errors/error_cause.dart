@@ -44,6 +44,18 @@ _ErrorCause _classifyError(Object error) {
   return _ErrorCause.unknown;
 }
 
+/// True when [next] is the FIRST error emission after a non-error one.
+///
+/// The one owner of the "report a stream failure once" test. It was spelled
+/// two ways at six `ref.listen` sites, and the two are not equivalent:
+/// refreshing an already-errored provider emits an `AsyncLoading` that still
+/// carries the error, so `hasError` is true while `is AsyncError` is false.
+/// The three sites testing `next is! AsyncError || previous is AsyncError`
+/// therefore re-logged and re-pushed a notice on every retry — the rebuild
+/// spam `ref.listen` exists to avoid.
+bool isFirstAsyncError(AsyncValue<Object?>? previous, AsyncValue<Object?> next) =>
+    next.hasError && !(previous?.hasError ?? false);
+
 /// Composes "{intro}. {cause}" — what failed, then why and what to do next.
 ///
 /// The cause is deliberately actionable rather than diagnostic: the raw error

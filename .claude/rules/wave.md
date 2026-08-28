@@ -2,7 +2,9 @@
 paths:
   - "functions/wave/**"
   - "functions/scripts/*wave*"
+  - "lib/features/wave/**"
   - "lib/features/settings/**"
+  - "test/features/wave/**"
   - "test/features/settings/**"
 ---
 

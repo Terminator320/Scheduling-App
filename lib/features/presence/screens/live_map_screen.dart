@@ -201,7 +201,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     AsyncValue<List<StaffMapPoint>>? previous,
     AsyncValue<List<StaffMapPoint>> next,
   ) {
-    if (!next.hasError || (previous?.hasError ?? false)) return;
+    if (!isFirstAsyncError(previous, next)) return;
     ref
         .read(loggerProvider)
         .warn('LIVEMAP-LOAD live map failed', next.error, next.stackTrace);

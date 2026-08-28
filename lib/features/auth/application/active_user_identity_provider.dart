@@ -34,13 +34,7 @@ final activeUserIdentityProvider =
 
       // Retry this read right after sign-in — if we don't, ID-token/role
       // bridge lag can wipe the mirrors.
-      final match = await retryAsync(
-        () => repo.findUserByUid(uid),
-        delays: const [
-          Duration(milliseconds: 500),
-          Duration(milliseconds: 1500),
-        ],
-      );
+      final match = await retryAsync(() => repo.findUserByUid(uid));
       final docId = match?.id;
       if (docId == null) return null;
       return (role: role, docId: docId);

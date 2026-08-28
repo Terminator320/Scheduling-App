@@ -83,6 +83,60 @@ void main() {
       expect(host.started, 2);
     });
   });
+
+  // The generation half — the sign-out teardown guard. `runCoalesced` guards
+  // sync-against-sync; NOTHING here guarded sync against teardown, and the
+  // failure is silent: `deregisterThisDevice` runs BEFORE `signOut()`, so a
+  // body resuming mid-teardown still holds a valid credential and its
+  // re-registration SUCCEEDS — putting back the push token, presence row or
+  // Live Activity registration of a device that just signed out.
+  group('generation guard', () {
+    test('a body that ran to completion never looked stale', () async {
+      final host = _GenerationHost()..release.complete();
+      await host.sync();
+      expect(host.abandoned, isFalse);
+      expect(host.completed, isTrue);
+    });
+
+    test('an in-flight body sees isSyncStale at its next await', () async {
+      final host = _GenerationHost();
+      final inFlight = host.sync();
+      await host.reachedFirstAwait.future;
+      host.invalidateSync();
+      host.release.complete();
+      await inFlight;
+      expect(host.abandoned, isTrue);
+      expect(host.completed, isFalse);
+    });
+
+    test('a generation captured before invalidation stays stale', () {
+      final host = _GenerationHost();
+      final captured = host.syncGeneration;
+      host.invalidateSync();
+      expect(host.isSyncStale(captured), isTrue);
+      // Permanently — a later unrelated bump must not wrap back to valid.
+      host.invalidateSync();
+      expect(host.isSyncStale(captured), isTrue);
+    });
+
+    test('a generation read after invalidation is fresh again', () {
+      final host = _GenerationHost()..invalidateSync();
+      expect(host.isSyncStale(host.syncGeneration), isFalse);
+    });
+
+    test('invalidateSync also drops a queued rerun', () async {
+      final host = _GenerationHost();
+      final first = host.sync();
+      await host.reachedFirstAwait.future;
+      // Queue a rerun behind the in-flight body, then tear down.
+      unawaited(host.sync());
+      host.invalidateSync();
+      host.release.complete();
+      await first;
+      await Future<void>.delayed(Duration.zero);
+      expect(host.started, 1);
+    });
+  });
 }
 
 /// Host whose body throws (swallowed the way real controllers do), to prove
@@ -99,5 +153,29 @@ class _ThrowingHost with ReentrantSync {
     } catch (_) {
       // Controllers log with their own tag; here we just swallow.
     }
+  }
+}
+
+/// Host that captures its generation and re-checks it after an await, the way
+/// the three device-registration controllers do.
+class _GenerationHost with ReentrantSync {
+  int started = 0;
+  bool abandoned = false;
+  bool completed = false;
+  Completer<void> reachedFirstAwait = Completer<void>();
+  Completer<void> release = Completer<void>();
+
+  Future<void> sync() => runCoalesced(_body);
+
+  Future<void> _body() async {
+    started++;
+    final generation = syncGeneration;
+    if (!reachedFirstAwait.isCompleted) reachedFirstAwait.complete();
+    await release.future;
+    if (isSyncStale(generation)) {
+      abandoned = true;
+      return;
+    }
+    completed = true;
   }
 }

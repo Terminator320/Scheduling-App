@@ -198,7 +198,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     AsyncValue<List<AppointmentRecord>>? previous,
     AsyncValue<List<AppointmentRecord>> next,
   ) {
-    if (next is! AsyncError || previous is AsyncError) return;
+    if (!isFirstAsyncError(previous, next)) return;
     ref
         .read(loggerProvider)
         .warn(

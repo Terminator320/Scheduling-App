@@ -62,14 +62,6 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "employeeIds", "arrayConfig": "CONTAINS" },
-        { "fieldPath": "endTime", "order": "ASCENDING" }
-      ]
-    },
-    {
-      "collectionGroup": "appointments",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "employeeIds", "arrayConfig": "CONTAINS" },
         { "fieldPath": "startTime", "order": "ASCENDING" }
       ]
     },
@@ -424,6 +416,15 @@
     },
     {
       "collectionGroup": "appointmentRecountClaims",
+      "fieldPath": "expiresAt",
+      "ttl": true,
+      "indexes": [
+        { "order": "ASCENDING", "queryScope": "COLLECTION" },
+        { "order": "DESCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
+      "collectionGroup": "clientRecountClaims",
       "fieldPath": "expiresAt",
       "ttl": true,
       "indexes": [

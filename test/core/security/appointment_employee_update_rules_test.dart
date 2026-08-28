@@ -38,7 +38,11 @@ void main() {
     return body!;
   }
 
-  String collapsed(String source) => source.replaceAll(RegExp(r'\s+'), ' ');
+  /// The branch as the rules ENGINE sees it: comments dropped, whitespace
+  /// flattened. Dropping comments is what stops a term-absence assertion below
+  /// from firing on prose that merely mentions the term it forbids.
+  String collapsed(String source) =>
+      source.replaceAll(RegExp('//[^\n]*'), '').replaceAll(RegExp(r'\s+'), ' ');
 
   test('the branch still restricts the diff to status and updatedAt', () {
     // The guard below is only safe because this is exact about what MAY
@@ -79,13 +83,35 @@ void main() {
     expect(branch, isNot(contains("resource.data.status == 'pending'")));
   });
 
+  test('updatedAt is pinned to the server clock', () {
+    // S1: the diff restriction admits `updatedAt`, so without this an assignee
+    // running a modified client could stamp an arbitrary — future, past, or
+    // non-timestamp — value on any job they are assigned to. Nothing
+    // server-side branches on an appointment's `updatedAt`, so this is
+    // audit-trail integrity rather than an exploitable defect; it is the same
+    // pin the presence rule puts on its own `updatedAt`, and it is safe
+    // because BOTH client write paths send `FieldValue.serverTimestamp()`
+    // unconditionally.
+    expect(
+      collapsed(employeeBranch()),
+      contains('request.resource.data.updatedAt == request.time'),
+    );
+  });
+
   test('the branch carries NO date restriction, deliberately', () {
     // The documented invariant: "Mark as complete" carries no clock gate at
     // all, and the rules allow an assignee to write `status:'done'` with no
     // date restriction. A `request.time` / instant comparison creeping in here
     // silently strands an employee on day 2+ of a multi-day run, or one who
     // taps the button after midnight, with a job they cannot close.
-    final branch = employeeBranch();
+    //
+    // The `updatedAt` pin above is the ONE exempt mention of the clock, and it
+    // is exempt because it is not a restriction at all: it constrains the
+    // value being WRITTEN, names no date on the appointment, and can refuse a
+    // close at no hour. Anything else reading the clock here would.
+    final branch = collapsed(
+      employeeBranch(),
+    ).replaceAll('request.resource.data.updatedAt == request.time', '');
     for (final term in const [
       'request.time',
       'duration.value',

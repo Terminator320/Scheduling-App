@@ -15,6 +15,7 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
@@ -32,10 +33,9 @@ import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 /// True while a job still belongs in the driving route.
-bool _isOpen(String status) => !AppointmentStatus.fromRaw(status).isTerminal;
+bool _isOpen(String status) => !isTerminalStatusRaw(status);
 
 /// Shows a day's jobs as a numbered route timeline.
 class DayRouteScreen extends ConsumerStatefulWidget {
@@ -81,7 +81,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     AsyncValue<List<AppointmentRecord>>? previous,
     AsyncValue<List<AppointmentRecord>> next,
   ) {
-    if (next is! AsyncError || previous is AsyncError) return;
+    if (!isFirstAsyncError(previous, next)) return;
     ref
         .read(loggerProvider)
         .warn('APPT-LOAD day route stream error', next.error, next.stackTrace);
@@ -203,7 +203,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     // Re-scope the range stream to this day.
     final daySlices =
         source
-            .where((a) => !AppointmentStatus.fromRaw(a.status).isCancelled)
+            .where((a) => !isCancelledStatusRaw(a.status))
             .map((a) => sliceFor(a, _day))
             .nonNulls
             .toList()

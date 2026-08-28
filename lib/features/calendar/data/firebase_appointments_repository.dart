@@ -16,7 +16,6 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:uuid/uuid.dart';
 
 class FirebaseAppointmentsRepository implements AppointmentsRepository {
@@ -144,7 +143,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     }
     return snapshot.docs
         .map((d) => AppointmentRecord.fromMap(d.id, d.data()))
-        .where((a) => !AppointmentStatus.fromRaw(a.status).isTerminal)
+        .where((a) => !isTerminalStatusRaw(a.status))
         .length;
   }
 
@@ -397,10 +396,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   Future<List<AppointmentRecord>> fetchInRange(
     AppointmentDateRange range,
   ) async {
-    final snapshot = await retryAsync(
-      () => _rangeQuery(range).get(),
-      delays: const [Duration(milliseconds: 500), Duration(milliseconds: 1500)],
-    );
+    final snapshot = await retryAsync(() => _rangeQuery(range).get());
     return _mapRangeSnapshot(snapshot);
   }
 

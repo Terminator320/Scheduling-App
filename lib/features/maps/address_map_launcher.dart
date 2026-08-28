@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
+import 'package:scheduling/core/launchers/external_uri_launcher.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
@@ -124,7 +125,14 @@ class AddressMapLauncher {
     try {
       opened = await launchUrl(chosen, mode: LaunchMode.externalApplication);
     } catch (e, st) {
-      _logger.warn('LAUNCH-MAPS showMapChoices launchUrl failed', e, st);
+      // Same reason as `launchExternalUri`: the chosen URI is a Maps route
+      // built from client addresses, and the exception message quotes it.
+      _logger.warn(
+        'LAUNCH-MAPS showMapChoices launchUrl failed '
+        '(${chosen.scheme}): ${e.runtimeType}',
+        launchFailureRecord(e),
+        st,
+      );
     }
     if (!opened && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

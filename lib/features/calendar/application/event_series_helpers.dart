@@ -1,7 +1,6 @@
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart'
-    show AppointmentStatus;
 
 /// Pure helpers for reasoning about an appointment series, extracted for testability.
 
@@ -29,7 +28,7 @@ List<AppointmentRecord> futureSeriesRecords(
     if (a.id != null &&
         a.id != excludeId &&
         a.startTime.isAfter(after) &&
-        !AppointmentStatus.fromRaw(a.status).isTerminal)
+        !isTerminalStatusRaw(a.status))
       a,
 ];
 

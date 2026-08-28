@@ -223,9 +223,9 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
         client: client,
         selected: widget.selectedClientId == client.id,
         onOpen: () => _openClient(client),
-        // Read once per build off ONE reduction over the cached window, not a
-        // provider watch per row.
-        buildingCount: _buildingCounts[buildingKeyFor(client)],
+        // Both halves are read once per build off the SAME cached window, not
+        // a provider watch and not a key derivation per row.
+        buildingCount: _buildingCounts[_buildingKeyOf(client)],
       ),
     ),
   );
@@ -449,10 +449,26 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
   /// consumer's own build.
   Map<String, int> _buildingCounts = const {};
 
+  /// The window's per-client building keys, from the same source and for the
+  /// same reason. See [_buildingKeyOf] for why it is not read directly.
+  Map<String, String?> _buildingKeys = const {};
+
+  /// This client's building key, derived only for a row the scan window never
+  /// saw — an archived client, which [buildingKeysIn] omits.
+  ///
+  /// `containsKey`, not `??`: a live client with no address maps to a real
+  /// `null`, and falling through on that would recompute the key for every one
+  /// of them on every rebuild.
+  String? _buildingKeyOf(ClientRecord client) =>
+      _buildingKeys.containsKey(client.id)
+      ? _buildingKeys[client.id]
+      : buildingKeyFor(client);
+
   @override
   Widget build(BuildContext context) {
     ref.listen(clientsRefreshProvider, (_, _) => _pagingController.refresh());
     _buildingCounts = ref.watch(clientBuildingCountsProvider);
+    _buildingKeys = ref.watch(clientBuildingKeysProvider).value ?? const {};
 
     switch (widget.filter) {
       case ClientsFilterArchived():

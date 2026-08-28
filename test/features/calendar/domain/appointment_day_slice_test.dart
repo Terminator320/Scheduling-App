@@ -583,6 +583,75 @@ void main() {
       expect(slice.dayCount, 1);
     });
 
+    test('expandToDays substitutes the stored label too', () {
+      // The main calendar's agenda builds its slices through expandToDays, not
+      // sliceFor. Without the substitution a split run day renders with
+      // dayCount 1, so a 5-day run showed five unlabelled identical cards
+      // while the day route, dashboard, widget and Siri all said "Day 3 of 5".
+      final byDay = expandToDays(
+        [dayThreeOfFive()],
+        AppointmentDateRange(
+          start: DateTime(2026, 8),
+          end: DateTime(2026, 8, 10),
+        ),
+      );
+      final slices = byDay[DateTime(2026, 8, 5)]!;
+      expect(slices, hasLength(1));
+      expect(slices.single.dayIndex, 3);
+      expect(slices.single.dayCount, 5);
+      expect(slices.single.isMultiDay, isTrue);
+    });
+
+    test('expandToDays still emits the stored day ONLY', () {
+      // Same guard as sliceFor: the stored pair labels, it never widens.
+      final byDay = expandToDays(
+        [dayThreeOfFive()],
+        AppointmentDateRange(
+          start: DateTime(2026, 8),
+          end: DateTime(2026, 8, 10),
+        ),
+      );
+      expect(byDay.keys, [DateTime(2026, 8, 5)]);
+    });
+
+    test('expandToDays ignores an incoherent stored pair', () {
+      final broken = AppointmentRecord(
+        id: 'b2',
+        startTime: DateTime(2026, 8, 5, 9),
+        endTime: DateTime(2026, 8, 5, 17),
+        dayIndex: 9,
+        dayCount: 5,
+      );
+      final byDay = expandToDays(
+        [broken],
+        AppointmentDateRange(
+          start: DateTime(2026, 8),
+          end: DateTime(2026, 8, 10),
+        ),
+      );
+      final slice = byDay[DateTime(2026, 8, 5)]!.single;
+      expect(slice.dayIndex, 1);
+      expect(slice.dayCount, 1);
+    });
+
+    test('expandToDays keeps deriving the pair for a legacy WIDE record', () {
+      final wide = AppointmentRecord(
+        id: 'w3',
+        startTime: DateTime(2026, 8, 3, 9),
+        endTime: DateTime(2026, 8, 7, 17),
+      );
+      final byDay = expandToDays(
+        [wide],
+        AppointmentDateRange(
+          start: DateTime(2026, 8),
+          end: DateTime(2026, 8, 10),
+        ),
+      );
+      expect(byDay[DateTime(2026, 8, 3)]!.single.dayIndex, 1);
+      expect(byDay[DateTime(2026, 8, 5)]!.single.dayIndex, 3);
+      expect(byDay[DateTime(2026, 8, 7)]!.single.dayCount, 5);
+    });
+
     test('a stored pair on a WIDE document is ignored', () {
       // Only a console write can produce this. Honouring it would print the
       // same "Day 3 of 5" on all five days of the span.

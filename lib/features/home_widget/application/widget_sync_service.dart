@@ -13,8 +13,8 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 /// App Group shared with the iOS WidgetKit extension. This is public because
 /// the app has to call `HomeWidget.setAppGroupId` with it before any widget
@@ -64,9 +64,6 @@ Map<String, dynamic> buildWidgetPayload(
   final startOfToday = now.dateOnly;
   final startOfTomorrow = DateTime(now.year, now.month, now.day + 1);
 
-  AppointmentStatus statusOf(AppointmentRecord a) =>
-      AppointmentStatus.fromRaw(a.status);
-
   // A job is "on" a day when it WORKS that day — not when its stored startTime
   // happens to fall in it. Without this a run that began yesterday is invisible
   // today, which is the whole point of multi-day support.
@@ -76,7 +73,7 @@ Map<String, dynamic> buildWidgetPayload(
 
   final todayAll = slicesOn(startOfToday);
   final todayIncomplete = todayAll
-      .where((s) => !statusOf(s.appointment).isTerminal)
+      .where((s) => !isTerminalStatusRaw(s.appointment.status))
       .toList();
   // "Still ahead of you today", judged against THIS day's window. An all-day
   // block starts at midnight, so a start test would drop it the moment the day
@@ -90,13 +87,15 @@ Map<String, dynamic> buildWidgetPayload(
   final tomorrowJobs =
       slicesOn(
           startOfTomorrow,
-        ).where((s) => !statusOf(s.appointment).isTerminal).toList()
+        )
+            .where((s) => !isTerminalStatusRaw(s.appointment.status))
+            .toList()
         ..sort((x, y) => x.windowStart.compareTo(y.windowStart));
 
   DateTime? rolloverAt;
   if (todayIncomplete.isEmpty) {
     final finished = todayAll
-        .where((s) => !statusOf(s.appointment).isCancelled)
+        .where((s) => !isCancelledStatusRaw(s.appointment.status))
         .toList();
     // If today's jobs are empty or all cancelled, use a stable past instant so
     // we don't churn; otherwise roll over 1h after the last job ends. The
@@ -266,7 +265,7 @@ final widgetPayloadProvider =
                 range: range,
               )),
             );
-      final locale = AppLanguageController.instance.value == 'fr' ? 'fr' : 'en';
+      final locale = currentServerLocale;
       return appts.whenData(
         (list) => buildWidgetPayload(list, DateTime.now(), locale: locale),
       );

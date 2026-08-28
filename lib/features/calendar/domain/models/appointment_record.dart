@@ -104,9 +104,12 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     'repeat': repeat.raw,
     'seriesId': seriesId,
     // Single-day jobs omit run labels.
-    if (dayCount > 1) 'dayIndex': dayIndex,
-    if (dayCount > 1) 'dayCount': dayCount,
+    if (isRunMember) 'dayIndex': dayIndex,
+    if (isRunMember) 'dayCount': dayCount,
   };
+
+  /// One day of a multi-day run, whose length is fixed at booking.
+  bool get isRunMember => dayCount > 1;
 
   /// Clock-derived display status; keep synced with notification functions.
   String get displayStatus => displayStatusAt(DateTime.now());

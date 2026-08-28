@@ -11,16 +11,23 @@
  * The debounce is the one most easily broken into a data bug: it must collapse
  * one photo batch into ONE parent write without ever suppressing the offline
  * queue's replay, which is the only self-heal `pictureCount` has.
+ *
+ * The claim PROTOCOL — staleness takeover, both fail-open branches, the
+ * swallowed release failure, the TTL stamp — belongs to `recount_claim.js` and
+ * is pinned by `__tests__/recount_claim.test.js`. What is asserted here is
+ * only what this adapter decides: the ledger it claims in, the settle window,
+ * the `{skipped, count}` shape, and that the aggregate it hands over is
+ * `recountPictures`.
  */
 const {
   purgeAppointmentImages,
+  appointmentImagePrefix,
   recountPictures,
   debouncedRecountPictures,
   IMAGES_SUBCOLLECTION,
   PICTURE_COUNT_WARN_CAP,
   RECOUNT_CLAIM_COLLECTION,
-  RECOUNT_CLAIM_STALE_MS,
-  RECOUNT_CLAIM_TTL_MS,
+  RECOUNT_SETTLE_MS,
 } = require("../appointment_images");
 
 /**
@@ -147,6 +154,34 @@ function makeImageDeleter(error) {
     },
   };
 }
+
+describe("appointmentImagePrefix", () => {
+  test("ends in a slash", () => {
+    // Without it `deleteFiles({prefix})` matches by bare string prefix.
+    expect(appointmentImagePrefix("appt1").endsWith("/")).toBe(true);
+  });
+
+  test("appointment 12's prefix does NOT match appointment 123's objects",
+      () => {
+        // The cross-appointment data loss the trailing slash prevents: a
+        // dropped slash makes deleting `12` sweep `123`, `120`, `1234`...
+        const twelve = appointmentImagePrefix("12");
+        const oneTwoThree = appointmentImagePrefix("123");
+        expect(oneTwoThree.startsWith(twelve)).toBe(false);
+        expect(`${oneTwoThree}a.jpg`.startsWith(twelve)).toBe(false);
+      });
+
+  test("matches its own objects", () => {
+    const p = appointmentImagePrefix("appt1");
+    expect(`${p}photo.jpg`.startsWith(p)).toBe(true);
+  });
+
+  test("agrees with the path the client writes", () => {
+    // Hand-mirror of image_storage_service.dart:
+    //   appointments/$appointmentId/images/$fileName
+    expect(appointmentImagePrefix("A9")).toBe("appointments/A9/images/");
+  });
+});
 
 describe("purgeAppointmentImages", () => {
   test("recursively deletes the images subcollection", async () => {
@@ -345,6 +380,22 @@ describe("debouncedRecountPictures collapses one batch", () => {
     expect(state.updates).toEqual([]);
     expect(state.ops).toEqual([]);
   });
+
+  test("claims in the appointment ledger, and settles for RECOUNT_SETTLE_MS",
+      async () => {
+        // The two things this adapter chooses, and both are silent when wrong.
+        // A wrong collection name lands on a ledger the rules deny and the TTL
+        // policy never sweeps: `claimRecount` then fails open on every call and
+        // the debounce simply never engages, with no error and no log.
+        const slept = [];
+        const {db, state} = makeDb({count: 1});
+        await debouncedRecountPictures("appt1", {
+          db, logger: quietLogger(), sleep: async (ms) => slept.push(ms),
+        });
+        expect(RECOUNT_CLAIM_COLLECTION).toBe("appointmentRecountClaims");
+        expect(state.claimCreates.map((c) => c.id)).toEqual(["appt1"]);
+        expect(slept).toEqual([RECOUNT_SETTLE_MS]);
+      });
 });
 
 describe("the replay self-heal survives the debounce", () => {
@@ -363,77 +414,6 @@ describe("the replay self-heal survives the debounce", () => {
     expect(state.updates.map((u) => u.patch)).toEqual([
       {pictureCount: 2}, {pictureCount: 3},
     ]);
-  });
-
-  test("the claim does not survive its own pass", async () => {
-    const {db, state} = makeDb({count: 1});
-    await debouncedRecountPictures(
-        "appt1", {db, logger: quietLogger(), sleep: async () => {}});
-    expect(state.claims.has("appt1")).toBe(false);
-  });
-
-  test("an abandoned claim is taken over rather than obeyed", async () => {
-    // An invocation killed between claiming and releasing leaves a claim
-    // behind. Waiting for the TTL policy to sweep it would suspend the
-    // self-heal for as long as that takes, so staleness is enforced in code.
-    const claimedAt = new Date(1000000);
-    const now = new Date(claimedAt.getTime() + RECOUNT_CLAIM_STALE_MS + 1);
-    const {db, state} = makeDb({count: 5});
-    state.claims.set("appt1", {claimedAt});
-
-    const result = await debouncedRecountPictures("appt1", {
-      db, logger: quietLogger(), now, sleep: async () => {},
-    });
-    expect(result).toEqual({skipped: false, count: 5});
-    expect(state.claimSets).toHaveLength(1);
-    expect(state.updates[0].patch).toEqual({pictureCount: 5});
-  });
-
-  test("a claim with no usable timestamp is taken over", async () => {
-    // A doc that vanished mid-read, or one written by an older shape, is the
-    // opposite of a live claim. Reading it as live would fail closed in the
-    // one direction that loses data.
-    const {db, state} = makeDb({count: 6});
-    state.claims.set("appt1", {});
-    await debouncedRecountPictures(
-        "appt1", {db, logger: quietLogger(), sleep: async () => {}});
-    expect(state.updates[0].patch).toEqual({pictureCount: 6});
-  });
-
-  test("a claim ledger failure FAILS OPEN and still recounts", async () => {
-    // An extra parent write is exactly the old behaviour; a skipped recount is
-    // a wrong count with nothing left to notice it.
-    const {db, state} = makeDb({
-      count: 8, claimCreateError: Object.assign(new Error("nope"), {code: 13}),
-    });
-    const result = await debouncedRecountPictures(
-        "appt1", {db, logger: quietLogger(), sleep: async () => {}});
-    expect(result).toEqual({skipped: false, count: 8});
-    expect(state.updates[0].patch).toEqual({pictureCount: 8});
-  });
-
-  test("a failed release does not stop the recount", async () => {
-    const {db, state} = makeDb({
-      count: 2, claimDeleteError: new Error("release failed"),
-    });
-    const result = await debouncedRecountPictures(
-        "appt1", {db, logger: quietLogger(), sleep: async () => {}});
-    expect(result).toEqual({skipped: false, count: 2});
-    expect(state.updates[0].patch).toEqual({pictureCount: 2});
-  });
-
-  test("stamps an absolute expiresAt for the TTL policy", async () => {
-    // Firestore TTL policies use expiration offset 0, so the stored value must
-    // be the instant of deletion, not a duration.
-    const now = new Date(1000000);
-    const {db, state} = makeDb({count: 1});
-    await debouncedRecountPictures("appt1", {
-      db, logger: quietLogger(), now, sleep: async () => {},
-    });
-    const {claimedAt, expiresAt} = state.claimCreates[0].data;
-    expect(claimedAt).toEqual(now);
-    expect(expiresAt.getTime())
-        .toBe(now.getTime() + RECOUNT_CLAIM_TTL_MS);
   });
 });
 

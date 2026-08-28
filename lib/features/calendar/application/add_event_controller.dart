@@ -130,12 +130,24 @@ class AddEventController extends Notifier<AddEventState>
   void removeImage(int index) => removePendingImageAt(index);
 
   void selectDate(DateTime date) {
+    final endDate = _shiftedEndDate(date);
     state = state.copyWith(
       selectedDate: date,
-      endDate: _shiftedEndDate(date),
+      endDate: endDate,
+      repeat: _repeatForSpan(date, endDate),
       errors: withoutKey(withoutKey(state.errors, 'date'), 'endDate'),
     );
   }
+
+  /// A multi-day draft cannot carry a hidden repeat rule.
+  ///
+  /// The picker is hidden once the span exceeds a day, so a rule chosen while
+  /// the draft was still single-day would otherwise stay in state: `submit`
+  /// books no copies for a run, yet stamps the rule on every day document —
+  /// a repeat that silently does nothing, on records that then read as both a
+  /// run and a series.
+  RepeatInterval _repeatForSpan(DateTime? start, DateTime? end) =>
+      runLengthDays(start, end) > 1 ? RepeatInterval.none : state.repeat;
 
   /// Returns the end date after moving the start to [date].
   DateTime _shiftedEndDate(DateTime date) {
@@ -152,6 +164,7 @@ class AddEventController extends Notifier<AddEventState>
     state = state.copyWith(
       endDate: date,
       endDateTouched: true,
+      repeat: _repeatForSpan(state.selectedDate, date),
       errors: withoutKey(state.errors, 'endDate'),
     );
   }

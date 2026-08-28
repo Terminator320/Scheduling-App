@@ -62,7 +62,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       previous,
       next,
     ) {
-      if (!next.hasError || (previous?.hasError ?? false)) return;
+      if (!isFirstAsyncError(previous, next)) return;
       ref
           .read(loggerProvider)
           .warn('DASH-LOAD dashboard failed', next.error, next.stackTrace);

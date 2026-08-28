@@ -154,7 +154,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           isMultiDay: spanLength > 1,
           // One day of a multi-day RUN: the end date goes away, because the
           // run's length is fixed at booking.
-          isRunMember: widget.appointment.dayCount > 1,
+          isRunMember: widget.appointment.isRunMember,
           isOvernight:
               !state.isAllDay &&
               isOvernightWindow(state.selectedStartTime, state.selectedEndTime),
@@ -335,7 +335,8 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     EventDetailsState state,
   ) async {
     final appointment = widget.appointment;
-    if (appointment.seriesId.isEmpty || state.repeat != state.savedRepeat) {
+    if (appointment.seriesId.isEmpty ||
+        (state.repeat != state.savedRepeat && !appointment.isRunMember)) {
       return false;
     }
     final provider = eventDetailsControllerProvider(
@@ -352,9 +353,11 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     }
     // A run member and a repeat occurrence take the same dialog with different
     // words: one is "the rest of this job", the other "the visits after this
-    // one". They can never both apply — the repeat picker is hidden on a
-    // multi-day form, so a run always carries `RepeatInterval.none`.
-    final isRun = appointment.dayCount > 1;
+    // one". They can never both apply — the repeat picker is hidden on a run
+    // day as well as a multi-day form, so a run carries `RepeatInterval.none`.
+    // A run member wins the label either way, in case a stored repeat predates
+    // that gate.
+    final isRun = appointment.isRunMember;
     final choice = await showSeriesScopeDialog(
       context,
       title: context.l10n.calendar_applyChangesTo,
@@ -462,7 +465,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     final choice = await showDeleteAppointmentDialog(
       context,
       isSeries: appointment.seriesId.isNotEmpty,
-      isRun: appointment.dayCount > 1,
+      isRun: appointment.isRunMember,
     );
     // Cleared before the mounted guard (the notifier is context-free, and
     // bailing while busy would wedge a surviving controller) and before the

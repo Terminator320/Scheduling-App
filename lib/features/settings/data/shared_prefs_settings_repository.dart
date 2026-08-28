@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/utils/app_language.dart';
 import 'package:scheduling/features/settings/domain/models/app_settings.dart';
 import 'package:scheduling/features/settings/domain/settings_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -20,8 +21,7 @@ class SharedPrefsSettingsRepository implements SettingsRepository {
     return value;
   }
 
-  static String _sanitizeLanguage(String? value) =>
-      value == 'fr' ? 'fr' : 'en';
+  static String _sanitizeLanguage(String? value) => serverLocaleOf(value);
 
   @override
   Future<AppSettings> load() async {

@@ -583,6 +583,39 @@ void main() {
       expect(readState().repeat, RepeatInterval.none);
     });
 
+    test('widening the span past a day clears a chosen repeat', () async {
+      // The picker is hidden once the span exceeds a day, so a rule chosen
+      // while the draft was single-day would otherwise stay in state: submit
+      // books NO copies for a run yet stamps the rule on every day document,
+      // producing a repeat that silently does nothing on records that then
+      // read as both a run and a series.
+      readNotifier()
+        ..selectDate(DateTime(2026, 8, 3))
+        ..selectRepeat(RepeatInterval.fourMonths)
+        ..selectEndDate(DateTime(2026, 8, 5));
+      expect(readState().repeat, RepeatInterval.none);
+    });
+
+    test('a single-day span keeps the chosen repeat', () async {
+      readNotifier()
+        ..selectDate(DateTime(2026, 8, 3))
+        ..selectRepeat(RepeatInterval.fourMonths)
+        ..selectEndDate(DateTime(2026, 8, 3));
+      expect(readState().repeat, RepeatInterval.fourMonths);
+    });
+
+    test('moving the START date so the span widens also clears it', () async {
+      // selectDate carries the touched end date along, so it can widen the
+      // span just as selectEndDate can.
+      readNotifier()
+        ..selectDate(DateTime(2026, 8, 3))
+        ..selectEndDate(DateTime(2026, 8, 3))
+        ..selectRepeat(RepeatInterval.fourMonths);
+      expect(readState().repeat, RepeatInterval.fourMonths);
+      readNotifier().selectEndDate(DateTime(2026, 8, 6));
+      expect(readState().repeat, RepeatInterval.none);
+    });
+
     test('skips busy check on forceBusy and writes the appointment', () async {
       when(
         () => appointments.findBusyEmployees(

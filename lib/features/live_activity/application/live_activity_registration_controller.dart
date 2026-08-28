@@ -94,7 +94,7 @@ class LiveActivityRegistrationController with ReentrantSync {
   AppLogger get _logger => _ref.read(loggerProvider);
 
   static String _currentLocale() =>
-      AppLanguageController.instance.value == 'fr' ? 'fr' : 'en';
+      currentServerLocale;
 
   /// Idempotent and safe to call on every account-doc emission or language
   /// change. Concurrent calls coalesce, so whichever finishes last wins.

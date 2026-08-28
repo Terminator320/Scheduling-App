@@ -162,9 +162,15 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   changed in the 2026-08-25 audit and have NOT been deployed**, so prod is
   running older bodies. The count is still 25 and still matches, which is
   exactly the trap named below — a count check looks clean while the deployed
-  code is behind. Nothing user-visible depends on it (the changes are dead-code
-  removal plus a shared options constant), so it can ride the next deploy; the
-  release runbook is `docs/DEPLOYMENT.md`. The retirement deploy has now RUN. P4c added `createEmployeeAccount`,
+  code is behind. **The pending delta is NOT cosmetic** (re-measured 2026-08-28
+  against `dab81bb0`, the last recorded deploy): `firestore.rules` **+36/-11**,
+  a new 119-line `functions/client_address_utils.js`, and behaviour changes in
+  `client_propagation.js` (+17), `day_slice_utils.js` (+44), `client_name_utils.js`
+  and `wave/mappers.js` (-56). This bullet previously called it "dead-code
+  removal plus a shared options constant" that could "ride the next deploy" —
+  it carries a RULES change, so it takes the `docs/DEPLOYMENT.md` §4a/§4c
+  checks and the documented ordering (backend BEFORE the app build), not a
+  ride-along. The release runbook is `docs/DEPLOYMENT.md`. The retirement deploy has now RUN. P4c added `createEmployeeAccount`,
   `completeEmployeeSetup` and `deleteEmployeeAccount` and kept
   `createEmployeeInvite` / `redeemSignupCode` as the `#compat-1.37.1` shim;
   `changeEmployeeEmail` landed 2026-08-04 (26 → 27); **the shim was retired
@@ -891,6 +897,19 @@ resurrected as a count-only stub, and swallows Firestore `NOT_FOUND` for the sam
 case. The pure `clientsToRecount(before, after)` is exported for jest. Served by
 the automatic single-field index on `clientId` — no composite index needed.
 **Deployed 2026-08-01** (`d916b16`).
+
+A booking batch can land up to 16 writes carrying one `clientId` at once (a
+multi-day run's day-documents, a repeat series' occurrences), so those are
+DEBOUNCED through the shared `recount_claim.js` ledger
+(`clientRecountClaims/{clientId}`, `RECOUNT_SETTLE_MS` 2 s) into one aggregate.
+**The debounce is GATED on `mayShareABatch`** (2026-08-28): unconditionally it
+also charged every ordinary single create or delete 2 s of billed wall-clock
+plus a claim `create()` **and** `delete()` — taking the common path from 2
+Firestore writes to 4 to save writes on the rare one. The gate reads the batch
+markers off the document itself (`dayCount > 1`, or a non-empty `seriesId`), so
+it needs no extra read, and it tests `seriesId` for merely being non-empty
+rather than differing from the document's own id: the series ROOT is written in
+the same `WriteBatch` as its siblings and carries its own id there.
 
 ### `deleteClient` — `clients.js`
 Admin-only callable, the **only** delete path for a client in this build.

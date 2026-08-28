@@ -257,4 +257,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = {assertKnownFlags, hasLocalityFields, patchFor, segmentsOf};
+module.exports = {assertKnownFlags, hasLocalityFields, patchFor};

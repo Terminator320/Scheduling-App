@@ -232,29 +232,29 @@ class FirebaseClientsRepository implements ClientsRepository {
   @override
   Future<List<ClientRecord>> fetchClientsByBuilding(String key) async {
     if (key.trim().isEmpty) return const [];
-    final records = await _windowRecords();
+    final window = await _clientScanWindow();
+    if (window == null) return const [];
+    // The keys are already on the window — deriving them again here was a
+    // second full O(window) pass on every building-filter selection.
     final matches = [
-      for (final record in records)
-        if (buildingKeyFor(record) == key) record,
+      for (final record in window.records)
+        if (window.buildingKeys[record.id] == key) record,
     ];
     return _byDisplayName(matches);
   }
 
   @override
+  Future<Map<String, String?>> fetchBuildingKeys() async =>
+      (await _clientScanWindow())?.buildingKeys ?? const {};
+
+  @override
   Future<List<ClientBuilding>> fetchBuildings() async =>
-      buildingsIn(await _windowRecords());
+      (await _clientScanWindow())?.buildings ?? const [];
 
   /// The cached scan window as live records, archived clients dropped — the
   /// shape the type filter and the Building menu both reduce over.
-  Future<List<ClientRecord>> _windowRecords() async {
-    final window = await _clientScanWindow();
-    if (window == null) return const [];
-    return [
-      for (final doc in window.docs)
-        if (doc.data['archived'] != true)
-          ClientRecord.fromMap(doc.id, doc.data),
-    ];
-  }
+  Future<List<ClientRecord>> _windowRecords() async =>
+      (await _clientScanWindow())?.records ?? const [];
 
   /// The list order every filtered client view uses.
   List<ClientRecord> _byDisplayName(List<ClientRecord> records) {
@@ -444,8 +444,36 @@ class _CachedClientSearch {
 }
 
 class _CachedClientScanWindow {
-  const _CachedClientScanWindow(this.docs, this.fetchedAt);
+  _CachedClientScanWindow(this.docs, this.fetchedAt);
 
   final List<RawClientDoc> docs;
   final DateTime fetchedAt;
+
+  /// Materialized once per window. Three reducers read this and `_patchWindow`
+  /// keeps a window alive across writes, so the Firestore read was cached
+  /// while the record-building pass re-ran on every filter tap — on the UI
+  /// isolate, unlike `searchClients`, which offloads through `compute`.
+  late final List<ClientRecord> records = [
+    for (final doc in docs)
+      if (doc.data['archived'] != true) ClientRecord.fromMap(doc.id, doc.data),
+  ];
+
+  /// Every record's building key, derived ONCE per window.
+  ///
+  /// Three surfaces want it — the Building menu's counts, the building filter
+  /// and the per-row pill — and `buildingKeyFor` is ~8 regex `replaceAll`s, a
+  /// `splitApt` and two per-codeunit `normalize` passes each. `_patchWindow`
+  /// rebuilds this object on EVERY client add/edit/archive/delete, so without
+  /// the shared map each of those writes paid for the whole window three
+  /// times, synchronously on the UI isolate, right behind the archive-swipe
+  /// animation.
+  late final Map<String, String?> buildingKeys = buildingKeysIn(records);
+
+  /// `buildingsIn` runs `buildingKeyFor` over every record, so it is memoized
+  /// on the same key rather than recomputed per Building-menu build — and it
+  /// reads [buildingKeys] rather than deriving them again.
+  late final List<ClientBuilding> buildings = buildingsIn(
+    records,
+    keys: buildingKeys,
+  );
 }

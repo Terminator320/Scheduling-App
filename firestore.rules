@@ -104,6 +104,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Sibling of the above for client `jobCount`; same server-owned posture.
+    match /clientRecountClaims/{clientId} {
+      allow read, write: if false;
+    }
+
     // Admin-SDK-only mapping of each tech to their live-activity appointment, owned
     // entirely by the server — a client write here could redirect another tech's card
     // and leak a client's address.
@@ -677,6 +682,16 @@ service cloud.firestore {
                .affectedKeys()
                .hasOnly(['status', 'updatedAt'])
             && request.resource.data.status == 'done'
+            // `updatedAt` is admitted into the diff above, so pin it the way
+            // the presence rule pins its own: without this, a modified client
+            // closing a job it is assigned to may stamp an arbitrary — future,
+            // past, or non-timestamp — value on it. Nothing server-side
+            // branches on an appointment's `updatedAt`, so this is audit-trail
+            // integrity rather than an exploitable defect. Safe to pin because
+            // BOTH client write paths (`updateAppointmentStatus` and
+            // `updateAppointmentStatuses`) send `FieldValue.serverTimestamp()`
+            // unconditionally; a path that omitted it would be refused here.
+            && request.resource.data.updatedAt == request.time
             && resource.data.status != 'cancelled');
 
       // Delete: admin only.

@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 /// I6: the appointment status allowlist is one of the most load-bearing
 /// duplications in the codebase — `isValidAppointmentStatus` in

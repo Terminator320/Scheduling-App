@@ -240,7 +240,15 @@ async function main() {
   }
 }
 
-main().then(() => process.exit(0)).catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Only run when invoked directly. Without this the module ran a PRODUCTION
+// scan the moment anything required it, which is why its pure helpers could
+// not be tested — and this script's verdict is what authorizes irreversible
+// follow-up work.
+if (require.main === module) {
+  main().then(() => process.exit(0)).catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
+
+module.exports = {assertKnownFlags};

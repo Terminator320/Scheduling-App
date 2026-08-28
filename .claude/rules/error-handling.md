@@ -257,10 +257,12 @@ re-decide it at a call site.
   error, st)`** (the `AuthFailureLogging` extension on `AppLogger`, beside
   `isExpected`) — never hand-roll the `if (failure.isExpected)` branch. The
   sites (`sign_in_controller`, `account_setup_screen`, `forgot_password_screen`,
-  `auth_service`, `my_details_screen`, `settings_screen`) previously double-filed
-  the same failure from two layers. (This said "the four sites" and named
-  `create_account_screen`, which P4c deleted; `settings_screen`'s
-  delete-account branch was the one that had no log at all.) `label` stays the Crashlytics warn tag, and the
+  `auth_service`, `my_details_screen`, `delete_account_flow`) previously
+  double-filed the same failure from two layers. (This said "the four sites"
+  and named `create_account_screen`, which P4c deleted; the delete-account
+  branch was the one that had no log at all, and it lives in
+  `settings/widgets/views/delete_account_flow.dart` — this bullet named
+  `settings_screen`, where it has never been.) `label` stays the Crashlytics warn tag, and the
   breadcrumb carries only the label plus `failure.runtimeType` — never the
   email, password, or code.
 - `AppLogger.breadcrumb` is the no-error-record variant of `warn`: it keeps a

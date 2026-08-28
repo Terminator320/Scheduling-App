@@ -17,6 +17,7 @@
  */
 
 const {
+  toMillis,
   businessDayStartMs,
   isTerminalStatus,
   isCancelledStatus,
@@ -44,7 +45,9 @@ const WIDGET_LOOKAHEAD_DAYS = 3;
  * @return {number}
  */
 function nowMillis(now) {
-  return now instanceof Date ? now.getTime() : Number(now);
+  // Delegates to the shared coercion: the private copy this replaced returned
+  // NaN for a Firestore Timestamp and skipped the finite check.
+  return toMillis(now) ?? NaN;
 }
 
 /**

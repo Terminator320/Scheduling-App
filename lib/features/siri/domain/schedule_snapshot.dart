@@ -1,7 +1,7 @@
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 /// Schema version; bump only alongside Swift `ScheduleSnapshot` decoder.
 /// v2 added `title` and `isAllDay` for personal jobs, which carry no client
@@ -100,7 +100,7 @@ Map<String, dynamic> buildScheduleSnapshot({
 
   for (final a in appointments) {
     if (a.id == null || a.id!.isEmpty) continue;
-    if (AppointmentStatus.fromRaw(a.status).isCancelled) continue;
+    if (isCancelledStatusRaw(a.status)) continue;
     // A run is bucketed on every day it WORKS, not just the day it began —
     // otherwise Siri says "nothing today" on day 2 of a five-day job.
     for (final day in buckets.keys) {

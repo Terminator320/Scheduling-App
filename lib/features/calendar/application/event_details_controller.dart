@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show listEquals;
-
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -19,8 +18,8 @@ import 'package:scheduling/features/calendar/application/event_details_outcome.d
 import 'package:scheduling/features/calendar/application/event_details_save_pipeline.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
-import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -345,6 +344,10 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
     // Guard before reading the series.
     if (state.isSaving) return const EventDetailsActionBusy();
+    // Offline writes would wait forever for a server ack.
+    if (ref.read(isOfflineProvider)) {
+      return const EventDetailsActionFailed(SocketException('offline'));
+    }
     state = state.copyWith(isSaving: true);
     // Read dependencies before any await.
     final repo = ref.read(appointmentsRepositoryProvider);
@@ -379,6 +382,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
     // Reject duplicate status writes.
     if (state.isSaving) return const EventDetailsActionBusy();
+    // Offline writes would wait forever for a server ack, so Mark as complete
+    // would spin until reconnect — the one action a technician out of signal
+    // is most likely to press.
+    if (ref.read(isOfflineProvider)) {
+      return const EventDetailsActionFailed(SocketException('offline'));
+    }
     state = state.copyWith(isSaving: true);
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
@@ -561,7 +570,11 @@ class EventDetailsController extends Notifier<EventDetailsState>
     required bool checkConflicts,
   }) async {
     final seriesEditor = AppointmentSeriesEditor(repo);
-    if (repeat != savedRepeat) {
+    // A run member never rewrites its series. Its `seriesId` names the run,
+    // so a rewrite would delete the run's trailing days and their photos.
+    // The picker is hidden on a run day, so this only catches a stored repeat
+    // that predates that gate.
+    if (repeat != savedRepeat && !appointment.isRunMember) {
       final plan = await seriesEditor.planRewrite(
         updated: updated,
         appointment: appointment,
@@ -681,6 +694,10 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
     // Reuse the save/status busy guard for delete taps.
     if (state.isSaving) return const EventDetailsActionBusy();
+    // Offline writes would wait forever for a server ack.
+    if (ref.read(isOfflineProvider)) {
+      return const EventDetailsActionFailed(SocketException('offline'));
+    }
     state = state.copyWith(isSaving: true);
     // Resolve these before the first await, so they survive the sheet being dismissed.
     final repo = ref.read(appointmentsRepositoryProvider);

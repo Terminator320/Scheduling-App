@@ -279,7 +279,10 @@ const waveRetryFailedJobs = onCall(
 
       const businessId = await readWaveBusinessId();
       if (!businessId) {
-        throw new HttpsError("failed-precondition", "wave/not-connected");
+        // Same state, same code as the other two connection gates. This threw
+        // `wave/not-connected`, which no shipped Flutter mapper knows, so
+        // "Retry failed" on a disconnected install read as a generic error.
+        throw new HttpsError("failed-precondition", "wave/not-bootstrapped");
       }
 
       const {requeued, scanned} = await requeueDeadJobs();

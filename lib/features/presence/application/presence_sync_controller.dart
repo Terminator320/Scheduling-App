@@ -220,11 +220,20 @@ class PresenceSyncController with ReentrantSync {
   void _uploadThrottled(Position position, DateTime attemptedAt) {
     final previous = _lastUploadAt;
     _lastUploadAt = attemptedAt;
+    // Resolved here, not in the handler: the handler runs from a Timer after
+    // this controller may be disposed, and Riverpod 3 throws on `ref.read`
+    // from a disposed consumer.
+    final logger = _logger;
     unawaited(
       _upload(position).then((result) {
         if (result == PresenceWriteResult.ok) return;
         if (_lastUploadAt == attemptedAt) _lastUploadAt = previous;
         if (result == PresenceWriteResult.denied) _stop();
+      }).catchError((Object e, StackTrace st) {
+        // Runs from a Timer callback, so a throw here has no caller left and
+        // would land in Crashlytics as a fatal from a background GPS write.
+        if (_lastUploadAt == attemptedAt) _lastUploadAt = previous;
+        logger.warn('PRESENCE upload failed', e, st);
       }),
     );
   }

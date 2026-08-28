@@ -37,7 +37,7 @@ class ClientJobHistorySection extends ConsumerWidget {
     ref.listen<AsyncValue<List<AppointmentRecord>>>(
       clientJobHistoryProvider(clientId),
       (previous, next) {
-        if (!next.hasError || (previous?.hasError ?? false)) return;
+        if (!isFirstAsyncError(previous, next)) return;
         ref
             .read(loggerProvider)
             .warn(

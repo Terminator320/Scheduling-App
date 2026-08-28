@@ -42,7 +42,7 @@ final dashboardHistoryRangeProvider =
 ///
 /// A `.get()`, not a `.snapshots()`: these weeks are closed and cannot change
 /// under the screen, so a live listener over them was pure cost — and, held
-/// together with the live half in ONE 1000-doc-capped stream, it was also what
+/// together with the live half in ONE 3000-doc-capped stream, it was also what
 /// silently truncated the trend charts above ~14 jobs/day.
 /// Kept warm on the same grace as the live half — see [keepWarmWithGrace].
 final dashboardHistoryProvider =
