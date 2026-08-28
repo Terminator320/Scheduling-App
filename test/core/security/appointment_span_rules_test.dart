@@ -142,4 +142,41 @@ void main() {
       expect(assigneeBranch, isNot(contains('AppointmentSpan')));
     });
   });
+
+  group('the run day fields are bounded, not merely type-checked', () {
+    // `dayIndex`/`dayCount` are what a card reads to say "Day 3 of 5". An
+    // `is int` alone would let a client write "Day 900 of 4000" — the Dart
+    // `_storedRunLabel` and the JS `storedRunLabel` both refuse an incoherent
+    // pair, but the rules are the last line of defence.
+    test('both fields are present in the appointment validator', () {
+      final body = bodyOf('isValidAppointmentData') ?? '';
+      expect(body, contains('dayIndex'));
+      expect(body, contains('dayCount'));
+    });
+
+    test('each is an int floored at 1', () {
+      final body = bodyOf('isValidAppointmentData') ?? '';
+      expect(body, contains('d.dayIndex is int'));
+      expect(body, contains('d.dayIndex >= 1'));
+      expect(body, contains('d.dayCount is int'));
+      expect(body, contains('d.dayCount >= 1'));
+    });
+
+    test('each is capped at maxAppointmentSpanDays', () {
+      // A run can never have more days than its span may cover, so this cap
+      // and isValidAppointmentSpan's move together.
+      final body = bodyOf('isValidAppointmentData') ?? '';
+      expect(body, contains('d.dayIndex <= $maxAppointmentSpanDays'));
+      expect(body, contains('d.dayCount <= $maxAppointmentSpanDays'));
+    });
+
+    test('both stay optional, so an ordinary job still saves', () {
+      // The appointment validator has no `hasOnly`; every clause is
+      // absent-or-valid. A required field here would reject every one-day job
+      // and every document written before the split.
+      final body = bodyOf('isValidAppointmentData') ?? '';
+      expect(body, contains("!('dayIndex' in d.keys())"));
+      expect(body, contains("!('dayCount' in d.keys())"));
+    });
+  });
 }

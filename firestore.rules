@@ -571,7 +571,27 @@ service cloud.firestore {
         && (!('employeeIds' in d.keys())
             || (d.employeeIds is list && d.employeeIds.size() <= 500))
         && (!('employeeNames' in d.keys())
-            || (d.employeeNames is list && d.employeeNames.size() <= 500));
+            || (d.employeeNames is list && d.employeeNames.size() <= 500))
+        // A day of a multi-day RUN: N documents sharing a seriesId, each one
+        // day long, linked by this pair. Bounded rather than merely
+        // type-checked so a client cannot write "Day 900 of 4000" — the Dart
+        // `_storedRunLabel` and the JS `storedRunLabel` both refuse an
+        // incoherent pair, but the rules are the last line of defence and an
+        // unbounded int here would reach every read surface's model.
+        //
+        // The cap is `maxAppointmentSpanDays` in
+        // `lib/features/calendar/domain/appointment_day_slice.dart` — the same
+        // 14 `isValidAppointmentSpan` bounds, so a run can never have more days
+        // than its span may cover. Pinned as text by
+        // `appointment_span_rules_test.dart`; the two caps move together.
+        //
+        // Absent-or-valid like every clause here: this validator has no
+        // `hasOnly`, and a required field would reject every one-day job and
+        // every document written before the split.
+        && (!('dayIndex' in d.keys())
+            || (d.dayIndex is int && d.dayIndex >= 1 && d.dayIndex <= 14))
+        && (!('dayCount' in d.keys())
+            || (d.dayCount is int && d.dayCount >= 1 && d.dayCount <= 14));
     }
 
     match /appointments/{appointmentId} {
