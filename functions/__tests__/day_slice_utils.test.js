@@ -232,3 +232,77 @@ describe("clampedLastWorkDayMs", () => {
     expect(clampedLastWorkDayMs(noEnd)).toBe(AUG3);
   });
 });
+
+describe("stored run label", () => {
+  // A multi-day JOB is N one-day documents sharing a seriesId; the stored pair
+  // is the only thing that knows the run is longer than the document. Same
+  // worked examples as the Dart `stored run label` group.
+  const dayThreeOfFive = () => ({
+    startTime: new Date("2026-08-05T13:00:00Z"), // 09:00 Toronto
+    endTime: new Date("2026-08-05T21:00:00Z"), // 17:00 Toronto
+    seriesId: "d1",
+    dayIndex: 3,
+    dayCount: 5,
+  });
+  const aug5 = new Date("2026-08-05T16:00:00Z").getTime();
+  const aug6 = new Date("2026-08-06T16:00:00Z").getTime();
+
+  test("a split day reports its stored position", () => {
+    const slice = sliceForDay(dayThreeOfFive(), aug5);
+    expect(slice.dayIndex).toBe(3);
+    expect(slice.dayCount).toBe(5);
+    expect(slice.isMultiDay).toBe(true);
+  });
+
+  test("the stored pair does NOT widen which days it runs on", () => {
+    expect(sliceForDay(dayThreeOfFive(), aug6)).toBeNull();
+  });
+
+  test("the window stays this day only", () => {
+    const slice = sliceForDay(dayThreeOfFive(), aug5);
+    expect(slice.windowStartMs)
+        .toBe(new Date("2026-08-05T13:00:00Z").getTime());
+    expect(slice.windowEndMs).toBe(new Date("2026-08-05T21:00:00Z").getTime());
+  });
+
+  test("dayCountOf still reports the document's OWN length", () => {
+    // travel_utils gates the Live Activity on this being 1, so a split day has
+    // to read as a one-day job and get its own Lock Screen card.
+    expect(dayCountOf(dayThreeOfFive())).toBe(1);
+  });
+
+  test("a legacy wide document still derives its pair", () => {
+    const wide = {
+      startTime: new Date("2026-08-03T13:00:00Z"),
+      endTime: new Date("2026-08-07T21:00:00Z"),
+    };
+    const slice = sliceForDay(wide, aug5);
+    expect(slice.dayIndex).toBe(3);
+    expect(slice.dayCount).toBe(5);
+  });
+
+  test("an incoherent stored pair falls back to the derived one", () => {
+    const broken = {...dayThreeOfFive(), dayIndex: 9};
+    const slice = sliceForDay(broken, aug5);
+    expect(slice.dayIndex).toBe(1);
+    expect(slice.dayCount).toBe(1);
+  });
+
+  test("a stored pair on a WIDE document is ignored", () => {
+    // Only a console write produces this. Honouring it would print the same
+    // "Day 3 of 5" on all five days of the span.
+    const wide = {
+      startTime: new Date("2026-08-03T13:00:00Z"),
+      endTime: new Date("2026-08-07T21:00:00Z"),
+      dayIndex: 3,
+      dayCount: 5,
+    };
+    const aug3 = new Date("2026-08-03T16:00:00Z").getTime();
+    expect(sliceForDay(wide, aug3).dayIndex).toBe(1);
+  });
+
+  test("a count past the cap is ignored", () => {
+    const overCap = {...dayThreeOfFive(), dayIndex: 1, dayCount: 40};
+    expect(sliceForDay(overCap, aug5).dayCount).toBe(1);
+  });
+});
