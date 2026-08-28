@@ -171,6 +171,42 @@ function clampedLastWorkDayMs(r) {
 }
 
 /**
+ * The run position a SPLIT day carries on the document itself, or null when the
+ * derived pair should be used instead.
+ *
+ * A multi-day JOB is N documents of one day each, sharing a `seriesId`; the
+ * stored pair is the only thing that knows the run is longer than the document.
+ * A legacy WIDE document stores nothing and is derived as it always was.
+ *
+ * Hand-mirror of `_storedRunLabel` in
+ * `lib/features/calendar/domain/appointment_day_slice.dart` — change both
+ * together; the jest cases reuse that suite's worked examples, so a divergence
+ * fails rather than ships.
+ *
+ * **This is the LABEL only.** The index/range test in `sliceForDay` stays
+ * derived: reading a stored `dayCount: 5` into it would make one document claim
+ * to run on the five days after its own start, and `buildWidgetPayload` probes
+ * every record against every day of its window.
+ *
+ * @param {!Object} r
+ * @param {!{startMs: number, endMs: number, overnight: boolean}} w The
+ *   already-resolved window, threaded in rather than re-resolved — see the
+ *   window-taking rule above.
+ * @return {?{dayIndex: number, dayCount: number}}
+ */
+function storedRunLabel(r, w) {
+  const index = Number(r.dayIndex);
+  const count = Number(r.dayCount);
+  if (!Number.isInteger(index) || !Number.isInteger(count)) return null;
+  if (count < 2 || count > MAX_APPOINTMENT_SPAN_DAYS) return null;
+  if (index < 1 || index > count) return null;
+  // A wide document is a legacy or console-written run whose SPAN is the truth;
+  // honouring a stored pair there prints one day's label on all of them.
+  if (dayCountOfWindow(w) !== 1) return null;
+  return {dayIndex: index, dayCount: count};
+}
+
+/**
  * The record as it appears on the Toronto day containing `dayMs`, or null when
  * it doesn't run that day.
  *
@@ -197,18 +233,20 @@ function sliceForDay(r, dayMs) {
   const count = Math.min(rawCount, MAX_APPOINTMENT_SPAN_DAYS);
   const index = calendarDaysBetween(w.startMs, dayMs) + 1;
   if (index < 1 || index > count) return null;
+  // Substituted AFTER the range test above, never into it.
+  const label = storedRunLabel(r, w) || {dayIndex: index, dayCount: count};
 
   return {
     record: r,
-    dayIndex: index,
-    dayCount: count,
+    dayIndex: label.dayIndex,
+    dayCount: label.dayCount,
     windowStartMs: businessWallInstantMs(
         dayMs, businessMinutesOfDay(w.startMs)),
     windowEndMs: businessWallInstantMs(
         w.overnight ? addDaysMs(dayMs, 1) : dayMs,
         businessMinutesOfDay(w.endMs)),
     isOvernight: w.overnight,
-    isMultiDay: count > 1,
+    isMultiDay: label.dayCount > 1,
   };
 }
 
