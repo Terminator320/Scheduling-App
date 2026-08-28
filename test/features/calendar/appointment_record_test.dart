@@ -188,6 +188,49 @@ void main() {
       expect(r.status, 'pending');
       expect(r.employeeIds, isEmpty);
     });
+
+    group('run day fields', () {
+      test('defaults to zero when the document carries neither', () {
+        final record = AppointmentRecord.fromMap('a1', {
+          'startTime': start,
+          'endTime': end,
+        });
+        expect(record.dayIndex, 0);
+        expect(record.dayCount, 0);
+      });
+
+      test('reads a stored pair', () {
+        final record = AppointmentRecord.fromMap('a1', {
+          'startTime': start,
+          'endTime': end,
+          'dayIndex': 3,
+          'dayCount': 5,
+        });
+        expect(record.dayIndex, 3);
+        expect(record.dayCount, 5);
+      });
+
+      test('a negative or unparseable value reads as zero, never throws', () {
+        final record = AppointmentRecord.fromMap('a1', {
+          'startTime': start,
+          'endTime': end,
+          'dayIndex': -2,
+          'dayCount': 'five',
+        });
+        expect(record.dayIndex, 0);
+        expect(record.dayCount, 0);
+      });
+
+      test('toMap emits the pair only for a run member', () {
+        final single = AppointmentRecord(startTime: start, endTime: end);
+        expect(single.toMap().containsKey('dayIndex'), isFalse);
+        expect(single.toMap().containsKey('dayCount'), isFalse);
+
+        final member = single.copyWith(dayIndex: 3, dayCount: 5);
+        expect(member.toMap()['dayIndex'], 3);
+        expect(member.toMap()['dayCount'], 5);
+      });
+    });
   });
 
   group('AppointmentDateRange.visibleMonth', () {
@@ -308,5 +351,7 @@ void main() {
       final restored = AppointmentImage.fromMap(original.toMap());
       expect(restored, equals(original));
     });
+
+
   });
 }

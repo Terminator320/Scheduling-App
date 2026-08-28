@@ -41,8 +41,27 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     // stops that stopgap counting as work in the job tallies.
     @Default(false) bool isDayOff,
     @Default(RepeatInterval.none) RepeatInterval repeat,
-    // Links the occurrences of one repeat series (the first visit's doc id).
+    // Links the occurrences of one repeat series (the first visit's doc id),
+    // and the days of one multi-day RUN (the first DAY's doc id) — the same
+    // field, because the repeat picker is hidden on a multi-day form and the
+    // two can never coexist. Re-adding repeating multi-day work means a
+    // separate `runId`, never a third meaning here.
     @Default('') String seriesId,
+    // This document's 1-based position in its multi-day RUN, and how many days
+    // that run covers. A run is N documents sharing a [seriesId]; each is ONE
+    // day, so this pair is the only thing that knows the run is longer than
+    // the document.
+    //
+    // Zero on every single-day job and on the legacy WIDE documents written
+    // before the split (three of them in production as of 2026-08-27), where
+    // `startTime`/`endTime` still span the whole run and `AppointmentDaySlice`
+    // derives the pair from that span. Zero is therefore not "missing data" —
+    // it is the signal to derive, and `sliceFor` owns that branch.
+    //
+    // Read it through `AppointmentDaySlice.sliceFor`, never directly: the
+    // substitution rule has coherence guards this field cannot carry.
+    @Default(0) int dayIndex,
+    @Default(0) int dayCount,
     DateTime? createdAt,
     DateTime? updatedAt,
     // How many photos live in `appointments/{id}/images`. FUNCTION-OWNED
@@ -86,6 +105,8 @@ abstract class AppointmentRecord with _$AppointmentRecord {
       isDayOff: data['isDayOff'] == true,
       repeat: RepeatInterval.fromRaw((data['repeat'] ?? '').toString()),
       seriesId: (data['seriesId'] ?? '').toString(),
+      dayIndex: _parseCount(data['dayIndex']),
+      dayCount: _parseCount(data['dayCount']),
       createdAt: firestoreDateTime(data['createdAt']),
       updatedAt: firestoreDateTime(data['updatedAt']),
       pictureCount: _parseCount(data['pictureCount']),
@@ -146,6 +167,11 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     'isDayOff': isDayOff,
     'repeat': repeat.raw,
     'seriesId': seriesId,
+    // Omitted on a single-day job, so its document stays exactly as it always
+    // was and an ordinary edit's `.update()` cannot write a 0 over a run
+    // member's real pair.
+    if (dayCount > 1) 'dayIndex': dayIndex,
+    if (dayCount > 1) 'dayCount': dayCount,
   };
 
   /// A display status computed from the current time — never stored. Keep this
