@@ -338,17 +338,24 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   `test/core/app/app_sync_listeners_test.dart`. Method-channel plugin —
   device-only verification of the upload itself.
 
-  **That zero is about the subcollection ONLY, and the distinction is the
-  whole of S1.** The parent `pictures[]` arrays are the larger set and are
-  still there until `clear-appointment-picture-arrays.js` runs: a
+  **S1 IS CLOSED as of 2026-08-27, and it was the CLEAR SCRIPT that closed it,
+  not the retirement of the field.** Keep that distinction even now it is
+  historical, because it is the one this rule got wrong three times. The
+  subcollection count coming back zero (2026-08-22) was only ever about the
+  SUBCOLLECTION: the parent `pictures[]` arrays were the larger set, and a
   pre-CONTRACT upload wrote a `url` ALONGSIDE the `storagePath` into every
-  entry, so they are not url-ONLY and a scan for url-only rows cannot see
-  them — each is a permanent rules-free link readable off the appointment
-  document by any assigned employee, with nothing left to rotate it. Count
-  them with `countArrayUrls` in the same script; **running the clear script
-  is what closes this, not the retirement of the field.** Do not restate
-  the zero as "no rules-free link remains" — that conflation reached three
-  files before the release review caught it.
+  entry — so they were never url-ONLY and a scan for url-only rows could not
+  see them. Each was a permanent, non-expiring, rules-free link readable off
+  the appointment document by any assigned employee and surviving
+  deactivation, with nothing left to rotate it.
+  `clear-appointment-picture-arrays.js` ran against prod on 2026-08-27 and
+  cleared **14 entries across 11 appointments (67 scanned)**, so no such link
+  remains in the database at all. `countArrayUrls` in
+  `count-legacy-image-urls.js` is how you re-check that, and it is read-only.
+  **What this does NOT reach, and never could:** a URL somebody captured under
+  a pre-1.49 build is still live on its object unless rotated by hand. "No
+  rules-free link remains" is a statement about the DATABASE, not about every
+  copy that ever left it.
 
 ## Server side
 
