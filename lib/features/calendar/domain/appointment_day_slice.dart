@@ -187,12 +187,45 @@ bool runsInRange(AppointmentRecord appointment, DateTime start, DateTime end) {
 AppointmentDaySlice? sliceFor(AppointmentRecord appointment, DateTime day) {
   final index = _dayIndexOn(appointment, day);
   if (index == null) return null;
+  final label = _storedRunLabel(appointment) ?? index;
   return _sliceAt(
     appointment,
     day: day.dateOnly,
-    index: index.dayIndex,
-    count: index.dayCount,
+    index: label.dayIndex,
+    count: label.dayCount,
   );
+}
+
+/// The run position a SPLIT day carries on the document itself, or null when
+/// the derived pair should be used instead.
+///
+/// A multi-day JOB is N documents of one day each, sharing a `seriesId`; the
+/// stored pair is the only thing that knows the run is longer than the
+/// document. A legacy WIDE document stores nothing and is derived as it always
+/// was.
+///
+/// **This is the LABEL only.** [_dayIndexOn] keeps owning "does this run on
+/// this day", and must never see these numbers: a document storing
+/// `dayCount: 5` would then claim to run on the five days after its own start,
+/// smearing every run across the calendar — and `runsOn` is the mandated
+/// re-scoping call on the drawer badge, the roster's jobs-today and the
+/// dashboard's day reducer, so all three would inherit it at once.
+///
+/// Three conditions, each closing a different way a bad pair could render:
+///  - the document's OWN window is one day. A wide document is a legacy or
+///    console-written run whose span is the truth; honouring a stored pair
+///    there prints one day's label on every day of the span.
+///  - the pair is coherent, so a console edit cannot produce "Day 9 of 5".
+///  - the count is a real run within the cap, so it agrees with every other
+///    day-scoping answer about how long a run may be.
+///
+/// Hand-mirrored by `storedRunLabel` in `functions/day_slice_utils.js`; the two
+/// test suites share worked examples, so a divergence fails rather than ships.
+({int dayIndex, int dayCount})? _storedRunLabel(AppointmentRecord a) {
+  if (a.dayCount < 2 || a.dayCount > maxAppointmentSpanDays) return null;
+  if (a.dayIndex < 1 || a.dayIndex > a.dayCount) return null;
+  if (_clampedDayCount(a.startTime, a.endTime) != 1) return null;
+  return (dayIndex: a.dayIndex, dayCount: a.dayCount);
 }
 
 /// [day]'s 1-based position within [appointment]'s run, or null when it does

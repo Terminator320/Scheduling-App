@@ -522,4 +522,79 @@ void main() {
       expect(sliceFor(normal, DateTime(2026, 8, 2))!.dayCount, 5);
     });
   });
+
+  group('stored run label', () {
+    AppointmentRecord dayThreeOfFive() => AppointmentRecord(
+      id: 'd3',
+      startTime: DateTime(2026, 8, 5, 9),
+      endTime: DateTime(2026, 8, 5, 17),
+      seriesId: 'd1',
+      dayIndex: 3,
+      dayCount: 5,
+    );
+
+    test('a split day reports its stored position', () {
+      final slice = sliceFor(dayThreeOfFive(), DateTime(2026, 8, 5));
+      expect(slice, isNotNull);
+      expect(slice!.dayIndex, 3);
+      expect(slice.dayCount, 5);
+      expect(slice.isMultiDay, isTrue);
+    });
+
+    test('the stored pair does NOT widen which days it runs on', () {
+      // The regression this guard exists for: reading dayCount 5 into the
+      // range test would smear one document across five days, and runsOn is
+      // the mandated re-scoping call on the drawer badge, the roster count and
+      // the dashboard.
+      final record = dayThreeOfFive();
+      expect(runsOn(record, DateTime(2026, 8, 5)), isTrue);
+      expect(runsOn(record, DateTime(2026, 8, 6)), isFalse);
+      expect(runsOn(record, DateTime(2026, 8, 9)), isFalse);
+      expect(sliceFor(record, DateTime(2026, 8, 6)), isNull);
+    });
+
+    test('the window stays this day only', () {
+      final slice = sliceFor(dayThreeOfFive(), DateTime(2026, 8, 5))!;
+      expect(slice.windowStart, DateTime(2026, 8, 5, 9));
+      expect(slice.windowEnd, DateTime(2026, 8, 5, 17));
+    });
+
+    test('a legacy wide document still derives its pair', () {
+      final wide = AppointmentRecord(
+        id: 'w1',
+        startTime: DateTime(2026, 8, 3, 9),
+        endTime: DateTime(2026, 8, 7, 17),
+      );
+      final slice = sliceFor(wide, DateTime(2026, 8, 5))!;
+      expect(slice.dayIndex, 3);
+      expect(slice.dayCount, 5);
+    });
+
+    test('an incoherent stored pair falls back to the derived one', () {
+      final broken = AppointmentRecord(
+        id: 'b1',
+        startTime: DateTime(2026, 8, 5, 9),
+        endTime: DateTime(2026, 8, 5, 17),
+        dayIndex: 9,
+        dayCount: 5,
+      );
+      final slice = sliceFor(broken, DateTime(2026, 8, 5))!;
+      expect(slice.dayIndex, 1);
+      expect(slice.dayCount, 1);
+    });
+
+    test('a stored pair on a WIDE document is ignored', () {
+      // Only a console write can produce this. Honouring it would print the
+      // same "Day 3 of 5" on all five days of the span.
+      final wide = AppointmentRecord(
+        id: 'w2',
+        startTime: DateTime(2026, 8, 3, 9),
+        endTime: DateTime(2026, 8, 7, 17),
+        dayIndex: 3,
+        dayCount: 5,
+      );
+      expect(sliceFor(wide, DateTime(2026, 8, 3))!.dayIndex, 1);
+      expect(sliceFor(wide, DateTime(2026, 8, 5))!.dayIndex, 3);
+    });
+  });
 }
