@@ -94,6 +94,11 @@ final List<_WriteCase> _writeCases = [
     method: 'updateAppointmentStatus',
     run: (r) => r.updateAppointmentStatus(id: 'a1', status: 'done'),
   ),
+  (
+    method: 'updateAppointmentStatuses',
+    run: (r) =>
+        r.updateAppointmentStatuses(ids: const ['a1'], status: 'cancelled'),
+  ),
   (method: 'deleteAppointment', run: (r) => r.deleteAppointment('a1')),
   (
     method: 'deleteAppointments',

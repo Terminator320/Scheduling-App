@@ -309,6 +309,39 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   @override
+  Future<void> updateAppointmentStatuses({
+    required List<String> ids,
+    required String status,
+  }) async {
+    final trimmed = status.trim();
+    if (!_allowedStatuses.contains(trimmed)) {
+      throw ArgumentError.value(
+        status,
+        'status',
+        'must be one of $_allowedStatuses',
+      );
+    }
+    if (ids.isEmpty) return;
+    // ONE shared op id across the batch, so `claimSeriesNotice` collapses the
+    // whole run into a single push instead of one per day — the same claim
+    // `updateAppointments` and `rewriteSeries` make. Minted for a cancel only,
+    // matching `updateAppointmentStatus`: the employee mark-done rule is
+    // `affectedKeys().hasOnly(['status', 'updatedAt'])`, and an extra key there
+    // is rejected as `permission-denied`.
+    final opId = _newSeriesOpId();
+    final batch = _appointments.firestore.batch();
+    for (final id in ids) {
+      batch.update(_appointments.doc(id), {
+        'status': trimmed,
+        if (trimmed == 'cancelled') 'seriesOpId': opId,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+    _invalidateSearchCache();
+  }
+
+  @override
   Future<void> deleteAppointment(String id) => deleteAppointments([id]);
 
   @override

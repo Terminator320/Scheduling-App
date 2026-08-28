@@ -19,18 +19,30 @@ class _MockCollection extends Mock
 class _MockDoc extends Mock
     implements DocumentReference<Map<String, dynamic>> {}
 
+class _MockBatch extends Mock implements WriteBatch {}
+
 void main() {
   late _MockFirestore firestore;
   late _MockCollection collection;
   late _MockDoc doc;
+  late _MockBatch batch;
+
+  // `batch.update` takes a DocumentReference, and mocktail needs a fallback
+  // before `any()`/`captureAny()` can stand in for one.
+  setUpAll(() => registerFallbackValue(_MockDoc()));
 
   setUp(() {
     firestore = _MockFirestore();
     collection = _MockCollection();
     doc = _MockDoc();
+    batch = _MockBatch();
     when(() => firestore.collection('appointments')).thenReturn(collection);
     when(() => collection.doc(any())).thenReturn(doc);
     when(() => doc.update(any())).thenAnswer((_) async {});
+    when(() => collection.firestore).thenReturn(firestore);
+    when(firestore.batch).thenReturn(batch);
+    when(() => batch.update(any(), any())).thenReturn(null);
+    when(batch.commit).thenAnswer((_) async {});
   });
 
   test('rejects unknown status', () async {
@@ -89,5 +101,51 @@ void main() {
         .cast<String, dynamic>();
     expect(payload.keys, unorderedEquals(['status', 'updatedAt']));
     expect(payload.containsKey('seriesOpId'), isFalse);
+  });
+
+  group('updateAppointmentStatuses', () {
+    test('writes the status to every id in ONE batch', () async {
+      final repo = FirebaseAppointmentsRepository(firestore);
+      await repo.updateAppointmentStatuses(
+        ids: ['d1', 'd2', 'd3'],
+        status: 'cancelled',
+      );
+      verify(() => batch.update(any(), any())).called(3);
+      verify(batch.commit).called(1);
+      verifyNever(() => doc.update(any()));
+    });
+
+    test('one shared seriesOpId, so a run cancels with ONE push', () async {
+      final repo = FirebaseAppointmentsRepository(firestore);
+      await repo.updateAppointmentStatuses(
+        ids: ['d1', 'd2', 'd3'],
+        status: 'cancelled',
+      );
+      final payloads = verify(
+        () => batch.update(any(), captureAny()),
+      ).captured.map((p) => (p as Map).cast<String, dynamic>()).toList();
+
+      expect(payloads, hasLength(3));
+      expect(payloads.every((p) => p['status'] == 'cancelled'), isTrue);
+      final opIds = payloads.map((p) => p['seriesOpId']).toSet();
+      expect(opIds, hasLength(1));
+      expect(opIds.single, isA<String>());
+      expect(opIds.single as String, isNotEmpty);
+    });
+
+    test('rejects a status off the allowlist before writing', () {
+      final repo = FirebaseAppointmentsRepository(firestore);
+      expect(
+        () => repo.updateAppointmentStatuses(ids: ['d1'], status: 'overdue'),
+        throwsArgumentError,
+      );
+      verifyNever(() => batch.update(any(), any()));
+    });
+
+    test('an empty id list commits nothing', () async {
+      final repo = FirebaseAppointmentsRepository(firestore);
+      await repo.updateAppointmentStatuses(ids: [], status: 'cancelled');
+      verifyNever(batch.commit);
+    });
   });
 }
