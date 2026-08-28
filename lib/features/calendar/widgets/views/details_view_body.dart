@@ -10,6 +10,8 @@ import 'package:scheduling/features/calendar/application/event_details_controlle
 import 'package:scheduling/features/calendar/domain/day_off_reason.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
+import 'package:scheduling/features/calendar/widgets/dialogs/cancel_appointment_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_action_bar.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_leaf_widgets.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -18,7 +20,6 @@ import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/key_value_panel.dart';
-import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/quick_action_button.dart';
 
@@ -145,14 +146,16 @@ class DetailsViewBody extends ConsumerWidget {
     WidgetRef ref,
     EventDetailsController notifier,
   ) async {
-    final confirmed = await showConfirmDialog(
+    final choice = await showCancelAppointmentDialog(
       context,
-      title: context.l10n.calendar_cancelAppointment,
-      message: context.l10n.calendar_cancelledJobsAreSavedToHistory,
-      confirmLabel: context.l10n.calendar_cancelAppointment,
+      // One day of a run offers the tail; anything else is a plain confirm.
+      isRun: appointment.dayCount > 1,
     );
-    if (!confirmed || !context.mounted) return;
-    final outcome = await notifier.cancelAppointment(appointment);
+    if (choice == null || !context.mounted) return;
+    final outcome = await notifier.cancelAppointment(
+      appointment,
+      includeFuture: choice == SeriesScopeChoice.thisAndFuture,
+    );
     if (!context.mounted) return;
     _onStatusOutcome(
       context,
