@@ -1,7 +1,7 @@
 # Multi-day jobs book as one appointment per day
 
 **Date:** 2026-08-27
-**Status:** designed, not implemented
+**Status:** implemented 2026-08-27; rules NOT yet deployed, app NOT yet shipped
 
 ## The problem
 

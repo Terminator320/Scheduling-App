@@ -391,6 +391,59 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   inside it — a phantom clash the admin had to force through on every evening
   job. That helper compares ALL window pairs rather than matching day indices,
   because an overnight window runs into the following calendar day.
+- **A multi-day JOB is N appointments, one per day; a multi-day PERSONAL block
+  is still ONE wide document.** (2026-08-27, designed in
+  `docs/plans/2026-08-27-per-day-appointments.md`.) One document carries one
+  `status`, so a wide job closed entirely the moment the crew marked day 1
+  complete. The days of a run share `seriesId` — day 1's doc id, the SAME field
+  a repeat uses — and each carries a stored `dayIndex`/`dayCount`. That overload
+  is safe only because **the repeat picker is hidden on a multi-day form**; the
+  two mechanics must never coexist, or "this and the following" means two
+  things. Re-adding repeating multi-day work means a separate `runId`, never
+  another meaning for `seriesId`.
+  **The stored pair is the LABEL ONLY, and that is the whole trap.**
+  `_dayIndexOn` answers both "does this run on this day" and "what does the card
+  say"; feeding a stored `dayCount: 5` into the first makes day 3's document
+  claim the five days after its own start, and `runsOn` is the mandated
+  re-scoping call on the drawer badge, the roster's jobs-today and the
+  dashboard's day reducer, so all three inherit it at once. `sliceFor`
+  substitutes into the slice it RETURNS; `_dayIndexOn` stays purely derived. The
+  substitution additionally requires the document's OWN window to be one day, so
+  a stored pair on a legacy wide doc cannot print one day's label on all of
+  them. Hand-mirrored by `storedRunLabel` in `functions/day_slice_utils.js`; the
+  two suites share worked examples.
+  **`AppointmentDaySlice` is NOT legacy.** It stays the live representation for
+  time off and personal blocks, which deliberately do not split — nothing marks
+  a day off complete, and a fortnight of holiday fanned into 14
+  independently-cancellable rows makes the clash alert and the availability
+  reducer read 14 documents where they now read one span.
+  **A run's LENGTH is fixed at booking** (the end-date row is hidden on a run
+  member, via `AppointmentFormFields.isRunMember` →
+  `AppointmentDateRows.showEndDate`): shortening is cancelling the tail through
+  the scope dialog, extending is a second booking. Letting a day reshape the run
+  through `rewrite` would delete and recreate the trailing documents,
+  destroying exactly the per-day statuses and photos the split exists to create.
+  **Mark-complete never asks scope**; edit, cancel and delete all do, through
+  the same `SeriesScopeDialog` with run-flavoured copy — and cancel is the one
+  that needed a new write path, `updateAppointmentStatuses` (one batch, one
+  shared `seriesOpId`, so a run cancels with ONE push).
+  Photos stay on day 1 of a run (`images` is a per-document subcollection);
+  photos taken on day 3 attach to day 3's own document.
+  **The push fan-out needed NO work**: `diffAppointmentForNotifications`
+  already suppresses the `assigned` push for any created document whose
+  `seriesId` is not its own id, and day 1's doc id IS the `seriesId`, so a
+  5-day run notifies the crew once. A consequence that DOES change: the overdue
+  prompt and the tomorrow digest now speak per day, so a 5-day job produces
+  five "job tomorrow" lines across five nights instead of one. That is correct
+  and is the point, but it is a real increase in message volume.
+  **Live Activities start working on long jobs** — `travel_utils.js` skips them
+  at `dayCountOf(c) <= 1`, and every split day is one day, so each day of a run
+  now gets its own Lock Screen card. The guard stays as-is for the wide
+  documents time off still writes.
+  No migration was needed: prod held ZERO open multi-day jobs on 2026-08-27
+  (`functions/scripts/count-multi-day-appointments.js`, read-only — re-run it
+  before shipping), and the three wide documents that exist keep rendering
+  through the derived branch.
   **`MAX_APPOINTMENT_SPAN_DAYS`/`_MS` in `functions/time_utils.js` hand-mirrors
   `maxAppointmentSpanDays`** (each carries a pointer to the other). Every
   backend sweep that filters on `startTime` must reach at least that far back,
