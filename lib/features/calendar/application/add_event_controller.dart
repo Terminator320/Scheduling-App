@@ -75,11 +75,22 @@ class AddEventBusyEmployees extends AddEventSubmitOutcome {
 }
 
 class AddEventSubmitted extends AddEventSubmitOutcome {
-  const AddEventSubmitted(this.appointment, {this.futureBookings = 0});
+  const AddEventSubmitted(
+    this.appointment, {
+    this.futureBookings = 0,
+    this.runDays = 1,
+  });
   final AppointmentRecord appointment;
 
-  /// Pre-booked repeat occurrences created alongside [appointment].
+  /// Pre-booked REPEAT occurrences created alongside [appointment].
+  ///
+  /// Counts repeat copies only. A multi-day run's later days are reported by
+  /// [runDays] instead — they are the same job, and folding them in here made
+  /// a 5-day booking announce "4 future visits booked".
   final int futureBookings;
+
+  /// How many days the booked run covers; 1 for an ordinary single-day job.
+  final int runDays;
 }
 
 class AddEventFailed extends AddEventSubmitOutcome {
@@ -97,8 +108,6 @@ class AddEventController extends Notifier<AddEventState>
   AddEventState build() {
     return AddEventState(selectedDate: initialDate, endDate: initialDate);
   }
-
-  // --- AppointmentFormConcerns adapters ---
 
   @override
   AddEventState applyFormUpdate(
@@ -194,7 +203,6 @@ class AddEventController extends Notifier<AddEventState>
     state = state.copyWith(repeat: value);
   }
 
-  /// Marks a personal block as all-day time off.
   void setDayOff({required bool value}) {
     state = state.copyWith(
       isDayOff: value,
@@ -274,12 +282,9 @@ class AddEventController extends Notifier<AddEventState>
     final uploader = ref.read(appointmentImageUploadProvider);
     // Snapshot form state before async work starts.
     final images = state.selectedImages;
-    // Personal jobs do not need a client.
     final client = state.selectedClient;
     final isPersonal = state.isPersonal;
-    // `setPersonal` already clears invalid day-off state.
     final isDayOff = state.isDayOff;
-    // Times below are derived from this all-day snapshot.
     final isAllDay = state.isAllDay;
     final selectedEmployees = state.selectedEmployees;
     final repeat = state.repeat;
@@ -332,7 +337,6 @@ class AddEventController extends Notifier<AddEventState>
             endTime: runWindows[i].end,
             // Real runs use day one as their series id.
             seriesId: dayCount > 1 ? docId : appointment.seriesId,
-            // Single-day jobs derive their slice label.
             dayIndex: dayCount > 1 ? i + 1 : 0,
             dayCount: dayCount > 1 ? dayCount : 0,
           ),
@@ -384,7 +388,11 @@ class AddEventController extends Notifier<AddEventState>
         uploader.uploadInBackground(appointmentId: docId, newImages: images);
       }
 
-      return AddEventSubmitted(days.first, futureBookings: toWrite.length - 1);
+      return AddEventSubmitted(
+        days.first,
+        futureBookings: repeatCopies.length,
+        runDays: dayCount,
+      );
     } catch (e, st) {
       logger.warn('APPT-CREATE submit failed', e, st);
       if (ref.mounted) state = state.copyWith(isSubmitting: false);

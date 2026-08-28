@@ -3,9 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'package:scheduling/core/validators/password_requirements.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-class AuthValidators {
-  const AuthValidators._();
-
+abstract final class AuthValidators {
   static final RegExp _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
   static bool isValidEmailFormat(String email) => _emailPattern.hasMatch(email);

@@ -1,6 +1,6 @@
 import 'package:intl/intl.dart';
 
-class DateUtilsHelper {
+abstract final class DateUtilsHelper {
   // Cached per locale since DateFormat parses locale symbols on construction.
   static final Map<String, DateFormat> _timeFormats = {};
   static final Map<String, DateFormat> _dateFormats = {};

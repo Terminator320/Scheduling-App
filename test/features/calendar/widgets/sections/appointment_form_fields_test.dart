@@ -35,6 +35,7 @@ void main() {
     ValueChanged<bool>? onAllDayChanged,
     bool isMultiDay = false,
     bool isRunMember = false,
+    bool canSpanDays = true,
     bool isOvernight = false,
     int spanLength = 1,
     DateTime? selectedDate,
@@ -66,59 +67,60 @@ void main() {
       // in initState, so the tree needs a real scope.
       ProviderScope(
         child: MaterialApp(
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: AppointmentFormFields(
-              controllers: controllers,
-              allEmployees: const [],
-              selectedClient: selectedClient,
-              clientResults: clientResults,
-              isSearchingClient: false,
-              selectedEmployees: const [],
-              repeat: RepeatInterval.none,
-              useCustomAddress: useCustomAddress,
-              selectedDate: selectedDate,
-              endDate: endDate,
-              isPersonal: isPersonal,
-              isDayOff: isDayOff,
-              onPersonalChanged: showPersonalSwitch
-                  ? (onPersonalChanged ?? (_) {})
-                  : null,
-              isAllDay: isAllDay,
-              isMultiDay: isMultiDay,
-              isRunMember: isRunMember,
-              isOvernight: isOvernight,
-              spanLength: spanLength,
-              errors: errors,
-              employeeLabel: 'Employee',
-              employeeRequired: false,
-              materialsHint: 'Materials',
-              photosSection: const SizedBox.shrink(),
-              callbacks: AppointmentFormCallbacks(
-                onSearchClients: (_) {},
-                onSelectClient: onSelectClient ?? (_) {},
-                onClearClient: () {},
-                onToggleEmployee: (_) {},
-                onSelectStartDate: onSelectStartDate ?? (_) {},
-                onSelectEndDate: onSelectEndDate ?? (_) {},
-                onPickStartTime: () {},
-                onPickEndTime: () {},
-                onSelectRepeat: (_) {},
-                onUseCustomAddress: (_) {},
-                onDayOffChanged: onDayOffChanged ?? (_) {},
-                onAllDayChanged: onAllDayChanged ?? (_) {},
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: AppointmentFormFields(
+                controllers: controllers,
+                allEmployees: const [],
+                selectedClient: selectedClient,
+                clientResults: clientResults,
+                isSearchingClient: false,
+                selectedEmployees: const [],
+                repeat: RepeatInterval.none,
+                useCustomAddress: useCustomAddress,
+                selectedDate: selectedDate,
+                endDate: endDate,
+                isPersonal: isPersonal,
+                isDayOff: isDayOff,
+                onPersonalChanged: showPersonalSwitch
+                    ? (onPersonalChanged ?? (_) {})
+                    : null,
+                isAllDay: isAllDay,
+                isMultiDay: isMultiDay,
+                isRunMember: isRunMember,
+                canSpanDays: canSpanDays,
+                isOvernight: isOvernight,
+                spanLength: spanLength,
+                errors: errors,
+                employeeLabel: 'Employee',
+                employeeRequired: false,
+                materialsHint: 'Materials',
+                photosSection: const SizedBox.shrink(),
+                callbacks: AppointmentFormCallbacks(
+                  onSearchClients: (_) {},
+                  onSelectClient: onSelectClient ?? (_) {},
+                  onClearClient: () {},
+                  onToggleEmployee: (_) {},
+                  onSelectStartDate: onSelectStartDate ?? (_) {},
+                  onSelectEndDate: onSelectEndDate ?? (_) {},
+                  onPickStartTime: () {},
+                  onPickEndTime: () {},
+                  onSelectRepeat: (_) {},
+                  onUseCustomAddress: (_) {},
+                  onDayOffChanged: onDayOffChanged ?? (_) {},
+                  onAllDayChanged: onAllDayChanged ?? (_) {},
+                ),
+                onRequestAddClient: onRequestAddClient,
+                onApplyTemplate: onApplyTemplate,
               ),
-              onRequestAddClient: onRequestAddClient,
-              onApplyTemplate: onApplyTemplate,
             ),
-          ),
           ),
         ),
       ),
@@ -489,5 +491,16 @@ void main() {
   testWidgets('an ordinary job still offers an end date', (tester) async {
     await pumpAppointmentForm(tester, width: 400);
     expect(find.text('End date'), findsOneWidget);
+  });
+
+  testWidgets('editing a client job cannot widen it into a run', (
+    tester,
+  ) async {
+    // Only the ADD path fans a span into one document per day. Offering the
+    // row on edit wrote the single WIDE document the split exists to remove —
+    // it renders "Day 3 of 5" but marking one day complete closes the week.
+    await pumpAppointmentForm(tester, width: 400, canSpanDays: false);
+    expect(find.text('End date'), findsNothing);
+    expect(find.text('Start date'), findsOneWidget);
   });
 }

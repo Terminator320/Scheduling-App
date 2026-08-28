@@ -134,10 +134,16 @@ class AddressMapLauncher {
         st,
       );
     }
-    if (!opened && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        errorSnackBar(context, context.l10n.error_couldNotOpenMapApp),
-      );
+    if (!opened) {
+      // `launchUrl` returning false throws nothing, so without this a map that
+      // silently refuses to open leaves no trace at all — the same branch
+      // `launchExternalUri` logs for the schemes it owns.
+      _logger.warn('LAUNCH-MAPS showMapChoices launchUrl returned false');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          errorSnackBar(context, context.l10n.error_couldNotOpenMapApp),
+        );
+      }
     }
   }
 }

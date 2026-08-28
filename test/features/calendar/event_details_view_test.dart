@@ -274,11 +274,16 @@ void main() {
   ) async {
     await openEditForm(tester);
 
-    // Both date rows land on the same day, so nothing describes a run.
+    // ONE date row, not two: editing may not widen a one-day client job into a
+    // multi-day one, because only the ADD path splits a span into per-day
+    // documents — so the end-date row is withheld here for the same reason it
+    // is withheld on a run member. This asserted two rows until 2026-08-28,
+    // when offering the second one still wrote a wide document.
     expect(
       find.text(DateUtilsHelper.formatDate(DateTime(2026, 5, 10))),
-      findsNWidgets(2),
+      findsOneWidget,
     );
+    expect(find.text('End date'), findsNothing);
     expect(find.textContaining(RegExp(r'\d+ (days|nights)')), findsNothing);
     expect(find.text('Start Time'), findsOneWidget);
     expect(find.text('End Time'), findsOneWidget);

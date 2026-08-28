@@ -720,6 +720,15 @@
   "@calendar_repeatEveryYear": {
     "description": "Repeat option: the appointment repeats every year"
   },
+  "calendar_appointmentCreatedRunDays": "{count, plural, =1{Appointment created} other{Job booked — {count} days}}",
+  "@calendar_appointmentCreatedRunDays": {
+    "description": "Success notice after booking a multi-day job, which creates one appointment per work day. Deliberately NOT the repeat wording: the days are ONE job, not future visits.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendar_appointmentCreatedWithRepeats": "{count, plural, =1{Appointment created — 1 future visit booked} other{Appointment created — {count} future visits booked}}",
   "@calendar_appointmentCreatedWithRepeats": {
     "description": "Success notice after creating a repeating appointment; count is the number of pre-booked future occurrences",

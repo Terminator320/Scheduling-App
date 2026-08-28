@@ -46,7 +46,6 @@ class AppSyncListeners {
   }
 
   void _pushRegistration() {
-    // Sync this device's FCM registration after account changes.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
@@ -59,8 +58,7 @@ class AppSyncListeners {
   }
 
   void _presenceSync() {
-    // Starts or stops the foreground location stream that feeds the travel-time
-    // "leave now" reminders — same emission-driven shape as push registration above.
+    // Starts or stops the foreground location stream for leave-now reminders.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
@@ -73,9 +71,7 @@ class AppSyncListeners {
   }
 
   void _liveActivitySync() {
-    // Registers this device's Live Activity APNs tokens so the server can show
-    // the "time to leave" card on a locked phone. That only works on iOS 17.2+ —
-    // other devices just get the plain leaveNow push.
+    // Registers Live Activity APNs tokens for lock-screen leave-now cards.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,
@@ -101,8 +97,6 @@ class AppSyncListeners {
       next.isLoading || next.hasError;
 
   void _widgetSync() {
-    // iOS home-screen widget only. It never wires up elsewhere, so the
-    // employee-appointments listener it would open never opens.
     if (!isIosPlatform()) return;
     ref.listen<AsyncValue<Map<String, dynamic>?>>(widgetPayloadProvider, (
       prev,
@@ -123,7 +117,6 @@ class AppSyncListeners {
   }
 
   void _snapshotSync() {
-    // iOS Siri App Intents extension only — same App Group, separate key.
     if (!isIosPlatform()) return;
     ref.listen<AsyncValue<Map<String, dynamic>?>>(scheduleSnapshotProvider, (
       prev,

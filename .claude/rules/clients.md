@@ -114,6 +114,22 @@ Root context: `../../CLAUDE.md`.
   fields only, so a plain substitution drops the function-owned `jobCount` and
   `createdAt` and blanks the count on every search and type-filter result until
   the TTL expires. Any new field `toMap()` doesn't emit inherits this.
+- **`ClientType.building` REPLACED `propertyManagement`, and the stored value
+  changed with it — there is NO legacy alias** (2026-08-28). The enum member is
+  `building` and the raw string it stores is `"building"`; the old
+  `propertyManagement`/`"property_mgmt"` pair is gone from Dart AND from
+  `BUSINESS_TYPES` in `functions/client_name_utils.js`. Safe when it shipped
+  because prod held **zero** docs carrying `property_mgmt` (checked
+  2026-08-28), and that count is the whole justification — `fromRaw` maps an
+  unknown value to `unset`, so a doc written with the old string reads back as
+  a client with NO type, which additionally flips
+  `ClientNamePolicy.isBusiness` to false and puts that customer in reach of
+  the name-IS-the-phone rewrite. The live risk is a FLEET one, not a data one:
+  an app build older than 1.53.0 still writes `property_mgmt`, so if such a
+  build is still installed anywhere, re-run the count before trusting this.
+  If a row ever turns up, map it forward — never re-add the old value to make
+  a read pass.
+
 - **Clients are GROUPED BY BUILDING, and the key is DERIVED, never stored**
   (2026-08-28). `buildingKeyFor` / `buildingsIn` / `buildingCountsIn`
   (`clients/domain/policies/client_building.dart`) reduce the street line down
@@ -457,7 +473,21 @@ Root context: `../../CLAUDE.md`.
   composed address while the doc stores the canonical `4-1234 …`, so an
   apt-bearing client never matched `from` and its appointments silently never
   took an address correction — nor did a city-only edit, which never touches
-  `address` at all.
+  `address` at all. **Composing on both sides was necessary but NOT
+  sufficient — the two composers also have to agree CHARACTER FOR CHARACTER**,
+  and until 2026-08-28 they did not. `composeFullAddress` deliberately did not
+  re-spell the apt ("the server has no display concern"), so it built `from`
+  as `"4-1234 Rue Principale, …"` while the app books
+  `"1234 Rue Principale #4, …"` — and `buildAppointmentPatch` compares
+  VERBATIM, so no apt-bearing client ever took an address correction. The JS
+  side now runs the street through its own `canonicalToDisplay`
+  (`splitApt` + `formatAptForDisplay`, hand-mirroring the four Dart apt
+  patterns IN ORDER). **The app's DISPLAY spelling is the canonical stored
+  form for `appointments.address`** — it is what every existing appointment
+  already holds, so the server matches the client, never the reverse.
+  The trap to remember: each side's tests asserted its own composer against
+  itself, which is how this survived a release. They now share worked examples
+  and `client_propagation.test.js` patches a real booked address end to end.
   The backfill is HYGIENE, not a fix — every read already composes, so nothing
   user-visible changes. It **cannot lose information**: it only removes
   trailing segments that match fields still on the same doc, so the old string

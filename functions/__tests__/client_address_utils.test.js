@@ -113,10 +113,30 @@ describe("composeFullAddress", () => {
     expect(composeFullAddress(null)).toBe("");
   });
 
-  test("does NOT re-spell the apt — that is the app's display concern", () => {
-    // The server must never rewrite a stored appointment address into a
-    // different spelling of itself; only the Dart twin renders "#4".
+  test("re-spells the apt the way the APP books it", () => {
+    // Shares the worked example with the Dart twin's "composeFull renders the
+    // apt as #4" case (address_parser_street_locality_test.dart). These two
+    // strings are compared VERBATIM by buildAppointmentPatch, so a divergence
+    // here means an apt-bearing client's address correction reaches none of
+    // their jobs. This case asserted the opposite until 2026-08-28 — that the
+    // server deliberately did NOT re-spell — and it passed the whole time,
+    // because it only ever checked this composer against itself.
     expect(composeFullAddress({address: "4-1234 Rue Principale", ...MONTREAL}))
-        .toBe("4-1234 Rue Principale, Montréal, QC H2X 1Y4, Canada");
+        .toBe("1234 Rue Principale #4, Montréal, QC H2X 1Y4, Canada");
+  });
+
+  test("a legacy full-string doc composes to the SAME string", () => {
+    // The other stored shape, same expected value — the property that makes
+    // normalizing `address` a no-op for propagation. Mirrors the Dart case
+    // "a legacy full-string doc renders identically, not doubled".
+    expect(composeFullAddress({
+      address: "4-1234 Rue Principale, Montréal, QC H2X 1Y4, Canada",
+      ...MONTREAL,
+    })).toBe("1234 Rue Principale #4, Montréal, QC H2X 1Y4, Canada");
+  });
+
+  test("an address with no apt is untouched by the display pass", () => {
+    expect(composeFullAddress({address: "1234 Rue Principale", ...MONTREAL}))
+        .toBe("1234 Rue Principale, Montréal, QC H2X 1Y4, Canada");
   });
 });

@@ -125,6 +125,7 @@ class AppointmentFormFields extends StatelessWidget {
     super.key,
     this.isMultiDay = false,
     this.isRunMember = false,
+    this.canSpanDays = true,
     this.isOvernight = false,
     this.spanLength = 1,
     this.editingStatus,
@@ -163,6 +164,17 @@ class AppointmentFormFields extends StatelessWidget {
 
   /// True when this appointment is one day of a multi-day run.
   final bool isRunMember;
+
+  /// Whether this form may turn a one-day job into a multi-day one.
+  ///
+  /// False on the EDIT flow for a client job. A run's shape is fixed at
+  /// booking, and only the ADD path fans a span into one document per day — so
+  /// widening an end date here wrote the single WIDE document the per-day
+  /// split exists to eliminate: it renders "Day 3 of 5" through the derived
+  /// branch, indistinguishable from a real run, but marking one day complete
+  /// closes the whole week. Personal blocks and time off keep the row: they
+  /// legitimately stay one wide document.
+  final bool canSpanDays;
 
   /// True when the daily window crosses midnight, so the run counts nights.
   final bool isOvernight;
@@ -473,7 +485,7 @@ class AppointmentFormFields extends StatelessWidget {
             : (isOvernight
                   ? l10n.calendar_spanNights(spanLength)
                   : l10n.calendar_spanDays(spanLength)),
-        showEndDate: !isRunMember,
+        showEndDate: !isRunMember && canSpanDays,
         onStartDateSelected: callbacks.onSelectStartDate,
         onEndDateSelected: callbacks.onSelectEndDate,
       );

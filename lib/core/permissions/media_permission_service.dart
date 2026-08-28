@@ -31,7 +31,8 @@ class MediaPermissionService {
     }
   }
 
-  /// Add-only photo-library access for saving appointment photos to the device gallery.
+  /// Add-only photo-library access for saving appointment photos to the device
+  /// gallery.
   Future<MediaPermissionResult> ensurePhotoAddOnly() async {
     try {
       final status = await _requestPhotoAddOnly();

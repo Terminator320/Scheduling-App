@@ -152,6 +152,7 @@
   "calendar_repeatEvery4Months": "Tous les 4 mois",
   "calendar_repeatEvery6Months": "Tous les 6 mois",
   "calendar_repeatEveryYear": "Tous les ans",
+  "calendar_appointmentCreatedRunDays": "{count, plural, =1{Rendez-vous créé} other{Travail planifié — {count} jours}}",
   "calendar_appointmentCreatedWithRepeats": "{count, plural, =1{Rendez-vous créé — 1 visite future réservée} other{Rendez-vous créé — {count} visites futures réservées}}",
   "calendar_changesSavedWithRepeats": "{count, plural, =1{Modifications enregistrées — 1 visite future réservée} other{Modifications enregistrées — {count} visites futures réservées}}",
   "calendar_changesSavedWithRemoved": "{count, plural, =1{Modifications enregistrées — 1 visite future supprimée} other{Modifications enregistrées — {count} visites futures supprimées}}",

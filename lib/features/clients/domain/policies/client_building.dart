@@ -93,20 +93,20 @@ String? _buildingStreetOf(ClientRecord client) {
 /// Ordered by count descending because the reason to open this menu is "which
 /// addresses do we have a lot of work at"; ties fall back to the street so the
 /// order is stable between rebuilds rather than depending on iteration order.
-/// Pass [keys] — a `buildingKeysIn` result over the SAME clients — to reuse
-/// keys already computed instead of deriving them a second time. It carries an
-/// entry per client, `null` included, so an absent id means "not from this
-/// set" rather than "no building".
+/// [keys] is a `buildingKeysIn` result over the SAME clients — required rather
+/// than optional so this can never become a second place building keys are
+/// derived. It carries an entry per client, `null` included, so an absent id
+/// means "not from this set" rather than "no building".
 List<ClientBuilding> buildingsIn(
   Iterable<ClientRecord> clients, {
+  required Map<String, String?> keys,
   int minimumClients = 2,
-  Map<String, String?>? keys,
 }) {
   final counts = <String, int>{};
   final labels = <String, ({String street, String city})>{};
 
   for (final client in clients) {
-    final key = keys == null ? buildingKeyFor(client) : keys[client.id];
+    final key = keys[client.id];
     if (key == null) continue;
     counts[key] = (counts[key] ?? 0) + 1;
     // First spelling seen wins — the key is already accent- and case-folded,
@@ -145,17 +145,4 @@ List<ClientBuilding> buildingsIn(
 /// building" from "not in this window" with `containsKey`.
 Map<String, String?> buildingKeysIn(Iterable<ClientRecord> clients) => {
   for (final client in clients) client.id: buildingKeyFor(client),
-};
-
-/// How many clients sit at each building, keyed by [buildingKeyFor].
-///
-/// ONE reduction the whole list shares, never a lookup per row — the same
-/// shape as `employeeJobsTodayProvider`. Only buildings meeting the floor
-/// appear, so a row asking for a key that isn't here has no pill to show.
-Map<String, int> buildingCountsIn(
-  Iterable<ClientRecord> clients, {
-  int minimumClients = 2,
-}) => {
-  for (final building in buildingsIn(clients, minimumClients: minimumClients))
-    building.key: building.clientCount,
 };

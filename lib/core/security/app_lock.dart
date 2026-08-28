@@ -148,7 +148,9 @@ class _AppLockState extends ConsumerState<AppLock> with WidgetsBindingObserver {
         // it returns false for the pre-first-unlock `local_auth` channel window
         // this whole subsystem exists to handle — and writing the flag there
         // turns the user's app lock off forever, silently, on one hiccup.
-        logger.warn('APPLOCK unavailable after lock engaged; opening for this session');
+        logger.warn(
+          'APPLOCK unavailable after lock engaged; opening for this session',
+        );
         notices.error(context.l10n.settings_appLockUnavailable);
         setState(() {
           _locked = false;

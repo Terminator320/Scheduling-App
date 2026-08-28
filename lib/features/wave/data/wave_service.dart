@@ -26,6 +26,10 @@ class WaveService {
   final FirebaseFunctions _functions;
   final AppLogger _logger;
 
+  /// Firebase callables can return `Map<dynamic, dynamic>` on Android.
+  Map<String, dynamic> _mapResult(HttpsCallableResult<dynamic> result) =>
+      (result.data as Map?)?.cast<String, dynamic>() ?? const {};
+
   /// Connect to Wave; business resolved server-side.
   Future<WaveConnection> bootstrap() async {
     final HttpsCallableResult<dynamic> result;
@@ -42,8 +46,7 @@ class WaveService {
     }
 
     try {
-      // NOTE: `as Map?` — Android callables return Map<dynamic, dynamic>.
-      final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
+      final data = _mapResult(result);
       return WaveConnection.fromMap(data);
     } catch (e, st) {
       _logger.warn('WAVE-BOOT waveBootstrap response parse failed', e, st);
@@ -67,8 +70,7 @@ class WaveService {
     }
 
     try {
-      // NOTE: `as Map?` — Android callables return Map<dynamic, dynamic>.
-      final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
+      final data = _mapResult(result);
       if (data['connected'] != true) return null;
       return WaveConnection.fromMap(data);
     } catch (e, st) {
@@ -108,8 +110,7 @@ class WaveService {
     }
 
     try {
-      // NOTE: `as Map?` — Android callables return Map<dynamic, dynamic>.
-      final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
+      final data = _mapResult(result);
       return WaveSyncSummary.fromMap(data);
     } catch (e, st) {
       _logger.warn(
@@ -148,8 +149,7 @@ class WaveService {
     }
 
     try {
-      // NOTE: `as Map?` — Android callables return Map<dynamic, dynamic>.
-      final data = (result.data as Map?)?.cast<String, dynamic>() ?? const {};
+      final data = _mapResult(result);
       return WaveRetryResult.fromMap(data);
     } catch (e, st) {
       _logger.warn(

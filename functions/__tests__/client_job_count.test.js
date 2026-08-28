@@ -91,22 +91,37 @@ describe("clientsToRecount", () => {
 // ---------------------------------------------------------------------------
 
 /**
- * Fake Firestore recording the aggregate query it was asked for and the write
- * it received.
- * @param {{count: number, updateError: ?Object}} opts
+ * Fake Firestore recording the aggregate queries it was asked for and the
+ * write it received.
+ *
+ * `recountOne` issues TWO aggregates off one base query — every document for
+ * the client, then the later days of its multi-day runs — so the chained
+ * `where` has to be modelled or the second one reads as the first.
+ * `laterRunDays` is what the `dayIndex > 1` leg answers.
+ * @param {{count: number, laterRunDays: number, updateError: ?Object}} opts
  * @return {!Object} `{db, calls}`
  */
-function fakeDb({count = 0, updateError = null} = {}) {
-  const calls = {where: null, doc: null, update: [], set: []};
+function fakeDb({count = 0, laterRunDays = 0, updateError = null} = {}) {
+  const calls = {where: null, wheres: [], doc: null, update: [], set: []};
   const db = {
     collection(name) {
       if (name === "appointments") {
         return {
           where(field, op, value) {
             calls.where = {field, op, value};
-            return {
+            calls.wheres.push({field, op, value});
+            const base = {
               count: () => ({get: async () => ({data: () => ({count})})}),
+              where(f2, o2, v2) {
+                calls.wheres.push({field: f2, op: o2, value: v2});
+                return {
+                  count: () => ({
+                    get: async () => ({data: () => ({count: laterRunDays})}),
+                  }),
+                };
+              },
             };
+            return base;
           },
         };
       }
@@ -143,6 +158,33 @@ describe("recountOne", () => {
     expect(calls.update).toEqual([{jobCount: 7}]);
     expect(calls.set).toEqual([]);
   });
+
+  test("a multi-day run counts as ONE job, not one per day", async () => {
+    // The badge says "jobs". A Monday-to-Friday booking is one job stored as
+    // five day-documents, so a document count read 5 for it.
+    const {db, calls} = fakeDb({count: 7, laterRunDays: 4});
+
+    await recountOne(db, "c1");
+
+    expect(calls.update).toEqual([{jobCount: 3}]);
+  });
+
+  test("the later-days leg filters dayIndex > 1, so day 1 still counts",
+      async () => {
+        // Only a run member carries `dayIndex`, and day 1 stores 1 — so the
+        // inequality excludes both a single-day job (no field at all) and the
+        // run's first day, which IS the job.
+        const {db, calls} = fakeDb({count: 5, laterRunDays: 0});
+
+        await recountOne(db, "c1");
+
+        // One base query, reused for both aggregates.
+        expect(calls.wheres).toEqual([
+          {field: "clientId", op: "==", value: "c1"},
+          {field: "dayIndex", op: ">", value: 1},
+        ]);
+        expect(calls.update).toEqual([{jobCount: 5}]);
+      });
 
   test("writes an absolute count, not an increment", async () => {
     // The trigger runs with `retry: true` and a redelivered event would

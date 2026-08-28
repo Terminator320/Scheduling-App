@@ -206,16 +206,22 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
       if (!mounted) return;
     }
     switch (outcome) {
-      case AddEventSubmitted(:final appointment, :final futureBookings):
-        ref
-            .read(noticeServiceProvider)
-            .success(
-              futureBookings > 0
-                  ? context.l10n.calendar_appointmentCreatedWithRepeats(
-                      futureBookings,
-                    )
-                  : context.l10n.common_appointmentCreated,
-            );
+      case AddEventSubmitted(
+        :final appointment,
+        :final futureBookings,
+        :final runDays,
+      ):
+        // A run and a repeat series are different things and must not share a
+        // sentence: a 5-day job is ONE job over 5 days, not 4 future visits.
+        ref.read(noticeServiceProvider).success(
+          switch ((runDays, futureBookings)) {
+            (final days, _) when days > 1 =>
+              context.l10n.calendar_appointmentCreatedRunDays(days),
+            (_, final repeats) when repeats > 0 =>
+              context.l10n.calendar_appointmentCreatedWithRepeats(repeats),
+            _ => context.l10n.common_appointmentCreated,
+          },
+        );
         // Show clashes before closing this sheet.
         await showPersonalBlockClashesIfAny(context, ref, block: appointment);
         if (!mounted) return;

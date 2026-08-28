@@ -29,6 +29,7 @@ import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 // Re-export for single-source imports.
@@ -186,9 +187,18 @@ class EventDetailsController extends Notifier<EventDetailsState>
           client: client,
           selectedClient: client,
           // No-fixed-address clients always use custom mode.
+          //
+          // Compared against `fullAddress`, never the raw `address`: since the
+          // street/locality split that field is the STREET LINE only, while an
+          // appointment's address is seeded from the composed line — so a
+          // client with a city never matched and every detail opened in custom
+          // mode, retiring the client-address pill everywhere. Both sides go
+          // through `toCanonical` because the seed is stored canonicalised on
+          // save while `fullAddress` composes the display spelling.
           useCustomAddress:
               client.noFixedAddress ||
-              appointment.address.trim() != client.address.trim(),
+              AddressParser.toCanonical(appointment.address) !=
+                  AddressParser.toCanonical(client.fullAddress),
         );
       } else {
         state = state.copyWith(client: client);
@@ -325,12 +335,10 @@ class EventDetailsController extends Notifier<EventDetailsState>
     );
   }
 
-  /// Marks this appointment done.
   Future<EventDetailsActionOutcome> markAsDone(AppointmentRecord appointment) {
     return _setStatusOnRepo(appointment, 'done');
   }
 
-  /// Cancels this appointment, optionally including future run days.
   Future<EventDetailsActionOutcome> cancelAppointment(
     AppointmentRecord appointment, {
     bool includeFuture = false,
@@ -342,7 +350,6 @@ class EventDetailsController extends Notifier<EventDetailsState>
     if (!includeFuture || appointment.seriesId.isEmpty) {
       return _setStatusOnRepo(appointment, 'cancelled');
     }
-    // Guard before reading the series.
     if (state.isSaving) return const EventDetailsActionBusy();
     // Offline writes would wait forever for a server ack.
     if (ref.read(isOfflineProvider)) {
@@ -358,6 +365,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
         series,
         excludeId: id,
         after: appointment.startTime,
+        anchor: appointment,
       );
       await repo.updateAppointmentStatuses(
         ids: [id, ...futureIds],
@@ -403,13 +411,11 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Toggles the busy flag for confirmation dialogs.
   void setSaving({required bool busy}) {
     if (!ref.mounted) return;
     state = state.copyWith(isSaving: busy);
   }
 
-  /// Builds the stateless save pipeline.
   EventDetailsSavePipeline _pipeline() => EventDetailsSavePipeline(
     repo: ref.read(appointmentsRepositoryProvider),
     resolveStorage: () => ref.mounted ? ref.read(imageStorageProvider) : null,
@@ -448,7 +454,6 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
     state = state.copyWith(isSaving: true);
 
-    // Times below are derived from this all-day snapshot.
     final isAllDay = state.isAllDay;
 
     // Read dependencies before any await.
@@ -643,13 +648,13 @@ class EventDetailsController extends Notifier<EventDetailsState>
         end: conflict.end,
       );
 
-  /// Waits for seeding, validates the saved snapshot, and returns a stop outcome on errors.
+  /// Waits for seeding, validates the saved snapshot, and returns a stop
+  /// outcome on errors.
   Future<EventDetailsSaveOutcome?> _settleAndValidate(
     AppointmentRecord appointment, {
     required String title,
     required bool isAllDay,
   }) async {
-    // Wait for enrichment to finish, so assignee resolution reads a warm active-employee list.
     await _seedFuture;
     if (!ref.mounted) return const EventDetailsInvalid();
 
@@ -710,6 +715,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
           series,
           excludeId: id,
           after: appointment.startTime,
+          anchor: appointment,
         );
         await repo.deleteAppointments([id, ...futureIds]);
       } else {

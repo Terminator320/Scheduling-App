@@ -23,11 +23,9 @@ class MasterDetailScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Only tablet-class devices show two panes.
     if (!context.isTwoPane) {
       return master;
     }
-    // Give each pane its own primary scroll controller.
     return Row(
       children: [
         Expanded(

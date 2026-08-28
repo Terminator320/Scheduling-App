@@ -63,7 +63,6 @@ class AnimatedLoadingButton extends StatelessWidget {
             ),
     );
 
-    // minHeight lets text scale without clipping.
     return TapScale(
       enabled: effectiveOnPressed != null,
       child: ConstrainedBox(

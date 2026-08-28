@@ -169,18 +169,16 @@ bool dailyWindowsOverlap({
 }
 
 /// Concrete work windows for a daily [start]-[end] pair.
+///
+/// Shares [expandRunWindows]' loop rather than repeating it: the windows a run
+/// is BOOKED with and the windows it is CHECKED against for clashes must be
+/// the same arithmetic, and this file is the one owner of day scoping. The
+/// only difference is the incoherent-pair answer — nothing to check, versus
+/// one window to book.
 List<({DateTime start, DateTime end})> _windowsOf(
   DateTime start,
   DateTime end,
-) {
-  final days = _clampedDayCount(start, end);
-  if (days < 1) return const [];
-  final firstDay = start.dateOnly;
-  return [
-    for (var i = 0; i < days; i++)
-      _windowOn(addCalendarDays(firstDay, i), start, end),
-  ];
-}
+) => _clampedDayCount(start, end) < 1 ? const [] : expandRunWindows(start, end);
 
 /// Buckets appointment day slices by work day, clipped to [range].
 Map<DateTime, List<AppointmentDaySlice>> expandToDays(

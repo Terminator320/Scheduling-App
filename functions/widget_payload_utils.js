@@ -17,7 +17,7 @@
  */
 
 const {
-  toMillis,
+  nowMillis,
   businessDayStartMs,
   isTerminalStatus,
   isCancelledStatus,
@@ -39,16 +39,6 @@ const {sliceForDay} = require("./day_slice_utils");
 // windows are allowed to differ.
 const WIDGET_LOOKAHEAD_DAYS = 3;
 
-/**
- * Epoch ms for a `now` that may be a Date or a number.
- * @param {(Date|number)} now
- * @return {number}
- */
-function nowMillis(now) {
-  // Delegates to the shared coercion: the private copy this replaced returned
-  // NaN for a Firestore Timestamp and skipped the finite check.
-  return toMillis(now) ?? NaN;
-}
 
 /**
  * Start of the current Toronto day (00:00) as an epoch-ms UTC instant.

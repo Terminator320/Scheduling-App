@@ -50,7 +50,6 @@ class AppointmentImageLoader {
   /// Returns photo bytes, or empty bytes when there is no usable handle.
   Future<Uint8List> load(AppointmentImage image) {
     final key = _cacheKeyFor(image);
-    // Nothing to fetch and nothing to key on.
     if (key.isEmpty) return Future.value(Uint8List(0));
 
     final cached = _cache[key];
@@ -70,7 +69,6 @@ class AppointmentImageLoader {
     // Capture the cache generation before the network round trip.
     final generation = _disk.generation;
     final bytes = await _fetch(() => _refFor(image), key);
-    // Empty results are refusals or transport failures, so caches skip them.
     if (bytes.isNotEmpty) {
       unawaited(_disk.write(key, bytes, generation: generation));
     }
@@ -135,7 +133,6 @@ class AppointmentImageLoader {
     }
     _sizes[path] = bytes.length;
     _cachedBytes += bytes.length;
-    // Avoid copying keys until the cache is actually over budget.
     if (_cachedBytes <= _maxCachedBytes) return;
     for (final oldest in _sizes.keys.toList()) {
       if (_cachedBytes <= _maxCachedBytes) break;

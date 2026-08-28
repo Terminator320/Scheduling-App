@@ -28,26 +28,6 @@ class AppointmentSeriesEditor {
 
   final AppointmentsRepository _repo;
 
-  /// Rewrites the series when its repeat interval changes.
-  Future<SeriesRewriteResult> rewrite({
-    required AppointmentRecord updated,
-    required AppointmentRecord appointment,
-    required String id,
-    required DateTime start,
-    required DateTime end,
-    required RepeatInterval repeat,
-  }) async {
-    final plan = await planRewrite(
-      updated: updated,
-      appointment: appointment,
-      id: id,
-      start: start,
-      end: end,
-      repeat: repeat,
-    );
-    return commitRewrite(plan);
-  }
-
   Future<SeriesRewritePlan> planRewrite({
     required AppointmentRecord updated,
     required AppointmentRecord appointment,
@@ -92,24 +72,6 @@ class AppointmentSeriesEditor {
     );
   }
 
-  /// Applies this visit's edited fields to future non-terminal siblings.
-  Future<int> propagate({
-    required AppointmentRecord updated,
-    required AppointmentRecord appointment,
-    required String id,
-    required DateTime start,
-    required DateTime end,
-  }) async {
-    final plan = await planPropagate(
-      updated: updated,
-      appointment: appointment,
-      id: id,
-      start: start,
-      end: end,
-    );
-    return commitPropagate(plan);
-  }
-
   Future<SeriesPropagatePlan> planPropagate({
     required AppointmentRecord updated,
     required AppointmentRecord appointment,
@@ -146,7 +108,7 @@ class AppointmentSeriesEditor {
           originalEnd: end,
           copyStart: copyStart,
         ),
-        // Normalize each sibling's status so a legacy or unknown value doesn't get rejected.
+        // Normalize each sibling's status so legacy values stay writable.
         status: AppointmentStatus.storedRaw(v.status),
       );
     }).toList();

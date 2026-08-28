@@ -63,6 +63,9 @@ const {
   dayCountOf,
   MAX_APPOINTMENT_SPAN_DAYS,
 } = require("../day_slice_utils");
+// The one owner of the terminal set; a local copy here is the drift that
+// decides an irreversible migration on the wrong open/closed tally.
+const {TERMINAL_STATUSES} = require("../time_utils");
 
 const EXACT_FLAGS = ["--verbose"];
 
@@ -78,11 +81,6 @@ function assertKnownFlags(argv) {
 // Read-only, so this is purely a round-trip dial rather than a write bound.
 const PAGE_SIZE = 500;
 
-// Mirrors `terminalStatusRawValues` in
-// `lib/features/calendar/domain/appointment_status_values.dart` — the legacy
-// `completed` alias included, because dropping it is exactly the drift that
-// once made such a doc invisible to History.
-const TERMINAL_STATUSES = new Set(["done", "completed", "cancelled"]);
 
 /**
  * Scans every appointment and tallies the multi-day runs.

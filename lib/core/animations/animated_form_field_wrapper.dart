@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 /// Shakes [child] horizontally when [hasError] flips from false to true
-/// (one sine cycle of ±6px over 320ms, matching the old flutter_animate shakeX).
+/// (one sine cycle of ±6px over 320ms).
 class AnimatedFormFieldWrapper extends StatefulWidget {
   const AnimatedFormFieldWrapper({
     required this.child,

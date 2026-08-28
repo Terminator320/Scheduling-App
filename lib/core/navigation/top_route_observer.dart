@@ -2,10 +2,9 @@ import 'package:flutter/widgets.dart';
 
 /// Records the name of the navigator's topmost route.
 ///
-/// The deep-link dispatcher polls this before pushing the invite screen: on a
-/// cold start `SplashScreen` routes with `pushReplacementNamed`, which replaces
-/// the **topmost** route, so pushing too early would have splash replace the
-/// invite screen itself.
+/// On a cold start, `SplashScreen` routes with `pushReplacementNamed`, which
+/// replaces the topmost route. Anything pushed before splash settles would be
+/// replaced too, so callers use this to wait for the real top route.
 ///
 /// `didRemove` only reacts when the removed route IS the current topmost one,
 /// and the test is `identical`, never the route's name. `pushNamedAndRemoveUntil`

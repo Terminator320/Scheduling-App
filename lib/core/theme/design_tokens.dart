@@ -23,9 +23,7 @@ const String kFontSans = 'InstrumentSans';
 /// hand at a call site.
 const String kFontMono = 'IBMPlexMono';
 
-class AppColors {
-  AppColors._();
-
+abstract final class AppColors {
   static const Color surface = Color(0xFFFFFFFF);
 
   // --- Redesign vocabulary (2026-07-30). Light roles. ---
@@ -159,8 +157,7 @@ Color avatarForegroundFor(ThemeData theme, Color background) {
       .toColor();
 }
 
-class AppSpacing {
-  AppSpacing._();
+abstract final class AppSpacing {
   static const double sp4 = 4;
   static const double sp8 = 8;
   static const double sp12 = 12;
@@ -177,8 +174,7 @@ class AppSpacing {
 /// whole reason this class exists. Don't prune one for being unreferenced.
 /// The `rCard`/`rPanel`/`rSheet`/`rDialog` values below are off-scale by
 /// design — they are the design's own named surfaces, not rungs.
-class AppRadius {
-  AppRadius._();
+abstract final class AppRadius {
   static const double r8 = 8;
   static const double r12 = 12;
   static const double r16 = 16;
@@ -195,8 +191,7 @@ class AppRadius {
   static const double rRow = 13;
 }
 
-class AppShadow {
-  AppShadow._();
+abstract final class AppShadow {
   static const List<BoxShadow> card = [
     BoxShadow(color: Color(0x0A000000), blurRadius: 4, offset: Offset(0, 1)),
   ];
@@ -210,16 +205,13 @@ class AppShadow {
   ];
 }
 
-class AppDuration {
-  AppDuration._();
+abstract final class AppDuration {
   static const Duration fast = Duration(milliseconds: 150);
   static const Duration normal = Duration(milliseconds: 250);
   static const Duration shimmer = Duration(milliseconds: 1200);
 }
 
-class AppMotion {
-  AppMotion._();
-
+abstract final class AppMotion {
   /// Shared open/close curve for `showModalBottomSheet` across the app.
   static const AnimationStyle sheetStyle = AnimationStyle(
     duration: Duration(milliseconds: 300),

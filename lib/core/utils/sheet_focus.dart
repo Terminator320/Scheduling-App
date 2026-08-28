@@ -1,8 +1,6 @@
 import 'package:flutter/widgets.dart';
 
-class SheetFocus {
-  const SheetFocus._();
-
+abstract final class SheetFocus {
   static Future<void> settleBeforeSheet() async {
     FocusManager.instance.primaryFocus?.unfocus();
     await Future<void>.delayed(const Duration(milliseconds: 80));
