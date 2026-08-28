@@ -721,4 +721,87 @@ void main() {
       },
     );
   });
+
+  group('multi-day runs', () {
+    test('a 3-day job writes three linked one-day documents', () async {
+      var nextId = 0;
+      when(appointments.newDocId).thenAnswer((_) => 'appt-${++nextId}');
+      when(() => appointments.addAppointments(any())).thenAnswer((_) async {});
+
+      final c = readNotifier();
+      fillValid(c);
+      c.selectEndDate(DateTime(2026, 5, 12));
+
+      final outcome = await c.submit(
+        title: 'Repipe',
+        address: '999 Maple',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(outcome, isA<AddEventSubmitted>());
+      expect((outcome as AddEventSubmitted).futureBookings, 2);
+
+      final captured = verify(
+        () => appointments.addAppointments(captureAny()),
+      ).captured.single;
+      final run = (captured as List).cast<AppointmentRecord>();
+      expect(run, hasLength(3));
+      expect(run.map((a) => a.id).toSet(), hasLength(3));
+
+      final runId = run.first.id;
+      for (var i = 0; i < 3; i++) {
+        expect(run[i].seriesId, runId, reason: 'every day shares the run id');
+        expect(run[i].dayIndex, i + 1);
+        expect(run[i].dayCount, 3);
+        expect(run[i].startTime, DateTime(2026, 5, 10 + i, 9));
+        expect(run[i].endTime, DateTime(2026, 5, 10 + i, 10));
+        expect(run[i].status, 'pending');
+      }
+    });
+
+    test('a one-day job still writes a single unlinked document', () async {
+      final c = readNotifier();
+      fillValid(c);
+
+      await c.submit(
+        title: 'Leak',
+        address: '999 Maple',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      final captured = verify(
+        () => appointments.addAppointment(captureAny()),
+      ).captured.single as AppointmentRecord;
+      expect(captured.seriesId, '');
+      expect(captured.dayIndex, 0);
+      expect(captured.dayCount, 0);
+    });
+
+    test('a multi-day PERSONAL block stays one wide document', () async {
+      // Times first: setPersonal defaults an as-yet-untimed block to all-day.
+      final c = readNotifier()
+        ..selectDate(DateTime(2026, 5, 10))
+        ..selectStartTime(const TimeOfDay(hour: 9, minute: 0))
+        ..selectEndTime(const TimeOfDay(hour: 10, minute: 0))
+        ..setPersonal(value: true)
+        ..toggleEmployee(_employeeA)
+        ..selectEndDate(DateTime(2026, 5, 14));
+
+      await c.submit(
+        title: 'Vacation',
+        address: '',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      final captured = verify(
+        () => appointments.addAppointment(captureAny()),
+      ).captured.single as AppointmentRecord;
+      expect(captured.startTime, DateTime(2026, 5, 10, 9));
+      expect(captured.endTime, DateTime(2026, 5, 14, 10));
+      expect(captured.dayCount, 0);
+    });
+  });
 }

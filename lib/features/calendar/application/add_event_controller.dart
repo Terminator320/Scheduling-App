@@ -10,6 +10,7 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
+import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
@@ -370,31 +371,74 @@ class AddEventController extends Notifier<AddEventState>
         seriesId: repeat == RepeatInterval.none ? '' : docId,
       );
 
-      // The conflict check only covers the first occurrence, and photos stay attached to that first visit.
-      final copies = [
-        for (final copyStart in repeat.occurrenceStartsAfter(start))
+      // A multi-day JOB books one document per day, so each day carries its own
+      // status and marking day 1 complete cannot close the rest. A PERSONAL
+      // block does not split: nothing marks a day off complete, and a fortnight
+      // of holiday fanned into 14 independently-cancellable rows makes the
+      // clash alert and the availability reducer read 14 documents where they
+      // now read one span.
+      //
+      // The run is linked by `seriesId` = day 1's doc id, the SAME field a
+      // repeat uses. Safe only because the repeat picker is hidden on a
+      // multi-day form, and it earns the push dedupe for free:
+      // `diffAppointmentForNotifications` suppresses the "assigned" push for
+      // any created document whose seriesId is not its own id, so a 5-day run
+      // notifies the crew ONCE.
+      final runWindows = isPersonal
+          ? [(start: start, end: end)]
+          : expandRunWindows(start, end);
+      final dayCount = runWindows.length;
+
+      final days = [
+        for (var i = 0; i < dayCount; i++)
           appointment.copyWith(
-            id: repo.newDocId(),
-            startTime: copyStart,
-            endTime: occurrenceEnd(
-              originalStart: start,
-              originalEnd: end,
-              copyStart: copyStart,
-            ),
+            id: i == 0 ? docId : repo.newDocId(),
+            startTime: runWindows[i].start,
+            endTime: runWindows[i].end,
+            // Overrides the repeat seed above only for a real run; a one-day
+            // job keeps whatever the repeat picker chose.
+            seriesId: dayCount > 1 ? docId : appointment.seriesId,
+            // Zero on a single-day job, so its document is written exactly as
+            // it always was and `sliceFor` keeps deriving its label.
+            dayIndex: dayCount > 1 ? i + 1 : 0,
+            dayCount: dayCount > 1 ? dayCount : 0,
           ),
       ];
 
-      if (copies.isEmpty) {
-        await repo.addAppointment(appointment);
+      // A one-day job may still repeat; a multi-day one cannot, so these two
+      // never both produce documents. The conflict check above already covered
+      // every day of the run — it takes the whole span and filters through
+      // `dailyWindowsOverlap` — but it still only covers the FIRST repeat
+      // occurrence, exactly as before.
+      final repeatCopies = dayCount > 1
+          ? const <AppointmentRecord>[]
+          : [
+              for (final copyStart in repeat.occurrenceStartsAfter(start))
+                days.first.copyWith(
+                  id: repo.newDocId(),
+                  startTime: copyStart,
+                  endTime: occurrenceEnd(
+                    originalStart: start,
+                    originalEnd: end,
+                    copyStart: copyStart,
+                  ),
+                ),
+            ];
+
+      final toWrite = [...days, ...repeatCopies];
+      if (toWrite.length == 1) {
+        await repo.addAppointment(toWrite.single);
       } else {
-        await repo.addAppointments([appointment, ...copies]);
+        await repo.addAppointments(toWrite);
       }
 
+      // Photos stay on day 1: `images` is a per-document subcollection, and
+      // photos taken on day 3 attach to day 3's own document afterwards.
       if (images.isNotEmpty) {
         uploader.uploadInBackground(appointmentId: docId, newImages: images);
       }
 
-      return AddEventSubmitted(appointment, futureBookings: copies.length);
+      return AddEventSubmitted(days.first, futureBookings: toWrite.length - 1);
     } catch (e, st) {
       logger.warn('APPT-CREATE submit failed', e, st);
       if (ref.mounted) state = state.copyWith(isSubmitting: false);
