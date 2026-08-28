@@ -350,26 +350,53 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       notifier.setSaving(busy: false);
       return null;
     }
+    // A run member and a repeat occurrence take the same dialog with different
+    // words: one is "the rest of this job", the other "the visits after this
+    // one". They can never both apply — the repeat picker is hidden on a
+    // multi-day form, so a run always carries `RepeatInterval.none`.
+    final isRun = appointment.dayCount > 1;
     final choice = await showSeriesScopeDialog(
       context,
       title: context.l10n.calendar_applyChangesTo,
-      contextLabel: context.l10n.calendar_repeatsEveryLabel(
-        repeatIntervalLabel(context.l10n, state.repeat).toUpperCase(),
-      ),
-      thisOnlyLabel: context.l10n.calendar_editThisVisitOnly,
-      thisAndFutureLabel: context.l10n.calendar_editThisAndFutureVisits,
-      thisOnlyDetail: context.l10n.calendar_thisVisitKeepsSeries(
-        DateUtilsHelper.formatDate(appointment.startTime),
-      ),
+      contextLabel: isRun
+          ? context.l10n.calendar_runDayLabel(
+              appointment.dayIndex,
+              appointment.dayCount,
+            )
+          : context.l10n.calendar_repeatsEveryLabel(
+              repeatIntervalLabel(context.l10n, state.repeat).toUpperCase(),
+            ),
+      thisOnlyLabel: isRun
+          ? context.l10n.calendar_editThisDayOnly
+          : context.l10n.calendar_editThisVisitOnly,
+      thisAndFutureLabel: isRun
+          ? context.l10n.calendar_editThisAndFollowingDays
+          : context.l10n.calendar_editThisAndFutureVisits,
+      thisOnlyDetail: isRun
+          ? context.l10n.calendar_thisDayKeepsRun(
+              DateUtilsHelper.formatDate(appointment.startTime),
+            )
+          : context.l10n.calendar_thisVisitKeepsSeries(
+              DateUtilsHelper.formatDate(appointment.startTime),
+            ),
       thisAndFutureDetail: outlook.last == null
           ? null
-          : context.l10n.calendar_remainingVisitsThrough(
-              outlook.count,
-              DateUtilsHelper.formatDate(outlook.last!),
-            ),
-      primaryLabelFor: (choice) => choice == SeriesScopeChoice.thisOnly
-          ? context.l10n.calendar_saveThisVisit
-          : context.l10n.calendar_saveNVisits(outlook.count),
+          : (isRun
+                ? context.l10n.calendar_remainingDaysThrough(
+                    outlook.count,
+                    DateUtilsHelper.formatDate(outlook.last!),
+                  )
+                : context.l10n.calendar_remainingVisitsThrough(
+                    outlook.count,
+                    DateUtilsHelper.formatDate(outlook.last!),
+                  )),
+      primaryLabelFor: (choice) => switch ((isRun, choice)) {
+        (true, SeriesScopeChoice.thisOnly) => context.l10n.calendar_saveThisDay,
+        (true, _) => context.l10n.calendar_saveNDays(outlook.count),
+        (false, SeriesScopeChoice.thisOnly) =>
+          context.l10n.calendar_saveThisVisit,
+        (false, _) => context.l10n.calendar_saveNVisits(outlook.count),
+      },
     );
     // Reset before the mounted guard — the notifier is context-free, and
     // bailing while still busy would wedge a surviving controller.
@@ -435,6 +462,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     final choice = await showDeleteAppointmentDialog(
       context,
       isSeries: appointment.seriesId.isNotEmpty,
+      isRun: appointment.dayCount > 1,
     );
     // Cleared before the mounted guard (the notifier is context-free, and
     // bailing while busy would wedge a surviving controller) and before the
