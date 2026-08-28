@@ -11,12 +11,15 @@ import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
+import 'package:scheduling/features/calendar/application/appointment_conflict_checker.dart';
 import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
+import 'package:scheduling/features/calendar/application/appointment_series_editor.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_outcome.dart';
 import 'package:scheduling/features/calendar/application/event_details_save_pipeline.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
+import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
@@ -46,12 +49,10 @@ abstract class EventDetailsState
     required String editingStatus,
     @Default(false) bool isEditing,
 
-    /// An existing record already has a real end date, so unlike the add flow
-    /// this starts true: moving the start date must preserve the run's LENGTH
-    /// rather than collapse it to a single day.
+    /// Existing appointments preserve run length when the start date moves.
     @Default(true) bool endDateTouched,
     @Default(RepeatInterval.none) RepeatInterval repeat,
-    // The repeat value as last saved — if the user changes it, that triggers new bookings.
+    // Changing this value triggers repeat rebooking.
     @Default(RepeatInterval.none) RepeatInterval savedRepeat,
     @Default(<EmployeeRecord>[]) List<EmployeeRecord> selectedEmployees,
     @Default(<AppointmentImage>[]) List<AppointmentImage> existingImages,
@@ -66,7 +67,7 @@ abstract class EventDetailsState
     @Default(false) bool isPersonal,
     @Default(false) bool isDayOff,
     @Default(false) bool isAllDay,
-    // Set when the user explicitly removes the client, so we don't fall back to a placeholder.
+    // Prevents fallback to the original client.
     @Default(false) bool clientCleared,
     @Default(<String, AppointmentFormError>{})
     Map<String, AppointmentFormError> errors,
@@ -82,18 +83,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
   // Settles when employee enrichment completes, so save() runs on warm data.
   Future<void>? _seedFuture;
 
-  /// The photo list this controller last put into [state], so the
-  /// subcollection load can tell "the user has not touched these" from "they
-  /// have". Compared BY VALUE: `existingImages` is a freezed collection getter
-  /// that wraps the backing list in a NEW `EqualUnmodifiableListView` on every
-  /// access, so an identity test could never be true and the read would always
-  /// be discarded.
+  /// Last photo list adopted by this controller.
   List<AppointmentImage> _lastKnownImages = const [];
 
   @override
   EventDetailsState build() {
-    // Re-seeded per build, so a rebuild while a read is in flight compares
-    // against the list this build actually opened with.
+    // Reset the photo baseline for this build.
     _lastKnownImages = const [];
     Future.microtask(() => _loadClientIfNeeded(appointment.clientId));
     Future.microtask(_loadStoredPictures);
@@ -103,41 +98,24 @@ class EventDetailsController extends Notifier<EventDetailsState>
       endDate: lastWorkDayOf(appointment),
       selectedStartTime: TimeOfDay.fromDateTime(appointment.startTime),
       selectedEndTime: TimeOfDay.fromDateTime(appointment.endTime),
-      // storedRaw normalizes legacy/unknown status so save won't fail rules validation.
+      // Normalize status before later writes.
       editingStatus: AppointmentStatus.storedRaw(appointment.status),
       repeat: appointment.repeat,
       savedRepeat: appointment.repeat,
       isPersonal: appointment.isPersonal,
       isDayOff: appointment.isDayOff,
       isAllDay: appointment.isAllDay,
-      // Seeded synchronously to avoid a race with the async load below — employee
-      // visibility depends on employeeIds being set right away.
+      // Seed assignees before async enrichment.
       selectedEmployees: _assigneesFromRecord(appointment),
     );
   }
 
   /// Reads this job's photos from `appointments/{id}/images`.
-  ///
-  /// The sheet opens with none: photos are not on the appointment document any
-  /// more, so there is nothing to seed from and this read is the only source.
-  /// It runs UNCONDITIONALLY — deliberately, and never gate it on
-  /// `pictureCount`/`hasPictures` again. That counter's only writer is
-  /// `recountAppointmentPictures`, which settles for 2 s before it even runs
-  /// the aggregate, so a photo added seconds ago still reads as 0: the gate
-  /// made a just-added photo invisible on reopen, and made a permanently
-  /// failing parent write hide a job's photos forever. The counter stays the
-  /// card indicator's cheap approximation, where being briefly behind costs
-  /// nothing; the sheet pays one bounded `get` instead.
-  ///
-  /// Failure falls back to showing nothing rather than throwing: a photo strip
-  /// that fails to load must not take the sheet down with it.
   Future<void> _loadStoredPictures() async {
     final id = appointment.id;
     if (id == null || id.isEmpty) return;
     final repo = ref.read(appointmentsRepositoryProvider);
-    // Hoisted with `repo`: the `ref.mounted` check below proves disposal here
-    // is real, and `ref.read` on a disposed notifier throws a StateError over
-    // the failure it is trying to report.
+    // Read the logger before this notifier can be disposed.
     final logger = ref.read(loggerProvider);
     List<AppointmentImage> stored;
     try {
@@ -147,19 +125,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
       return;
     }
     if (stored.isEmpty || !ref.mounted) return;
-    // Only adopt while the list is still exactly what this controller last put
-    // there. A Storage-backed read is a real window, and the user can have
-    // edited inside it - adopting then would silently restore what they
-    // removed, and the next Save would act on a list they had already changed.
-    // An emptiness test is NOT equivalent: with two loads in flight the first
-    // adopts, a delete empties the list, and the second would put every photo
-    // back.
+    // Adopt only if the user has not edited the photo list.
     if (!listEquals(state.existingImages, _lastKnownImages)) return;
     state = state.copyWith(existingImages: _lastKnownImages = stored);
   }
 
-  /// Builds placeholder employees from the stored ids and names. They get
-  /// swapped for the full records once those load.
+  /// Builds assignee placeholders from stored ids and names.
   static List<EmployeeRecord> _assigneesFromRecord(AppointmentRecord a) => [
     for (var i = 0; i < a.employeeIds.length; i++)
       EmployeeRecord(
@@ -168,8 +139,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
       ),
   ];
 
-  /// Fills in the seeded placeholders with full employee records, for display
-  /// only — whatever the user has toggled still wins.
+  /// Enriches placeholder assignees for display.
   Future<void> _enrichSelectedEmployees() async {
     if (state.selectedEmployees.isEmpty) return;
     final logger = ref.read(loggerProvider);
@@ -187,16 +157,14 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Resolves the active staff set the same way for both seeding and
-  /// assignee resolution.
+  /// Resolves active staff for seeding and assignee saves.
   Future<List<EmployeeRecord>> _resolveActiveEmployees() =>
       ref.read(employeesRepositoryProvider).watchEmployees().first;
 
   Future<void> _loadClientIfNeeded(String clientId) async {
     final id = clientId.trim();
     if (id.isEmpty || state.client != null) return;
-    // The clients read rule is admin-only, so skip this load for employees —
-    // otherwise it just logs a permission-denied error.
+    // Employees cannot read client documents.
     if (ref.exists(currentUserDocProvider)) {
       final docState = ref.read(currentUserDocProvider);
       if (docState.hasError) return;
@@ -211,7 +179,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     final clientsRepo = ref.read(clientsRepositoryProvider);
     try {
       final client = await clientsRepo.getClientById(id);
-      // Check again after the await, since the user might have picked a client while this was loading.
+      // Do not overwrite a client picked during the read.
       if (!ref.mounted) return;
       if (client == null || state.client != null) return;
       if (state.selectedClient == null && !state.clientCleared) {
@@ -280,15 +248,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     state = state.copyWith(repeat: value);
   }
 
-  /// Marks the personal block as time off. Only reachable while the personal
-  /// switch is on — see [setPersonal], which clears it on the way off.
-  ///
-  /// Turning it ON forces all-day, for the reason spelled out on the add
-  /// flow's twin: the form hides both the all-day switch and the time rows
-  /// behind `isDayOff`, so a day off that kept `isAllDay: false` could neither
-  /// satisfy the validator nor show why. The edit flow reaches that state in
-  /// ONE tap — open a timed personal block and tick Day off — which is why
-  /// both halves must agree.
+  /// Marks a personal block as all-day time off.
   void setDayOff({required bool value}) {
     state = state.copyWith(
       isDayOff: value,
@@ -300,23 +260,18 @@ class EventDetailsController extends Notifier<EventDetailsState>
     );
   }
 
-  /// Flipping this on drops the client the same way the add flow does — the
-  /// picker is hidden from here on, and `clientCleared` keeps `save()` from
-  /// falling back to the stored one.
+  /// Toggles personal mode and clears hidden client-only fields.
   void setPersonal({required bool value}) {
     state = state.copyWith(
       isPersonal: value,
-      // Cleared on the way off for the same reason as the add flow: the chip
-      // goes with the switch, so a surviving flag would be unreachable.
+      // Client visits cannot keep a hidden day-off flag.
       isDayOff: value && state.isDayOff,
       selectedClient: value ? null : state.selectedClient,
       client: value ? null : state.client,
       clientCleared: value || state.clientCleared,
       clientResults: value ? const [] : state.clientResults,
       useCustomAddress: !value && state.useCustomAddress,
-      // isAllDay is deliberately NOT cleared here. The all-day switch is shown
-      // on every job now, not just personal ones, so the flag stays reachable
-      // and repairable — clearing it would discard a deliberate choice.
+      // All-day stays user-controlled for every job type.
       errors: withoutKey(state.errors, 'client'),
     );
   }
@@ -336,8 +291,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
       errors: update.errors ?? current.errors,
       newImages: update.pendingImages ?? current.newImages,
     );
-    // Unlike the add flow, this state also tracks the loaded `client` and the
-    // explicit-clear flag (which blocks the placeholder fallback in save()).
+    // Keep the loaded client and explicit-clear flag in sync.
     if (update.selectedClient != null) {
       next = next.copyWith(
         selectedClient: update.selectedClient,
@@ -372,17 +326,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
     );
   }
 
-  /// Writes `status: 'done'`. If it fails, the widget layer builds a failure
-  /// notice from the returned outcome.
+  /// Marks this appointment done.
   Future<EventDetailsActionOutcome> markAsDone(AppointmentRecord appointment) {
     return _setStatusOnRepo(appointment, 'done');
   }
 
-  /// Writes `status: 'cancelled'`. With [includeFuture], also cancels the
-  /// non-terminal days of this RUN that come after it, in one batch.
-  ///
-  /// [markAsDone] deliberately has no such option: closing one day and leaving
-  /// the rest open is the entire reason a multi-day job is separate documents.
+  /// Cancels this appointment, optionally including future run days.
   Future<EventDetailsActionOutcome> cancelAppointment(
     AppointmentRecord appointment, {
     bool includeFuture = false,
@@ -394,13 +343,10 @@ class EventDetailsController extends Notifier<EventDetailsState>
     if (!includeFuture || appointment.seriesId.isEmpty) {
       return _setStatusOnRepo(appointment, 'cancelled');
     }
-    // Same reentrancy guard the single-document path uses, set synchronously
-    // before the first await — without it a double-tap pays for getSeries and
-    // the batch twice.
+    // Guard before reading the series.
     if (state.isSaving) return const EventDetailsActionBusy();
     state = state.copyWith(isSaving: true);
-    // Resolved before the first await: Riverpod 3 throws on `ref.read` from an
-    // unmounted consumer, and the sheet can be dismissed mid-flight.
+    // Read dependencies before any await.
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
     try {
@@ -431,15 +377,14 @@ class EventDetailsController extends Notifier<EventDetailsState>
     if (id == null) {
       return EventDetailsActionFailed(StateError('appointment has no id'));
     }
-    // Reject a double-tap on the status write — same reentrancy guard save() uses.
+    // Reject duplicate status writes.
     if (state.isSaving) return const EventDetailsActionBusy();
     state = state.copyWith(isSaving: true);
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
     try {
       await repo.updateAppointmentStatus(id: id, status: status);
-      // The live activity card gets ended server-side via the liveActivityCards
-      // marker, so don't end it locally here.
+      // Live activity cleanup is server-owned.
       if (ref.mounted) state = state.copyWith(isSaving: false);
       return const EventDetailsActionOk();
     } catch (e, st) {
@@ -449,27 +394,29 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Toggles the busy flag while a confirmation dialog is open to prevent duplicate prompts.
-  void setSaving({required bool busy}) =>
-      state = state.copyWith(isSaving: busy);
+  /// Toggles the busy flag for confirmation dialogs.
+  void setSaving({required bool busy}) {
+    if (!ref.mounted) return;
+    state = state.copyWith(isSaving: busy);
+  }
 
-  /// The write half of a save. Built per call so it closes over nothing.
+  /// Builds the stateless save pipeline.
   EventDetailsSavePipeline _pipeline() => EventDetailsSavePipeline(
     repo: ref.read(appointmentsRepositoryProvider),
     resolveStorage: () => ref.mounted ? ref.read(imageStorageProvider) : null,
     logger: ref.read(loggerProvider),
   );
 
-  /// The final assignee list. The awaited active-employee read is the point —
-  /// see [_resolveActiveEmployees].
+  /// Resolves final assignees against the active staff list.
   Future<({List<String> ids, List<String> names})> _resolveAssignees(
     AppointmentRecord appointment,
     EventDetailsSavePipeline pipeline,
+    List<EmployeeRecord> selectedEmployees,
   ) async {
     final activeEmployees = await _resolveActiveEmployees();
     return pipeline.resolveAssignees(
       appointment: appointment,
-      selected: state.selectedEmployees,
+      selected: selectedEmployees,
       activeEmployees: activeEmployees,
     );
   }
@@ -483,32 +430,23 @@ class EventDetailsController extends Notifier<EventDetailsState>
     bool applyToSeries = false,
     bool forceBusy = false,
   }) async {
-    // Mark this in-flight before the seed-settle await, so a double-tap can't
-    // start a concurrent save. `Busy`, not `Invalid` — the form is fine, the
-    // write is already running.
+    // Duplicate saves are busy, not invalid.
     if (state.isSaving) return const EventDetailsSaveBusy();
 
-    // Bail out early if we're offline, before setting the flag — otherwise
-    // Save just spins waiting for a server ack that isn't coming.
+    // Offline writes would wait forever for a server ack.
     if (ref.read(isOfflineProvider)) {
       return const EventDetailsFailed(SocketException('offline'));
     }
     state = state.copyWith(isSaving: true);
 
-    // Snapshot before the first await. The all-day switch stays live while a
-    // save is in flight, and the instants below are DERIVED from this flag —
-    // re-reading it afterwards could write `isAllDay: true` over a 09:00–17:00
-    // window, which reads as "All day" on the card while the travel sweep skips
-    // it and the crew gets no "time to leave" push.
+    // Times below are derived from this all-day snapshot.
     final isAllDay = state.isAllDay;
 
-    // Resolve dependencies before the first await, so they survive the sheet
-    // being dismissed (Riverpod 3).
+    // Read dependencies before any await.
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
     final pipeline = _pipeline();
-    // Only resolve the upload service if there are photos, so we skip
-    // initializing FirebaseStorage otherwise.
+    // Avoid touching Storage when no new photos exist.
     final uploader = state.newImages.isEmpty
         ? null
         : ref.read(appointmentImageUploadProvider);
@@ -536,36 +474,23 @@ class EventDetailsController extends Notifier<EventDetailsState>
       endTime: state.selectedEndTime,
     );
 
-    // Snapshot the photo state before writing, so it survives the sheet being dismissed.
+    // Snapshot form state before async writes.
     final removedImages = state.removedExistingImages;
     final newImages = state.newImages;
+    final selectedEmployees = state.selectedEmployees;
+    final selectedClient = state.selectedClient;
+    final editingStatus = state.editingStatus;
+    final repeat = state.repeat;
+    final savedRepeat = state.savedRepeat;
+    final isPersonal = state.isPersonal;
+    final isDayOff = state.isDayOff;
 
     try {
-      // A PERSONAL block skips the prompt — the time-off clash alert handles
-      // that clash after the write, and two dialogs about it in a row is what
-      // running both would give. See the add flow's twin.
-      if (!forceBusy && !state.isPersonal) {
-        final busy = await repo.findBusyEmployees(
-          candidates: state.selectedEmployees,
-          start: start,
-          end: end,
-          // Without this the job collides with itself and every one of its own
-          // assignees reports as busy.
-          excludeAppointmentId: id,
-        );
-        if (busy.isNotEmpty) {
-          // Not an error — hand the decision back to the user. The flag has to
-          // clear here or Save stays stuck after the dialog is dismissed.
-          if (ref.mounted) state = state.copyWith(isSaving: false);
-          return EventDetailsBusyEmployees(
-            busyEmployees: busy,
-            start: start,
-            end: end,
-          );
-        }
-      }
-
-      final assignees = await _resolveAssignees(appointment, pipeline);
+      final assignees = await _resolveAssignees(
+        appointment,
+        pipeline,
+        selectedEmployees,
+      );
       final updated = pipeline.buildUpdatedRecord(
         appointment,
         id: id,
@@ -576,33 +501,40 @@ class EventDetailsController extends Notifier<EventDetailsState>
         start: start,
         end: end,
         assignees: assignees,
-        selectedClient: state.selectedClient,
-        status: state.editingStatus,
-        repeat: state.repeat,
-        isPersonal: state.isPersonal,
-        isDayOff: state.isDayOff,
+        selectedClient: selectedClient,
+        status: editingStatus,
+        repeat: repeat,
+        isPersonal: isPersonal,
+        isDayOff: isDayOff,
         isAllDay: isAllDay,
       );
 
-      final saved = await pipeline.applySeriesChange(
+      final saved = await _applySeriesChange(
         appointment,
+        repo: repo,
         updated: updated,
         id: id,
         start: start,
         end: end,
         applyToSeries: applyToSeries,
-        repeat: state.repeat,
-        savedRepeat: state.savedRepeat,
+        repeat: repeat,
+        savedRepeat: savedRepeat,
+        selectedEmployees: selectedEmployees,
+        checkConflicts: !forceBusy && !isPersonal,
       );
+      if (saved is! EventDetailsSaved) {
+        if (ref.mounted) state = state.copyWith(isSaving: false);
+        return saved;
+      }
 
       await pipeline.applyPhotoChanges(
         id: id,
         uploader: uploader,
         removedImages: removedImages,
         newImages: newImages,
-        // The repeat baseline for the NEXT edit — state, so it stays here.
+        // Move the repeat baseline after the record write.
         onRecordWritten: () {
-          if (ref.mounted) state = state.copyWith(savedRepeat: state.repeat);
+          if (ref.mounted) state = state.copyWith(savedRepeat: repeat);
         },
       );
 
@@ -615,11 +547,90 @@ class EventDetailsController extends Notifier<EventDetailsState>
     }
   }
 
-  /// Waits for the seed to settle, then validates the form. Returns a stop
-  /// outcome if it's invalid, or null to keep going.
-  /// [isAllDay] is passed rather than re-read: it is the value [save]
-  /// snapshotted, so the form is validated against the same flag the instants
-  /// and the record are built from.
+  Future<EventDetailsSaveOutcome> _applySeriesChange(
+    AppointmentRecord appointment, {
+    required AppointmentsRepository repo,
+    required AppointmentRecord updated,
+    required String id,
+    required DateTime start,
+    required DateTime end,
+    required bool applyToSeries,
+    required RepeatInterval repeat,
+    required RepeatInterval savedRepeat,
+    required List<EmployeeRecord> selectedEmployees,
+    required bool checkConflicts,
+  }) async {
+    final seriesEditor = AppointmentSeriesEditor(repo);
+    if (repeat != savedRepeat) {
+      final plan = await seriesEditor.planRewrite(
+        updated: updated,
+        appointment: appointment,
+        id: id,
+        start: start,
+        end: end,
+        repeat: repeat,
+      );
+      if (checkConflicts) {
+        final conflict = await findFirstAppointmentConflict(
+          repo: repo,
+          candidates: selectedEmployees,
+          bookings: [plan.updated, ...plan.copies],
+          excludeAppointmentIds: plan.deleteIds.toSet(),
+          excludeOwnBookingIds: true,
+        );
+        if (conflict != null) return _busyEmployees(conflict);
+      }
+      final result = await seriesEditor.commitRewrite(plan);
+      return EventDetailsSaved(
+        result.updated,
+        futureBookings: result.futureBookings,
+        removedBookings: result.removedBookings,
+      );
+    }
+
+    if (applyToSeries && appointment.seriesId.isNotEmpty) {
+      final plan = await seriesEditor.planPropagate(
+        updated: updated,
+        appointment: appointment,
+        id: id,
+        start: start,
+        end: end,
+      );
+      if (checkConflicts) {
+        final conflict = await findFirstAppointmentConflict(
+          repo: repo,
+          candidates: selectedEmployees,
+          bookings: [plan.updated, ...plan.propagated],
+          excludeOwnBookingIds: true,
+        );
+        if (conflict != null) return _busyEmployees(conflict);
+      }
+      final updatedSiblings = await seriesEditor.commitPropagate(plan);
+      return EventDetailsSaved(updated, updatedSiblings: updatedSiblings);
+    }
+
+    if (checkConflicts) {
+      final conflict = await findFirstAppointmentConflict(
+        repo: repo,
+        candidates: selectedEmployees,
+        bookings: [updated],
+        excludeOwnBookingIds: true,
+      );
+      if (conflict != null) return _busyEmployees(conflict);
+    }
+
+    await repo.updateAppointment(updated);
+    return EventDetailsSaved(updated);
+  }
+
+  EventDetailsBusyEmployees _busyEmployees(AppointmentConflictHit conflict) =>
+      EventDetailsBusyEmployees(
+        busyEmployees: conflict.busyEmployees,
+        start: conflict.start,
+        end: conflict.end,
+      );
+
+  /// Waits for seeding, validates the saved snapshot, and returns a stop outcome on errors.
   Future<EventDetailsSaveOutcome?> _settleAndValidate(
     AppointmentRecord appointment, {
     required String title,
@@ -657,15 +668,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     return null;
   }
 
-  /// Deletes the visit and returns a sealed outcome. When [includeFuture] is
-  /// set, this also deletes the series' future visits in one batch
-  /// (done/cancelled visits are preserved).
-  ///
-  /// It returns [EventDetailsActionOutcome] rather than a nullable error for
-  /// the same reason the status setters do: `null` meant BOTH "deleted" and
-  /// "skipped by the reentrancy guard", so a skipped delete announced
-  /// "Appointment deleted" and closed the sheet without having written
-  /// anything.
+  /// Deletes this appointment, optionally including future series visits.
   Future<EventDetailsActionOutcome> deleteAppointment(
     AppointmentRecord appointment, {
     bool includeFuture = false,
@@ -676,25 +679,14 @@ class EventDetailsController extends Notifier<EventDetailsState>
         StateError('Cannot delete an appointment without an id.'),
       );
     }
-    // Reject a double-tap on the delete — same reentrancy guard save() and the
-    // status writes use. Without it a second run pays getSeries and the batch
-    // delete all over again.
+    // Reuse the save/status busy guard for delete taps.
     if (state.isSaving) return const EventDetailsActionBusy();
     state = state.copyWith(isSaving: true);
     // Resolve these before the first await, so they survive the sheet being dismissed.
     final repo = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
     try {
-      // Photos are NOT cleaned up here. Deleting the appointment document fires
-      // `cascadeDeleteAppointmentImages`, which removes both the photo
-      // documents and the Storage objects under
-      // `appointments/{id}/images/`. That moved server-side at the CONTRACT
-      // step for a plain reason: this used to enumerate `appointment.pictures`
-      // to know which objects to delete, and that array no longer exists — a
-      // client that is not reading the subcollection cannot list what to
-      // remove. The trigger also covers the series branch below (each deleted
-      // document fires its own) and the bytes of a photo whose document link
-      // never landed, which the array never could.
+      // Server cascade deletes appointment photo documents and bytes.
       if (includeFuture && appointment.seriesId.isNotEmpty) {
         final series = await repo.getSeries(appointment.seriesId);
         final futureIds = futureSeriesIds(

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Whether [mode] renders dark now, resolving [ThemeMode.system] against platform brightness to fix the system-mode toggle.
+/// Whether [mode] currently resolves to dark.
 bool isDarkMode(ThemeMode mode, Brightness platformBrightness) =>
     switch (mode) {
       ThemeMode.dark => true,

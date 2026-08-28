@@ -8,6 +8,7 @@ import 'package:scheduling/l10n/l10n.dart';
 /// process rather than on every rebuild of the row it sits in — the reason
 /// logging inside a build method is otherwise forbidden.
 final Set<String> _reportedUnknownStates = <String>{};
+final AppLogger _waveBadgeLogger = AppLogger();
 
 /// Small chip reflecting Wave sync state; renders nothing when empty/unknown.
 class WaveSyncBadge extends StatelessWidget {
@@ -94,7 +95,7 @@ class WaveSyncBadge extends StatelessWidget {
         // admin-only surface with no signal anywhere. Empty is the ordinary
         // "never synced" case and is not worth reporting.
         if (syncState.isNotEmpty && _reportedUnknownStates.add(syncState)) {
-          AppLogger().warn('WAVE-BADGE unknown syncState: $syncState');
+          _waveBadgeLogger.warn('WAVE-BADGE unknown syncState: $syncState');
         }
         return null;
     }

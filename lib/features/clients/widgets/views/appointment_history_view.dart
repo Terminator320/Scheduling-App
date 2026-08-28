@@ -19,8 +19,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 
-/// A pre-normalized searchable projection, built once per page load so filtering on
-/// every keystroke stays cheap.
+/// Pre-normalized row text for cheap local filtering.
 typedef _HistorySearchEntry = ({
   AppointmentRecord appointment,
   String clientText,
@@ -28,8 +27,7 @@ typedef _HistorySearchEntry = ({
   String phoneDigits,
 });
 
-/// Paginated history list, newest first. Filters and search both operate over the
-/// pages already loaded on the client, not a fresh server query.
+/// Paginated history list, newest first.
 class AppointmentHistoryView extends ConsumerStatefulWidget {
   const AppointmentHistoryView({
     required this.searchQuery,
@@ -42,31 +40,16 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
 
   final String searchQuery;
 
-  /// The caller's resolved role, passed straight to `showEventDetails` as
-  /// `showActions`. Defaults CLOSED, like every other appointment surface —
-  /// a `true` default silently offers employees actions the rules reject with
-  /// an opaque `permission-denied`.
-  ///
-  /// History holds only `done` and `cancelled` jobs, so for an admin this
-  /// opens exactly one affordance per row: the action bar's Edit button on a
-  /// finished one, the edit chip on a cancelled one. Mark-as-done and Cancel
-  /// both hide themselves on a terminal job.
+  /// Caller role gate passed to appointment details.
   final bool isAdmin;
 
-  /// Wraps the filter bar as its feature-tour step. Null when the host has
-  /// no tour for it.
+  /// Optional feature-tour wrapper for the filter bar.
   final Widget Function(Widget child)? filterTourWrap;
 
-  /// Wraps the FIRST row only, as that row's feature-tour step. One row, not
-  /// every row — the step's GlobalKey has to stay unique.
+  /// Optional feature-tour wrapper for the first row.
   final Widget Function(Widget child)? firstRowTourWrap;
 
-  /// Fires after the first page has settled and been laid out — success or
-  /// failure, since either way the skeleton is gone and no further row will
-  /// appear on its own. A tour host gates `FeatureTourHost.ready` on this:
-  /// the filter bar only renders once a page has loaded and the first row
-  /// doesn't exist before then, so a tour started earlier drops BOTH steps and
-  /// marks the WHOLE scope seen.
+  /// Fires once the first page replaces the skeleton.
   final VoidCallback? onFirstPageSettled;
 
   @override
@@ -78,14 +61,10 @@ class _AppointmentHistoryViewState
     extends ConsumerState<AppointmentHistoryView> {
   static const int _pageSize = 25;
 
-  /// How close to the end of the loaded rows a build has to reach before the
-  /// next page is requested. The list drives its own pagination now that it
-  /// builds slivers by month, so this is the threshold `PagedListView` used to
-  /// own.
+  /// Remaining-row threshold before fetching the next page.
   static const int _prefetchThreshold = 3;
 
-  // Debounce before running a history search, same as the clients list. The
-  // loaded-page filter covers the gap in the meantime so it still feels instant.
+  // Debounced server search mirrors the clients list.
   late final Debouncer _searchDebounce;
 
   int? _year;
@@ -94,20 +73,13 @@ class _AppointmentHistoryViewState
 
   String _committedQuery = '';
 
-  // Filter options and the search index are memoized — they only get recomputed when
-  // a new page arrives, not on every filter setState.
+  // Recompute filter/search indexes only when pages change.
   List<List<AppointmentRecord>>? _filterOptionsPages;
   List<int> _cachedYears = const [];
   List<HistoryEmployeeOption> _cachedEmployees = const [];
   List<_HistorySearchEntry> _searchIndex = const [];
 
-  /// `tallyOf` is another O(N) pass over the same rows, re-run on every
-  /// rebuild — a page load, a filter `setState`, an `employeeColorMapProvider`
-  /// or `currentDayProvider` emission. Memoized on the rows list identity,
-  /// like the two above it.
-  ///
-  /// That identity is only stable because every list reaching [_countedList]
-  /// comes out of a [_RowCache] — see the note there.
+  /// Memoized tally for the current row list.
   List<AppointmentRecord>? _talliedRows;
   HistoryTally _tally = (total: 0, cancelled: 0);
 
@@ -119,9 +91,7 @@ class _AppointmentHistoryViewState
     return _tally;
   }
 
-  /// The three row lists this screen can render, each cached against the
-  /// inputs that produce it: the loaded pages, the chip/text filter over them,
-  /// and the chip filter over a settled server search.
+  /// Cached row lists for loaded, filtered, and searched states.
   final _RowCache _loadedRows = _RowCache();
   final _RowCache _filteredRows = _RowCache();
   final _RowCache _searchRows = _RowCache();
@@ -145,16 +115,14 @@ class _AppointmentHistoryViewState
       logger: ref.read(loggerProvider),
       tag: 'HIST-SEARCH debounced search failed',
     );
-    // Load first page upfront so search/filter has data when view opens directly into filtered state.
+    // Load the first page after the widget mounts.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _pagingController.fetchNextPage();
     });
   }
 
   Future<List<AppointmentRecord>> _fetchPage(int pageKey) async {
-    // Before the await, matching the twin in `clients_list_view.dart`: a page
-    // can settle after the screen is gone, and `ref.read` on an unmounted
-    // consumer throws under Riverpod 3.
+    // Read providers before await; the page can settle after dispose.
     final logger = ref.read(loggerProvider);
     try {
       final items = _pagingController.value.items;
@@ -172,8 +140,7 @@ class _AppointmentHistoryViewState
     }
   }
 
-  /// Post-frame, so the filter bar and first row the tour targets have
-  /// actually been laid out by the time the host asks showcase about them.
+  /// Notifies after tour targets have laid out.
   void _notifyFirstPageSettled() {
     final notify = widget.onFirstPageSettled;
     if (notify == null) return;
@@ -189,8 +156,7 @@ class _AppointmentHistoryViewState
     _scheduleSearch();
   }
 
-  // Restart the debounce on every query change. Clearing the query, though, commits
-  // instantly instead of waiting.
+  // Clearing the query commits immediately.
   void _scheduleSearch() {
     final next = widget.searchQuery.trim();
     if (next.isEmpty) {
@@ -218,8 +184,7 @@ class _AppointmentHistoryViewState
     _status = null;
   });
 
-  // Filter options are derived from the loaded pages so a selection never
-  // makes its own chip's other options disappear.
+  // Options come from loaded pages so selected chips stay visible.
   List<int> _yearsOf(List<AppointmentRecord> appointments) {
     final years = <int>{for (final a in appointments) a.startTime.year};
     return years.toList()..sort((a, b) => b.compareTo(a));
@@ -253,8 +218,7 @@ class _AppointmentHistoryViewState
   bool get _hasActiveFilter =>
       widget.searchQuery.trim().isNotEmpty || _hasChipFilter;
 
-  // Applies only the chip filters, no text search. Used on top of either the
-  // loaded pages or the server-backed search results.
+  // Applies chip filters without text search.
   List<AppointmentRecord> _applyChips(List<AppointmentRecord> appointments) =>
       appointments.where(_matchesChips).toList();
 
@@ -267,13 +231,10 @@ class _AppointmentHistoryViewState
     return true;
   }
 
-  // Chip + text filtering over the loaded pages, via the memoized
-  // [_searchIndex] so each keystroke only normalizes the (short) query — the
-  // per-row normalization already happened when the page arrived.
+  // Local text search uses the memoized row index.
   List<AppointmentRecord> _filterLoaded() {
     final hasQuery = widget.searchQuery.trim().isNotEmpty;
-    // Accent-folded text + digits-only phone matching — same rule as the
-    // clients list, so a client's phone number finds their appointments.
+    // Match folded text and digits-only phone numbers.
     final qText = ClientSearchPolicy.normalize(widget.searchQuery);
     final qDigits = ClientSearchPolicy.digitsOnly(widget.searchQuery);
     return [
@@ -294,10 +255,7 @@ class _AppointmentHistoryViewState
     return matchesClient || matchesEmployee || matchesPhone;
   }
 
-  /// The filter row renders as soon as any history has loaded — the two status
-  /// chips are always offerable, since `done` and `cancelled` are what History
-  /// holds by definition. The year and crew chips still hide themselves when
-  /// there is nothing to choose between.
+  /// Filter row for the loaded history.
   Widget _filterBar(List<int> years, List<HistoryEmployeeOption> employees) {
     final bar = Padding(
       padding: const EdgeInsets.only(
@@ -321,9 +279,7 @@ class _AppointmentHistoryViewState
   @override
   Widget build(BuildContext context) {
     final colorMap = ref.watch(employeeColorMapProvider);
-    // The rail speaks the year on an older search hit, so "this year" has to
-    // survive an app left open across New Year — same reason the calendar's
-    // today circle reads this provider rather than DateTime.now().
+    // Watch currentYear so New Year updates the rail.
     final currentYear = ref.watch(currentDayProvider).year;
 
     return ColoredBox(
@@ -331,17 +287,12 @@ class _AppointmentHistoryViewState
       child: PagingListener<int, AppointmentRecord>(
         controller: _pagingController,
         builder: (context, state, fetchNextPage) {
-          // `PagingState.items` re-flattens every loaded page on each access,
-          // so it hands back a NEW list every rebuild. Resolving it through
-          // the cache is what makes the downstream `identical` memos — the
-          // tally here and the month sections in `HistorySliverList` — able to
-          // hit at all; against the raw getter they compared two fresh lists
-          // and re-ran their O(N) pass on every emission.
+          // Cache flattened pages so identity-based memos can hit.
           final loaded = _loadedRows.of(
             (state.pages,),
             () => state.items ?? const <AppointmentRecord>[],
           );
-          // The filter options and search index key on the same page identity.
+          // Filter options and search index share page identity.
           if (!identical(state.pages, _filterOptionsPages)) {
             _filterOptionsPages = state.pages;
             _cachedYears = _yearsOf(loaded);
@@ -384,10 +335,7 @@ class _AppointmentHistoryViewState
 
   Widget _buildPaged(
     PagingState<int, AppointmentRecord> state,
-    // Hoisted out of the itemBuilder on purpose: PagingState.items is a
-    // computed getter that re-flattens every loaded page on each access, so
-    // reading it per row copied the whole list once per built row — O(N) per
-    // row, growing with scroll depth. Same value, resolved once.
+    // Hoist flattened items out of itemBuilder.
     List<AppointmentRecord> loaded,
     void Function() fetchNextPage,
     Map<String, Color> colorMap,
@@ -397,12 +345,7 @@ class _AppointmentHistoryViewState
       if (state.status == PagingStatus.loadingFirstPage) {
         _requestFirstPage(state, fetchNextPage);
       }
-      // Deliberately NOT wrapped in the RefreshIndicator: `AppEmptyState`
-      // carries its own `SingleChildScrollView`, so putting one of ours around
-      // it would leave two controllerless primary scrollables under this
-      // route's `PrimaryScrollScope` — which is what makes the app-wide
-      // Scrollbar throw. The Retry button covers the failed case; the empty
-      // one has nothing to re-fetch.
+      // AppEmptyState owns its own scrollable.
       return switch (state.status) {
         PagingStatus.loadingFirstPage => _skeleton(),
         PagingStatus.firstPageError => _errorState(
@@ -431,13 +374,7 @@ class _AppointmentHistoryViewState
     );
   }
 
-  /// Requests the first page whenever the state is back at square one.
-  ///
-  /// `PagingController.refresh()` only RESETS the state — it does not fetch —
-  /// so both pull-to-refresh and the first-page Retry rely on someone noticing
-  /// the reset and asking again. `PagedListView` used to be that someone; this
-  /// list builds its own slivers, so it has to be. Without it a refresh leaves
-  /// the skeleton shimmering forever with no request in flight.
+  /// Requests the first page after a paging reset.
   void _requestFirstPage(
     PagingState<int, AppointmentRecord> state,
     void Function() fetchNextPage,
@@ -448,14 +385,7 @@ class _AppointmentHistoryViewState
     });
   }
 
-  /// Requests the next page once a build reaches within [_prefetchThreshold]
-  /// rows of the end.
-  ///
-  /// Always post-frame: `PagingController.fetchNextPage` assigns its own value
-  /// synchronously, so calling it from an item builder would mutate a listenable
-  /// mid-build. It is a mutex besides, so a repeat while one is in flight is a
-  /// no-op — but a failed page is left alone, or the list would spin on a retry
-  /// nobody asked for.
+  /// Requests the next page near the end of the loaded rows.
   void _maybeFetchNext(
     PagingState<int, AppointmentRecord> state,
     void Function() fetchNextPage,
@@ -469,9 +399,7 @@ class _AppointmentHistoryViewState
     });
   }
 
-  /// The tail of the paged list: a spinner while the next page is in flight, a
-  /// tap-to-retry row when one failed, and nothing at all once the list is
-  /// complete.
+  /// Spinner, retry row, or nothing for the paged-list tail.
   Widget _pagingFooter(
     PagingState<int, AppointmentRecord> state,
     void Function() fetchNextPage,
@@ -490,9 +418,7 @@ class _AppointmentHistoryViewState
     if (!state.isLoading) return const SizedBox.shrink();
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: AppSpacing.sp16),
-      // Through the one adaptive seam, not `.adaptive()`: that branches on
-      // `defaultTargetPlatform`, which a test forcing the look via
-      // `ThemeData(platform:)` cannot reach. Sized to keep the old footprint.
+      // Use the app's adaptive seam for testable platform styling.
       child: Center(child: AdaptiveProgressIndicator(size: 36, strokeWidth: 4)),
     );
   }
@@ -510,23 +436,17 @@ class _AppointmentHistoryViewState
       );
     }
 
-    // Both filter passes allocate, so they are cached on the inputs that
-    // decide their contents — the search index (which tracks the loaded
-    // pages), the query and the three chips. Without this the list handed
-    // down is fresh every rebuild and the tally/month-section memos never hit.
+    // Cache allocated filter results on their inputs.
     final filterKey = (_searchIndex, query, _year, _employeeId, _status);
     List<AppointmentRecord> filteredLoaded() =>
         _filteredRows.of(filterKey, _filterLoaded);
 
-    // No text query — chip filters alone operate over the loaded pages, which
-    // stay a contiguous run of days and so keep their month bars.
+    // Chip-only filtering keeps loaded pages contiguous.
     if (query.isEmpty) {
       return list(filteredLoaded(), inSearch: false);
     }
 
-    // The local page filter fills the gap until the debounced server search settles.
-    // It's computed lazily, so the settled `data` branch — which renders the server
-    // results — doesn't end up re-filtering on every rebuild.
+    // Local filtering fills the debounce gap.
     Widget localOr(Widget Function() onEmpty) {
       final local = filteredLoaded();
       return local.isEmpty ? onEmpty() : list(local, inSearch: true);
@@ -540,8 +460,7 @@ class _AppointmentHistoryViewState
         .watch(historySearchProvider(query))
         .when(
           data: (results) => list(
-            // The provider hands back the same instance until it refetches,
-            // so keying on it plus the chips holds across rebuilds.
+            // Provider identity holds until it refetches.
             _searchRows.of(
               (results, _year, _employeeId, _status),
               () => _applyChips(results),
@@ -549,14 +468,12 @@ class _AppointmentHistoryViewState
             inSearch: true,
           ),
           loading: () => localOr(_skeleton),
-          // A failed search shouldn't read as "no history" — surface an error
-          // when the local fallback is also empty, not the empty state.
+          // Show search errors only when local fallback is empty.
           error: (e, _) => localOr(() => _searchError(e, query)),
         );
   }
 
-  // Retry re-runs the failed search by invalidating its provider instance;
-  // this rebuild is already watching it, so it refetches immediately.
+  // Retry invalidates the watched search provider.
   Widget _searchError(Object error, String query) => _errorState(
     error,
     onRetry: () => ref.invalidate(historySearchProvider(query)),
@@ -575,12 +492,7 @@ class _AppointmentHistoryViewState
         onAction: onRetry,
       );
 
-  /// The count line and the rows it describes.
-  ///
-  /// The count is the ONE count on this screen. Per-month counts are
-  /// deliberately absent: History is paginated, so an early month could only
-  /// ever report what had loaded, which is a figure that climbs while you read
-  /// it.
+  /// Count line and the rows it describes.
   Widget _countedList({
     required List<AppointmentRecord> rows,
     required Map<String, Color> colorMap,
@@ -631,21 +543,7 @@ class _AppointmentHistoryViewState
   }
 }
 
-/// Holds one derived row list against the inputs that produced it.
-///
-/// Every list this screen hands to a consumer must be the SAME INSTANCE while
-/// its inputs are unchanged, because the two passes over it downstream —
-/// `tallyOf` here and `monthSectionsOf` in `HistorySliverList` — memoize on
-/// `identical`. Each source allocates a fresh list on every read
-/// (`PagingState.items` re-flattens the pages, both filter passes build a new
-/// list), so without this the memos compared two fresh lists, never hit, and
-/// re-ran their O(N) pass on every rebuild: per keystroke while searching and
-/// on every `employeeColorMapProvider` / `currentDayProvider` emission, over a
-/// history that grows unbounded with scroll depth.
-///
-/// The key is compared with `==`, so pass a record: its `List` members fall back
-/// to identity (which is what tracks a new page or a new search result), while
-/// the query and chip values compare by value.
+/// Caches one derived row list against its input key.
 class _RowCache {
   Object? _key;
   List<AppointmentRecord> _rows = const [];
@@ -662,12 +560,7 @@ class _RowCache {
   }
 }
 
-/// `18 JOBS · 2 CANCELLED` — the one count on the screen.
-///
-/// The cancelled clause is a SUBSET of the total, not an addition, the same
-/// shape as the calendar agenda's `4 JOBS · 1 DONE`. Search says `RESULTS`
-/// instead of `JOBS` and keeps the clause: dropping it on one state and not the
-/// other would read as a different metric.
+/// Count label for jobs/results and cancelled subset.
 class _HistoryCountLine extends StatelessWidget {
   const _HistoryCountLine({required this.tally, required this.inSearch});
 

@@ -1,4 +1,4 @@
-/// Repeat frequency for an appointment series. Occurrences are pre-booked up to [horizonMonths] ahead.
+/// Repeat frequency for an appointment series.
 enum RepeatInterval {
   none(0),
   fourMonths(4),
@@ -13,10 +13,10 @@ enum RepeatInterval {
   /// Pre-booking horizon (five years).
   static const int horizonMonths = 60;
 
-  /// Upper bound on how many occurrences we generate, so a series stays safely under Firestore's WriteBatch 500-op limit.
+  /// WriteBatch-safe upper bound on generated occurrences.
   static const int maxOccurrences = 120;
 
-  /// Firestore string value. [fromRaw] is the only string→interval mapper.
+  /// Firestore string value.
   String get raw => switch (this) {
     RepeatInterval.none => 'none',
     RepeatInterval.fourMonths => 'four_months',
@@ -42,12 +42,12 @@ enum RepeatInterval {
     assert(
       starts.length <= maxOccurrences,
       'repeat horizon produces ${starts.length} occurrences '
-      '(> $maxOccurrences) — atomic series WriteBatch could exceed 500 ops',
+      '(> $maxOccurrences) - atomic series WriteBatch could exceed 500 ops',
     );
     return starts;
   }
 
-  /// Adds months while keeping the same time-of-day. If the resulting day doesn't exist in that month, it clamps to the last valid day.
+  /// Adds months and clamps invalid month days.
   static DateTime _addMonthsClamped(DateTime date, int months) {
     final zeroBased = date.month - 1 + months;
     final year = date.year + zeroBased ~/ 12;
@@ -58,13 +58,13 @@ enum RepeatInterval {
   }
 }
 
-/// Computes the end time for a repeated occurrence, keeping the original day-span and time-of-day. Uses UTC dates so DST doesn't throw off the math.
+/// Computes the end time for a repeated occurrence.
 DateTime occurrenceEnd({
   required DateTime originalStart,
   required DateTime originalEnd,
   required DateTime copyStart,
 }) {
-  // Use UTC midnights here so DST shifts don't throw off the day-span calculation.
+  // UTC midnights avoid DST span drift.
   final daySpan =
       DateTime.utc(
             originalEnd.year,

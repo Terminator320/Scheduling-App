@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 
-/// Current local day, re-emitted at midnight so schedule mirrors rebuild their today/tomorrow buckets.
+/// Current local day, re-emitted just after midnight.
 final currentDayProvider = Provider<DateTime>((ref) {
   final now = DateTime.now();
   final today = now.dateOnly;

@@ -14,72 +14,7 @@ final appointmentImageLoaderProvider = Provider<AppointmentImageLoader>(
   (ref) => AppointmentImageLoader(logger: ref.watch(loggerProvider)),
 );
 
-/// Fetches an appointment photo's BYTES from Storage, for rendering in memory.
-///
-/// **No renderable URL is ever produced ON THE RENDER PATH, and that is the
-/// point — but be precise about how far it goes.**
-/// `getDownloadURL()` mints a `?alt=media&token=…` URL whose
-/// `firebaseStorageDownloadTokens` value is stable per object and never
-/// expires; fetching it serves the bytes over plain HTTPS with **no auth and
-/// no rules evaluation**. Its predecessor resolved that URL at render time,
-/// which put `storage.rules` in front of the MINT — but handed back the same
-/// permanent string every time, so a URL rendered while an employee was active
-/// sat in the on-disk image cache and kept working for anyone holding it long
-/// after `deactivateEmployee` revoked their credential. `getData()` is an
-/// authenticated SDK call: `storage.rules` is evaluated on **every fetch**,
-/// and a refused reader gets nothing.
-///
-/// Nothing mints one any more. The CONTRACT step deleted `downloadUrlFor`,
-/// `uploadImage` persists a `storagePath` alone, and no write path in the app
-/// produces a token URL — so this class is no longer working against a supply
-/// of them.
-///
-/// **And as of 2026-08-22 this class produces and consumes nothing shareable
-/// at all.** This paragraph used to say the opposite, because LEGACY rows could still
-/// carry a `url` with no `storagePath` — a rules-free, non-expiring,
-/// transferable download link that an assigned employee could read straight
-/// out of the image document, with the rotation that once invalidated it on
-/// deactivation deleted alongside the minting machinery. The open question was
-/// only how many survived in prod, and the answer came back **zero**
-/// (`functions/scripts/count-legacy-image-urls.js`: 14 image documents
-/// scanned, 0 with a url and no storagePath). So the three things that kept
-/// the field alive went with it: `firestore.rules` no longer accepts `url`,
-/// `AppointmentImagesStore` no longer writes it, and the `refFromURL` fallback
-/// below is gone. An entry reaching here without a `storagePath` now has no
-/// handle at all and loads as empty bytes rather than through a permanent
-/// link.
-///
-/// **What that zero does NOT cover, and must not be read as covering:** the
-/// parent `pictures[]` arrays, which are outside this class entirely. A
-/// pre-CONTRACT upload wrote a `url` there ALONGSIDE the `storagePath`, so
-/// those entries are not url-only and the count above never looked at them —
-/// each is still a permanent rules-free link readable off the appointment
-/// document, until `clear-appointment-picture-arrays.js` has run.
-/// `countArrayUrls` in that same script is the count that closes it.
-///
-/// If a url-only row is ever reintroduced, re-home its bytes under a real
-/// `storagePath` — do not re-add the field to make the write pass.
-///
-/// **Photos render offline again, and that was never in tension with the
-/// above.** `cached_network_image` cached BYTES too; what made it unacceptable
-/// was the handle it cached them against — a permanent, rules-free token URL.
-/// [AppointmentImageDiskCache] keys on `storagePath` instead and stores nothing
-/// shareable, so the on-disk cache is back without the leak. Two caches, two
-/// jobs: the session map below keeps the fetch from being paid per widget
-/// State (every sheet open, and again on every View→Edit toggle), and the disk
-/// cache keeps it from being paid per SESSION — which is what a tech in a
-/// basement or an underground garage actually needs.
-///
-/// Be precise about the residual: a cache HIT of either kind is not
-/// rules-evaluated, so bytes fetched while entitled stay renderable on that
-/// device until they are evicted or [clear] runs. That is the accepted cost,
-/// and it is why [clear] is wired into `deregisterThisDevice`.
-///
-/// A doc written before `storagePath` was stored has only its `url`, so that
-/// URL is unavoidably the handle — but it is resolved back to a `Reference`
-/// via `refFromURL` and fetched through the SDK like any other, so even the
-/// legacy path is rules-evaluated and never hands the token URL to the network
-/// stack. That fallback is why this is not a migration.
+/// Fetches appointment photo bytes from Storage without producing token URLs.
 class AppointmentImageLoader {
   AppointmentImageLoader({
     FirebaseStorage? storage,
@@ -89,49 +24,30 @@ class AppointmentImageLoader {
        _logger = logger ?? AppLogger(),
        _disk = diskCache ?? AppointmentImageDiskCache(logger: logger);
 
-  /// Session-scoped, keyed by `storagePath`. The provider is a singleton, so
-  /// this survives a sheet close — the fetch is otherwise paid per widget
-  /// State, i.e. on every sheet open AND again on every View→Edit toggle.
-  ///
-  /// An EMPTY result is **never cached**: a rules refusal must not outlive a
-  /// change of entitlement, and a transport failure must not outlive the
-  /// network coming back.
+  /// Session cache keyed by `storagePath`; empty refusals are never cached.
   final Map<String, Future<Uint8List>> _cache = {};
 
-  /// Sizes of the entries in [_cache] that have settled, in insertion order,
-  /// so the cache can be trimmed oldest-first when it outgrows its budget.
+  /// Settled entry sizes in insertion order for oldest-first trimming.
   final Map<String, int> _sizes = {};
   int _cachedBytes = 0;
 
-  /// Fetches at most this many photos at once, so opening a job with a long
-  /// strip doesn't fire the whole batch at Storage in one burst.
+  /// Caps simultaneous Storage fetches for long photo strips.
   static const int _maxConcurrentLoads = 4;
 
-  /// Holding bytes for the session is only safe if it is bounded — a session
-  /// that opens fifty jobs would otherwise retain every photo of every one of
-  /// them.
+  /// Bounds the in-memory photo cache for a session.
   static const int _maxCachedBytes = 24 * 1024 * 1024;
 
-  /// The upload cap IS the ceiling: nothing this app wrote can be larger, and
-  /// `getData` needs an explicit bound.
+  /// Matches the upload cap required by `getData`.
   static const int _maxImageBytes = ImageStorageService.maxUploadBytes;
 
-  /// Resolved LAZILY, on the first fetch.
-  ///
-  /// `FirebaseStorage.instance` throws without an initialized app, and this
-  /// provider is now touched by `deregisterThisDevice` — which every widget
-  /// test covering sign-out builds — purely to [clear] the cache. Constructing
-  /// the singleton there would make forgetting the session require Firebase.
+  /// Lazily resolved so clearing the cache does not require Firebase.
   FirebaseStorage get _storage => _injectedStorage ?? FirebaseStorage.instance;
 
   final FirebaseStorage? _injectedStorage;
   final AppLogger _logger;
   final AppointmentImageDiskCache _disk;
 
-  /// The photo's bytes, or an EMPTY list when there are none to render — a
-  /// rules refusal, a transport failure, or a legacy entry with no usable
-  /// handle. Callers must treat empty as a refusal (error tile, untappable),
-  /// never as a pending load.
+  /// Returns photo bytes, or empty bytes when there is no usable handle.
   Future<Uint8List> load(AppointmentImage image) {
     final key = _cacheKeyFor(image);
     // Nothing to fetch and nothing to key on.
@@ -146,55 +62,27 @@ class AppointmentImageLoader {
     return pending;
   }
 
-  /// Disk first, then the network — and the network result is written back.
-  ///
-  /// The disk write is deliberately NOT awaited: it is a cache fill, so making
-  /// the photo wait on it would put a file write (and the eviction sweep behind
-  /// it) in front of every first render. [AppointmentImageDiskCache] serializes
-  /// its own mutations and drops a write whose session has already ended, so
-  /// nothing here needs to sequence it.
+  /// Reads disk first, then Storage, and writes successful network bytes back.
   Future<Uint8List> _resolve(AppointmentImage image, String key) async {
     final onDisk = await _disk.read(key);
     if (onDisk != null) return onDisk;
 
-    // Read BEFORE the fetch: a sign-out during the round trip bumps the
-    // generation, and this is the value that lets the write-back notice.
+    // Capture the cache generation before the network round trip.
     final generation = _disk.generation;
     final bytes = await _fetch(() => _refFor(image), key);
-    // An EMPTY result is a refusal or a transport failure. Caching either one
-    // would outlive the thing that caused it — a change of entitlement, or the
-    // network coming back — so neither store keeps it.
+    // Empty results are refusals or transport failures, so caches skip them.
     if (bytes.isNotEmpty) {
       unawaited(_disk.write(key, bytes, generation: generation));
     }
     return bytes;
   }
 
-  /// The cache key for [image], or `''` when it carries no usable handle.
-  ///
-  /// `storagePath` is the only handle a photo has, so it is the only key.
-  ///
-  /// There used to be a `url:`-prefixed second key space for legacy url-only
-  /// entries. Both it and the `refFromURL` fetch below went on 2026-08-22,
-  /// when a prod count found zero such documents and `firestore.rules` stopped
-  /// accepting the field — an entry that reaches here without a
-  /// `storagePath` now has no handle at all, rather than silently rendering
-  /// from a permanent rules-free link.
-  ///
-  /// [load] short-circuits such an entry on the empty key and returns empty
-  /// bytes WITHOUT a warn, deliberately: this is a render path called again on
-  /// every rebuild of the photo, so a log here is the rebuild spam
-  /// `.claude/rules/error-handling.md` carves out. It costs nothing in
-  /// practice because the shape is unreachable from a current write — the
-  /// rules reject `url`, `AppointmentImagesStore.append` skips an entry with
-  /// no `storagePath`, and the prod count of stored ones was zero.
+  /// Returns the `storagePath` cache key, or `''` for an unusable photo.
   static String _cacheKeyFor(AppointmentImage image) => image.storagePath;
 
   Reference _refFor(AppointmentImage image) => _storage.ref(image.storagePath);
 
-  /// Fetches in list order so the returned bytes line up index-for-index with
-  /// [images] — the viewer opens at a tapped index, so a reordered result
-  /// would open the wrong photo.
+  /// Loads photos in list order so viewer indexes stay stable.
   Future<List<Uint8List>> loadAll(List<AppointmentImage> images) async {
     final loaded = <Uint8List>[];
     for (var i = 0; i < images.length; i += _maxConcurrentLoads) {
@@ -209,21 +97,6 @@ class AppointmentImageLoader {
   }
 
   /// Forgets every cached photo, in memory and on disk.
-  ///
-  /// Called from the account-exit teardown, which is the single owner of
-  /// "forget this session". The provider is a process-lifetime singleton, so
-  /// without this up to 24 MB of one user's photo bytes stays resident in the
-  /// heap across sign-out into the next user's session on a shared device.
-  /// That is not a rules bypass — serving them still requires the next user
-  /// to be entitled to the same `storagePath` — but it is memory-forensics
-  /// exposure, and it was the one thing `AccountExitListeners` did not
-  /// tear down.
-  ///
-  /// The DISK half raises the stakes: those bytes outlive the process
-  /// entirely, so a shared handset would otherwise hand the next person every
-  /// job photo the last one opened. The memory clear happens first and
-  /// synchronously — it cannot fail, and the awaited disk delete must not
-  /// delay it.
   Future<void> clear() async {
     _cache.clear();
     _sizes.clear();
@@ -231,18 +104,13 @@ class AppointmentImageLoader {
     await _disk.clear();
   }
 
-  /// [refOf] is a thunk because `refFromURL` parses, and therefore throws, on
-  /// a URL Storage doesn't own — which has to be caught here like any other
-  /// failure rather than escaping to the caller as a broken future.
+  /// [refOf] is a thunk so reference construction and the network fetch fail
+  /// through the same empty-bytes path.
   Future<Uint8List> _fetch(Reference Function() refOf, String label) async {
     try {
       return await refOf().getData(_maxImageBytes) ?? Uint8List(0);
     } catch (e, st) {
-      // A RULES REJECTION MUST NOT FALL BACK. Its predecessor's `catch`
-      // returned the stored `url` — a permanent, rules-free token link — in
-      // exactly the case it existed to refuse. Nothing here can fall back to a
-      // URL because nothing here produces one; the branch survives so the log
-      // still says which of the two happened, and neither result is cached.
+      // Refusals and transport failures both render as empty, never a URL.
       _logger.warn(
         _isRefusal(e)
             ? 'IMG-LOAD refused by storage.rules: $label'
@@ -267,10 +135,7 @@ class AppointmentImageLoader {
     }
     _sizes[path] = bytes.length;
     _cachedBytes += bytes.length;
-    // Checked BEFORE the key copy, which is the overwhelmingly common path:
-    // the budget only binds once a session has opened a lot of photos, and
-    // `_sizes.keys.toList()` above the test copied the whole key list on every
-    // single photo load to usually evict nothing.
+    // Avoid copying keys until the cache is actually over budget.
     if (_cachedBytes <= _maxCachedBytes) return;
     for (final oldest in _sizes.keys.toList()) {
       if (_cachedBytes <= _maxCachedBytes) break;

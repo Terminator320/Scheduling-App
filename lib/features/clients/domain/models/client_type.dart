@@ -6,7 +6,7 @@ enum ClientType {
   unset(''),
   residential('residential'),
   commercial('commercial'),
-  propertyManagement('property_mgmt');
+  building('building');
 
   const ClientType(this.raw);
 
@@ -26,7 +26,7 @@ enum ClientType {
   static const List<ClientType> pickable = [
     ClientType.residential,
     ClientType.commercial,
-    ClientType.propertyManagement,
+    ClientType.building,
   ];
 }
 
@@ -36,5 +36,5 @@ String clientTypeLabel(AppLocalizations l10n, ClientType type) =>
       ClientType.unset => '',
       ClientType.residential => l10n.clients_typeResidential,
       ClientType.commercial => l10n.clients_typeCommercial,
-      ClientType.propertyManagement => l10n.clients_typePropertyManagement,
+      ClientType.building => l10n.clients_typeBuilding,
     };

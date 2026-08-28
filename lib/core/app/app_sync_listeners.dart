@@ -15,7 +15,7 @@ import 'package:scheduling/features/presence/application/presence_sync_controlle
 import 'package:scheduling/features/siri/application/schedule_snapshot_provider.dart';
 import 'package:scheduling/features/siri/application/schedule_snapshot_service.dart';
 
-/// Cross-cutting sync wiring — device registration, mirrors, photo drain — pulled out here for testability. Account-lifecycle listeners stay in main.dart, since registration order matters there.
+/// Cross-cutting sync wiring for app-wide listeners.
 ///
 /// [registerAll] must be called from `build`, like any `ref.listen`.
 class AppSyncListeners {
@@ -46,9 +46,7 @@ class AppSyncListeners {
   }
 
   void _pushRegistration() {
-    // Registers this device's FCM token once an active employee's or admin's
-    // account doc resolves. Admins also get time-based nudges for jobs
-    // they're assigned to. This is a no-op for signed-out users.
+    // Sync this device's FCM registration after account changes.
     ref.listen<AsyncValue<Map<String, dynamic>>>(currentUserDocProvider, (
       prev,
       next,

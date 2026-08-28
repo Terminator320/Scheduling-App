@@ -490,6 +490,85 @@ void main() {
     });
   });
 
+  group('building filtering', () {
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> paton() => [
+      doc('c1', {
+        'name': 'Zeta',
+        'address': '914-4450 Prom. Paton',
+        'city': 'Laval',
+        'province': 'QC',
+        'postalCode': 'H7W 5J7',
+        'country': 'Canada',
+      }),
+      doc('c2', {
+        'name': 'Alpha',
+        // Legacy shape — the locality is in `address` AND in its own fields,
+        // which is exactly what makes it reduce to the same building.
+        'address': '1207-4450 Prom. Paton, Laval, QC H7W 5J7, Canada',
+        'city': 'Laval',
+        'province': 'QC',
+        'postalCode': 'H7W 5J7',
+        'country': 'Canada',
+      }),
+      doc('c3', {
+        'name': 'Elsewhere',
+        'address': '7 Rue Seule',
+        'city': 'Laval',
+        'province': 'QC',
+      }),
+    ];
+
+    test('fetchBuildings groups shared addresses only', () async {
+      // Built before `when` — `doc()` stubs internally, and mocktail refuses a
+      // `when` inside a stub response.
+      final docs = paton();
+      when(() => snapshot.docs).thenReturn(docs);
+
+      final buildings = await repo().fetchBuildings();
+
+      expect(buildings, hasLength(1));
+      expect(buildings.single.street, '4450 Prom. Paton');
+      expect(buildings.single.clientCount, 2);
+    });
+
+    test('fetchClientsByBuilding returns both shapes, name-sorted', () async {
+      final docs = paton();
+      when(() => snapshot.docs).thenReturn(docs);
+      final key = (await repo().fetchBuildings()).single.key;
+
+      final clients = await repo().fetchClientsByBuilding(key);
+
+      expect(clients.map((c) => c.name), ['Alpha', 'Zeta']);
+    });
+
+    test('an archived client is not counted or listed', () async {
+      // Same rule the type filter keeps: the Archived chip is where they live.
+      final docs = [
+        doc('c1', {
+          'name': 'Live',
+          'address': '914-4450 Prom. Paton',
+          'city': 'Laval',
+        }),
+        doc('c2', {
+          'name': 'Gone',
+          'address': '1207-4450 Prom. Paton',
+          'city': 'Laval',
+          'archived': true,
+        }),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      // One live client at that address is not a building.
+      expect(await repo().fetchBuildings(), isEmpty);
+    });
+
+    test('an empty key selects nothing', () async {
+      final docs = paton();
+      when(() => snapshot.docs).thenReturn(docs);
+      expect(await repo().fetchClientsByBuilding(''), isEmpty);
+    });
+  });
+
   group('type filtering', () {
     test('fetchClientsByType returns only that type, name-sorted', () async {
       final docs = [
@@ -539,12 +618,12 @@ void main() {
 
     test('property mgmt maps from its stored raw value', () async {
       final docs = [
-        doc('c1', {'name': 'Gestion', 'type': 'property_mgmt'}),
+        doc('c1', {'name': 'Gestion', 'type': 'building'}),
       ];
       when(() => snapshot.docs).thenReturn(docs);
 
       final typed = await repo().fetchClientsByType(
-        ClientType.propertyManagement,
+        ClientType.building,
       );
 
       expect(typed.single.name, 'Gestion');

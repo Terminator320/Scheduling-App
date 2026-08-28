@@ -23,8 +23,21 @@ firebase-functions/admin),
 `isReauthStale` and **`assertFreshReauth`** — the last being the guard
 `.claude/rules/security.md` holds up as *the shape to copy* for failing closed
 on missing input, and all three were missing from this list),
-`bridge.js` (`syncUsersByUid`), `client_propagation.js`
-(`propagateClientEdits`), `client_job_count.js` (`recountClientJobs`, backed by
+`bridge.js` (`syncUsersByUid`), `client_address_utils.js` (pure, no trigger —
+`streetFromAddress` / `composeFullAddress`, the JS half of a pair hand-mirrored
+as `AddressParser.streetOnly` / `composeFull`. `clients/{id}.address` is the
+STREET LINE and the four locality fields are their own, so anything showing a
+whole address composes it back. It lived in `wave/mappers.js`, where the rule
+was first needed, and moved out when `client_propagation.js` needed the same
+answer — that module must not import from `wave/`, and a second copy of a rule
+this sharp is how two answers drift apart), `client_propagation.js`
+(`propagateClientEdits` — **compares the COMPOSED address, never the stored
+field**: an appointment holds one address string and no locality fields of its
+own, so fanning a raw street line onto it strips the city off a live job with
+nothing left to rebuild from. It is also what keeps normalizing the client
+field a no-op, and it fixed a matching bug that predated the split — the app
+books the composed address while the doc stores the canonical `4-1234 …`, so
+an apt-bearing client silently never took an address correction at all), `client_job_count.js` (`recountClientJobs`, backed by
 the pure `clientsToRecount`), `clients.js` (`deleteClient` — admin-only, the
 ONLY client-delete path now that `allow delete` on `/clients` is withdrawn;
 refuses `client-has-history` on a **live `count()` aggregate**, deliberately not

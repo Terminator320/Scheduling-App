@@ -18,12 +18,7 @@ class PendingUpload {
   final List<String> paths;
   final int enqueuedAtMs;
 
-  /// Images already uploaded to Storage on a previous pass whose
-  /// subcollection link hasn't landed yet. They're re-attempted append-only on
-  /// the next drain — never re-uploaded, since their local files are already
-  /// gone. The re-link is idempotent because the document id is DERIVED
-  /// (`appointmentImageDocId`, from `storagePath`), so a second write of a row
-  /// the earlier pass had committed lands on the same document.
+  /// Already-uploaded images waiting for an append-only retry.
   final List<AppointmentImage> uploaded;
 
   String get id => '${appointmentId}_$enqueuedAtMs';
@@ -58,25 +53,7 @@ class PendingUpload {
     );
   }
 
-  // Reuse toMap() for the shared fields; only override uploadedAt, which
-  // toMap() leaves as a DateTime that jsonEncode can't handle. ISO-8601 round-
-  // trips through fromMap, so an uploaded image survives SharedPreferences.
-  //
-  // `url` is DROPPED whenever there is a `storagePath` — the same rule the
-  // subcollection document follows, and for the same reason. A `getDownloadURL`
-  // result is a permanent `?alt=media&token=…` link readable with **no auth and
-  // no rules evaluation**, which is exactly what `AppointmentImageLoader`
-  // exists to stop handing out; this queue is a plaintext JSON blob in
-  // SharedPreferences (an unencrypted plist on iOS, included in device and
-  // iCloud backups), so persisting one there put a stronger credential in a
-  // weaker store than the Keychain-backed `SecureStorageService` next to it.
-  // Nothing re-mints it: the re-link writes the row at
-  // `appointmentImageDocId(storagePath)`, so the identity that makes the
-  // append idempotent is derived rather than carried, and a dropped `url`
-  // costs nothing.
-  //
-  // A LEGACY image with no `storagePath` keeps its `url`: there it is the only
-  // identity the entry has, and dropping it would strand the bytes.
+  // JSON-safe image shape for SharedPreferences.
   static Map<String, dynamic> _imageToJson(AppointmentImage image) => {
     ...image.toMap(),
     if (image.storagePath.isNotEmpty) 'url': '',
@@ -84,9 +61,7 @@ class PendingUpload {
   };
 }
 
-/// A durable queue of photo batches that failed to upload, or just haven't
-/// uploaded yet. It's stored as a JSON list under one SharedPreferences key,
-/// and if that data ever comes back corrupt, we just reset it to empty.
+/// Durable SharedPreferences queue for pending photo uploads.
 class PendingUploadStore {
   PendingUploadStore({AppLogger? logger}) : _logger = logger ?? AppLogger();
 
@@ -95,16 +70,12 @@ class PendingUploadStore {
 
   final AppLogger _logger;
 
-  /// Every mutation goes through [_serialized], because the whole queue
-  /// lives under one SharedPreferences key and reads/writes need to run
-  /// one at a time to stay consistent.
+  /// Serializes read-modify-write queue mutations.
   Future<void> _mutations = Future<void>.value();
 
   Future<T> _serialized<T>(Future<T> Function() action) {
     final result = _mutations.then((_) => action());
-    // We swallow the error only on the internal chain, so one failed
-    // mutation doesn't block every mutation after it. The caller still sees
-    // the real error through `result`.
+    // Keep the internal chain alive while returning the real result.
     _mutations = result.then((_) {}, onError: (_) {});
     return result;
   }
@@ -124,8 +95,7 @@ class PendingUploadStore {
           .whereType<PendingUpload>()
           .toList();
     } on FormatException catch (e, st) {
-      // Worth logging loudly here: resetting the queue silently drops photo
-      // batches that a technician thinks are still waiting to upload.
+      // Resetting the queue drops batches the user expects to upload.
       _logger.warn('IMG-UPLOAD pending queue decode failed; reset', e, st);
       return const [];
     }
@@ -149,15 +119,7 @@ class PendingUploadStore {
     await _save(entries.where((e) => e.id != id).toList());
   });
 
-  /// Swaps the entry with [id] for [entry] in ONE serialized read-modify-write.
-  ///
-  /// A requeue used to be `remove(id)` then `add(next)`. Each half was safe on
-  /// its own, but the PAIR is two read-modify-writes: a throw between them left
-  /// the entry gone while its staged files stayed on disk, and both [prune] and
-  /// the drain walk queue ENTRIES — so nothing could ever reach those files
-  /// again. The photos silently never appeared and the staging directory grew
-  /// forever. Failing this single mutation leaves the original entry intact,
-  /// which is what keeps the files reachable on the next drain.
+  /// Replaces [id] atomically so failed requeues keep the old entry reachable.
   Future<void> replace(String id, PendingUpload entry) => _serialized(() async {
     final entries = await load();
     await _save([
@@ -172,9 +134,13 @@ class PendingUploadStore {
       _serialized(() async {
         final entries = await load();
         final cutoff = now.subtract(_maxAge).millisecondsSinceEpoch;
-        final pruned = entries.where((e) => e.enqueuedAtMs < cutoff).toList();
+        final kept = <PendingUpload>[];
+        final pruned = <PendingUpload>[];
+        for (final entry in entries) {
+          (entry.enqueuedAtMs < cutoff ? pruned : kept).add(entry);
+        }
         if (pruned.isNotEmpty) {
-          await _save(entries.where((e) => e.enqueuedAtMs >= cutoff).toList());
+          await _save(kept);
         }
         return pruned;
       });

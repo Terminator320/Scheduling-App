@@ -14,21 +14,7 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
-/// The write half of editing an appointment: merge the assignees, build the
-/// record, apply it (single visit / whole series / repeat rewrite), then apply
-/// the photo changes.
-///
-/// Split out of `EventDetailsController` because the rules it carries are the
-/// ones the codebase flags hardest for correctness — retaining assignees the
-/// picker cannot show, normalizing a legacy status through
-/// [AppointmentStatus.storedRaw], choosing the series branch, and deleting
-/// orphaned bytes only AFTER the doc stops pointing at them. Each is far
-/// easier to reason about (and to test) when it takes explicit values instead
-/// of reaching into controller state.
-///
-/// Deliberately holds NO state and touches no `Ref`: the controller keeps
-/// owning `isSaving`, the error map and the seed, so the reentrancy and
-/// `ref.mounted` rules stay in one place.
+/// Builds appointment save records and applies photo changes.
 class EventDetailsSavePipeline {
   const EventDetailsSavePipeline({
     required this.repo,
@@ -38,23 +24,12 @@ class EventDetailsSavePipeline {
 
   final AppointmentsRepository repo;
 
-  /// Resolved LAZILY, and only when there are bytes to delete: constructing
-  /// `ImageStorageService` touches `FirebaseStorage.instance`, so resolving it
-  /// on every save would initialize Storage for edits that have no photos.
-  ///
-  /// Returns null once the host is gone — this runs after several awaits, and
-  /// reading a disposed `Ref` throws. Orphaned bytes are the acceptable loss.
+  /// Resolves Storage only when bytes must be deleted.
   final ImageStorageService? Function() resolveStorage;
 
   final AppLogger logger;
 
-  /// The final assignee list: the selected employees plus any original
-  /// assignee the picker could not show, so a disabled or removed person is
-  /// never silently unassigned.
-  ///
-  /// [activeEmployees] must be a FRESHLY awaited list — a cold or empty cached
-  /// value makes every original assignee look inactive, so all of them are
-  /// retained and a real deselection is silently undone.
+  /// Merges selected employees with original hidden assignees.
   ({List<String> ids, List<String> names}) resolveAssignees({
     required AppointmentRecord appointment,
     required List<EmployeeRecord> selected,
@@ -87,11 +62,7 @@ class EventDetailsSavePipeline {
     required bool isDayOff,
     required bool isAllDay,
   }) {
-    // A personal job carries no client — including when an existing client
-    // visit is converted into one, so the stored copies are cleared rather
-    // than left behind on a job that no longer shows them. The ADDRESS is not
-    // cleared with them: the field stays on screen (optional) for a personal
-    // job, so whatever it holds is visible and the user's to edit.
+    // Personal jobs clear client fields while keeping the visible address.
     final pickedClient = isPersonal ? null : selectedClient;
     return AppointmentRecord(
       id: id,
@@ -105,9 +76,7 @@ class EventDetailsSavePipeline {
       clientPhone: isPersonal
           ? ''
           : pickedClient?.phone ?? appointment.clientPhone,
-      // Cleared on a day off the same way the client fields are: the form
-      // drops the address field entirely there, so keeping a typed value
-      // would store something invisible on every surface.
+      // Day-off jobs clear the hidden address field.
       address: isDayOff ? '' : address.trim(),
       isPersonal: isPersonal,
       isDayOff: isDayOff,
@@ -164,11 +133,7 @@ class EventDetailsSavePipeline {
     return EventDetailsSaved(updated);
   }
 
-  /// Photo changes, AFTER the record write — the ordering matters.
-  ///
-  /// [onRecordWritten] runs between the removal and the storage cleanup; the
-  /// controller uses it to move its repeat baseline, which is state and so
-  /// stays out of here.
+  /// Applies photo changes after the record write.
   Future<void> applyPhotoChanges({
     required String id,
     required AppointmentImageUploadService? uploader,
@@ -176,29 +141,19 @@ class EventDetailsSavePipeline {
     required List<File> newImages,
     void Function()? onRecordWritten,
   }) async {
-    // Deletes the removed photos' documents by their derived ids, so a
-    // concurrent upload's own documents are untouched.
+    // Derived ids keep concurrent upload documents untouched.
     if (removedImages.isNotEmpty) {
       await repo.removeAppointmentPictures(id, removedImages);
     }
     onRecordWritten?.call();
-    // Bytes are deleted only once the documents have stopped referencing them.
-    // This is a REMOVAL from a job that still exists, so it stays client-side;
-    // deleting the whole appointment is the server's job
-    // (`cascadeDeleteAppointmentImages`), which is the only path that can no
-    // longer enumerate its own photos.
+    // Delete bytes only after documents stop referencing them.
     await _deleteOrphanedImages(removedImages);
     if (newImages.isNotEmpty) {
       uploader?.uploadInBackground(appointmentId: id, newImages: newImages);
     }
   }
 
-  /// Best-effort: the photo documents are already gone, so a failure here
-  /// costs orphaned bytes rather than a photo the job still points at, and
-  /// taking the save down with it would be the worse trade. The whole-job
-  /// path is NOT best-effort — `cascadeDeleteAppointmentImages` rethrows
-  /// under `retry: true`, because there it is the only thing that can find
-  /// the bytes at all.
+  /// Best-effort cleanup after removed photo documents are gone.
   Future<void> _deleteOrphanedImages(List<AppointmentImage> images) async {
     if (images.isEmpty) return;
     final storage = resolveStorage();

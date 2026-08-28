@@ -11,6 +11,7 @@ import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
+import 'package:scheduling/features/clients/domain/policies/client_building.dart';
 import 'package:scheduling/features/clients/domain/policies/client_delete_policy.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
@@ -222,6 +223,9 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
         client: client,
         selected: widget.selectedClientId == client.id,
         onOpen: () => _openClient(client),
+        // Read once per build off ONE reduction over the cached window, not a
+        // provider watch per row.
+        buildingCount: _buildingCounts[buildingKeyFor(client)],
       ),
     ),
   );
@@ -423,6 +427,16 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
         onAction: onRetry,
       );
 
+  Widget _buildingEmptyState({required String query}) => AppEmptyState(
+    icon: Icons.apartment_outlined,
+    title: query.isEmpty
+        ? context.l10n.clients_noClientsAtAddress
+        : '${context.l10n.clients_noClientsMatch} "$query"',
+    body: query.isEmpty
+        ? context.l10n.clients_typeFilterHint
+        : context.l10n.common_tryADifferentSearchTerm,
+  );
+
   Widget _resultsList(List<ClientRecord> items) => ListView.separated(
     padding: const EdgeInsets.only(bottom: AppSpacing.sp16),
     itemCount: items.length,
@@ -430,9 +444,15 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
     itemBuilder: (context, index) => _clientTile(items[index], index),
   );
 
+  /// Set once per build in [build] so the row builder can read it without
+  /// touching `ref` — a `PagedListView` item builder runs outside the
+  /// consumer's own build.
+  Map<String, int> _buildingCounts = const {};
+
   @override
   Widget build(BuildContext context) {
     ref.listen(clientsRefreshProvider, (_, _) => _pagingController.refresh());
+    _buildingCounts = ref.watch(clientBuildingCountsProvider);
 
     switch (widget.filter) {
       case ClientsFilterArchived():
@@ -446,6 +466,12 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
           ref.watch(clientsByTypeProvider(type)),
           onRetry: () => ref.invalidate(clientsByTypeProvider(type)),
           emptyState: (query) => _typeEmptyState(type: type, query: query),
+        );
+      case ClientsFilterBuilding(:final key):
+        return _buildFromAsync(
+          ref.watch(clientsByBuildingProvider(key)),
+          onRetry: () => ref.invalidate(clientsByBuildingProvider(key)),
+          emptyState: (query) => _buildingEmptyState(query: query),
         );
       case ClientsFilterAll():
         break; // falls through to the search / paginated list below

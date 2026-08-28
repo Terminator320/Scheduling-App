@@ -18,7 +18,6 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/fields/client_search_field.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
-import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
@@ -27,7 +26,7 @@ import 'package:scheduling/shared/widgets/fields/sheet_field_row.dart';
 import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 
-/// The nine text controllers an appointment form drives. Shared between the add and edit flows so their field sets stay in sync.
+/// Text controllers shared by add and edit appointment forms.
 class AppointmentFormControllers {
   const AppointmentFormControllers({
     required this.title,
@@ -65,19 +64,7 @@ class AppointmentFormControllers {
   }
 }
 
-/// The ten pickers an appointment form drives, grouped the same way
-/// [AppointmentFormControllers] groups its nine controllers.
-///
-/// Every one of these is REQUIRED and always supplied by both call sites, so
-/// this buys readability rather than safety — a missing one was already a
-/// compile error. What it removes is ten near-identical lines from a
-/// 35-parameter constructor, and the temptation to answer "which of these does
-/// the edit flow not pass?" by reading all thirty-five.
-///
-/// The OPTIONAL callbacks deliberately stay on the widget: `onApplyTemplate`,
-/// `onPersonalChanged`, `onStatusChanged` and `onRequestAddClient` are each
-/// null on one flow and not the other, and that nullability is the thing a
-/// reader needs to see at the call site.
+/// Required callbacks shared by add and edit appointment forms.
 class AppointmentFormCallbacks {
   const AppointmentFormCallbacks({
     required this.onSearchClients,
@@ -94,9 +81,7 @@ class AppointmentFormCallbacks {
     required this.onAllDayChanged,
   });
 
-  /// Both are `required` on every flow, so neither carries the nullability
-  /// signal that keeps the four optional callbacks loose on the widget - they
-  /// belong in the group like the other required ones.
+  /// Required switch callbacks shared by both flows.
   final ValueChanged<bool> onDayOffChanged;
   final ValueChanged<bool> onAllDayChanged;
 
@@ -105,9 +90,7 @@ class AppointmentFormCallbacks {
   final VoidCallback onClearClient;
   final ValueChanged<EmployeeRecord> onToggleEmployee;
 
-  /// The dates arrive already picked: the rows drop an inline month calendar
-  /// down beneath themselves rather than opening a modal picker, so there is
-  /// no "cancelled" outcome for a host to handle.
+  /// Date rows return already-picked values.
   final ValueChanged<DateTime> onSelectStartDate;
   final ValueChanged<DateTime> onSelectEndDate;
 
@@ -117,8 +100,7 @@ class AppointmentFormCallbacks {
   final ValueChanged<bool> onUseCustomAddress;
 }
 
-/// Shared appointment form field stack for the add and edit flows. The status
-/// block only renders when both [editingStatus] and [onStatusChanged] are provided.
+/// Shared appointment form field stack for add and edit.
 class AppointmentFormFields extends StatelessWidget {
   const AppointmentFormFields({
     required this.controllers,
@@ -163,44 +145,23 @@ class AppointmentFormFields extends StatelessWidget {
   final RepeatInterval repeat;
   final bool useCustomAddress;
 
-  /// The dates behind the two date rows' text. The rows render the
-  /// controllers' formatted strings; these drive the inline month calendar's
-  /// selection and the month it opens on. Null while a field is still empty.
+  /// Dates behind the two date rows' text.
   final DateTime? selectedDate;
   final DateTime? endDate;
 
-  /// Personal job: time blocked off for the crew rather than a client visit.
-  /// Hides the client picker, materials, photos, repeat and the template
-  /// chips, and drops the client and title from validation. The address stays,
-  /// marked optional — a personal block can still have somewhere to be.
+  /// Personal job time blocked off for the crew.
   final bool isPersonal;
 
-  /// This personal block is time OFF — the crew is away rather than working.
-  /// Rendered as a chip under the switch, and only while [isPersonal] is on.
-  /// Stored, because it is what keeps the block out of every job count; see
-  /// `AppointmentRecord.isTimeOff`.
+  /// True when a personal block is time off.
   final bool isDayOff;
 
-  /// No time was put in, so the block owns the whole day: the start/end rows
-  /// are hidden and the record saves midnight → 23:59.
+  /// True when the block owns the whole day.
   final bool isAllDay;
 
-  /// True when this job runs more than one day — drives the daily-window
-  /// qualifier on the time labels and the run length beside the end date.
+  /// True when this job runs more than one day.
   final bool isMultiDay;
 
-  /// This appointment is one DAY of a multi-day run — N documents sharing a
-  /// `seriesId`, each carrying its own status.
-  ///
-  /// The edit form then hides the END DATE: a run's length is fixed at booking
-  /// (owner call 2026-08-27). Shortening one is cancelling its tail through the
-  /// scope dialog; extending it is a second booking. Letting a day reshape the
-  /// run would delete and recreate the trailing documents, destroying exactly
-  /// the per-day statuses and photos the split exists to create.
-  ///
-  /// Distinct from [isMultiDay], which describes the SPAN the form currently
-  /// has selected: the add flow can be multi-day and is never a run member,
-  /// and a run member's own day is one day long so it is never multi-day.
+  /// True when this appointment is one day of a multi-day run.
   final bool isRunMember;
 
   /// True when the daily window crosses midnight, so the run counts nights.
@@ -215,32 +176,26 @@ class AppointmentFormFields extends StatelessWidget {
   final String materialsHint;
   final Widget photosSection;
 
-  /// Wraps a section as its feature-tour step. Injected by the ADD sheet
-  /// only — the edit flow has no walkthrough, and passes null, which leaves
-  /// every section untouched.
+  /// Wraps a section as its feature-tour step.
   final Widget Function(TourStepId id, Widget child)? tourWrap;
 
   /// The ten always-present pickers. See [AppointmentFormCallbacks].
   final AppointmentFormCallbacks callbacks;
 
-  /// Who can't take the job on the chosen date, resolved by the host — it is
-  /// the host that knows the span and, on an edit, which doc to exclude from
-  /// the conflict scan. Empty until a date is picked.
+  /// Crew conflicts for the chosen date/span.
   final AssigneeAvailability assigneeAvailability;
 
   /// Edit flow only. When null, the status block is omitted (add flow).
   final String? editingStatus;
   final ValueChanged<String>? onStatusChanged;
 
-  /// Opens the add-client sheet and auto-selects the created client. Pass null to hide the affordance entirely.
+  /// Opens the add-client sheet and auto-selects the result.
   final Future<ClientRecord?> Function(String initialName)? onRequestAddClient;
 
-  /// Add flow only — renders one-tap job-template chips above the title. Null hides the chips, which is how the edit flow uses this.
+  /// Add flow only job-template callback.
   final ValueChanged<JobTemplate>? onApplyTemplate;
 
-  /// Renders the personal-job switch. Null hides it: the edit flow only offers
-  /// it on a job that is ALREADY personal, so an ordinary client visit can't be
-  /// turned into one halfway through its life.
+  /// Renders the personal-job switch when supplied.
   final ValueChanged<bool>? onPersonalChanged;
 
   String? _err(BuildContext context, String field) {
@@ -250,7 +205,8 @@ class AppointmentFormFields extends StatelessWidget {
 
   void _selectClient(ClientRecord client) {
     controllers.clientSearch.text = client.displayName;
-    controllers.address.text = AddressParser.canonicalToDisplay(client.address);
+    // AppointmentRecord.address is the full directions string.
+    controllers.address.text = client.fullAddress;
     callbacks.onSelectClient(client);
   }
 
@@ -269,19 +225,7 @@ class AppointmentFormFields extends StatelessWidget {
   }
 
   void _setPersonal(bool value) {
-    // Clear the text fields the switch hides, so nothing stale is left in a
-    // controller the user can no longer see. Photos are not cleared: dropping
-    // already-uploaded images off a flick of a switch is destructive and can't
-    // be undone from this form.
-    //
-    // The ADDRESS stays, because a personal block may well have somewhere to
-    // be — EXCEPT when it is the client's own address. `_selectClient` writes
-    // that into the controller, and until then it renders as a read-only pill,
-    // so the admin never typed it and it belongs to a client this block is no
-    // longer for. Both halves of the test matter: with no client selected the
-    // field is the editable one, so whatever it holds was typed by hand and
-    // must survive — including an address entered before the switch was
-    // flipped.
+    // Clear hidden client-job fields without dropping uploaded photos.
     if (value) {
       controllers.clientSearch.clear();
       controllers.materials.clear();
@@ -300,12 +244,11 @@ class AppointmentFormFields extends StatelessWidget {
   void _useClientAddress() {
     final client = selectedClient;
     if (client == null) return;
-    controllers.address.text = AddressParser.canonicalToDisplay(client.address);
+    controllers.address.text = client.fullAddress;
     callbacks.onUseCustomAddress(false);
   }
 
-  /// Wraps [child] as [id]'s tour step, or leaves it alone when the host
-  /// injected no tour.
+  /// Wraps [child] as [id]'s tour step when injected.
   Widget _tour(TourStepId id, Widget child) =>
       tourWrap?.call(id, child) ?? child;
 
@@ -323,8 +266,7 @@ class AppointmentFormFields extends StatelessWidget {
     );
   }
 
-  /// Quick-fill job-template chips — add flow only, and never on a personal
-  /// job: every template names a plumbing service.
+  /// Quick-fill job-template chips for add flow.
   List<Widget> _templatesSection(BuildContext context, AppLocalizations l10n) {
     if (onApplyTemplate == null || isPersonal) return const [];
     return [
@@ -355,9 +297,7 @@ class AppointmentFormFields extends StatelessWidget {
     // --- Personal job ---
     if (onPersonalChanged != null) ...[
       _PersonalJobSwitch(value: isPersonal, onChanged: _setPersonal),
-      // Only under an ON switch: a client visit can never be time off, and the
-      // controllers clear the flag when the switch goes off so a hidden chip
-      // can't leave one behind.
+      // Time off belongs only to personal jobs.
       if (isPersonal) ...[
         const SizedBox(height: AppSpacing.sp8),
         _DayOffChoiceChip(
@@ -371,8 +311,7 @@ class AppointmentFormFields extends StatelessWidget {
     SheetFocusScroll(
       child: LabeledTextField(
         label: l10n.calendar_serviceTitle,
-        // A personal block doesn't have to be named — left blank it saves as
-        // "Personal", which is what the card and the off-screen mirrors read.
+        // Blank personal titles save as "Personal".
         hint: isPersonal
             ? l10n.calendar_personal
             : l10n.calendar_eGPlumbingRepair,
@@ -425,23 +364,15 @@ class AppointmentFormFields extends StatelessWidget {
 
   /// Start/end date, start/end time, status (edit flow only) and repeat.
   List<Widget> _scheduleSection(BuildContext context, AppLocalizations l10n) {
-    // A DAY OFF has no lifecycle — it is not work, so there is nothing to
-    // start or finish and the picker's three states are all the wrong
-    // question. Its card and detail header show "Day off" in that slot.
+    // Day off has no work status lifecycle.
     final showStatus =
         editingStatus != null && onStatusChanged != null && !isDayOff;
     final isNarrowPhone = context.isNarrowWidth;
 
-    // Dates and times are pickers, not text entry, so they render as panel rows
-    // rather than readOnly TextFields. Free-text fields keep LabeledTextField,
-    // which owns the error shake and the clear button.
-    //
-    // Built on demand: an all-day block has no times, and the rows are not
-    // constructed for one.
+    // Build time rows only when the schedule needs them.
     List<Widget> timeRows() {
       final startRow = SheetFieldRow(
-        // Once the job runs past one day the two times describe a window
-        // repeated on every day of the run, not a single span.
+        // Multi-day times describe each day's window.
         label: !isMultiDay
             ? l10n.calendar_startTime
             : (isOvernight
@@ -490,35 +421,16 @@ class AppointmentFormFields extends StatelessWidget {
         TourStepId.apptSchedule,
         SheetPanel(
           children: [
-            // --- All day — first row of the panel, since it decides whether
-            // the time rows below it exist at all. Offered on every job: a
-            // client visit can genuinely run whole days too.
-            //
-            // NOT offered on a DAY OFF, which is all-day by definition: the
-            // switch would be a control whose only useful position is the one
-            // it is already in, and turning it off would ask someone which
-            // hours of their day off they are having.
+            // All day controls whether time rows exist.
             if (!isDayOff)
               _AllDaySwitch(
                 value: isAllDay,
                 onChanged: callbacks.onAllDayChanged,
               ),
             _dateRows(context, l10n),
-            // An all-day block has no times to show — the date rows are the
-            // whole schedule.
+            // All-day schedules show dates only.
             if (!isAllDay && !isDayOff) ...timeRows(),
-            // --- Repeat: same panel as the date and times, so everything
-            // about when the job happens reads as one block. Not offered on a
-            // personal job.
-            //
-            // Nor on a MULTI-DAY one. A run's days are linked by `seriesId`,
-            // the same field a repeat uses, so a repeating multi-day job would
-            // make that field mean two things at once and force a third state
-            // into the scope dialog ("the rest of this run" vs "this and
-            // future weeks"). Owner call 2026-08-27: the business does not book
-            // repeating multi-day work, so the ambiguity is removed rather than
-            // modelled. Adding it back means a separate `runId`, never another
-            // meaning for `seriesId`.
+            // Repeat is hidden for personal and multi-day jobs.
             if (!isPersonal && !isMultiDay)
               RepeatIntervalPicker(
                 current: repeat,
@@ -541,10 +453,7 @@ class AppointmentFormFields extends StatelessWidget {
     ];
   }
 
-  /// Start and end date, as ONE panel row that drops the month down beneath
-  /// itself. It is a single child of the panel rather than two, because the
-  /// dropdown belongs to the pair — see [AppointmentDateRows], which owns the
-  /// open/closed state and the divider between the two rows.
+  /// Start and end date as one expandable panel row.
   Widget _dateRows(BuildContext context, AppLocalizations l10n) =>
       AppointmentDateRows(
         startValue: controllers.date.text,
@@ -565,12 +474,7 @@ class AppointmentFormFields extends StatelessWidget {
         onEndDateSelected: callbacks.onSelectEndDate,
       );
 
-  /// Address, notes, materials and the host-supplied photos slot.
-  ///
-  /// The body is one Column rather than spread widgets so the tour has a
-  /// single target for the whole section — the step describes all four
-  /// fields, and highlighting only the first would misdescribe it. The
-  /// Column is stretch-aligned like its parent, so the layout is unchanged.
+  /// Address, notes, materials, and host-supplied photos.
   List<Widget> _detailsSection(BuildContext context, AppLocalizations l10n) => [
     MonoSectionLabel(l10n.calendar_sectionDetails),
     const SizedBox(height: AppSpacing.sp8),
@@ -584,14 +488,7 @@ class AppointmentFormFields extends StatelessWidget {
   ];
 
   List<Widget> _detailsBody(BuildContext context, AppLocalizations l10n) => [
-    // --- Address. Offered on a personal job too, where it is OPTIONAL: a
-    // dentist appointment or a supply run still happens somewhere, and the
-    // crew wants directions to it. Marked optional there so the blank state
-    // reads as deliberate rather than unfinished.
-    //
-    // A DAY OFF is the one personal block with nowhere to be, so it drops the
-    // field entirely — and both save paths clear it, since a hidden field must
-    // never keep a value the form no longer shows.
+    // Day off hides address; other personal blocks may still need one.
     if (!isDayOff) ...[
       AppointmentAddressField(
         selectedClient: selectedClient,
@@ -638,12 +535,6 @@ class AppointmentFormFields extends StatelessWidget {
 }
 
 /// The "Day off" chip under the personal-job switch.
-///
-/// A selectable chip rather than a second switch: it qualifies the switch above
-/// it rather than opening its own field group, and a stack of two switches
-/// reads as two independent settings. `FilterChip` (not the `ActionChip` the
-/// templates use) because this one has a STATE to show — the templates fire and
-/// forget, this is stored on the record.
 class _DayOffChoiceChip extends StatelessWidget {
   const _DayOffChoiceChip({required this.value, required this.onChanged});
 
@@ -661,8 +552,7 @@ class _DayOffChoiceChip extends StatelessWidget {
   );
 }
 
-/// Marks the job as personal time rather than a client visit. Mirrors the
-/// client form's "no fixed address" switch, which gates a field the same way.
+/// Marks the job as personal time rather than a client visit.
 class _PersonalJobSwitch extends StatelessWidget {
   const _PersonalJobSwitch({required this.value, required this.onChanged});
 
@@ -674,10 +564,7 @@ class _PersonalJobSwitch extends StatelessWidget {
     type: MaterialType.transparency,
     child: SwitchListTile.adaptive(
       contentPadding: EdgeInsets.zero,
-      // No subtitle: the WHO section already carries enough on one screen
-      // (owner call, 2026-08-05). Turning the switch on visibly removes the
-      // client picker and relaxes the address to optional, which explains
-      // itself better than a line of hint text.
+      // The field changes below make the switch self-explanatory.
       title: Text(context.l10n.calendar_personalJob),
       value: value,
       activeTrackColor: Theme.of(context).colorScheme.primary,
@@ -686,11 +573,7 @@ class _PersonalJobSwitch extends StatelessWidget {
   );
 }
 
-/// Turns the block into a whole-day one. Offered on every job — a client visit
-/// can run whole days too. Lives inside the schedule `SheetPanel`, so it takes
-/// the panel's horizontal inset; the vertical is tighter than a `SheetFieldRow`'s
-/// because a switch is taller than a label-over-value pair and the row would
-/// otherwise tower over the date row beneath it.
+/// Turns the block into a whole-day one.
 class _AllDaySwitch extends StatelessWidget {
   const _AllDaySwitch({required this.value, required this.onChanged});
 
@@ -708,7 +591,7 @@ class _AllDaySwitch extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(15, 9, 13, 9),
           child: Row(
             children: [
-              // No explanatory subtitle — "All day" says it.
+              // "All day" is enough label on its own.
               Expanded(
                 child: Text(
                   context.l10n.calendar_allDay,

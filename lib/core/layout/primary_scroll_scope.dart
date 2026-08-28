@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Scopes a fresh PrimaryScrollController to prevent multiple primary ScrollViews from sharing the same controller and confusing the Scrollbar.
+/// Provides a private PrimaryScrollController.
 class PrimaryScrollScope extends StatefulWidget {
   const PrimaryScrollScope({required this.child, super.key});
 

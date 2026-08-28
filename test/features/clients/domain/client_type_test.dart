@@ -7,8 +7,8 @@ void main() {
       expect(ClientType.fromRaw('residential'), ClientType.residential);
       expect(ClientType.fromRaw('commercial'), ClientType.commercial);
       expect(
-        ClientType.fromRaw('property_mgmt'),
-        ClientType.propertyManagement,
+        ClientType.fromRaw('building'),
+        ClientType.building,
       );
     });
 

@@ -9,6 +9,7 @@ import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/policies/client_building.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 
 class FirebaseClientsRepository implements ClientsRepository {
@@ -211,31 +212,54 @@ class FirebaseClientsRepository implements ClientsRepository {
   Future<List<ClientRecord>> fetchArchivedClients() async {
     final window = await _clientScanWindow();
     if (window == null) return const [];
-    final matches = [
+    return _byDisplayName([
       for (final doc in window.docs)
         if (doc.data['archived'] == true)
           ClientRecord.fromMap(doc.id, doc.data),
-    ];
-    final keyed = [
-      for (final record in matches)
-        (sortKey: record.displayName.toLowerCase(), record: record),
-    ]..sort((a, b) => a.sortKey.compareTo(b.sortKey));
-    return [for (final entry in keyed) entry.record];
+    ]);
   }
 
   @override
   Future<List<ClientRecord>> fetchClientsByType(ClientType type) async {
     if (type == ClientType.unset) return const [];
+    final records = await _windowRecords();
+    return _byDisplayName([
+      for (final record in records)
+        if (record.type == type) record,
+    ]);
+  }
+
+  @override
+  Future<List<ClientRecord>> fetchClientsByBuilding(String key) async {
+    if (key.trim().isEmpty) return const [];
+    final records = await _windowRecords();
+    final matches = [
+      for (final record in records)
+        if (buildingKeyFor(record) == key) record,
+    ];
+    return _byDisplayName(matches);
+  }
+
+  @override
+  Future<List<ClientBuilding>> fetchBuildings() async =>
+      buildingsIn(await _windowRecords());
+
+  /// The cached scan window as live records, archived clients dropped — the
+  /// shape the type filter and the Building menu both reduce over.
+  Future<List<ClientRecord>> _windowRecords() async {
     final window = await _clientScanWindow();
     if (window == null) return const [];
-    final matches = [
+    return [
       for (final doc in window.docs)
-        if (doc.data['archived'] != true &&
-            ClientType.fromRaw(doc.data['type']?.toString()) == type)
+        if (doc.data['archived'] != true)
           ClientRecord.fromMap(doc.id, doc.data),
     ];
+  }
+
+  /// The list order every filtered client view uses.
+  List<ClientRecord> _byDisplayName(List<ClientRecord> records) {
     final keyed = [
-      for (final record in matches)
+      for (final record in records)
         (sortKey: record.displayName.toLowerCase(), record: record),
     ]..sort((a, b) => a.sortKey.compareTo(b.sortKey));
     return [for (final entry in keyed) entry.record];

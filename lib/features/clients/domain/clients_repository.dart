@@ -1,5 +1,6 @@
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/policies/client_building.dart';
 
 abstract class ClientsRepository {
   /// Drops every cached client this repository is holding.
@@ -66,4 +67,12 @@ abstract class ClientsRepository {
   /// which stops the paginated list early. See the "never removed" invariant in
   /// CLAUDE.md for the full reasoning.
   Future<List<ClientRecord>> fetchClientsByType(ClientType type);
+
+  /// Clients at one building, keyed by `buildingKeyFor`. Same bounded cached
+  /// window as the type filter, so the Building menu costs no extra read.
+  Future<List<ClientRecord>> fetchClientsByBuilding(String key);
+
+  /// Every address shared by two or more clients, busiest first — the Building
+  /// menu's options and the per-row pill's counts.
+  Future<List<ClientBuilding>> fetchBuildings();
 }

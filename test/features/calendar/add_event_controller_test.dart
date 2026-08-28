@@ -656,6 +656,42 @@ void main() {
       verifyNever(() => appointments.addAppointment(any()));
     });
 
+    test('checks repeat copies and reports a future conflict', () async {
+      var nextId = 0;
+      when(appointments.newDocId).thenAnswer((_) => 'appt-${++nextId}');
+      when(
+        () => appointments.findBusyEmployees(
+          candidates: any(named: 'candidates'),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+        ),
+      ).thenAnswer((invocation) async {
+        final start = invocation.namedArguments[#start] as DateTime;
+        return start == DateTime(2026, 9, 10, 9)
+            ? const [_employeeA]
+            : const <EmployeeRecord>[];
+      });
+
+      final c = readNotifier();
+      fillValid(c);
+      c.selectRepeat(RepeatInterval.fourMonths);
+
+      final outcome = await c.submit(
+        title: 'Furnace check',
+        address: '999 Maple',
+        notes: '',
+        materialsNeeded: '',
+      );
+
+      expect(outcome, isA<AddEventBusyEmployees>());
+      final busy = outcome as AddEventBusyEmployees;
+      expect(busy.busyEmployees, const [_employeeA]);
+      expect(busy.start, DateTime(2026, 9, 10, 9));
+      expect(busy.end, DateTime(2026, 9, 10, 10));
+      verifyNever(() => appointments.addAppointment(any()));
+      verifyNever(() => appointments.addAppointments(any()));
+    });
+
     test(
       'returns AddEventFailed and resets isSubmitting when repo throws',
       () async {
@@ -771,9 +807,11 @@ void main() {
         materialsNeeded: '',
       );
 
-      final captured = verify(
-        () => appointments.addAppointment(captureAny()),
-      ).captured.single as AppointmentRecord;
+      final captured =
+          verify(
+                () => appointments.addAppointment(captureAny()),
+              ).captured.single
+              as AppointmentRecord;
       expect(captured.seriesId, '');
       expect(captured.dayIndex, 0);
       expect(captured.dayCount, 0);
@@ -796,9 +834,11 @@ void main() {
         materialsNeeded: '',
       );
 
-      final captured = verify(
-        () => appointments.addAppointment(captureAny()),
-      ).captured.single as AppointmentRecord;
+      final captured =
+          verify(
+                () => appointments.addAppointment(captureAny()),
+              ).captured.single
+              as AppointmentRecord;
       expect(captured.startTime, DateTime(2026, 5, 10, 9));
       expect(captured.endTime, DateTime(2026, 5, 14, 10));
       expect(captured.dayCount, 0);

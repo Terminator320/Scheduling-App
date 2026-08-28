@@ -8,7 +8,6 @@ import 'package:scheduling/features/clients/email_compose_launcher.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_contacts_cards.dart';
 import 'package:scheduling/features/clients/widgets/sections/client_job_history_section.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
-import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/features/wave/widgets/wave_sync_badge.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/key_value_panel.dart';
@@ -34,7 +33,7 @@ class ClientDetailViewBody extends ConsumerWidget {
     final hasPhone = client.phone.isNotEmpty;
     final hasEmail = client.email.isNotEmpty;
     final hasAddress = client.address.isNotEmpty;
-    final displayAddress = AddressParser.canonicalToDisplay(client.address);
+    final displayAddress = client.fullAddress;
 
     // Handlers built here (where `ref` lives) so widgets stay presentational.
     final onCall = hasPhone
@@ -50,7 +49,9 @@ class ClientDetailViewBody extends ConsumerWidget {
     final onDirections = hasAddress
         ? () => AddressMapLauncher.showMapChoices(
             context,
-            address: client.address,
+            // The composed address, never the stored one: a street-only doc
+            // would send the maps app a street with no city.
+            address: displayAddress,
           )
         : null;
     // Always offered — even a name-only client is worth saving to the phone.

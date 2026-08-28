@@ -6,26 +6,10 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
-/// The longest span a job may be booked for. Guards [expandToDays] against
-/// fanning a corrupt multi-year `endTime` into an unbounded number of slices.
-///
-/// Hand-mirrored twice: `MAX_APPOINTMENT_SPAN_DAYS` in `functions/time_utils.js`
-/// and the `duration.value(14, 'd')` bound in `firestore.rules`. All three must
-/// stay equal; `test/core/security/appointment_span_rules_test.dart` pins the
-/// rules copy against this one.
-///
-/// Also the distance `AppointmentDateRange.fetchStart` reaches back past a
-/// range's start, so a job that started up to this many days ago is still
-/// fetched even though the query filters on `startTime` alone. The two must
-/// stay equal, or a job can start before the fetch window and still overlap
-/// it.
+/// Maximum appointment span, mirrored in functions and Firestore rules.
 const int maxAppointmentSpanDays = 14;
 
-/// One appointment as it appears on ONE of the days it spans.
-///
-/// The two stored times describe a **daily window** — 9:00 AM to 5:00 PM on
-/// each of those days, not one unbroken stretch through the nights. A slice
-/// carries that day's concrete window plus its position in the run.
+/// One appointment as it appears on one day of its span.
 @immutable
 class AppointmentDaySlice {
   const AppointmentDaySlice({
@@ -42,8 +26,7 @@ class AppointmentDaySlice {
   final int dayIndex;
   final int dayCount;
 
-  /// This day's concrete window. [windowEnd] lands on the following calendar
-  /// day when the window crosses midnight.
+  /// This day's concrete window, possibly ending the next calendar day.
   final DateTime windowStart;
   final DateTime windowEnd;
 
@@ -54,50 +37,28 @@ class AppointmentDaySlice {
   bool get isOvernight => windowEnd.dateOnly.isAfter(windowStart.dateOnly);
 }
 
-/// True when a daily window crosses midnight.
-///
-/// A multi-day booking at the same clock time (Aug 1 09:00 → Aug 3 09:00)
-/// must still read as continuous 24-hour windows on each of its days, so
-/// equal start/end minutes count as overnight too — a strict `<` would
-/// collapse those windows to zero length instead.
+/// True when a daily window crosses midnight or covers 24 hours.
 bool _isOvernightWindow(DateTime start, DateTime end) {
   final startMinutes = start.hour * 60 + start.minute;
   final endMinutes = end.hour * 60 + end.minute;
   return endMinutes <= startMinutes;
 }
 
-/// The last day the crew STARTS work for a raw daily window — never the
-/// morning an overnight run finishes.
-///
-/// The window form of [lastWorkDayOf], for a caller holding only a resolved
-/// start/end pair and no record yet (the booking-conflict dialog, which
-/// describes a job that hasn't been saved).
+/// Last day the crew starts work for a raw daily window.
 DateTime lastWorkDayOfWindow(DateTime start, DateTime end) =>
     _isOvernightWindow(start, end)
     ? addCalendarDays(end.dateOnly, -1)
     : end.dateOnly;
 
-/// The last day the crew STARTS work — never the morning an overnight run
-/// finishes. Keeps the count at `end - start + 1` for day jobs and night
-/// shifts alike.
+/// Last day the crew starts work for an appointment.
 DateTime lastWorkDayOf(AppointmentRecord appointment) =>
     lastWorkDayOfWindow(appointment.startTime, appointment.endTime);
 
-/// How many days (or nights) a daily [start]–[end] window runs for.
-///
-/// Can come back below 1 on a corrupt pair whose end precedes its start —
-/// every caller guards with `< 1` rather than trusting this is a valid count.
+/// Raw day or night count for a daily window.
 int _dayCountOfWindow(DateTime start, DateTime end) =>
     calendarDaysBetween(start.dateOnly, lastWorkDayOfWindow(start, end)) + 1;
 
-/// [_dayCountOfWindow] capped at [maxAppointmentSpanDays].
-///
-/// `firestore.rules` bounds the span too, but only for CLIENT writes — the
-/// console and the Admin SDK bypass rules entirely, so a doc that exceeds the
-/// cap is still reachable and this clamp is still the thing that contains it.
-/// Every day-scoping answer routes through here so they cannot disagree about
-/// how long a corrupt run is; a value below 1 still means a corrupt pair with
-/// no day to render on, and each caller guards for that.
+/// Clamped day count used by all day-scoping helpers.
 int _clampedDayCount(DateTime start, DateTime end) =>
     math.min(_dayCountOfWindow(start, end), maxAppointmentSpanDays);
 
@@ -121,69 +82,28 @@ int _clampedDayCount(DateTime start, DateTime end) =>
 }
 
 /// True when [appointment]'s daily window runs on [day].
-///
-/// The range streams query from `AppointmentDateRange.fetchStart` — up to
-/// [maxAppointmentSpanDays] BEFORE the range's start, so that a job already
-/// under way is still fetched. That makes the stream a deliberate superset of
-/// the range: any surface that wants exactly one day's jobs has to re-scope,
-/// and it must do it through here rather than by comparing `startTime` at the
-/// call site, which silently reads a fortnight of history as "today".
 bool runsOn(AppointmentRecord appointment, DateTime day) =>
     _dayIndexOn(appointment, day) != null;
 
-/// True when [appointment] is WORK: not cancelled, not time off.
-///
-/// **The one owner of "what counts as a job", day-independent half.** A
-/// cancelled visit is work that is not happening and time off is not work at
-/// all, so neither may be counted by anything answering "how much is on this
-/// day" — the month grid's dots, the agenda header's `N JOBS`, the drawer
-/// badge or the roster's jobs-today.
-///
-/// It is split out from [countsAsLoadOn] rather than spelled again because
-/// callers that already hold a DAY-SCOPED slice must not re-derive the day:
-/// the agenda has one slice per rendered row and `runsOn` walks the run. The
-/// pair had drifted on how each spelled the cancelled half once already, and
-/// by 2026-08-25 there were four spellings — this one, `countsAsLoadOn`,
-/// `dottedJobsOn` and the agenda header's own — of which the header's was the
-/// odd one out, counting a cancelled job as a job AND as done.
+/// True when [appointment] is countable work.
 bool countsAsWork(AppointmentRecord appointment) =>
     !isCancelledStatusRaw(appointment.status) && !appointment.isTimeOff;
 
-/// True when [appointment] is a job COUNTING as that day's load — it is
-/// [countsAsWork] and it runs on [day].
-///
-/// One owner because it is asked from two places that cannot share a provider
-/// (the drawer badge reads `myAppointmentsProvider` for a non-admin, the roster
-/// reducer reads the admin range stream) and were keeping in step through a
-/// prose "matching employeeJobsTodayProvider" comment. They had already drifted
-/// on how they spelled the cancelled half. The next term added to "what is
-/// work" lands in [countsAsWork] once, instead of on one of them.
+/// True when [appointment] counts as load on [day].
 bool countsAsLoadOn(AppointmentRecord appointment, DateTime day) =>
     countsAsWork(appointment) && runsOn(appointment, day);
 
-/// True when [appointment] works on at least one day in `[start, end)`.
-///
-/// The range sibling of [runsOn], for a surface bucketing by week or month
-/// rather than by day. Testing `startTime` against the bounds instead drops a
-/// run from the very week it is being worked, whenever it began earlier.
+/// True when [appointment] runs on at least one day in `[start, end)`.
 bool runsInRange(AppointmentRecord appointment, DateTime start, DateTime end) {
   final count = _clampedDayCount(appointment.startTime, appointment.endTime);
-  // Corrupt record — end precedes start, so there is no day it runs.
+  // Corrupt records with no valid day do not run.
   if (count < 1) return false;
   final firstDay = appointment.startTime.dateOnly;
   final lastDay = addCalendarDays(firstDay, count - 1);
   return firstDay.isBefore(end) && !lastDay.isBefore(start.dateOnly);
 }
 
-/// The record as it appears on [day], or null when it doesn't run that day.
-///
-/// Clamped to [maxAppointmentSpanDays] like [expandToDays] and [_windowsOf].
-/// `firestore.rules` bounds client writes to the same cap, but the console and
-/// the Admin SDK bypass rules, so a doc that exceeds it is still reachable.
-/// Left unclamped, this one owner of day-scoping disagreed with itself: the
-/// calendar rendered 14 slices while every `runsOn` consumer counted the full
-/// corrupt length, giving a drawer badge that read "1 job today" every day for
-/// a year and a card counter reading "Day 400 of 900".
+/// Returns [appointment]'s slice for [day], or null when it does not run.
 AppointmentDaySlice? sliceFor(AppointmentRecord appointment, DateTime day) {
   final index = _dayIndexOn(appointment, day);
   if (index == null) return null;
@@ -196,31 +116,7 @@ AppointmentDaySlice? sliceFor(AppointmentRecord appointment, DateTime day) {
   );
 }
 
-/// The run position a SPLIT day carries on the document itself, or null when
-/// the derived pair should be used instead.
-///
-/// A multi-day JOB is N documents of one day each, sharing a `seriesId`; the
-/// stored pair is the only thing that knows the run is longer than the
-/// document. A legacy WIDE document stores nothing and is derived as it always
-/// was.
-///
-/// **This is the LABEL only.** [_dayIndexOn] keeps owning "does this run on
-/// this day", and must never see these numbers: a document storing
-/// `dayCount: 5` would then claim to run on the five days after its own start,
-/// smearing every run across the calendar — and `runsOn` is the mandated
-/// re-scoping call on the drawer badge, the roster's jobs-today and the
-/// dashboard's day reducer, so all three would inherit it at once.
-///
-/// Three conditions, each closing a different way a bad pair could render:
-///  - the document's OWN window is one day. A wide document is a legacy or
-///    console-written run whose span is the truth; honouring a stored pair
-///    there prints one day's label on every day of the span.
-///  - the pair is coherent, so a console edit cannot produce "Day 9 of 5".
-///  - the count is a real run within the cap, so it agrees with every other
-///    day-scoping answer about how long a run may be.
-///
-/// Hand-mirrored by `storedRunLabel` in `functions/day_slice_utils.js`; the two
-/// test suites share worked examples, so a divergence fails rather than ships.
+/// Returns a coherent stored split-day label, or null to derive it.
 ({int dayIndex, int dayCount})? _storedRunLabel(AppointmentRecord a) {
   if (a.dayCount < 2 || a.dayCount > maxAppointmentSpanDays) return null;
   if (a.dayIndex < 1 || a.dayIndex > a.dayCount) return null;
@@ -228,20 +124,7 @@ AppointmentDaySlice? sliceFor(AppointmentRecord appointment, DateTime day) {
   return (dayIndex: a.dayIndex, dayCount: a.dayCount);
 }
 
-/// [day]'s 1-based position within [appointment]'s run, or null when it does
-/// not run that day.
-///
-/// Split out of [sliceFor] because [runsOn] only needs the null test, and it
-/// is the MANDATED re-scoping call on every superset consumer — the drawer
-/// badge over the whole range list on every drawer build,
-/// `employeeJobsTodayProvider`, `employeeTodayJobsProvider`, the dashboard's
-/// day reducer. Building the whole slice to answer it meant two `DateTime`
-/// allocations per record that `runsOn` then discarded, ~2000 of them per
-/// pass at the 1000-record stream limit.
-///
-/// `_clampedDayCount` deliberately stays inside: it is the correctness guard
-/// that contains a console-written run past [maxAppointmentSpanDays], not an
-/// optimisation to hoist out.
+/// Returns [day]'s 1-based run position, or null when it does not run.
 ({int dayIndex, int dayCount})? _dayIndexOn(
   AppointmentRecord appointment,
   DateTime day,
@@ -269,23 +152,14 @@ AppointmentDaySlice _sliceAt(
   );
 }
 
-/// True when two daily windows have overlapping work on at least one day both
-/// of them run.
-///
-/// The two stored instants are a DAILY WINDOW, not one unbroken stretch, so the
-/// raw instant test (`aStart < bEnd && aEnd > bStart`) is wrong for anything
-/// multi-day: it reports a 9-5 run across a week as clashing with a 7 pm job
-/// inside that week, when nobody is on site at 7 pm on any of those days.
+/// True when two daily windows overlap on any day they both run.
 bool dailyWindowsOverlap({
   required DateTime aStart,
   required DateTime aEnd,
   required DateTime bStart,
   required DateTime bEnd,
 }) {
-  // Every pair, not just matching day indices: an overnight window runs into
-  // the FOLLOWING calendar day, so a night shift's first window can overlap a
-  // job dated the next morning. Both sides are capped at
-  // maxAppointmentSpanDays, so this is at most 14x14 instant comparisons.
+  // Compare every clamped window pair to catch overnight overlaps.
   final bWindows = _windowsOf(bStart, bEnd);
   return _windowsOf(aStart, aEnd).any(
     (a) => bWindows.any(
@@ -294,9 +168,7 @@ bool dailyWindowsOverlap({
   );
 }
 
-/// Each work day's concrete window for a daily [start]–[end] pair, clamped to
-/// [maxAppointmentSpanDays]. Empty for a corrupt pair whose end precedes its
-/// start.
+/// Concrete work windows for a daily [start]-[end] pair.
 List<({DateTime start, DateTime end})> _windowsOf(
   DateTime start,
   DateTime end,
@@ -310,17 +182,7 @@ List<({DateTime start, DateTime end})> _windowsOf(
   ];
 }
 
-/// Buckets [records] by the days they run, clipped to [range].
-///
-/// Slices are generated per WORK day — each day the daily window begins — not
-/// per calendar day the stored instant span touches. That one rule is what
-/// makes a night shift file under the evening it starts and show nothing on
-/// the morning it ends.
-///
-/// A run longer than [maxAppointmentSpanDays] is clamped to that many slices
-/// and its real, un-clamped length is reported through [onSpanClamped]. A
-/// corrupt record whose day count comes back below 1 is dropped silently
-/// instead — there is no day left for it to render on.
+/// Buckets appointment day slices by work day, clipped to [range].
 Map<DateTime, List<AppointmentDaySlice>> expandToDays(
   Iterable<AppointmentRecord> records,
   AppointmentDateRange range, {
@@ -333,8 +195,7 @@ Map<DateTime, List<AppointmentDaySlice>> expandToDays(
       appointment.endTime,
     );
     if (rawCount < 1) continue;
-    // A corrupt endTime years out must not explode the index. Clamp, but
-    // report it — a silently truncated run reads as a short job.
+    // Clamp oversized spans and report the original count.
     final count = rawCount > maxAppointmentSpanDays
         ? maxAppointmentSpanDays
         : rawCount;
@@ -344,8 +205,7 @@ Map<DateTime, List<AppointmentDaySlice>> expandToDays(
     for (var i = 0; i < count; i++) {
       final day = addCalendarDays(startDate, i);
       if (day.isBefore(range.start) || !day.isBefore(range.end)) continue;
-      // The CLAMPED count, not rawCount — otherwise dayIndex can never reach
-      // dayCount on a clamped run and isLastDay never fires.
+      // Use the clamped count so `isLastDay` remains reachable.
       (slicesByDay[day] ??= <AppointmentDaySlice>[]).add(
         _sliceAt(appointment, day: day, index: i + 1, count: count),
       );
@@ -357,21 +217,7 @@ Map<DateTime, List<AppointmentDaySlice>> expandToDays(
   return slicesByDay;
 }
 
-/// Three tiers, outermost first.
-///
-/// **Open before closed.** A day's agenda answers "what is left to do", so a
-/// job finished at 7 AM must not hold its slot above the 8 AM job that hasn't
-/// started. Both terminal states sink — a cancelled visit is as done with as a
-/// completed one. It reads the STORED status via [AppointmentRecord.isClosed],
-/// never `displayStatus`, so this comparator stays clock-free like the rest of
-/// the module.
-///
-/// **All-day before timed.** An all-day block owns the whole day, so it reads
-/// above the clock. A continuing TIMED job has a real start time today and
-/// deliberately takes its place in clock order rather than being pinned.
-///
-/// **Then window start.** Both tiers above apply within the closed block too,
-/// so the finished work still reads in the order it happened.
+/// Sorts open work first, then all-day before timed, then by window start.
 int _agendaOrder(AppointmentDaySlice a, AppointmentDaySlice b) {
   final aClosed = a.appointment.isClosed;
   final bClosed = b.appointment.isClosed;
@@ -382,22 +228,7 @@ int _agendaOrder(AppointmentDaySlice a, AppointmentDaySlice b) {
   return a.windowStart.compareTo(b.windowStart);
 }
 
-/// A booked daily window split into ONE window per work day.
-///
-/// The create path's half of the day-scoping rules: [sliceFor] takes a wide
-/// document apart for RENDERING, this takes a form's resolved span apart for
-/// WRITING, and the two have to agree about what a day of a run is. It lives
-/// here for that reason — a second spelling of "which days does this run on"
-/// at a call site is the drift this file exists to prevent.
-///
-/// Each window carries the same time of day as the original, composed as LOCAL
-/// wall clock, so a run crossing a DST shift stays 9-to-5 on every day rather
-/// than sliding an hour. An overnight window ends the following calendar
-/// morning, which is why such a run counts nights rather than days.
-///
-/// Always returns at least one window and never more than
-/// [maxAppointmentSpanDays] — a corrupt pair whose end precedes its start books
-/// the single day it started on rather than nothing at all.
+/// Splits a booked daily window into one local-time window per work day.
 List<({DateTime start, DateTime end})> expandRunWindows(
   DateTime start,
   DateTime end,

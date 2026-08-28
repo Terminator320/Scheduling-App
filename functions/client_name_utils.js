@@ -242,11 +242,11 @@ function composeStored(opts) {
 
 /**
  * The stored `type` values that mean "organization". Hand-mirrors
- * `ClientType.commercial` / `ClientType.propertyManagement` — a
- * property-management company is a business with a contact person, which is
- * exactly the shape `clientDisplayName` has to get right.
+ * `ClientType.commercial` / `ClientType.building` — an apartment or condo
+ * building is a business with an on-site contact person, which is exactly the
+ * shape `clientDisplayName` has to get right.
  */
-const BUSINESS_TYPES = new Set(["commercial", "property_mgmt"]);
+const BUSINESS_TYPES = new Set(["commercial", "building"]);
 
 /**
  * Whether this client is an ORGANIZATION rather than a person.

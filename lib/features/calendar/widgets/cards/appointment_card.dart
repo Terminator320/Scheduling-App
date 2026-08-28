@@ -12,29 +12,18 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
-/// How much of the crew the card shows — both the bands the colour bar splits
-/// into and the avatars in the stack, deliberately the same number so the two
-/// always agree. Past this a band is too thin to read and the stack outgrows
-/// the meta line.
+/// Shared cap for crew bar bands and avatar stack.
 const int _kMaxCrewShown = 4;
 
-/// The day-off strip's dashed rail geometry: inset from the leading edge,
-/// stroke width, and the gap between it and the avatar. Named because the
-/// rail is POSITIONED (from [_kRailInset], [_kRailWidth]) while the content is
-/// PADDED past it by all three — the two spellings have to agree, or the rail
-/// paints under the avatar.
+/// Day-off strip dashed rail geometry.
 const double _kRailInset = 9;
 const double _kRailWidth = 3;
 const double _kRailGap = 10;
 
-/// Vertical padding inside the day-off strip. Its 44px floor still wins for a
-/// single-line (untitled) block.
+/// Vertical padding inside the day-off strip.
 const double _kStripPaddingY = 9;
 
-/// The colour bar down the card's leading edge: a flat colour for one crew, a
-/// hard-stopped gradient of everyone's colours for more. Deliberately NOT grey
-/// for a multi-crew job — grey reads as "unassigned" and throws away the one
-/// thing the bar is for (owner call, 2026-07-31).
+/// Leading crew bar decoration.
 BoxDecoration _crewBarDecoration(ThemeData theme, List<Color> colors) {
   if (colors.isEmpty) return BoxDecoration(color: theme.palette.textFaint);
   if (colors.length == 1) return BoxDecoration(color: colors.first);
@@ -43,8 +32,7 @@ BoxDecoration _crewBarDecoration(ThemeData theme, List<Color> colors) {
     gradient: LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      // Each colour twice against a shared stop, so the bands meet at a hard
-      // edge instead of blending into mud.
+      // Duplicate colors make hard band edges.
       colors: [
         for (final color in colors) ...[color, color],
       ],
@@ -55,9 +43,7 @@ BoxDecoration _crewBarDecoration(ThemeData theme, List<Color> colors) {
   );
 }
 
-/// The app's core component: one appointment, everywhere it appears — the
-/// calendar agenda, the day route, client job history, the dashboard, and the
-/// history list (which used to have its own `AppointmentTile`).
+/// One appointment card reused across appointment surfaces.
 class AppointmentCard extends StatelessWidget {
   const AppointmentCard({
     required this.appointment,
@@ -73,60 +59,40 @@ class AppointmentCard extends StatelessWidget {
     this.slice,
   });
 
-  /// Minimum height of a collapsed row's body.
-  ///
-  /// The collapsed padding + title + meta line lands near 56px, which already
-  /// clears Material's 48px minimum — but not by enough to leave to chance at
-  /// the OS's smallest text scale. Pinning it makes the tap target structural
-  /// rather than incidental. Growing the other way needs nothing: the body is a
-  /// Column, so large text simply makes the row taller.
+  /// Minimum collapsed tap target height.
   static const double _kClosedMinHeight = 48;
 
   final AppointmentRecord appointment;
 
-  /// Assignees in order. Empty is legitimate — an unassigned job.
+  /// Assignees in display order.
   final List<AppointmentCrew> crew;
 
-  /// Overrides the record's denormalized client name (the client detail
-  /// surfaces already know the live one).
+  /// Overrides the record's denormalized client name.
   final String? clientName;
 
   final VoidCallback? onTap;
   final bool selected;
 
-  /// Rendered below the meta rows — the day route's Navigate pill.
+  /// Rendered below the meta rows.
   final Widget? footer;
 
-  /// Strikes the title through and drops the card to 0.6 opacity when the
-  /// visit is cancelled. History, client job history and — since closed jobs
-  /// sank into their own block — the day's agenda all want this.
+  /// Applies cancelled-row styling.
   final bool dimWhenCancelled;
 
   /// Today's cards use a 3px bar rather than 4px, per the design.
   final bool emphasizeToday;
 
-  /// The calendar agenda's sunk-block treatment for a closed job: the green
-  /// success tint for `done`, and a collapsed body that puts the time beside
-  /// the client and drops the crew avatars.
-  ///
-  /// Opt-in because the agenda is the only surface that SORTS closed work to
-  /// the bottom — everywhere else a finished job still sits in context, where
-  /// shrinking it would just hide information.
+  /// Applies the agenda's collapsed closed-job treatment.
   final bool collapseWhenClosed;
 
-  /// This card's day within a multi-day run. Null for surfaces that show a job
-  /// once (history, client job history) rather than per day.
+  /// This card's day within a multi-day run.
   final AppointmentDaySlice? slice;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    // TIME OFF is not a job, so it is not a card: no crew colour bar, no fill,
-    // no shadow — a low strip that reads as a fact about the day rather than
-    // an item in the list. It lives HERE rather than at the call sites because
-    // `AppointmentCard` is the one appointment card, so every surface that
-    // renders appointments gets the same treatment for free.
+    // Time off renders as a strip instead of a job card.
     if (appointment.isTimeOff) {
       return _DayOffStrip(
         appointment: appointment,
@@ -153,9 +119,7 @@ class AppointmentCard extends StatelessWidget {
               child: Semantics(
                 label: model.semanticsLabel,
                 excludeSemantics: true,
-                // IntrinsicHeight stretches the crew bar to the card's full
-                // height. Nothing inside this subtree may use LayoutBuilder,
-                // AutoSizeText or FittedBox — they cannot report intrinsics.
+                // IntrinsicHeight forbids LayoutBuilder/FittedBox descendants.
                 child: IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -181,24 +145,14 @@ class AppointmentCard extends StatelessWidget {
     return model.isCancelled ? Opacity(opacity: 0.6, child: card) : card;
   }
 
-  /// One band per crew member rather than the first assignee's colour alone: a
-  /// two-person job reads as two-person at a glance, and nobody's colour is
-  /// thrown away. An assignee with no colour is skipped, not greyed.
-  ///
-  /// Capped at [_kMaxCrewShown] — the SAME cap the avatar stack uses, so the
-  /// bands and the faces can never disagree about how much of the crew the
-  /// card is showing.
+  /// Crew colors for the leading bar.
   List<Color> _barColors(ThemeData theme) => [
     for (final member in crew.take(_kMaxCrewShown))
       if (member.color case final stored?)
         crewColorOf(theme, stored.toARGB32()),
   ];
 
-  /// The card's fill.
-  ///
-  /// Selection wins outright; a collapsed *done* job otherwise takes the same
-  /// success token the "Complete" chip fills with, so the card and its own
-  /// chip can't disagree. (In light the two are the same green anyway.)
+  /// The card's fill color.
   Color _cardColor(ThemeData theme, _CardModel model) {
     if (selected) return theme.colorScheme.secondaryContainer;
     if (model.collapsed && model.status.isDone) {
@@ -207,12 +161,7 @@ class AppointmentCard extends StatelessWidget {
     return theme.colorScheme.surface;
   }
 
-  /// The card's text column — full height, or the agenda's collapsed row for a
-  /// closed job.
-  ///
-  /// Collapsed drops the crew avatars and puts the time beside the client on
-  /// one line. The colour bar still carries the crew, so *who* survives the
-  /// collapse; only the faces go.
+  /// The card body for full or collapsed layout.
   Widget _body(ThemeData theme, _CardModel model) {
     final titleRow = _TitleRow(
       title: appointment.title,
@@ -265,11 +214,7 @@ class AppointmentCard extends StatelessWidget {
     );
   }
 
-  /// The card's mono time line, scoped to the day this card represents.
-  ///
-  /// The stored times are a DAILY window, so every day of a run reads the same
-  /// clock — only the counter moves. "All day" is reserved for `isAllDay` and
-  /// is never borrowed to describe a timed job's middle day.
+  /// Mono time line for this card's represented day.
   String _timeLabel(BuildContext context) {
     final l10n = context.l10n;
     final window = slice;
@@ -299,28 +244,7 @@ class AppointmentCard extends StatelessWidget {
   }
 }
 
-/// A day off, in place of the card.
-///
-/// Reads the typed reason as the headline with `<name> is off` beneath it, and
-/// once the last day has passed `<name> was off` with the Complete chip a
-/// finished job wears — see [AppointmentRecord.displayStatusAt], which derives
-/// that from the clock rather than from any write.
-///
-/// ONE layout serves both cases (owner call, 2026-08-25): the headline slot is
-/// ALWAYS filled — the reason when there is one, the sentence when there isn't
-/// — and only the caption below it is conditional. An untitled block therefore
-/// renders its sentence a little heavier than it used to (`titleSmall` rather
-/// than `bodyMedium`); that is the accepted price of one row shape instead of
-/// two that drift apart. Never render both slots from the same string.
-///
-/// The crew colour comes back as a DASHED rail, reversing what this comment
-/// said until 2026-08-25 — that the colour survived only as the avatar, since
-/// "the BAR is what says a crew is on this job, and a day off has no job to be
-/// on". The dashes are the reason it can: they read as the negative of the
-/// card's solid bar rather than a quieter version of it, and they are what
-/// lets two stacked absences be told apart before any text is read. What still
-/// keeps this from reading as a card holds unchanged — no card fill, no
-/// shadow, and a headline one size below the card's title.
+/// A day off rendered in place of a job card.
 class _DayOffStrip extends StatelessWidget {
   const _DayOffStrip({
     required this.appointment,
@@ -338,9 +262,7 @@ class _DayOffStrip extends StatelessWidget {
     final l10n = context.l10n;
     final displayStatus = AppointmentStatus.fromRaw(appointment.displayStatus);
     final isOver = displayStatus.isTerminal;
-    // The crew is who the block is FOR, so the sentence names them rather than
-    // the title — a day off usually has none typed, and an untitled one would
-    // otherwise read "Personal".
+    // Name the crew the day off belongs to.
     final crewLabel = _crewLabel(context);
     final name = crewLabel ?? appointment.title.trim();
     final sentence = isOver
@@ -361,9 +283,7 @@ class _DayOffStrip extends StatelessWidget {
         child: Semantics(
           label: [?reason, sentence, l10n.calendar_dayOff].join(', '),
           excludeSemantics: true,
-          // The rail is positioned rather than laid out in the Row so the
-          // strip keeps sizing to its text — a stretched Row child would need
-          // an IntrinsicHeight to resolve its own height first.
+          // Position the rail without forcing intrinsic layout.
           child: Stack(
             children: [
               Container(
@@ -379,10 +299,7 @@ class _DayOffStrip extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: theme.statusColors.neutralContainer,
                   borderRadius: BorderRadius.circular(AppRadius.r12),
-                  // Load-bearing: that fill resolves to `AppColors.paper`,
-                  // which is also `scaffoldBackgroundColor`, so in the light
-                  // theme the strip has no container at all without an edge —
-                  // two stacked days off run together.
+                  // The border separates stacked day-off rows.
                   border: Border.all(color: theme.colorScheme.outline),
                 ),
                 child: Row(
@@ -428,9 +345,7 @@ class _DayOffStrip extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sp8),
-                    // The finished state borrows the job chip so "done" looks
-                    // the same everywhere; the open state is a caption, not a
-                    // status.
+                    // Finished days off reuse the done chip.
                     if (isOver)
                       StatusChip(status: displayStatus)
                     else
@@ -450,13 +365,7 @@ class _DayOffStrip extends StatelessWidget {
                   child: Opacity(
                     opacity: isOver ? 0.5 : 1,
                     child: CustomPaint(
-                      // A null stored colour means the assignee no longer
-                      // resolves to an employee — `AppointmentCrew` has the
-                      // call site substitute a neutral, and the card's crew
-                      // bar uses this same one. Never `colorScheme.primary`:
-                      // `crewColorOf` keys on STORED light-theme hues, so the
-                      // dark primary misses the override map and takes the
-                      // generic lift on top of an already-lifted colour.
+                      // Null stored color falls back to the neutral rail.
                       painter: _DashedRailPainter(
                         lead.color == null
                             ? theme.palette.textFaint
@@ -481,8 +390,7 @@ class _DayOffStrip extends StatelessWidget {
   }
 }
 
-/// The day-off strip's leading rail: 4 on, 4 off, down the full inner height.
-/// See [_DayOffStrip] for why a day off gets dashes where a job gets a bar.
+/// Dashed leading rail for day-off strips.
 class _DashedRailPainter extends CustomPainter {
   const _DashedRailPainter(this.color);
 
@@ -512,13 +420,7 @@ class _DashedRailPainter extends CustomPainter {
       oldDelegate.color != color;
 }
 
-/// Everything `build` derives before it builds anything: the three variant
-/// flags (compact / collapsed / cancelled), the two composed strings and the
-/// spoken label.
-///
-/// Pulled out because `_body` needed most of them and was taking them one
-/// named parameter at a time — eight of them, which is what made the three
-/// variants hard to read side by side.
+/// Derived card presentation model.
 class _CardModel {
   const _CardModel({
     required this.status,
@@ -536,13 +438,10 @@ class _CardModel {
     final appointment = card.appointment;
     final status = AppointmentStatus.fromRaw(appointment.displayStatus);
     final timeLabel = card._timeLabel(context);
-    // The denormalized count, which trails a fresh upload by the recount
-    // debounce. Fine for an indicator; see AppointmentRecord.hasPictures for
-    // why it must not gate a read.
+    // Denormalized photo count is indicator-only.
     final hasPhotos = appointment.hasPictures;
 
-    // A personal job has no client, so it names itself in that slot rather
-    // than leaving the meta line as the crew alone.
+    // Personal jobs name themselves in the client slot.
     final client = appointment.isPersonal
         ? context.l10n.calendar_personal
         : (card.clientName ?? appointment.clientName).trim();
@@ -555,9 +454,7 @@ class _CardModel {
       isCancelled: card.dimWhenCancelled && status.isCancelled,
       hasPhotos: hasPhotos,
       timeLabel: timeLabel,
-      // The crew is now the avatar stack, so the meta text is the client
-      // alone. A job with no client to name (an unassigned legacy record)
-      // falls back to the crew names rather than leaving the line blank.
+      // Legacy no-client jobs fall back to crew names.
       metaLine: client.isNotEmpty ? client : (card._crewLabel(context) ?? ''),
       semanticsLabel: [
         appointment.title,
@@ -565,8 +462,7 @@ class _CardModel {
         timeLabel,
         for (final member in card.crew) member.name,
         if (client.isNotEmpty) client,
-        // The glyph is the only cue that a job carries photos, so it has to be
-        // spoken — the card excludes its subtree's own semantics.
+        // Include the photo cue in the composed semantics label.
         if (hasPhotos) context.l10n.calendar_hasPhotos,
       ].join(', '),
     );
@@ -574,9 +470,7 @@ class _CardModel {
 
   final AppointmentStatus status;
 
-  /// Time off wears a "Day off" chip where the status normally sits — the card
-  /// still renders in full, it just isn't work. See
-  /// [AppointmentRecord.isTimeOff].
+  /// True when the status chip should read as day off.
   final bool isTimeOff;
   final bool compact;
   final bool collapsed;
@@ -607,7 +501,7 @@ class _TitleRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // A plain Text, never AutoSizeText — see the IntrinsicHeight note above.
+    // Keep plain Text under IntrinsicHeight.
     final titleText = Text(
       title,
       maxLines: compact ? 3 : 2,
@@ -630,9 +524,7 @@ class _TitleRow extends StatelessWidget {
           )
         : null;
 
-    // The photo cue rides the title rather than the time line, so it reaches
-    // the eye first and — because this row is shared — survives the agenda's
-    // collapsed treatment, where the meta line loses the crew avatars.
+    // Keep the photo cue visible in collapsed rows.
     final photos = hasPhotos
         ? const Padding(
             padding: EdgeInsets.only(top: 2, left: AppSpacing.sp8),
@@ -674,11 +566,7 @@ class _TitleRow extends StatelessWidget {
   }
 }
 
-/// A closed job's single meta line: the mono time, then the client.
-///
-/// The time keeps its multi-day counter — a 5-day run marked done still shows
-/// on every one of its days, and without "Day 2 of 5" those rows are
-/// indistinguishable from each other.
+/// Closed-job meta line with time and client.
 class _ClosedMetaRow extends StatelessWidget {
   const _ClosedMetaRow({required this.time, required this.label});
 
@@ -718,13 +606,7 @@ class _ClosedMetaRow extends StatelessWidget {
   }
 }
 
-/// The card's "this job has photos" cue, at the end of the title line and just
-/// before the status chip. Presence only — the count lives in the detail sheet,
-/// and the card is answering "is there anything to look at here", not "how
-/// much".
-///
-/// Semantics are excluded because the card composes one label for the whole
-/// subtree; [AppointmentCard] adds the spoken form there.
+/// Photo-presence cue for the title line.
 class _PhotoGlyph extends StatelessWidget {
   const _PhotoGlyph();
 
@@ -736,19 +618,13 @@ class _PhotoGlyph extends StatelessWidget {
   );
 }
 
-/// Every assignee's avatar, overlapped into a stack. Overlapping rather than
-/// spacing them keeps a four-person job from eating the client's name; the
-/// stack's width is computed rather than laid out, because the card's
-/// `IntrinsicHeight` forbids a `LayoutBuilder` anywhere in this subtree.
+/// Overlapped assignee avatar stack.
 class _CrewAvatars extends StatelessWidget {
   const _CrewAvatars({required this.crew});
 
   final List<AppointmentCrew> crew;
 
-  /// How much of each avatar the next one covers. The diameter comes from
-  /// [AvatarSize.xs] itself — the stack has to size itself by hand (no
-  /// `LayoutBuilder` under `IntrinsicHeight`), so a local copy would silently
-  /// drift if the avatar sizes ever changed.
+  /// How much of each avatar the next one covers.
   static const double _overlap = 6;
 
   @override
@@ -764,20 +640,17 @@ class _CrewAvatars extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // Painted right-to-left so each avatar overlaps the one after it,
-          // which is what makes the stack read as a stack.
+          // Paint right-to-left for the overlap stack.
           for (var i = shown.length - 1; i >= 0; i--)
             Positioned(
               left: i * step,
               child: Container(
-                // A hairline of the card's own colour keeps two adjacent crew
-                // colours from bleeding into one shape.
+                // Separate adjacent crew colors with a hairline.
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: scheme.surface, width: 1.5),
                 ),
-                // AppAvatar resolves crewColorOf/avatarForegroundFor itself,
-                // so the STORED colour goes straight through.
+                // AppAvatar resolves the stored crew color.
                 child: AppAvatar(
                   name: shown[i].name,
                   color: shown[i].color,

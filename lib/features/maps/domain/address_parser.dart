@@ -110,8 +110,120 @@ class AddressParser {
     final resolvedApt = trimmedApt.isNotEmpty
         ? trimmedApt
         : (parsed?.apt ?? '').trim();
-    return combineAptAndStreet(resolvedStreet, resolvedApt);
+    return combineAptAndStreet(
+      _withoutRepeatedApt(resolvedStreet, resolvedApt),
+      resolvedApt,
+    );
   }
+
+  /// Peels any FURTHER `<apt>-` still leading [street] after [splitApt] took
+  /// the first one off.
+  ///
+  /// `splitApt` peels exactly one, so a street that already carried the unit
+  /// came back out prefixed again — "210-210-4450 Prom. Paton", three of which
+  /// are in prod. It rendered as "210-4450 Prom. Paton #210" (the unit twice)
+  /// and, worse, re-saving in the app did NOT repair it: the extra prefix
+  /// survived every round trip, so the doc was stuck. This heals one on its
+  /// next ordinary save.
+  ///
+  /// Only an EXACT `<resolvedApt>-` repeat is taken, never a general leading
+  /// number, so a civic range keeps whatever `splitApt` left of it.
+  static String _withoutRepeatedApt(String street, String apt) {
+    if (apt.isEmpty) return street;
+    final prefix = '$apt-';
+    var value = street;
+    while (value.startsWith(prefix) && value.length > prefix.length) {
+      value = value.substring(prefix.length).trim();
+    }
+    return value;
+  }
+
+  /// The street line alone — [stored] with any trailing segments that merely
+  /// repeat the structured locality fields removed.
+  ///
+  /// Hand-mirrors `streetFromAddress` (`functions/wave/mappers.js`), which the
+  /// Wave push has always needed because `clients/{id}.address` carries more
+  /// than a street. Keep the two in step; their tests share worked examples.
+  ///
+  /// It strips from the TAIL rather than splitting on the first comma, so a
+  /// street like "100 Main St, Building A" keeps its second segment. With no
+  /// locality fields to identify a tail (a legacy doc that predates them) it
+  /// falls back to the first segment rather than guessing, and it never strips
+  /// the last remaining one — a street that IS the city name must not reduce
+  /// to nothing.
+  ///
+  /// **Idempotent**: an already-reduced street passes through untouched, which
+  /// is what lets it run on a collection holding both shapes — the Wave import
+  /// writes a street line, the app used to write the whole picked string.
+  static String streetOnly(
+    String stored, {
+    String city = '',
+    String province = '',
+    String postalCode = '',
+    String country = '',
+  }) {
+    final segments = stored
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (segments.length <= 1) return segments.isEmpty ? '' : segments.first;
+
+    final tails = <String>{
+      for (final part in [city, province, postalCode, country])
+        if (_localityKey(part).isNotEmpty) _localityKey(part),
+      if (province.trim().isNotEmpty && postalCode.trim().isNotEmpty)
+        _localityKey('$province $postalCode'),
+    };
+    if (tails.isEmpty) return segments.first;
+
+    var end = segments.length;
+    while (end > 1 && tails.contains(_localityKey(segments[end - 1]))) {
+      end -= 1;
+    }
+    return segments.take(end).join(', ');
+  }
+
+  /// The whole address as one line, rebuilt from the street plus the structured
+  /// fields — "1234 Rue Principale #4, Montréal, QC H2X 1Y4, Canada".
+  ///
+  /// Reducing through [streetOnly] FIRST is the load-bearing half: a legacy doc
+  /// whose `address` still holds the locality would otherwise render its city
+  /// twice. That makes this safe on both stored shapes and safe to re-apply to
+  /// its own output.
+  static String composeFull(
+    String stored, {
+    String city = '',
+    String province = '',
+    String postalCode = '',
+    String country = '',
+  }) {
+    final street = canonicalToDisplay(
+      streetOnly(
+        stored,
+        city: city,
+        province: province,
+        postalCode: postalCode,
+        country: country,
+      ),
+    );
+    // Province and postal code share a segment, the way an address is written.
+    final region = [
+      province.trim(),
+      postalCode.trim(),
+    ].where((part) => part.isNotEmpty).join(' ');
+    return [
+      street,
+      city.trim(),
+      region,
+      country.trim(),
+    ].where((part) => part.isNotEmpty).join(', ');
+  }
+
+  /// Collapses inner whitespace and case so two spellings of the same locality
+  /// compare equal. Mirrors the JS `norm`.
+  static String _localityKey(String value) =>
+      value.replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
 
   static String toCanonical(String text) {
     final trimmed = text.trim();

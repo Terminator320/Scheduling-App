@@ -3,33 +3,45 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
+import 'package:scheduling/features/clients/domain/policies/client_building.dart';
+import 'package:scheduling/features/clients/widgets/sections/client_address_filter_menu.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Residential / Commercial / Property mgmt / Archived filter chips above the
-/// clients list.
+/// Residential / Commercial / Building / Archived filter chips above the
+/// clients list, plus the Address menu.
 ///
 /// The type options are the fixed [ClientType.pickable] set, so unlike a
 /// free-text vocabulary this needs no query to discover what to offer. Tapping
 /// the selected chip clears the filter, mirroring `ClientTypeChips`. Archived
 /// is a peer chip rather than a modifier: the chips are mutually exclusive, so
 /// the state is one sealed [ClientsFilter], not a type plus a flag.
+///
+/// ADDRESSES are the free-text vocabulary that rule excludes, which is why they
+/// arrive as a menu ([ClientAddressFilterMenu]) rather than a chip each — see
+/// that file. It is still a peer of the chips: selecting one clears whichever
+/// chip was on, because the state is one sealed value.
 class ClientTypeFilterBar extends StatelessWidget {
   const ClientTypeFilterBar({
     required this.selected,
     required this.onChanged,
+    this.buildings = const [],
     super.key,
   });
 
   final ClientsFilter selected;
   final ValueChanged<ClientsFilter> onChanged;
 
+  /// Addresses shared by two or more clients. Empty renders no menu at all.
+  final List<ClientBuilding> buildings;
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     return Semantics(
       label: l10n.clients_filterByType,
-      // The options are a fixed three, so this scrolls (for long labels at large
-      // text scale) without paying for a lazy sliver viewport.
+      // The chips are a fixed four and the menu is one more, so this scrolls
+      // (for long labels at large text scale) without paying for a lazy sliver
+      // viewport.
       child: SizedBox(
         height: 48,
         child: SingleChildScrollView(
@@ -54,6 +66,11 @@ class ClientTypeFilterBar extends StatelessWidget {
                 onSelected: (_) => onChanged(
                   toggledFilter(selected, const ClientsFilterArchived()),
                 ),
+              ),
+              ClientAddressFilterMenu(
+                buildings: buildings,
+                selected: selected,
+                onChanged: onChanged,
               ),
             ],
           ),

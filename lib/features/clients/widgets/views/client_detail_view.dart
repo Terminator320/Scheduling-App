@@ -157,7 +157,7 @@ class _ProfileCard extends StatelessWidget {
   final ClientRecord client;
   final VoidCallback onEdit;
 
-  /// "Property mgmt · since Apr 2023" — either half is dropped when absent,
+  /// "Building · since Apr 2023" — either half is dropped when absent,
   /// so a typeless client with no createdAt renders no line at all.
   String _subtitle(BuildContext context) {
     final l10n = context.l10n;

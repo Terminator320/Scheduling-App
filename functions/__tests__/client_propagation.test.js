@@ -117,6 +117,48 @@ describe("relevantClientChange", () => {
     expect(change).toEqual({address: {from: "1 Old St", to: "2 New Rd"}});
   });
 
+  test("normalizing `address` to the street line propagates NOTHING", () => {
+    // The safety property the address backfill rests on. An appointment holds
+    // ONE address string and no city/province/postal of its own, so fanning a
+    // stripped street onto it would destroy the locality with nothing left to
+    // rebuild from. Both shapes compose to the same string, so the change is
+    // invisible here.
+    const locality = {
+      city: "Montréal", province: "QC", postalCode: "H2X 1Y4",
+      country: "Canada",
+    };
+    const change = relevantClientChange(
+        {address: "1234 Rue Principale, Montréal, QC H2X 1Y4, Canada",
+          ...locality},
+        {address: "1234 Rue Principale", ...locality});
+    expect(change).toBeNull();
+  });
+
+  test("an apt-bearing client now MATCHES the booked address", () => {
+    // Predates the split: the app books the composed address while the doc
+    // stores the canonical `4-1234 ...`, so `from` never equalled what the
+    // appointment held and an apt-bearing client silently never took an
+    // address correction.
+    const locality = {city: "Montréal", province: "QC"};
+    const change = relevantClientChange(
+        {address: "4-1234 Rue Principale", ...locality},
+        {address: "4-1234 Rue Sherbrooke", ...locality});
+    expect(change.address.from)
+        .toBe("4-1234 Rue Principale, Montréal, QC");
+    expect(change.address.to)
+        .toBe("4-1234 Rue Sherbrooke, Montréal, QC");
+  });
+
+  test("a CITY edit alone now reaches the appointment", () => {
+    // The stored `address` is untouched by this edit, so comparing it raw saw
+    // no change and the appointment kept the old city forever.
+    const change = relevantClientChange(
+        {address: "1 Rue Peel", city: "Laval"},
+        {address: "1 Rue Peel", city: "Montréal"});
+    expect(change.address).toEqual(
+        {from: "1 Rue Peel, Laval", to: "1 Rue Peel, Montréal"});
+  });
+
   test("does NOT propagate when the previous address was empty", () => {
     // An empty stored appointment address means custom/none. Matching on ""
     // would clobber those, so an empty-from change carries no instruction.

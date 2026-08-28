@@ -60,8 +60,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   DateTime? _selectedDay;
   late AppointmentDateRange _appointmentRange;
 
-  /// Null for an employee — see [_publishRange]. Captured once so [dispose] can
-  /// clear the range without touching `ref`.
+  /// Captured so dispose can clear without touching `ref`.
   OpenCalendarRange? _openRange;
   late DateFormat _monthLabelFormat;
   late DateFormat _monthShortLabelFormat;
@@ -87,9 +86,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     if (widget.isAdmin) {
       _openRange = ref.read(openCalendarRangeProvider.notifier);
     }
-    // Post-frame: this runs while the tree is still building, and Riverpod
-    // refuses a provider write from there. Every later publish comes from a
-    // gesture handler, which is already outside the build phase.
+    // Publish after build so Riverpod accepts the provider write.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _publishRange();
     });
@@ -98,24 +95,12 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   @override
   void dispose() {
     _agendaController.dispose();
-    // Through the captured notifier, never `ref`: Riverpod 3 throws on an
-    // unmounted consumer. Clearing matters because the provider is keepAlive —
-    // a stale range left behind by a torn-down calendar is one a later sheet
-    // would happily reduce, reopening a listener nothing else holds. Only if
-    // this screen still owns it, or a replacement calendar built before this
-    // teardown loses the range it just published.
+    // Clear only the range this screen still owns.
     _openRange?.clearIfHolding(this);
     super.dispose();
   }
 
-  /// Hands the window this screen holds open to whatever is opened FROM it —
-  /// today the add sheet's assignee picker, which reduces this very stream
-  /// rather than forking a second listener for the same documents.
-  ///
-  /// Admin only: `appointmentsInRangeProvider` constrains `startTime` alone, so
-  /// a technician joining that listener is rejected by the rules outright.
-  /// Cleared on the way out, or a torn-down calendar leaves a stale range
-  /// behind that a later sheet would happily reduce.
+  /// Publishes the open calendar range for admin child surfaces.
   void _publishRange() => _openRange?.publish(this, _appointmentRange);
 
   void _onCollapseDrag(double dy) {
@@ -127,14 +112,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     setState(() {});
   }
 
-  // Show the "today" control whenever the day on screen isn't today — not just
-  // when the visible month differs, which left it hidden while the user was
-  // reading another day of the current month (owner call, 2026-07-30). [today]
-  // comes from currentDayProvider, so it re-derives across midnight.
-  //
-  // The month test is belt-and-braces: every paging path also selects the day
-  // it lands on, so the date test already covers a swipe away from today — but
-  // it keeps the pill honest for any future path that moves the grid alone.
+  // Show Today when either the selected day or focused month differs.
   bool _showTodayButton(DateTime today) =>
       !isSameDate(_selectedDay ?? _focusedDay, today) ||
       !isInMonth(today, _focusedDay);
@@ -151,10 +129,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     _publishRange();
   }
 
-  /// Paging to another month (by swipe or from the month picker) lands on that
-  /// month's first day and selects it, so the agenda below always describes the
-  /// grid above — [day] is already the 1st from both callers. Leaving the old
-  /// selection behind showed a day the grid wasn't even highlighting.
+  /// Moves focus and selection to the given month/day.
   void _setFocusedDay(DateTime day) {
     final newRange = AppointmentDateRange.forCalendar(
       focusedDay: day,
@@ -168,8 +143,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     _publishRange();
   }
 
-  /// Swiping the collapsed week strip moves one week and selects that week's
-  /// first day — the strip's analogue of paging the month grid.
+  /// Pages the collapsed week strip by one week.
   void _pageWeek(int direction) {
     final from = _selectedDay ?? _focusedDay;
     final weekStart = CalendarMonthGrid.weekStartOf(context);
@@ -178,12 +152,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   }
 
   Map<DateTime, List<AppointmentDaySlice>>? _dayIndex;
-  // Remembers which appointments list _dayIndex was last built from, so we
-  // know when it needs rebuilding.
+  // Tracks the source list used for _dayIndex.
   List<AppointmentRecord>? _indexedAppointments;
 
-  /// Rebuilds [_dayIndex] only when [source] is a different list instance than
-  /// the one last indexed — the index is otherwise recomputed every rebuild.
+  /// Rebuilds [_dayIndex] only for a new source list.
   void _refreshDayIndex(List<AppointmentRecord> source) {
     if (identical(source, _indexedAppointments)) return;
     _indexedAppointments = source;
@@ -194,7 +166,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           .read(loggerProvider)
           .warn(
             'APPT-RANGE appointment ${appointment.id} spans $actualDays days, '
-            'past the $maxAppointmentSpanDays-day cap — showing the first '
+            'past the $maxAppointmentSpanDays-day cap - showing the first '
             '$maxAppointmentSpanDays',
           ),
     );
@@ -203,8 +175,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   List<AppointmentDaySlice> _getEventsForDay(DateTime day) =>
       _dayIndex?[day.dateOnly] ?? const <AppointmentDaySlice>[];
 
-  /// The records running on [day], for the crew dots — lazy, since the grid
-  /// asks once per cell on every rebuild.
+  /// Records running on [day], used for crew dots.
   Iterable<AppointmentRecord> _appointmentsOn(DateTime day) =>
       _getEventsForDay(day).map((slice) => slice.appointment);
 
@@ -222,7 +193,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     _publishRange();
   }
 
-  // Only log on the data→error transition — .when would otherwise fire this on every rebuild while the stream stays errored.
+  // Report only the first data-to-error transition.
   void _onAppointmentsAsyncChange(
     AsyncValue<List<AppointmentRecord>>? previous,
     AsyncValue<List<AppointmentRecord>> next,
@@ -251,7 +222,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     if (picked != null && mounted) _setFocusedDay(picked);
   }
 
-  /// The appointments stream this screen renders — the whole business for admins, just their own jobs for employees.
+  /// Appointments stream for the current user scope.
   StreamProvider<List<AppointmentRecord>> get _appointmentsProvider =>
       widget.isAdmin
       ? appointmentsInRangeProvider(_appointmentRange)
@@ -260,7 +231,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           range: _appointmentRange,
         ));
 
-  /// Watches the relevant providers, refreshes the caches, and returns only the values [build] actually renders.
+  /// Prepares the provider values build renders.
   ({
     String userName,
     Map<String, Color> colorMap,
@@ -278,8 +249,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final userName = ref.watch(currentUserNameProvider);
     final colorMap = ref.watch(employeeColorMapProvider);
     final nameMap = ref.watch(employeeNameMapProvider);
-    // Watched, not DateTime.now(): the appointments stream only re-emits on a
-    // write, so an app left open across midnight would keep circling yesterday.
+    // Watch currentDayProvider so midnight updates the UI.
     final today = ref.watch(currentDayProvider);
 
     // Error logging is owned by the onAsyncChange listener in build.
@@ -304,9 +274,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       colorMap: colorMap,
       nameMap: nameMap,
       isLoading: appointmentsAsync.isLoading,
-      // Both forms go to the header, which measures the row and picks — a
-      // text-scale threshold can't know how wide "September" is in this
-      // locale on this device.
+      // Header decides which month label fits.
       monthLabel: _monthLabelFormat.format(_focusedDay),
       monthLabelShort: _monthShortLabelFormat.format(_focusedDay),
       yearLabel: _yearLabelFormat.format(_focusedDay),
@@ -316,22 +284,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
-  /// The agenda header's count: the day's total, plus how much of it is behind
-  /// them once anything is FINISHED — `3 JOBS · 1 DONE`.
-  ///
-  /// Neither side counts anything `countsAsWork` rejects. Time off is not work
-  /// at all, and a CANCELLED visit is work that is not happening — so a day
-  /// whose only entry is either reads "0 JOBS" with that card still listed
-  /// under it. The cards themselves stay in [events]; only the COUNT is
-  /// filtered.
-  ///
-  /// **Cancelled dropped 2026-08-25 (owner call), reversing the rule that this
-  /// tail counts `isClosed`.** It read "1 JOB · 1 DONE" for a day holding one
-  /// called-off visit, which is wrong twice over: a cancelled job is not a job
-  /// on the day, and it is certainly not DONE. It also put the header at odds
-  /// with the month grid, whose dots have dropped cancelled since 2026-08-17 —
-  /// the same day showed no dot and a full job count. The agenda's own
-  /// "Done · N" rule was moved with it, so the two still agree.
+  /// Agenda count label for work and done totals.
   static String _jobLabel(
     BuildContext context,
     List<AppointmentDaySlice> events,
@@ -351,9 +304,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
     final data = _prepareBuild(context);
 
-    // Both wrappers are session concerns that merely happen to be hosted here:
-    // a background photo upload fails long after its sheet is gone, and a
-    // role upgrade has to re-route whatever shell the person is standing in.
+    // Session listeners are hosted at the calendar shell.
     return RoleUpgradeListener(
       employeeId: widget.employeeId,
       isAdmin: widget.isAdmin,
@@ -415,14 +366,11 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
-  /// The collapsed week strip, or null while the month grid is on screen.
-  /// Collapse is portrait-only: the split layout's month pane has no room for a
-  /// rising strip and scrolls its two panes independently.
+  /// Collapsed week strip, hidden in split layout.
   Widget? _weekStrip(DateTime today, Map<String, Color> colorMap) {
     if (_splitCalendar || !_collapse.isCollapsed) return null;
     final selectedDay = _selectedDay ?? _focusedDay;
-    // Swipe the strip to page weeks, mirroring the month grid's pager. The
-    // taps inside still win — a horizontal drag recognizer doesn't claim them.
+    // Horizontal swipes page weeks.
     return GestureDetector(
       onHorizontalDragEnd: (details) {
         final velocity = details.primaryVelocity ?? 0;
@@ -443,8 +391,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
-  /// The Day-route control. Kept on the screen rather than inside the header
-  /// block because it is a feature-tour target this screen owns.
+  /// Day-route control owned by this screen's tour.
   Widget _dayRouteButton(BuildContext context) {
     final theme = Theme.of(context);
     return _tour.step(
@@ -524,8 +471,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           onMonthChanged: _setFocusedDay,
           dotColorsFor: (day) =>
               dayJobDotColors(_appointmentsOn(day), colorMap),
-          // The cell's semantics label speaks the dots' meaning, so it counts
-          // what the dots count — cancelled visits are excluded from both.
+          // Semantics count the same jobs as the dots.
           countFor: (day) => dottedJobsOn(_appointmentsOn(day)).length,
         ),
       );
@@ -539,8 +485,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     required String jobLabel,
   }) {
     final events = _getEventsForDay(_selectedDay ?? _focusedDay);
-    // The header, not the list, carries the tour step: a showcase target must
-    // be a box widget and the portrait agenda is a sliver.
+    // The header is the stable tour target.
     final agendaHeader = _tour.step(
       TourStepId.calendarDayList,
       child: AgendaHeader(dayTitle: dayTitle, jobLabel: jobLabel),
@@ -576,14 +521,13 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     required Map<String, String> nameMap,
     required DateTime today,
   }) {
-    // Scope each pane under its own PrimaryScrollController or they'll share the tab's controller.
+    // Give each split pane its own primary scroll controller.
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
           flex: 11,
-          // The grid derives its own height from the scaled day number, so
-          // the pane scrolls rather than clipping at large text sizes.
+          // Let the grid scroll instead of clipping at large text sizes.
           child: PrimaryScrollScope(
             child: SingleChildScrollView(
               child: _buildCalendar(colorMap, today),
@@ -604,8 +548,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                   colorMap: colorMap,
                   isLoading: isLoading,
                   isAdmin: widget.isAdmin,
-                  // Same floating FAB and Today pill as portrait — this pane
-                  // is the one they sit over in the split layout.
+                  // Reserve room for this pane's floating controls.
                   bottomClearance: kAgendaFloatingControlsClearance,
                 ),
               ],
@@ -616,8 +559,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
-  /// Portrait: TWO scroll areas — the grid is fixed above the agenda, so
-  /// reading down the day never moves the calendar.
+  /// Portrait layout with fixed grid and scrolling agenda.
   Widget _portraitContent({
     required List<AppointmentDaySlice> events,
     required Widget agendaHeader,
@@ -626,24 +568,11 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     required Map<String, String> nameMap,
     required DateTime today,
   }) {
-    // Portrait: the grid is FIXED above the agenda, and the jobs get their own
-    // viewport (owner call, 2026-07-31). Collapsing is then a deliberate drag
-    // on the jobs section rather than something that happens while reading down
-    // the day — and once collapsed, scrolling the jobs never moves the grid
-    // again. The old shared-viewport version needed a derived spacer to hold
-    // the extent the grid vacated; with two viewports there is no vacated
-    // extent to hold.
+    // The agenda scrolls independently from the fixed grid.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // The grid does NOT scroll (owner call, 2026-07-31) — the handle below
-        // is the only way to move it, so a stray drag on the month can't slide
-        // it under the header. `NeverScrollableScrollPhysics` keeps the
-        // viewport purely as overflow protection: `Flexible` lets the grid
-        // yield instead of running the column past the bottom on a small phone
-        // at a large text scale. At normal heights it shrink-wraps and this is
-        // inert. Don't swap the physics back in to "fix" a clipped month —
-        // that would restore the scroll the owner asked to remove.
+        // The grid viewport is overflow protection, not user scrolling.
         if (!_collapse.isCollapsed)
           Flexible(
             child: SingleChildScrollView(
@@ -651,9 +580,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
               child: _buildCalendar(colorMap, today),
             ),
           ),
-        // The line between the two sections IS the collapse control: drag it
-        // up to fold the grid into the header's week strip, down to bring it
-        // back. It stays put when collapsed so there is something to pull.
+        // The section divider is also the collapse control.
         _tour.step(
           TourStepId.calendarCollapse,
           child: CollapseHandle(
@@ -667,13 +594,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         Expanded(
           child: CustomScrollView(
             controller: _agendaController,
-            // Its own controller, not the primary one: the grid above is a
-            // second scrollable on this route, and the app-wide Scrollbar
-            // rejects two positions on one controller.
-            //
-            // Bouncing and always-scrollable so a day with one job still gives
-            // under the finger — collapse is driven by the handle, not by this
-            // list, so the bounce is feel alone.
+            // Use a private controller because the grid is another scrollable.
             physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics(),
             ),

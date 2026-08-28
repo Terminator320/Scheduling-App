@@ -9,7 +9,7 @@ class ImagePickerService {
       _logger = logger ?? AppLogger();
 
   static const double maxImageDimension = 1600;
-  // image_picker resizes and JPEG-compresses natively at decode time, so no separate compression pass is needed.
+  // image_picker handles native resize and JPEG compression.
   static const int imageQuality = 70;
 
   final ImagePicker _picker;
@@ -40,7 +40,7 @@ class ImagePickerService {
         imageQuality: imageQuality,
       );
 
-      return images.map((x) => File(x.path)).toList();
+      return [for (final image in images) File(image.path)];
     } catch (e, st) {
       _logger.warn('IMG-PICK multi pick failed', e, st);
       return const [];

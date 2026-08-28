@@ -60,7 +60,7 @@ const _fullClient = ClientRecord(
   city: 'Montréal',
   province: 'QC',
   postalCode: 'H2X 2S8',
-  type: ClientType.propertyManagement,
+  type: ClientType.building,
   accessNotes: 'Gate code 4821, park behind the loading dock.',
   onSiteManager: 'Jean-Philippe Tremblay',
   billingTerms: 'Net 30, deposit on booking',

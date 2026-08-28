@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
+import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
 import 'package:scheduling/features/clients/widgets/sections/client_type_filter_bar.dart';
@@ -136,9 +138,13 @@ class _ListInformationState extends State<ListInformation> {
             children: [
               _tour.stepIf(
                 TourStepId.clientsFilter,
-                ClientTypeFilterBar(
-                  selected: _filter,
-                  onChanged: (next) => setState(() => _filter = next),
+                Consumer(
+                  builder: (context, ref, _) => ClientTypeFilterBar(
+                    selected: _filter,
+                    onChanged: (next) => setState(() => _filter = next),
+                    buildings:
+                        ref.watch(clientBuildingsProvider).value ?? const [],
+                  ),
                 ),
               ),
               Expanded(

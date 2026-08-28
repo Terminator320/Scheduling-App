@@ -8,7 +8,7 @@ import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-Widget _harness(ClientRecord client) => ThemeNotifier(
+Widget _harness(ClientRecord client, {int? buildingCount}) => ThemeNotifier(
   themeMode: ThemeMode.light,
   toggleTheme: () {},
   textScale: 1,
@@ -18,7 +18,9 @@ Widget _harness(ClientRecord client) => ThemeNotifier(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     theme: lightTheme(),
-    home: Scaffold(body: ClientTile(client: client)),
+    home: Scaffold(
+      body: ClientTile(client: client, buildingCount: buildingCount),
+    ),
   ),
 );
 
@@ -115,6 +117,76 @@ void main() {
 
     expect(find.text('Commercial'), findsNothing);
     expect(find.text('Residential'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows how many clients share the address', (tester) async {
+    await tester.pumpWidget(
+      _harness(
+        const ClientRecord(
+          id: 'c1',
+          name: 'Acme',
+          address: '914-4450 Prom. Paton',
+        ),
+        buildingCount: 18,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('18 units'), findsOneWidget);
+  });
+
+  testWidgets('no pill when this client is the only one at the address', (
+    tester,
+  ) async {
+    // A building of one is just a client; the pill would be noise on every row.
+    await tester.pumpWidget(
+      _harness(
+        const ClientRecord(id: 'c1', name: 'Acme', address: '7 Rue Seule'),
+        buildingCount: 1,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('unit'), findsNothing);
+  });
+
+  testWidgets('no pill on a surface with no index to hand', (tester) async {
+    // The booking flow's client picker reuses this tile and passes nothing.
+    await tester.pumpWidget(
+      _harness(
+        const ClientRecord(id: 'c1', name: 'Acme', address: '7 Rue Seule'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('unit'), findsNothing);
+  });
+
+  testWidgets('all three badges fit a small phone at 2x text', (tester) async {
+    // The building pill is a THIRD child of the badge Wrap; archived + type +
+    // units together are the worst case.
+    tester.view.physicalSize = const Size(260, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MediaQuery(
+        data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+        child: _harness(
+          const ClientRecord(
+            id: 'c1',
+            name: 'Acme Property Holdings',
+            address: '914-4450 Prom. Paton',
+            archived: true,
+            type: ClientType.building,
+          ),
+          buildingCount: 18,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
     expect(tester.takeException(), isNull);
   });
 }

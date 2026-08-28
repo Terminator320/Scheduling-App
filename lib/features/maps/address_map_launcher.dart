@@ -13,6 +13,8 @@ import 'package:url_launcher/url_launcher.dart';
 class AddressMapLauncher {
   const AddressMapLauncher._();
 
+  static final AppLogger _logger = AppLogger();
+
   static Future<void> showMapChoices(
     BuildContext context, {
     required String address,
@@ -122,7 +124,7 @@ class AddressMapLauncher {
     try {
       opened = await launchUrl(chosen, mode: LaunchMode.externalApplication);
     } catch (e, st) {
-      AppLogger().warn('LAUNCH-MAPS showMapChoices launchUrl failed', e, st);
+      _logger.warn('LAUNCH-MAPS showMapChoices launchUrl failed', e, st);
     }
     if (!opened && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(

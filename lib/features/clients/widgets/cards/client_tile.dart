@@ -4,7 +4,6 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
-import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/list_item_tile.dart';
 import 'package:scheduling/shared/widgets/feedback/status_pill.dart';
@@ -15,11 +14,20 @@ class ClientTile extends StatelessWidget {
     super.key,
     this.onOpen,
     this.selected = false,
+    this.buildingCount,
   });
 
   final ClientRecord client;
   final Future<void> Function()? onOpen;
   final bool selected;
+
+  /// How many clients share this one's street address, when that is more than
+  /// one. Passed IN rather than looked up: the list reduces the whole window
+  /// once and hands each row its number, the way the team roster's "jobs
+  /// today" count does — a per-row provider watch would be one listener per
+  /// visible client. Null on any surface with no index to hand (the booking
+  /// flow's client picker), which simply shows no pill.
+  final int? buildingCount;
 
   Future<void> _open(BuildContext context) async {
     if (onOpen != null) {
@@ -39,15 +47,17 @@ class ClientTile extends StatelessWidget {
     // The address is what identifies a job site at a glance; phone is the
     // fallback for a client who has no address on file.
     final subtitle = client.address.trim().isNotEmpty
-        ? AddressParser.canonicalToDisplay(client.address)
+        ? client.fullAddress
         : client.phone;
     final count = client.jobCount;
     final hasType = client.type != ClientType.unset;
     // Archived clients drop out of the list but stay in search results, so the
     // row is the only place that can say why one looks "missing".
+    final units = buildingCount ?? 0;
     final badges = <Widget>[
       if (client.archived) const _ArchivedPill(),
       if (hasType) _TypeChip(type: client.type),
+      if (units > 1) _BuildingPill(units: units),
     ];
 
     // Resolved once: `displayName` is an uncached getter that runs `stripPhone`
@@ -109,6 +119,31 @@ class _TypeChip extends StatelessWidget {
       label: clientTypeLabel(context.l10n, type),
       background: color.withValues(alpha: 0.10),
       foreground: color,
+      radius: AppRadius.r8,
+    );
+  }
+}
+
+/// "18 units", as a neutral pill under the address — this client's address is
+/// shared with others. Neutral rather than accented: it is a fact about the
+/// site, not a status, and the accent slot beside it already belongs to the
+/// client's type.
+///
+/// Deliberately NOT tappable. The whole row is one `InkWell` that opens the
+/// client, so a tappable pill inside it is a nested gesture on a 48px target;
+/// the Address menu above the list is where filtering to a building belongs.
+class _BuildingPill extends StatelessWidget {
+  const _BuildingPill({required this.units});
+
+  final int units;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return StatusPill(
+      label: context.l10n.clients_buildingUnits(units),
+      background: scheme.surfaceContainerHighest,
+      foreground: scheme.onSurfaceVariant,
       radius: AppRadius.r8,
     );
   }
