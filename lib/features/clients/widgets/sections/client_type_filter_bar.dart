@@ -7,8 +7,8 @@ import 'package:scheduling/features/clients/domain/policies/client_building.dart
 import 'package:scheduling/features/clients/widgets/sections/client_address_filter_menu.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// Residential / Commercial / Building / Archived filter chips above the
-/// clients list, plus the Address menu.
+/// The Address menu, then the Residential / Commercial / Building / Archived
+/// filter chips above the clients list.
 ///
 /// The type options are the fixed [ClientType.pickable] set, so unlike a
 /// free-text vocabulary this needs no query to discover what to offer. Tapping
@@ -20,6 +20,10 @@ import 'package:scheduling/l10n/l10n.dart';
 /// arrive as a menu ([ClientAddressFilterMenu]) rather than a chip each — see
 /// that file. It is still a peer of the chips: selecting one clears whichever
 /// chip was on, because the state is one sealed value.
+///
+/// The menu leads the row (2026-08-29). This scrolls, so something is off-screen
+/// on arrival at large text scales, and the type chips can be read by name from
+/// where they sit where the menu has to be found before it can be used.
 class ClientTypeFilterBar extends StatelessWidget {
   const ClientTypeFilterBar({
     required this.selected,
@@ -50,6 +54,11 @@ class ClientTypeFilterBar extends StatelessWidget {
           child: Row(
             spacing: AppSpacing.sp8,
             children: [
+              ClientAddressFilterMenu(
+                buildings: buildings,
+                selected: selected,
+                onChanged: onChanged,
+              ),
               for (final type in ClientType.pickable)
                 FilterChip(
                   label: Text(clientTypeLabel(l10n, type)),
@@ -66,11 +75,6 @@ class ClientTypeFilterBar extends StatelessWidget {
                 onSelected: (_) => onChanged(
                   toggledFilter(selected, const ClientsFilterArchived()),
                 ),
-              ),
-              ClientAddressFilterMenu(
-                buildings: buildings,
-                selected: selected,
-                onChanged: onChanged,
               ),
             ],
           ),
