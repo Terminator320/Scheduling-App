@@ -67,9 +67,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('4450 Prom. Paton'), findsOneWidget);
-    expect(find.text('Laval · 18 units'), findsOneWidget);
+    expect(find.text('Laval'), findsOneWidget);
+    expect(find.text('18'), findsOneWidget);
     expect(find.text("10200 Bd de l'Acadie"), findsOneWidget);
-    expect(find.text('Montréal · 3 units'), findsOneWidget);
+    expect(find.text('Montréal'), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
   });
 
   testWidgets('picking one selects that building', (tester) async {
@@ -118,7 +120,13 @@ void main() {
 
     await tester.tap(find.byType(FilterChip));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Laval · 18 units'));
+    // Scoped to the menu — the chip names the selected street too.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(MenuItemButton),
+        matching: find.text('4450 Prom. Paton'),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(picked, const ClientsFilterAll());
@@ -140,5 +148,101 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Address'), findsOneWidget);
+  });
+
+  testWidgets('the clear row is offered ONLY while an address filters', (
+    tester,
+  ) async {
+    // With no address active it would do nothing — and emitting
+    // ClientsFilterAll would clear a TYPE chip this menu doesn't own, since
+    // all four filters share one sealed value.
+    await tester.pumpWidget(_harness(buildings: const [_paton, _acadie]));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(FilterChip));
+    await tester.pumpAndSettle();
+    expect(find.text('All addresses'), findsNothing);
+  });
+
+  testWidgets('the clear row clears the filter', (tester) async {
+    ClientsFilter? picked;
+    await tester.pumpWidget(
+      _harness(
+        buildings: const [_paton, _acadie],
+        selected: const ClientsFilterBuilding('paton'),
+        onChanged: (next) => picked = next,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(FilterChip));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('All addresses'));
+    await tester.pumpAndSettle();
+
+    expect(picked, const ClientsFilterAll());
+  });
+
+  testWidgets('a stale selection can still be cleared', (tester) async {
+    // The chip falls back to the generic label when the picked building leaves
+    // the window, so the clear row is the only way out of that filter.
+    await tester.pumpWidget(
+      _harness(
+        buildings: const [_acadie],
+        selected: const ClientsFilterBuilding('paton'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(FilterChip));
+    await tester.pumpAndSettle();
+    expect(find.text('All addresses'), findsOneWidget);
+  });
+
+  testWidgets('a long street name does not blow out the chip', (tester) async {
+    // It sits in a scrolling row: an unbounded label pushed every other filter
+    // off-screen.
+    const long = ClientBuilding(
+      key: 'sherbrooke',
+      street: '1200 Rue Sherbrooke Ouest, Tour Est',
+      city: 'Montréal',
+      clientCount: 4,
+    );
+    await tester.pumpWidget(
+      _harness(
+        buildings: const [long],
+        selected: const ClientsFilterBuilding('sherbrooke'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final label = tester.widget<Text>(
+      find.text('1200 Rue Sherbrooke Ouest, Tour Est'),
+    );
+    expect(label.overflow, TextOverflow.ellipsis);
+    expect(label.maxLines, 1);
+    expect(
+      tester.getSize(find.byType(FilterChip)).width,
+      lessThan(300),
+    );
+  });
+
+  testWidgets('the menu paints its own surface, not the page colour', (
+    tester,
+  ) async {
+    // The Material default is `surfaceContainer`, which this theme maps to the
+    // exact scaffoldBackgroundColor with elevation tinting off — so the open
+    // panel was the same colour as the list behind it.
+    await tester.pumpWidget(_harness(buildings: const [_paton]));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(FilterChip));
+    await tester.pumpAndSettle();
+
+    final theme = lightTheme();
+    final anchor = tester.widget<MenuAnchor>(find.byType(MenuAnchor));
+    final background = anchor.style!.backgroundColor!.resolve({});
+    expect(background, theme.colorScheme.surface);
+    expect(background, isNot(theme.scaffoldBackgroundColor));
   });
 }

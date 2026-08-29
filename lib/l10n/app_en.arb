@@ -545,9 +545,13 @@
   "@clients_filterByAddress": {
     "description": "Label on the clients list menu that filters to one shared street address"
   },
+  "clients_filterAllAddresses": "All addresses",
+  "@clients_filterAllAddresses": {
+    "description": "Menu row on the clients list that clears the shared-address filter"
+  },
   "clients_buildingUnits": "{count, plural, =1{1 unit} other{{count} units}}",
   "@clients_buildingUnits": {
-    "description": "How many clients share one street address - a pill on the client row and the subtitle of each address in the filter menu",
+    "description": "How many clients share one street address - a pill on the client row, and the screen-reader label on the count beside each address in the filter menu",
     "placeholders": {
       "count": {
         "type": "int"
