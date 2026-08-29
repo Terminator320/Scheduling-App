@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/domain/holidays.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_day_circle.dart';
 
@@ -139,24 +140,32 @@ class _StripCell extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.sp4),
-            Container(
-              width: circleSize,
-              height: circleSize,
-              alignment: Alignment.center,
-              decoration: calendarDayCircleDecoration(
-                scheme: scheme,
-                isSelected: isSelected,
-                showTodayRing: isToday,
-              ),
-              child: Text(
-                '${day.day}',
-                style: TextStyle(
-                  fontFamily: kFontSans,
-                  fontSize: 14.5,
-                  fontWeight: isSelected || isToday
-                      ? FontWeight.w700
-                      : FontWeight.w500,
-                  color: isSelected ? scheme.onPrimary : scheme.onSurface,
+            calendarDayTokenWithRule(
+              theme: theme,
+              set: markerSetOn(day),
+              isSelected: isSelected,
+              // Every day in the strip belongs to the week on screen, so
+              // nothing here is off-month and nothing fades.
+              isFaint: false,
+              token: Container(
+                width: circleSize,
+                height: circleSize,
+                alignment: Alignment.center,
+                decoration: calendarDayCircleDecoration(
+                  scheme: scheme,
+                  isSelected: isSelected,
+                  showTodayRing: isToday,
+                ),
+                child: Text(
+                  '${day.day}',
+                  style: TextStyle(
+                    fontFamily: kFontSans,
+                    fontSize: 14.5,
+                    fontWeight: isSelected || isToday
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                    color: isSelected ? scheme.onPrimary : scheme.onSurface,
+                  ),
                 ),
               ),
             ),

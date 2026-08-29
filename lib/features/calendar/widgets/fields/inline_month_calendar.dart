@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/domain/holidays.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_day_circle.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_grid.dart';
@@ -367,27 +368,40 @@ class _PickerDayCell extends StatelessWidget {
       numberColor = scheme.onSurface;
     }
 
-    final circle = Container(
-      width: circleSize,
-      height: circleSize,
-      alignment: Alignment.center,
-      decoration: calendarDayCircleDecoration(
-        scheme: scheme,
-        isSelected: isSelected,
-        showTodayRing: isToday,
-        // A tint of the SAME hue, never a second colour: this is one run with
-        // two ends, not two things to tell apart.
-        fill: isCompanion ? scheme.primary.withValues(alpha: 0.16) : null,
-      ),
-      child: Text(
-        '${day.day}',
-        style: TextStyle(
-          fontFamily: kFontSans,
-          fontSize: 14,
-          fontWeight: isSelected || isCompanion || isToday
-              ? FontWeight.w700
-              : FontWeight.w500,
-          color: numberColor,
+    final circle = calendarDayTokenWithRule(
+      theme: theme,
+      set: markerSetOn(day),
+      isSelected: isSelected,
+      // A disabled or off-month day in the picker reads faint, and the rule
+      // fades with it.
+      isFaint: !isEnabled || !inMonth,
+      // No agenda row under the picker to name the holiday, so a selected day
+      // keeps its hue (lifted) rather than going flat white — this is the one
+      // surface where the marker can prevent a mis-booking, so it has to say
+      // which kind of day it is at the moment the date is chosen.
+      keepHueWhenSelected: true,
+      token: Container(
+        width: circleSize,
+        height: circleSize,
+        alignment: Alignment.center,
+        decoration: calendarDayCircleDecoration(
+          scheme: scheme,
+          isSelected: isSelected,
+          showTodayRing: isToday,
+          // A tint of the SAME hue, never a second colour: this is one run with
+          // two ends, not two things to tell apart.
+          fill: isCompanion ? scheme.primary.withValues(alpha: 0.16) : null,
+        ),
+        child: Text(
+          '${day.day}',
+          style: TextStyle(
+            fontFamily: kFontSans,
+            fontSize: 14,
+            fontWeight: isSelected || isCompanion || isToday
+                ? FontWeight.w700
+                : FontWeight.w500,
+            color: numberColor,
+          ),
         ),
       ),
     );

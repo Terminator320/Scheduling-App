@@ -104,6 +104,37 @@ abstract final class AppColors {
   /// designed dark counterpart, and no picker would ever offer it.
   static const Color crewDefault = blue;
 
+  /// The three calendar holiday-marker hues — the 2px rule under a day
+  /// number, one colour per `HolidaySet`. Resolved through
+  /// `holidayHueFor` (`calendar/widgets/views/calendar_day_circle.dart`),
+  /// never painted raw; `holidayRuleColorFor` layers the selected/off-month
+  /// variants over it.
+  ///
+  /// A SEPARATE family from [crewPalette] on purpose, and deliberately in the
+  /// gaps it leaves. The obvious picks were each already spoken for: blue is
+  /// the selection fill (a marker in it vanishes on the day you tap), red
+  /// means *cancelled* on the status chart, and crewPalette's ten hues blanket
+  /// most of the rest of the wheel — painted as round dots ~3px BELOW this
+  /// rule, so a shared hue would twin with the dot beneath it. Teal sits
+  /// between the crew green and cyan but deeper and more muted than either;
+  /// purple is well clear of teal and is the liturgical colour of Holy Week;
+  /// ochre is the only warm one, so the construction shutdown separates from
+  /// both cool markers at a glance.
+  static const Color holidayStatutory = Color(0xFF0F766E);
+  static const Color holidayOrthodox = Color(0xFF8E3DAE);
+  static const Color holidayConstruction = Color(0xFFB45309);
+
+  static const Color darkHolidayStatutory = Color(0xFF3FBFB0);
+  static const Color darkHolidayOrthodox = Color(0xFFC482E8);
+  // NOT `darkAmber` (#F1A83C), which this was until 2026-08-29: that constant
+  // IS the dark rendering of crew amber (`_darkCrewOverride[0xFFE08A00]`), so
+  // in dark theme the shutdown's rule and the crew dot 3px beneath it painted
+  // the identical colour — exactly the twinning the "sit in crewPalette's
+  // gaps" rule above exists to prevent. This is the same ochre pushed toward
+  // orange-red (hue ~26 deg, matching the light `#B45309`) and away from the
+  // gold of amber, which also clears dark brown `#C9985A` and olive `#B9CC45`.
+  static const Color darkHolidayConstruction = Color(0xFFEA802E);
+
   /// The eight nav-drawer row hues, one per `AppDestination`.
   ///
   /// A SEPARATE palette from [crewPalette], deliberately, even though every

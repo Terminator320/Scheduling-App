@@ -749,5 +749,22 @@
   "calendar_everyoneElseBooked": "Tout le monde est occupé",
   "calendar_openJob": "Ouvrir le travail",
   "calendar_leaveThem": "Laisser ainsi",
-  "common_undo": "Annuler l'action"
+  "common_undo": "Annuler l'action",
+  "calendar_holidayNewYear": "Jour de l'An",
+  "calendar_holidayGoodFriday": "Vendredi saint",
+  "calendar_holidayEasterMonday": "Lundi de Pâques",
+  "calendar_holidayOrthodoxGoodFriday": "Vendredi saint orthodoxe",
+  "calendar_holidayOrthodoxEaster": "Pâques orthodoxe",
+  "calendar_holidayOrthodoxEasterMonday": "Lundi de Pâques orthodoxe",
+  "calendar_holidayPatriotes": "Journée nationale des patriotes",
+  "calendar_holidayNationalHoliday": "Fête nationale",
+  "calendar_holidayCanadaDay": "Fête du Canada",
+  "calendar_holidayConstruction": "Vacances de la construction",
+  "calendar_holidayLabourDay": "Fête du travail",
+  "calendar_holidayThanksgiving": "Action de grâce",
+  "calendar_holidayChristmas": "Noël",
+  "calendar_holidaySetStatutory": "Jour férié au Québec",
+  "calendar_holidaySetOrthodox": "Orthodoxe grec",
+  "calendar_holidayTag": "Férié",
+  "calendar_holidayTagObservance": "Observance"
 }

@@ -40,6 +40,9 @@ Widget _wrap(List<AppointmentDaySlice> events) => MaterialApp(
           nameMap: const {},
           colorMap: const {},
           onAppointmentTap: (_) {},
+          // An ordinary February day, so no holiday row joins the rows
+          // under test.
+          day: DateTime(2026, 2, 10),
         ),
       ],
     ),

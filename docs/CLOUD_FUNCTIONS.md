@@ -2,7 +2,16 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-28 (release 1.53.0+82 — **the export list is unchanged at 25
+refreshed 2026-08-29 (release 1.54.0+83 — **the export list is unchanged at 25
+and no row below moved**. The one server-side change is the retirement of
+`createEmployeeAccount`'s `#compat-1.47.0` carve-out: `isAdmin` is out of the
+`assertPayloadShape` allowlist and is now refused as `unexpected-field`. It was
+deployed on its own on 2026-08-29 — a `functions`-only deploy, because retiring
+a compat key is a backend change and cannot ride along with the app build that
+stopped sending the field. The rest of the release is Flutter-only: the
+calendar's holiday markers compute in Dart and reach no function, rule or
+index. See `createEmployeeAccount` below for the full reasoning.)
+Previously refreshed 2026-08-28 (release 1.53.0+82 — **the export list is unchanged at 25
 and no row below moved**, but two behaviour changes here matter: the client
 `jobCount` recount is now DEBOUNCED through the shared `recount_claim.js`
 ledger and GATED on `mayShareABatch`, because a per-day run lands up to 16
@@ -371,16 +380,18 @@ transaction, so two admins creating the same person can't both win.
 `role: "employee"`, hard-coded in `performCreateAccount`. Promotion is a
 separate later edit on the employee edit sheet.
 
-**But `isAdmin` IS still in the `assertPayloadShape` allowlist, deliberately
-— ACCEPTED AND IGNORED**, tagged `#compat-1.47.0` at the call site. It is
-never destructured, never passed on, and cannot mint an admin. It stays only
-to keep the allowlist a SUPERSET of the deployed one (`docs/DEPLOYMENT.md`
-§4a): `assertPayloadShape` throws `unexpected-field` on the first key it does
-not recognise, and every admin build at or below 1.47.0 sends `isAdmin`
-unconditionally on BOTH create and Reset password — so dropping it would fail
-both actions on every device that had not updated yet, including the Reset
-password button the pre-deploy remediation runs on. Retire the key once no
-such build is in the wild; don't delete it as a leftover.
+**`isAdmin` was in the `assertPayloadShape` allowlist as `#compat-1.47.0`
+— ACCEPTED AND IGNORED — and was RETIRED 2026-08-29.** It is now refused like
+any other unrecognised key. The carve-out existed because every admin build at
+or below 1.47.0 sent `isAdmin` unconditionally on BOTH create and Reset
+password, and `assertPayloadShape` throws `unexpected-field` on the first key
+it does not recognise — so dropping it early would have failed both actions on
+every device that had not updated. It was removed once the fleet was wholly on
+1.53 and the current client sends no such key, which keeps the allowlist a
+superset of every deployed build (`docs/DEPLOYMENT.md` §4a). Note what this
+never was: a role check. `performCreateAccount` hard-codes `role: "employee"`
+and has never read a role off the payload, so removing the key tightened the
+surface without changing who can be minted.
 
 Re-running it on a still-`invited` person **re-provisions**: it refreshes the
 doc's editable fields and issues a fresh random password — that IS the

@@ -206,7 +206,7 @@ describe("createEmployeeAccount ordering", () => {
     expect(auth.updateUser).not.toHaveBeenCalled();
   });
 
-  test("accepts an old build's ignored isAdmin field and still writes employee",
+  test("rejects isAdmin now that the #compat-1.47.0 carve-out is retired",
       async () => {
         const trace = [];
         const auth = makeAuth(trace);
@@ -214,18 +214,20 @@ describe("createEmployeeAccount ordering", () => {
         getFirestore.mockReturnValue(makeDb(docs, trace));
         getAuth.mockReturnValue(auth);
 
-        // The pre-change client sent `isAdmin` unconditionally. Narrowing the
-        // allowlist would fail every create AND every password reset from an
-        // admin device that has not updated yet.
-        await createEmployeeAccount.run({
+        // Builds at or below 1.47.0 sent `isAdmin` unconditionally, so the
+        // allowlist accepted-and-ignored it until the fleet reached 1.53
+        // (retired 2026-08-29). No supported build sends it now, so it is an
+        // unexpected field like any other. This test is the tripwire: if a
+        // client is ever changed to send it again, this fails rather than the
+        // create silently breaking in production.
+        await expect(createEmployeeAccount.run({
           data: {...VALID_CREATE, isAdmin: true},
           auth: ADMIN,
-        });
+        })).rejects.toThrow(/unexpected-field/);
 
-        const written = docs["generated-doc-id"];
-        expect(written).toBeDefined();
-        // Accepted, but never honoured — the role is hard-coded downstream.
-        expect(written.role).toBe("employee");
+        // Refused before any write — no account, no Auth user.
+        expect(docs["generated-doc-id"]).toBeUndefined();
+        expect(auth.createUser).not.toHaveBeenCalled();
       });
 
   test("resets a pending account's password only AFTER the doc transaction",

@@ -10,6 +10,34 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.54.0+83] - 2026-08-29
+
+The calendar now marks the days the province takes off. Québec's statutory
+holidays, the Greek Orthodox Easter days and the two-week construction
+shutdown all show up on the month grid, the week strip and the date picker you
+book from — so a job lands on Saint-Jean because someone chose it, not because
+nobody noticed.
+
+### Added
+- **Holidays are marked on the calendar.** A coloured rule under the day number
+  flags Québec's thirteen statutory holidays, the Greek Orthodox Good Friday /
+  Easter / Easter Monday, and the fourteen days of the CCQ construction
+  shutdown. Teal is a statutory holiday, purple a Greek Orthodox one and ochre
+  the construction fortnight; tapping the day names it in the agenda below,
+  with a tag saying whether it is a holiday or an observance. **Nothing is
+  blocked** — an emergency call on Christmas Day books exactly as it does
+  today, the calendar just stops being silent about what day it is.
+- **The date picker on the booking form is marked too,** which is the one that
+  can actually stop a mistake: the holiday is visible while the date is being
+  chosen, not discovered afterwards — and it keeps its colour once the day is
+  picked, so it still tells you which kind of day you just chose.
+- **A holiday with nothing booked still says so.** The row appears above an
+  empty day, which is the day it has most to tell you about.
+- **The dates need no upkeep, ever.** Every holiday is worked out from its own
+  rule, including the ones that move — both Easters, the Monday before May 25,
+  Canada Day shifting when July 1 is a Sunday, and the shutdown's fortnight. It
+  is right in 2031 and 2044 with no update and nothing to maintain.
+
 ## [1.53.0+82] - 2026-08-28
 
 A job that runs over several days is now booked as one visit per day, so the

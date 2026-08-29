@@ -304,6 +304,25 @@ Revised 2026-08-04 after the owner confirmed 1.37.1+64 is still the shipping App
 
 Items 6 and 7 share one gate, and that gate is **months out** — 1.41 has not been submitted, so 1.37.1 will keep drawing sessions well past the point where installs migrate. That is precisely why item 1 was promoted to the top: it removes the damaging half of F1 without waiting for anything, and it closes two pre-existing orphan-recovery gaps on the way.
 
+> **Status update 2026-08-29 — the gate has cleared.** The paragraph above is
+> left as written because it records the reasoning at the time, and the call to
+> promote item 1 was right. But it is no longer current:
+>
+> - **Item 7 is DONE.** The `#compat-1.37.1` shim was retired 2026-08-08 (all
+>   8 sites, as one unit) and deployed — see `docs/DEPLOYMENT.md`. Its
+>   successor carve-out `#compat-1.47.0` has since been opened *and* retired
+>   too (2026-08-29), with the fleet on 1.53.
+> - **Item 6 is UNBLOCKED and still OPEN.** Disabling Identity Platform
+>   sign-up is a **Firebase console action** — it lives in no file in this
+>   repo, so nothing here will ever close it and no code change will surface
+>   it. It waited on 1.37.1's retirement, which happened three weeks ago.
+>   Whoever picks this up: it is the 5-minute half of F1, and item 1's reclaim
+>   path (shipped) only covered the damaging half.
+>
+> The lesson worth keeping is the failure mode, not the dates: a blocked item
+> whose gate later clears has nothing to remind anyone. Both of these sat past
+> their gate because the block was recorded once and never re-read.
+
 Do **not** buy the Identity Platform upgrade to solve F1 with a blocking function — see F1's rejected routes.
 
 ---

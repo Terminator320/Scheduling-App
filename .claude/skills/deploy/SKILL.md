@@ -38,6 +38,11 @@ firebase deploy --only functions,firestore:rules,storage
 - `storage` is the target name, **not** `storage:rules` (invalid target).
 - One function only: `--only functions:<name>`.
 - Rules only: `--only firestore:rules`.
+- **If `firestore.indexes.json` changed, deploy `firestore:indexes` FIRST and
+  on its own**, then the command above. A new composite has to finish building
+  before the code that queries it goes live, and a separate run makes the index
+  drift line (below) easy to spot instead of burying it in the functions
+  output.
 - Deploying functions (re)activates App Check enforcement
   (`enforceAppCheck: true`) on the callables — that is expected and correct.
 
@@ -53,6 +58,27 @@ firebase deploy --only functions,firestore:rules,storage
   these triggers are idempotent with `retry: true`. Proceed. A retry is
   billed like any execution but only fires on failure, so steady-state cost
   is unchanged.
+- **"there are N indexes defined in your project that are not present in your
+  firestore indexes file"** — you deleted an index from
+  `firestore.indexes.json` and expected the deploy to drop it. **It did not,
+  and it never will: a deploy can add an index but never delete one.** The only
+  flag that deletes is `--force`, which is **banned here** — it also deletes
+  any prod TTL policy missing from the file, which is how all five live
+  policies were lost on 2026-07-21. So the index stays as permanent drift until
+  someone removes it out-of-band.
+  **Do that with a targeted delete, not the console and never `--force`:** get
+  the index id from Firebase MCP `firestore_list_indexes` (parent
+  `projects/schedulingapp-88727/databases/(default)/collectionGroups/<coll>`),
+  then `firestore_delete_index` on that id. It removes exactly one index and
+  cannot touch a TTL policy. Re-read the list afterwards and confirm **both**
+  halves: the index is gone, *and* whichever index now serves those queries in
+  its place is still `READY`.
+  Check one thing BEFORE deleting: if a wider composite covers the same query
+  as a *prefix*, it is `SPARSE_ALL` and therefore omits documents missing any
+  of its extra fields, where the narrower index did not. Confirm nothing live
+  depends on that difference, or the query silently returns fewer rows.
+  (Worked example: `appointments (employeeIds CONTAINS, endTime ASC)`, deleted
+  2026-08-29.)
 - **"An Internal error has occurred… firebase-tools"** — transient backend
   issue. Wait a few minutes and retry once; if it persists, check the
   function's Cloud logs before changing anything locally.

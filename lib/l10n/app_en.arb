@@ -3537,5 +3537,73 @@
   "common_undo": "Undo",
   "@common_undo": {
     "description": "Reverts a single settled swap back to the original assignee, while the clash dialog is open."
+  },
+  "calendar_holidayNewYear": "New Year's Day",
+  "@calendar_holidayNewYear": {
+    "description": "Québec statutory holiday, January 1."
+  },
+  "calendar_holidayGoodFriday": "Good Friday",
+  "@calendar_holidayGoodFriday": {
+    "description": "Québec statutory holiday, two days before Gregorian Easter."
+  },
+  "calendar_holidayEasterMonday": "Easter Monday",
+  "@calendar_holidayEasterMonday": {
+    "description": "Québec statutory holiday, the day after Gregorian Easter."
+  },
+  "calendar_holidayOrthodoxGoodFriday": "Orthodox Good Friday",
+  "@calendar_holidayOrthodoxGoodFriday": {
+    "description": "Greek Orthodox observance, two days before Julian Easter."
+  },
+  "calendar_holidayOrthodoxEaster": "Orthodox Easter",
+  "@calendar_holidayOrthodoxEaster": {
+    "description": "Greek Orthodox observance: Pascha, Julian Easter Sunday."
+  },
+  "calendar_holidayOrthodoxEasterMonday": "Orthodox Easter Monday",
+  "@calendar_holidayOrthodoxEasterMonday": {
+    "description": "Greek Orthodox observance, the day after Julian Easter."
+  },
+  "calendar_holidayPatriotes": "National Patriots' Day",
+  "@calendar_holidayPatriotes": {
+    "description": "Québec statutory holiday, the Monday before May 25."
+  },
+  "calendar_holidayNationalHoliday": "Saint-Jean-Baptiste",
+  "@calendar_holidayNationalHoliday": {
+    "description": "Québec statutory holiday, June 24. The Fête nationale."
+  },
+  "calendar_holidayCanadaDay": "Canada Day",
+  "@calendar_holidayCanadaDay": {
+    "description": "Québec statutory holiday, July 1 (July 2 when the 1st is a Sunday)."
+  },
+  "calendar_holidayConstruction": "Construction holiday",
+  "@calendar_holidayConstruction": {
+    "description": "The CCQ industry shutdown: 14 days from the Sunday before July's last Saturday."
+  },
+  "calendar_holidayLabourDay": "Labour Day",
+  "@calendar_holidayLabourDay": {
+    "description": "Québec statutory holiday, the first Monday of September."
+  },
+  "calendar_holidayThanksgiving": "Thanksgiving",
+  "@calendar_holidayThanksgiving": {
+    "description": "Québec statutory holiday, the second Monday of October."
+  },
+  "calendar_holidayChristmas": "Christmas",
+  "@calendar_holidayChristmas": {
+    "description": "Québec statutory holiday, December 25."
+  },
+  "calendar_holidaySetStatutory": "Québec statutory holiday",
+  "@calendar_holidaySetStatutory": {
+    "description": "Caption under a statutory holiday's name in the day agenda."
+  },
+  "calendar_holidaySetOrthodox": "Greek Orthodox",
+  "@calendar_holidaySetOrthodox": {
+    "description": "Caption under a Greek Orthodox day's name in the day agenda."
+  },
+  "calendar_holidayTag": "Holiday",
+  "@calendar_holidayTag": {
+    "description": "Mono all-caps tag on a statutory or construction holiday row in the day agenda."
+  },
+  "calendar_holidayTagObservance": "Observance",
+  "@calendar_holidayTagObservance": {
+    "description": "Mono all-caps tag on a Greek Orthodox row in the day agenda, which is not a statutory holiday."
   }
 }
