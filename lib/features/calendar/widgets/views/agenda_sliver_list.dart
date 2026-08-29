@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/holidays.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
+import 'package:scheduling/features/calendar/widgets/views/holiday_agenda_row.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
@@ -24,6 +26,7 @@ const double kAgendaFloatingControlsClearance = 90;
 class AgendaSliverList extends StatelessWidget {
   const AgendaSliverList({
     required this.events,
+    required this.day,
     required this.nameMap,
     required this.colorMap,
     super.key,
@@ -49,6 +52,13 @@ class AgendaSliverList extends StatelessWidget {
   /// [kAgendaFloatingControlsClearance]. Default 0: a pane with nothing
   /// floating over it must not grow dead space at the bottom.
   final double bottomClearance;
+
+  /// The day this agenda describes, used only to look up its holidays.
+  ///
+  /// Owned here rather than at the two call sites (the portrait calendar and
+  /// the split-layout `EventList`) so the row can never appear on one and not
+  /// the other. It must be the SAME day [events] were resolved for.
+  final DateTime day;
 
   @override
   Widget build(BuildContext context) {
@@ -76,8 +86,30 @@ class AgendaSliverList extends StatelessWidget {
     // cancellations would otherwise get, since those still sink to the tail.
     final showClosedRule = firstClosedIndex >= 0 && closedJobCount > 0;
 
+    // Computed, so it costs no read and does not wait on the jobs query — which
+    // is why it renders above the skeleton and the empty state too. A holiday
+    // with nothing booked is exactly the day this row has most to say about.
+    // A LIST because the two Easters coincide roughly one year in three, and
+    // the grid can only paint one hue on a shared day.
+    final holidays = holidaysOn(day);
+
     return SliverMainAxisGroup(
       slivers: [
+        if (holidays.isNotEmpty)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.sp16,
+              AppSpacing.sp8,
+              AppSpacing.sp16,
+              0,
+            ),
+            sliver: SliverList.list(
+              children: [
+                for (final holiday in holidays)
+                  HolidayAgendaRow(holiday: holiday),
+              ],
+            ),
+          ),
         if (isLoading)
           const SliverToBoxAdapter(child: _AgendaSkeleton())
         else if (events.isEmpty)

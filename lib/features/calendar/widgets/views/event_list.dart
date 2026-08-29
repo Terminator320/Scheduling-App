@@ -10,6 +10,7 @@ import 'package:scheduling/features/calendar/widgets/views/agenda_sliver_list.da
 class EventList extends StatelessWidget {
   const EventList({
     required this.events,
+    required this.day,
     required this.nameMap,
     required this.colorMap,
     super.key,
@@ -33,6 +34,10 @@ class EventList extends StatelessWidget {
   /// a FAB over this pane can clear the last card.
   final double bottomClearance;
 
+  /// See [AgendaSliverList.day] — forwarded so the split layout shows the same
+  /// holiday row the portrait calendar does.
+  final DateTime day;
+
   @override
   Widget build(BuildContext context) => Expanded(
     child: CustomScrollView(
@@ -46,6 +51,7 @@ class EventList extends StatelessWidget {
           onAppointmentTap: onAppointmentTap,
           selectedAppointmentId: selectedAppointmentId,
           bottomClearance: bottomClearance,
+          day: day,
         ),
       ],
     ),

@@ -484,7 +484,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     required String dayTitle,
     required String jobLabel,
   }) {
-    final events = _getEventsForDay(_selectedDay ?? _focusedDay);
+    final agendaDay = _selectedDay ?? _focusedDay;
+    final events = _getEventsForDay(agendaDay);
     // The header is the stable tour target.
     final agendaHeader = _tour.step(
       TourStepId.calendarDayList,
@@ -494,6 +495,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     if (_splitCalendar) {
       return _splitContent(
         events: events,
+        agendaDay: agendaDay,
         agendaHeader: agendaHeader,
         isLoading: isLoading,
         colorMap: colorMap,
@@ -504,6 +506,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
     return _portraitContent(
       events: events,
+      agendaDay: agendaDay,
       agendaHeader: agendaHeader,
       isLoading: isLoading,
       colorMap: colorMap,
@@ -515,6 +518,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   /// Landscape phones and tablets: month grid | day agenda, side by side.
   Widget _splitContent({
     required List<AppointmentDaySlice> events,
+    required DateTime agendaDay,
     required Widget agendaHeader,
     required bool isLoading,
     required Map<String, Color> colorMap,
@@ -548,6 +552,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                   colorMap: colorMap,
                   isLoading: isLoading,
                   isAdmin: widget.isAdmin,
+                  day: agendaDay,
                   // Reserve room for this pane's floating controls.
                   bottomClearance: kAgendaFloatingControlsClearance,
                 ),
@@ -562,6 +567,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   /// Portrait layout with fixed grid and scrolling agenda.
   Widget _portraitContent({
     required List<AppointmentDaySlice> events,
+    required DateTime agendaDay,
     required Widget agendaHeader,
     required bool isLoading,
     required Map<String, Color> colorMap,
@@ -605,6 +611,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                 colorMap: colorMap,
                 isLoading: isLoading,
                 isAdmin: widget.isAdmin,
+                day: agendaDay,
                 // The FAB and the Today pill float over this list, so the last
                 // job of the day needs somewhere to scroll clear of them.
                 bottomClearance: kAgendaFloatingControlsClearance,

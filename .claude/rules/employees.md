@@ -28,15 +28,17 @@ self-service settings. Root context: `../../CLAUDE.md`.
   or the expanded roster row while that echo is still in memory).
   **The doc is always written `role: "employee"`** (2026-08-21): the callable
   hard-codes it in `performCreateAccount` and never reads a role off the
-  payload. **`isAdmin` IS still in the `assertPayloadShape` allowlist, on
-  purpose — ACCEPTED AND IGNORED**, tagged `#compat-1.47.0`. Do not delete
-  it to "align the code with this rule": `assertPayloadShape` throws
-  `unexpected-field` on the first key it does not recognise, and every admin
-  build at or below 1.47.0 sends `isAdmin` unconditionally on BOTH create
-  and Reset password — so dropping the key fails both actions on every
-  device that has not updated, including the Reset password button the
-  pre-deploy remediation depends on (`docs/DEPLOYMENT.md` §4a, the superset
-  contract). Retire it once no such build is in the wild.
+  payload. **`isAdmin` was accepted-and-ignored in the
+  `assertPayloadShape` allowlist as `#compat-1.47.0`, and was RETIRED
+  2026-08-29** once the fleet reached 1.53 — it is now refused as
+  `unexpected-field`. Keep the reasoning, because it is the shape of every
+  future carve-out: `assertPayloadShape` throws on the first key it does not
+  recognise, and every admin build at or below 1.47.0 sent `isAdmin`
+  unconditionally on BOTH create and Reset password, so dropping the key
+  early would have failed both actions on every device that had not updated
+  (`docs/DEPLOYMENT.md` §4a, the superset contract). The removal was safe
+  only because the current client sends no such key AND no older build
+  remained. Don't re-add it.
   Promotion is a separate, later edit on `edit_person_sheet.dart` once the
   person has finished setup — you make an admin by creating them normally and
   then flipping that toggle. The employee then

@@ -53,11 +53,14 @@ class ClientTile extends StatelessWidget {
     final hasType = client.type != ClientType.unset;
     // Archived clients drop out of the list but stay in search results, so the
     // row is the only place that can say why one looks "missing".
-    final units = buildingCount ?? 0;
+    final isShared = (buildingCount ?? 0) > 1;
     final badges = <Widget>[
       if (client.archived) const _ArchivedPill(),
       if (hasType) _TypeChip(type: client.type),
-      if (units > 1) _BuildingPill(units: units),
+      // Skipped when the type chip beside it already reads "Building" — the
+      // two pills carry the same word and would render as a duplicate.
+      if (isShared && client.type != ClientType.building)
+        const _BuildingPill(),
     ];
 
     // Resolved once: `displayName` is an uncached getter that runs `stripPhone`
@@ -124,24 +127,24 @@ class _TypeChip extends StatelessWidget {
   }
 }
 
-/// "18 units", as a neutral pill under the address — this client's address is
+/// "Building", as a neutral pill under the address — this client's address is
 /// shared with others. Neutral rather than accented: it is a fact about the
 /// site, not a status, and the accent slot beside it already belongs to the
-/// client's type.
+/// client's type. It says WHAT the site is, not how many neighbours the row
+/// has: the count belongs to the Address filter menu, where it ranks one
+/// building against another.
 ///
 /// Deliberately NOT tappable. The whole row is one `InkWell` that opens the
 /// client, so a tappable pill inside it is a nested gesture on a 48px target;
 /// the Address menu above the list is where filtering to a building belongs.
 class _BuildingPill extends StatelessWidget {
-  const _BuildingPill({required this.units});
-
-  final int units;
+  const _BuildingPill();
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return StatusPill(
-      label: context.l10n.clients_buildingUnits(units),
+      label: context.l10n.clients_typeBuilding,
       background: scheme.surfaceContainerHighest,
       foreground: scheme.onSurfaceVariant,
       radius: AppRadius.r8,

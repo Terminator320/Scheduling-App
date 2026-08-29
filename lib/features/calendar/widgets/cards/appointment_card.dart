@@ -8,6 +8,7 @@ import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/day_off_reason.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/widgets/cards/non_working_time_row.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
@@ -15,9 +16,10 @@ import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 /// Shared cap for crew bar bands and avatar stack.
 const int _kMaxCrewShown = 4;
 
-/// Day-off strip dashed rail geometry.
+/// Day-off strip dashed rail geometry. The WIDTH is shared with the holiday
+/// row through `kNonWorkingRailWidth`; the inset and gap are this strip's own,
+/// since only it positions its rail in a `Stack`.
 const double _kRailInset = 9;
-const double _kRailWidth = 3;
 const double _kRailGap = 10;
 
 /// Vertical padding inside the day-off strip.
@@ -287,21 +289,18 @@ class _DayOffStrip extends StatelessWidget {
           child: Stack(
             children: [
               Container(
-                constraints: const BoxConstraints(minHeight: 44),
+                constraints: const BoxConstraints(
+                  minHeight: kNonWorkingRowMinHeight,
+                ),
                 padding: EdgeInsets.only(
                   left: lead == null
                       ? AppSpacing.sp12
-                      : _kRailInset + _kRailWidth + _kRailGap,
+                      : _kRailInset + kNonWorkingRailWidth + _kRailGap,
                   right: AppSpacing.sp12,
                   top: _kStripPaddingY,
                   bottom: _kStripPaddingY,
                 ),
-                decoration: BoxDecoration(
-                  color: theme.statusColors.neutralContainer,
-                  borderRadius: BorderRadius.circular(AppRadius.r12),
-                  // The border separates stacked day-off rows.
-                  border: Border.all(color: theme.colorScheme.outline),
-                ),
+                decoration: nonWorkingTimeDecoration(theme),
                 child: Row(
                   children: [
                     if (lead != null) ...[
@@ -316,10 +315,12 @@ class _DayOffStrip extends StatelessWidget {
                       const SizedBox(width: AppSpacing.sp8),
                     ],
                     Expanded(
-                      child: _DayOffText(
-                        reason: reason,
-                        sentence: sentence,
-                        isOver: isOver,
+                      child: NonWorkingTimeText(
+                        // The reason LEADS when there is one, and the sentence
+                        // drops to the caption beneath it.
+                        headline: reason ?? sentence,
+                        caption: reason == null ? null : sentence,
+                        isMuted: isOver,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sp8),
@@ -339,7 +340,7 @@ class _DayOffStrip extends StatelessWidget {
                   left: _kRailInset,
                   top: AppSpacing.sp8,
                   bottom: AppSpacing.sp8,
-                  width: _kRailWidth,
+                  width: kNonWorkingRailWidth,
                   child: _DayOffRail(lead: lead, isOver: isOver),
                 ),
             ],
@@ -355,53 +356,6 @@ class _DayOffStrip extends StatelessWidget {
     final first = crew.first.name.trim();
     if (crew.length == 1) return first;
     return context.l10n.calendar_crewPlusOthers(first, crew.length - 1);
-  }
-}
-
-/// The headline and caption of a day-off strip.
-///
-/// The headline slot is ALWAYS filled — the typed reason when there is one,
-/// the `<name> is off` sentence when there isn't — and only the caption
-/// beneath is conditional. Never render both slots from the same string.
-class _DayOffText extends StatelessWidget {
-  const _DayOffText({
-    required this.reason,
-    required this.sentence,
-    required this.isOver,
-  });
-
-  final String? reason;
-  final String sentence;
-  final bool isOver;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          reason ?? sentence,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: isOver ? theme.palette.textTertiary : theme.palette.textBody,
-          ),
-        ),
-        if (reason != null) ...[
-          const SizedBox(height: 3),
-          Text(
-            sentence,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.palette.textTertiary,
-            ),
-          ),
-        ],
-      ],
-    );
   }
 }
 

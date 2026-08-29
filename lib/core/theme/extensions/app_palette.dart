@@ -43,6 +43,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.crewOverride,
     required this.crewCustomLift,
     required this.avatarInkLightness,
+    required this.holidayStatutory,
+    required this.holidayOrthodox,
+    required this.holidayConstruction,
   });
 
   final Color textBody; // body copy — Ink 80
@@ -65,6 +68,24 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Map<int, Color> crewOverride;
   final double crewCustomLift;
   final double? avatarInkLightness; // null = plain contrast foreground
+
+  // The three calendar holiday-marker hues — the 2px rule under a day number,
+  // one per `HolidaySet`. They live here rather than as a brightness branch in
+  // the calendar, because a light/dark difference belongs on the extension.
+  //
+  // Three plain fields rather than a `HolidaySet`-keyed map, for two reasons
+  // that are NOT "core must not import a feature type" — this repo does that
+  // in a dozen places, and `status_chip.dart` even re-exports one. The real
+  // ones: `lerp` interpolates a `Color` field but can only SNAP a map at the
+  // midpoint (see `crewOverride` above), which would step the hue mid-theme-
+  // animation; and `holidays.dart` imports `l10n.dart` for its label
+  // resolvers, so taking `HolidaySet` would drag `AppLocalizations` into the
+  // theme layer, which today has zero feature imports. A switch EXPRESSION
+  // over the enum is exhaustiveness-checked anyway, so a fourth member still
+  // breaks the build. Resolved through `holidayHueFor`.
+  final Color holidayStatutory;
+  final Color holidayOrthodox;
+  final Color holidayConstruction;
 
   static const light = AppPalette(
     textBody: AppColors.ink80,
@@ -91,6 +112,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     crewOverride: {},
     crewCustomLift: 0,
     avatarInkLightness: null,
+    holidayStatutory: AppColors.holidayStatutory,
+    holidayOrthodox: AppColors.holidayOrthodox,
+    holidayConstruction: AppColors.holidayConstruction,
   );
 
   static const dark = AppPalette(
@@ -118,6 +142,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     crewOverride: _darkCrewOverride,
     crewCustomLift: 0.18,
     avatarInkLightness: 0.07,
+    holidayStatutory: AppColors.darkHolidayStatutory,
+    holidayOrthodox: AppColors.darkHolidayOrthodox,
+    holidayConstruction: AppColors.darkHolidayConstruction,
   );
 
   @override
@@ -142,6 +169,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     Map<int, Color>? crewOverride,
     double? crewCustomLift,
     double? avatarInkLightness,
+    Color? holidayStatutory,
+    Color? holidayOrthodox,
+    Color? holidayConstruction,
   }) => AppPalette(
     textBody: textBody ?? this.textBody,
     textTertiary: textTertiary ?? this.textTertiary,
@@ -163,6 +193,9 @@ class AppPalette extends ThemeExtension<AppPalette> {
     crewOverride: crewOverride ?? this.crewOverride,
     crewCustomLift: crewCustomLift ?? this.crewCustomLift,
     avatarInkLightness: avatarInkLightness ?? this.avatarInkLightness,
+    holidayStatutory: holidayStatutory ?? this.holidayStatutory,
+    holidayOrthodox: holidayOrthodox ?? this.holidayOrthodox,
+    holidayConstruction: holidayConstruction ?? this.holidayConstruction,
   );
 
   @override
@@ -197,6 +230,17 @@ class AppPalette extends ThemeExtension<AppPalette> {
       avatarInkLightness: t < 0.5
           ? avatarInkLightness
           : other.avatarInkLightness,
+      holidayStatutory: Color.lerp(
+        holidayStatutory,
+        other.holidayStatutory,
+        t,
+      )!,
+      holidayOrthodox: Color.lerp(holidayOrthodox, other.holidayOrthodox, t)!,
+      holidayConstruction: Color.lerp(
+        holidayConstruction,
+        other.holidayConstruction,
+        t,
+      )!,
     );
   }
 }

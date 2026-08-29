@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/calendar/domain/holidays.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_day_circle.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -203,6 +204,10 @@ class CalendarDayCell extends StatelessWidget {
       '${day.day.toString().padLeft(2, '0')}',
     );
 
+    // One lookup for both the marker hue and the label — the cell asks per
+    // rebuild, and `holidaysOn` is year-cached behind this.
+    final holidays = holidaysOn(day);
+
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
@@ -214,6 +219,10 @@ class CalendarDayCell extends StatelessWidget {
           showTodayRing: showTodayRing,
           bold: isSelected || (isToday && inMonth),
           color: numberColor,
+          // Off-month is the FAINT case, and for the construction shutdown it
+          // is the normal one — that run crosses July/August every year.
+          holidaySet: markerSetFrom(holidays),
+          isFaint: !inMonth,
         ),
         _CrewDotRow(dotColors: dotColors),
       ],
@@ -233,10 +242,14 @@ class CalendarDayCell extends StatelessWidget {
     return Semantics(
       button: true,
       selected: isSelected,
-      // The dots are colour-only, so the count carries their meaning instead.
-      label: count > 0
-          ? '$dateLabel, ${context.l10n.calendar_appointmentCount(count)}'
-          : dateLabel,
+      // The dots are colour-only, so the count carries their meaning instead —
+      // and the holiday rule is colour-only for the same reason, so its NAME
+      // goes here too. A coincidence day names both.
+      label: [
+        dateLabel,
+        if (count > 0) context.l10n.calendar_appointmentCount(count),
+        for (final holiday in holidays) holidayLabel(context.l10n, holiday.name),
+      ].join(', '),
       excludeSemantics: true,
       child: InkResponse(
         key: cellKey,
@@ -259,6 +272,8 @@ class _DayNumber extends StatelessWidget {
     required this.showTodayRing,
     required this.bold,
     required this.color,
+    required this.holidaySet,
+    required this.isFaint,
   });
 
   final int day;
@@ -268,26 +283,41 @@ class _DayNumber extends StatelessWidget {
   final bool bold;
   final Color color;
 
+  /// The set whose hue the holiday rule takes, or null on an ordinary day.
+  final HolidaySet? holidaySet;
+
+  /// An off-month cell, which fades the rule along with the number.
+  final bool isFaint;
+
   @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    alignment: Alignment.center,
-    decoration: calendarDayCircleDecoration(
-      scheme: Theme.of(context).colorScheme,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return calendarDayTokenWithRule(
+      theme: theme,
+      set: holidaySet,
       isSelected: isSelected,
-      showTodayRing: showTodayRing,
-    ),
-    child: Text(
-      '$day',
-      style: TextStyle(
-        fontFamily: kFontSans,
-        fontSize: 14,
-        fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-        color: color,
+      isFaint: isFaint,
+      token: Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: calendarDayCircleDecoration(
+          scheme: theme.colorScheme,
+          isSelected: isSelected,
+          showTodayRing: showTodayRing,
+        ),
+        child: Text(
+          '$day',
+          style: TextStyle(
+            fontFamily: kFontSans,
+            fontSize: 14,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+            color: color,
+          ),
+        ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// One dot per job that day, in crew colour.

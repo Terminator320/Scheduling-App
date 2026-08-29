@@ -156,7 +156,11 @@ Root context: `../../CLAUDE.md`.
   and picking the selected one clears back to `ClientsFilterAll`. It renders
   NOTHING when no address is shared; an empty menu is a control that looks
   broken, and on a small roster that is the normal state.
-  **The per-row "18 units" pill is ONE reduction the list shares**
+  **The per-row pill reads "Building", not a unit count** (owner call
+  2026-08-29) — the row says WHAT the site is; the count belongs to the Address
+  menu, where it ranks one building against another. It is skipped when the
+  type chip beside it already says Building, or the row carries the word twice.
+  It is still ONE reduction the list shares
   (`clientBuildingCountsProvider`), passed into `ClientTile` as
   `buildingCount` — never a provider watch per row, the same rule
   `employeeJobsTodayProvider` keeps. It is deliberately NOT tappable: the whole

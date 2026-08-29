@@ -251,3 +251,114 @@ STAYS in the root `CLAUDE.md`, because those are reachable from
   not decoration: its `neutralContainer` fill resolves to `AppColors.paper`,
   which is ALSO `scaffoldBackgroundColor`, so without an edge the strip has no
   visible container at all in the light theme.
+  **That ground is SHARED with the holiday row through
+  `widgets/cards/non_working_time_row.dart`** (2026-08-29) —
+  `nonWorkingTimeDecoration`, `NonWorkingTimeText`, `kNonWorkingRowMinHeight`
+  and `kNonWorkingRailWidth`. The two rows say the same kind of thing and
+  render adjacent in the same agenda, so the ground and the headline/caption
+  column must not drift; they were hand-written copies that had already
+  disagreed on the caption gap before the holiday row shipped. Only those four
+  things are shared — each row keeps its own LAYOUT, which legitimately differs
+  (the day off positions a dashed rail in a `Stack` to avoid forcing intrinsic
+  layout and carries an avatar; a holiday belongs to nobody, so its rail is an
+  ordinary child). Put a new "this day is not work" row on the same four.
+- **Holidays are COMPUTED and DISPLAY-ONLY, and the marker is a rule UNDER the
+  day number** (2026-08-29, designed in
+  `docs/plans/2026-08-29-calendar-holidays.md`). `domain/holidays.dart` derives
+  Québec's statutory days, the Greek Orthodox Easter trio and the CCQ
+  construction shutdown from pure arithmetic — no dataset, no network call, no
+  yearly maintenance. A bundled table was rejected deliberately: whatever range
+  it covered, the calendar would stop marking holidays the year after with no
+  error and no bug report. Nothing is dimmed, warned or blocked; an emergency
+  call on Saint-Jean saves exactly as it did before.
+  **The marker lives INSIDE the token, and that is the whole design.**
+  `calendarDayTokenWithRule` (`widgets/views/calendar_day_circle.dart`, beside
+  the decoration it wraps) paints a 2px rule 4px above the token's bottom edge.
+  **It RESOLVES the colour itself rather than taking one** — a surface hands it
+  the set and the two states, so it cannot render a token and forget the
+  marker, which would compile clean and simply show nothing. That is the drift
+  `calendarDayCircleDecoration` was extracted to end, and this is its twin.
+  `holidayHueFor` is the bare palette lookup (what the agenda row's rail
+  paints) and `holidayRuleColorFor` layers the two state variants over it. A marker living in the
+  token's `fill` is erased by selection — which wins the fill by rule in
+  `calendarDayCircleDecoration` — so it would be absent on exactly the day
+  being read. **The day NUMBER is never recoloured** (owner call): the rule
+  alone is the marker, so selection and off-month keep reading as they always
+  did. On a SELECTED day the rule goes `onPrimary` white, because every
+  candidate hue muddies against the primary-blue fill (Greek flag blue, the
+  first pick, was very nearly invisible on it) — the agenda row below is open
+  by definition on a selected day and carries the colour and the name instead.
+  **That last clause is the whole justification, so a surface with NO agenda
+  row beneath it must pass `keepHueWhenSelected`** — the hue is then LIFTED
+  toward `onPrimary` instead of replaced by it. `InlineMonthCalendar` is that
+  surface and the only one that passes it: whitening there dropped the holiday's
+  CATEGORY at the exact moment a date is being chosen, on the one surface that
+  can prevent a mis-booking rather than report one. The lift factor is picked
+  so all three clear 3:1 on the fill and no further, since every step past that
+  pulls the three toward the same white and loses the distinction it exists to
+  keep; both are pinned by tests.
+  Off-month drops to 45% alpha so the rule fades with the faint number; for the
+  construction shutdown that is the NORMAL case, since the run crosses the
+  July/August boundary every single year.
+  **All THREE `calendarDayCircleDecoration` call sites take it** — the month
+  grid, the collapsed week strip and the form's `InlineMonthCalendar`. The
+  picker is the one that matters most and the easiest to forget: it is where a
+  date is chosen while booking, so it is the only surface where the marker can
+  prevent a mis-booking rather than just report one.
+  **The three hues live on `AppPalette`, never a `theme.brightness` branch**
+  (`holidayStatutory` / `holidayOrthodox` / `holidayConstruction`) — the
+  frontend rule forbids branching on brightness for styling, and this is the
+  same shape as `crewColorOf` reading `palette.crewOverride`. They are three
+  plain fields rather than a `HolidaySet`-keyed map for two reasons, and
+  "`core/` must not import a feature type" is NOT one of them — that rule does
+  not exist here, and a dozen files under `core/` already import from
+  `features/`. The real ones: `lerp` interpolates a `Color` field but can only
+  SNAP a map at the midpoint, so a keyed map would step the hue mid-theme
+  animation; and `holidays.dart` imports `l10n.dart` for its label resolvers,
+  so taking `HolidaySet` would drag `AppLocalizations` into `core/theme/`,
+  which today has zero feature imports. The hues sit in `crewPalette`'s GAPS on purpose: blue
+  is the selection fill, red means *cancelled*, and the ten crew hues are
+  painted as round dots ~3px below this rule, so a shared hue twins with the
+  dot beneath it. **The DARK construction hue must not be `darkAmber`** — that
+  constant IS the dark rendering of crew amber, so the shutdown's rule and the
+  crew dot beneath it painted the same colour until 2026-08-29; check a new
+  hue against `_darkCrewOverride`'s VALUES, not just `crewPalette`.
+  **`holidaysOn` returns a LIST and the marker reduces it.** The two Easters
+  coincide roughly one year in three (2028, 2031, 2034), so one day really can
+  carry both Good Fridays. `HolidaySet`'s DECLARATION ORDER is the precedence —
+  statutory wins the single hue a cell can show — and the agenda renders BOTH
+  rows so nothing is lost. Reducing with "first match" instead would make the
+  colour depend on the order the sets happen to be built in.
+  **The semantics label names the holiday**, for the same reason it carries the
+  appointment count: the rule is colour-only. `CalendarDayCell` resolves
+  `holidaysOn` ONCE and feeds both the label and `markerSetFrom` — don't
+  re-look-up per concern.
+  **The agenda row reuses the day-off vocabulary** (`HolidayAgendaRow`) —
+  `neutralContainer`, `outline` border, `r12`, mono all-caps tag. A holiday IS
+  non-working time, so it joins a category the app already speaks instead of
+  opening a new one; the only structural difference is that it belongs to
+  nobody, so there is no avatar and the rail slot carries the set's hue. The
+  shared half lives in `widgets/cards/non_working_time_row.dart` — see the
+  day-off bullet above. It
+  lives inside `AgendaSliverList` (which takes a REQUIRED `day`) rather than at
+  the two call sites, so the portrait calendar and the split-layout `EventList`
+  can never disagree. That day must be the same one the `events` beside it were
+  resolved for — the screen passes `_selectedDay ?? _focusedDay`, its
+  resolved-day idiom, never the raw nullable field, or the holiday row and the
+  job list describe different days. It renders ABOVE the skeleton and the empty
+  state, because it costs no read and a holiday with nothing booked is the day
+  it has most to say about. **The TAG is where "statutory vs observance"
+  lives** — the grid marker carries only a hue, and on a selected day that hue
+  is white. The construction row deliberately carries NO caption (owner call):
+  "Construction holiday" needs no gloss.
+  **Three date rules are wrong in the obvious implementation** and are each
+  pinned in `holidays_test.dart` against published dates. Patriotes is the
+  Monday STRICTLY before May 25 — when the 25th is itself a Monday (2026) an
+  "on or before" reading gives the 25th, and is right the other six years in
+  seven. Canada Day shifts to July 2 when July 1 is a Sunday, **and Fête
+  nationale shifts to June 25 on the identical rule** — implementing one
+  without the other (which the first build did) answers the same legal
+  question two ways in 2029, when both dates fall on a Sunday. And the CCQ
+  shutdown is the Sunday PRECEDING July's last Saturday, **not** the widely
+  repeated "Sunday after the third Saturday", which is right for 2024–2026 and
+  wrong for 2022 and 2023.

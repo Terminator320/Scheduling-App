@@ -276,20 +276,17 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
   await assertAdmin(req.auth.uid);
   // Validate the payload before consuming a rate-limit slot so malformed
   // submissions can't lock out a legitimate admin for an hour.
-  // #compat-1.47.0 — `isAdmin` is ACCEPTED AND IGNORED, deliberately. It
-  // is never read, never passed to performCreateAccount, and cannot mint an
-  // admin: the role is hard-coded `"employee"` there. It stays in the set
-  // purely to keep this allowlist a SUPERSET of the deployed one
-  // (docs/DEPLOYMENT.md §4a) — assertPayloadShape throws `unexpected-field`
-  // on the first key it does not recognise, and every admin build shipped
-  // before the field was dropped sends it unconditionally on BOTH create and
-  // reset-password. Dropping it would fail both actions on every such device
-  // from the moment the backend deploys until the last one updates. Retire it
-  // as one unit — `grep -rn "#compat-1.47.0"` — once no build at or below
-  // 1.47.0 is still in the wild, the way `#compat-1.37.1` was retired.
+  // `isAdmin` was accepted-and-ignored here as `#compat-1.47.0`, so that admin
+  // builds at or below 1.47.0 — which sent it unconditionally on both create
+  // and reset-password — kept working. Retired 2026-08-29 once the fleet was
+  // wholly on 1.53: the current client sends no such key, so the allowlist is
+  // still a superset of every deployed build. Sending it now is refused as
+  // `unexpected-field`, which is the correct answer for a key no supported
+  // build produces. The role remains hard-coded "employee" in
+  // performCreateAccount regardless — that defence never depended on this set.
   assertPayloadShape(req.data, new Set([
     "name", "firstName", "lastName", "email", "phone", "colorValue",
-    "jobTitle", "isAdmin",
+    "jobTitle",
   ]));
   // 250, not 100: `name` is the JOIN of the two halves, each capped at 100
   // client- and server-side, so the composed value legitimately reaches 201.

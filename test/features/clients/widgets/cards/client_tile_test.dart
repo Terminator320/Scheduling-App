@@ -120,7 +120,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('shows how many clients share the address', (tester) async {
+  testWidgets('marks a shared address as a building', (tester) async {
     await tester.pumpWidget(
       _harness(
         const ClientRecord(
@@ -133,7 +133,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('18 units'), findsOneWidget);
+    expect(find.text('Building'), findsOneWidget);
   });
 
   testWidgets('no pill when this client is the only one at the address', (
@@ -148,7 +148,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('unit'), findsNothing);
+    expect(find.text('Building'), findsNothing);
   });
 
   testWidgets('no pill on a surface with no index to hand', (tester) async {
@@ -160,12 +160,12 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('unit'), findsNothing);
+    expect(find.text('Building'), findsNothing);
   });
 
   testWidgets('all three badges fit a small phone at 2x text', (tester) async {
     // The building pill is a THIRD child of the badge Wrap; archived + type +
-    // units together are the worst case.
+    // building together are the worst case.
     tester.view.physicalSize = const Size(260, 640);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
