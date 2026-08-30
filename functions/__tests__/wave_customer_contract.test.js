@@ -122,13 +122,6 @@ describe("buildCustomerPayload", () => {
     expect(buildCustomerPayload(client({email: ""})).ok).toBe(true);
   });
 
-  test("refuses a phone carrying no digits at all", () => {
-    const out = buildCustomerPayload(client({phone: "call the office"}));
-    expect(out.ok).toBe(false);
-    expect(out.problems[0])
-        .toEqual({field: "phone", code: "INVALID_PHONE", detail: null});
-  });
-
   test("accepts every phone shape the app legitimately stores", () => {
     // The formatted NANP form, the bare form, an international number and an
     // extension all reach Wave today and are accepted.
@@ -136,6 +129,26 @@ describe("buildCustomerPayload", () => {
       "514-555-1234 x22"]) {
       expect(buildCustomerPayload(client({phone})).ok).toBe(true);
     }
+  });
+
+  test("accepts a phone with NO digits, because Wave does", () => {
+    // Disproved by the first production conformance run: client
+    // 2wcEiCNztsWYUYNXYBEm stores "Tareq Chehadeh" in `phone` and Wave has it
+    // SYNCED with that string as the customer's phone number. A rule refusing
+    // it would block a client Wave accepts. See contactProblems' note.
+    const out = buildCustomerPayload(client({phone: "Tareq Chehadeh"}));
+    expect(out.ok).toBe(true);
+    expect(out.payload.phone).toBe("Tareq Chehadeh");
+  });
+
+  test("still caps an over-long phone", () => {
+    // Dropping the shape rule must not drop the LENGTH rule, which is a real
+    // documented Wave limit rather than a guess.
+    const out = buildCustomerPayload(client({phone: "5".repeat(33)}));
+    expect(out.ok).toBe(false);
+    expect(out.problems[0])
+        .toEqual({field: "phone", code: "TOO_LONG",
+          detail: {length: 33, cap: 32}});
   });
 });
 
