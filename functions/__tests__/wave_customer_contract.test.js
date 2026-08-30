@@ -100,4 +100,40 @@ describe("buildCustomerPayload", () => {
     expect(out.ok).toBe(false);
     expect(out.problems.map((p) => p.field).sort()).toEqual(["city", "name"]);
   });
+
+  test("refuses an email Wave would reject", () => {
+    for (const email of ["nope", "a@b", "a b@example.com", "@example.com"]) {
+      const out = buildCustomerPayload(client({email}));
+      expect(out.ok).toBe(false);
+      expect(out.problems[0])
+          .toEqual({field: "email", code: "INVALID_EMAIL", detail: null});
+    }
+  });
+
+  test("accepts ordinary and plus-addressed email", () => {
+    for (const email of ["marc@example.com", "marc+wave@sub.example.co.uk"]) {
+      expect(buildCustomerPayload(client({email})).ok).toBe(true);
+    }
+  });
+
+  test("an absent email is not a problem", () => {
+    // `presence` omits an empty optional, so there is nothing to validate.
+    expect(buildCustomerPayload(client({email: ""})).ok).toBe(true);
+  });
+
+  test("refuses a phone carrying no digits at all", () => {
+    const out = buildCustomerPayload(client({phone: "call the office"}));
+    expect(out.ok).toBe(false);
+    expect(out.problems[0])
+        .toEqual({field: "phone", code: "INVALID_PHONE", detail: null});
+  });
+
+  test("accepts every phone shape the app legitimately stores", () => {
+    // The formatted NANP form, the bare form, an international number and an
+    // extension all reach Wave today and are accepted.
+    for (const phone of ["(514) 555-1234", "5145551234", "+33 1 42 68 53 00",
+      "514-555-1234 x22"]) {
+      expect(buildCustomerPayload(client({phone})).ok).toBe(true);
+    }
+  });
 });
