@@ -31,6 +31,67 @@ const {toWaveCustomerInput, mappedFieldsHash} = require("./mappers");
  */
 
 /**
+ * Wave's own length caps, as PAYLOAD paths paired with the client-doc field an
+ * admin would edit to fix them.
+ *
+ * The values mirror `IMPORT_FIELD_CAPS` (`wave/mappers.js`), which has always
+ * applied them on the IMPORT direction only — `capped()` is called solely by
+ * `fromWaveCustomer`. The push path capped nothing, which is what left a
+ * 201–225 name and a 501–533 address able to dead-letter permanently.
+ *
+ * `provinceCode`/`countryCode` are absent deliberately: they are GraphQL
+ * ENUMS, already membership-tested by `toProvinceCode`/`toCountryCode`, so a
+ * length is meaningless for them.
+ * @const {!Array<{path: !Array<string>, field: string, cap: number}>}
+ */
+const PAYLOAD_CAPS = [
+  {path: ["name"], field: "name", cap: 200},
+  {path: ["firstName"], field: "firstName", cap: 200},
+  {path: ["lastName"], field: "lastName", cap: 200},
+  {path: ["email"], field: "email", cap: 320},
+  {path: ["phone"], field: "phone", cap: 32},
+  {path: ["mobile"], field: "mobile", cap: 32},
+  {path: ["address", "addressLine1"], field: "address", cap: 500},
+  {path: ["address", "addressLine2"], field: "addressLine2", cap: 500},
+  {path: ["address", "city"], field: "city", cap: 128},
+  {path: ["address", "postalCode"], field: "postalCode", cap: 32},
+];
+
+/**
+ * Reads a nested payload value, tolerating an absent branch.
+ * @param {!Object} payload The Wave customer input.
+ * @param {!Array<string>} path Property names, outermost first.
+ * @return {*} The value, or undefined.
+ */
+function readPath(payload, path) {
+  let cursor = payload;
+  for (const key of path) {
+    if (!cursor || typeof cursor !== "object") return undefined;
+    cursor = cursor[key];
+  }
+  return cursor;
+}
+
+/**
+ * Every field whose composed value exceeds Wave's cap.
+ * @param {!Object} payload The Wave customer input.
+ * @return {!Array<WaveProblem>}
+ */
+function overLongProblems(payload) {
+  const problems = [];
+  for (const rule of PAYLOAD_CAPS) {
+    const value = readPath(payload, rule.path);
+    if (typeof value !== "string" || value.length <= rule.cap) continue;
+    problems.push({
+      field: rule.field,
+      code: "TOO_LONG",
+      detail: {length: value.length, cap: rule.cap},
+    });
+  }
+  return problems;
+}
+
+/**
  * Builds the Wave customer payload for a client, or says why it cannot.
  * @param {!Object} clientFields Firestore `clients` document fields.
  * @return {{ok: boolean, payload: (!Object|undefined),
@@ -43,6 +104,7 @@ function buildCustomerPayload(clientFields) {
   if (!payload.name || !payload.name.trim()) {
     problems.push({field: "name", code: "EMPTY", detail: null});
   }
+  problems.push(...overLongProblems(payload));
 
   if (problems.length > 0) return {ok: false, problems};
   return {ok: true, payload, hash: mappedFieldsHash(clientFields)};
