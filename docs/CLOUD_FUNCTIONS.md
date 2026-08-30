@@ -288,6 +288,18 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` |
 | `recountClientJobs` | trigger | `onDocumentWritten appointments/{id}` | `client_job_count.js` | a write that changes `clientId` | — | `retry: true` |
 | `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/triggers.js` | any `clients` doc write | `WAVE_FULL_ACCESS_TOKEN` | `retry: true` · 300s · enqueues **and pushes** |
+
+`waveUpsertCustomer` also records **`wave.problems`** on the client doc —
+the customer contract's verdict on whether Wave would accept it
+(`wave/customer_contract.js`, added 2026-08-30). Structured
+`[{field, code, detail}]`, naming the CLIENT DOC field an admin edits.
+**Report-only in Phase 1**: nothing is blocked by it, the job is still
+enqueued and `wave.syncState` is untouched. It rides the existing
+mark-pending batch, so it costs no extra write, and it is not a mapped
+field — the hash is unchanged, so `shouldEnqueueClientWrite` stops the
+re-fire and this cannot loop. Replay it over production read-only with
+`functions/scripts/audit-wave-contract.js`. Design:
+`docs/plans/2026-08-30-wave-validated-contract-design.md`.
 | `validateUploadedImage` | trigger | `onObjectFinalized` (Storage) | `maintenance.js` | `appointments/*/images/*` upload | — | region `us-east1` |
 | `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | no `retry` (dupe push worse than missed) |
 | `waveRetryFailedJobs` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings, requeue dead outbox jobs) | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable 10/hr |
