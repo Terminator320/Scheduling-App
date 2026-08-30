@@ -1,6 +1,7 @@
 "use strict";
 
-const {buildCustomerPayload} = require("../wave/customer_contract");
+const {buildCustomerPayload, problemsPatch} =
+  require("../wave/customer_contract");
 
 /**
  * A client doc that the contract accepts, so each test can break exactly one
@@ -189,5 +190,26 @@ describe("historical incidents", () => {
     expect(out.problems).toContainEqual({
       field: "address", code: "TOO_LONG", detail: {length: 533, cap: 500},
     });
+  });
+});
+
+describe("problemsPatch", () => {
+  test("records the problems when a client cannot be sent", () => {
+    expect(problemsPatch(client({name: ""}))).toEqual({
+      "wave.problems": [{field: "name", code: "EMPTY", detail: null}],
+    });
+  });
+
+  test("clears the field when a client is fine", () => {
+    // Explicitly null rather than omitted: a client REPAIRED since the last
+    // write must not keep stale problems on its doc.
+    expect(problemsPatch(client())).toEqual({"wave.problems": null});
+  });
+
+  test("is a plain patch with no other keys", () => {
+    // Phase 1 is report-only. It must not touch syncState, and the enqueue
+    // decision stays exactly where it is.
+    expect(Object.keys(problemsPatch(client({name: ""})))).toEqual(
+        ["wave.problems"]);
   });
 });
