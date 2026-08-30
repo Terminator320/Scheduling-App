@@ -103,11 +103,32 @@ function overLongProblems(payload) {
  */
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
 
-/** Any decimal digit. @const {!RegExp} */
-const HAS_DIGIT = /\d/;
-
 /**
  * Problems with the payload's contact fields.
+ *
+ * THERE IS DELIBERATELY NO PHONE RULE. One briefly existed — "a value carrying
+ * no digit at all cannot be dialled, so Wave refuses it" — and the first
+ * conformance run against production disproved it: client
+ * `2wcEiCNztsWYUYNXYBEm` stores the literal string "Tareq Chehadeh" in `phone`
+ * (a contact name typed into the wrong box) and Wave has it **synced**, with
+ * that string as the customer's phone number. Enforcing the rule would have
+ * BLOCKED a client Wave accepts, which is the one outcome these loose contact
+ * rules exist to avoid.
+ *
+ * The lesson generalises: every other rule here traces to a real refusal, and
+ * that one traced to a guess about what Wave *might* refuse. Wave can emit
+ * `INVALID_PHONE` (it is in `ERROR_CODE_MESSAGES`, and
+ * `createCustomerWithPhoneFallback` exists for it), so a phone rule may be
+ * warranted eventually — but write it from an observed rejection, never from a
+ * plausible one. The length cap in `PAYLOAD_CAPS` still applies to both fields.
+ *
+ * (That client's phone IS bad data and should be fixed, but "unusable for
+ * calling" is a different question from "will Wave take it", and gating the
+ * sync on the former is the wrong lever.)
+ *
+ * The email rule stays: no client trips it, so nothing disproves it, and a
+ * malformed address is a far more standard refusal. It is still unproven
+ * against Wave — treat it the same way if real data ever contradicts it.
  * @param {!Object} payload The Wave customer input.
  * @return {!Array<WaveProblem>}
  */
@@ -115,14 +136,6 @@ function contactProblems(payload) {
   const problems = [];
   if (typeof payload.email === "string" && !EMAIL_SHAPE.test(payload.email)) {
     problems.push({field: "email", code: "INVALID_EMAIL", detail: null});
-  }
-  // A number with no digit in it cannot be dialled and Wave refuses it. The
-  // shape is otherwise left alone: the app legitimately stores international
-  // and extension forms that no NANP pattern would match.
-  for (const field of ["phone", "mobile"]) {
-    const value = payload[field];
-    if (typeof value !== "string" || HAS_DIGIT.test(value)) continue;
-    problems.push({field, code: "INVALID_PHONE", detail: null});
   }
   return problems;
 }
