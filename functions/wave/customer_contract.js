@@ -92,6 +92,42 @@ function overLongProblems(payload) {
 }
 
 /**
+ * A deliberately loose email shape: a local part, one `@`, a dotted domain,
+ * and no whitespace.
+ *
+ * Wave is the authority on what it accepts, and this is not trying to be a
+ * second one — it catches the obvious refusals BEFORE they become a permanent
+ * dead-letter. A false accept simply behaves as it does today; a false REJECT
+ * would block a client that syncs fine, so this errs loose on purpose.
+ * @const {!RegExp}
+ */
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
+
+/** Any decimal digit. @const {!RegExp} */
+const HAS_DIGIT = /\d/;
+
+/**
+ * Problems with the payload's contact fields.
+ * @param {!Object} payload The Wave customer input.
+ * @return {!Array<WaveProblem>}
+ */
+function contactProblems(payload) {
+  const problems = [];
+  if (typeof payload.email === "string" && !EMAIL_SHAPE.test(payload.email)) {
+    problems.push({field: "email", code: "INVALID_EMAIL", detail: null});
+  }
+  // A number with no digit in it cannot be dialled and Wave refuses it. The
+  // shape is otherwise left alone: the app legitimately stores international
+  // and extension forms that no NANP pattern would match.
+  for (const field of ["phone", "mobile"]) {
+    const value = payload[field];
+    if (typeof value !== "string" || HAS_DIGIT.test(value)) continue;
+    problems.push({field, code: "INVALID_PHONE", detail: null});
+  }
+  return problems;
+}
+
+/**
  * Builds the Wave customer payload for a client, or says why it cannot.
  * @param {!Object} clientFields Firestore `clients` document fields.
  * @return {{ok: boolean, payload: (!Object|undefined),
@@ -105,6 +141,7 @@ function buildCustomerPayload(clientFields) {
     problems.push({field: "name", code: "EMPTY", detail: null});
   }
   problems.push(...overLongProblems(payload));
+  problems.push(...contactProblems(payload));
 
   if (problems.length > 0) return {ok: false, problems};
   return {ok: true, payload, hash: mappedFieldsHash(clientFields)};
