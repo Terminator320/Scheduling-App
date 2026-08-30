@@ -56,4 +56,48 @@ describe("buildCustomerPayload", () => {
     expect(out.problems[0]).toEqual(
         {field: "name", code: "EMPTY", detail: null});
   });
+
+  test("refuses a name past Wave's 200-character cap", () => {
+    // firestore.rules permits 225 (sized for the old "<name> <phone>" shape,
+    // and it must STAY there — a cap below a stored value makes that doc
+    // permanently un-updatable). So the contract is what catches this.
+    const out = buildCustomerPayload(client({name: "a".repeat(218)}));
+    expect(out.ok).toBe(false);
+    expect(out.problems).toEqual([
+      {field: "name", code: "TOO_LONG", detail: {length: 218, cap: 200}},
+    ]);
+  });
+
+  test("accepts a name exactly at the cap", () => {
+    expect(buildCustomerPayload(client({name: "a".repeat(200)})).ok)
+        .toBe(true);
+  });
+
+  test("refuses an address past Wave's 500-character cap", () => {
+    const out = buildCustomerPayload(client({address: "a".repeat(520)}));
+    expect(out.ok).toBe(false);
+    expect(out.problems).toEqual([
+      {field: "address", code: "TOO_LONG", detail: {length: 520, cap: 500}},
+    ]);
+  });
+
+  test("blames `address` when apt + address together exceed the cap", () => {
+    // addressLine1 is the two joined, so each can be legal alone and the
+    // composed line still refused. The admin edits `address`, so that is what
+    // the problem names.
+    const out = buildCustomerPayload(
+        client({apt: "1108", address: "a".repeat(498)}));
+    expect(out.ok).toBe(false);
+    expect(out.problems[0].field).toBe("address");
+    expect(out.problems[0].code).toBe("TOO_LONG");
+  });
+
+  test("reports every over-long field, not just the first", () => {
+    const out = buildCustomerPayload(client({
+      name: "a".repeat(201),
+      city: "b".repeat(129),
+    }));
+    expect(out.ok).toBe(false);
+    expect(out.problems.map((p) => p.field).sort()).toEqual(["city", "name"]);
+  });
 });
