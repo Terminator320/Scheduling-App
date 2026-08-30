@@ -46,7 +46,7 @@ describe("buildCustomerPayload", () => {
     const out = buildCustomerPayload(client({name: ""}));
     expect(out.ok).toBe(false);
     expect(out.problems).toEqual([
-      {field: "name", code: "EMPTY", detail: null},
+      {field: "name", code: "EMPTY", severity: "blocking", detail: null},
     ]);
     expect(out.payload).toBeUndefined();
   });
@@ -55,7 +55,7 @@ describe("buildCustomerPayload", () => {
     const out = buildCustomerPayload(client({name: "   "}));
     expect(out.ok).toBe(false);
     expect(out.problems[0]).toEqual(
-        {field: "name", code: "EMPTY", detail: null});
+        {field: "name", code: "EMPTY", severity: "blocking", detail: null});
   });
 
   test("refuses a name past Wave's 200-character cap", () => {
@@ -65,7 +65,8 @@ describe("buildCustomerPayload", () => {
     const out = buildCustomerPayload(client({name: "a".repeat(218)}));
     expect(out.ok).toBe(false);
     expect(out.problems).toEqual([
-      {field: "name", code: "TOO_LONG", detail: {length: 218, cap: 200}},
+      {field: "name", code: "TOO_LONG", severity: "blocking",
+        detail: {length: 218, cap: 200}},
     ]);
   });
 
@@ -78,7 +79,8 @@ describe("buildCustomerPayload", () => {
     const out = buildCustomerPayload(client({address: "a".repeat(520)}));
     expect(out.ok).toBe(false);
     expect(out.problems).toEqual([
-      {field: "address", code: "TOO_LONG", detail: {length: 520, cap: 500}},
+      {field: "address", code: "TOO_LONG", severity: "blocking",
+        detail: {length: 520, cap: 500}},
     ]);
   });
 
@@ -107,7 +109,8 @@ describe("buildCustomerPayload", () => {
       const out = buildCustomerPayload(client({email}));
       expect(out.ok).toBe(false);
       expect(out.problems[0])
-          .toEqual({field: "email", code: "INVALID_EMAIL", detail: null});
+          .toEqual({field: "email", code: "INVALID_EMAIL", severity: "blocking",
+            detail: null});
     }
   });
 
@@ -131,14 +134,31 @@ describe("buildCustomerPayload", () => {
     }
   });
 
-  test("accepts a phone with NO digits, because Wave does", () => {
-    // Disproved by the first production conformance run: client
-    // 2wcEiCNztsWYUYNXYBEm stores "Tareq Chehadeh" in `phone` and Wave has it
-    // SYNCED with that string as the customer's phone number. A rule refusing
-    // it would block a client Wave accepts. See contactProblems' note.
+  test("still SYNCS a phone with no digits, but reports it", () => {
+    // Client 2wcEiCNztsWYUYNXYBEm stores "Tareq Chehadeh" in `phone` and Wave
+    // has it SYNCED with that string as the customer's phone number — so
+    // blocking it would strand a client Wave accepts. It is still wrong:
+    // nothing can dial it. Advisory is what lets both be true.
     const out = buildCustomerPayload(client({phone: "Tareq Chehadeh"}));
     expect(out.ok).toBe(true);
     expect(out.payload.phone).toBe("Tareq Chehadeh");
+    expect(out.problems).toEqual([
+      {field: "phone", code: "NOT_DIALABLE", severity: "advisory",
+        detail: null},
+    ]);
+  });
+
+  test("an ordinary client reports no problems at all", () => {
+    expect(buildCustomerPayload(client()).problems).toEqual([]);
+  });
+
+  test("an advisory alongside a blocking problem still blocks", () => {
+    const out = buildCustomerPayload(
+        client({name: "", phone: "Tareq Chehadeh"}));
+    expect(out.ok).toBe(false);
+    expect(out.payload).toBeUndefined();
+    expect(out.problems.map((p) => p.code).sort())
+        .toEqual(["EMPTY", "NOT_DIALABLE"]);
   });
 
   test("still caps an over-long phone", () => {
@@ -148,7 +168,7 @@ describe("buildCustomerPayload", () => {
     expect(out.ok).toBe(false);
     expect(out.problems[0])
         .toEqual({field: "phone", code: "TOO_LONG",
-          detail: {length: 33, cap: 32}});
+          severity: "blocking", detail: {length: 33, cap: 32}});
   });
 });
 
@@ -185,7 +205,7 @@ describe("historical incidents", () => {
     }));
     expect(out.ok).toBe(false);
     expect(out.problems).toContainEqual(
-        {field: "name", code: "EMPTY", detail: null});
+        {field: "name", code: "EMPTY", severity: "blocking", detail: null});
   });
 
   test("latent: a legacy 225-character name is refused, not dead-lettered",
@@ -193,7 +213,8 @@ describe("historical incidents", () => {
         const out = buildCustomerPayload(client({name: "a".repeat(225)}));
         expect(out.ok).toBe(false);
         expect(out.problems).toContainEqual({
-          field: "name", code: "TOO_LONG", detail: {length: 225, cap: 200},
+          field: "name", code: "TOO_LONG", severity: "blocking",
+          detail: {length: 225, cap: 200},
         });
       });
 
@@ -201,7 +222,8 @@ describe("historical incidents", () => {
     const out = buildCustomerPayload(client({address: "a".repeat(533)}));
     expect(out.ok).toBe(false);
     expect(out.problems).toContainEqual({
-      field: "address", code: "TOO_LONG", detail: {length: 533, cap: 500},
+      field: "address", code: "TOO_LONG", severity: "blocking",
+      detail: {length: 533, cap: 500},
     });
   });
 });
@@ -209,7 +231,19 @@ describe("historical incidents", () => {
 describe("problemsPatch", () => {
   test("records the problems when a client cannot be sent", () => {
     expect(problemsPatch(client({name: ""}))).toEqual({
-      "wave.problems": [{field: "name", code: "EMPTY", detail: null}],
+      "wave.problems": [
+        {field: "name", code: "EMPTY", severity: "blocking", detail: null},
+      ],
+    });
+  });
+
+  test("records an ADVISORY problem even though the push proceeds", () => {
+    // The push is fine and the client syncs; the admin must still see it.
+    expect(problemsPatch(client({phone: "Tareq Chehadeh"}))).toEqual({
+      "wave.problems": [
+        {field: "phone", code: "NOT_DIALABLE", severity: "advisory",
+          detail: null},
+      ],
     });
   });
 

@@ -7,6 +7,13 @@
 // This is the check that moves that discovery before the deploy. Run it after
 // any change to the contract, the mappers, or ClientNamePolicy.
 //
+// It reports BOTH severities, and the split is the point:
+//   BLOCKING  — Wave would refuse it; the push dead-letters permanently.
+//   ADVISORY  — Wave accepts it, but the data is wrong (a phone nobody can
+//               dial). Syncs fine; still worth fixing.
+// Reporting only the blocked clients would hide exactly the case this audit
+// first turned up on 2026-08-30.
+//
 // It writes NOTHING. Safe against production at any time.
 //
 // Usage:
@@ -43,13 +50,17 @@ const PAGE_SIZE = 500;
 /**
  * Replays the contract over every client document.
  * @param {!Object} db The Firestore handle.
- * @return {!Promise<{scanned: number, refused: number,
+ * @return {!Promise<{scanned: number, refused: number, flagged: number,
  *   byCode: !Object<string, number>, offenders: !Array<!Object>}>} The tally.
+ *   `refused` counts clients with a BLOCKING problem (the push would
+ *   dead-letter); `flagged` also counts advisory-only ones, which sync fine
+ *   but carry data worth fixing.
  */
 async function audit(db) {
   const byCode = {};
   const offenders = [];
   let scanned = 0;
+  let refused = 0;
   let cursor = null;
 
   // Paged on `__name__` so this needs no index and no orderBy field, which
@@ -63,11 +74,16 @@ async function audit(db) {
 
     for (const doc of snap.docs) {
       scanned += 1;
-      const result = buildCustomerPayload(doc.data() || {});
-      if (result.ok) continue;
-      offenders.push({id: doc.id, problems: result.problems});
-      for (const problem of result.problems) {
-        const key = `${problem.field}:${problem.code}`;
+      // NOT gated on `ok`: an ADVISORY problem rides along on a perfectly good
+      // result, and reporting only the blocked clients would hide the case
+      // this audit first turned up.
+      const {ok, problems} = buildCustomerPayload(doc.data() || {});
+      const found = Array.isArray(problems) ? problems : [];
+      if (found.length === 0) continue;
+      if (!ok) refused += 1;
+      offenders.push({id: doc.id, blocked: !ok, problems: found});
+      for (const problem of found) {
+        const key = `${problem.severity}  ${problem.field}:${problem.code}`;
         byCode[key] = (byCode[key] || 0) + 1;
       }
     }
@@ -76,7 +92,7 @@ async function audit(db) {
     if (snap.size < PAGE_SIZE) break;
   }
 
-  return {scanned, refused: offenders.length, byCode, offenders};
+  return {scanned, refused, flagged: offenders.length, byCode, offenders};
 }
 
 /**
@@ -95,10 +111,11 @@ async function main() {
   printTargetBanner(app, {dryRun: false});
   const db = getFirestore();
 
-  const {scanned, refused, byCode, offenders} = await audit(db);
+  const {scanned, refused, flagged, byCode, offenders} = await audit(db);
 
   console.log(`\nScanned ${scanned} clients.`);
-  console.log(`${refused} would be REFUSED by Wave.\n`);
+  console.log(`${refused} would be REFUSED by Wave (blocking).`);
+  console.log(`${flagged - refused} sync fine but carry advisory problems.\n`);
 
   const keys = Object.keys(byCode).sort();
   if (keys.length === 0) {
@@ -109,9 +126,9 @@ async function main() {
 
   if (verbose && offenders.length > 0) {
     console.log("\nAffected clients:");
-    for (const {id, problems} of offenders) {
+    for (const {id, blocked, problems} of offenders) {
       const summary = problems.map((p) => `${p.field}:${p.code}`).join(", ");
-      console.log(`  ${id}  ${summary}`);
+      console.log(`  ${blocked ? "BLOCKED " : "advisory"}  ${id}  ${summary}`);
     }
   }
 
