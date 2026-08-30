@@ -291,6 +291,50 @@ describe("describeWaveError", () => {
         "fields=[customerPatch.customer]");
   });
 
+  it("names the code and field a VALIDATION rejection carries", () => {
+    // The class this mattered most for was the one it answered "" on.
+    // `sanitizeInputErrors` maps seven codes and falls back to a generic
+    // sentence for everything else, so an unmapped code left the log, the job
+    // and the client badge all saying "Wave rejected the customer data." and
+    // nothing else — which is how a blank `name` took a full log dig to find
+    // (client o0KcOnJSgjvMHYpmcZ44, 2026-08-30).
+    const err = new WaveValidationError([
+      {code: "GENERIC_ERROR", message: "Name can't be blank", path: ["name"]},
+    ]);
+    const out = describeWaveError(err);
+    expect(out).toContain("codes=[GENERIC_ERROR]");
+    expect(out).toContain("fields=[name]");
+  });
+
+  it("never carries a validation error's raw MESSAGE", () => {
+    // Wave's inputError message is customer data by default — it is exactly
+    // what `sanitizeInputErrors` refuses to surface. Only `code` and `path`
+    // are schema-level.
+    const err = new WaveValidationError([
+      {
+        code: "INVALID_EMAIL",
+        message: "jane@example.com is not a valid email",
+        path: "input.email",
+      },
+    ]);
+    const out = describeWaveError(err);
+    expect(out).toContain("codes=[INVALID_EMAIL]");
+    expect(out).toContain("fields=[input.email]");
+    expect(out).not.toContain("jane@example.com");
+  });
+
+  it("stays bounded on a validation wall too", () => {
+    const errs = Array.from({length: 50}, (_, i) => ({
+      code: `CODE_${i}`,
+      path: [`f${i}`],
+      message: `secret-${i}`,
+    }));
+    const out = describeWaveError(new WaveValidationError(errs));
+    expect(out.length).toBeLessThanOrEqual(300);
+    expect(out).toContain("CODE_0");
+    expect(out).not.toContain("secret-0");
+  });
+
   it("says nothing rather than guessing on a non-Wave error", () => {
     expect(describeWaveError(new TypeError("obj.foo"))).toBe("");
     expect(describeWaveError(null)).toBe("");
