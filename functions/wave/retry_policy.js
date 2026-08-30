@@ -183,6 +183,48 @@ function joinCapped(values) {
 }
 
 /**
+ * The validation half of [describeWaveError].
+ *
+ * A `WaveValidationError` is the one class whose reason arrives STRUCTURED —
+ * Wave's `inputErrors`, each a `{code, path, message}` — and it was also the
+ * one class [describeWaveError] answered `''` on, so a rejected customer edit
+ * recorded its cause nowhere. `sanitizeInputErrors` maps seven codes and falls
+ * back to one generic sentence for the rest, which means an UNMAPPED code left
+ * the log, the job's `lastError` and the client's `wave.syncError` all saying
+ * "Wave rejected the customer data." and nothing more.
+ *
+ * Takes `code` and `path` only. Wave's inputError `message` is customer data
+ * by default ("jane@example.com is not a valid email") and is exactly what
+ * `sanitizeInputErrors` refuses to surface — unlike the transport branch
+ * below, there is no schema-level fragment worth mining out of it.
+ *
+ * @param {!WaveValidationError} err The validation rejection.
+ * @return {string} A short descriptor, or '' when Wave named neither.
+ */
+function describeInputErrors(err) {
+  const errs = Array.isArray(err.inputErrors) ? err.inputErrors : [];
+  const codes = [];
+  const fields = [];
+  for (const e of errs) {
+    if (!e) continue;
+    if (typeof e.code === "string" && e.code) codes.push(e.code);
+    const path = e.path;
+    if (Array.isArray(path)) {
+      if (path.length) fields.push(path.join("."));
+    } else if (typeof path === "string" && path) {
+      fields.push(path);
+    }
+  }
+
+  const parts = [];
+  const codeList = joinCapped(codes);
+  if (codeList) parts.push(`codes=[${codeList}]`);
+  const fieldList = joinCapped(fields);
+  if (fieldList) parts.push(`fields=[${fieldList}]`);
+  return parts.join(" ").slice(0, DESCRIBE_MAX_LENGTH);
+}
+
+/**
  * A PII-free descriptor of WHY Wave refused, for the dead-letter LOG ONLY.
  *
  * [sanitizeError] deliberately reduces every transport failure to
@@ -194,7 +236,12 @@ function joinCapped(values) {
  * only recovery action ("Retry failed") re-sent the identical payload and
  * dead-lettered it identically.
  *
- * What it takes is bounded to schema-level identifiers, never customer data:
+ * A `WaveValidationError` is handed to [describeInputErrors] above, which reads
+ * its structured `inputErrors` instead. Everything else answers '' — a
+ * descriptor is only worth logging when the error class actually carries one.
+ *
+ * What THIS branch takes is bounded to schema-level identifiers, never
+ * customer data:
  *   - `extensions.code` — Wave's own error vocabulary
  *     (e.g. `GRAPHQL_VALIDATION_FAILED`).
  *   - the error `path`, and any `at "input.address.countryCode"` fragment,
@@ -210,6 +257,7 @@ function joinCapped(values) {
  *   add beyond what [sanitizeError] already says.
  */
 function describeWaveError(err) {
+  if (err instanceof WaveValidationError) return describeInputErrors(err);
   if (!(err instanceof WaveApiError)) return "";
   const details = Array.isArray(err.details) ? err.details : [];
   const codes = [];
