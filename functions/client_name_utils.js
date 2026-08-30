@@ -213,11 +213,15 @@ function looksLikeBusinessName(name) {
  *
  * A BUSINESS keeps its name: "3101-5696 qc inc.", "1505 Village de Bergerac".
  * That name IS the identity in Wave, and unlike a person there is rarely a
- * first/last to fall back on.
+ * first/last to fall back on — UNLESS its name is nothing but its own number,
+ * which `stripPhone` reduces to "". The business branch used to return that
+ * blank, and Wave refuses a blank customer name, so the client dead-lettered
+ * on every push forever with "Retry failed" re-sending the same refusal. Such
+ * a business takes the number, like a person.
  *
- * Both branches are idempotent. `baseName` is also the answer for a person
- * with no number at all — a blank floats the doc to the top of the
- * name-ordered client list.
+ * Both branches are idempotent, and neither can compose a name AWAY. `baseName`
+ * is the answer only when there is no number at all — a blank floats the doc to
+ * the top of the name-ordered client list.
  *
  * @param {{baseName: string, phone: (string|undefined),
  *   mobile: (string|undefined), type: (string|undefined),
@@ -230,13 +234,19 @@ function composeStored(opts) {
   const phone = str(o.phone);
   const mobile = str(o.mobile);
   const base = stripPhone(o.baseName, {phone, mobile});
+  const number = phone || mobile;
 
-  if (isBusiness({type: o.type, businessName: o.businessName}) ||
-      looksLikeBusinessName(base)) {
+  // `base` non-empty guards the business branch because composing a name AWAY
+  // is never right: `name` IS the Wave customer identity and Wave refuses a
+  // blank one, so the doc dead-letters on every push forever. A business named
+  // by nothing but its own number strips to "" here and has no first/last to
+  // fall back on, so it takes the person's number instead.
+  if (base &&
+      (isBusiness({type: o.type, businessName: o.businessName}) ||
+       looksLikeBusinessName(base))) {
     return base;
   }
 
-  const number = phone || mobile;
   return number ? bareNumber(number) : base;
 }
 

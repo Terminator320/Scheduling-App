@@ -77,12 +77,19 @@ class ClientNamePolicy {
     String businessName = '',
   }) {
     final base = stripPhone(baseName, phone: phone, mobile: mobile);
-    if (isBusiness(type: type, businessName: businessName) ||
-        looksLikeBusinessName(base)) {
+    final number = phone.trim().isNotEmpty ? phone.trim() : mobile.trim();
+
+    // `base.isNotEmpty` guards the business branch because composing a name
+    // AWAY is never right: `name` IS the Wave customer identity and Wave
+    // refuses a blank one, so the doc dead-letters on every push forever.
+    // A business named by nothing but its own number strips to '' here and has
+    // no first/last to fall back on, so it takes the person's number instead.
+    if (base.isNotEmpty &&
+        (isBusiness(type: type, businessName: businessName) ||
+            looksLikeBusinessName(base))) {
       return base;
     }
 
-    final number = phone.trim().isNotEmpty ? phone.trim() : mobile.trim();
     return number.isNotEmpty ? bareNumber(number) : base;
   }
 

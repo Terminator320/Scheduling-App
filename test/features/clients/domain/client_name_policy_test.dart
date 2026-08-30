@@ -201,6 +201,48 @@ void main() {
         '5145551234',
       );
     });
+
+    test('a BUSINESS named only by its own number keeps the number', () {
+      // `stripPhone` correctly reduces such a name to '' — it IS nothing but
+      // this client's number — and the business branch used to return that
+      // blank. An empty `name` is rejected by Wave on every push, so the
+      // customer dead-letters permanently and 'Retry failed' re-sends the same
+      // refusal (client o0KcOnJSgjvMHYpmcZ44, 2026-08-30). A business has no
+      // first/last to fall back on, so the number is the only identity left.
+      for (final type in [ClientType.commercial, ClientType.building]) {
+        expect(
+          ClientNamePolicy.composeStored(
+            baseName: '5144586186',
+            phone: '(514) 458-6186',
+            type: type,
+          ),
+          '5144586186',
+        );
+      }
+      expect(
+        ClientNamePolicy.composeStored(
+          baseName: '(514) 458-6186',
+          phone: '(514) 458-6186',
+          businessName: '3101-5696 qc inc.',
+        ),
+        '5144586186',
+      );
+    });
+
+    test('never returns blank while a base name or a number exists', () {
+      // The invariant the case above is one instance of: `name` is the Wave
+      // customer identity, so composing one away is never the right answer.
+      for (final type in ClientType.values) {
+        expect(
+          ClientNamePolicy.composeStored(
+            baseName: '514-458-6186',
+            phone: '(514) 458-6186',
+            type: type,
+          ),
+          isNot(''),
+        );
+      }
+    });
   });
 
   group('displayFor — a PERSON shows their halves', () {
