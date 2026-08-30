@@ -137,3 +137,57 @@ describe("buildCustomerPayload", () => {
     }
   });
 });
+
+describe("historical incidents", () => {
+  // Each case dead-lettered a real client permanently in production. They are
+  // named so a regression cannot come back anonymously.
+
+  test("2026-08-15: a New York client is never sent as CA-NY", () => {
+    // provinceCode had an unconditional `CA-` prefix, so a US client shipped
+    // as a subdivision of nowhere. Enums are not an inputErrors entry — the
+    // whole $input fails to coerce, arriving as a non-retryable
+    // WaveApiError(graphql). Nothing recovered it.
+    const out = buildCustomerPayload(client({
+      city: "Brooklyn", province: "NY", country: "United States",
+      postalCode: "11201",
+    }));
+    expect(out.ok).toBe(true);
+    expect(out.payload.address.countryCode).toBe("US");
+    expect(out.payload.address.provinceCode).toBe("US-NY");
+  });
+
+  test("2026-08-15: an unknown province is omitted, never guessed", () => {
+    const out = buildCustomerPayload(client({province: "Ontari"}));
+    expect(out.ok).toBe(true);
+    expect(out.payload.address.provinceCode).toBeUndefined();
+  });
+
+  test("2026-08-30: a business named only by its phone is refused", () => {
+    // Client o0KcOnJSgjvMHYpmcZ44. `type: building` with a name that
+    // composeStored had reduced to "". Wave refuses a blank customer name.
+    const out = buildCustomerPayload(client({
+      name: "", firstName: "", lastName: "", type: "building",
+      phone: "(514) 458-6186",
+    }));
+    expect(out.ok).toBe(false);
+    expect(out.problems).toContainEqual(
+        {field: "name", code: "EMPTY", detail: null});
+  });
+
+  test("latent: a legacy 225-character name is refused, not dead-lettered",
+      () => {
+        const out = buildCustomerPayload(client({name: "a".repeat(225)}));
+        expect(out.ok).toBe(false);
+        expect(out.problems).toContainEqual({
+          field: "name", code: "TOO_LONG", detail: {length: 225, cap: 200},
+        });
+      });
+
+  test("latent: a legacy 533-character address is refused", () => {
+    const out = buildCustomerPayload(client({address: "a".repeat(533)}));
+    expect(out.ok).toBe(false);
+    expect(out.problems).toContainEqual({
+      field: "address", code: "TOO_LONG", detail: {length: 533, cap: 500},
+    });
+  });
+});
