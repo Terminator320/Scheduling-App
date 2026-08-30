@@ -147,6 +147,25 @@ function buildCustomerPayload(clientFields) {
   return {ok: true, payload, hash: mappedFieldsHash(clientFields)};
 }
 
+/**
+ * The Firestore patch recording a client's contract problems.
+ *
+ * PHASE 1 IS REPORT-ONLY: this records what the contract WOULD refuse and
+ * changes nothing else. The job is still enqueued, the push still runs, and
+ * `wave.syncState` is untouched. The point is to learn what the contract
+ * flags across every real client before it is able to block one.
+ *
+ * Always returns the key, `null` when there is nothing wrong — a client
+ * repaired since the last write must not keep stale problems on its doc.
+ * @param {!Object} clientFields Firestore `clients` document fields.
+ * @return {!Object} A patch to merge into a client-doc update.
+ */
+function problemsPatch(clientFields) {
+  const result = buildCustomerPayload(clientFields);
+  return {"wave.problems": result.ok ? null : result.problems};
+}
+
 module.exports = {
   buildCustomerPayload,
+  problemsPatch,
 };

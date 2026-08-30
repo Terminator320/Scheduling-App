@@ -31,6 +31,7 @@ const {
   shouldEnqueueClientWrite,
 } = require("./worker");
 const {mappedFieldsHash} = require("./mappers");
+const {problemsPatch} = require("./customer_contract");
 const {classifyWaveError} = require("./errors");
 const {isImportDue} = require("./import_schedule");
 const {importWithWatermark, readWaveBusinessIdCached} = require("./sync_run");
@@ -125,9 +126,16 @@ const waveUpsertCustomer = onDocumentWritten(
       // two can't leave the doc stuck at 'pending' with no queued job (or a
       // queued job with no visible pending state).
       const batch = db.batch();
+      // `wave.problems` rides the batch that was already updating this doc, so
+      // report-only costs no extra write. It is NOT a mapped field, so the
+      // hash is unchanged and `shouldEnqueueClientWrite` returns false when
+      // the trigger re-fires on this write — the same protection the
+      // mark-pending update above already relies on, and the reason this
+      // cannot loop.
       batch.update(db.doc("clients/" + clientId), {
         "wave.syncState": "pending",
         "wave.syncError": null,
+        ...problemsPatch(after),
       });
       // payloadHash is diagnostic only — the worker re-reads the live doc
       // and recomputes the hash before writing, since the doc is the real
