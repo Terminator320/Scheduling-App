@@ -88,7 +88,11 @@ async function main() {
   const verbose = process.argv.includes("--verbose");
 
   const app = initializeApp({credential: applicationDefault()});
-  printTargetBanner(app);
+  // `dryRun: false` like the other read-only scripts: this NEVER writes, so
+  // the banner must not carry a "[dry-run]" prefix implying a live run exists
+  // behind it. The second argument is required — omitting it throws before the
+  // first read.
+  printTargetBanner(app, {dryRun: false});
   const db = getFirestore();
 
   const {scanned, refused, byCode, offenders} = await audit(db);
