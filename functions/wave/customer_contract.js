@@ -25,9 +25,23 @@
 const {toWaveCustomerInput, mappedFieldsHash} = require("./mappers");
 
 /**
- * @typedef {{field: string, code: string, detail: ?Object}} WaveProblem
+ * @typedef {{field: string, code: string, severity: string,
+ *   detail: ?Object}} WaveProblem
  *   `field` names the CLIENT DOC field an admin edits, never the Wave payload
  *   path — the UI points at an input with it.
+ *
+ *   `severity` is `"blocking"` or `"advisory"`, and the split is load-bearing.
+ *   Two different questions were competing for one verdict:
+ *
+ *     - BLOCKING — "Wave will refuse this." Never enqueue it; the push would
+ *       dead-letter permanently.
+ *     - ADVISORY — "Wave accepts this, but the data is wrong." Report it,
+ *       surface it, and push anyway.
+ *
+ *   Collapsing them costs a real failure in each direction. Treating every
+ *   problem as blocking stops a client Wave is happy with from syncing at all
+ *   (client `2wcEiCNztsWYUYNXYBEm`, below). Treating none as blocking puts the
+ *   permanent dead-letter back. Only `blocking` decides `ok`.
  */
 
 /**
@@ -85,6 +99,7 @@ function overLongProblems(payload) {
     problems.push({
       field: rule.field,
       code: "TOO_LONG",
+      severity: "blocking",
       detail: {length: value.length, cap: rule.cap},
     });
   }
@@ -103,39 +118,59 @@ function overLongProblems(payload) {
  */
 const EMAIL_SHAPE = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/;
 
+/** Any decimal digit. @const {!RegExp} */
+const HAS_DIGIT = /\d/;
+
 /**
  * Problems with the payload's contact fields.
  *
- * THERE IS DELIBERATELY NO PHONE RULE. One briefly existed — "a value carrying
- * no digit at all cannot be dialled, so Wave refuses it" — and the first
- * conformance run against production disproved it: client
- * `2wcEiCNztsWYUYNXYBEm` stores the literal string "Tareq Chehadeh" in `phone`
- * (a contact name typed into the wrong box) and Wave has it **synced**, with
- * that string as the customer's phone number. Enforcing the rule would have
- * BLOCKED a client Wave accepts, which is the one outcome these loose contact
- * rules exist to avoid.
+ * `NOT_DIALABLE` is ADVISORY, and the first production conformance run is
+ * exactly why. Client `2wcEiCNztsWYUYNXYBEm` stores the literal string
+ * "Tareq Chehadeh" in `phone` — a contact name typed into the wrong box — and
+ * Wave has that client **synced**, with that string as the customer's phone
+ * number. So Wave plainly does not refuse it, and blocking the sync over it
+ * would strand a customer Wave is happy with.
  *
- * The lesson generalises: every other rule here traces to a real refusal, and
- * that one traced to a guess about what Wave *might* refuse. Wave can emit
- * `INVALID_PHONE` (it is in `ERROR_CODE_MESSAGES`, and
- * `createCustomerWithPhoneFallback` exists for it), so a phone rule may be
- * warranted eventually — but write it from an observed rejection, never from a
- * plausible one. The length cap in `PAYLOAD_CAPS` still applies to both fields.
+ * But it is still WRONG: nothing can dial it, and that client has no reachable
+ * number. Nothing else in the system catches this — `ClientFormValidator` says
+ * so in its own comment ("phone/mobile aren't format-checked at all"), the
+ * rules only bound length, and no other check exists. Advisory is what lets
+ * both facts be true at once: the push proceeds, and the problem is on record.
  *
- * (That client's phone IS bad data and should be fixed, but "unusable for
- * calling" is a different question from "will Wave take it", and gating the
- * sync on the former is the wrong lever.)
+ * The code is deliberately NOT `INVALID_PHONE`. That name asserts something
+ * about Wave's opinion, and Wave's opinion is that it is fine; this is a claim
+ * about whether a human can ring it. Wave *can* emit `INVALID_PHONE` (it is in
+ * `ERROR_CODE_MESSAGES`, and `createCustomerWithPhoneFallback` exists for it),
+ * so a BLOCKING phone rule may be warranted one day — write it from an
+ * observed rejection, never a plausible one, which is how this one got its
+ * severity wrong to begin with.
  *
- * The email rule stays: no client trips it, so nothing disproves it, and a
- * malformed address is a far more standard refusal. It is still unproven
- * against Wave — treat it the same way if real data ever contradicts it.
+ * The shape check stays deliberately weak: only "carries no digit at all".
+ * The app legitimately stores international forms and extensions that no
+ * stricter pattern would match, and an advisory that cries wolf gets ignored,
+ * which costs more than it saves.
+ *
+ * `INVALID_EMAIL` stays BLOCKING: no client trips it, so nothing disproves it,
+ * and a malformed address is a far more standard refusal. It is still unproven
+ * against Wave — if real data ever contradicts it, demote it the same way.
  * @param {!Object} payload The Wave customer input.
  * @return {!Array<WaveProblem>}
  */
 function contactProblems(payload) {
   const problems = [];
   if (typeof payload.email === "string" && !EMAIL_SHAPE.test(payload.email)) {
-    problems.push({field: "email", code: "INVALID_EMAIL", detail: null});
+    problems.push({
+      field: "email", code: "INVALID_EMAIL",
+      severity: "blocking", detail: null,
+    });
+  }
+  for (const field of ["phone", "mobile"]) {
+    const value = payload[field];
+    if (typeof value !== "string" || HAS_DIGIT.test(value)) continue;
+    problems.push({
+      field, code: "NOT_DIALABLE",
+      severity: "advisory", detail: null,
+    });
   }
   return problems;
 }
@@ -151,13 +186,20 @@ function buildCustomerPayload(clientFields) {
   const problems = [];
 
   if (!payload.name || !payload.name.trim()) {
-    problems.push({field: "name", code: "EMPTY", detail: null});
+    problems.push({
+      field: "name", code: "EMPTY", severity: "blocking", detail: null,
+    });
   }
   problems.push(...overLongProblems(payload));
   problems.push(...contactProblems(payload));
 
-  if (problems.length > 0) return {ok: false, problems};
-  return {ok: true, payload, hash: mappedFieldsHash(clientFields)};
+  // ONLY a blocking problem withholds the payload. An advisory one rides along
+  // on a perfectly good result — the push proceeds and the problem is still
+  // reported, which is the whole reason the severities are split.
+  if (problems.some((p) => p.severity === "blocking")) {
+    return {ok: false, problems};
+  }
+  return {ok: true, payload, hash: mappedFieldsHash(clientFields), problems};
 }
 
 /**
@@ -174,8 +216,12 @@ function buildCustomerPayload(clientFields) {
  * @return {!Object} A patch to merge into a client-doc update.
  */
 function problemsPatch(clientFields) {
-  const result = buildCustomerPayload(clientFields);
-  return {"wave.problems": result.ok ? null : result.problems};
+  const {problems} = buildCustomerPayload(clientFields);
+  // Records BOTH severities. An advisory problem does not stop the push, but
+  // the admin still has to be able to see it — a client nobody can ring is
+  // worth showing even though Wave took it happily.
+  const found = Array.isArray(problems) ? problems : [];
+  return {"wave.problems": found.length > 0 ? found : null};
 }
 
 module.exports = {
