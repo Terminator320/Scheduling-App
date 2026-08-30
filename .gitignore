@@ -13,6 +13,29 @@
 *google-services.json
 **/GoogleService-Info.plist
 
+# Service-account private keys. Nothing here needs one committed, and the
+# consequence of one slipping through is worse than any other secret in this
+# list: an adminsdk key is NON-EXPIRING full admin on prod Firestore, Auth and
+# Storage, and the Admin SDK bypasses `firestore.rules` entirely.
+#
+# The `functions/scripts/` runbooks tell an operator to point
+# GOOGLE_APPLICATION_CREDENTIALS at exactly such a file, so one lands on a dev
+# machine every time a backfill or audit is run. Until 2026-08-30 no pattern
+# here would have caught it — `*google-services.json` above does not match the
+# `<project>-firebase-adminsdk-<hash>.json` the console downloads.
+# Keep such a key OUTSIDE the repo anyway; this is the backstop, not the plan.
+*firebase-adminsdk*.json
+*-service-account*.json
+service-account*.json
+# ...but the jest FIXTURES are fake keys and must stay tracked. The patterns
+# above match `fake-service-account.json`, and that file is only safe today
+# because it is ALREADY tracked — `.gitignore` cannot un-track anything. A NEW
+# fixture, or a fresh clone that re-added one, would be dropped silently.
+# Verified with `git check-ignore -v --no-index`, never `git status`: the
+# tracked copy reports "not ignored" from `git status`'s point of view, which
+# is exactly how this hides.
+!**/__tests__/fixtures/*service-account*.json
+
 # Node tooling (root + functions/)
 node_modules/
 
