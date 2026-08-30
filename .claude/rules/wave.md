@@ -273,3 +273,26 @@ the sync badge, `clients/{id}.name` as Wave's customer name — are in
   `Expected type`. It takes **only** the quoted run following `at` — the same
   message quotes the offending VALUE immediately before it, and that is
   customer data. Keep new detail extraction on that side of the line.
+  **The customer contract owns "will Wave accept this client?"**
+  (`wave/customer_contract.js`, 2026-08-30). `buildCustomerPayload` returns
+  either a payload plus its hash, or structured `problems` — each naming the
+  CLIENT DOC field an admin edits, never a Wave payload path, because the UI
+  points at an input with it. Every rule traces to a dead-letter: a blank
+  `name` (2026-08-30), a field past Wave's cap (latent — `firestore.rules`
+  permits `name` at 225 and `address` at 533 where Wave caps at 200 and 500,
+  and the push path capped NOTHING, since `capped()` is called only by
+  `fromWaveCustomer`), an unusable email or phone.
+  **Do NOT "fix" the length gap by lowering the rules caps.** The 225 exists
+  because a cap below a stored value makes that doc permanently un-updatable
+  with an opaque `permission-denied` — see the root `CLAUDE.md`. The contract
+  refuses the doc and keeps it editable, which is the whole point.
+  **PHASE 1 IS REPORT-ONLY.** `problemsPatch` rides the trigger's existing
+  mark-pending batch and records `wave.problems`; nothing is blocked and the
+  enqueue decision is untouched. `wave.problems` is not a mapped field, so the
+  hash is unchanged and `shouldEnqueueClientWrite` stops the re-fire — the same
+  protection mark-pending relies on. The contract becomes the ONLY payload
+  producer in Phase 2; until then `wave/customers.js` still builds its own.
+  `functions/scripts/audit-wave-contract.js` replays it over production,
+  read-only. Run it after any change to the contract, the mappers, or
+  `ClientNamePolicy`. Design:
+  `docs/plans/2026-08-30-wave-validated-contract-design.md`.
