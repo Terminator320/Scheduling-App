@@ -91,6 +91,17 @@ class _WaveSettingsSectionState extends ConsumerState<WaveSettingsSection> {
       logger.warn('WAVE-$tag failed', e, st);
       if (!mounted) return;
       notices.error(e.toLocalizedMessage(context));
+    } on Object catch (e, st) {
+      // `WaveService` maps its own throws, but the `action:` closures also run
+      // notices, `ref.invalidate` and `setState` — so a non-`WaveFailure` is
+      // reachable, and it used to escape to the zone handler with NO notice
+      // shown: the admin taps Sync and nothing visibly happens. Reuses the
+      // existing generic string rather than minting an `error_intro*` key for
+      // a path that should never fire; this section is already the documented
+      // carve-out from `composeErrorNotice`.
+      logger.warn('WAVE-$tag failed (unexpected)', e, st);
+      if (!mounted) return;
+      notices.error(context.l10n.error_somethingWentWrongPleaseTryAgain);
     } finally {
       if (mounted) setBusy(busy: false);
     }
