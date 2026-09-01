@@ -397,6 +397,56 @@ void main() {
       verify(() => query.get()).called(2);
     });
 
+    test('a local write keeps the window alive past the plain TTL', () async {
+      // `patched()` used to carry the ORIGINAL fetchedAt through, so the
+      // window expired two minutes after the tab-open scan however much
+      // activity there had been — and the first write after that idle re-paged
+      // every client doc, plus a `fromMap` and a `buildingKeyFor` each, on the
+      // UI isolate.
+      final docs = [
+        doc('c1', {'name': 'John Smith'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      var now = DateTime(2026, 7, 2, 12);
+      final r = repo(clock: () => now);
+
+      await r.searchClients('John');
+      now = now.add(const Duration(minutes: 1, seconds: 30));
+      await r.updateClient(client(name: 'John Smith'));
+      // Past the 2-minute TTL measured from the ORIGINAL read, but only 30s
+      // past the write.
+      now = now.add(const Duration(minutes: 1, seconds: 30));
+      await r.searchClients('John');
+
+      verify(() => query.get()).called(1);
+    });
+
+    test('but never past the absolute ceiling', () async {
+      // The TTL is the only protection against a REMOTE write, so a steadily
+      // edited window must still age out. Without this bound an admin who
+      // saves a client every minute would never see another admin's change.
+      final docs = [
+        doc('c1', {'name': 'John Smith'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      var now = DateTime(2026, 7, 2, 12);
+      final r = repo(clock: () => now);
+
+      await r.searchClients('John');
+      // Eleven one-minute writes: each is inside the TTL, and together they
+      // carry the window past the 10-minute ceiling.
+      for (var i = 0; i < 11; i++) {
+        now = now.add(const Duration(minutes: 1));
+        await r.updateClient(client(name: 'John Smith'));
+      }
+      now = now.add(const Duration(seconds: 30));
+      await r.searchClients('John');
+
+      verify(() => query.get()).called(2);
+    });
+
     test(
       'updating a client is reflected in search without re-reading the window',
       () async {

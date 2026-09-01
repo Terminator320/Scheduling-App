@@ -24,6 +24,7 @@ class PhotoPickerSection extends ConsumerStatefulWidget {
     required this.onRemoveNew,
     super.key,
     this.failedCount = 0,
+    this.pendingCount = 0,
     this.tooLargeFileNames = const [],
     this.onRetry,
   });
@@ -34,6 +35,14 @@ class PhotoPickerSection extends ConsumerStatefulWidget {
   final void Function(int index) onRemoveExisting;
   final void Function(int index) onRemoveNew;
   final int failedCount;
+
+  /// Photos still in the offline upload queue for this appointment.
+  ///
+  /// The strip renders LOCAL files, so a queued photo looks identical to an
+  /// uploaded one — which is why the queue needs a line of its own rather
+  /// than a badge on a thumbnail.
+  final int pendingCount;
+
   final List<String> tooLargeFileNames;
   final VoidCallback? onRetry;
 
@@ -150,6 +159,13 @@ class _PhotoPickerSectionState extends ConsumerState<PhotoPickerSection> {
           _EditableEmptyPhotoState(onPickImages: widget.onPickImages)
         else
           const _ReadOnlyEmptyPhotoState(),
+
+        // Waiting comes FIRST: it is the transient state, and a job with both
+        // should read "3 waiting, 1 failed" in that order.
+        if (widget.pendingCount > 0) ...[
+          const SizedBox(height: AppSpacing.sp8),
+          _UploadPendingRow(count: widget.pendingCount),
+        ],
 
         if (widget.failedCount > 0) ...[
           const SizedBox(height: AppSpacing.sp8),
@@ -298,9 +314,11 @@ class _EditablePhotoStrip extends StatelessWidget {
             ),
           ),
         ),
+        // The 48x48 target is centred on its glyph, so the offsets shift by
+        // half the size growth to leave the glyph where it was.
         Positioned(
-          top: 4,
-          right: 12,
+          top: 0,
+          right: 4,
           child: formRemoveButton(
             context,
             onTap: () => onRemoveExisting(entry.key),
@@ -339,8 +357,8 @@ class _EditablePhotoStrip extends StatelessWidget {
           ),
         ),
         Positioned(
-          top: 4,
-          right: 12,
+          top: 0,
+          right: 4,
           child: formRemoveButton(
             context,
             onTap: () => onRemoveNew(entry.key),
@@ -451,6 +469,45 @@ class _FailedPhotoThumb extends StatelessWidget {
           Text(context.l10n.calendar_photoFailedBadge, style: style),
         ],
       ),
+    );
+  }
+}
+
+/// "N photos waiting to upload" — the queue, made visible.
+///
+/// Deliberately NOT an error colour: nothing has gone wrong, the phone just
+/// has no signal yet. It is the same row shape as [_UploadFailedRow] so the
+/// two read as one status area rather than two designs.
+class _UploadPendingRow extends StatelessWidget {
+  const _UploadPendingRow({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 3),
+          child: Icon(
+            Icons.cloud_upload_outlined,
+            size: 13,
+            color: scheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sp4),
+        Expanded(
+          child: Text(
+            context.l10n.calendar_nPhotosWaitingToUpload(count),
+            style: textTheme.labelSmall?.copyWith(
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

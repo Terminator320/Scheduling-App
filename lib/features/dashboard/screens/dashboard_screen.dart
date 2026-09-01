@@ -117,6 +117,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           AsyncError() => CenteredErrorText(
             message: context.l10n.error_introLoadDashboard,
+            onRetry: () => ref.invalidate(dashboardStatsProvider),
           ),
           _ => const _LoadingList(),
         },
@@ -164,16 +165,25 @@ class _StatsList extends ConsumerWidget {
               // counters instead of every section on the screen. It shares the
               // stats' sources, so by the time this subtree builds it has
               // settled too — the guard is for the frame where it has not.
-              ?ref
-                  .watch(dashboardPeriodSummaryProvider)
-                  .whenOrNull(
-                    data: (summary) => Padding(
-                      padding: const EdgeInsets.only(
-                        bottom: AppSpacing.sp24,
-                      ),
-                      child: PeriodSummarySection(summary: summary),
-                    ),
+              //
+              // An ERROR renders a retry rather than nothing: `whenOrNull`
+              // made the whole section disappear, which reads as "this period
+              // has no data" instead of "the read failed".
+              ?switch (ref.watch(dashboardPeriodSummaryProvider)) {
+                AsyncData(:final value) => Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sp24),
+                  child: PeriodSummarySection(summary: value),
+                ),
+                AsyncError() => Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sp24),
+                  child: CenteredErrorText(
+                    message: context.l10n.error_introLoadDashboard,
+                    onRetry: () =>
+                        ref.invalidate(dashboardPeriodSummaryProvider),
                   ),
+                ),
+                _ => null,
+              },
               tour.stepIf(
                 TourStepId.dashboardUpcoming,
                 UpcomingTodaySection(

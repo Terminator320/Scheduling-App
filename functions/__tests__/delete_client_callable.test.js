@@ -27,13 +27,30 @@ jest.mock("firebase-functions/logger", () => ({
   debug: jest.fn(),
   error: jest.fn(),
 }));
-jest.mock("../security", () => ({
-  APP_CHECK: {enforceAppCheck: true},
-  assertAdmin: jest.fn(),
-  assertPayloadShape: jest.fn(),
-  requireDocId: jest.fn(),
-  enforceDurableRateLimit: jest.fn(),
-}));
+jest.mock("../security", () => {
+  const mock = {
+    APP_CHECK: {enforceAppCheck: true},
+    assertAdmin: jest.fn(),
+    assertPayloadShape: jest.fn(),
+    requireDocId: jest.fn(),
+    enforceDurableRateLimit: jest.fn(),
+  };
+  // `deleteClient` opens with `assertAdminCall`, which composes the three
+  // steps below. Re-composed here against the MOCKS so every existing
+  // assertion on `assertAdmin`/`assertPayloadShape` still observes the real
+  // call — stubbing the parts alone would intercept nothing, since the
+  // composer holds module-internal references.
+  mock.assertAdminCall = jest.fn(async (req, allowedKeys) => {
+    if (!req.auth || !req.auth.uid) {
+      throw new (require("firebase-functions/v2/https").HttpsError)(
+          "unauthenticated", "auth-required");
+    }
+    await mock.assertAdmin(req.auth.uid);
+    mock.assertPayloadShape(req.data, allowedKeys);
+    return req.auth.uid;
+  });
+  return mock;
+});
 
 const {HttpsError} = require("firebase-functions/v2/https");
 const {getFirestore} = require("firebase-admin/firestore");

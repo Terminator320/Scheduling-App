@@ -123,6 +123,8 @@ class AppointmentFormFields extends StatelessWidget {
     required this.photosSection,
     required this.callbacks,
     super.key,
+    this.rosterStatus = AssigneeRosterStatus.ready,
+    this.onRetryRoster,
     this.isMultiDay = false,
     this.isRunMember = false,
     this.canSpanDays = true,
@@ -139,6 +141,10 @@ class AppointmentFormFields extends StatelessWidget {
 
   final AppointmentFormControllers controllers;
   final List<EmployeeRecord> allEmployees;
+
+  /// Whether [allEmployees] has actually settled — see [EmployeePicker].
+  final AssigneeRosterStatus rosterStatus;
+  final VoidCallback? onRetryRoster;
   final ClientRecord? selectedClient;
   final List<ClientRecord> clientResults;
   final bool isSearchingClient;
@@ -369,6 +375,8 @@ class AppointmentFormFields extends StatelessWidget {
         onToggle: callbacks.onToggleEmployee,
         errorText: _err(context, 'employees'),
         availability: assigneeAvailability,
+        rosterStatus: rosterStatus,
+        onRetryRoster: onRetryRoster,
       ),
     ),
     const SizedBox(height: AppSpacing.sp16),

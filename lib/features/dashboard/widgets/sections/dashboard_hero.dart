@@ -56,6 +56,10 @@ class DashboardHero extends StatelessWidget {
         AppSpacing.sp16,
       ),
       decoration: BoxDecoration(
+        // Raw `Colors.black` below is not a missing token: it composes a
+        // SHADE OF the theme's own primary through `alphaBlend`, so it tracks
+        // whatever `scheme.primary` is in either theme. A palette entry here
+        // would be a second colour to keep in step with the first.
         gradient: LinearGradient(
           colors: [
             scheme.primary,

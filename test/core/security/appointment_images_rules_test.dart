@@ -47,11 +47,55 @@ void main() {
       );
     });
 
-    test('writes are admin-only, so an employee cannot fabricate a photo row',
-        () {
+    test('an ASSIGNEE may add a photo row, and only add one', () {
+      // Widened 2026-09-01. The read half was always theirs; the write half
+      // was admin-only, so the person standing in the basement could not use
+      // the photo pipeline that already existed. Adding is additive and
+      // path-scoped; editing or deleting somebody else's row is a different
+      // decision and stays with the admin, so a field record cannot be
+      // quietly removed by the person whose work it documents.
       final block = imagesBlock();
-      expect(block, contains('allow create, update: if isAdmin()'));
+      expect(
+        block,
+        contains(
+          'allow create: if (isAdmin() || '
+          'isAssignedEmployee(parentAppointment()))',
+        ),
+      );
+      expect(block, contains('allow update: if isAdmin()'));
       expect(block, contains('allow delete: if isAdmin()'));
+    });
+
+    test('storage.rules grants the same assignee the BYTES', () {
+      // Two stores, one grant. A row create with no matching object write
+      // leaves a photo row pointing at nothing.
+      final storage = File('storage.rules').readAsStringSync();
+      final block = storage.substring(
+        storage.indexOf('match /appointments/{appointmentId}/images/'),
+      );
+      expect(
+        block,
+        contains(
+          'allow write: if (isAdmin() || '
+          'isAssignedToAppointment(appointmentId))',
+        ),
+      );
+      // And only the bytes: delete stays admin-only on BOTH sides.
+      expect(block, contains('allow delete: if isAdmin();'));
+    });
+
+    test('storagePath is scoped to THIS appointment, not merely capped', () {
+      // The 500-char cap alone let a compromised admin session plant a row
+      // pointing at another appointment's object, making that photo readable
+      // by the SECOND appointment's assignees through the read rule above.
+      // ImageStorageService.upload builds exactly this shape, and
+      // storage.rules gates the bytes at the same path.
+      final block = imagesBlock();
+      expect(block, contains('request.resource.data.storagePath.matches('));
+      expect(
+        block,
+        contains("'appointments/' + appointmentId + '/images/.*'"),
+      );
     });
 
     test('the document shape is locked', () {

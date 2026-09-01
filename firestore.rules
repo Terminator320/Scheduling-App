@@ -294,10 +294,46 @@ service cloud.firestore {
       // scheduling or identity field first. `email` in particular must NEVER
       // join this list: it is a sign-in identity, and Auth and Firestore move
       // together through changeEmployeeEmail or not at all.
+      //
+      // `updatedAt` is on the allowlist but has no cap in isValidUserData
+      // (which has no hasOnly, so an unlisted key is unchecked) — it was the
+      // last client-writable field here with no bound at all. Pinned to
+      // request.time, which is exactly what updateSelfDetails already sends
+      // (`FieldValue.serverTimestamp()`, unconditionally). Without it any
+      // active employee could park an arbitrary type or size there, and
+      // watchEmployees() re-delivers that doc to every signed-in peer on every
+      // snapshot — the same class the appointments branch already closes.
+      //
+      // SELF ONLY, deliberately: this function is called from the self branch
+      // alone. Pinning the admin branch too would make a legacy doc holding a
+      // bad `updatedAt` un-updatable by the one role that can repair it.
       function isAvailabilityOnlyChange() {
         return request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['workingDays', 'workStartMinutes', 'workEndMinutes',
-                    'onCall', 'phone', 'travelAlertsEnabled', 'updatedAt']);
+            .hasOnly(['workingDays', 'workStartMinutes', 'workEndMinutes',
+                      'onCall', 'phone', 'travelAlertsEnabled', 'updatedAt'])
+          && request.resource.data.updatedAt == request.time;
+      }
+
+      // `email` is a SIGN-IN IDENTITY: Auth and Firestore move together
+      // through changeEmployeeEmail, or not at all. Written directly here it
+      // desyncs the two stores — the person signs in at the old address while
+      // every admin surface shows the new one, and nothing in-app can find it.
+      // The self branch never reaches this (email is not on its allowlist);
+      // this is the ADMIN branch's half.
+      //
+      // Guarded on `uid` rather than denied outright, because the denial only
+      // means something where an Auth account exists to desync FROM.
+      // changeEmployeeEmail refuses a doc with no uid
+      // (`account-has-no-auth`), and updateEmployee's no-Auth branch is the
+      // only writer left for a pre-P4c doc that never got one — a flat denial
+      // would brick that doc's email with no path to repair it. Every P4c doc
+      // carries its uid from creation, so the guarded form covers the whole
+      // live fleet.
+      function emailMovesThroughAuth() {
+        return !request.resource.data.diff(resource.data)
+                  .affectedKeys().hasAny(['email'])
+            || !('uid' in resource.data)
+            || resource.data.uid == '';
       }
 
       // Two ways in. An ADMIN may update any doc. A PERSON may update their
@@ -326,6 +362,7 @@ service cloud.firestore {
             && !request.resource.data.diff(resource.data)
                  .affectedKeys()
                  .hasAny(['uid', 'termsAcceptedAt', 'locationConsentAt'])
+            && emailMovesThroughAuth()
             && emergencyFieldNotSet('emergencyContact')
             && emergencyFieldNotSet('emergencyPhone')
             && isValidUserData(request.resource.data);
@@ -540,6 +577,7 @@ service cloud.firestore {
         && (!('repeat' in d.keys()) || isBoundedString(d.repeat, 32))
         && (!('address' in d.keys()) || isBoundedString(d.address, 500))
         && (!('notes' in d.keys()) || isBoundedString(d.notes, 4000))
+        && (!('fieldNotes' in d.keys()) || isBoundedString(d.fieldNotes, 4000))
         && (!('materialsNeeded' in d.keys())
             || isBoundedString(d.materialsNeeded, 2000))
         // 401, not 200: this is the DENORMALIZED client display name, and
@@ -654,8 +692,8 @@ service cloud.firestore {
       // visit as a completed one — in History, in the dashboard tallies and in
       // purgeExpiredHistory's accounting, re-firing notifyAppointmentChanges
       // and endCardOnTerminal on the way. `DetailsActionBar` hides the button
-      // (`hasStarted && !isDone && !isCancelled`), so rules are the only real
-      // gate and reaching it needed nothing but a modified client.
+      // (`!isDone && !isCancelled`), so rules are the only real gate and
+      // reaching it needed nothing but a modified client.
       //
       // Written as `!= 'cancelled'`, NOT as an
       // `in ['pending', 'in_progress']` allowlist, deliberately: legacy docs
@@ -692,7 +730,39 @@ service cloud.firestore {
             // `updateAppointmentStatuses`) send `FieldValue.serverTimestamp()`
             // unconditionally; a path that omitted it would be refused here.
             && request.resource.data.updatedAt == request.time
-            && resource.data.status != 'cancelled');
+            && resource.data.status != 'cancelled')
+        // What the CREW recorded on site. A SEPARATE branch from the status
+        // flip above, deliberately: that one is the most security-sensitive
+        // write in the app and its `hasOnly(['status','updatedAt'])` is what
+        // makes it safe to reason about — widening that set to carry notes
+        // would let one write do both and put every guarantee above in play.
+        //
+        // `fieldNotes`, never `notes`: the dispatcher's brief is written when
+        // the job is booked and an assignee must not be able to overwrite it.
+        // Two fields is what makes "the crew may add, never edit the brief" a
+        // rules-level fact rather than a UI convention.
+        //
+        // No status gate, unlike mark-done. A note is additive and is often
+        // the explanation for a job that went wrong — "nobody home", "needs a
+        // part" — so a cancelled or already-closed visit is exactly when one
+        // is worth recording. `updatedAt` is pinned for the same audit-trail
+        // reason as the branch above.
+        //
+        // The cap is conditional on the field being PRESENT, and that is
+        // load-bearing rather than defensive: `hasOnly` admits a SUBSET, and
+        // an assignee adding a photo touches this document with an
+        // `updatedAt`-only diff (`AppointmentImagesStore.append` bumps the
+        // parent in the same batch as the image rows). A flat
+        // `isBoundedString(...fieldNotes)` evaluates against an absent field
+        // on that write and refuses the whole batch — so the crew could add a
+        // photo row and never the photo.
+        || (isAssignedEmployee(resource.data)
+            && request.resource.data.diff(resource.data)
+               .affectedKeys()
+               .hasOnly(['fieldNotes', 'updatedAt'])
+            && (!('fieldNotes' in request.resource.data)
+                || isBoundedString(request.resource.data.fieldNotes, 4000))
+            && request.resource.data.updatedAt == request.time);
 
       // Delete: admin only.
       allow delete: if isAdmin();
@@ -714,11 +784,16 @@ service cloud.firestore {
       // bounded (one per query, cached per request) and it buys the far larger
       // saving on the range queries, but it is a real trade.
       //
-      // An employee may READ but never write: photos are uploaded by the
-      // admin-only appointment form, and `storage.rules` is the real gate on
-      // the bytes themselves. Keeping the write admin-only here means a
-      // compromised employee session cannot fabricate a photo row pointing at
-      // a storage path belonging to another job.
+      // An assignee may READ and CREATE, never update or delete. That widened
+      // on 2026-09-01: the read half was always theirs, and the write half was
+      // admin-only on the reasoning that photos come from the admin-only
+      // appointment form — which was true, and was the whole problem. The
+      // person standing in the basement could not record what they found.
+      // What stops a compromised employee session fabricating a row pointing
+      // at ANOTHER job's object is the path constraint on `storagePath`, not
+      // the role; `storage.rules` grants the same assignee the bytes at the
+      // same path, and `validateUploadedImage` still deletes anything whose
+      // magic bytes are not JPEG/PNG.
       match /images/{imageId} {
         function parentAppointment() {
           return get(/databases/$(database)/documents/appointments/$(appointmentId)).data;
@@ -749,10 +824,45 @@ service cloud.firestore {
         //
         // Do not re-add it to this list to make some future write pass;
         // re-home those bytes under a real `storagePath` instead.
-        allow create, update: if isAdmin()
+        // The path is CONSTRAINED to this appointment's own folder, not just
+        // capped: the cap alone let a compromised admin session plant a row
+        // pointing at another appointment's object, making that photo readable
+        // by the second appointment's assignees through the read rule above.
+        // `ImageStorageService.upload` builds exactly this shape
+        // (`appointments/{id}/images/{fileName}`), and `storage.rules` gates
+        // the bytes at the same path — so the two now agree on the folder
+        // rather than only on who may write.
+        // CREATE is open to an assignee, update and delete are not. A
+        // plumber's field record is the billable artifact and the upsell
+        // pipeline — the whole photo pipeline, the offline upload queue and
+        // the magic-byte validation already existed and were wired admin-only,
+        // so the crew who are actually standing in the basement could not use
+        // any of it. Adding is additive and path-scoped; EDITING or DELETING
+        // somebody else's photo row is a different decision and stays with the
+        // admin, so a record cannot be quietly removed after the fact.
+        //
+        // `storage.rules` grants the same assignee the bytes at the same path,
+        // and `validateUploadedImage` still deletes anything whose magic bytes
+        // are not JPEG/PNG. The path constraint below is what stops a
+        // compromised session pointing a row at another job's object.
+        allow create: if (isAdmin() || isAssignedEmployee(parentAppointment()))
           && request.resource.data.keys().hasOnly(
               ['storagePath', 'fileName', 'uploadedAt'])
           && isBoundedString(request.resource.data.storagePath, 500)
+          && request.resource.data.storagePath.matches(
+              'appointments/' + appointmentId + '/images/.*')
+          && (!('fileName' in request.resource.data.keys())
+              || isBoundedString(request.resource.data.fileName, 300))
+          && (!('uploadedAt' in request.resource.data.keys())
+              || request.resource.data.uploadedAt == null
+              || request.resource.data.uploadedAt is timestamp);
+
+        allow update: if isAdmin()
+          && request.resource.data.keys().hasOnly(
+              ['storagePath', 'fileName', 'uploadedAt'])
+          && isBoundedString(request.resource.data.storagePath, 500)
+          && request.resource.data.storagePath.matches(
+              'appointments/' + appointmentId + '/images/.*')
           && (!('fileName' in request.resource.data.keys())
               || isBoundedString(request.resource.data.fileName, 300))
           && (!('uploadedAt' in request.resource.data.keys())

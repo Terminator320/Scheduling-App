@@ -6,6 +6,7 @@ import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/domain/day_off_reason.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -13,6 +14,7 @@ import 'package:scheduling/features/calendar/domain/policies/appointment_form_va
 import 'package:scheduling/features/calendar/widgets/dialogs/cancel_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_action_bar.dart';
+import 'package:scheduling/features/calendar/widgets/views/details_field_record_view.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_leaf_widgets.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_contacts_cards.dart';
@@ -113,6 +115,13 @@ class DetailsViewBody extends ConsumerWidget {
           isCancelled: data.isCancelled,
           onRetry: notifier.enterEditing,
         ),
+        // Offered to a NON-ADMIN ASSIGNEE only — exactly the set the crew
+        // branches of `firestore.rules` admit, so the surface and the rule
+        // cannot disagree about who may write. An admin has the edit form;
+        // a read-only surface (client job history) is an admin looking at
+        // somebody else's job and gets nothing.
+        if (_canRecordFieldWork(ref, appointment))
+          DetailsFieldRecordView(appointment: appointment),
         DetailsActionBar(
           isDone: data.isDone,
           isCancelled: data.isCancelled,
@@ -124,6 +133,16 @@ class DetailsViewBody extends ConsumerWidget {
         ),
       ],
     );
+  }
+
+  /// Whether the viewer is a non-admin assignee of [appointment].
+  ///
+  /// Deliberately NOT `!showActions`: the client job-history surface passes
+  /// that too, and it is an ADMIN reading a job they are not on.
+  static bool _canRecordFieldWork(WidgetRef ref, AppointmentRecord appointment) {
+    final identity = ref.watch(activeUserIdentityProvider).value;
+    if (identity == null || identity.role == 'admin') return false;
+    return appointment.employeeIds.contains(identity.docId);
   }
 
   Future<void> _onMarkDone(

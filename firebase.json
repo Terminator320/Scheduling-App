@@ -17,6 +17,7 @@
         "scripts/**",
         "__tests__/**",
         "build/**",
+        "coverage/**",
         "firebase-debug.log",
         "firebase-debug.*.log",
         "*.local"

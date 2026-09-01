@@ -208,4 +208,69 @@ void main() {
       );
     });
   });
+
+  // Zero tests, six call sites, and its own dartdoc says three of them
+  // previously spelled the distinction wrong. The two spellings are NOT
+  // equivalent: refreshing an already-errored provider emits an AsyncLoading
+  // that still CARRIES the error, so `hasError` is true while
+  // `is AsyncError` is false. Sites testing `next is! AsyncError` therefore
+  // re-logged and re-pushed a notice on every retry — the rebuild spam
+  // `ref.listen` exists to avoid.
+  group('isFirstAsyncError', () {
+    const data = AsyncData<int>(1);
+    const loading = AsyncLoading<int>();
+    final failed = AsyncError<int>(StateError('x'), StackTrace.empty);
+    test('data -> error is the first error', () {
+      expect(isFirstAsyncError(data, failed), isTrue);
+    });
+
+    test('a first-ever emission that is an error counts', () {
+      expect(isFirstAsyncError(null, failed), isTrue);
+    });
+
+    test('loading -> error counts', () {
+      expect(isFirstAsyncError(loading, failed), isTrue);
+    });
+
+    test('error -> error is NOT first', () {
+      expect(isFirstAsyncError(failed, failed), isFalse);
+    });
+
+    test('a REAL provider retry reports exactly once, not once per attempt',
+        () {
+      // The whole reason the helper exists, driven through Riverpod rather
+      // than a hand-built AsyncValue: refreshing an already-errored provider
+      // emits an AsyncLoading that STILL CARRIES the error, so `hasError` is
+      // true while `is AsyncError` is false. The three sites that spelled
+      // this `next is! AsyncError || previous is AsyncError` therefore
+      // re-logged and re-pushed a notice on every retry.
+      final provider = FutureProvider<int>((ref) async {
+        throw StateError('always');
+      });
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final reported = <AsyncValue<int>>[];
+      container
+        ..listen<AsyncValue<int>>(provider, (previous, next) {
+          if (isFirstAsyncError(previous, next)) reported.add(next);
+        }, fireImmediately: true)
+        // Settle the first failure, then retry it twice.
+        ..read(provider)
+        ..invalidate(provider)
+        ..read(provider)
+        ..invalidate(provider)
+        ..read(provider);
+
+      expect(reported, hasLength(lessThanOrEqualTo(1)));
+    });
+
+    test('error -> data reports nothing', () {
+      expect(isFirstAsyncError(failed, data), isFalse);
+    });
+
+    test('data -> data reports nothing', () {
+      expect(isFirstAsyncError(data, data), isFalse);
+    });
+  });
 }

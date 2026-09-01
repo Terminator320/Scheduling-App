@@ -380,7 +380,10 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
       body: identity.when(
         loading: () => const Center(child: AdaptiveProgressIndicator(size: 32)),
         error: (_, _) => Center(
-          child: CenteredErrorText(message: l10n.error_somethingWentWrong),
+          child: CenteredErrorText(
+            message: l10n.error_somethingWentWrong,
+            onRetry: () => ref.invalidate(activeUserIdentityProvider),
+          ),
         ),
         // A settled null identity — signed out or inactive — is the only real
         // error here.
@@ -388,6 +391,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
             ? Center(
                 child: CenteredErrorText(
                   message: l10n.error_somethingWentWrong,
+                  onRetry: () => ref.invalidate(activeUserIdentityProvider),
                 ),
               )
             : _body(value.docId, isAdmin: value.role == 'admin'),
@@ -416,7 +420,10 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
         return const Center(child: AdaptiveProgressIndicator(size: 32));
       }
       return Center(
-        child: CenteredErrorText(message: l10n.error_somethingWentWrong),
+        child: CenteredErrorText(
+          message: l10n.error_somethingWentWrong,
+          onRetry: () => ref.invalidate(allUsersStreamProvider),
+        ),
       );
     }
     if (emergency.isLoading) {
@@ -426,7 +433,10 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     // on file" — the same distinction the edit-person sheet draws.
     if (emergency.hasError) {
       return Center(
-        child: CenteredErrorText(message: l10n.error_somethingWentWrong),
+        child: CenteredErrorText(
+          message: l10n.error_somethingWentWrong,
+          onRetry: () => ref.invalidate(emergencyContactProvider(docId)),
+        ),
       );
     }
 

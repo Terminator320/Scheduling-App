@@ -54,6 +54,7 @@
 "use strict";
 
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+const {scanByName} = require("./_scan");
 const {bootstrapScript} = require("./_project");
 
 const EXACT_FLAGS = ["--verbose"];
@@ -83,46 +84,35 @@ async function countLegacyUrls(db, verbose) {
   let scanned = 0;
   let legacy = 0;
   let orphans = 0;
-  let cursor = null;
 
-  for (;;) {
-    let query = db.collectionGroup("images")
-        .orderBy("__name__")
-        .limit(PAGE_SIZE);
-    if (cursor) query = query.startAfter(cursor);
-
-    const snap = await query.get();
-    if (snap.empty) break;
-
-    for (const doc of snap.docs) {
-      scanned += 1;
-      const data = doc.data() || {};
-      const storagePath = String(data.storagePath || "").trim();
-      const url = String(data.url || "").trim();
-      // Both branches below name the document, so `doc.ref.parent.parent` —
-      // the appointment, which is what an operator needs to act on one of
-      // these — is resolved once for the pair.
-      const appointmentId =
+  for await (const doc of scanByName(
+      db.collectionGroup("images"),
+      {pageSize: PAGE_SIZE},
+  )) {
+    scanned += 1;
+    const data = doc.data() || {};
+    const storagePath = String(data.storagePath || "").trim();
+    const url = String(data.url || "").trim();
+    // Both branches below name the document, so `doc.ref.parent.parent` —
+    // the appointment, which is what an operator needs to act on one of
+    // these — is resolved once for the pair.
+    const appointmentId =
         doc.ref.parent.parent ? doc.ref.parent.parent.id : "(unknown)";
-      const path = `appointments/${appointmentId}/images/${doc.id}`;
+    const path = `appointments/${appointmentId}/images/${doc.id}`;
 
-      // The two halves of ONE classification of a document with no
-      // storagePath, spelled side by side so neither can drift from the
-      // other: a url makes it a legacy permanent link, no url makes it
-      // unrenderable, and the clear script refuses an appointment on the
-      // second.
-      if (storagePath !== "") continue;
-      if (url !== "") {
-        legacy += 1;
-        if (verbose) console.log(`  legacy url: ${path}`);
-      } else {
-        orphans += 1;
-        console.log(`  NO IDENTITY (neither storagePath nor url): ${path}`);
-      }
+    // The two halves of ONE classification of a document with no
+    // storagePath, spelled side by side so neither can drift from the
+    // other: a url makes it a legacy permanent link, no url makes it
+    // unrenderable, and the clear script refuses an appointment on the
+    // second.
+    if (storagePath !== "") continue;
+    if (url !== "") {
+      legacy += 1;
+      if (verbose) console.log(`  legacy url: ${path}`);
+    } else {
+      orphans += 1;
+      console.log(`  NO IDENTITY (neither storagePath nor url): ${path}`);
     }
-
-    cursor = snap.docs[snap.docs.length - 1];
-    if (snap.size < PAGE_SIZE) break;
   }
 
   return {scanned, legacy, orphans};
@@ -149,34 +139,23 @@ async function countArrayUrls(db, verbose) {
   let appointments = 0;
   let withArray = 0;
   let urls = 0;
-  let cursor = null;
 
-  for (;;) {
-    let query = db.collection("appointments")
-        .orderBy("__name__")
-        .limit(PAGE_SIZE);
-    if (cursor) query = query.startAfter(cursor);
+  for await (const doc of scanByName(
+      db.collection("appointments"),
+      {pageSize: PAGE_SIZE},
+  )) {
+    appointments += 1;
+    const data = doc.data() || {};
+    const pictures = Array.isArray(data.pictures) ? data.pictures : [];
+    if (pictures.length === 0) continue;
+    withArray += 1;
 
-    const snap = await query.get();
-    if (snap.empty) break;
-
-    for (const doc of snap.docs) {
-      appointments += 1;
-      const data = doc.data() || {};
-      const pictures = Array.isArray(data.pictures) ? data.pictures : [];
-      if (pictures.length === 0) continue;
-      withArray += 1;
-
-      const carried = pictures.filter(
-          (p) => String((p && p.url) || "").trim() !== "").length;
-      urls += carried;
-      if (carried > 0 && verbose) {
-        console.log(`  ${carried} array url(s): appointments/${doc.id}`);
-      }
+    const carried = pictures.filter(
+        (p) => String((p && p.url) || "").trim() !== "").length;
+    urls += carried;
+    if (carried > 0 && verbose) {
+      console.log(`  ${carried} array url(s): appointments/${doc.id}`);
     }
-
-    cursor = snap.docs[snap.docs.length - 1];
-    if (snap.size < PAGE_SIZE) break;
   }
 
   return {appointments, withArray, urls};

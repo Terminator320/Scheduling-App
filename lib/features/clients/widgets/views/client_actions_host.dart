@@ -25,26 +25,33 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
   void onClientDeleted(ClientRecord client);
 
   /// Toggles [client]'s archived state.
-  Future<void> archiveClient(ClientRecord client) async {
+  ///
+  /// Returns true ONLY when the write committed, which is what lets the list's
+  /// full-swipe run this from `confirmDismiss` rather than `onDismissed`.
+  /// `flutter_slidable` collapses the row to zero extent BEFORE `onDismissed`,
+  /// so the three paths that write nothing — the offline guard, the reentrancy
+  /// skip and a failure — each removed a client that was never archived, and
+  /// the keyed `Slidable` kept it collapsed until a pull-to-refresh.
+  Future<bool> archiveClient(ClientRecord client) async {
     final next = !client.archived;
     if (guardedOffline(
       context,
       ref,
       intro: context.l10n.error_introArchiveClient,
     )) {
-      return;
+      return false;
     }
 
     final notices = ref.read(noticeServiceProvider);
     final outcome = await ref
         .read(clientFormControllerProvider.notifier)
         .setArchived(client.id, archived: next);
-    if (!mounted) return;
+    if (!mounted) return false;
     switch (outcome) {
       // A write the reentrancy guard skipped: nothing committed and nothing
       // failed, so this surfaces nothing at all.
       case ClientArchiveBusy():
-        return;
+        return false;
       case ClientArchived(:final archived):
         notices.success(
           archived
@@ -52,6 +59,7 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
               : context.l10n.clients_unarchivedNotice(client.displayName),
         );
         onClientArchived(client, archived: archived);
+        return true;
       case ClientArchiveFailed(:final error):
         notices.error(
           composeErrorNotice(
@@ -60,6 +68,7 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
             error: error,
           ),
         );
+        return false;
     }
   }
 

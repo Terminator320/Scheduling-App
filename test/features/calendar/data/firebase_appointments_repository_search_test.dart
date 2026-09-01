@@ -109,4 +109,61 @@ void main() {
     final results = await repo().searchHistory('Xavier');
     expect(results, isEmpty);
   });
+
+  // The `_clock` parameter exists so these are testable — its own comment says
+  // so — and `clock:` appeared in ZERO calendar test files. Only invalidation
+  // was pinned, never expiry and never eviction, so both dials could be broken
+  // (a TTL that never expires serves stale history search results; an LRU that
+  // never evicts grows the map without bound on a long-lived singleton) with
+  // nothing failing.
+  group('the search-result cache', () {
+    late DateTime now;
+    FirebaseAppointmentsRepository clocked() =>
+        FirebaseAppointmentsRepository(firestore, clock: () => now);
+
+    setUp(() => now = DateTime(2026, 9, 1, 12));
+
+    test('a repeat query inside the TTL serves the cache, not Firestore',
+        () async {
+      final r = clocked();
+      await r.searchHistory('sophie');
+      now = now.add(const Duration(seconds: 119));
+      final again = await r.searchHistory('sophie');
+
+      expect(again.map((a) => a.id), ['a1']);
+      // One scan for the two calls.
+      verify(() => query.get()).called(1);
+    });
+
+    test('a repeat query PAST the TTL re-reads', () async {
+      final r = clocked();
+      await r.searchHistory('sophie');
+      now = now.add(const Duration(seconds: 121));
+      await r.searchHistory('sophie');
+
+      verify(() => query.get()).called(2);
+    });
+
+    test('a DIFFERENT query inside the TTL reuses the scan window', () async {
+      // The per-query cache and the scan window are two separate dials on the
+      // same clock. This is the one that decides read cost: without it every
+      // committed keystroke re-pages the whole terminal-status archive.
+      final r = clocked();
+      await r.searchHistory('sophie');
+      now = now.add(const Duration(seconds: 60));
+      await r.searchHistory('john');
+
+      verify(() => query.get()).called(1);
+    });
+
+    test('an expired window is re-paged for a query that was never cached',
+        () async {
+      final r = clocked();
+      await r.searchHistory('sophie');
+      now = now.add(const Duration(seconds: 121));
+      await r.searchHistory('john');
+
+      verify(() => query.get()).called(2);
+    });
+  });
 }

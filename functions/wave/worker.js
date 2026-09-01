@@ -68,6 +68,7 @@ const {WaveValidationError, upsertCustomer} = require("./customers");
 const {adminFirestore} = require("../admin_firestore");
 const {WaveApiError} = require("./client");
 const {mappedFieldsHash} = require("./mappers");
+const {toMillis} = require("../time_utils");
 const {
   DEFAULT_MAX_ATTEMPTS,
   RATE_LIMITED_MAX_ATTEMPTS,
@@ -154,11 +155,16 @@ function clientIdFromRefPath(refPath) {
  * @return {number} Epoch ms, or NaN.
  */
 function timestampToMs(value) {
-  if (value instanceof Date) return value.getTime();
-  if (value && typeof value.toMillis === "function") return value.toMillis();
-  if (value && typeof value.toDate === "function") {
-    return value.toDate().getTime();
-  }
+  // Delegates to the owner in `time_utils`. This was a third spelling of the
+  // same conversion and the ONLY one returning NaN, which compares false
+  // everywhere and so degraded a lease comparison silently rather than
+  // loudly. The NaN return is kept — both callers test `Number.isFinite`, so
+  // it is equivalent to null for them, and the docstring above is the
+  // contract this module's tests assert.
+  const ms = toMillis(value);
+  if (ms != null) return ms;
+  // Numeric strings were accepted here and nowhere else; preserved rather
+  // than quietly narrowed.
   const n = Number(value);
   return Number.isFinite(n) ? n : NaN;
 }

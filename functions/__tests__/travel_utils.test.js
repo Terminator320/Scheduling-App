@@ -12,6 +12,9 @@ jest.mock("../live_activity_dispatch", () => ({
   endLiveActivity: jest.fn(async () => 0),
 }));
 
+const fs = require("fs");
+const path = require("path");
+
 const {startLiveActivity} = require("../live_activity_dispatch");
 
 
@@ -546,6 +549,57 @@ describe("runTravelAwareReminderSweep", () => {
     users: {e1: {role: "employee", status: "active"}},
     tokens: {e1: [{id: "t", locale: "en"}]},
   };
+
+  test("the per-employee CONTEXT query is backed by a declared index",
+      async () => {
+        // THE SITE OF THE 2026-08-29 TWO-DAY INVISIBLE OUTAGE. This query's
+        // trailing `orderBy("endTime")` needs the composite
+        // (employeeIds CONTAINS, endTime ASC). That index was deleted as a
+        // "redundant prefix" of (employeeIds, endTime, startTime) — it is not
+        // one, because `__name__` lands at the END of an index, so the longer
+        // one cannot serve the shorter query. The sweep is best-effort and
+        // swallows its own failure, so nothing surfaced; only the Cloud
+        // Functions log showed it.
+        //
+        // No test anywhere coupled a sweep query to the manifest, though the
+        // precedent existed (notification_policy_ledger_body.test.js reads it
+        // for TTL policies). This is that coupling: delete the index and this
+        // fails, rather than production going quiet for two days.
+        const {db, appointmentQueries} = makeTravelDb({
+          ...activeE1,
+          appointments: [job],
+          context: {e1: []},
+          presence: {e1: {lat: 45.5, lng: -73.6, updatedAt: future(-5 * MIN)}},
+        });
+        await runTravelAwareReminderSweep({
+          db, messaging: makeMessaging(), fetchImpl: okFetch(600),
+          apiKey: "k", now: NOW, logger: silentLogger,
+        });
+
+        const context = appointmentQueries.find(
+            (q) => q.wheres.some((w) => w.field === "employeeIds"));
+        expect(context).toBeDefined();
+        // The shape the index has to serve: one array-contains, then a
+        // range + orderBy on a single other field.
+        expect(context.wheres.map((w) => `${w.field} ${w.op}`)).toEqual([
+          "employeeIds array-contains",
+          "endTime >",
+          "endTime <=",
+        ]);
+        expect(context.orderBy).toBe("endTime");
+
+        const manifest = JSON.parse(fs.readFileSync(
+            path.join(__dirname, "..", "..", "firestore.indexes.json"),
+            "utf8"));
+        // Firestore appends `__name__` itself, so the DECLARED fields must be
+        // exactly the two — a longer index is a different index, not a
+        // superset.
+        const declared = (manifest.indexes || []).filter(
+            (i) => i.collectionGroup === "appointments").map(
+            (i) => i.fields.map(
+                (f) => `${f.fieldPath}:${f.arrayConfig || f.order}`).join(","));
+        expect(declared).toContain("employeeIds:CONTAINS,endTime:ASCENDING");
+      });
 
   test("the candidate query is capped and ordered by startTime", async () => {
     // Every other sweep in this codebase names a ceiling; this one did not.

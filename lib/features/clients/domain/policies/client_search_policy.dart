@@ -1,3 +1,4 @@
+import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 
 /// A pre-normalized searchable projection of a client. We build this once per data
@@ -82,8 +83,22 @@ class ClientSearchPolicy {
 
   static String digitsOnly(String value) => value.replaceAll(_nonDigit, '');
 
-  // Client-side fallback matcher used for instant results — this is the single source
-  // of truth for matching on these fields.
+  /// [index] + [entryMatches] in one call, for a caller holding a single
+  /// client and no projection.
+  ///
+  /// **NOT the hot path, and not what new matching should route through.** The
+  /// split exists FOR performance: `index` is hoisted to run once per data
+  /// change, while this rebuilds the projection per candidate per keystroke —
+  /// so every production path uses `index()` + `entryMatches()` (the loaded-page
+  /// filter) or `rawMatches()` (the debounced server scan). It has no
+  /// production caller at all; it survives because a one-client assertion reads
+  /// better in a test than a two-step one.
+  ///
+  /// The field set still has exactly one owner — this delegates rather than
+  /// re-spelling it — so it cannot drift from the matchers above. CLAUDE.md
+  /// used to name THIS as "the single client-side fallback matcher, route new
+  /// client matching through it", which pointed an author straight at the
+  /// function the hot paths were refactored to avoid.
   static bool matchesClient(ClientRecord client, String query) {
     final q = normalize(query);
     final qDigits = digitsOnly(query);
@@ -142,7 +157,7 @@ class ClientSearchPolicy {
     required String queryDigits,
   }) {
     if (queryText.isEmpty && queryDigits.isEmpty) return false;
-    final contacts = (data['contacts'] as List?) ?? const [];
+    final contacts = firestoreList(data['contacts']);
 
     if (queryText.isNotEmpty) {
       final text = normalize(

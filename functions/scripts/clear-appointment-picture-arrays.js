@@ -66,6 +66,7 @@
 const {FieldValue} = require("firebase-admin/firestore");
 const {appointmentImageDocId} = require("../appointment_image_ids");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+const {scanByName} = require("./_scan");
 const {bootstrapScript} = require("./_project");
 
 /** Bare switches, matched EXACTLY — see `_flags.js`. */
@@ -168,7 +169,6 @@ async function storedImageIds(doc) {
  *   entriesCleared: number, recounted: number, refused: !Array<!Object>}>}
  */
 async function runClear({db, dryRun, log = console.log, warn = console.warn}) {
-  let cursor = null;
   let appointments = 0;
   let withArray = 0;
   let cleared = 0;
@@ -176,65 +176,52 @@ async function runClear({db, dryRun, log = console.log, warn = console.warn}) {
   let recounted = 0;
   const refused = [];
 
-  for (;;) {
-    // Ordered by document id — the only field every appointment is guaranteed
-    // to have. Ordering by a data field would silently exclude any document
-    // missing it, which is exactly how a sweep misses the rows that most need
-    // it.
-    let query = db.collection("appointments")
-        .orderBy("__name__")
-        .limit(PAGE_SIZE);
-    if (cursor) query = query.startAfter(cursor);
-    const snap = await query.get();
-    if (snap.empty) break;
+  for await (const doc of scanByName(
+      db.collection("appointments"),
+      {pageSize: PAGE_SIZE},
+  )) {
+    appointments += 1;
+    const data = doc.data() || {};
+    const pictures = Array.isArray(data.pictures) ? data.pictures : [];
+    // Read for every appointment, array or not — the subcollection is the
+    // store, so it is the only thing that can say whether `pictureCount` is
+    // right. Ids only, so this is the cheapest read Firestore offers.
+    const storedIds = await storedImageIds(doc);
 
-    for (const doc of snap.docs) {
-      appointments += 1;
-      const data = doc.data() || {};
-      const pictures = Array.isArray(data.pictures) ? data.pictures : [];
-      // Read for every appointment, array or not — the subcollection is the
-      // store, so it is the only thing that can say whether `pictureCount` is
-      // right. Ids only, so this is the cheapest read Firestore offers.
-      const storedIds = await storedImageIds(doc);
-
-      if (pictures.length === 0) {
-        // No array to clear, so the only question left is whether the counter
-        // agrees with the subcollection. `undefined` parses as 0 on the client
-        // side, so treat it as 0 here too and write only on a real difference.
-        if (!needsRecount(data, storedIds.size)) continue;
-        recounted += 1;
-        if (dryRun) continue;
-        await doc.ref.update({pictureCount: storedIds.size});
-        continue;
-      }
-      withArray += 1;
-
-      const plan = planClear(pictures, storedIds);
-      if (!plan.clear) {
-        refused.push({
-          id: doc.id,
-          missing: plan.missing.length,
-          identityless: plan.identityless,
-        });
-        continue;
-      }
-
-      cleared += 1;
-      entriesCleared += pictures.length;
+    if (pictures.length === 0) {
+      // No array to clear, so the only question left is whether the counter
+      // agrees with the subcollection. `undefined` parses as 0 on the client
+      // side, so treat it as 0 here too and write only on a real difference.
+      if (!needsRecount(data, storedIds.size)) continue;
+      recounted += 1;
       if (dryRun) continue;
-      // One write, not a batch: the array delete and the count must land
-      // together, and `pictureCount` is re-stamped from what the subcollection
-      // actually holds rather than from the array's length — they agree here
-      // by construction, but the subcollection is the store, so it is what the
-      // number should come from.
-      await doc.ref.update({
-        pictures: FieldValue.delete(),
-        pictureCount: storedIds.size,
+      await doc.ref.update({pictureCount: storedIds.size});
+      continue;
+    }
+    withArray += 1;
+
+    const plan = planClear(pictures, storedIds);
+    if (!plan.clear) {
+      refused.push({
+        id: doc.id,
+        missing: plan.missing.length,
+        identityless: plan.identityless,
       });
+      continue;
     }
 
-    cursor = snap.docs[snap.docs.length - 1];
-    if (snap.size < PAGE_SIZE) break;
+    cleared += 1;
+    entriesCleared += pictures.length;
+    if (dryRun) continue;
+    // One write, not a batch: the array delete and the count must land
+    // together, and `pictureCount` is re-stamped from what the subcollection
+    // actually holds rather than from the array's length — they agree here
+    // by construction, but the subcollection is the store, so it is what the
+    // number should come from.
+    await doc.ref.update({
+      pictures: FieldValue.delete(),
+      pictureCount: storedIds.size,
+    });
   }
 
   const prefix = dryRun ? "[dry run] would clear" : "cleared";

@@ -108,6 +108,7 @@ alwaysApply: true
   | `APPT-LOAD` | `error_introLoadAppointments` |
   | `APPT-OPEN` | `error_introOpenAppointment` |
   | `APPT-STATUS` | `error_introUpdateAppointmentStatus` |
+  | `APPT-FIELDNOTE` | `error_introSaveFieldNotes` |
   | `CLI-ADD` | `error_introAddClient` |
   | `CLI-SAVE` | `error_introSaveClient` |
   | `CLI-DEL` | `error_introDeleteClient` |

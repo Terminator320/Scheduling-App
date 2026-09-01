@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/data/firebase_appointments_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
@@ -20,6 +21,15 @@ class _MockQuerySnapshot extends Mock
 
 class _MockDocSnap extends Mock
     implements QueryDocumentSnapshot<Map<String, dynamic>> {}
+
+class _RecordingLogger extends AppLogger {
+  final warnings = <String>[];
+
+  @override
+  void warn(String message, [Object? error, StackTrace? stack]) {
+    warnings.add(message);
+  }
+}
 
 void main() {
   late _MockFirestore firestore;
@@ -372,6 +382,68 @@ void main() {
         ),
         isEmpty,
       );
+    });
+  });
+  group('the conflict query stays bounded', () {
+    // Every other ceiling in this repository has a paired test; this one had
+    // none. Truncate it and clashes past the cap go unreported, so the picker
+    // under-dims and the Save-time busy prompt under-fires — a double-booking
+    // that no surface warns about.
+    _MockDocSnap clash(int i) => doc({
+      'startTime': Timestamp.fromDate(start),
+      'endTime': Timestamp.fromDate(end),
+      'status': 'pending',
+      'employeeIds': const ['e0'],
+    }, id: 'c$i');
+
+    test('it names a ceiling, once per 30-id chunk', () async {
+      await repo().findClashingAppointments(
+        employeeIds: const ['e0'],
+        start: start,
+        end: end,
+      );
+
+      verify(() => query.limit(1000)).called(1);
+    });
+
+    test('a snapshot that comes back AT the cap warns', () async {
+      final logger = _RecordingLogger();
+      // Built BEFORE the stub: `clash` itself calls `when`, which mocktail
+      // refuses inside a stub response.
+      final docs = [for (var i = 0; i < 1000; i++) clash(i)];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      await FirebaseAppointmentsRepository(
+        firestore,
+        logger: logger,
+      ).findClashingAppointments(
+        employeeIds: const ['e0'],
+        start: start,
+        end: end,
+      );
+
+      expect(logger.warnings, hasLength(1));
+      expect(logger.warnings.single, startsWith('APPT-BUSY'));
+      expect(logger.warnings.single, contains('1000'));
+    });
+
+    test('a short snapshot is silent', () async {
+      final logger = _RecordingLogger();
+      // Built BEFORE the stub: `clash` itself calls `when`, which mocktail
+      // refuses inside a stub response.
+      final docs = [for (var i = 0; i < 999; i++) clash(i)];
+      when(() => snapshot.docs).thenReturn(docs);
+
+      await FirebaseAppointmentsRepository(
+        firestore,
+        logger: logger,
+      ).findClashingAppointments(
+        employeeIds: const ['e0'],
+        start: start,
+        end: end,
+      );
+
+      expect(logger.warnings, isEmpty);
     });
   });
 }

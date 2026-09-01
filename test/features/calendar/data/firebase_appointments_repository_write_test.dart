@@ -107,6 +107,8 @@ void main() {
     test('stamps both createdAt and updatedAt server timestamps', () async {
       final doc = _MockDoc();
       final batch = _MockBatch();
+      // `addAppointments` reads the ref's id to patch the history scan window.
+      when(() => doc.id).thenReturn('a1');
       when(() => collection.doc('a1')).thenReturn(doc);
       when(() => firestore.batch()).thenReturn(batch);
       when(
@@ -136,6 +138,8 @@ void main() {
       // just-uploaded photo invisible.)
       final doc = _MockDoc();
       final batch = _MockBatch();
+      // `addAppointments` reads the ref's id to patch the history scan window.
+      when(() => doc.id).thenReturn('a1');
       when(() => collection.doc('a1')).thenReturn(doc);
       when(() => firestore.batch()).thenReturn(batch);
       when(

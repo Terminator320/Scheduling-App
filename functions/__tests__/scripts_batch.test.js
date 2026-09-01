@@ -25,11 +25,20 @@ function fakeDb() {
     batch() {
       const b = {
         updates: [],
+        deletes: [],
+        // Every staged op, in order, so a commit reports what it really
+        // carried rather than only its updates.
+        ops: [],
         update(ref, patch) {
           b.updates.push([ref, patch]);
+          b.ops.push(ref);
+        },
+        delete(ref) {
+          b.deletes.push(ref);
+          b.ops.push(ref);
         },
         async commit() {
-          commits.push(b.updates.map(([ref]) => ref));
+          commits.push([...b.ops]);
         },
       };
       batches.push(b);
@@ -83,6 +92,61 @@ describe("commitInBatches", () => {
 
     expect(batches).toEqual([]);
     expect(commits).toEqual([]);
+  });
+
+  // `stageDelete` had ZERO test references — the only irreversible operation
+  // in this directory, behind `backfill.js --prune-orphans`, and its own
+  // docstring says "a delete is not re-runnable". A field patch written by a
+  // forgotten guard can be undone; a deleted `usersByUid` row locks a live
+  // employee out of everything until someone notices.
+  describe("stageDelete", () => {
+    test("DRY RUN deletes nothing, and opens no batch at all", async () => {
+      const {db, batches, commits} = fakeDb();
+      const writer = commitInBatches(db, {dryRun: true, batchSize: 2});
+
+      for (const id of ["a", "b", "c"]) await writer.stageDelete(id);
+      await writer.flush();
+
+      expect(batches).toEqual([]);
+      expect(commits).toEqual([]);
+    });
+
+    test("a live run queues one delete per ref and commits at the cap",
+        async () => {
+          const {db, batches, commits} = fakeDb();
+          const writer = commitInBatches(db, {batchSize: 2});
+
+          for (const id of ["a", "b", "c"]) await writer.stageDelete(id);
+          expect(commits).toEqual([["a", "b"]]);
+
+          await writer.flush();
+          expect(commits).toEqual([["a", "b"], ["c"]]);
+          expect(batches[0].deletes).toEqual(["a", "b"]);
+        });
+
+    test("it DELETES, never updates — the two are not interchangeable here",
+        async () => {
+          const {db, batches} = fakeDb();
+          const writer = commitInBatches(db, {batchSize: 5});
+
+          await writer.stageDelete("a");
+          await writer.flush();
+
+          expect(batches[0].deletes).toEqual(["a"]);
+          expect(batches[0].updates).toEqual([]);
+        });
+
+    test("deletes and updates share one batch and one cap", async () => {
+      // They are staged through the same `stageOp`, so a mixed run must not
+      // be able to exceed the batch size by counting them separately.
+      const {db, commits} = fakeDb();
+      const writer = commitInBatches(db, {batchSize: 2});
+
+      await writer.stage("a", {x: 1});
+      await writer.stageDelete("b");
+
+      expect(commits).toEqual([["a", "b"]]);
+    });
   });
 
   test("a failed commit is not resent by the flush behind it", async () => {

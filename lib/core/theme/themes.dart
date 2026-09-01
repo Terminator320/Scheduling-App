@@ -407,3 +407,98 @@ ThemeData _buildDarkTheme() {
     ),
   );
 }
+
+/// [base] with every text style one weight step heavier.
+///
+/// iOS **Bold Text** is a system setting the app claimed to honour on its
+/// public accessibility page while nothing in `lib/` read `boldTextOf` —
+/// Flutter surfaces the flag but applies it to nothing. Applied in
+/// `MaterialApp.builder`, where the resolved theme and the MediaQuery are both
+/// in scope, so it composes with light/dark and with high contrast rather than
+/// needing a fourth cached theme.
+ThemeData boldTextTheme(ThemeData base) {
+  TextStyle? bolder(TextStyle? s) {
+    if (s == null) return null;
+    final weight = s.fontWeight ?? FontWeight.w400;
+    final index = FontWeight.values.indexOf(weight);
+    // One step, capped: w900 has nowhere to go, and jumping straight to bold
+    // flattens the type scale's own weight contrast.
+    final next = index < 0 || index >= FontWeight.values.length - 1
+        ? weight
+        : FontWeight.values[index + 1];
+    return s.copyWith(fontWeight: next);
+  }
+
+  final t = base.textTheme;
+  return base.copyWith(
+    textTheme: t.copyWith(
+      displayLarge: bolder(t.displayLarge),
+      displayMedium: bolder(t.displayMedium),
+      displaySmall: bolder(t.displaySmall),
+      headlineLarge: bolder(t.headlineLarge),
+      headlineMedium: bolder(t.headlineMedium),
+      headlineSmall: bolder(t.headlineSmall),
+      titleLarge: bolder(t.titleLarge),
+      titleMedium: bolder(t.titleMedium),
+      titleSmall: bolder(t.titleSmall),
+      bodyLarge: bolder(t.bodyLarge),
+      bodyMedium: bolder(t.bodyMedium),
+      bodySmall: bolder(t.bodySmall),
+      labelLarge: bolder(t.labelLarge),
+      labelMedium: bolder(t.labelMedium),
+      labelSmall: bolder(t.labelSmall),
+    ),
+  );
+}
+
+ThemeData? _highContrastLightCache;
+
+/// The light theme with lifted foregrounds, for iOS **Increase Contrast**.
+///
+/// Handed to `MaterialApp.highContrastTheme`, which is the framework's own
+/// hook: it swaps to this whenever `MediaQuery.highContrastOf` is true, so no
+/// call site branches. The changes are deliberately narrow — secondary text
+/// and hairlines are what the setting is actually for, and repainting the brand
+/// blues would make the app a different app rather than a more legible one.
+ThemeData highContrastLightTheme() => _highContrastLightCache ??= _liftContrast(
+  lightTheme(),
+  onSurfaceVariant: AppColors.ink,
+  outline: AppColors.ink60,
+  outlineVariant: AppColors.ink60,
+);
+
+ThemeData? _highContrastDarkCache;
+
+/// The dark theme's counterpart. Same reasoning as
+/// [highContrastLightTheme].
+ThemeData highContrastDarkTheme() => _highContrastDarkCache ??= _liftContrast(
+  darkTheme(),
+  onSurfaceVariant: AppColors.darkTextPrimary,
+  outline: const Color(0x66FFFFFF),
+  outlineVariant: const Color(0x40FFFFFF),
+);
+
+ThemeData _liftContrast(
+  ThemeData base, {
+  required Color onSurfaceVariant,
+  required Color outline,
+  required Color outlineVariant,
+}) {
+  final scheme = base.colorScheme.copyWith(
+    onSurfaceVariant: onSurfaceVariant,
+    outline: outline,
+    outlineVariant: outlineVariant,
+  );
+  final t = base.textTheme;
+  return base.copyWith(
+    colorScheme: scheme,
+    // The type scale hard-codes a muted colour on the secondary styles, so a
+    // scheme swap alone would leave the very text this setting exists for
+    // unchanged.
+    textTheme: t.copyWith(
+      bodySmall: t.bodySmall?.copyWith(color: onSurfaceVariant),
+      labelMedium: t.labelMedium?.copyWith(color: onSurfaceVariant),
+    ),
+    dividerColor: outline,
+  );
+}

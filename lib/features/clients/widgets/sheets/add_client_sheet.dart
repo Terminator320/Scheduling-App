@@ -22,6 +22,7 @@ import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/offline_form_notice.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
 import 'package:scheduling/shared/widgets/sheets/app_bottom_sheet.dart';
@@ -236,6 +237,10 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
         headerTourWrap: (child) => _tour.stepIf(TourStepId.clientSave, child),
         scrollCacheExtent: kTourScrollCacheExtent,
         children: [
+          // First, so the person is told BEFORE filling the form in — the
+          // submit controller already fails fast, and the app's global offline
+          // banner is drawn under the page, behind this sheet.
+          const OfflineFormNotice(),
           ..._whoSection(theme, l10n),
           ..._reachThemSection(theme, l10n),
           ..._siteSection(theme, l10n, isSaving: isSaving),

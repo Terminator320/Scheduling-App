@@ -83,6 +83,9 @@ class AppointmentImageUploadService {
       await _store.add(entry);
       // Now owned by the queue, so nothing below may delete them.
       staged = const [];
+      // Published BEFORE the drain, so an offline device shows "waiting"
+      // immediately rather than only after the attempt has failed.
+      await _publishPending();
       // Drains are serialized to avoid duplicate upload passes.
       await drainPending();
     } catch (e, st) {
@@ -259,13 +262,39 @@ class AppointmentImageUploadService {
           }
           for (final entry in await _store.load()) {
             await _attempt(entry);
+            // Per entry, not per drain: a long queue should visibly shrink.
+            await _publishPending();
           }
+          await _publishPending();
         } catch (e, st) {
           _logger.warn('IMG-UPLOAD drain failed', e, st);
+          // A failed drain leaves the queue as it was; republish so the
+          // waiting count is never left stale by the failure path.
+          await _publishPending();
         }
       } while (_pendingDrain);
     } finally {
       _draining = false;
+    }
+  }
+
+  /// Republishes the queue depth per appointment from the store itself.
+  ///
+  /// A full read rather than a hand-maintained counter: a drain that partially
+  /// succeeds re-queues a SUBSET, and a counter kept by arithmetic drifts the
+  /// first time that happens. It is a SharedPreferences-backed list of a
+  /// handful of entries, so the read is cheap.
+  Future<void> _publishPending() async {
+    try {
+      final counts = <String, int>{};
+      for (final entry in await _store.load()) {
+        counts[entry.appointmentId] =
+            (counts[entry.appointmentId] ?? 0) + entry.paths.length;
+      }
+      _notifier.reportPending(counts);
+    } catch (e, st) {
+      // Never let the SIGNAL break the upload: this is a status read.
+      _logger.warn('IMG-UPLOAD pending count failed', e, st);
     }
   }
 

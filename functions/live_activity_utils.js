@@ -27,6 +27,9 @@ const PHASE_TRAVEL = "travel";
 const PHASE_ON_SITE = "onSite";
 
 const {toMillis, formatTimeOfDay} = require("./time_utils");
+// Shared with `notification_messages`, which is the point: the card and the
+// `leaveNow` push beside it must not call the same job two different things.
+const {whoFor: _who} = require("./job_naming");
 
 /**
  * Absolute UTC ISO-8601 for an instant, or null. The Swift decoder's
@@ -59,19 +62,6 @@ function toEpochSeconds(value) {
  */
 function _timeOnly(value, locale) {
   return formatTimeOfDay(locale, value);
-}
-
-/**
- * Who a card names the job after: the client, or — for a personal job, which
- * has none — its title. Same fallback the pushes use in
- * `notification_messages._who`; the card and the `leaveNow` push beside it must
- * not call the same job two different things.
- * @param {!Object} c Content-state input.
- * @param {string} generic Localized "Client" placeholder.
- * @return {string}
- */
-function _who(c, generic) {
-  return (c.clientName || "").trim() || (c.title || "").trim() || generic;
 }
 
 /**

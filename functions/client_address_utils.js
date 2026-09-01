@@ -197,9 +197,11 @@ function composeFullAddress(f) {
       .filter(Boolean).join(", ");
 }
 
+// `splitApt` and `canonicalToDisplay` are deliberately NOT exported: both are
+// internal steps of `composeFullAddress`, and every one of these is a
+// hand-mirror of an `AddressParser` method — the fewer of them another module
+// can reach, the fewer places a divergence from the Dart side can surface.
 module.exports = {
   streetFromAddress,
   composeFullAddress,
-  splitApt,
-  canonicalToDisplay,
 };

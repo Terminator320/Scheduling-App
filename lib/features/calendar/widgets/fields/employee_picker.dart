@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
@@ -11,6 +12,23 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
+/// Whether the roster feeding [EmployeePicker.allEmployees] has settled.
+///
+/// Three states, because an empty chip row means three different things and
+/// the picker used to render all of them identically.
+enum AssigneeRosterStatus { loading, ready, failed }
+
+/// [AssigneeRosterStatus] for the roster provider both save flows watch.
+///
+/// One owner so the add sheet and the edit body cannot disagree about what an
+/// empty chip row means; they read two different providers but answer the same
+/// question.
+AssigneeRosterStatus rosterStatusOf(AsyncValue<Object?> roster) {
+  if (roster.hasValue) return AssigneeRosterStatus.ready;
+  if (roster.hasError) return AssigneeRosterStatus.failed;
+  return AssigneeRosterStatus.loading;
+}
+
 class EmployeePicker extends StatelessWidget {
   const EmployeePicker({
     required this.allEmployees,
@@ -21,6 +39,8 @@ class EmployeePicker extends StatelessWidget {
     this.errorText,
     this.onToggle,
     this.availability = AssigneeAvailability.none,
+    this.rosterStatus = AssigneeRosterStatus.ready,
+    this.onRetryRoster,
   });
 
   final List<EmployeeRecord> allEmployees;
@@ -34,6 +54,20 @@ class EmployeePicker extends StatelessWidget {
 
   /// Crew conflicts for the chosen date/span.
   final AssigneeAvailability availability;
+
+  /// Whether the roster behind [allEmployees] has actually arrived.
+  ///
+  /// Both save flows used to read it as `.asData?.value ?? const []`, which
+  /// collapses "still loading", "the read failed" and "there is nobody" into
+  /// one empty list. An assignee is REQUIRED to save
+  /// (`appointment_form_validator.dart`), so a slow first load or a transient
+  /// permission error made the booking form look like the business has no
+  /// staff — no spinner, no message, and no way forward on the only
+  /// appointment-creation path.
+  final AssigneeRosterStatus rosterStatus;
+
+  /// Re-runs the roster read. Only reachable from the failed state.
+  final VoidCallback? onRetryRoster;
 
   @override
   Widget build(BuildContext context) {
@@ -65,13 +99,45 @@ class EmployeePicker extends StatelessWidget {
         ),
     ];
 
+    final mutedLabel = TextStyle(fontSize: 13, color: scheme.onSurfaceVariant);
     final content = displayEmployees.isEmpty
-        ? Text(
-            selectable
-                ? context.l10n.common_noEmployeesFound
-                : context.l10n.calendar_noEmployeesAssigned,
-            style: TextStyle(fontSize: 13, color: scheme.onSurfaceVariant),
-          )
+        ? switch (rosterStatus) {
+            // Only ever reached while the list is empty: once a roster has
+            // arrived the chips are the answer, and a background refresh must
+            // not replace them with a spinner.
+            AssigneeRosterStatus.loading => Row(
+              children: [
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                const SizedBox(width: AppSpacing.sp8),
+                Text(context.l10n.common_loadingEmployees, style: mutedLabel),
+              ],
+            ),
+            AssigneeRosterStatus.failed => Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    context.l10n.error_errorLoadingEmployees,
+                    style: mutedLabel,
+                  ),
+                ),
+                if (onRetryRoster != null)
+                  TextButton(
+                    onPressed: onRetryRoster,
+                    child: Text(context.l10n.common_retry),
+                  ),
+              ],
+            ),
+            AssigneeRosterStatus.ready => Text(
+              selectable
+                  ? context.l10n.common_noEmployeesFound
+                  : context.l10n.calendar_noEmployeesAssigned,
+              style: mutedLabel,
+            ),
+          }
         : Wrap(
             spacing: AppSpacing.sp8,
             runSpacing: AppSpacing.sp8,

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show compute;
 
 import 'package:scheduling/core/data/paged_scan.dart';
+import 'package:scheduling/core/data/search_result_cache.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/core/utils/retry.dart';
@@ -48,8 +49,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   /// single write triggers collapse into one per employee.
   String _newSeriesOpId() => const Uuid().v4();
 
-  static const int _searchCacheMax = 50;
-  static const Duration _searchCacheTtl = Duration(minutes: 2);
   static const int _historySearchPageSize = 500;
 
   /// Ceiling on the live business-wide range listeners. Paging fixed the silent
@@ -70,30 +69,119 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   /// costs two round-trips to reach the ceiling, not twenty.
   static const int _clientHistoryPageSize = 500;
 
-  final Map<String, _CachedHistorySearch> _searchCache = {};
+  /// Bounded LRU of recent results. The dials (50 entries, 2 minutes) live on
+  /// [SearchResultCache], which the clients repository shares — they were two
+  /// byte-identical copies of one cost decision.
+  late final SearchResultCache<AppointmentRecord> _searchCache =
+      SearchResultCache(clock: _clock);
+
   _CachedHistoryScanWindow? _scanWindow;
 
-  bool _isFresh(DateTime fetchedAt) =>
-      _clock().difference(fetchedAt) < _searchCacheTtl;
+  bool _isFresh(DateTime fetchedAt) => _searchCache.isFresh(fetchedAt);
 
-  void _cacheSearch(String key, List<AppointmentRecord> results) {
-    _searchCache.remove(key);
-    if (_searchCache.length >= _searchCacheMax) {
-      _searchCache.remove(_searchCache.keys.first);
-    }
-    _searchCache[key] = _CachedHistorySearch(results, _clock());
-  }
-
-  void _invalidateSearchCache() {
+  /// Merges locally-written appointments into the history scan window instead
+  /// of dropping it.
+  ///
+  /// **Every appointment-write method must call this or [_notifyLocalWrite].**
+  /// It replaced `_invalidateSearchCache`, which threw the window away: a new
+  /// write path that calls neither serves stale history-search results,
+  /// including a just-deleted appointment that opens a detail view for a doc
+  /// that no longer exists.
+  ///
+  /// [changed] maps doc id to the fields just written, or null for a delete.
+  /// The window is the full paged terminal-status archive capped at
+  /// [_historySearchScanLimit] (5000), and NINE write paths used to discard it
+  /// outright — so an admin who searched History, opened a result and marked
+  /// it complete re-paged the whole archive behind the sheet: thousands of
+  /// billed reads and four sequential round trips for a one-field write, then
+  /// `compute` marshalling every raw map across the isolate boundary again. It
+  /// grows with the archive. The clients repository already solved this with
+  /// its own `_patchWindow`; this is that treatment for appointments.
+  ///
+  /// A doc whose status is no longer terminal is REMOVED rather than merged —
+  /// the window query is `status whereIn terminalStatusQueryValues`, so a job
+  /// created as `pending`, or reopened, does not belong in it. That is also
+  /// what makes `addAppointments` safe to route through here.
+  ///
+  /// ORDER is preserved, not appended to: the window is `startTime` DESC and
+  /// `searchHistory` returns it unsorted, so a re-appended doc would surface
+  /// out of order in the results list.
+  void _patchWindow(Map<String, Map<String, dynamic>?> changed) {
     _searchCache.clear();
-    _scanWindow = null;
+    final window = _scanWindow;
+    if (window == null || !_isFresh(window.fetchedAt)) {
+      _scanWindow = null;
+      if (!_localWrites.isClosed) _localWrites.add(null);
+      return;
+    }
+
+    final docs = <RawHistoryDoc>[];
+    final merged = <String>{};
+    for (final doc in window.docs) {
+      if (!changed.containsKey(doc.id)) {
+        docs.add(doc);
+        continue;
+      }
+      merged.add(doc.id);
+      final next = _windowDoc(doc.data, changed[doc.id]);
+      if (next != null) docs.add((id: doc.id, data: next));
+    }
+    // A job the window has never seen (a create, or one that just became
+    // terminal) goes in at its own date rather than at the end.
+    for (final entry in changed.entries) {
+      if (merged.contains(entry.key)) continue;
+      final next = _windowDoc(const {}, entry.value);
+      if (next == null) continue;
+      docs.insert(_insertIndexFor(docs, next), (id: entry.key, data: next));
+    }
+    _scanWindow = _CachedHistoryScanWindow(docs, window.fetchedAt);
     if (!_localWrites.isClosed) _localWrites.add(null);
   }
 
-  /// Unlike [_invalidateSearchCache] this does NOT poke `_localWrites`. Its
-  /// callers are signing the user out, and waking every `onLocalWrite`
-  /// listener on the way would refetch against a credential that is about to
-  /// be revoked.
+  /// The window row [patch] leaves behind, or null when the doc drops out.
+  ///
+  /// `FieldValue` sentinels are stripped: they are write instructions, not
+  /// values, and storing one would make `firestoreDateTime` read the field as
+  /// absent on the next `fromMap`. The previous value stays instead, at most
+  /// [SearchResultCache.ttl] stale.
+  static Map<String, dynamic>? _windowDoc(
+    Map<String, dynamic> previous,
+    Map<String, dynamic>? patch,
+  ) {
+    if (patch == null) return null;
+    final next = {
+      ...previous,
+      for (final e in patch.entries)
+        if (e.value is! FieldValue) e.key: e.value,
+    };
+    return isTerminalStatusRaw((next['status'] ?? '').toString()) ? next : null;
+  }
+
+  /// Where [doc] belongs in a `startTime` DESC window.
+  static int _insertIndexFor(List<RawHistoryDoc> docs, Map<String, dynamic> doc) {
+    final at = firestoreDateTime(doc['startTime']);
+    if (at == null) return docs.length;
+    for (var i = 0; i < docs.length; i++) {
+      final other = firestoreDateTime(docs[i].data['startTime']);
+      if (other == null || other.isBefore(at)) return i;
+    }
+    return docs.length;
+  }
+
+  /// Wakes `onLocalWrite` without touching the search cache or the window.
+  ///
+  /// For a write that provably changes no field `matchHistoryDocs` reads —
+  /// the photo paths, which only ever touch the `images` subcollection and the
+  /// parent's `updatedAt`. The client job-history section still has to refetch
+  /// (the card's photo indicator reads `pictureCount`), which is what the poke
+  /// is for.
+  void _notifyLocalWrite() {
+    if (!_localWrites.isClosed) _localWrites.add(null);
+  }
+
+  /// Unlike [_patchWindow] this does NOT poke `_localWrites`. Its callers are
+  /// signing the user out, and waking every `onLocalWrite` listener on the way
+  /// would refetch against a credential that is about to be revoked.
   @override
   void clearCaches() {
     _searchCache.clear();
@@ -155,10 +243,12 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   @override
   Future<void> addAppointments(List<AppointmentRecord> appointments) async {
     final batch = _appointments.firestore.batch();
+    final written = <String, Map<String, dynamic>?>{};
     for (final appointment in appointments) {
       final doc = appointment.id == null
           ? _appointments.doc()
           : _appointments.doc(appointment.id);
+      written[doc.id] = _toFirestoreMap(appointment);
       batch.set(doc, {
         ..._toFirestoreMap(appointment),
         // The one client write of this counter the rules allow, and the reason
@@ -173,7 +263,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       });
     }
     await batch.commit();
-    _invalidateSearchCache();
+    _patchWindow(written);
   }
 
   @override
@@ -206,6 +296,11 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         'seriesOpId': opId,
         'updatedAt': FieldValue.serverTimestamp(),
       });
+    final written = <String, Map<String, dynamic>?>{
+      updated.id!: _toFirestoreMap(updated),
+      for (final id in deleteIds) id: null,
+      for (final copy in copies) copy.id!: _toFirestoreMap(copy),
+    };
     for (final id in deleteIds) {
       batch.delete(_appointments.doc(id));
     }
@@ -221,7 +316,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       });
     }
     await batch.commit();
-    _invalidateSearchCache();
+    _patchWindow(written);
   }
 
   @override
@@ -232,7 +327,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       'seriesOpId': _newSeriesOpId(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    _invalidateSearchCache();
+    _patchWindow({appointment.id!: _toFirestoreMap(appointment)});
   }
 
   @override
@@ -243,11 +338,16 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     ];
     if (records.isEmpty) return;
     final opId = _newSeriesOpId();
+    final written = <String, Map<String, dynamic>?>{};
     await _appointments.firestore.runTransaction((txn) async {
       final refs = [for (final r in records) _appointments.doc(r.id)];
       final snaps = await Future.wait([for (final ref in refs) txn.get(ref)]);
+      // Rebuilt per attempt: a transaction can re-run, and a set carried over
+      // from an abandoned attempt would name docs this commit never touched.
+      written.clear();
       for (var i = 0; i < records.length; i++) {
         if (!snaps[i].exists) continue;
+        written[records[i].id!] = _toFirestoreMap(records[i]);
         txn.update(refs[i], {
           ..._toFirestoreMap(records[i]),
           'seriesOpId': opId,
@@ -255,7 +355,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         });
       }
     });
-    _invalidateSearchCache();
+    _patchWindow(written);
   }
 
   @override
@@ -264,7 +364,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     List<AppointmentImage> pictures,
   ) async {
     await _images.append(id, pictures);
-    _invalidateSearchCache();
+    _notifyLocalWrite();
   }
 
   @override
@@ -273,7 +373,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     List<AppointmentImage> pictures,
   ) async {
     await _images.remove(id, pictures);
-    _invalidateSearchCache();
+    _notifyLocalWrite();
   }
 
   @override
@@ -296,6 +396,23 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   // buys ~18 lines and pays for them by routing that path through a different
   // Firestore mechanism.
   @override
+  Future<void> updateFieldNotes({
+    required String id,
+    required String notes,
+  }) async {
+    // EXACTLY the two keys the assignee rules branch allows. Anything else —
+    // including a `seriesOpId`, which every other write here mints — is
+    // refused as an opaque `permission-denied`.
+    await _appointments.doc(id).update({
+      'fieldNotes': notes,
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    _patchWindow({
+      id: {'fieldNotes': notes},
+    });
+  }
+
+  @override
   Future<void> updateAppointmentStatus({
     required String id,
     required String status,
@@ -313,7 +430,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       if (trimmed == 'cancelled') 'seriesOpId': _newSeriesOpId(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
-    _invalidateSearchCache();
+    _patchWindow({id: {'status': trimmed}});
   }
 
   @override
@@ -346,7 +463,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       });
     }
     await batch.commit();
-    _invalidateSearchCache();
+    _patchWindow({for (final id in ids) id: {'status': trimmed}});
   }
 
   @override
@@ -359,7 +476,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       batch.delete(_appointments.doc(id));
     }
     await batch.commit();
-    _invalidateSearchCache();
+    _patchWindow({for (final id in ids) id: null});
   }
 
   List<AppointmentRecord> _mapRangeSnapshot(
@@ -468,12 +585,8 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     if (!ClientSearchPolicy.shouldSearch(q)) return const [];
 
     final cacheKey = ClientSearchPolicy.cacheKey(q);
-    final cached = _searchCache[cacheKey];
-    if (cached != null && _isFresh(cached.fetchedAt)) {
-      _cacheSearch(cacheKey, cached.results);
-      return cached.results;
-    }
-    _searchCache.remove(cacheKey);
+    final cached = _searchCache.read(cacheKey);
+    if (cached != null) return cached;
 
     final window = await _historyScanWindow();
     if (window == null) return const [];
@@ -482,7 +595,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       matchHistoryDocs,
       HistorySearchScan(docs: window.docs, query: q),
     );
-    _cacheSearch(cacheKey, matches);
+    _searchCache.write(cacheKey, matches);
     return matches;
   }
 
@@ -659,13 +772,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     base['endTime'] = Timestamp.fromDate(appointment.endTime);
     return base;
   }
-}
-
-class _CachedHistorySearch {
-  const _CachedHistorySearch(this.results, this.fetchedAt);
-
-  final List<AppointmentRecord> results;
-  final DateTime fetchedAt;
 }
 
 class _CachedHistoryScanWindow {

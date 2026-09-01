@@ -32,6 +32,10 @@ class SecuritySettingsCard extends StatelessWidget {
         iconColor: scheme.primary,
         label: context.l10n.settings_appLock,
         isLast: true,
+        // The whole row toggles. Without it only the switch is tappable, and a
+        // shrink-wrapped Switch.adaptive is about 31pt — under both minimums,
+        // on the row whose label is the thing you are aiming at.
+        onTap: isBusy ? null : () => onToggleAppLock(value: !enabled),
         trailing: Switch.adaptive(
           value: enabled,
           onChanged: isBusy ? null : (value) => onToggleAppLock(value: value),

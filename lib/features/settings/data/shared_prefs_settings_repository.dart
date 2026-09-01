@@ -5,6 +5,14 @@ import 'package:scheduling/features/settings/domain/settings_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SharedPrefsSettingsRepository implements SettingsRepository {
+  /// [deviceLanguage] is injectable for the same reason `AuthService`'s deps
+  /// are: the first-launch seed is otherwise only reachable by mutating the
+  /// platform dispatcher.
+  SharedPrefsSettingsRepository({String Function()? deviceLanguage})
+    : _deviceLanguage = deviceLanguage ?? deviceServerLocale;
+
+  final String Function() _deviceLanguage;
+
   static const _keyThemeMode = 'theme_mode';
   static const _keyTextScale = 'text_scale';
   static const _keyLanguage = 'language';
@@ -21,7 +29,13 @@ class SharedPrefsSettingsRepository implements SettingsRepository {
     return value;
   }
 
-  static String _sanitizeLanguage(String? value) => serverLocaleOf(value);
+  /// The STORED preference, or the device's language on a first launch.
+  ///
+  /// The fallback is a seed, not a derivation: `getString` returns null only
+  /// until something is saved, and every save path writes an explicit code, so
+  /// a person who picked English on a French handset keeps English.
+  String _sanitizeLanguage(String? value) =>
+      value == null ? _deviceLanguage() : serverLocaleOf(value);
 
   @override
   Future<AppSettings> load() async {

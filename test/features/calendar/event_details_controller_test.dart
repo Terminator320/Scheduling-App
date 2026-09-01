@@ -260,6 +260,55 @@ void main() {
       },
     );
 
+    test('a user-doc stream that ERRORS mid-await does not escape as a fatal',
+        () async {
+      // Shipped as a FATAL on 2026-08-31 and fixed by putting the await
+      // INSIDE the try. `_loadClientIfNeeded` runs in a DISCARDED
+      // `Future.microtask`, so nothing is left to catch a throw and it reaches
+      // the zone handler — from a sheet that merely failed to prefill a name.
+      // The `hasError` guard above the await covers an ALREADY-settled error,
+      // never one arriving during it, which is exactly this case.
+      //
+      // Hoist that await back above the try and this test fails.
+      final scopedClients = _MockClientsRepo();
+      final docs = StreamController<Map<String, dynamic>>();
+      when(
+        () => scopedClients.getClientById(any()),
+      ).thenAnswer((_) async => _existingClient);
+      final scoped = ProviderContainer(
+        overrides: [
+          appointmentsRepositoryProvider.overrideWithValue(appointments),
+          clientsRepositoryProvider.overrideWithValue(scopedClients),
+          employeesRepositoryProvider.overrideWithValue(employees),
+          appointmentImageUploadProvider.overrideWithValue(uploader),
+          imageStorageProvider.overrideWithValue(storage),
+          currentUserDocProvider.overrideWith((ref) => docs.stream),
+        ],
+      );
+      addTearDown(docs.close);
+      addTearDown(scoped.dispose);
+
+      scoped
+        ..listen(currentUserDocProvider, (_, _) {})
+        ..listen(
+          eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+          (_, _) {},
+        )
+        ..read(eventDetailsControllerProvider(EventDetailsKey(_appointment)));
+      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(Duration.zero);
+
+      // The controller is now parked on `.future`, mid-await.
+      docs.addError(StateError('unavailable'));
+      await pumpEventQueue();
+
+      // The doc really did settle as an error, the client load was abandoned,
+      // and nothing escaped — an unhandled async error out of the discarded
+      // microtask fails this test on its own.
+      expect(scoped.read(currentUserDocProvider).hasError, isTrue);
+      verifyNever(() => scopedClients.getClientById(any()));
+    });
+
     test('loads the client once an admin role settles', () async {
       final scopedClients = _MockClientsRepo();
       final docs = StreamController<Map<String, dynamic>>();
@@ -1228,6 +1277,101 @@ void main() {
         expect(readState().isSaving, isFalse);
       },
     );
+
+    // The offline invariant covered `save()` alone, and there are FOUR guards
+    // on this controller. Drop the one on `_setStatusOnRepo` and "Mark as
+    // complete" offline spins on an un-acked write until reconnect with the
+    // button disabled — the action a technician out of signal is most likely
+    // to press, and exactly the failure the invariant exists for.
+    ProviderContainer offlineContainer() {
+      final c = ProviderContainer(
+        overrides: [
+          appointmentsRepositoryProvider.overrideWithValue(appointments),
+          clientsRepositoryProvider.overrideWithValue(clients),
+          employeesRepositoryProvider.overrideWithValue(employees),
+          appointmentImageUploadProvider.overrideWithValue(uploader),
+          imageStorageProvider.overrideWithValue(storage),
+          isOfflineProvider.overrideWithValue(true),
+        ],
+      )..listen(
+        eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+        (_, _) {},
+      );
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    test('markComplete fails fast offline and never writes', () async {
+      final offline = offlineContainer();
+      final key = EventDetailsKey(_appointment);
+
+      final outcome = await offline
+          .read(eventDetailsControllerProvider(key).notifier)
+          .markAsDone(_appointment);
+
+      expect(outcome, isA<EventDetailsActionFailed>());
+      // A SocketException, NOT a Busy: `_classifyError` keys on the type, so
+      // this is what renders the offline notice rather than a generic error.
+      expect(
+        (outcome as EventDetailsActionFailed).error,
+        isA<SocketException>(),
+      );
+      verifyNever(
+        () => appointments.updateAppointmentStatus(
+          id: any(named: 'id'),
+          status: any(named: 'status'),
+        ),
+      );
+      // The flag is untouched, so the button is still usable on reconnect.
+      expect(
+        offline.read(eventDetailsControllerProvider(key)).isSaving,
+        isFalse,
+      );
+    });
+
+    test('deleteAppointment fails fast offline and never writes', () async {
+      final offline = offlineContainer();
+      final key = EventDetailsKey(_appointment);
+
+      final outcome = await offline
+          .read(eventDetailsControllerProvider(key).notifier)
+          .deleteAppointment(_appointment);
+
+      expect(outcome, isA<EventDetailsActionFailed>());
+      expect(
+        (outcome as EventDetailsActionFailed).error,
+        isA<SocketException>(),
+      );
+      verifyNever(() => appointments.deleteAppointment(any()));
+      expect(
+        offline.read(eventDetailsControllerProvider(key)).isSaving,
+        isFalse,
+      );
+    });
+
+    test('a series cancel fails fast offline and never reads the series',
+        () async {
+      final offline = offlineContainer();
+      final key = EventDetailsKey(_appointment);
+
+      final outcome = await offline
+          .read(eventDetailsControllerProvider(key).notifier)
+          .cancelAppointment(
+            _appointment.copyWith(seriesId: 'series-1'),
+            includeFuture: true,
+          );
+
+      expect(outcome, isA<EventDetailsActionFailed>());
+      expect(
+        (outcome as EventDetailsActionFailed).error,
+        isA<SocketException>(),
+      );
+      verifyNever(() => appointments.getSeries(any()));
+      expect(
+        offline.read(eventDetailsControllerProvider(key)).isSaving,
+        isFalse,
+      );
+    });
 
     test(
       'offline fails fast without touching the repo or the busy flag',

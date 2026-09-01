@@ -125,7 +125,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     final provider = widget.images[_currentIndex];
     if (provider is FileImage) return provider.file;
     // Refused photos use a placeholder that should not be exported.
-    if (identical(provider, _refusedImage)) return null;
+    if (isRefusedImage(provider)) return null;
     if (provider is MemoryImage) {
       final dir = await getTemporaryDirectory();
       final file = File(_pathIn(dir.path, _photoFileName()));
@@ -217,6 +217,10 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Raw white, deliberately: the viewer paints its own black ground in BOTH
+    // themes — a photo is shown against black wherever it is opened — so this
+    // is not a theme-dependent foreground, and a `ColorScheme` token here
+    // would flip it to dark-on-black in the light theme.
     const foreground = Colors.white;
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final dragFraction = (_dragOffset.abs() / (_dismissDistance * 2)).clamp(
@@ -310,6 +314,8 @@ class _ViewerOverlay extends StatelessWidget {
   final VoidCallback onClose;
   final TextTheme textTheme;
 
+  /// Raw white for the same reason as the viewer body: this chrome sits on
+  /// the viewer's own black ground in both themes.
   static const Color _foreground = Colors.white;
 
   @override
@@ -372,7 +378,10 @@ class _ViewerOverlay extends StatelessWidget {
 }
 
 /// Placeholder provider for a photo the loader refused.
-final _refusedImage = MemoryImage(
+///
+/// Test it with [isRefusedImage] rather than comparing here — the read-only
+/// carousel needs the same answer and cannot see this file's privates.
+final refusedImage = MemoryImage(
   Uint8List.fromList(const [
     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, //
     0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
@@ -386,6 +395,16 @@ final _refusedImage = MemoryImage(
   ]),
 );
 
+/// Whether [provider] is the placeholder [buildImageProviders] substitutes for
+/// a photo Storage refused.
+///
+/// The slot has to stay in the list — indexes are shared with the viewer and
+/// the strip — but a transparent 1x1 renders as a BLANK page in the read-only
+/// carousel, which reads as "this job has an empty photo" rather than "this
+/// photo could not be loaded". The editable strip already draws an error tile;
+/// this is what lets the carousel agree with it.
+bool isRefusedImage(ImageProvider provider) => identical(provider, refusedImage);
+
 List<ImageProvider> buildImageProviders({
   required List<Uint8List> bytes,
   required List<File> files,
@@ -393,7 +412,7 @@ List<ImageProvider> buildImageProviders({
   return [
     // Empty bytes mean a refused photo, so keep the slot stable.
     ...bytes.map<ImageProvider>(
-      (b) => b.isEmpty ? _refusedImage : MemoryImage(b),
+      (b) => b.isEmpty ? refusedImage : MemoryImage(b),
     ),
     ...files.map<ImageProvider>(FileImage.new),
   ];

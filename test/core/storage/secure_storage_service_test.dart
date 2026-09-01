@@ -1,6 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_secure_storage/test/test_flutter_secure_storage_platform.dart';
+import 'package:flutter_secure_storage_platform_interface/flutter_secure_storage_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/storage/secure_storage_service.dart';
 
 // The private migration marker written once the keychain accessibility
@@ -107,6 +111,69 @@ void main() {
       expect(await _raw(_migratedMarker), 'true');
     });
 
+    // The catch path had nothing driving it, so `_migration = null` at the end
+    // of it was unpinned. Drop that line and ONE pre-first-unlock -25308 caches
+    // a "completed" future for the whole process: every key stays on the old
+    // accessibility class, and the biometric lock silently stops engaging for
+    // the rest of that session.
+    group('a THROWING migration', () {
+      tearDown(() {
+        FlutterSecureStorage.setMockInitialValues({});
+      });
+
+      test('is retried on the next operation, not cached as done', () async {
+        final platform = _FlakyStorage({SecureStorageKeys.cacheDocId: 'doc-1'});
+        FlutterSecureStoragePlatform.instance = platform;
+        final logger = _RecordingLogger();
+        final service = SecureStorageService(logger: logger);
+
+        // First pass throws part-way through and swallows.
+        platform.failing = true;
+        await service.read(SecureStorageKeys.cacheDocId);
+        expect(await _raw(_migratedMarker), isNull);
+
+        // Second pass must actually re-run rather than await a settled future.
+        platform.failing = false;
+        await service.read(SecureStorageKeys.cacheDocId);
+        expect(await _raw(_migratedMarker), 'true');
+        expect(await service.read(SecureStorageKeys.cacheDocId), 'doc-1');
+      });
+
+      test('a locked keychain (-25308) is logged as DEFERRED, not as a fault',
+          () async {
+        // isKeychainLockedError classifies the pre-first-unlock window so a
+        // content-available push cold-starting a locked phone does not file a
+        // Crashlytics fault every time.
+        final platform = _FlakyStorage({})
+          ..failing = true
+          ..error = PlatformException(code: 'Unexpected', message: '-25308');
+        FlutterSecureStoragePlatform.instance = platform;
+        final logger = _RecordingLogger();
+
+        await SecureStorageService(
+          logger: logger,
+        ).read(SecureStorageKeys.cacheDocId);
+
+        expect(logger.warnings.single, contains('deferred'));
+        expect(logger.errors, isEmpty);
+      });
+
+      test('any other failure is logged WITH the error', () async {
+        final platform = _FlakyStorage({})
+          ..failing = true
+          ..error = Exception('keychain on fire');
+        FlutterSecureStoragePlatform.instance = platform;
+        final logger = _RecordingLogger();
+
+        await SecureStorageService(
+          logger: logger,
+        ).read(SecureStorageKeys.cacheDocId);
+
+        expect(logger.warnings.single, contains('failed'));
+        expect(logger.errors, hasLength(1));
+      });
+    });
+
     test('migration runs only once across multiple operations', () async {
       FlutterSecureStorage.setMockInitialValues({
         SecureStorageKeys.cacheDocId: 'doc-1',
@@ -200,4 +267,35 @@ void main() {
       expect(await _raw(_migratedMarker), isNull);
     });
   });
+}
+/// In-memory storage whose WRITES can be made to throw, so the migration
+/// failure path is reachable. Reads keep working, which is the realistic
+/// shape: the marker read succeeds and the rewrite is what the locked
+/// keychain refuses.
+class _FlakyStorage extends TestFlutterSecureStoragePlatform {
+  _FlakyStorage(super.data);
+
+  bool failing = false;
+  Exception error = PlatformException(code: 'Unexpected', message: '-25308');
+
+  @override
+  Future<void> write({
+    required String key,
+    required String value,
+    required Map<String, String> options,
+  }) async {
+    if (failing) throw error;
+    return super.write(key: key, value: value, options: options);
+  }
+}
+
+class _RecordingLogger extends AppLogger {
+  final warnings = <String>[];
+  final errors = <Object>[];
+
+  @override
+  void warn(String message, [Object? error, StackTrace? stack]) {
+    warnings.add(message);
+    if (error != null) errors.add(error);
+  }
 }

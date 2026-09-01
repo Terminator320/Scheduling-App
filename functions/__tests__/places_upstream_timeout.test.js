@@ -13,13 +13,32 @@
  */
 jest.mock("../security", () => {
   const actual = jest.requireActual("../security");
-  return {
+  const mock = {
     ...actual,
     assertAdmin: jest.fn().mockResolvedValue(undefined),
     enforceDurableRateLimit: jest.fn().mockResolvedValue({
       refund: jest.fn().mockResolvedValue(undefined),
     }),
   };
+  // The callables open with `assertAdminCall`, which COMPOSES the auth check,
+  // `assertAdmin` and `assertPayloadShape`. It holds a module-internal
+  // reference to the real `assertAdmin`, so stubbing the export alone would
+  // intercept nothing and every gate assertion below would pass vacuously —
+  // the same "mocked and never actually reached" shape that let three of these
+  // gates be deleted with a green suite. Re-composing it here against the MOCK
+  // keeps `security.assertAdmin` the thing the tests observe. The composition
+  // itself, order included, is proved against the real one in
+  // `assert_admin.test.js`.
+  mock.assertAdminCall = jest.fn(async (req, allowedKeys) => {
+    if (!req.auth || !req.auth.uid) {
+      throw new (require("firebase-functions/v2/https").HttpsError)(
+          "unauthenticated", "auth-required");
+    }
+    await mock.assertAdmin(req.auth.uid);
+    actual.assertPayloadShape(req.data, allowedKeys);
+    return req.auth.uid;
+  });
+  return mock;
 });
 
 const errors = [];

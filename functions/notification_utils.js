@@ -31,6 +31,7 @@ const {
 const {
   buildNotificationMessage,
   buildDigestMessage,
+  buildJobCompletedMessage,
 } = require("./notification_messages");
 
 const {
@@ -53,6 +54,7 @@ const {
   overduePromptLedgerId,
   isStaleTokenError,
   isAlreadyExists,
+  isCrewCompletion,
   recordOf: _record,
   contextFor: _contextFor,
 } = require("./notification_policy");
@@ -368,6 +370,13 @@ async function handleAppointmentWrite(id, before, after, deps) {
   // appointment, so doing it server-side means a tech marking one job done
   // won't wrongly kill the card for a job they're still driving to.
   await endCardOnTerminal(id, before, after, deps, now);
+  // Tell the dispatcher the work happened. ABOVE the events early-return,
+  // because a mark-done produces no employee-facing event at all — the differ
+  // has nothing to say to the crew about a job they just closed themselves —
+  // so placing it after the return would make it unreachable on the one
+  // transition it exists for. Best-effort and never throws, like every other
+  // notice here.
+  await notifyAdminsOfCompletion(id, before, after, deps);
   const events = diffAppointmentForNotifications(before, after, now, id);
   if (events.length === 0) return {events: 0, sent: 0};
   let sent = 0;
@@ -831,6 +840,64 @@ async function runDailyDigest(deps) {
 }
 
 /**
+ * Pushes "Marc finished Leak fix" to every active admin who is not on the job.
+ *
+ * The dispatcher had no signal that work was happening: `AttentionFlags`
+ * existed but the Dashboard is a pushed destination behind drawer -> Business,
+ * while an admin's home is the calendar — so the most valuable operational
+ * signal in the app was pull-only and two navigations deep.
+ *
+ * An admin ASSIGNED to the job is excluded: they were there. The exclusion is
+ * per-recipient rather than `excludeDocId`, which takes one id, because a job
+ * can carry several assignees.
+ *
+ * Best-effort in the strongest sense — it swallows everything, including a
+ * failed name lookup, because the completion is already committed and a push
+ * failure must not fail the trigger and trigger a retry of the whole write
+ * handler.
+ *
+ * @param {string} id appointment doc id.
+ * @param {?Object} before
+ * @param {?Object} after
+ * @param {!Object} deps `{db, messaging, logger}`.
+ * @return {!Promise<void>}
+ */
+async function notifyAdminsOfCompletion(id, before, after, deps) {
+  if (!isCrewCompletion(before, after)) return;
+  try {
+    const assignees = new Set(toIdList(after.employeeIds));
+    const what = String(after.clientName || after.title || "").trim();
+    // The crew member's name off the denormalized list, so this costs no read.
+    // Positional with employeeIds, the same pairing every other surface uses.
+    const names = Array.isArray(after.employeeNames) ? after.employeeNames : [];
+    const who = String(names.length === 1 ? names[0] || "" : "").trim();
+
+    const snap = await deps.db.collection("users")
+        .where("role", "==", "admin")
+        .where("status", "==", "active")
+        .limit(ADMIN_FANOUT_MAX)
+        .get();
+    const cache = new Map(snap.docs.map(
+        (doc) => [doc.id, {user: doc.data() || {}, tokenDocs: null}]));
+    await Promise.all(snap.docs
+        .filter((doc) => !assignees.has(doc.id))
+        .map((doc) => sendToEmployee(
+            deps,
+            doc.id,
+            {kind: "jobCompleted", appointmentId: String(id)},
+            (locale) => buildJobCompletedMessage(who, what, locale),
+            ADMIN_RECIPIENT_ROLES,
+            cache,
+        ).catch(() => {})));
+  } catch (e) {
+    if (deps.logger) {
+      deps.logger.warn("notifyAdminsOfCompletion failed",
+          {appointmentId: String(id), err: String(e)});
+    }
+  }
+}
+
+/**
  * Ceiling on one admin fan-out, with the warn-at-cap posture the three sweep
  * ceilings use. Admins are a handful in practice, so this is a tail guard —
  * but this was the last unbounded collection query in the push stack, and it
@@ -918,6 +985,7 @@ module.exports = {
   ADMIN_FANOUT_MAX,
   ledgerBody,
   isAlreadyExists,
+  isCrewCompletion,
   recordOf: _record,
   contextFor: _contextFor,
   SERIES_CLAIM_WINDOW_MS,
@@ -937,6 +1005,7 @@ module.exports = {
   // than re-deriving any of it (changeEmployeeEmail is the first non-job one).
   sendToEmployee,
   sendToActiveAdmins,
+  notifyAdminsOfCompletion,
   deliverRecipientOnce: _deliverRecipientOnce,
   handleAppointmentWrite,
   runDailyDigest,

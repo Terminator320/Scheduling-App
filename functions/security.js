@@ -46,7 +46,11 @@ function assertPayloadShape(data, allowedKeys) {
   } catch {
     throw new HttpsError("invalid-argument", "malformed-payload");
   }
-  if (serialized.length > MAX_PAYLOAD_BYTES) {
+  // BYTES, not `.length`: that counts UTF-16 code units, so 4096 emoji or CJK
+  // characters serialize to ~12-16 KB and passed a cap whose constant and
+  // error code both say bytes. `notification_utils.js` already measures this
+  // way; this is the same measurement in the other direction.
+  if (Buffer.byteLength(serialized, "utf8") > MAX_PAYLOAD_BYTES) {
     throw new HttpsError("invalid-argument", "payload-too-large");
   }
   for (const key of Object.keys(data)) {
@@ -232,6 +236,48 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
 }
 
 /**
+ * The whole opening of an ADMIN-ONLY callable: signed in, actually an admin,
+ * and a payload of exactly [allowedKeys].
+ *
+ * One owner because the three steps were re-decided at eleven call sites, and
+ * on 2026-09-01 three of those sites turned out to have a DELETABLE
+ * `assertAdmin` — the whole suite stayed green with the gate removed, on the
+ * callables that mint and delete real Firebase Auth accounts. Tests close
+ * that for the three that were found; this closes it for the ones nobody has
+ * looked at yet, because a callable that opens with this cannot be missing a
+ * step.
+ *
+ * The ORDER is the security-relevant part and is fixed here:
+ *
+ *   auth -> assertAdmin -> assertPayloadShape
+ *
+ * Identity guards sit ABOVE the payload check so a non-privileged caller is
+ * refused before anything reads their data, and the payload check sits above
+ * whatever rate limiter the caller adds next, so a burst of malformed
+ * submissions cannot exhaust a legitimate admin's window. `.claude/rules/
+ * security.md` states that order; this is it made mechanical.
+ *
+ * NOT for a self-service callable. `changeEmployeeEmail` and
+ * `completeEmployeeSetup` are deliberately not admin-only, and
+ * `changeEmployeeEmail` resolves its caller through the pure
+ * `resolveEmailChangeCaller` precisely so widening it past admins cannot
+ * widen WHICH doc a caller reaches. Don't reach for this there.
+ *
+ * @param {!Object} req The callable request.
+ * @param {!Set<string>} allowedKeys The only keys this endpoint accepts.
+ * @return {!Promise<string>} The caller's uid, which every site needs next for
+ *   its rate limiter.
+ */
+async function assertAdminCall(req, allowedKeys) {
+  if (!req.auth || !req.auth.uid) {
+    throw new HttpsError("unauthenticated", "auth-required");
+  }
+  await assertAdmin(req.auth.uid);
+  assertPayloadShape(req.data, allowedKeys);
+  return req.auth.uid;
+}
+
+/**
  * Throws HttpsError("permission-denied", "wave/not-admin") unless the
  * `usersByUid/{uid}` bridge (kept in sync by syncUsersByUid) shows an active
  * admin. Role always comes from Firestore, never from the client.
@@ -313,6 +359,7 @@ module.exports = {
   readSessionToken,
   enforceDurableRateLimit,
   assertAdmin,
+  assertAdminCall,
   isReauthStale,
   assertFreshReauth,
 };

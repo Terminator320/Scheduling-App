@@ -25,6 +25,18 @@ int? firestoreInt(dynamic value) {
   return null;
 }
 
+/// Parses a Firestore field value into a list, leniently.
+///
+/// The container half of the rule [firestoreInt] states: these factories run
+/// inside `snapshots().map` and on the sign-in path, so a hard `as List?` on
+/// ONE console-edited document throws for the whole stream — the roster, a
+/// Clients page, or the search `compute` isolate, where the throw makes every
+/// query silently return nothing. Elements stay the caller's problem
+/// (`whereType`/`== true` already tolerate junk); only the container is
+/// guarded here, and a non-list reads as empty.
+List<Object?> firestoreList(dynamic value) =>
+    value is List ? value : const [];
+
 /// Parses a Firestore field value into a list of strings.
 ///
 /// Two accepted shapes, a list of strings or a bare non-empty string, because

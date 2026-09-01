@@ -9,6 +9,7 @@ import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/policies/history_search_policy.dart';
 import 'package:scheduling/features/clients/application/appointment_history_providers.dart';
 import 'package:scheduling/features/clients/domain/history_grouping.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
@@ -19,12 +20,14 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 
-/// Pre-normalized row text for cheap local filtering.
-typedef _HistorySearchEntry = ({
+/// Pre-normalized row text for cheap local filtering, paired with its row.
+///
+/// The projection itself is `HistorySearchEntry` in `history_search_policy`,
+/// which is also what the debounced server scan matches — the two are the same
+/// search at two layers and must not drift.
+typedef _HistoryRow = ({
   AppointmentRecord appointment,
-  String clientText,
-  List<String> employeeTexts,
-  String phoneDigits,
+  HistorySearchEntry entry,
 });
 
 /// Paginated history list, newest first.
@@ -77,7 +80,7 @@ class _AppointmentHistoryViewState
   List<List<AppointmentRecord>>? _filterOptionsPages;
   List<int> _cachedYears = const [];
   List<HistoryEmployeeOption> _cachedEmployees = const [];
-  List<_HistorySearchEntry> _searchIndex = const [];
+  List<_HistoryRow> _searchIndex = const [];
 
   /// Memoized tally for the current row list.
   List<AppointmentRecord>? _talliedRows;
@@ -238,22 +241,19 @@ class _AppointmentHistoryViewState
     final qText = ClientSearchPolicy.normalize(widget.searchQuery);
     final qDigits = ClientSearchPolicy.digitsOnly(widget.searchQuery);
     return [
-      for (final entry in _searchIndex)
-        if (_matchesChips(entry.appointment) &&
-            (!hasQuery || _matchesQuery(entry, qText, qDigits)))
-          entry.appointment,
+      for (final row in _searchIndex)
+        if (_matchesChips(row.appointment) &&
+            (!hasQuery ||
+                historyEntryMatches(
+                  row.entry,
+                  queryText: qText,
+                  queryDigits: qDigits,
+                )))
+          row.appointment,
     ];
   }
 
-  bool _matchesQuery(_HistorySearchEntry entry, String qText, String qDigits) {
-    if (qText.isEmpty && qDigits.isEmpty) return false;
-    final matchesClient = qText.isNotEmpty && entry.clientText.contains(qText);
-    final matchesEmployee =
-        qText.isNotEmpty && entry.employeeTexts.any((e) => e.contains(qText));
-    final matchesPhone =
-        qDigits.isNotEmpty && entry.phoneDigits.contains(qDigits);
-    return matchesClient || matchesEmployee || matchesPhone;
-  }
+
 
   /// Filter row for the loaded history.
   Widget _filterBar(List<int> years, List<HistoryEmployeeOption> employees) {
@@ -299,15 +299,7 @@ class _AppointmentHistoryViewState
             _cachedEmployees = _employeesOf(loaded);
             _searchIndex = [
               for (final a in loaded)
-                (
-                  appointment: a,
-                  clientText: ClientSearchPolicy.normalize(a.clientName),
-                  employeeTexts: [
-                    for (final e in a.employeeNames)
-                      ClientSearchPolicy.normalize(e),
-                  ],
-                  phoneDigits: ClientSearchPolicy.digitsOnly(a.clientPhone),
-                ),
+                (appointment: a, entry: historyEntryOf(a)),
             ];
           }
 

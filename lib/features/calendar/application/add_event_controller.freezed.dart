@@ -14,8 +14,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$AddEventState {
 
- DateTime? get selectedDate; DateTime? get endDate;/// The user picked an end date explicitly, so it no longer mirrors the
-/// start — moving the start now SHIFTS it instead of collapsing the run.
+ DateTime? get selectedDate; DateTime? get endDate;/// Whether the end date should move with later start-date changes.
  bool get endDateTouched; TimeOfDay? get selectedStartTime; TimeOfDay? get selectedEndTime; bool get endTimeWasPickedManually; ClientRecord? get selectedClient; List<ClientRecord> get clientResults; bool get isSearchingClient; bool get useCustomAddress; bool get isPersonal; bool get isDayOff; bool get isAllDay; List<EmployeeRecord> get selectedEmployees; RepeatInterval get repeat; List<File> get selectedImages; bool get isSubmitting; Map<String, AppointmentFormError> get errors;
 /// Create a copy of AddEventState
 /// with the given fields replaced by the non-null parameter values.
@@ -242,8 +241,7 @@ class _AddEventState implements AddEventState {
 
 @override final  DateTime? selectedDate;
 @override final  DateTime? endDate;
-/// The user picked an end date explicitly, so it no longer mirrors the
-/// start — moving the start now SHIFTS it instead of collapsing the run.
+/// Whether the end date should move with later start-date changes.
 @override@JsonKey() final  bool endDateTouched;
 @override final  TimeOfDay? selectedStartTime;
 @override final  TimeOfDay? selectedEndTime;
