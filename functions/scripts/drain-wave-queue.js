@@ -65,12 +65,11 @@
 // lease, so one killed mid-dispatch is reclaimed by the next drain's stale
 // pass rather than lost or double-pushed.
 
-const {initializeApp, applicationDefault} = require("firebase-admin/app");
 
 const {drainQueue, countQueuedJobs} = require("../wave/worker");
 const {readWaveBusinessId} = require("../wave/sync_run");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
-const {printTargetBanner} = require("./_project");
+const {bootstrapScript} = require("./_project");
 
 /** Jobs claimed per round. Matches the interactive sync's batch. */
 const BATCH_LIMIT = 20;
@@ -159,19 +158,11 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  */
 async function main() {
   const argv = process.argv.slice(2);
-  assertKnownFlags(argv);
-  const dryRun = argv.includes("--dry-run");
+  const {dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
   const ratePerMin =
     parsePositiveInt(argv, "--rate=", DEFAULT_RATE_PER_MIN, MAX_RATE_PER_MIN);
   const maxJobs = parsePositiveInt(argv, "--max=", Infinity);
   const maxIdle = parsePositiveInt(argv, "--max-idle=", DEFAULT_MAX_IDLE);
-
-  const app = initializeApp({credential: applicationDefault()});
-
-  // Printed BEFORE anything is read or pushed. This one writes to a THIRD
-  // party — the wrong project here renames customers in the wrong Wave
-  // business, which no amount of re-running fixes.
-  printTargetBanner(app, {dryRun});
 
   const depth = await countQueuedJobs();
   console.log(`queued jobs: ${depth}\n`);

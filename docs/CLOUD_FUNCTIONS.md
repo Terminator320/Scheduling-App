@@ -2,7 +2,19 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-08-29 (release 1.54.0+83 — **the export list is unchanged at 25
+refreshed 2026-09-01 (release 1.55.0+84 — **the export list is unchanged at 25
+and no row below moved**. Three server-side changes, all inside existing
+functions: `waveUpsertCustomer` now records `wave.problems` from the new
+customer contract (report-only — see below the summary table);
+`notifyAppointmentChanges` wraps its per-recipient loop so one transient
+failure no longer drops recipients 2..N on a function registered WITHOUT
+`retry: true`; and all three `places.js` callables abort their upstream
+request at 8 s, deliberately under the client's own 10 s callable timeout, so
+an abandoned lookup stops burning a billed Places call and its rate-limit
+slot. `runWaveDaily` also guards its connection read, making its documented
+"never throws" contract true on its own terms. Rules unchanged; one composite
+index RESTORED — see `sendUpcomingJobReminders`.)
+Previously refreshed 2026-08-29 (release 1.54.0+83 — **the export list is unchanged at 25
 and no row below moved**. The one server-side change is the retirement of
 `createEmployeeAccount`'s `#compat-1.47.0` carve-out: `isAdmin` is out of the
 `assertPayloadShape` allowlist and is now refused as `unexpected-field`. It was
@@ -288,6 +300,15 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` |
 | `recountClientJobs` | trigger | `onDocumentWritten appointments/{id}` | `client_job_count.js` | a write that changes `clientId` | — | `retry: true` |
 | `waveUpsertCustomer` | trigger | `onDocumentWritten clients/{id}` | `wave/triggers.js` | any `clients` doc write | `WAVE_FULL_ACCESS_TOKEN` | `retry: true` · 300s · enqueues **and pushes** |
+| `validateUploadedImage` | trigger | `onObjectFinalized` (Storage) | `maintenance.js` | `appointments/*/images/*` upload | — | region `us-east1` |
+| `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | no `retry` (dupe push worse than missed) |
+| `waveRetryFailedJobs` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings, requeue dead outbox jobs) | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable 10/hr |
+| `cascadeDeleteAppointmentImages` | trigger | `onDocumentDeleted appointments/{id}` | `appointment_images.js` | any appointment delete | — | `retry: true` · **rethrows** |
+| `recountAppointmentPictures` | trigger | `onDocumentWritten appointments/{id}/images/{imageId}` | `appointment_images.js` | any photo doc write | — | `retry: true` · absolute `count()` |
+| `purgeExpiredHistory` | scheduled | `0 3 1 1,4,7,10 *` — quarterly, 1st of Jan/Apr/Jul/Oct 03:00 (Toronto) | `maintenance.js` | quarterly | — | `maxInstances: 1` · 1800s |
+| `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` + `travel_utils.js` | timer | `GOOGLE_MAP_API_KEY` · `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | `maxInstances: 1` · ledger · Routes API · **also carries the overdue sweep** |
+| `sendDailyJobDigest` | scheduled | `0 18 * * *` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · **also calls `runWaveDaily()`** |
+
 
 `waveUpsertCustomer` also records **`wave.problems`** on the client doc —
 the customer contract's verdict on whether Wave would accept it
@@ -300,14 +321,6 @@ field — the hash is unchanged, so `shouldEnqueueClientWrite` stops the
 re-fire and this cannot loop. Replay it over production read-only with
 `functions/scripts/audit-wave-contract.js`. Design:
 `docs/plans/2026-08-30-wave-validated-contract-design.md`.
-| `validateUploadedImage` | trigger | `onObjectFinalized` (Storage) | `maintenance.js` | `appointments/*/images/*` upload | — | region `us-east1` |
-| `notifyAppointmentChanges` | trigger | `onDocumentWritten appointments/{id}` | `notifications.js` | any appointment write | `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | no `retry` (dupe push worse than missed) |
-| `waveRetryFailedJobs` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings, requeue dead outbox jobs) | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable 10/hr |
-| `cascadeDeleteAppointmentImages` | trigger | `onDocumentDeleted appointments/{id}` | `appointment_images.js` | any appointment delete | — | `retry: true` · **rethrows** |
-| `recountAppointmentPictures` | trigger | `onDocumentWritten appointments/{id}/images/{imageId}` | `appointment_images.js` | any photo doc write | — | `retry: true` · absolute `count()` |
-| `purgeExpiredHistory` | scheduled | `0 3 1 1,4,7,10 *` — quarterly, 1st of Jan/Apr/Jul/Oct 03:00 (Toronto) | `maintenance.js` | quarterly | — | `maxInstances: 1` · 1800s |
-| `sendUpcomingJobReminders` | scheduled | `every 5 minutes` (Toronto) | `notifications.js` + `travel_utils.js` | timer | `GOOGLE_MAP_API_KEY` · `APNS_AUTH_KEY` · `APNS_KEY_ID` · `APNS_TEAM_ID` | `maxInstances: 1` · ledger · Routes API · **also carries the overdue sweep** |
-| `sendDailyJobDigest` | scheduled | `0 18 * * *` (Toronto) | `notifications.js` | timer | — | `maxInstances: 1` · **also calls `runWaveDaily()`** |
 
 **Exactly three Cloud Scheduler jobs, and that is deliberate** — only 3 are free
 per billing account. `sendOverdueJobPrompts` (was `every 15 minutes`) is merged
@@ -613,6 +626,23 @@ has no reverse-geocode mode) with `GOOGLE_MAP_API_KEY`, and returns only the
 top result's `formatted_address` (or `null` on `ZERO_RESULTS`) — never logs
 coordinates or resolved addresses. **Deployed to prod 2026-07-18.**
 
+**All three Places callables abort upstream at 8 s** (`UPSTREAM_TIMEOUT_MS`,
+`fetchPlacesJson`, 2026-09-01). Node's `fetch()` has no default timeout, so a
+slow upstream held the function open indefinitely: the CLIENT gave up at 10 s
+(`_callableTimeout`, `google_places_repository.dart`) and reported
+`deadline-exceeded` while the function carried on, still spending a billed
+upstream call and the rate-limit slot it had already consumed, for an answer
+nobody was waiting for. **The budget must stay UNDER the client's** so the
+server gives up first and the work is never orphaned — raise the two together
+or that stops being true; a jest test asserts the ordering. The transport-error
+log carries `timedOut`, which is what separates "the upstream is slow" from
+"the network broke" in Cloud Logging. This surfaced as a production Crashlytics
+cluster on the live map, where a recycled roster row re-requested a failed cell
+immediately; the client half is `kReverseGeocodeFailureCooldown`
+(`maps_providers.dart`). **The fan-out itself is NOT fixed** — N staff still
+issue N concurrent lookups on open, and batching needs an endpoint that does
+not exist yet.
+
 ## Images
 
 ### `validateUploadedImage` — `maintenance.js`
@@ -665,7 +695,15 @@ since `android/` was deleted on 2026-08-05). **Deployed 2026-07-11**
 unassignment pushes. Diffs before/after (`diffAppointmentForNotifications`):
 one event per employee, priority `cancelled > removed > rescheduled >
 assigned`; past appointments skipped. Deliberately **no `retry: true`** — a
-duplicate push is worse than a rare missed one. **A repeat series collapses to
+duplicate push is worse than a rare missed one. **Which is exactly why every
+recipient is isolated in its own try/catch** (2026-09-01): the per-recipient
+loop had none, so one transient failure on the FIRST assignee threw out of the
+whole handler and recipients 2..N were dropped permanently, with no retry
+behind them to make it up. The five comparable fan-outs in this file already
+carried the guard — this was drift, not a decision. The series-claim ordering
+is deliberately left alone: a send that throws after `claimSeriesNotice`
+committed still suppresses the sibling for its window, which is a separate
+decision about claim semantics. **A repeat series collapses to
 ONE push per (employee, kind)** via the Admin-SDK-only
 `appointmentSeriesNotices` claim ledger (`claimSeriesNotice`): a "this and all
 future" edit writes ~15 sibling docs in one batch, each firing this trigger, so
@@ -727,10 +765,17 @@ reminder; only the all-day case is excluded (mirrors the `isPersonal` skip in
 `selectOverdueCandidates`). Per (job, assignee) it picks a departure origin —
 an intervening job's address → a fresh background-GPS presence doc
 (`updatedAt` ≤ 25 min) → a recently-ended job's address (≤ 4 h) → none — via one
-per-employee context query (`(employeeIds CONTAINS, endTime ASC, startTime ASC)`
-index, bounded by `CONTEXT_QUERY_MAX` and by an `endTime` ceiling of
-window + max-booking — narrowing that ceiling to the travel window alone would
-drop a long intervening job that started inside the window but runs past it)
+per-employee context query (bounded by `CONTEXT_QUERY_MAX` and by an `endTime`
+ceiling of window + max-booking — narrowing that ceiling to the travel window
+alone would drop a long intervening job that started inside the window but runs
+past it). **That query needs `appointments (employeeIds CONTAINS, endTime ASC)`
+— its OWN index, not the longer `(… endTime ASC, startTime ASC)` one**, because
+it ends on `orderBy("endTime")` and Firestore appends `__name__` at the END, so
+no prefix of the longer index puts `__name__` directly after `endTime`.
+Deleting it as a "redundant prefix" on 2026-08-29 broke every travel-aware
+reminder for two days, invisibly — this path is best-effort and falls through
+to the fixed 30-minute kind. Restored 2026-08-31; see
+`.claude/rules/firestore-indexes.md`.
 plus a batched `getAll` of the presence docs, then calls Google Routes
 API `computeRoutes` (`TRAFFIC_AWARE`) and fires at
 `startTime − driveTime − 10min` (lead capped at 90 min). **Every failure path —
@@ -1306,6 +1351,12 @@ digest has sent, which is the whole safety argument for merging. Same cost
 reasoning as the overdue sweep: it is one of the two merges that took Cloud
 Scheduler from six jobs to three. The host binds `WAVE_FULL_ACCESS_TOKEN` and
 carries the 540 s timeout this work needs on its own.
+
+Its `connection` read is inside a try (2026-09-01). That was the one `await`
+here outside one, so the "never throws" contract in its own docstring was not
+true on its own terms: a transient `unavailable` there rejected out of a rider
+whose HOST had already finished its real work. The caller's catch is
+belt-and-braces and stays.
 
 It does two things, and the first runs unconditionally.
 

@@ -155,7 +155,6 @@ class _AdditionalContactCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final compact = context.isCompact;
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.sp12),
@@ -167,88 +166,88 @@ class _AdditionalContactCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (compact)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${context.l10n.clients_contact} ${index + 1}',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sp4),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: IconButton(
-                    tooltip: context.l10n.clients_removeContact,
-                    onPressed: onRemove,
-                    icon: const Icon(Icons.close),
-                  ),
-                ),
-              ],
-            )
-          else
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '${context.l10n.clients_contact} ${index + 1}',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: context.l10n.clients_removeContact,
-                  onPressed: onRemove,
-                  icon: const Icon(Icons.close),
-                ),
-              ],
-            ),
+          _header(context, theme),
           const SizedBox(height: AppSpacing.sp8),
-          SheetFocusScroll(
-            child: LabeledTextField(
-              label: context.l10n.clients_contactName,
-              controller: contact.nameController,
-              required: true,
-              textCapitalization: TextCapitalization.words,
-              autofillHints: const [AutofillHints.name],
-              maxLength: TextLimits.personName,
-              errorText: errors['contact_${index}_name'],
-              onChanged: (_) => onClearError('contact_${index}_name'),
-            ),
-          ),
+          _nameField(context),
           const SizedBox(height: AppSpacing.sp12),
-          SheetFocusScroll(
-            child: LabeledTextField(
-              label: context.l10n.clients_phone,
-              controller: contact.phoneController,
-              keyboard: TextInputType.phone,
-            inputFormatters: const [PhoneInputFormatter()],
-              autofillHints: const [AutofillHints.telephoneNumber],
-              maxLength: TextLimits.phone,
-              errorText: errors['contact_${index}_phone'],
-              onChanged: (_) => onClearError('contact_${index}_phone'),
-            ),
-          ),
+          _phoneField(context),
           const SizedBox(height: AppSpacing.sp12),
-          SheetFocusScroll(
-            child: LabeledTextField(
-              label: context.l10n.common_email,
-              controller: contact.emailController,
-              keyboard: TextInputType.emailAddress,
-              autofillHints: const [AutofillHints.email],
-              maxLength: TextLimits.email,
-              errorText: errors['contact_${index}_email'],
-              onChanged: (_) {
-                onClearError('contact_${index}_email');
-                onClearError('contact_${index}_phone');
-              },
-            ),
-          ),
+          _emailField(context),
         ],
       ),
     );
   }
+
+  /// "Contact N" and its remove button.
+  ///
+  /// Stacked when compact: at a narrow width with large text the title and the
+  /// button competed for one row, and the label saying WHICH contact is being
+  /// removed is the half that must not be the one to ellipsize.
+  Widget _header(BuildContext context, ThemeData theme) {
+    final title = Text(
+      '${context.l10n.clients_contact} ${index + 1}',
+      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+    );
+    final removeButton = IconButton(
+      tooltip: context.l10n.clients_removeContact,
+      onPressed: onRemove,
+      icon: const Icon(Icons.close),
+    );
+
+    if (!context.isCompact) {
+      return Row(children: [Expanded(child: title), removeButton]);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        title,
+        const SizedBox(height: AppSpacing.sp4),
+        Align(alignment: Alignment.centerLeft, child: removeButton),
+      ],
+    );
+  }
+
+  Widget _nameField(BuildContext context) => SheetFocusScroll(
+    child: LabeledTextField(
+      label: context.l10n.clients_contactName,
+      controller: contact.nameController,
+      required: true,
+      textCapitalization: TextCapitalization.words,
+      autofillHints: const [AutofillHints.name],
+      maxLength: TextLimits.personName,
+      errorText: errors['contact_${index}_name'],
+      onChanged: (_) => onClearError('contact_${index}_name'),
+    ),
+  );
+
+  Widget _phoneField(BuildContext context) => SheetFocusScroll(
+    child: LabeledTextField(
+      label: context.l10n.clients_phone,
+      controller: contact.phoneController,
+      keyboard: TextInputType.phone,
+      inputFormatters: const [PhoneInputFormatter()],
+      autofillHints: const [AutofillHints.telephoneNumber],
+      maxLength: TextLimits.phone,
+      errorText: errors['contact_${index}_phone'],
+      onChanged: (_) => onClearError('contact_${index}_phone'),
+    ),
+  );
+
+  /// Clearing the PHONE error from the email field is deliberate: the
+  /// "one of phone or email" rule reports on the phone row, so supplying an
+  /// email is what resolves it.
+  Widget _emailField(BuildContext context) => SheetFocusScroll(
+    child: LabeledTextField(
+      label: context.l10n.common_email,
+      controller: contact.emailController,
+      keyboard: TextInputType.emailAddress,
+      autofillHints: const [AutofillHints.email],
+      maxLength: TextLimits.email,
+      errorText: errors['contact_${index}_email'],
+      onChanged: (_) {
+        onClearError('contact_${index}_email');
+        onClearError('contact_${index}_phone');
+      },
+    ),
+  );
 }

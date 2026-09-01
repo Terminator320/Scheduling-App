@@ -26,10 +26,8 @@
 
 "use strict";
 
-const {initializeApp, applicationDefault} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
-const {printTargetBanner} = require("./_project");
+const {bootstrapScript} = require("./_project");
 const {buildCustomerPayload} = require("../wave/customer_contract");
 
 /** Bare switches, matched EXACTLY - see `_flags.js`. */
@@ -100,16 +98,12 @@ async function audit(db) {
  * @return {!Promise<void>}
  */
 async function main() {
-  assertKnownFlags(process.argv.slice(2));
-  const verbose = process.argv.includes("--verbose");
-
-  const app = initializeApp({credential: applicationDefault()});
-  // `dryRun: false` like the other read-only scripts: this NEVER writes, so
-  // the banner must not carry a "[dry-run]" prefix implying a live run exists
-  // behind it. The second argument is required — omitting it throws before the
-  // first read.
-  printTargetBanner(app, {dryRun: false});
-  const db = getFirestore();
+  const argv = process.argv.slice(2);
+  // Read-only: `--dry-run` is not in this script's flag allowlist, so
+  // `dryRun` comes back false and the banner carries no misleading
+  // "[dry-run]" prefix — see `bootstrapScript`.
+  const {app, db} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
+  const verbose = argv.includes("--verbose");
 
   const {scanned, refused, flagged, byCode, offenders} = await audit(db);
 
@@ -135,7 +129,16 @@ async function main() {
   await app.delete();
 }
 
-main().catch((err) => {
-  console.error(err && err.message ? err.message : err);
-  process.exit(1);
-});
+// Only run when invoked directly. Without this guard `main()` fired at REQUIRE
+// time against whatever credentials were ambient, so a test could not load the
+// file without running the audit — the sole script here that was shaped that
+// way. `audit` already takes an injected `db`, so the guard is all that stood
+// between it and being testable.
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err && err.message ? err.message : err);
+    process.exit(1);
+  });
+}
+
+module.exports = {audit, assertKnownFlags};

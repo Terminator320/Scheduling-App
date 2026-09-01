@@ -277,6 +277,32 @@ the handles lazier does not make the module requirable. Extract the pure logic i
 that; `onCall`/`onDocument*` modules load lazily and are safe to `require`
 directly. Jest tests live in **`functions/__tests__/` only** — the parallel
 `functions/test/` directory was merged away 2026-07-19; don't recreate it.
+
+**An operator script's whole preamble has ONE owner: `bootstrapScript(argv,
+{assertFlags})`** (`scripts/_project.js`, 2026-08-31). `_flags.js` owns
+rejecting an unknown argument and `printTargetBanner` owns the banner, but
+nothing owned the six lines WIRING them together — resolve `dryRun` once and
+hand the same value to both. Thirteen scripts spelled that sequence out by
+hand, which is thirteen chances to print a banner that disagrees with the run:
+commit `3059ac0a` is exactly that drift, and repo history has a backfill whose
+`--dry-run` wrote everything anyway. These scripts touch prod, so the banner
+must be printed BEFORE the first read — `applicationDefault()` resolves
+whatever credentials are ambient and nothing on the command line says which
+project that is. Pass the script's OWN `assertFlags` wrapper rather than a
+flag list: the lists legitimately differ per script and each wrapper is
+separately pinned by jest, so re-passing the lists here would create a second
+spelling free to drift from the one the tests check. A script with no
+`--dry-run` in its allowlist (the `audit-*`/`count-*` trio) can never see one
+in `argv`, so `dryRun` is structurally false for it and it needs no special
+case. `scripts/backfill.js` deliberately does NOT use it — it branches on
+`FIRESTORE_EMULATOR_HOST` and hard-fails on missing credentials, a different
+preamble rather than this one with a flag.
+
+**A script that is also a module must guard `main()` behind
+`require.main === module`.** `audit-wave-contract.js` fired its whole audit at
+REQUIRE time against whatever credentials were ambient, so no test could load
+it; its `audit` already took an injected `db`, and the guard was the only thing
+standing between it and being testable.
 - `syncUsersByUid` — Firestore trigger: mirrors `users/{id}` into `usersByUid/{uid}` bridge collection so security rules can resolve roles from auth UID alone. **It also owns deactivation:** on `active` → anything else it disables the Firebase Auth account + `revokeRefreshTokens` and purges every delivery artifact (`presence/location`, `fcmTokens`, `liveActivityTokens` via `recursiveDelete`, and the `liveActivityCards` marker); `→ active` symmetrically re-enables the account. This is load-bearing, not cleanup — the rules gates below assume a *live* status check can't be reached with a stale credential, and `deactivateEmployee` only flips the Firestore field. All of it runs AFTER the auth-critical bridge write and is idempotent (`retry: true`; `auth/user-not-found` is swallowed so the delete-account ordering converges). **Deactivation used to also ROTATE the Storage download tokens on that person's job photos** (`rotateAssignedImageTokens`, `appointment_image_tokens.js`) — that module, its trigger's raised `timeoutSeconds`, and the `(employeeIds CONTAINS, endTime DESC)` composite it needed were all **deleted at the photo-subcollection CONTRACT step**, which is what it was always scheduled to retire with. It existed because `ImageStorageService.uploadImage` minted a `getDownloadURL()` link per photo and persisted it into `pictures[]`: that link's `firebaseStorageDownloadTokens` value is stable per object, never expires and is served with no auth and NO `storage.rules` evaluation, so every assigned device held permanent rules-free copies that revoking the credential did not reach. **The app no longer mints or stores one**, so no NEW photo carries such a link — those are fetched through the SDK against `storage.rules`, which this branch's status flip already answers. **That is not the same as "nothing is left to invalidate", and this bullet used to claim it was:** legacy `appointments/*/images` rows with a `url` and no `storagePath` still exist (the backfill keeps them on purpose, the rules still accept the field, the client fallback is permanent), and those strings stay live after deactivation with nothing rotating them. Closing it needs a prod count of exactly those rows first — see `.claude/rules/images.md`. Don't reintroduce a broad rotation pass without first reintroducing the write that made one necessary; a scoped one over just those legacy objects is the open option. Two things it taught, worth keeping: a `deps` field resolved after entry is a branch no test can reach (the resolved bucket landed in a local while the callee read `deps.bucket`, so the control reported "nothing rotated" while rotating nothing, 2026-08-16); and a per-appointment parent write fans out to `notifyAppointmentChanges`, which stays a genuine no-op only because `diffAppointmentForNotifications` emits nothing for a photo-only diff — pinned by "a pictures-only rewrite emits nothing" in `notification_utils.test.js`.
 **The bridge's pure rules moved to `bridge_policy.js`** — `shouldHaveBridge`, `bridgeBody`, `bridgeMatches` and `classifyBridgeRow` — shared with `scripts/backfill.js`, which repairs the same collection and had byte-identical copies of the first three under a comment claiming the duplication was deliberate (its stated reason, folding the role check in up front, stopped being a difference once this trigger gained the same check). `classifyBridgeRow` is the three-way decision guarding that script's `--prune-orphans` delete: `current` / `retained` (a uid claimed by a users doc the run SKIPPED — deleting it locks a live employee out of everything) / `orphan`. It was the only script here that deletes and the only one with no test.
 - **Disabled employees must not read their old jobs.** `isAssignedEmployee` (`firestore.rules`) and `isAssignedToAppointment` (`storage.rules`) both gate on `status == 'active'`, NOT on bridge-doc existence — the bridge doc is deliberately retained for `disabled` users, so an existence-only check leaves a terminated tech reading client PII and job photos indefinitely. Keep the two helpers in lockstep.

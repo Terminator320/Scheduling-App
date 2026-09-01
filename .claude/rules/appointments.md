@@ -450,7 +450,16 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   Both axes live in one helper because a run member's START date stays
   editable: moving day 1 past its siblings made "cancel this and the following
   days" select NOTHING and report success, while the same action on day 4 swept
-  the moved day up. Pass the anchor at every run-scoped call site.
+  the moved day up. Pass the anchor at every run-scoped call site — cancel and
+  delete did; `planPropagate` did not, and it is reachable by a run member
+  through the scope dialog, so "save this and following" reproduced BOTH
+  failures the parameter was added to prevent.
+  **The dialog's COUNT derives from the same selection it describes.**
+  `seriesOutlook` lives beside `futureSeriesRecords` and is built FROM it, so
+  the number the admin confirms cannot disagree with what is written. Its own
+  earlier scan counted terminal siblings that are never written and used the
+  wrong axis on a run — a count is a promise about a write, so derive it from
+  the write's selection rather than re-deriving the selection.
   **Only the ADD path splits a span into per-day documents**, so the EDIT form
   must not be able to widen a client job: `AppointmentFormFields.canSpanDays`
   gates the end-date row and `details_edit_body` passes `isPersonal`. Without

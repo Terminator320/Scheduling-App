@@ -46,11 +46,10 @@
 // `--dry_run` would otherwise silently read as false and take this LIVE
 // against `/appointments`.
 
-const {initializeApp, applicationDefault} = require("firebase-admin/app");
-const {getFirestore, Timestamp} = require("firebase-admin/firestore");
+const {Timestamp} = require("firebase-admin/firestore");
 const {appointmentImageDocId} = require("../appointment_image_ids");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
-const {printTargetBanner} = require("./_project");
+const {bootstrapScript} = require("./_project");
 
 /** Bare switches, matched EXACTLY — see `_flags.js`. */
 const EXACT_FLAGS = ["--dry-run"];
@@ -166,16 +165,7 @@ async function backfillOne(db, doc, dryRun = false) {
  */
 async function main() {
   const argv = process.argv.slice(2);
-  assertKnownFlags(argv);
-  const dryRun = argv.includes("--dry-run");
-
-  const app = initializeApp({credential: applicationDefault()});
-  const db = getFirestore();
-
-  // Printed BEFORE the first read — `applicationDefault()` resolves whatever
-  // credentials are in the environment, and nothing on the command line says
-  // which project that is.
-  printTargetBanner(app, {dryRun});
+  const {db, dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
 
   let cursor = null;
   let appointments = 0;

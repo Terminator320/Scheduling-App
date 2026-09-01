@@ -242,9 +242,20 @@ const SWEEP_DRAIN_BUDGET_MS = 180 * 1000;
  * @return {!Promise<void>}
  */
 async function runWaveDaily() {
+  // The connection read was the ONE await here outside a try, so the JSDoc's
+  // "never throws" was a promise this function did not keep: a transient
+  // `unavailable` on it rejected out of a rider whose host had already done
+  // its real work. The caller's catch is belt-and-braces and stays; a
+  // contract stated in a docstring should hold on its own terms.
   const ref = getFirestore().collection("wave").doc("connection");
-  const snap = await ref.get();
-  const data = snap.exists ? snap.data() : null;
+  let data = null;
+  try {
+    const snap = await ref.get();
+    data = snap.exists ? snap.data() : null;
+  } catch (err) {
+    logger.warn("WAVE-BOOT runWaveDaily: connection read failed", {err});
+    return;
+  }
   const businessId = data && typeof data.businessId === "string" ?
     data.businessId : "";
   if (!businessId) {

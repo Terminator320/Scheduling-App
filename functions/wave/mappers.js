@@ -115,11 +115,19 @@ const SUBDIVISION_CODES = {
  * name is recomposed from their phone number on save and never carries the
  * imported string forward at all.
  *
- * NOT exported: `test/core/validators/text_limits_test.dart` reads this file
- * back as TEXT and asserts every cap clears its firestore.rules cap. Dart, CEL
- * and JS cannot share a constant, so that test is the only thing stopping a
- * tightened rule from letting the import write client docs the app can never
- * update again.
+ * This is the ONE owner of Wave's field caps. `wave/customer_contract.js`
+ * reads it rather than restating the numbers: it applies them on the PUSH
+ * direction, where `capped()` below applies them on the IMPORT direction, and
+ * a second hand-written copy is how a widened Wave cap gets applied in one
+ * place and not the other.
+ *
+ * It is exported for that caller only.
+ * `test/core/validators/text_limits_test.dart` reads this file back as TEXT
+ * and asserts every cap clears its
+ * firestore.rules cap — Dart, CEL and JS cannot share a constant, so that test
+ * is the only thing stopping a tightened rule from letting the import write
+ * client docs the app can never update again. It matches the literal below, so
+ * exporting the binding does not weaken it.
  * @type {!Object<string, number>}
  */
 const IMPORT_FIELD_CAPS = {
@@ -470,6 +478,7 @@ function fromWaveCustomer(node) {
 }
 
 module.exports = {
+  IMPORT_FIELD_CAPS,
   toWaveCustomerInput,
   mappedFieldsHash,
   fromWaveCustomer,

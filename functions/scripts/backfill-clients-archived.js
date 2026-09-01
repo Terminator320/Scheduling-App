@@ -30,10 +30,8 @@
 // `--dry_run` would otherwise silently read as false and take this LIVE
 // against `/clients`.
 
-const {initializeApp, applicationDefault} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
-const {printTargetBanner} = require("./_project");
+const {bootstrapScript} = require("./_project");
 // The batched-write loop, shared so `--dry-run` cannot be forgotten at a
 // call site — see `_batch.js`.
 const {commitInBatches} = require("./_batch");
@@ -75,16 +73,7 @@ function needsArchivedField(data) {
  */
 async function main() {
   const argv = process.argv.slice(2);
-  assertKnownFlags(argv);
-  const dryRun = argv.includes("--dry-run");
-
-  const app = initializeApp({credential: applicationDefault()});
-  const db = getFirestore();
-
-  // Printed BEFORE the first read — `applicationDefault()` resolves whatever
-  // credentials are in the environment, and nothing on the command line says
-  // which project that is.
-  printTargetBanner(app, {dryRun});
+  const {db, dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
 
   const snap = await db.collection("clients").get();
 

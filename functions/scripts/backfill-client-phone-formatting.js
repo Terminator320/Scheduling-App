@@ -47,15 +47,13 @@
 // the same invocation — so this pushes to Wave at up to a few hundred
 // mutations against a 60-calls/min ceiling. RUN IT WHEN THE QUEUE IS QUIET.
 
-const {initializeApp, applicationDefault} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
 
 const {digitsOf, formatNanpNumber} = require("../client_name_utils");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
 // The batched-write loop, shared so `--dry-run` cannot be forgotten at a
 // call site — see `_batch.js`.
 const {commitInBatches} = require("./_batch");
-const {printTargetBanner} = require("./_project");
+const {bootstrapScript} = require("./_project");
 
 const BATCH_SIZE = 400;
 const SAMPLE_SIZE = 25;
@@ -124,15 +122,7 @@ function patchFor(data) {
  */
 async function main() {
   const argv = process.argv.slice(2);
-  assertKnownFlags(argv);
-  const dryRun = argv.includes("--dry-run");
-
-  const app = initializeApp({credential: applicationDefault()});
-  const db = getFirestore();
-
-  // Printed BEFORE anything is read — running a bulk rewrite against the wrong
-  // project is the unrecoverable mistake, and this banner is the only defence.
-  printTargetBanner(app, {dryRun});
+  const {db, dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
 
   const snap = await db.collection("clients").get();
 

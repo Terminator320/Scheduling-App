@@ -107,9 +107,38 @@ class _AppointmentDateRowsState extends State<AppointmentDateRows> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     final theme = Theme.of(context);
+    final divider = Divider(height: 1, color: theme.colorScheme.outlineVariant);
 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _dateRows(context, divider),
+        // Deliberately NOT wrapped in an `AnimatedSize`: dismissing the panel
+        // is a deliberate tap on the row, so a gap that keeps shrinking for
+        // 200ms afterwards just shoves the rest of the form around after the
+        // fact. Two things rule out the tidier spellings — `reverseDuration`
+        // never applies here (`RenderAnimatedSize` always drives its controller
+        // FORWARD, so it is not used on a shrink), and a zero duration makes
+        // that render object re-dirty itself inside its own `performLayout`.
+        // The inner calendar keeps its own `AnimatedSize` for the 4↔6 row
+        // change when you page a month, which is the one worth animating.
+        if (_open != null)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [divider, _inlineCalendar(context)],
+          ),
+      ],
+    );
+  }
+
+  /// The start/end pair.
+  ///
+  /// Start and end share one row until the screen is too narrow to read both.
+  /// A run member has no end row in EITHER layout, so that test comes first:
+  /// each day of a run is its own appointment and its length is not editable.
+  Widget _dateRows(BuildContext context, Widget divider) {
+    final l10n = context.l10n;
     final startRow = SheetFieldRow(
       key: const ValueKey('appointment-start-date-row'),
       label: l10n.calendar_startDate,
@@ -121,6 +150,8 @@ class _AppointmentDateRowsState extends State<AppointmentDateRows> {
       onTap: () => _toggle(_OpenRow.start),
       trailing: _trailingIcon(_OpenRow.start),
     );
+    if (!widget.showEndDate) return startRow;
+
     final endRow = SheetFieldRow(
       key: const ValueKey('appointment-end-date-row'),
       label: l10n.calendar_endDate,
@@ -135,80 +166,51 @@ class _AppointmentDateRowsState extends State<AppointmentDateRows> {
       trailing: _trailingIcon(_OpenRow.end),
     );
 
-    final divider = Divider(height: 1, color: theme.colorScheme.outlineVariant);
+    if (context.isNarrowWidth) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [startRow, divider, endRow],
+      );
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: startRow),
+          const VerticalDivider(width: 1),
+          Expanded(child: endRow),
+        ],
+      ),
+    );
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Start and end share one row until the screen is too narrow to read
-        // both. The dropdown spans the full panel either way — it belongs to
-        // the pair, not to one half of the row.
-        //
-        // A run member has no end row in EITHER layout, so that test comes
-        // first: each day of a run is its own appointment and its length is not
-        // editable.
-        if (!widget.showEndDate)
-          startRow
-        else if (context.isNarrowWidth) ...[
-          startRow,
-          divider,
-          endRow,
-        ] else
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: startRow),
-                const VerticalDivider(width: 1),
-                Expanded(child: endRow),
-              ],
-            ),
-          ),
-        // Deliberately NOT wrapped in an `AnimatedSize`: dismissing the panel
-        // is a deliberate tap on the row, so a gap that keeps shrinking for
-        // 200ms afterwards just shoves the rest of the form around after the
-        // fact. Two things rule out the tidier spellings — `reverseDuration`
-        // never applies here (`RenderAnimatedSize` always drives its controller
-        // FORWARD, so it is not used on a shrink), and a zero duration makes
-        // that render object re-dirty itself inside its own `performLayout`.
-        // The inner calendar keeps its own `AnimatedSize` for the 4↔6 row
-        // change when you page a month, which is the one worth animating.
-        if (_open != null)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              divider,
-              InlineMonthCalendar(
-                // Keyed by row so switching from Start to End rebuilds the
-                // state rather than keeping the other date's month.
-                key: ValueKey('inline-month-${_open!.name}'),
-                selectedDate: _open == _OpenRow.start
-                    ? widget.startDate
-                    : widget.endDate,
-                firstDate: _open == _OpenRow.start
-                    ? widget.firstDate
-                    // Never offer an end before the start. Floored to midnight:
-                    // a seeded start carries the record's clock time, which
-                    // would otherwise put its own day out of bounds.
-                    : (widget.startDate?.dateOnly ?? widget.firstDate),
-                lastDate: widget.lastDate,
-                // The OTHER end of the run, marked on the month so the day
-                // being chosen can be read against the day it pairs with —
-                // picking an end date against a bare month means counting
-                // cells to find where the job starts.
-                companionDate: _open == _OpenRow.start
-                    ? widget.endDate
-                    : widget.startDate,
-                companionLabel: _open == _OpenRow.start
-                    ? l10n.calendar_endDate
-                    : l10n.calendar_startDate,
-                onDateSelected: _open == _OpenRow.start
-                    ? widget.onStartDateSelected
-                    : widget.onEndDateSelected,
-              ),
-            ],
-          ),
-      ],
+  /// The month panel for whichever row is open. The dropdown spans the full
+  /// panel in both layouts — it belongs to the PAIR, not to one half of the
+  /// row.
+  Widget _inlineCalendar(BuildContext context) {
+    final l10n = context.l10n;
+    final isStart = _open == _OpenRow.start;
+    return InlineMonthCalendar(
+      // Keyed by row so switching from Start to End rebuilds the state rather
+      // than keeping the other date's month.
+      key: ValueKey('inline-month-${_open!.name}'),
+      selectedDate: isStart ? widget.startDate : widget.endDate,
+      firstDate: isStart
+          ? widget.firstDate
+          // Never offer an end before the start. Floored to midnight: a seeded
+          // start carries the record's clock time, which would otherwise put
+          // its own day out of bounds.
+          : (widget.startDate?.dateOnly ?? widget.firstDate),
+      lastDate: widget.lastDate,
+      // The OTHER end of the run, marked on the month so the day being chosen
+      // can be read against the day it pairs with — picking an end date
+      // against a bare month means counting cells to find where the job
+      // starts.
+      companionDate: isStart ? widget.endDate : widget.startDate,
+      companionLabel: isStart ? l10n.calendar_endDate : l10n.calendar_startDate,
+      onDateSelected: isStart
+          ? widget.onStartDateSelected
+          : widget.onEndDateSelected,
     );
   }
 }

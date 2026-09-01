@@ -10,6 +10,71 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.55.0+84] - 2026-09-01
+
+Two things that were quietly wrong are now right: on the four or five months a
+year that need six weeks, the calendar was clipping the last one off the
+bottom, and every travel-aware "time to leave" reminder had silently fallen
+back to a flat 30 minutes since August 29. Alongside those, the Wave sync stops
+finding out at push time that Wave will refuse a client — it now checks first,
+and says which field to fix.
+
+### Added
+- **Wave tells you which client it cannot sync, and why.** A client whose data
+  Wave would refuse — a blank name, an address or name past Wave's length
+  limit, a malformed email — is now identified against Wave's own rules before
+  anything is sent, and the problem is recorded against the exact field you
+  would edit to fix it. Previously the refusal only surfaced after the fact, as
+  a failed sync that "Retry failed" could never clear, because every retry
+  re-sent the identical rejected data.
+- **A phone number nobody can dial is reported without blocking the sync.**
+  Wave accepts some values that are still wrong — a contact's name typed into
+  the phone box, for instance. That client keeps syncing, and the problem is
+  recorded rather than silently accepted or wrongly blocked.
+- **The Address filter has an "All addresses" row.** Clearing a picked street
+  no longer means hunting for the chip — the menu that set the filter can now
+  clear it.
+
+### Fixed
+- **A six-week month no longer loses its last week.** The month grid was
+  capped at half the screen no matter how tall the month was, so the final row
+  was quietly cut off on the months that need six — with nothing to indicate
+  anything was missing. The grid now takes the height its month actually needs.
+- **"Time to leave" reminders account for travel again.** Since August 29 every
+  one of them had degraded to a flat 30 minutes before the job, ignoring drive
+  time entirely, because a database index they depend on had been removed. The
+  reminder still arrived, which is why nobody noticed it had stopped being
+  accurate.
+- **A crew change now notifies everyone assigned, not just the first person.**
+  If the notification to one assignee failed, everybody after them on the job
+  was silently skipped and never told at all.
+- **Editing "this and all following" on a multi-day job targets the right
+  days.** After moving the first day of a run, the action could update nothing
+  while still reporting success — or, from a later day, sweep the moved day
+  back in and overwrite its time. The confirmation count now matches what is
+  actually written.
+- **A business named only by its own phone number syncs again.** Such a client
+  was reduced to a blank name, which Wave rejects outright, so it failed on
+  every attempt permanently.
+- **The live staff map stops re-requesting addresses it just failed to get.**
+  Scrolling the roster re-asked for every address that had failed, immediately
+  and repeatedly, until the hourly lookup limit was exhausted and the whole map
+  stopped resolving addresses. A failed lookup now waits before retrying.
+- **Addresses on the live map resolve instead of hanging.** A slow lookup ran
+  with no time limit on the server while the app had already given up on it.
+- **The clients list, the sign-in prefill and the Wave "Sync" button no longer
+  fail invisibly.** Three separate errors were escaping as app-level crash
+  reports instead of being handled — including one where tapping Sync could
+  appear to do nothing at all.
+- **Opening a job's photos can no longer take the app down** if the images
+  fail to load.
+- **The Address filter menu reads as a menu.** It painted the same colour as
+  the page behind it with no border, so it looked like part of the list rather
+  than a panel over it. It also moved to the front of the filter row, its
+  label is capped so a long street stops pushing the other filters off screen,
+  and each row now shows the city and the number of clients sharing that
+  address in its own column.
+
 ## [1.54.0+83] - 2026-08-29
 
 The calendar now marks the days the province takes off. Québec's statutory

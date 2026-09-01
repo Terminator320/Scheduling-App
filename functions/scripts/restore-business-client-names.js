@@ -33,8 +33,6 @@
 // point, it is what puts the name back in Wave. Eleven docs, so the 60/min
 // ceiling is not a concern here.
 
-const {initializeApp, applicationDefault} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
 
 const {digitsOf} = require("../client_name_utils");
 // The rejection rule comes from the shared `_flags.js`, like every other
@@ -44,7 +42,7 @@ const {digitsOf} = require("../client_name_utils");
 // have silently taken this one's flag guard with it. The target banner is
 // shared too — see `_project.js`.
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
-const {printTargetBanner} = require("./_project");
+const {bootstrapScript} = require("./_project");
 
 /** Bare switches, matched EXACTLY - see `_flags.js`. */
 const EXACT_FLAGS = ["--dry-run"];
@@ -119,13 +117,7 @@ function patchFor(data, restored) {
  */
 async function main() {
   const argv = process.argv.slice(2);
-  assertKnownFlags(argv);
-  const dryRun = argv.includes("--dry-run");
-
-  const app = initializeApp({credential: applicationDefault()});
-  const db = getFirestore();
-
-  printTargetBanner(app, {dryRun});
+  const {db, dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
 
   let restored = 0;
   const skipped = [];

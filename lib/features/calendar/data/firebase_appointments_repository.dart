@@ -14,6 +14,7 @@ import 'package:scheduling/features/calendar/domain/assignee_availability.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
+import 'package:scheduling/features/calendar/domain/policies/history_search_policy.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:uuid/uuid.dart';
@@ -565,6 +566,19 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     // Read off the RAW map, which only this layer sees: the record substitutes
     // a placeholder instant for a time it could not parse, so by the time the
     // rule runs the two are indistinguishable.
+    //
+    // This covers an UNPARSEABLE instant, not a MISSING one, and the gap is
+    // structural rather than an oversight. `_conflictSnapshots` filters on
+    // `endTime`/`startTime`, and Firestore excludes a document that lacks the
+    // filtered field entirely, so a row with no `endTime` never reaches this
+    // loop to be classified — no bound on that field can see it. Reaching one
+    // would mean dropping both bounds and scanning every appointment for the
+    // crew, which is a real read cost for a row shape that does not exist:
+    // verified 2026-09-01 against prod, all 76 appointments carry an
+    // `endTime`. The Dart model always writes both instants, so only a
+    // console-written or pre-migration row could lack one (the case
+    // `_recordFrom`'s breadcrumb exists for, and `day_slice_utils.js` handles
+    // server-side). If such a row is ever found, this is where it hides.
     final windowUnknownIds = <String>{};
     for (final snapshot in await _conflictSnapshots(
       employeeIds: employeeIds,
@@ -645,48 +659,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     base['endTime'] = Timestamp.fromDate(appointment.endTime);
     return base;
   }
-}
-
-typedef RawHistoryDoc = ({String id, Map<String, dynamic> data});
-
-class HistorySearchScan {
-  const HistorySearchScan({required this.docs, required this.query});
-
-  final List<RawHistoryDoc> docs;
-  final String query;
-}
-
-List<AppointmentRecord> matchHistoryDocs(HistorySearchScan scan) {
-  final normalizedQuery = ClientSearchPolicy.normalize(scan.query);
-  final queryDigits = ClientSearchPolicy.digitsOnly(scan.query);
-
-  final matches = <AppointmentRecord>[];
-  for (final doc in scan.docs) {
-    // The three fields the filter reads come straight off the raw map, and
-    // `fromMap` is paid only for a document that survives. The scan window is
-    // `_historySearchScanLimit` documents and a query keeps a handful, so
-    // building a full record first meant ~20 map reads, four date conversions,
-    // two list parses and a freezed constructor for every document rejected.
-    final data = doc.data;
-    final matchesClient =
-        normalizedQuery.isNotEmpty &&
-        ClientSearchPolicy.normalize(
-          (data['clientName'] ?? '').toString(),
-        ).contains(normalizedQuery);
-    final matchesEmployee =
-        normalizedQuery.isNotEmpty &&
-        firestoreStringList(data['employeeNames']).any(
-          (e) => ClientSearchPolicy.normalize(e).contains(normalizedQuery),
-        );
-    final matchesPhone =
-        queryDigits.isNotEmpty &&
-        ClientSearchPolicy.digitsOnly(
-          (data['clientPhone'] ?? '').toString(),
-        ).contains(queryDigits);
-    if (!matchesClient && !matchesEmployee && !matchesPhone) continue;
-    matches.add(AppointmentRecord.fromMap(doc.id, data));
-  }
-  return matches;
 }
 
 class _CachedHistorySearch {

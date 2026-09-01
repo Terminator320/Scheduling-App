@@ -8,22 +8,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
-import 'package:scheduling/core/images/appointment_image_loader.dart';
 import 'package:scheduling/core/notices/app_notice.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/features/calendar/application/appointments_providers.dart';
-import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
-import 'package:scheduling/features/clients/application/clients_providers.dart';
-import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/settings/widgets/views/delete_account_flow.dart';
 import 'package:scheduling/l10n/l10n.dart';
+
+import '../../../support/account_exit_stubs.dart';
 
 class _MockDeletionService extends Mock implements AccountDeletionService {}
 
@@ -35,32 +32,6 @@ class _MockPresence extends Mock implements PresenceSyncController {}
 
 class _MockLiveActivity extends Mock
     implements LiveActivityRegistrationController {}
-
-class _RecordingLoader extends AppointmentImageLoader {
-  _RecordingLoader();
-
-  @override
-  Future<void> clear() async {}
-}
-
-/// The teardown also clears both repositories' caches, and the real ones
-/// resolve `FirebaseFirestore.instance` on construction — which no widget test
-/// can answer. Same class of override as `_RecordingLoader` above.
-class _StubClients implements ClientsRepository {
-  @override
-  void clearCaches() {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-class _StubAppointments implements AppointmentsRepository {
-  @override
-  void clearCaches() {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
 
 /// The provider overrides every account-exit path needs, in one list so the
 /// three tests below cannot drift on it.
@@ -75,9 +46,7 @@ List<Override> _exitOverrides({
   pushRegistrationControllerProvider.overrideWithValue(push),
   presenceSyncControllerProvider.overrideWithValue(presence),
   liveActivityRegistrationControllerProvider.overrideWithValue(liveActivity),
-  appointmentImageLoaderProvider.overrideWithValue(_RecordingLoader()),
-  clientsRepositoryProvider.overrideWithValue(_StubClients()),
-  appointmentsRepositoryProvider.overrideWithValue(_StubAppointments()),
+  ...accountExitStubOverrides(),
 ];
 
 /// The smallest host the mixin needs — Settings itself carries app-lock

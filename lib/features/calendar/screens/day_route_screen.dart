@@ -16,7 +16,7 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
-import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
+import 'package:scheduling/features/calendar/domain/day_route.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/calendar/widgets/cards/appointment_card.dart';
@@ -65,15 +65,6 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     super.initState();
     _day = DateTime.now().dateOnly;
     _selectedEmployeeId = widget.employeeId;
-  }
-
-  // Keep admin selection valid for the current day.
-  String _resolveEmployeeId(List<String> assigneeIds) {
-    if (!widget.isAdmin) return widget.employeeId;
-    if (assigneeIds.isEmpty) return _selectedEmployeeId;
-    return assigneeIds.contains(_selectedEmployeeId)
-        ? _selectedEmployeeId
-        : assigneeIds.first;
   }
 
   // Report only the first data-to-error transition.
@@ -136,7 +127,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
 
   Widget _buildScaffold(
     AsyncValue<List<AppointmentRecord>> async,
-    _DayRouteData data,
+    DayRoute data,
   ) {
     return Scaffold(
       appBar: AppTopBar(
@@ -179,15 +170,17 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     );
   }
 
-  _DayRouteData? _preparedData;
+  DayRoute? _preparedData;
   // Inputs used to derive _preparedData.
   List<AppointmentRecord>? _preparedSource;
   Map<String, String>? _preparedNameMap;
   DateTime? _preparedDay;
   String? _preparedEmployeeId;
 
-  // Derives and memoizes the render-ready route data.
-  _DayRouteData _prepareBuild(
+  // Memoizes `buildDayRoute` on the inputs it was derived from. The identity
+  // memo stays here rather than in `domain/`: it keys on `State` fields the
+  // pure function does not have.
+  DayRoute _prepareBuild(
     List<AppointmentRecord> source,
     Map<String, String> nameMap,
   ) {
@@ -200,70 +193,17 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
       return cached;
     }
 
-    // Re-scope the range stream to this day.
-    final daySlices =
-        source
-            .where((a) => !isCancelledStatusRaw(a.status))
-            .map((a) => sliceFor(a, _day))
-            .nonNulls
-            .toList()
-          // Sort defensively to keep numbering and the route in driving order.
-          ..sort((a, b) => a.windowStart.compareTo(b.windowStart));
-
-    // Include removed employees by falling back to denormalized names.
-    final assigneeEntries = widget.isAdmin
-        ? _assigneesWithJobs(daySlices, nameMap)
-        : const <MapEntry<String, String>>[];
-    final employeeId = _resolveEmployeeId([
-      for (final e in assigneeEntries) e.key,
-    ]);
-
-    // Admins filter the day list to the picked assignee.
-    final jobs = widget.isAdmin
-        ? daySlices
-              .where((s) => s.appointment.employeeIds.contains(employeeId))
-              .toList()
-        : daySlices;
-    final stops = jobs
-        .where(
-          (s) =>
-              _isOpen(s.appointment.status) &&
-              s.appointment.address.trim().isNotEmpty,
-        )
-        .map((s) => s.appointment.address)
-        .toList();
-
     _preparedSource = source;
     _preparedNameMap = nameMap;
     _preparedDay = _day;
     _preparedEmployeeId = _selectedEmployeeId;
-    return _preparedData = _DayRouteData(
-      assigneeEntries: assigneeEntries,
-      employeeId: employeeId,
-      jobs: jobs,
-      stops: stops,
-    );
-  }
-
-  // Distinct assignees for the selected day.
-  List<MapEntry<String, String>> _assigneesWithJobs(
-    List<AppointmentDaySlice> daySlices,
-    Map<String, String> nameMap,
-  ) {
-    final byId = <String, String>{};
-    for (final slice in daySlices) {
-      final a = slice.appointment;
-      for (var i = 0; i < a.employeeIds.length; i++) {
-        final id = a.employeeIds[i];
-        if (id.isEmpty) continue;
-        byId.putIfAbsent(
-          id,
-          () => nameMap[id] ?? assigneeNameAt(a.employeeNames, i) ?? id,
-        );
-      }
-    }
-    return byId.entries.toList()..sort(
-      (a, b) => a.value.toLowerCase().compareTo(b.value.toLowerCase()),
+    return _preparedData = buildDayRoute(
+      source: source,
+      nameMap: nameMap,
+      day: _day,
+      isAdmin: widget.isAdmin,
+      ownEmployeeId: widget.employeeId,
+      selectedEmployeeId: _selectedEmployeeId,
     );
   }
 
@@ -489,21 +429,6 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
       ),
     );
   }
-}
-
-/// The render-ready slice of a day computed once per `build` by `_prepareBuild`.
-class _DayRouteData {
-  const _DayRouteData({
-    required this.assigneeEntries,
-    required this.employeeId,
-    required this.jobs,
-    required this.stops,
-  });
-
-  final List<MapEntry<String, String>> assigneeEntries;
-  final String employeeId;
-  final List<AppointmentDaySlice> jobs;
-  final List<String> stops;
 }
 
 class _StopTile extends StatelessWidget {

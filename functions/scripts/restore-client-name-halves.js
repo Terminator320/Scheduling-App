@@ -88,8 +88,6 @@
 // `docs/audits/audit-renamed-client-names.js` afterwards to confirm the set
 // shrank the way you expect.
 
-const {initializeApp, applicationDefault} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
 
 const {
   digitsOf,
@@ -102,7 +100,7 @@ const {toMillis} = require("../time_utils");
 // The flag LISTS deliberately stay local to each script — see `_flags.js` — so
 // these scripts share the RULE, not the vocabulary.
 const {explain} = require("./backfill-client-phone-formatting");
-const {printTargetBanner} = require("./_project");
+const {bootstrapScript} = require("./_project");
 // The SAME split the rename itself now applies, imported rather than copied:
 // this script repairs what that one wrote, so a divergence between the two
 // would leave the collection holding two different splits of the same name.
@@ -277,17 +275,8 @@ function classify(data) {
  */
 async function main() {
   const argv = process.argv.slice(2);
-  assertKnownFlags(argv);
-  const dryRun = argv.includes("--dry-run");
+  const {db, dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
   const max = parseMax(argv);
-
-  const app = initializeApp({credential: applicationDefault()});
-  const db = getFirestore();
-
-  // Printed BEFORE anything is read. Running a bulk repair against the wrong
-  // project is the unrecoverable mistake here, and this banner is the only
-  // thing standing in the way.
-  printTargetBanner(app, {dryRun});
 
   const snap = await db.collection("clients").get();
 

@@ -84,13 +84,36 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
 
   @override
   Widget build(BuildContext context) {
-    final appointment = widget.appointment;
-    final controllers = widget.controllers;
     final provider = eventDetailsControllerProvider(
-      EventDetailsKey(appointment),
+      EventDetailsKey(widget.appointment),
     );
     final state = ref.watch(provider);
     final notifier = ref.read(provider.notifier);
+
+    return FormSheetFrame(
+      title: context.l10n.calendar_editAppointment,
+      primaryLabel: context.l10n.common_saveChanges,
+      isBusy: state.isSaving,
+      onPrimary: () => _save(context, ref),
+      onCancel: widget.onClose,
+      children: [
+        _formFields(context, state, notifier),
+        const SizedBox(height: AppSpacing.sp24),
+        // Destructive actions live in the footer, never in the bar.
+        _DeleteButton(
+          isSaving: state.isSaving,
+          onDelete: () => _confirmDelete(context, ref),
+        ),
+      ],
+    );
+  }
+
+  Widget _formFields(
+    BuildContext context,
+    EventDetailsState state,
+    EventDetailsController notifier,
+  ) {
+    final appointment = widget.appointment;
     // Crew, plus anyone already on the job who is active but no longer
     // offerable by title — see `offerableAssignees`, which owns the rule and
     // the reason a DISABLED assignee must stay unoffered.
@@ -103,97 +126,86 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     // paired with a length of 1 would render "1 days".
     final spanLength = runLengthDays(state.selectedDate, state.endDate);
 
-    return FormSheetFrame(
-      title: context.l10n.calendar_editAppointment,
-      primaryLabel: context.l10n.common_saveChanges,
-      isBusy: state.isSaving,
-      onPrimary: () => _save(context, ref),
-      onCancel: widget.onClose,
-      children: [
-        AppointmentFormFields(
-          controllers: controllers,
-          allEmployees: allEmployees,
-          // Excluding this doc, or its own assignees read as clashing with
-          // themselves. `alreadyAssignedIds` is the STORED crew, so a
-          // deselected assignee who is off keeps a tappable chip.
-          assigneeAvailability: watchAssigneeAvailability(
-            ref,
-            date: state.selectedDate,
-            endDate: state.endDate,
-            isAllDay: state.isAllDay,
-            isPersonal: state.isPersonal,
-            startTime: state.selectedStartTime,
-            endTime: state.selectedEndTime,
-            alreadyAssignedIds: appointment.employeeIds.toSet(),
-            excludeAppointmentId: appointment.id,
-          ),
-          selectedClient: state.selectedClient,
-          clientResults: state.clientResults,
-          isSearchingClient: state.isSearchingClient,
-          selectedEmployees: state.selectedEmployees,
-          repeat: state.repeat,
-          useCustomAddress: state.useCustomAddress,
-          selectedDate: state.selectedDate,
-          endDate: state.endDate,
-          isPersonal: state.isPersonal,
-          isDayOff: state.isDayOff,
-          isAllDay: state.isAllDay,
-          // Offered only on a job that was already personal, so an ordinary
-          // client visit can't be converted mid-life (which would wipe its
-          // client).
-          onPersonalChanged: appointment.isPersonal
-              ? (value) => notifier.setPersonal(value: value)
-              : null,
-          errors: state.errors,
-          employeeLabel: context.l10n.calendar_assignedEmployee,
-          employeeRequired: false,
-          materialsHint: context.l10n.calendar_eGPipeWrenchTapeCommaSeparated,
-          editingStatus: state.editingStatus,
-          onStatusChanged: notifier.setStatus,
-          onRequestAddClient: requestAddClient,
-          isMultiDay: spanLength > 1,
-          // One day of a multi-day RUN: the end date goes away, because the
-          // run's length is fixed at booking.
-          isRunMember: widget.appointment.isRunMember,
-          // Editing may not widen a ONE-DAY client job into a multi-day one:
-          // only the ADD path splits a span into per-day documents, so this
-          // would write the wide document that closes every day at once.
-          // A job that is ALREADY multi-day keeps the row — a legacy wide
-          // document has to stay visible and shortenable, and hiding it there
-          // strands the very records this split is migrating away from.
-          // Personal blocks keep it too: they legitimately stay wide.
-          canSpanDays: widget.appointment.isPersonal || spanLength > 1,
-          isOvernight:
-              !state.isAllDay &&
-              isOvernightWindow(state.selectedStartTime, state.selectedEndTime),
-          spanLength: spanLength,
-          callbacks: AppointmentFormCallbacks(
-            onSearchClients: _onClientSearchChanged,
-            onSelectClient: notifier.selectClient,
-            onClearClient: notifier.clearClient,
-            onToggleEmployee: notifier.toggleEmployee,
-            onSelectStartDate: (picked) =>
-                _onStartDateSelected(notifier, picked),
-            onSelectEndDate: (picked) => _onEndDateSelected(notifier, picked),
-            onPickStartTime: () => _pickStartTime(context, state, notifier),
-            onPickEndTime: () => _pickEndTime(context, state, notifier),
-            onSelectRepeat: notifier.selectRepeat,
-            onUseCustomAddress: (value) =>
-                notifier.setUseCustomAddress(value: value),
-            onDayOffChanged: (value) => notifier.setDayOff(value: value),
-            onAllDayChanged: (value) => notifier.setAllDay(value: value),
-          ),
-          photosSection: _EditPhotosSection(appointment: appointment),
-        ),
-        const SizedBox(height: AppSpacing.sp24),
-        // Destructive actions live in the footer, never in the bar.
-        _DeleteButton(
-          isSaving: state.isSaving,
-          onDelete: () => _confirmDelete(context, ref),
-        ),
-      ],
+    return AppointmentFormFields(
+      controllers: widget.controllers,
+      allEmployees: allEmployees,
+      // Excluding this doc, or its own assignees read as clashing with
+      // themselves. `alreadyAssignedIds` is the STORED crew, so a
+      // deselected assignee who is off keeps a tappable chip.
+      assigneeAvailability: watchAssigneeAvailability(
+        ref,
+        date: state.selectedDate,
+        endDate: state.endDate,
+        isAllDay: state.isAllDay,
+        isPersonal: state.isPersonal,
+        startTime: state.selectedStartTime,
+        endTime: state.selectedEndTime,
+        alreadyAssignedIds: appointment.employeeIds.toSet(),
+        excludeAppointmentId: appointment.id,
+      ),
+      selectedClient: state.selectedClient,
+      clientResults: state.clientResults,
+      isSearchingClient: state.isSearchingClient,
+      selectedEmployees: state.selectedEmployees,
+      repeat: state.repeat,
+      useCustomAddress: state.useCustomAddress,
+      selectedDate: state.selectedDate,
+      endDate: state.endDate,
+      isPersonal: state.isPersonal,
+      isDayOff: state.isDayOff,
+      isAllDay: state.isAllDay,
+      // Offered only on a job that was already personal, so an ordinary
+      // client visit can't be converted mid-life (which would wipe its
+      // client).
+      onPersonalChanged: appointment.isPersonal
+          ? (value) => notifier.setPersonal(value: value)
+          : null,
+      errors: state.errors,
+      employeeLabel: context.l10n.calendar_assignedEmployee,
+      employeeRequired: false,
+      materialsHint: context.l10n.calendar_eGPipeWrenchTapeCommaSeparated,
+      editingStatus: state.editingStatus,
+      onStatusChanged: notifier.setStatus,
+      onRequestAddClient: requestAddClient,
+      isMultiDay: spanLength > 1,
+      // One day of a multi-day RUN: the end date goes away, because the
+      // run's length is fixed at booking.
+      isRunMember: appointment.isRunMember,
+      // Editing may not widen a ONE-DAY client job into a multi-day one:
+      // only the ADD path splits a span into per-day documents, so this
+      // would write the wide document that closes every day at once.
+      // A job that is ALREADY multi-day keeps the row — a legacy wide
+      // document has to stay visible and shortenable, and hiding it there
+      // strands the very records this split is migrating away from.
+      // Personal blocks keep it too: they legitimately stay wide.
+      canSpanDays: appointment.isPersonal || spanLength > 1,
+      isOvernight:
+          !state.isAllDay &&
+          isOvernightWindow(state.selectedStartTime, state.selectedEndTime),
+      spanLength: spanLength,
+      callbacks: _callbacks(context, state, notifier),
+      photosSection: _EditPhotosSection(appointment: appointment),
     );
   }
+
+  AppointmentFormCallbacks _callbacks(
+    BuildContext context,
+    EventDetailsState state,
+    EventDetailsController notifier,
+  ) => AppointmentFormCallbacks(
+    onSearchClients: _onClientSearchChanged,
+    onSelectClient: notifier.selectClient,
+    onClearClient: notifier.clearClient,
+    onToggleEmployee: notifier.toggleEmployee,
+    onSelectStartDate: (picked) => _onStartDateSelected(notifier, picked),
+    onSelectEndDate: (picked) => _onEndDateSelected(notifier, picked),
+    onPickStartTime: () => _pickStartTime(context, state, notifier),
+    onPickEndTime: () => _pickEndTime(context, state, notifier),
+    onSelectRepeat: notifier.selectRepeat,
+    onUseCustomAddress: (value) => notifier.setUseCustomAddress(value: value),
+    onDayOffChanged: (value) => notifier.setDayOff(value: value),
+    onAllDayChanged: (value) => notifier.setAllDay(value: value),
+  );
 
   /// The date rows drop an inline month calendar down beneath themselves, so a
   /// date arrives already picked — no modal to await, no cancelled outcome.

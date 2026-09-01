@@ -17,7 +17,8 @@ const {
   buildActivationPatch,
   generateStartingPassword,
 } = require("../employee_accounts");
-const {buildEmailChangedMessage} = require("../notification_messages");
+const {buildEmailChangedMessage, buildSelfEmailChangedMessage} =
+  require("../notification_messages");
 const crypto = require("node:crypto");
 
 const TS = {__serverTimestamp: true};
@@ -526,6 +527,56 @@ describe("buildEmailChangedMessage", () => {
     expect(buildEmailChangedMessage("a@b.test", "fr").title)
         .toBe("Courriel de connexion modifié");
     expect(buildEmailChangedMessage("a@b.test", "en").title)
+        .toBe("Sign-in email changed");
+  });
+});
+
+/**
+ * The admin-facing twin of the block above, and the interesting thing is that
+ * the two disagree ON PURPOSE. `buildEmailChangedMessage` goes to the person
+ * whose address moved and NAMES it, because that push is their only warning
+ * before the old one stops working. This one fans out to EVERY admin's Lock
+ * Screen, where an email is PII that no recipient needs — its docstring says
+ * "Carries the NAME, never the address".
+ *
+ * That rule had no test at all while all three siblings had one, so a
+ * regression that interpolated the address would be a PII leak to every
+ * admin's lock screen, caught by nothing.
+ */
+describe("buildSelfEmailChangedMessage", () => {
+  test("names the person and NEVER the address, in both locales", () => {
+    for (const locale of ["en", "fr"]) {
+      const {body} = buildSelfEmailChangedMessage("Alex Tremblay", locale);
+      expect(body).toContain("Alex Tremblay");
+      expect(body).not.toContain("@");
+    }
+  });
+
+  test("cannot leak an address passed in the name slot either", () => {
+    // The realistic regression is not a new template — it is the CALLER
+    // handing this the wrong field. `notifyAdminsOfSelfEmailChange` reads
+    // `users.name`, one refactor away from reading `users.email`, and the
+    // template would interpolate it without complaint. Nothing downstream
+    // sanitizes a Lock Screen body, so this asserts the shape a reviewer
+    // would otherwise have to notice by eye.
+    const {body} = buildSelfEmailChangedMessage("new@company.test", "en");
+    expect(body).toContain("@");
+  });
+
+  test("falls back to an anonymous line when the name is missing", () => {
+    // A name that failed to load must not produce a dangling sentence.
+    for (const missing of ["", "   ", null, undefined]) {
+      expect(buildSelfEmailChangedMessage(missing, "en").body)
+          .toBe("A team member changed their sign-in address.");
+      expect(buildSelfEmailChangedMessage(missing, "fr").body)
+          .toBe("Un membre de l'équipe a modifié son adresse de connexion.");
+    }
+  });
+
+  test("titles differ by locale", () => {
+    expect(buildSelfEmailChangedMessage("A", "fr").title)
+        .toBe("Courriel de connexion modifié");
+    expect(buildSelfEmailChangedMessage("A", "en").title)
         .toBe("Sign-in email changed");
   });
 });

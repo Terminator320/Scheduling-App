@@ -63,11 +63,10 @@
 // `--dry_run` would otherwise silently read as false and take this LIVE
 // against `/appointments`.
 
-const {initializeApp, applicationDefault} = require("firebase-admin/app");
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {FieldValue} = require("firebase-admin/firestore");
 const {appointmentImageDocId} = require("../appointment_image_ids");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
-const {printTargetBanner} = require("./_project");
+const {bootstrapScript} = require("./_project");
 
 /** Bare switches, matched EXACTLY — see `_flags.js`. */
 const EXACT_FLAGS = ["--dry-run"];
@@ -276,17 +275,7 @@ async function runClear({db, dryRun, log = console.log, warn = console.warn}) {
  */
 async function main() {
   const argv = process.argv.slice(2);
-  assertKnownFlags(argv);
-  const dryRun = argv.includes("--dry-run");
-
-  const app = initializeApp({credential: applicationDefault()});
-  const db = getFirestore();
-
-  // Printed BEFORE the first read. This is the only script in the directory
-  // that destroys data the app cannot rebuild, and `applicationDefault()`
-  // resolves whatever credentials happen to be in the environment — nothing
-  // on the command line says which project that is.
-  printTargetBanner(app, {dryRun});
+  const {db, dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
 
   await runClear({db, dryRun});
 }

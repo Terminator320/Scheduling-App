@@ -70,11 +70,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
 
   @override
   Widget build(BuildContext context) {
-    final locale = Localizations.localeOf(context).toString();
     final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final bodyLarge = theme.textTheme.bodyLarge;
-    final monthFormat = DateFormat.MMMM(locale);
 
     // Size past the bottom view padding so the wheels don't sit under the home indicator.
     return SizedBox(
@@ -83,82 +79,13 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
         top: false,
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sp16,
-                vertical: AppSpacing.sp8,
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    child: Text(
-                      context.l10n.common_cancel,
-                      style: TextStyle(color: scheme.primary),
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    child: Text(
-                      context.l10n.common_done,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: scheme.primary,
-                      ),
-                    ),
-                    onPressed: () => Navigator.pop(
-                      context,
-                      DateTime(selectedYear, selectedMonth),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _actionBar(context, theme.colorScheme),
             const Divider(height: 1),
             Expanded(
               child: Row(
                 children: [
-                  Expanded(
-                    child: CupertinoPicker(
-                      scrollController: _monthController,
-                      itemExtent: 40,
-                      useMagnifier: true,
-                      magnification: 1.2,
-                      squeeze: 1.2,
-                      onSelectedItemChanged: (i) => selectedMonth = i + 1,
-                      children: List.generate(
-                        12,
-                        (i) => Center(
-                          child: Text(
-                            monthFormat.format(DateTime(0, i + 1)),
-                            style: bodyLarge,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: CupertinoPicker(
-                      scrollController: _yearController,
-                      itemExtent: 40,
-                      useMagnifier: true,
-                      magnification: 1.2,
-                      squeeze: 1.2,
-                      onSelectedItemChanged: (i) =>
-                          selectedYear = _startYear + i,
-                      children: List.generate(
-                        _yearCount,
-                        (i) => Center(
-                          child: Text(
-                            '${_startYear + i}',
-                            style: bodyLarge,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+                  Expanded(child: _monthWheel(context, theme)),
+                  Expanded(child: _yearWheel(theme)),
                 ],
               ),
             ),
@@ -167,4 +94,86 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
       ),
     );
   }
+
+  /// Cancel / Done, the iOS wheel-picker convention: the sheet commits on Done
+  /// rather than on every wheel movement, so a scroll past the target is not a
+  /// selection.
+  Widget _actionBar(BuildContext context, ColorScheme scheme) => Padding(
+    padding: const EdgeInsets.symmetric(
+      horizontal: AppSpacing.sp16,
+      vertical: AppSpacing.sp8,
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () => Navigator.pop(context),
+          child: Text(
+            context.l10n.common_cancel,
+            style: TextStyle(color: scheme.primary),
+          ),
+        ),
+        CupertinoButton(
+          padding: EdgeInsets.zero,
+          onPressed: () =>
+              Navigator.pop(context, DateTime(selectedYear, selectedMonth)),
+          child: Text(
+            context.l10n.common_done,
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              color: scheme.primary,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  Widget _monthWheel(BuildContext context, ThemeData theme) {
+    // Built once for the whole wheel, never per item — constructing a
+    // `DateFormat` verifies the locale and parses a skeleton, and this builder
+    // runs for all twelve.
+    final monthFormat = DateFormat.MMMM(
+      Localizations.localeOf(context).toString(),
+    );
+    return _wheel(
+      controller: _monthController,
+      itemCount: 12,
+      onSelected: (i) => selectedMonth = i + 1,
+      labelAt: (i) => monthFormat.format(DateTime(0, i + 1)),
+      theme: theme,
+    );
+  }
+
+  Widget _yearWheel(ThemeData theme) => _wheel(
+    controller: _yearController,
+    itemCount: _yearCount,
+    onSelected: (i) => selectedYear = _startYear + i,
+    labelAt: (i) => '${_startYear + i}',
+    theme: theme,
+  );
+
+  /// The two wheels' shared geometry — one spelling so they cannot drift out
+  /// of alignment with each other.
+  Widget _wheel({
+    required FixedExtentScrollController controller,
+    required int itemCount,
+    required ValueChanged<int> onSelected,
+    required String Function(int) labelAt,
+    required ThemeData theme,
+  }) => CupertinoPicker(
+    scrollController: controller,
+    itemExtent: 40,
+    useMagnifier: true,
+    magnification: 1.2,
+    squeeze: 1.2,
+    onSelectedItemChanged: onSelected,
+    children: List.generate(
+      itemCount,
+      (i) => Center(
+        child: Text(labelAt(i), style: theme.textTheme.bodyLarge),
+      ),
+    ),
+  );
 }

@@ -62,6 +62,54 @@ class AgendaSliverList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Computed, so it costs no read and does not wait on the jobs query — which
+    // is why it renders above the skeleton and the empty state too. A holiday
+    // with nothing booked is exactly the day this row has most to say about.
+    // A LIST because the two Easters coincide roughly one year in three, and
+    // the grid can only paint one hue on a shared day.
+    final holidays = holidaysOn(day);
+
+    return SliverMainAxisGroup(
+      slivers: [
+        if (holidays.isNotEmpty) _holidayRows(holidays),
+        if (isLoading)
+          const SliverToBoxAdapter(child: _AgendaSkeleton())
+        else if (events.isEmpty)
+          _emptyState(context)
+        else
+          _jobList(),
+      ],
+    );
+  }
+
+  Widget _holidayRows(List<Holiday> holidays) => SliverPadding(
+    padding: const EdgeInsets.fromLTRB(
+      AppSpacing.sp16,
+      AppSpacing.sp8,
+      AppSpacing.sp16,
+      0,
+    ),
+    sliver: SliverList.list(
+      children: [
+        for (final holiday in holidays) HolidayAgendaRow(holiday: holiday),
+      ],
+    ),
+  );
+
+  Widget _emptyState(BuildContext context) => SliverFillRemaining(
+    hasScrollBody: false,
+    child: AppEmptyState(
+      icon: Icons.event_outlined,
+      title: context.l10n.common_noAppointmentsFound,
+      // Only admins have the '+' FAB, so don't tell employees to tap a
+      // button that isn't there.
+      body: isAdmin
+          ? context.l10n.common_tapToScheduleAnAppointment
+          : context.l10n.calendar_noAppointmentsForDay,
+    ),
+  );
+
+  Widget _jobList() {
     // Where the day's remaining work ends, or -1 when nothing is closed.
     // `expandToDays` already sorts open before closed, so the closed jobs are
     // one contiguous run at the tail — which is what lets the rule be a single
@@ -86,98 +134,54 @@ class AgendaSliverList extends StatelessWidget {
     // cancellations would otherwise get, since those still sink to the tail.
     final showClosedRule = firstClosedIndex >= 0 && closedJobCount > 0;
 
-    // Computed, so it costs no read and does not wait on the jobs query — which
-    // is why it renders above the skeleton and the empty state too. A holiday
-    // with nothing booked is exactly the day this row has most to say about.
-    // A LIST because the two Easters coincide roughly one year in three, and
-    // the grid can only paint one hue on a shared day.
-    final holidays = holidaysOn(day);
+    return SliverPadding(
+      // The clearance rides on the LIST branch only: the empty state is
+      // a `SliverFillRemaining` that deliberately doesn't scroll, and
+      // padding it would give it scrollable extent it has no content for.
+      padding: EdgeInsets.only(
+        top: AppSpacing.sp4,
+        bottom: AppSpacing.sp4 + bottomClearance,
+      ),
+      sliver: SliverList.builder(
+        itemCount: events.length,
+        itemBuilder: (context, index) {
+          final card = _card(context, events[index]);
+          return FadeInItem(
+            key: ValueKey(events[index].appointment.id),
+            index: index,
+            child: showClosedRule && index == firstClosedIndex
+                ? Column(
+                    children: [_ClosedRule(count: closedJobCount), card],
+                  )
+                : card,
+          );
+        },
+      ),
+    );
+  }
 
-    return SliverMainAxisGroup(
-      slivers: [
-        if (holidays.isNotEmpty)
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.sp16,
-              AppSpacing.sp8,
-              AppSpacing.sp16,
-              0,
-            ),
-            sliver: SliverList.list(
-              children: [
-                for (final holiday in holidays)
-                  HolidayAgendaRow(holiday: holiday),
-              ],
-            ),
-          ),
-        if (isLoading)
-          const SliverToBoxAdapter(child: _AgendaSkeleton())
-        else if (events.isEmpty)
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: AppEmptyState(
-              icon: Icons.event_outlined,
-              title: context.l10n.common_noAppointmentsFound,
-              // Only admins have the '+' FAB, so don't tell employees to tap a
-              // button that isn't there.
-              body: isAdmin
-                  ? context.l10n.common_tapToScheduleAnAppointment
-                  : context.l10n.calendar_noAppointmentsForDay,
-            ),
-          )
-        else
-          SliverPadding(
-            // The clearance rides on the LIST branch only: the empty state is
-            // a `SliverFillRemaining` that deliberately doesn't scroll, and
-            // padding it would give it scrollable extent it has no content for.
-            padding: EdgeInsets.only(
-              top: AppSpacing.sp4,
-              bottom: AppSpacing.sp4 + bottomClearance,
-            ),
-            sliver: SliverList.builder(
-              itemCount: events.length,
-              itemBuilder: (context, index) {
-                final slice = events[index];
-                final e = slice.appointment;
-
-                final card = Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sp16,
-                    vertical: AppSpacing.sp4,
-                  ),
-                  child: AppointmentCard(
-                    appointment: e,
-                    slice: slice,
-                    crew: crewFor(e, colorMap: colorMap, nameMap: nameMap),
-                    selected: selectedAppointmentId == e.id,
-                    collapseWhenClosed: true,
-                    dimWhenCancelled: true,
-                    onTap: () {
-                      if (onAppointmentTap != null) {
-                        onAppointmentTap!(e);
-                      } else {
-                        showEventDetails(context, e, showActions: isAdmin);
-                      }
-                    },
-                  ),
-                );
-
-                return FadeInItem(
-                  key: ValueKey(e.id),
-                  index: index,
-                  child: showClosedRule && index == firstClosedIndex
-                      ? Column(
-                          children: [
-                            _ClosedRule(count: closedJobCount),
-                            card,
-                          ],
-                        )
-                      : card,
-                );
-              },
-            ),
-          ),
-      ],
+  Widget _card(BuildContext context, AppointmentDaySlice slice) {
+    final e = slice.appointment;
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sp16,
+        vertical: AppSpacing.sp4,
+      ),
+      child: AppointmentCard(
+        appointment: e,
+        slice: slice,
+        crew: crewFor(e, colorMap: colorMap, nameMap: nameMap),
+        selected: selectedAppointmentId == e.id,
+        collapseWhenClosed: true,
+        dimWhenCancelled: true,
+        onTap: () {
+          if (onAppointmentTap != null) {
+            onAppointmentTap!(e);
+          } else {
+            showEventDetails(context, e, showActions: isAdmin);
+          }
+        },
+      ),
     );
   }
 }

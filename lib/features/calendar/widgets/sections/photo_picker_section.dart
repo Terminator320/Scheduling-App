@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/images/appointment_image_loader.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/image_viewer.dart';
@@ -75,9 +76,26 @@ class _PhotoPickerSectionState extends ConsumerState<PhotoPickerSection> {
       }
       return;
     }
-    final bytes = await ref
-        .read(appointmentImageLoaderProvider)
-        .loadAll(images);
+    // Both providers are read BEFORE the await: `ref.read` on an unmounted
+    // consumer throws under Riverpod 3, and this future is fired unawaited
+    // from `initState`, so a read in the catch below would throw exactly in
+    // the case the catch exists for.
+    final loader = ref.read(appointmentImageLoaderProvider);
+    final logger = ref.read(loggerProvider);
+
+    // `loadAll` swallows its own per-image failures today, so this catch is
+    // for the shapes it does not own — an OOM decoding a large batch, or a
+    // future refactor that lets one through. Nothing awaits this future, so
+    // without the guard a throw reaches the zone handler and is stamped as an
+    // app-level crash from a gallery that merely failed to render. Safety
+    // that depends on a property of a DIFFERENT file is not safety.
+    final List<Uint8List> bytes;
+    try {
+      bytes = await loader.loadAll(images);
+    } catch (e, st) {
+      logger.warn('IMG-LOAD photo picker preload failed', e, st);
+      return;
+    }
     // Ignore loads that finish after close or list changes.
     if (!mounted || !listEquals(images, widget.existingImages)) return;
     setState(() {

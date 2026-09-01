@@ -92,6 +92,52 @@ console or the admin API, exactly as I9 was on 2026-08-29. The four
 `fieldOverrides` additions, by contrast, apply normally on
 `firebase deploy --only firestore:indexes`.
 
+## ✅ Resolution — every remaining finding, 2026-09-01
+
+The 2026-08-31 pass left B5 and I2–I12 open plus two production steps. All are
+now closed. **Two of them closed as "the premise was wrong", which is the part
+worth reading.**
+
+### The two production steps
+
+| # | Outcome |
+|---|---|
+| P2 | **Confirmed fixed, deterministically rather than by silence.** `travel: context query failed` last appears at **2026-08-31T17:29Z** and never after the deploy — but the post-deploy window is still overnight, when the sweep has no candidates, so that alone proves nothing. The proof is the INDEX: `appointments (employeeIds CONTAINS, endTime ASC, __name__ ASC)` is present and **READY** in prod, which is exactly what `decideOrigin`'s context query needs. The sweep is running (5-minute cadence, clean). A business-hours log re-check is now confirmation, not evidence. |
+| N1 | **No console step was needed — the premise was wrong.** The manifest edit was made on the assumption that the dead `users (email, role, status)` composite existed in prod and a redeploy could not delete it. Prod has **no `users` composite at all**: the database holds exactly 14 composites and the manifest declares the same 14, matching one-for-one. Nothing to delete. (The stale `(employeeIds CONTAINS, endTime DESC)` index carried from 2026-08-28 is likewise absent — that loose end is closed too.) |
+
+### The findings
+
+| # | What was done |
+|---|---|
+| B5 | **Documented, not changed — and the reason is now a verified fact rather than a guess.** The audit could not confirm whether any prod appointment lacks `endTime`; all **76** of them carry one. So the unreachable-row case does not exist, and the alternative fix (drop the `endTime` bound, scan every appointment for the crew) would spend real reads on a shape with no instances — immediately after an index "simplification" caused a two-day outage. The `windowUnknownIds` comment now states the limitation, why no bound on that field can see such a row, and where to look if one is ever found. |
+| I2 | **Left eager, documented — the suggested fix does not work as written** (owner call). Deferring until the Address menu opens is impossible: `ClientAddressFilterMenu` renders NOTHING when no address is shared, by an explicit decision in its own doc comment, so it cannot decide whether to appear without the data a deferral would withhold. The "skip the booking-flow reuse path" half does not apply either — `ClientsListView` has exactly one call site. `clientBuildingsProvider` now records why it is eager, that the window is shared with search/type/Archived so the reads are early rather than wasted, and that the real fix is a server-maintained `buildings` aggregate. |
+| I3 | `bootstrapScript(argv, {assertFlags})` added to `_project.js`; **13 scripts** now call it instead of hand-spelling flags→dryRun→app→db→banner. It takes the script's OWN flag wrapper rather than the audit's suggested `{exact, prefixes}` pair — passing the lists again would create a second spelling of a script's flag policy, free to drift from the wrapper jest actually pins, which is the failure the helper exists to remove. `backfill.js` deliberately abstains (it branches on `FIRESTORE_EMULATOR_HOST` and hard-fails on missing credentials). 7 new cases, incl. both orderings that are invisible in review: flags rejected BEFORE any credential resolves, and one `dryRun` reaching both the banner and the caller. |
+| I4 | `audit-wave-contract.js` gains the `require.main === module` guard and `module.exports = {audit, assertKnownFlags}`. 11 cases pin the severity split (blocking→refused, advisory→flagged-not-refused, both→refused once), the per-code tally, a field-less legacy row, and a FULL page continuing the walk onto the next. |
+| I5 | `countLegacyUrls`/`countArrayUrls` exported. 13 cases pin the three-way classification (has-storagePath skipped / url-only legacy / neither orphan), whitespace-only fields counting as absent, an orphan being reported regardless of `--verbose`, and both cursor walks. |
+| I6 | `toIdList`'s four rejection rules and the 128/129 boundary pinned, plus the coupling its docstring names: behavioural equality with `security.js`'s `requireDocId`, and a read of `firestore.rules` asserting `isValidDocIdField`'s cap is the same 128. All three copies now fail together instead of drifting silently. |
+| I7 | `buildSelfEmailChangedMessage` pinned beside its sibling, asserting the body carries the name and **no `@`** in EN and FR — the PII rule its docstring states. A case also covers the realistic regression: the CALLER handing it `users.email` instead of `users.name`. |
+| I8 | Already closed on 2026-08-31. |
+| I9 | `test/support/account_exit_stubs.dart` owns the trio; the three copies are gone. `calls:` records the teardown order, omitting it gives silent stubs — the only difference the hand-written variants had. `.claude/rules/testing.md` and `docs/ARCHITECTURE.md` now point at the owner instead of naming three classes. |
+| I10 | All three splits done: `matchHistoryDocs`/`HistorySearchScan` → `calendar/domain/policies/history_search_policy.dart`; `buildDayRoute` → `calendar/domain/day_route.dart` (the identity memo stays in the `State`, which is what makes the extracted half pure); the 6-tier relevance ladder → `ClientSearchPolicy.relevanceScore`, beside the `rawMatches` half it is one decision with. |
+| I11 | All six. **Code:** `runWaveDaily`'s connection read was the one await outside a try, so its "never throws" docstring was a promise it did not keep — now guarded; `photo_picker_section`'s unawaited preload gained a catch with both providers hoisted above the await (Riverpod 3 `ref.read` on an unmounted consumer throws). **Tests:** `ledgerBody` (incl. asserting the TTL policy on all three ledger collections, the half no JS test could otherwise reach), `normalizeEmail`, `BiometricAuthService` (both fail-closed catches AND their `APPLOCK` tag), `countMultiDay`. |
+| I12 | **Top 5 extracted** (owner call), not the 56-site campaign the audit warned against: `agenda_sliver_list` 119→20, `details_edit_body` 111→24, `appointment_date_rows` 105→25, `additional_contacts_section` 99→25, `month_year_picker` 98→25. Every extracted helper keeps the explanatory comment that made the original long. The other 51 stand. |
+
+### One unrelated red test, fixed
+
+`main_calendar_screen_test.dart`'s "tapping the header month opens the month and
+year picker" began failing **today**, and it is neither this work nor the
+in-progress calendar changes — it fails identically at `68db34be`. It taps
+`DateFormat.MMMM()` of *today*, but `calendar_header_block.dart:227` renders the
+SHORT month label when the full one does not fit the measured width, and
+"September" does not fit the phone viewport the test pumps. So it passed all year
+and would have failed for the whole month. It now accepts either label.
+
+### Verification
+
+`flutter analyze` **No issues found!** · `flutter test` **3057/3057** ·
+`functions` ESLint **clean** · `functions` jest **1634/1634 across 75 suites**
+(up from 3035 / 1568 across 68).
+
 ## Summary
 
 - **Scanned:** 407 Dart + 136 JS + 3 rules/index files + 2 ARBs

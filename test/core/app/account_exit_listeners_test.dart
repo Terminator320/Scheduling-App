@@ -10,17 +10,14 @@ import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/app/account_exit_controller.dart';
 import 'package:scheduling/core/app/device_deregistration.dart';
-import 'package:scheduling/core/images/appointment_image_loader.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
-import 'package:scheduling/features/calendar/application/appointments_providers.dart';
-import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
-import 'package:scheduling/features/clients/application/clients_providers.dart';
-import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/l10n/l10n.dart';
+
+import '../../support/account_exit_stubs.dart';
 
 class _MockPush extends Mock implements PushRegistrationController {}
 
@@ -30,39 +27,6 @@ class _MockLiveActivity extends Mock
     implements LiveActivityRegistrationController {}
 
 class _MockAuthService extends Mock implements AuthService {}
-
-/// Keeps the photo-cache teardown off the platform channels.
-///
-/// `deregisterThisDevice` clears the on-disk photo cache, which resolves the
-/// platform cache directory through `path_provider`. A method channel never
-/// completes under `testWidgets`' fake clock, so the real loader makes every
-/// account-exit test HANG rather than fail — override this provider in any
-/// test that reaches an account exit.
-class _StubLoader extends AppointmentImageLoader {
-  @override
-  Future<void> clear() async {}
-}
-
-/// Same reason as `_StubLoader`: the teardown now also clears both
-/// repositories' caches, and the real ones resolve
-/// `FirebaseFirestore.instance` on construction.
-class _StubClients implements ClientsRepository {
-  @override
-  void clearCaches() {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      super.noSuchMethod(invocation);
-}
-
-class _StubAppointments implements AppointmentsRepository {
-  @override
-  void clearCaches() {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      super.noSuchMethod(invocation);
-}
 
 void main() {
   late _MockPush push;
@@ -112,9 +76,7 @@ void main() {
             liveActivity,
           ),
           authServiceProvider.overrideWithValue(auth),
-          appointmentImageLoaderProvider.overrideWithValue(_StubLoader()),
-          clientsRepositoryProvider.overrideWithValue(_StubClients()),
-          appointmentsRepositoryProvider.overrideWithValue(_StubAppointments()),
+          ...accountExitStubOverrides(),
         ],
         child: MaterialApp(
           navigatorKey: navigatorKey,

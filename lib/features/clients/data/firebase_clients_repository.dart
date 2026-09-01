@@ -398,27 +398,15 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
     );
     final contactsDigits = ClientSearchPolicy.digitsOnly(contactSearchText);
 
-    var score = 100;
-    if (displayName == normalizedQuery || phoneDigits == queryDigits) {
-      score = 0;
-    } else if (displayName.startsWith(normalizedQuery) ||
-        personName.startsWith(normalizedQuery)) {
-      score = 1;
-    } else if (queryDigits.isNotEmpty && phoneDigits.startsWith(queryDigits)) {
-      score = 2;
-    } else if (displayName.contains(normalizedQuery) ||
-        personName.contains(normalizedQuery)) {
-      score = 3;
-    } else if (queryDigits.isNotEmpty &&
-        (phoneDigits.contains(queryDigits) ||
-            contactsDigits.contains(queryDigits))) {
-      score = 4;
-    } else {
-      score = 5;
-    }
-
     scoredClients.add((
-      score: score,
+      score: ClientSearchPolicy.relevanceScore(
+        displayName: displayName,
+        personName: personName,
+        phoneDigits: phoneDigits,
+        contactsDigits: contactsDigits,
+        queryText: normalizedQuery,
+        queryDigits: queryDigits,
+      ),
       sortKey: rawDisplayName.toLowerCase(),
       record: client,
     ));

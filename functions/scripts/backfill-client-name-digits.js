@@ -77,8 +77,6 @@
 // reformat is idempotent, so re-running finishes the job and re-writes nothing
 // it already did.
 
-const {initializeApp, applicationDefault} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
 
 const {
   composeStored,
@@ -86,7 +84,7 @@ const {
   stripPhone,
 } = require("../client_name_utils");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
-const {printTargetBanner} = require("./_project");
+const {bootstrapScript} = require("./_project");
 // The batched-write loop, shared so `--dry-run` cannot be forgotten at a
 // call site — see `_batch.js`.
 const {commitInBatches} = require("./_batch");
@@ -151,15 +149,7 @@ function patchFor(data) {
  */
 async function main() {
   const argv = process.argv.slice(2);
-  assertKnownFlags(argv);
-  const dryRun = argv.includes("--dry-run");
-
-  const app = initializeApp({credential: applicationDefault()});
-  const db = getFirestore();
-
-  // Printed BEFORE anything is read: running a bulk write against the wrong
-  // project is the mistake the operator has to be able to see coming.
-  printTargetBanner(app, {dryRun});
+  const {db, dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
 
   const snap = await db.collection("clients").get();
 
