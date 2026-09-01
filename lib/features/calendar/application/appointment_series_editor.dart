@@ -84,6 +84,7 @@ class AppointmentSeriesEditor {
       series,
       excludeId: id,
       after: appointment.startTime,
+      anchor: appointment,
     );
     final propagated = siblings.map((v) {
       final copyStart = withTimeOfDay(v.startTime, start);

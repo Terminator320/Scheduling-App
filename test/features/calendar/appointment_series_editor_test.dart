@@ -23,6 +23,17 @@ AppointmentRecord _appt({
   seriesId: seriesId,
 );
 
+/// One day of a 5-day run, anchored on day 1's id.
+AppointmentRecord _runDay(
+  String id,
+  DateTime start, {
+  required int dayIndex,
+  int dayCount = 5,
+}) => _appt(id: id, start: start, seriesId: 'r1').copyWith(
+  dayIndex: dayIndex,
+  dayCount: dayCount,
+);
+
 void main() {
   setUpAll(() {
     registerFallbackValue(
@@ -254,5 +265,60 @@ void main() {
         expect(propagated.startTime, DateTime(2026, 3, 20));
       },
     );
+
+    // A RUN is scoped by stored `dayIndex`, never by `startTime` — a run day's
+    // start date is editable, so the two axes disagree the moment one is
+    // moved. `futureSeriesRecords` takes an `anchor` for exactly this, and
+    // propagate is the third run-scoped call site beside cancel and delete.
+    group('a moved run day stays scoped by dayIndex', () {
+      // Mon-Fri, one doc per day, anchored on day 1's id.
+      List<AppointmentRecord> runWithDay1On(DateTime day1Start) => [
+        _runDay('r1', day1Start, dayIndex: 1),
+        _runDay('r2', DateTime(2026, 8, 2, 9), dayIndex: 2),
+        _runDay('r3', DateTime(2026, 8, 3, 9), dayIndex: 3),
+        _runDay('r4', DateTime(2026, 8, 4, 9), dayIndex: 4),
+        _runDay('r5', DateTime(2026, 8, 5, 9), dayIndex: 5),
+      ];
+
+      test('day 1 moved past the run still reaches days 2-5', () async {
+        // Day 1 was moved out to Aug 10 — later than every sibling.
+        final moved = DateTime(2026, 8, 10, 9);
+        final series = runWithDay1On(moved);
+        final appointment = series.first;
+        when(() => repo.getSeries('r1')).thenAnswer((_) async => series);
+
+        final plan = await editor.planPropagate(
+          updated: appointment.copyWith(title: 'New Title'),
+          appointment: appointment,
+          id: 'r1',
+          start: moved,
+          end: moved.add(const Duration(hours: 1)),
+        );
+
+        // On `startTime` no sibling starts after Aug 10, so this silently
+        // propagated to nothing and still reported success.
+        expect(plan.propagated.map((a) => a.id), ['r2', 'r3', 'r4', 'r5']);
+        expect(plan.propagated.every((a) => a.title == 'New Title'), isTrue);
+      });
+
+      test('day 4 does not sweep up the moved day 1', () async {
+        final series = runWithDay1On(DateTime(2026, 8, 10, 9));
+        final day4 = series[3];
+        when(() => repo.getSeries('r1')).thenAnswer((_) async => series);
+
+        final plan = await editor.planPropagate(
+          updated: day4.copyWith(title: 'New Title'),
+          appointment: day4,
+          id: 'r4',
+          start: day4.startTime,
+          end: day4.endTime,
+        );
+
+        // Day 1 sits at Aug 10 — after day 4 in TIME but before it in the run.
+        // Scoped on startTime it was overwritten with day 4's fields and had
+        // its clock time rewritten, undoing the move.
+        expect(plan.propagated.map((a) => a.id), ['r5']);
+      });
+    });
   });
 }
