@@ -125,8 +125,10 @@ const HAS_DIGIT = /\d/;
  * Problems with the payload's contact fields.
  *
  * `NOT_DIALABLE` is ADVISORY, and the first production conformance run is
- * exactly why. Client `2wcEiCNztsWYUYNXYBEm` stores the literal string
- * "Tareq Chehadeh" in `phone` — a contact name typed into the wrong box — and
+ * exactly why. Client `2wcEiCNztsWYUYNXYBEm` stores a person's NAME in
+ * `phone` — typed into the wrong box; "Contact Person" stands in for it here
+ * and in the tests, because the real one is a customer's name and PII does
+ * not belong in source or in git history — and
  * Wave has that client **synced**, with that string as the customer's phone
  * number. So Wave plainly does not refuse it, and blocking the sync over it
  * would strand a customer Wave is happy with.

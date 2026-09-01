@@ -135,13 +135,13 @@ describe("buildCustomerPayload", () => {
   });
 
   test("still SYNCS a phone with no digits, but reports it", () => {
-    // Client 2wcEiCNztsWYUYNXYBEm stores "Tareq Chehadeh" in `phone` and Wave
+    // Client 2wcEiCNztsWYUYNXYBEm stores "Contact Person" in `phone` and Wave
     // has it SYNCED with that string as the customer's phone number — so
     // blocking it would strand a client Wave accepts. It is still wrong:
     // nothing can dial it. Advisory is what lets both be true.
-    const out = buildCustomerPayload(client({phone: "Tareq Chehadeh"}));
+    const out = buildCustomerPayload(client({phone: "Contact Person"}));
     expect(out.ok).toBe(true);
-    expect(out.payload.phone).toBe("Tareq Chehadeh");
+    expect(out.payload.phone).toBe("Contact Person");
     expect(out.problems).toEqual([
       {field: "phone", code: "NOT_DIALABLE", severity: "advisory",
         detail: null},
@@ -154,7 +154,7 @@ describe("buildCustomerPayload", () => {
 
   test("an advisory alongside a blocking problem still blocks", () => {
     const out = buildCustomerPayload(
-        client({name: "", phone: "Tareq Chehadeh"}));
+        client({name: "", phone: "Contact Person"}));
     expect(out.ok).toBe(false);
     expect(out.payload).toBeUndefined();
     expect(out.problems.map((p) => p.code).sort())
@@ -239,7 +239,7 @@ describe("problemsPatch", () => {
 
   test("records an ADVISORY problem even though the push proceeds", () => {
     // The push is fine and the client syncs; the admin must still see it.
-    expect(problemsPatch(client({phone: "Tareq Chehadeh"}))).toEqual({
+    expect(problemsPatch(client({phone: "Contact Person"}))).toEqual({
       "wave.problems": [
         {field: "phone", code: "NOT_DIALABLE", severity: "advisory",
           detail: null},
