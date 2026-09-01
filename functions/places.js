@@ -42,6 +42,10 @@ const rateBuckets = new Map();
 // placesGetDetails is low-volume, so it uses the durable Firestore cap rather
 // than the in-memory limiter, with a limit generous enough for an admin
 // entering many appointments at once.
+// Upstream budget for one Places/Geocoding request. Deliberately under the
+// client's 10 s callable timeout — see [fetchPlacesJson].
+const UPSTREAM_TIMEOUT_MS = 8_000;
+
 const PLACES_DETAILS_RATE_MAX = 40;
 const PLACES_DETAILS_RATE_WINDOW_MS = 15 * 60 * 1000;
 
@@ -98,11 +102,43 @@ function upstreamErrorCode(bodyText) {
  * @return {Promise<object>} parsed JSON body.
  */
 async function fetchPlacesJson(url, options, {label, uid}) {
+  // `fetch()` has no default timeout in Node, so a slow upstream held the
+  // function open indefinitely. The CLIENT gives up at 10 s
+  // (`_callableTimeout`, `google_places_repository.dart`) and reports
+  // `deadline-exceeded`, but the function carried on — still spending a
+  // billed upstream call and the durable rate-limit slot it already consumed,
+  // for an answer nobody was waiting for. Budget stays UNDER the client's, so
+  // the server gives up first and the work is never orphaned; raise the two
+  // together or this stops being true.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+  try {
+    return await _fetchPlacesJson(url, options, {label, uid}, controller);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * [fetchPlacesJson]'s body, under an already-armed abort [controller].
+ * @param {string} url Fully-built request URL.
+ * @param {?object} options fetch() options (method, headers, body).
+ * @param {{label: string, uid: string}} opts See [fetchPlacesJson].
+ * @param {!AbortController} controller Armed by the caller's timeout.
+ * @return {Promise<object>} parsed JSON body.
+ */
+async function _fetchPlacesJson(url, options, {label, uid}, controller) {
   let response;
   try {
-    response = await fetch(url, options);
+    response = await fetch(url, {...options, signal: controller.signal});
   } catch (err) {
-    logger.error(`${label}: transport error`, {uid, err: err.message});
+    // `timedOut` is what separates "the upstream is slow" from "the network
+    // broke" in Cloud Logging; both surface as a transport error otherwise.
+    logger.error(`${label}: transport error`, {
+      uid,
+      err: err.message,
+      timedOut: controller.signal.aborted,
+    });
     throw new HttpsError("internal", "places-transport");
   }
 
@@ -350,4 +386,7 @@ module.exports = {
   // Exported for jest — it is the one thing standing between a rejected
   // address lookup and the typed street address landing in Cloud Logging.
   upstreamErrorCode,
+  // Exported for jest — the test asserts it stays under the client's own
+  // callable timeout, which is the whole point of the budget.
+  UPSTREAM_TIMEOUT_MS,
 };
