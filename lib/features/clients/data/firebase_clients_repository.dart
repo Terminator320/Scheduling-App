@@ -78,7 +78,7 @@ class FirebaseClientsRepository implements ClientsRepository {
           if (doc.id != id) doc,
         if (data != null) (id: id, data: {...?previous, ...data}),
       ];
-      _scanWindow = _CachedClientScanWindow(docs, window.fetchedAt);
+      _scanWindow = window.patched(docs, id);
     } else {
       _scanWindow = null;
     }
@@ -446,14 +446,25 @@ class _CachedClientSearch {
 class _CachedClientScanWindow {
   _CachedClientScanWindow(this.docs, this.fetchedAt);
 
+  _CachedClientScanWindow._patched(
+    this.docs,
+    this.fetchedAt,
+    this._records,
+    this._buildingKeys,
+  );
+
   final List<RawClientDoc> docs;
   final DateTime fetchedAt;
+
+  List<ClientRecord>? _records;
+  Map<String, String?>? _buildingKeys;
+  List<ClientBuilding>? _buildings;
 
   /// Materialized once per window. Three reducers read this and `_patchWindow`
   /// keeps a window alive across writes, so the Firestore read was cached
   /// while the record-building pass re-ran on every filter tap — on the UI
   /// isolate, unlike `searchClients`, which offloads through `compute`.
-  late final List<ClientRecord> records = [
+  List<ClientRecord> get records => _records ??= [
     for (final doc in docs)
       if (doc.data['archived'] != true) ClientRecord.fromMap(doc.id, doc.data),
   ];
@@ -462,18 +473,68 @@ class _CachedClientScanWindow {
   ///
   /// Three surfaces want it — the Building menu's counts, the building filter
   /// and the per-row pill — and `buildingKeyFor` is ~8 regex `replaceAll`s, a
-  /// `splitApt` and two per-codeunit `normalize` passes each. `_patchWindow`
-  /// rebuilds this object on EVERY client add/edit/archive/delete, so without
-  /// the shared map each of those writes paid for the whole window three
-  /// times, synchronously on the UI isolate, right behind the archive-swipe
-  /// animation.
-  late final Map<String, String?> buildingKeys = buildingKeysIn(records);
+  /// `splitApt` and two per-codeunit `normalize` passes each, so deriving it
+  /// per surface meant paying for the whole window three times over.
+  Map<String, String?> get buildingKeys =>
+      _buildingKeys ??= buildingKeysIn(records);
 
   /// `buildingsIn` runs `buildingKeyFor` over every record, so it is memoized
   /// on the same key rather than recomputed per Building-menu build — and it
   /// reads [buildingKeys] rather than deriving them again.
-  late final List<ClientBuilding> buildings = buildingsIn(
-    records,
-    keys: buildingKeys,
-  );
+  List<ClientBuilding> get buildings =>
+      _buildings ??= buildingsIn(records, keys: buildingKeys);
+
+  /// The window after a local write, carrying the derived maps ACROSS it.
+  ///
+  /// A local write patches one document, but building a fresh window discarded
+  /// [records] and [buildingKeys] wholesale — and `_patchWindow`'s caller
+  /// bumps `clientsRefreshProvider`, so the three building providers re-read
+  /// immediately and both maps rebuilt on the spot. At a few hundred clients
+  /// that is a `ClientRecord.fromMap` and a `buildingKeyFor` per client, on
+  /// the UI isolate (unlike `searchClients`, which offloads through
+  /// `compute`), landing right behind the archive-swipe dismissal and the
+  /// save-sheet close. Only [changedId] can have changed, so only it is
+  /// re-derived.
+  ///
+  /// [buildings] is deliberately NOT carried: it is a reduction over the two
+  /// maps rather than a per-client derivation, so recomputing it is cheap and
+  /// carrying it would mean re-deriving the count and label rules here — a
+  /// second place the building rules live, which is what `buildingsIn` taking
+  /// a required `keys` exists to prevent.
+  _CachedClientScanWindow patched(List<RawClientDoc> next, String changedId) {
+    final cachedRecords = _records;
+    // Nothing has read the derived maps yet, so there is nothing to carry and
+    // a plain window is both correct and free.
+    if (cachedRecords == null) return _CachedClientScanWindow(next, fetchedAt);
+
+    final doc = next.where((d) => d.id == changedId).firstOrNull;
+    // Absent (a delete) or archived: it leaves `records`, which excludes
+    // archived clients, so the key map must lose the entry rather than keep a
+    // stale one.
+    final record = doc == null || doc.data['archived'] == true
+        ? null
+        : ClientRecord.fromMap(doc.id, doc.data);
+
+    final records = [
+      for (final r in cachedRecords)
+        if (r.id != changedId) r,
+      ?record,
+    ];
+
+    final cachedKeys = _buildingKeys;
+    final buildingKeys = cachedKeys == null
+        ? null
+        : {
+            for (final entry in cachedKeys.entries)
+              if (entry.key != changedId) entry.key: entry.value,
+            if (record != null) record.id: buildingKeyFor(record),
+          };
+
+    return _CachedClientScanWindow._patched(
+      next,
+      fetchedAt,
+      records,
+      buildingKeys,
+    );
+  }
 }
