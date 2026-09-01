@@ -71,6 +71,30 @@ final clientsByBuildingProvider = FutureProvider.autoDispose
     });
 
 /// Every address two or more clients share — the Building menu's options.
+///
+/// **This is EAGER on Clients-tab open, and that is a decision rather than an
+/// oversight** (owner call, 2026-09-01). `ClientsListView.build` watches this
+/// and [clientBuildingKeysProvider] before the filter switch, so opening the
+/// tab pays the paged `orderBy('name')` scan window (capped at
+/// `_clientScanLimit`, ~700 clients today) on top of the paginated list's
+/// first 50 — roughly 14× read amplification on the first open per session,
+/// where it used to be paid only on a search or a filter-chip tap.
+///
+/// It is not deferrable as the surface stands. `ClientAddressFilterMenu`
+/// renders NOTHING when no address is shared — deliberately, since an empty
+/// menu reads as a broken control — so it cannot decide whether to appear
+/// without the very data a deferral would be withholding. Loading on first
+/// open would mean always showing the chip, which reverses that decision.
+///
+/// The cost is also not wasted: this is the SAME cached, TTL'd window that
+/// search, the type chips and the Archived chip read, so the tab open warms
+/// what the next interaction would have fetched anyway.
+///
+/// Removing it for real means not deriving buildings from the client
+/// collection at all — a small server-maintained `buildings` aggregate would
+/// make both the menu and the per-row pill cost O(buildings) instead of
+/// O(clients). That is a design change (function, backfill, index), not a
+/// tweak here.
 final clientBuildingsProvider =
     FutureProvider.autoDispose<List<ClientBuilding>>((ref) async {
       ref.watch(clientsRefreshProvider);

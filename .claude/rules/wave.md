@@ -286,6 +286,40 @@ the sync badge, `clients/{id}.name` as Wave's customer name — are in
   because a cap below a stored value makes that doc permanently un-updatable
   with an opaque `permission-denied` — see the root `CLAUDE.md`. The contract
   refuses the doc and keeps it editable, which is the whole point.
+  **A problem is `blocking` or `advisory`, and only `blocking` decides `ok`.**
+  Two different questions were competing for one verdict: "Wave will refuse
+  this" (never enqueue — the push would dead-letter permanently) and "Wave
+  accepts this, but the data is wrong" (report it, surface it, push anyway).
+  Collapsing them costs a real failure in each direction — treating every
+  problem as blocking strands a client Wave is happy with, treating none as
+  blocking puts the permanent dead-letter back. `problemsPatch` records BOTH,
+  because an advisory does not stop the push but the admin must still see it,
+  and the audit reports the two separately and deliberately does NOT gate on
+  `ok`, or it would hide the very case that produced the split.
+  **Write a contract rule from an OBSERVED rejection, never a plausible one.**
+  The first production run is the evidence: 714 clients, 1 refusal — a client
+  storing the literal string "a contact's name" in `phone`, which Wave had
+  SYNCED with that string as the customer's phone number. The rule would have
+  blocked a client Wave accepts, which is the one outcome the loose contact
+  rules exist to avoid. It is now `NOT_DIALABLE`/advisory, deliberately not
+  `INVALID_PHONE`: that name asserts something about Wave's opinion, and Wave's
+  opinion is that it is fine. Every other rule traces to a real refusal; that
+  one traced to a guess. The documented LENGTH caps stay — those are not
+  guesses. The email rule stays too and is still unproven; treat it the same
+  way if real data ever contradicts it.
+  **The caps are READ from `IMPORT_FIELD_CAPS`, never restated.** `mappers.js`
+  owns them and `test/core/validators/text_limits_test.dart` pins that map as
+  TEXT against the `firestore.rules` caps; `PAYLOAD_CAPS` looks each one up by
+  field name (`importCap`) and adds only the payload PATH and the two
+  deliberate deviations — `provinceCode`/`countryCode` are GraphQL enums, so a
+  length is meaningless, and `mobile` borrows `phone`'s cap because the IMPORT
+  folds Wave's mobile into the one `phone` field while the PUSH sends both. A
+  second hand-written list is exactly the contract-versus-reality drift this
+  module exists to close, and it would drift silently. `importCap` THROWS at
+  require time rather than returning undefined: `overLongProblems` compares
+  `value.length <= rule.cap`, which is false for an undefined cap, so a field
+  renamed in `mappers.js` would not leave one field unchecked — it would report
+  EVERY client `TOO_LONG`, and in Phase 2 that is every client refused.
   **PHASE 1 IS REPORT-ONLY.** `problemsPatch` rides the trigger's existing
   mark-pending batch and records `wave.problems`; nothing is blocked and the
   enqueue decision is untouched. `wave.problems` is not a mapped field, so the

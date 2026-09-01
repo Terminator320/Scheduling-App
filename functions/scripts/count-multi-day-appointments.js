@@ -55,10 +55,8 @@
 
 "use strict";
 
-const {initializeApp, applicationDefault} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
-const {printTargetBanner} = require("./_project");
+const {bootstrapScript} = require("./_project");
 const {
   dayCountOf,
   MAX_APPOINTMENT_SPAN_DAYS,
@@ -179,15 +177,12 @@ async function countMultiDay(db, verbose) {
  * @return {!Promise<void>} Resolves when the count has been printed.
  */
 async function main() {
-  assertKnownFlags(process.argv.slice(2));
-  const verbose = process.argv.includes("--verbose");
-
-  const app = initializeApp({credential: applicationDefault()});
-  // Read-only, but the banner still prints: knowing which project a number
-  // describes is the whole point of reporting one to act on.
-  printTargetBanner(app, {dryRun: false});
-
-  const db = getFirestore();
+  const argv = process.argv.slice(2);
+  // Read-only: `--dry-run` is not in this script's flag allowlist, so
+  // `dryRun` comes back false and the banner carries no misleading
+  // "[dry-run]" prefix — see `bootstrapScript`.
+  const {db} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
+  const verbose = argv.includes("--verbose");
   const t = await countMultiDay(db, verbose);
 
   console.log(`\nscanned ${t.scanned} appointments`);
@@ -263,4 +258,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = {assertKnownFlags};
+module.exports = {assertKnownFlags, countMultiDay};

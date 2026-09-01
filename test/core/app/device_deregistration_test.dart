@@ -4,14 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/app/device_deregistration.dart';
-import 'package:scheduling/core/images/appointment_image_loader.dart';
-import 'package:scheduling/features/calendar/application/appointments_providers.dart';
-import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
-import 'package:scheduling/features/clients/application/clients_providers.dart';
-import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
+
+import '../../support/account_exit_stubs.dart';
 
 class _MockPush extends Mock implements PushRegistrationController {}
 
@@ -19,48 +16,6 @@ class _MockPresence extends Mock implements PresenceSyncController {}
 
 class _MockLiveActivity extends Mock
     implements LiveActivityRegistrationController {}
-
-/// Records the photo-cache clear without reaching the file system.
-///
-/// Subclassed rather than mocked because the real loader's `clear` would
-/// resolve the platform cache directory — a plugin call no widget test can
-/// answer — and the property under test is only that it is CALLED, last.
-class _RecordingLoader extends AppointmentImageLoader {
-  _RecordingLoader(this.calls);
-
-  final List<String> calls;
-
-  @override
-  Future<void> clear() async => calls.add('imageCache');
-}
-
-/// The real repositories resolve `FirebaseFirestore.instance` on construction,
-/// which no widget test can answer — and only the clear is under test.
-class _RecordingClients implements ClientsRepository {
-  _RecordingClients(this.calls);
-
-  final List<String> calls;
-
-  @override
-  void clearCaches() => calls.add('clients');
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      super.noSuchMethod(invocation);
-}
-
-class _RecordingAppointments implements AppointmentsRepository {
-  _RecordingAppointments(this.calls);
-
-  final List<String> calls;
-
-  @override
-  void clearCaches() => calls.add('appointments');
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      super.noSuchMethod(invocation);
-}
 
 /// `deregisterThisDevice` drops every server-side registration this device
 /// holds, and it is reached from all three account exits (the runtime
@@ -107,15 +62,7 @@ void main() {
           liveActivityRegistrationControllerProvider.overrideWithValue(
             liveActivity,
           ),
-          appointmentImageLoaderProvider.overrideWithValue(
-            _RecordingLoader(calls),
-          ),
-          clientsRepositoryProvider.overrideWithValue(
-            _RecordingClients(calls),
-          ),
-          appointmentsRepositoryProvider.overrideWithValue(
-            _RecordingAppointments(calls),
-          ),
+          ...accountExitStubOverrides(calls: calls),
         ],
         child: Consumer(
           builder: (context, ref, _) {

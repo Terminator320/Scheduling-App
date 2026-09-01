@@ -2,6 +2,7 @@
 
 const {buildCustomerPayload, problemsPatch} =
   require("../wave/customer_contract");
+const {IMPORT_FIELD_CAPS} = require("../wave/mappers");
 
 /**
  * A client doc that the contract accepts, so each test can break exactly one
@@ -258,5 +259,53 @@ describe("problemsPatch", () => {
     // decision stays exactly where it is.
     expect(Object.keys(problemsPatch(client({name: ""})))).toEqual(
         ["wave.problems"]);
+  });
+});
+
+describe("PAYLOAD_CAPS derives from IMPORT_FIELD_CAPS", () => {
+  // The caps are not restated in `customer_contract.js` -- they are read from
+  // the one map that owns them, which `text_limits_test.dart` already pins
+  // against the firestore.rules caps. These assert the READ still resolves,
+  // because the failure mode is silent and total: `overLongProblems` compares
+  // `value.length <= rule.cap`, and that is false for an undefined cap, so a
+  // field renamed in `mappers.js` would report EVERY client as TOO_LONG rather
+  // than leaving one field unchecked.
+  test("a value at exactly Wave's cap is accepted, one over is refused", () => {
+    for (const [field, payloadField] of [
+      ["name", "name"],
+      ["email", "email"],
+      ["address", "address"],
+    ]) {
+      const cap = IMPORT_FIELD_CAPS[field];
+      expect(typeof cap).toBe("number");
+
+      const atCap = buildCustomerPayload(client({[field]: "x".repeat(cap)}));
+      expect(atCap.problems.filter((p) => p.code === "TOO_LONG")).toEqual([]);
+
+      const overCap =
+        buildCustomerPayload(client({[field]: "x".repeat(cap + 1)}));
+      expect(overCap.problems).toContainEqual({
+        field: payloadField,
+        code: "TOO_LONG",
+        severity: "blocking",
+        detail: {length: cap + 1, cap},
+      });
+    }
+  });
+
+  test("mobile is capped, though the import map has no mobile entry", () => {
+    // The import folds Wave's mobile into `phone`, so `IMPORT_FIELD_CAPS` has
+    // no `mobile` key by design -- but the PUSH direction sends both, and an
+    // uncapped one dead-letters. It borrows `phone`'s cap.
+    expect(IMPORT_FIELD_CAPS.mobile).toBeUndefined();
+    const cap = IMPORT_FIELD_CAPS.phone;
+
+    expect(buildCustomerPayload(client({mobile: "5".repeat(cap)})).problems)
+        .toEqual([]);
+    expect(buildCustomerPayload(client({mobile: "5".repeat(cap + 1)})).problems)
+        .toContainEqual({
+          field: "mobile", code: "TOO_LONG", severity: "blocking",
+          detail: {length: cap + 1, cap},
+        });
   });
 });

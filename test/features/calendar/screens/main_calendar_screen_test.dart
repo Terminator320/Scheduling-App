@@ -305,7 +305,14 @@ void main() {
     await tester.pumpAndSettle();
 
     final today = DateTime.now();
-    await tester.tap(find.text(DateFormat.MMMM().format(today)));
+    // EITHER label, because the header picks between them by measured width
+    // (`calendar_header_block.dart`) — and this test is date-dependent, so a
+    // month whose full name does not fit the phone viewport renders the short
+    // one. Pinned to the full name it passed all year and then failed for the
+    // whole of September, which is not a regression this test should report.
+    final monthLabel = find.text(DateFormat.MMMM().format(today));
+    final shortLabel = find.text(DateFormat.MMM().format(today));
+    await tester.tap(monthLabel.evaluate().isNotEmpty ? monthLabel : shortLabel);
     await tester.pumpAndSettle();
 
     // Both wheels — every month and the whole year window, as before the
@@ -641,6 +648,102 @@ void main() {
       tester.getTopLeft(find.text('All day block')).dy,
       lessThan(tester.getTopLeft(find.text('Timed job')).dy),
     );
+  });
+
+  testWidgets('a six-week month paints its last row above the handle', (
+    tester,
+  ) async {
+    // A real phone WITH its insets, not the roomier bare test viewport: the
+    // bug was the grid taking an even flex share of the pane, which only
+    // starves a six-week month once the pane is short enough. The status bar
+    // and home indicator are 81px of that, so a padding-free viewport hides
+    // it.
+    tester.view.physicalSize = const Size(390 * 3, 844 * 3);
+    tester.view.devicePixelRatio = 3;
+    tester.view.padding = const FakeViewPadding(top: 47 * 3, bottom: 34 * 3);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Page forward to the next month that actually occupies six weeks, so the
+    // assertion holds whatever day the suite runs on.
+    final weekStart = weekStartForLocale('en_CA');
+    final now = DateTime.now();
+    var month = DateTime(now.year, now.month);
+    while (monthGridRowCount(month, weekStart: weekStart) != 6) {
+      await tester.drag(find.byType(PageView), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      month = DateTime(month.year, month.month + 1);
+    }
+
+    // Cell 35 is the first of the sixth row, and a six-week month always has a
+    // real day there.
+    final lastRow = monthGridDays(month, weekStart: weekStart)[35];
+    final cell = find.byKey(_dayKey(lastRow));
+    expect(cell, findsOneWidget);
+
+    // The handle is the top of the agenda: anything painted below it is under
+    // the grid's clip and invisible.
+    final handleTop = tester.getRect(find.byTooltip('Hide calendar')).top;
+    expect(tester.getRect(cell).bottom, lessThanOrEqualTo(handleTop));
+  });
+
+  testWidgets('a six-week month at 2x text does not overflow the pane', (
+    tester,
+  ) async {
+    // The companion to the test above, and it guards the OTHER direction.
+    // Capping the grid at a share of the pane made it a non-flex child, so
+    // unlike the `Flexible` it replaced it can no longer be squeezed by the
+    // agenda beside it — the column is free to exceed the pane instead. The
+    // documented contract is that a tall month CLIPS rather than overflows, and
+    // only a test at a large text scale can hold anyone to it: the 1.0x test
+    // above passes with metres of headroom.
+    //
+    // 375x667 with real insets is the smallest pane that can run the iOS 18
+    // floor. Nothing guards a margin below that, deliberately — but if
+    // `_kMaxGridShare`, the handle or the agenda header grows, this is what
+    // fails.
+    tester.view.physicalSize = const Size(375 * 3, 667 * 3);
+    tester.view.devicePixelRatio = 3;
+    tester.view.padding = const FakeViewPadding(top: 20 * 3);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPadding);
+
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+        textScale: 2,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final weekStart = weekStartForLocale('en_CA');
+    final now = DateTime.now();
+    var month = DateTime(now.year, now.month);
+    while (monthGridRowCount(month, weekStart: weekStart) != 6) {
+      await tester.drag(find.byType(PageView), const Offset(-400, 0));
+      await tester.pumpAndSettle();
+      month = DateTime(month.year, month.month + 1);
+    }
+
+    // An overflow paints as a framework error rather than an exception, so it
+    // has to be read off `takeException` — a bare pump would pass regardless.
+    expect(tester.takeException(), isNull);
+
+    // And the agenda must still be given real extent: an unstarved `Expanded`
+    // is what the cap exists to preserve.
+    expect(find.byTooltip('Hide calendar'), findsOneWidget);
   });
 
   testWidgets('survives a stream error without crashing (error branch logs)', (

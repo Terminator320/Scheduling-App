@@ -179,6 +179,56 @@ class ClientSearchPolicy {
     return false;
   }
 
+  /// How well a client matches a query — LOWER is better, 0 is exact.
+  ///
+  /// Product behaviour, not storage: this ranks what the user sees, and it sat
+  /// inside `matchClientDocs` in the data layer while its own match half
+  /// ([rawMatches]) already lived here. The two are one decision about what
+  /// "matching" means, so they belong in one file.
+  ///
+  /// The six tiers, in order:
+  ///   0 — the whole display name or the whole phone, exactly
+  ///   1 — display name or person name STARTS with the query
+  ///   2 — phone starts with the query's digits
+  ///   3 — display name or person name CONTAINS it
+  ///   4 — the client's or a contact's phone contains it
+  ///   5 — matched on something else (address, email, a contact's name)
+  ///
+  /// A prefix outranks a substring on purpose: someone typing "tre" wants
+  /// Tremblay above Latreille. Phone tiers sit BELOW their name equivalents
+  /// because a digit run is the more accidental match of the two — but an
+  /// exact phone ties with an exact name at 0, since nobody types ten digits
+  /// by accident.
+  ///
+  /// [displayName], [personName] and both digit strings must already be
+  /// normalized through [normalize] / [digitsOnly]; the caller has them in
+  /// hand from the match pass, and re-normalizing here would pay for the most
+  /// expensive part of this search a second time.
+  static int relevanceScore({
+    required String displayName,
+    required String personName,
+    required String phoneDigits,
+    required String contactsDigits,
+    required String queryText,
+    required String queryDigits,
+  }) {
+    if (displayName == queryText || phoneDigits == queryDigits) return 0;
+    if (displayName.startsWith(queryText) ||
+        personName.startsWith(queryText)) {
+      return 1;
+    }
+    if (queryDigits.isNotEmpty && phoneDigits.startsWith(queryDigits)) return 2;
+    if (displayName.contains(queryText) || personName.contains(queryText)) {
+      return 3;
+    }
+    if (queryDigits.isNotEmpty &&
+        (phoneDigits.contains(queryDigits) ||
+            contactsDigits.contains(queryDigits))) {
+      return 4;
+    }
+    return 5;
+  }
+
   /// The cheap half of [matchesClient] — just two substring checks against an
   /// already-normalized entry and query.
   static bool entryMatches(

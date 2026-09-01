@@ -183,6 +183,35 @@ alwaysApply: true
   fail-closed `catch (_) { return false; }` is the easiest one to miss: it hides
   a permanently-broken plugin channel behind a feature that just "doesn't work".
 
+## A catch only reaches what is inside it
+
+Three fatals shipped in one release from catches that existed, looked right,
+and did not cover the throw (2026-08-31). Each shape is worth recognising:
+
+- **An `await` hoisted ABOVE the `try`.** `_loadClientIfNeeded` awaited
+  `currentUserDocProvider.future` above its try, inside a DISCARDED
+  `Future.microtask`, and `PushRegistrationController._syncGuarded` awaited
+  `_refreshSub.cancel()` above its own. A `hasError` guard covers a SETTLED
+  error, not one arriving during the await. Nothing awaits a discarded future
+  or an unawaited `sync()`, so the throw goes straight to the zone handler and
+  is filed as an app-level FATAL from a sheet that merely failed to prefill a
+  name. Put every await the guard is for INSIDE the try —
+  `PresenceSyncController` already does, which is how the drift was visible.
+- **A `catch` narrowed to one type.** `WaveSettingsSection` caught only
+  `WaveFailure`, so any other throw escaped with NO notice shown: the admin
+  taps Sync and nothing visibly happens. Keep the typed branch first and a
+  generic branch behind it — that is what `composeErrorNotice` is for.
+- **Safety that depends on a property of a DIFFERENT file.** The photo picker's
+  preload relied on `loadAll` swallowing its own per-image failures. That is
+  true today and is not a guarantee: an OOM decoding a large batch, or one
+  refactor there, and an unawaited future takes the app down from a gallery
+  that merely failed to render.
+
+The common tell is an unawaited or discarded future: it has no caller left to
+catch anything, so its `try` is the only thing between a routine failure and a
+fatal. Treat `unawaited(...)`, `Future.microtask(...)` and a fire-and-forget
+`sync()` as requiring the whole body inside the guard.
+
 ## Action outcomes vs. errors
 
 - A controller action whose result has more than two states returns a **sealed

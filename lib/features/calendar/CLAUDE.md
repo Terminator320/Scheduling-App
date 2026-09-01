@@ -122,13 +122,40 @@ STAYS in the root `CLAUDE.md`, because those are reachable from
   shared-viewport version needed a derived
   `gridHeight − stripHeight` spacer to hold the extent the grid vacated; with two
   viewports there is no vacated extent, and the spacer is gone. **The grid does
-  not scroll at all** (owner call, 2026-07-31): it sits in a `Flexible` +
+  not scroll at all** (owner call, 2026-07-31): it sits in a
   `SingleChildScrollView` whose physics are `NeverScrollableScrollPhysics`, so
   the viewport is pure overflow protection — a short viewport (small phone,
   large text scale) shrinks the grid instead of running the column past the
   bottom, and at normal heights it shrink-wraps and is inert. The handle is the
   ONLY thing that moves the grid; don't restore scrollable physics to "fix" a
   clipped month.
+  **That viewport is bounded by a `ConstrainedBox` against the pane, NEVER by a
+  `Flexible`** (2026-08-31). It was `Flexible`, which made it a flex-1 sibling
+  of the agenda's `Expanded` — and `RenderFlex` splits the free space evenly
+  between two equal flex factors, so the grid could never exceed HALF the pane
+  no matter how tall the month was. A six-week month wants ~334px at 1.0 scale
+  where half an iPhone 15's pane is ~326, so its last week was quietly clipped
+  by ~11px (99px on an SE), and only on the 4 or 5 months a year that need six
+  rows. Nothing overflowed and nothing logged, because the never-scrolling
+  viewport is exactly the thing that absorbs it. `_portraitContent` therefore
+  wraps the column in a `LayoutBuilder` and caps the grid at `_kMaxGridShare`
+  (0.7) of `constraints.maxHeight`: the grid takes the height its month asks
+  for, and the cap only bites at large text scales, where clipping is still the
+  accepted fallback. Don't hand the grid a flex share again — a loose
+  `Flexible` cannot express "natural height, capped", because leftover space a
+  loose child declines goes to `MainAxisAlignment`, not to the `Expanded`
+  beside it. `main_calendar_screen_test.dart` pins it, and it pins it at a
+  390x844 viewport WITH real safe-area insets: the bare 412x915 harness has
+  ~81px more pane and passes either way.
+  **The trade is that the COLUMN can now overflow where the flex share could
+  not.** A non-flex child cannot be squeezed by the agenda, so grid + handle +
+  header can exceed a short enough pane and overflow rather than clip — the one
+  thing the old shape ruled out by construction. Measured: it holds at 375x667
+  (the smallest pane that can run the iOS 18 floor) even at 3x text, and
+  overflows by ~5px at 320x568, which no supported device is. That margin is
+  the whole safety story, so a second test pins it at 2x text on the 375x667
+  pane; raising `_kMaxGridShare` or growing the handle or the agenda header
+  spends it.
   **Collapse is portrait-only** — `_splitCalendar` short-circuits the strip.
   **Paging selects.** A month swipe (or the month picker) lands on the 1st and
   SELECTS it, and a swipe on the collapsed week strip pages one week and selects

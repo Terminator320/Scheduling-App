@@ -36,14 +36,14 @@ paths:
   timeout rather than fail**, with no error naming the cause. The two
   repositories resolve `FirebaseFirestore.instance` when their providers are
   READ — which `DeviceDeregistrationDeps.from` now does — so they fail
-  `[core/no-app]` on construction, before any teardown step runs. Override the
-  loader with a subclass whose `clear()` is a no-op and the repositories with
-  `implements X` + `noSuchMethod` stubs whose only real member is
-  `clearCaches()` (see `_StubLoader`/`_StubClients`/`_StubAppointments` in
-  `account_exit_listeners_test.dart`, the `_Recording*` trio in
-  `device_deregistration_test.dart`, and `_exitOverrides` in
-  `delete_account_flow_test.dart`). Same class of trap as the
-  `FlutterSecureStorage.setMockInitialValues({})` rule above.
+  `[core/no-app]` on construction, before any teardown step runs.
+  **Spread `accountExitStubOverrides()`
+  (`test/support/account_exit_stubs.dart`) rather than re-declaring them** —
+  pass `calls:` to record the teardown ORDER, omit it for silent stubs, which
+  is the only difference the three hand-written copies had between them. This
+  paragraph used to name all three by class, which was the tell that the trio
+  wanted an owner: there was nowhere to point instead. Same class of trap as
+  the `FlutterSecureStorage.setMockInitialValues({})` rule above.
 - **A bare `ProviderContainer` does NOT inherit `main()`'s retry override, and
   that matters for any test asserting an ERROR state.** `main.dart` passes
   `retry: (retryCount, error) => null` to its `ProviderScope`; without it,

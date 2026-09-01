@@ -22,7 +22,8 @@
  * @module wave/customer_contract
  */
 
-const {toWaveCustomerInput, mappedFieldsHash} = require("./mappers");
+const {IMPORT_FIELD_CAPS, toWaveCustomerInput, mappedFieldsHash} =
+  require("./mappers");
 
 /**
  * @typedef {{field: string, code: string, severity: string,
@@ -45,13 +46,38 @@ const {toWaveCustomerInput, mappedFieldsHash} = require("./mappers");
  */
 
 /**
+ * The cap `IMPORT_FIELD_CAPS` registers for one client-doc field.
+ *
+ * Throws at REQUIRE time rather than returning undefined, and that is the
+ * point: `overLongProblems` compares `value.length <= rule.cap`, which is
+ * false for an undefined cap — so a field renamed in `mappers.js` would not
+ * go uncapped, it would report EVERY client as `TOO_LONG` with `cap:
+ * undefined`. Report-only today, but `blocking` in Phase 2, where that is
+ * every client refused. A rename has to fail the deploy, not the data.
+ * @param {string} field Client document field name.
+ * @return {number}
+ */
+function importCap(field) {
+  const cap = IMPORT_FIELD_CAPS[field];
+  if (typeof cap !== "number") {
+    throw new Error(
+        `PAYLOAD_CAPS: no IMPORT_FIELD_CAPS entry for "${field}"`);
+  }
+  return cap;
+}
+
+/**
  * Wave's own length caps, as PAYLOAD paths paired with the client-doc field an
  * admin would edit to fix them.
  *
- * The values mirror `IMPORT_FIELD_CAPS` (`wave/mappers.js`), which has always
- * applied them on the IMPORT direction only — `capped()` is called solely by
- * `fromWaveCustomer`. The push path capped nothing, which is what left a
- * 201–225 name and a 501–533 address able to dead-letter permanently.
+ * The numbers are READ from `IMPORT_FIELD_CAPS` (`wave/mappers.js`), never
+ * restated here. That map has always applied them on the IMPORT direction only
+ * — `capped()` is called solely by `fromWaveCustomer` — while the push path
+ * capped nothing, which is what left a 201-225 name and a 501-533 address able
+ * to dead-letter permanently. Two directions, one set of caps: a second
+ * hand-written list is exactly the contract-versus-reality drift this module
+ * exists to close, and it would drift silently, since nothing tests one list
+ * against the other.
  *
  * `provinceCode`/`countryCode` are absent deliberately: they are GraphQL
  * ENUMS, already membership-tested by `toProvinceCode`/`toCountryCode`, so a
@@ -59,16 +85,31 @@ const {toWaveCustomerInput, mappedFieldsHash} = require("./mappers");
  * @const {!Array<{path: !Array<string>, field: string, cap: number}>}
  */
 const PAYLOAD_CAPS = [
-  {path: ["name"], field: "name", cap: 200},
-  {path: ["firstName"], field: "firstName", cap: 200},
-  {path: ["lastName"], field: "lastName", cap: 200},
-  {path: ["email"], field: "email", cap: 320},
-  {path: ["phone"], field: "phone", cap: 32},
-  {path: ["mobile"], field: "mobile", cap: 32},
-  {path: ["address", "addressLine1"], field: "address", cap: 500},
-  {path: ["address", "addressLine2"], field: "addressLine2", cap: 500},
-  {path: ["address", "city"], field: "city", cap: 128},
-  {path: ["address", "postalCode"], field: "postalCode", cap: 32},
+  {path: ["name"], field: "name", cap: importCap("name")},
+  {path: ["firstName"], field: "firstName", cap: importCap("firstName")},
+  {path: ["lastName"], field: "lastName", cap: importCap("lastName")},
+  {path: ["email"], field: "email", cap: importCap("email")},
+  {path: ["phone"], field: "phone", cap: importCap("phone")},
+  // Borrows `phone`'s cap on purpose: `IMPORT_FIELD_CAPS` has no `mobile`
+  // entry because the import folds Wave's mobile into the one `phone` field,
+  // but the PUSH direction sends both, and they are the same Wave field type.
+  {path: ["mobile"], field: "mobile", cap: importCap("phone")},
+  {
+    path: ["address", "addressLine1"],
+    field: "address",
+    cap: importCap("address"),
+  },
+  {
+    path: ["address", "addressLine2"],
+    field: "addressLine2",
+    cap: importCap("addressLine2"),
+  },
+  {path: ["address", "city"], field: "city", cap: importCap("city")},
+  {
+    path: ["address", "postalCode"],
+    field: "postalCode",
+    cap: importCap("postalCode"),
+  },
 ];
 
 /**

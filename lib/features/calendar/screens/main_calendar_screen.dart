@@ -38,6 +38,23 @@ import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 
+/// Most of the portrait pane the month grid may take before it starts
+/// clipping. Six-week months need a little over half a phone's pane, so the
+/// cap has to clear that; what is left keeps the collapse handle, the agenda
+/// header and a job or two on screen. A month taller than the cap is clipped
+/// by the never-scrolling viewport below, and the handle collapses the grid
+/// away entirely.
+///
+/// **The cap bounds the GRID, not the column.** Unlike the `Flexible` this
+/// replaced, the grid is no longer a flex child, so the agenda cannot squeeze
+/// it — which means grid + handle + header can exceed a short enough pane and
+/// overflow rather than clip. Measured: it holds at 375x667 (the smallest pane
+/// that can run the iOS 18 floor) even at 3x text, and overflows by ~5px at
+/// 320x568, which no supported device is. Raising this number, or growing the
+/// handle or the agenda header, spends that margin —
+/// `main_calendar_screen_test.dart` pins it at 2x text on the 375x667 pane.
+const double _kMaxGridShare = 0.7;
+
 class MainCalendar extends ConsumerStatefulWidget {
   const MainCalendar({
     required this.isAdmin,
@@ -574,52 +591,65 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     required Map<String, String> nameMap,
     required DateTime today,
   }) {
-    // The agenda scrolls independently from the fixed grid.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // The grid viewport is overflow protection, not user scrolling.
-        if (!_collapse.isCollapsed)
-          Flexible(
-            child: SingleChildScrollView(
-              physics: const NeverScrollableScrollPhysics(),
-              child: _buildCalendar(colorMap, today),
-            ),
-          ),
-        // The section divider is also the collapse control.
-        _tour.step(
-          TourStepId.calendarCollapse,
-          child: CollapseHandle(
-            isCollapsed: _collapse.isCollapsed,
-            onDrag: _onCollapseDrag,
-            onDragEnd: _collapse.endDrag,
-            onToggle: _toggleCollapse,
-          ),
-        ),
-        agendaHeader,
-        Expanded(
-          child: CustomScrollView(
-            controller: _agendaController,
-            // Use a private controller because the grid is another scrollable.
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics(),
-            ),
-            slivers: [
-              AgendaSliverList(
-                events: events,
-                nameMap: nameMap,
-                colorMap: colorMap,
-                isLoading: isLoading,
-                isAdmin: widget.isAdmin,
-                day: agendaDay,
-                // The FAB and the Today pill float over this list, so the last
-                // job of the day needs somewhere to scroll clear of them.
-                bottomClearance: kAgendaFloatingControlsClearance,
+    // The agenda scrolls independently from the fixed grid, and the grid is
+    // measured against the pane rather than handed a flex share of it.
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // The grid takes the height its month needs, capped at
+          // [_kMaxGridShare] of the pane. It must not share the flex with the
+          // agenda below: two flex-1 children split the pane evenly, and a
+          // six-week month needs more than half of a phone's, so its last week
+          // was clipped away. The viewport that is left is overflow protection
+          // at large text sizes, not user scrolling.
+          if (!_collapse.isCollapsed)
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: constraints.maxHeight * _kMaxGridShare,
               ),
-            ],
+              child: SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
+                child: _buildCalendar(colorMap, today),
+              ),
+            ),
+          // The section divider is also the collapse control.
+          _tour.step(
+            TourStepId.calendarCollapse,
+            child: CollapseHandle(
+              isCollapsed: _collapse.isCollapsed,
+              onDrag: _onCollapseDrag,
+              onDragEnd: _collapse.endDrag,
+              onToggle: _toggleCollapse,
+            ),
           ),
-        ),
-      ],
+          agendaHeader,
+          Expanded(
+            child: CustomScrollView(
+              controller: _agendaController,
+              // Use a private controller because the grid is another
+              // scrollable.
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
+              ),
+              slivers: [
+                AgendaSliverList(
+                  events: events,
+                  nameMap: nameMap,
+                  colorMap: colorMap,
+                  isLoading: isLoading,
+                  isAdmin: widget.isAdmin,
+                  day: agendaDay,
+                  // The FAB and the Today pill float over this list, so the
+                  // last job of the day needs somewhere to scroll clear of
+                  // them.
+                  bottomClearance: kAgendaFloatingControlsClearance,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

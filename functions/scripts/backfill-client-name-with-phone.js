@@ -87,8 +87,6 @@
 // lists at the end. This rewrites the customer name in Wave; it is not
 // reversible from here.
 
-const {initializeApp, applicationDefault} = require("firebase-admin/app");
-const {getFirestore} = require("firebase-admin/firestore");
 
 const {
   composeStored,
@@ -101,7 +99,7 @@ const {
 // rather than renamed. This script rewrites live Wave customers.
 const {toMillis} = require("../time_utils");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
-const {printTargetBanner} = require("./_project");
+const {bootstrapScript} = require("./_project");
 // The batched-write loop, shared so `--dry-run` cannot be forgotten at a
 // call site — see `_batch.js`.
 const {commitInBatches} = require("./_batch");
@@ -267,17 +265,8 @@ function splitName(name) {
  */
 async function main() {
   const argv = process.argv.slice(2);
-  assertKnownFlags(argv);
-  const dryRun = argv.includes("--dry-run");
+  const {db, dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
   const sinceMs = parseSince(argv);
-
-  const app = initializeApp({credential: applicationDefault()});
-  const db = getFirestore();
-
-  // Printed BEFORE anything is read. Running a bulk rename against the wrong
-  // project is the other unrecoverable mistake here, and the only defence is
-  // the operator seeing which one they hit.
-  printTargetBanner(app, {dryRun});
 
   const snap = await db.collection("clients").get();
 
