@@ -603,6 +603,115 @@ void main() {
 
       expect(keys.values.where((k) => k == key), hasLength(2));
     });
+
+    // `_patchWindow` carries the already-materialized records and building
+    // keys across a local write and re-derives only the one client that
+    // changed, rather than discarding the window's memos and rebuilding every
+    // record and key on the UI isolate. These pin the four write shapes it
+    // has to get right; the win is that they stay correct while the whole
+    // window is no longer recomputed.
+    group('a local write patches the derived maps in place', () {
+      ClientRecord patonClient(String id, String name, String address) =>
+          ClientRecord(
+            id: id,
+            name: name,
+            address: address,
+            city: 'Laval',
+            province: 'QC',
+            postalCode: 'H7W 5J7',
+            country: 'Canada',
+          );
+
+      test(
+        'an edit that moves a client INTO the building recounts it',
+        () async {
+          final docs = paton();
+          when(() => snapshot.docs).thenReturn(docs);
+          final r = repo();
+          // Materialize the memos first — this is the state the patch reuses.
+          expect((await r.fetchBuildings()).single.clientCount, 2);
+
+          await r.updateClient(
+            patonClient('c3', 'Elsewhere', '88-4450 Prom. Paton'),
+          );
+
+          final buildings = await r.fetchBuildings();
+          expect(buildings.single.clientCount, 3);
+          final keys = await r.fetchBuildingKeys();
+          expect(keys['c3'], buildings.single.key);
+          // The two clients that did not change keep their key.
+          expect(keys['c1'], buildings.single.key);
+          expect(keys['c2'], buildings.single.key);
+        },
+      );
+
+      test(
+        'an edit that moves a client OUT drops it from the key map',
+        () async {
+          final docs = paton();
+          when(() => snapshot.docs).thenReturn(docs);
+          final r = repo();
+          final key = (await r.fetchBuildings()).single.key;
+
+          // A street nothing else in the window shares, so moving c1 there can
+          // only dissolve Paton rather than form a second building with c3.
+          await r.updateClient(patonClient('c1', 'Zeta', '12 Rue Unique'));
+
+          final keys = await r.fetchBuildingKeys();
+          expect(keys['c1'], isNot(key));
+          expect(keys['c2'], key);
+          // One client left at Paton is below the 2-client minimum.
+          expect(await r.fetchBuildings(), isEmpty);
+        },
+      );
+
+      test('an untouched client is NOT rebuilt across a write', () async {
+        // The point of the patch, asserted the only way it can be from
+        // outside: a record the write did not touch comes back as the SAME
+        // instance, which is only true if the window carried it across
+        // instead of re-running `ClientRecord.fromMap` over the whole scan.
+        final docs = paton();
+        when(() => snapshot.docs).thenReturn(docs);
+        final r = repo();
+        final key = (await r.fetchBuildings()).single.key;
+        final before = (await r.fetchClientsByBuilding(
+          key,
+        )).firstWhere((c) => c.id == 'c2');
+
+        await r.updateClient(patonClient('c1', 'Zeta', '12 Rue Unique'));
+
+        final after = (await r.fetchClientsByBuilding(
+          key,
+        )).firstWhere((c) => c.id == 'c2');
+        expect(identical(before, after), isTrue);
+      });
+
+      test('archiving removes the client from the derived maps', () async {
+        final docs = paton();
+        when(() => snapshot.docs).thenReturn(docs);
+        final r = repo();
+        expect((await r.fetchBuildings()).single.clientCount, 2);
+
+        await r.setClientArchived('c1', archived: true);
+
+        // Archived clients are excluded from `records`, so the key map must
+        // lose the entry rather than keep a stale one.
+        expect(await r.fetchBuildingKeys(), isNot(contains('c1')));
+        expect(await r.fetchBuildings(), isEmpty);
+      });
+
+      test('deleting removes the client from the derived maps', () async {
+        final docs = paton();
+        when(() => snapshot.docs).thenReturn(docs);
+        final r = repo();
+        expect((await r.fetchBuildings()).single.clientCount, 2);
+
+        await r.deleteClient('c1');
+
+        expect(await r.fetchBuildingKeys(), isNot(contains('c1')));
+        expect(await r.fetchBuildings(), isEmpty);
+      });
+    });
   });
 
   group('type filtering', () {
