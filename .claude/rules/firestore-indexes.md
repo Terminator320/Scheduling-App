@@ -61,3 +61,30 @@ wait for the policy to disappear from the list → recreate, or the create fails
 group that already holds documents. TTL is housekeeping only — every one of
 these is also swept in-code, so a missing policy is never a correctness bug.
 
+
+**A composite index is NOT redundant just because another index starts with the
+same fields — Firestore appends `__name__` to the ordered fields, and that
+lands at the END.** `appointments (employeeIds CONTAINS, endTime ASC)` was
+deleted on 2026-08-29 as a "redundant prefix" of
+`(employeeIds CONTAINS, endTime ASC, startTime ASC)`. It is not one: the
+surviving index really reads `(employeeIds, endTime, startTime, __name__)`, so
+no prefix of it ever puts `__name__` directly after `endTime` — which is
+exactly what `travel_utils.js`'s `decideOrigin` context query needs
+(`array-contains` + two `endTime` bounds + `orderBy("endTime")` + `limit`).
+The query began failing `FAILED_PRECONDITION` immediately and **every travel
+reminder silently degraded to the fixed 30-minute kind for two days**, because
+that path is best-effort: it logs `travel: context query failed` and falls
+through, so nothing surfaced it in the app or in Crashlytics. It was found
+only by reading `functions_get_logs`, where it was 60 of 60 warnings in a
+2.5-hour window. **Restored 2026-08-31; do not delete it again.** Before
+removing any composite as a prefix, check what `orderBy` the query ends on —
+and prefer confirming against the logs over reasoning about it.
+
+**A `fieldOverrides` exemption is not free reach — `createdAt`/`updatedAt` stay
+INDEXED on purpose** (restated 2026-08-31 after a pass exempted them for write
+cost and had to be reverted). They are what you sort and filter by in the
+Firebase console when investigating a live doc, which is worth more than the
+two index writes each costs. The exemptions above are for free-text,
+denormalized and array-of-object fields that no query and no human ever sorts
+on — `wave.problems` (added 2026-08-31) is the array-of-objects shape, the
+same case as `clients/contacts`.
