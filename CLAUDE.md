@@ -89,6 +89,36 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   (cold-start already-deleted accounts are caught earlier by `SplashScreen`).
 - **Employee visibility:** Employees see only appointments where their doc id is
   in `employeeIds`. Apply this filter on any new appointment view.
+- **An ASSIGNEE may record their own work: crew notes and photos** (2026-09-01).
+  Until then a technician could read a job and tap "Mark as complete", and
+  nothing else — the photo pipeline, the offline upload queue and the
+  magic-byte validation all existed and were wired to the admin-only edit form,
+  so for a trade where the field record IS the billable artifact it travelled
+  by phone call. Three grants, each deliberately narrow:
+  **`fieldNotes` is its OWN `allow update` disjunct**, never a widened
+  `hasOnly` on the mark-done branch — that branch is the most
+  security-sensitive write in the app and its exact key set is what makes it
+  reasonable about; one write doing both puts every guarantee on it back in
+  play. It is `fieldNotes`, never `notes`: the dispatcher's brief is written at
+  booking and an assignee must not overwrite it, so two fields is what makes
+  "the crew may add, never edit the brief" a rules-level fact. It carries no
+  status gate (a note is often the explanation for a job that went wrong), and
+  **its length cap is conditional on the field being PRESENT** — `hasOnly`
+  admits a SUBSET, and an assignee adding a photo touches the parent with an
+  `updatedAt`-only diff, which a flat cap refuses, so the crew could add the
+  photo ROW and never the photo.
+  **`appointments/{id}/images` allows CREATE to an assignee**, with update and
+  delete still admin-only: adding to the record is additive, removing from it
+  is not, and a field record must not be quietly deletable by the person whose
+  work it documents. `storage.rules` grants the same assignee the BYTES at the
+  same path — the two move together, since a row create with no object write
+  leaves a photo pointing at nothing. What stops a compromised employee session
+  pointing a row at another job's object is the `storagePath` path constraint,
+  not the role.
+  The UI half is `DetailsFieldRecordView`, rendered only for a NON-ADMIN
+  ASSIGNEE (`activeUserIdentityProvider`), which is exactly the set those rules
+  admit — never `!showActions`, which the client job-history surface also
+  passes and which is an admin reading somebody else's job.
 - **Editing an appointment must preserve assignees not in the active picker.**
   The employee picker never shows a disabled/removed person, so such an assignee
   can't be deselected — saving must re-append original `employeeIds` not in the
@@ -321,8 +351,21 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `historySearchProvider` (`autoDispose.family` keyed by query) and match across
   all fields in Dart; the loaded-page filter fills the gap until the debounced
   read settles. `ClientSearchPolicy.normalize` (accent-fold) + `digitsOnly`
-  (phone) are the matching primitives, and `ClientSearchPolicy.matchesClient` is
-  the single client-side fallback matcher — route new client matching through it.
+  (phone) are the matching primitives. **The client-side matchers are
+  `index()` + `entryMatches()` (the loaded-page filter) and `rawMatches()` (the
+  debounced server scan) — route new client matching through those.**
+  `matchesClient` is a convenience wrapper over the first pair with NO
+  production caller: the split exists FOR performance, since `index` is hoisted
+  to run once per data change while `matchesClient` rebuilds the projection per
+  candidate per keystroke. This line used to call it "the single client-side
+  fallback matcher — route new client matching through it", which pointed an
+  author straight at the function the hot paths were refactored to avoid.
+  **The appointment side has the same pair now**: `historyEntryOf` +
+  `historyEntryMatches` (`calendar/domain/policies/history_search_policy.dart`),
+  which `matchHistoryDocs` and `appointment_history_view.dart`'s loaded-page
+  filter BOTH route through — they are the same search at two layers, and a
+  field added to one used to change results visibly when the debounce settled,
+  with nothing logged.
   **A matcher that reads the RAW map to skip building a record must parse list
   fields through `firestoreStringList`** (`core/utils/firestore_parsing.dart`,
   beside `firestoreDateTime`/`firestoreInt`), never a private copy: the history
@@ -331,10 +374,31 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   have matched — a search that quietly stops finding a crew member, with
   nothing logged.
   `FirebaseAppointmentsRepository` keeps a bounded LRU of recent `searchHistory`
-  results on the long-lived singleton; every write path clears it via
-  `_invalidateSearchCache()`, so a new appointment-write method MUST call it too
-  or history search serves stale results (including a just-deleted appointment
-  that opens a detail view for a doc that no longer exists).
+  results on the long-lived singleton. **Every write path must call
+  `_patchWindow(...)` or `_notifyLocalWrite()`** — a method that calls neither
+  serves stale results, including a just-deleted appointment that opens a
+  detail view for a doc that no longer exists, and
+  `firebase_appointments_repository_invalidation_test.dart` reads the source
+  back to make that a test failure rather than a silent one. **It replaced
+  `_invalidateSearchCache()`, which THREW THE WINDOW AWAY** (2026-09-01): the
+  window is the full paged terminal-status archive capped at 5000, and nine
+  write paths dropped it outright, so an admin who searched History, opened a
+  result and marked it complete re-paged the entire archive behind the sheet —
+  thousands of billed reads and four sequential round trips for a one-field
+  write, growing with the archive. `_patchWindow` merges the changed docs by id
+  instead, the same treatment `firebase_clients_repository`'s own `_patchWindow`
+  already had. Two rules inside it are load-bearing: a doc whose status is no
+  longer terminal is REMOVED rather than merged (the window is
+  `status whereIn terminalStatusQueryValues`, so a create or a reopen does not
+  belong in it), and a new doc is inserted at its `startTime` position, because
+  the window is `startTime` DESC and `searchHistory` returns it unsorted.
+  `_notifyLocalWrite()` is the narrow alternative, for a write that provably
+  changes no field `matchHistoryDocs` reads — the two photo paths.
+  **The LRU itself is `SearchResultCache<T>` (`core/data/search_result_cache.dart`),
+  shared with the clients repository**: the two carried byte-identical
+  `_isFresh`/`_cacheSearch` pairs over identical dials (50 entries, 2 min), and
+  neither copy had a test for expiry or eviction. Invalidation policy stays
+  per-repo — they legitimately differ on the `_localWrites` poke.
   **Both scan windows PAGE to their cap and then WARN**, the same posture
   `_mapRangeSnapshot` takes for the range streams. Paging is what stops a
   window truncating at one page; the cap is what stops it walking the whole

@@ -1,0 +1,20 @@
+/* Localized iOS permission prompts.
+
+   `Info.plist`'s NS*UsageDescription strings are the ENGLISH source; iOS reads
+   the value for the user's language out of `InfoPlist.strings` when one exists
+   for that locale, and falls back to the plist otherwise. Without these files
+   every OS prompt was English on a bilingual product sold in Quebec — the one
+   place the app's own `AppLanguageController` cannot reach, because the
+   prompts are drawn by the system before any Dart runs.
+
+   Keep in step with `ios/Runner/Info.plist`: a key present here overrides it,
+   and a key MISSING here silently falls back, which is the failure mode worth
+   knowing about — it looks like nothing is wrong. */
+
+"NSCameraUsageDescription" = "This app uses the camera to take appointment photos and profile pictures.";
+"NSContactsUsageDescription" = "This app saves a client you choose to your phone contacts, and keeps that one contact up to date when you edit the client. It does not read the rest of your contacts.";
+"NSFaceIDUsageDescription" = "This app uses Face ID to unlock the app lock you enabled in Settings.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Your location tells you when it is time to leave for your next appointment and shows your position on the staff map. This app only uses your location while you have it open.";
+"NSLocationWhenInUseUsageDescription" = "While you have the app open, your location tells you when it is time to leave for your next appointment and shows your position on the staff map.";
+"NSPhotoLibraryUsageDescription" = "This app accesses your photo library to attach images to appointments and profiles.";
+"NSPhotoLibraryAddUsageDescription" = "This app saves appointment photos to your photo library when you choose to save them.";

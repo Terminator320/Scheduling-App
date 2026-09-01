@@ -475,6 +475,35 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('a NON-WaveFailure throw still surfaces a notice', (
+      tester,
+    ) async {
+      // Shipped as a FATAL on 2026-08-31: the catch was narrowed to
+      // `on WaveFailure`, so any other throw escaped to the zone handler with
+      // NO notice shown — the admin taps Connect and nothing visibly happens.
+      // `WaveService` maps its own throws, but the action closures also run
+      // notices, `ref.invalidate` and `setState`, so this is reachable.
+      //
+      // Narrow the catch back to `on WaveFailure` and this test fails.
+      final service = _mockService();
+      final notices = NoticeService();
+      final emitted = <String>[];
+      notices.stream.listen((n) => emitted.add(n.message));
+
+      when(service.bootstrap).thenThrow(StateError('not a WaveFailure'));
+
+      await tester.pumpWidget(_wrapSection(service, noticeService: notices));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Connect to Wave'));
+      await tester.pumpAndSettle();
+
+      expect(emitted, isNotEmpty);
+      expect(tester.takeException(), isNull);
+      // And the busy flag was released, so the button is usable again.
+      expect(find.text('Connect to Wave'), findsOneWidget);
+    });
+
     testWidgets('Sync success after Connect names both directions', (
       tester,
     ) async {

@@ -122,11 +122,13 @@ Future<void> main() async {
         final crashlytics = FirebaseCrashlytics.instance;
         FlutterError.onError = crashlytics.recordFlutterFatalError;
         PlatformDispatcher.instance.onError = (error, stack) {
-          unawaited(_recordUnhandledError(
-            error,
-            stack,
-            fatal: isFatalUnhandledError(error),
-          ));
+          unawaited(
+            _recordUnhandledError(
+              error,
+              stack,
+              fatal: isFatalUnhandledError(error),
+            ),
+          );
           return true;
         };
 
@@ -157,11 +159,13 @@ Future<void> main() async {
       );
     },
     (error, stack) {
-      unawaited(_recordUnhandledError(
-        error,
-        stack,
-        fatal: isFatalUnhandledError(error),
-      ));
+      unawaited(
+        _recordUnhandledError(
+          error,
+          stack,
+          fatal: isFatalUnhandledError(error),
+        ),
+      );
     },
   );
 }
@@ -332,6 +336,12 @@ class _PaulAppState extends ConsumerState<PaulApp> {
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             theme: lightTheme(),
             darkTheme: darkTheme(),
+            // iOS "Increase Contrast". MaterialApp swaps to these itself when
+            // MediaQuery.highContrastOf is true, so nothing branches at a call
+            // site. docs/legal/accessibility.html claimed the app honoured
+            // this setting while nothing in lib/ read the flag.
+            highContrastTheme: highContrastLightTheme(),
+            highContrastDarkTheme: highContrastDarkTheme(),
             themeMode: _themeMode,
             scrollBehavior: const AppScrollBehavior(),
             home: const OnboardingGate(),
@@ -344,18 +354,28 @@ class _PaulAppState extends ConsumerState<PaulApp> {
                 _textScale * systemFactor,
                 2.2,
               );
+              // iOS "Bold Text". Flutter exposes the flag and applies it to
+              // nothing, so the weight bump is ours to make — here, where the
+              // RESOLVED theme is in scope, so it composes with light/dark and
+              // with the high-contrast pair above.
+              final theme = media.boldText
+                  ? boldTextTheme(Theme.of(context))
+                  : Theme.of(context);
               return MediaQuery(
                 data: media.copyWith(
                   textScaler: TextScaler.linear(effectiveScale),
                 ),
-                child: AppLock(
-                  child: NoticeListener(
-                    navigatorKey: _navigatorKey,
-                    child: Column(
-                      children: [
-                        Expanded(child: child ?? const SizedBox.shrink()),
-                        const OfflineBanner(),
-                      ],
+                child: Theme(
+                  data: theme,
+                  child: AppLock(
+                    child: NoticeListener(
+                      navigatorKey: _navigatorKey,
+                      child: Column(
+                        children: [
+                          Expanded(child: child ?? const SizedBox.shrink()),
+                          const OfflineBanner(),
+                        ],
+                      ),
                     ),
                   ),
                 ),

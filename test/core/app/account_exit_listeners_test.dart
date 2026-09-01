@@ -16,6 +16,7 @@ import 'package:scheduling/features/live_activity/application/live_activity_regi
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/routes/app_routes.dart';
 
 import '../../support/account_exit_stubs.dart';
 
@@ -36,6 +37,7 @@ void main() {
   late List<String> calls;
   late GlobalKey<NavigatorState> navigatorKey;
   late GlobalKey<ScaffoldMessengerState> messengerKey;
+  late List<String?> pushedRoutes;
 
   setUp(() {
     push = _MockPush();
@@ -45,6 +47,7 @@ void main() {
     calls = [];
     navigatorKey = GlobalKey<NavigatorState>();
     messengerKey = GlobalKey<ScaffoldMessengerState>();
+    pushedRoutes = [];
 
     when(() => push.unregisterCurrentDevice()).thenAnswer((_) async {
       calls.add('push');
@@ -83,6 +86,15 @@ void main() {
           scaffoldMessengerKey: messengerKey,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
+          // Records what the exit pushes. `home` still serves '/', so the
+          // existing tests are unaffected.
+          onGenerateRoute: (settings) {
+            pushedRoutes.add(settings.name);
+            return MaterialPageRoute<void>(
+              settings: settings,
+              builder: (_) => const Scaffold(body: SizedBox.shrink()),
+            );
+          },
           home: Consumer(
             builder: (context, ref, _) {
               controller = AccountExitController(
@@ -194,4 +206,66 @@ void main() {
       expect(calls.where((c) => c == 'signOut').length, 1);
     },
   );
+
+  testWidgets('sends the signed-out user to the login route', (tester) async {
+    // The ORDER and the guard were pinned; the navigation was not. Drop the
+    // push and a deleted or disabled user is signed out but left standing on
+    // whatever screen they had open — with `persistenceEnabled: true` still
+    // serving cached client names and addresses out of the local Firestore
+    // cache.
+    final controller = await pumpController(tester);
+
+    await controller.exitAccount(
+      selectMessage: (l10n) => 'disabled',
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: messengerKey,
+      isMounted: () => true,
+    );
+    // The navigation and the snack bar run from an addPostFrameCallback, and
+    // a callback registered while the binding is idle does not run until a
+    // frame is actually scheduled — in the app something is always rendering,
+    // in a test nothing is.
+    tester.binding.scheduleFrame();
+    await tester.pumpAndSettle();
+
+    expect(pushedRoutes, [AppRoutes.login]);
+  });
+
+  testWidgets('shows the reason on the way out', (tester) async {
+    final controller = await pumpController(tester);
+
+    await controller.exitAccount(
+      selectMessage: (l10n) => 'your account was disabled',
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: messengerKey,
+      isMounted: () => true,
+    );
+    // The navigation and the snack bar run from an addPostFrameCallback, and
+    // a callback registered while the binding is idle does not run until a
+    // frame is actually scheduled — in the app something is always rendering,
+    // in a test nothing is.
+    tester.binding.scheduleFrame();
+    await tester.pumpAndSettle();
+
+    expect(find.text('your account was disabled'), findsOneWidget);
+  });
+
+  testWidgets('an unmounted app navigates nowhere and releases the guard', (
+    tester,
+  ) async {
+    var mounted = true;
+    final controller = await pumpController(tester);
+
+    await controller.exitAccount(
+      selectMessage: (l10n) => 'disabled',
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: messengerKey,
+      isMounted: () => mounted,
+    );
+    mounted = false;
+    tester.binding.scheduleFrame();
+    await tester.pumpAndSettle();
+
+    expect(pushedRoutes, isEmpty);
+  });
 }

@@ -69,6 +69,14 @@ abstract class AppointmentsRepository {
   /// way.
   Future<List<AppointmentImage>> fetchAppointmentPictures(String id);
 
+  /// Writes what the CREW recorded on site.
+  ///
+  /// Its own method, not a corner of `updateAppointment`: the rules branch
+  /// behind it is `hasOnly(['fieldNotes', 'updatedAt'])`, so an assignee's
+  /// write must carry those two keys and nothing else. Re-serializing the
+  /// record here would be refused as an opaque `permission-denied`.
+  Future<void> updateFieldNotes({required String id, required String notes});
+
   Future<void> updateAppointmentStatus({
     required String id,
     required String status,

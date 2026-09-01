@@ -27,7 +27,7 @@ jest.mock("firebase-functions/logger", () => ({
 
 const {getFirestore} = require("firebase-admin/firestore");
 const logger = require("firebase-functions/logger");
-const {assertAdmin} = require("../security");
+const {assertAdmin, assertAdminCall} = require("../security");
 
 /**
  * In-memory Firestore double exposing one `usersByUid` document.
@@ -132,4 +132,103 @@ describe("assertAdmin", () => {
     await attempt({role: "admin", status: "active"});
     expect(logger.warn).not.toHaveBeenCalled();
   });
+});
+
+/**
+ * `assertAdminCall` composes the three-step opening every admin-only callable
+ * needs, and it is what makes a MISSING gate unrepresentable rather than
+ * merely tested for. On 2026-09-01 three callables turned out to have a
+ * deletable `assertAdmin` — the whole suite stayed green with the gate gone,
+ * on the endpoints that mint and delete real Firebase Auth accounts.
+ *
+ * The call sites now assert only that they USE it; this is where the
+ * composition itself is proved, against the real `assertAdmin` above.
+ */
+describe("assertAdminCall", () => {
+  const req = (over) => ({
+    auth: {uid: "caller-uid"},
+    data: {clientId: "c1"},
+    ...over,
+  });
+  const KEYS = new Set(["clientId"]);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test("an active admin with a clean payload passes, and gets their uid back",
+      async () => {
+        getFirestore.mockReturnValue(
+            makeDb({role: "admin", status: "active"}).db);
+
+        await expect(assertAdminCall(req(), KEYS)).resolves.toBe("caller-uid");
+      });
+
+  test("a signed-out caller is refused BEFORE the roster is read", async () => {
+    const {db, collections} = makeDb({role: "admin", status: "active"});
+    getFirestore.mockReturnValue(db);
+
+    await expect(assertAdminCall(req({auth: null}), KEYS))
+        .rejects.toThrow(/auth-required/);
+    expect(collections).toEqual([]);
+  });
+
+  test("a caller with an auth object but no uid is refused too", async () => {
+    // Fail closed on missing input, the shape `assertFreshReauth` sets.
+    const {db, collections} = makeDb({role: "admin", status: "active"});
+    getFirestore.mockReturnValue(db);
+
+    await expect(assertAdminCall(req({auth: {}}), KEYS))
+        .rejects.toThrow(/auth-required/);
+    expect(collections).toEqual([]);
+  });
+
+  test("a non-admin is refused", async () => {
+    getFirestore.mockReturnValue(
+        makeDb({role: "employee", status: "active"}).db);
+
+    await expect(assertAdminCall(req(), KEYS)).rejects.toThrow();
+  });
+
+  test("a DISABLED admin is refused", async () => {
+    // The half that makes deactivation effective.
+    getFirestore.mockReturnValue(
+        makeDb({role: "admin", status: "disabled"}).db);
+
+    await expect(assertAdminCall(req(), KEYS)).rejects.toThrow();
+  });
+
+  test("the ADMIN check runs BEFORE the payload check", async () => {
+    // Order is the security-relevant part: a non-privileged caller must be
+    // refused before anything reads their data, and both must sit above
+    // whatever rate limiter the caller adds next so a burst of malformed
+    // submissions cannot exhaust a legitimate admin's window. A bad payload
+    // from a NON-admin must therefore report the admin failure.
+    getFirestore.mockReturnValue(
+        makeDb({role: "employee", status: "active"}).db);
+
+    await expect(
+        assertAdminCall(req({data: {clientId: "c1", evil: 1}}), KEYS),
+    ).rejects.toThrow(/not-admin/);
+  });
+
+  test("an unexpected key is refused for an admin", async () => {
+    getFirestore.mockReturnValue(
+        makeDb({role: "admin", status: "active"}).db);
+
+    await expect(
+        assertAdminCall(req({data: {clientId: "c1", evil: 1}}), KEYS),
+    ).rejects.toThrow(/unexpected-field/);
+  });
+
+  test("an absent payload is accepted, as assertPayloadShape allows",
+      async () => {
+        // Callables whose every field is optional pass no data at all; the
+        // per-field readers are what refuse a missing required one.
+        getFirestore.mockReturnValue(
+            makeDb({role: "admin", status: "active"}).db);
+
+        await expect(assertAdminCall(req({data: undefined}), KEYS))
+            .resolves.toBe("caller-uid");
+      });
 });

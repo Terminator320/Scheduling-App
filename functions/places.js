@@ -2,12 +2,11 @@ const {onCall, HttpsError} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
 
 const {
-  assertPayloadShape,
   requireString,
   requireNumberInRange,
   readSessionToken,
   enforceDurableRateLimit,
-  assertAdmin,
+  assertAdminCall,
 } = require("./security");
 const {GOOGLE_MAP_API_KEY} = require("./params");
 
@@ -203,14 +202,10 @@ const placesAutocomplete = onCall(
       secrets: [GOOGLE_MAP_API_KEY],
     },
     async (req) => {
-      if (!req.auth || !req.auth.uid) {
-        throw new HttpsError("unauthenticated", "auth-required");
-      }
       // This is admin-only — address autocomplete is only surfaced on admin
       // appointment forms. The in-memory limiter below is a cost guard, not
       // a hard cap.
-      await assertAdmin(req.auth.uid);
-      assertPayloadShape(req.data, new Set(["input", "sessionToken"]));
+      await assertAdminCall(req, new Set(["input", "sessionToken"]));
       const input = requireString(req.data, "input", INPUT_MAX_LEN);
       const sessionToken = readSessionToken(req.data);
 
@@ -257,13 +252,9 @@ const placesGetDetails = onCall(
       secrets: [GOOGLE_MAP_API_KEY],
     },
     async (req) => {
-      if (!req.auth || !req.auth.uid) {
-        throw new HttpsError("unauthenticated", "auth-required");
-      }
       // Place details is admin-only for the same reason as autocomplete. It
       // also keeps the durable Firestore rate cap below.
-      await assertAdmin(req.auth.uid);
-      assertPayloadShape(req.data, new Set(["placeId", "sessionToken"]));
+      await assertAdminCall(req, new Set(["placeId", "sessionToken"]));
       const placeId = requireString(req.data, "placeId", 256);
       if (!PLACE_ID_PATTERN.test(placeId)) {
         throw new HttpsError("invalid-argument", "invalid-placeId");
@@ -316,13 +307,9 @@ const placesReverseGeocode = onCall(
       secrets: [GOOGLE_MAP_API_KEY],
     },
     async (req) => {
-      if (!req.auth || !req.auth.uid) {
-        throw new HttpsError("unauthenticated", "auth-required");
-      }
       // Only the admin-only live-location map calls this — same reasoning as
       // the other Places proxies.
-      await assertAdmin(req.auth.uid);
-      assertPayloadShape(req.data, new Set(["lat", "lng", "locale"]));
+      await assertAdminCall(req, new Set(["lat", "lng", "locale"]));
       const lat = requireNumberInRange(req.data && req.data.lat, "lat",
           -90, 90);
       const lng = requireNumberInRange(req.data && req.data.lng, "lng",

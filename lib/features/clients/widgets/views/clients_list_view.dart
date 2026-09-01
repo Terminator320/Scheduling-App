@@ -4,6 +4,8 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
@@ -194,7 +196,16 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
         extentRatio: canDeleteClient(client) ? 0.5 : 0.28,
         // Full swipe commits Archive ONLY. Delete is never gesture-committed
         // — it needs a deliberate tap plus a confirm.
-        dismissible: DismissiblePane(onDismissed: () => archiveClient(client)),
+        //
+        // The work runs in `confirmDismiss`, NOT `onDismissed`: the row is
+        // collapsed before `onDismissed` fires, so an archive that wrote
+        // nothing (offline, reentrancy skip, failure) still removed the row,
+        // and the keyed `Slidable` kept it gone until a pull-to-refresh.
+        // `archiveClient` returns true only when the write committed.
+        dismissible: DismissiblePane(
+          confirmDismiss: () => archiveClient(client),
+          onDismissed: () {},
+        ),
         children: [
           // Advisory: the callable re-checks with a live count(), so this only
           // keeps the swipe from offering what the server would refuse.
@@ -467,8 +478,18 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
   @override
   Widget build(BuildContext context) {
     ref.listen(clientsRefreshProvider, (_, _) => _pagingController.refresh());
-    _buildingCounts = ref.watch(clientBuildingCountsProvider);
-    _buildingKeys = ref.watch(clientBuildingKeysProvider).value ?? const {};
+
+    // Only while this tab is the visible one. The view lives in the hub's
+    // IndexedStack, so once visited it stayed subscribed for the rest of the
+    // session and both derivations re-ran on every client write — including
+    // one made from the inline add-client during booking, with the Clients
+    // list nowhere on screen. `currentOf` is null outside the shell (a pushed
+    // route, or the picker host), where the pill is wanted anyway.
+    final tab = HubShellScope.currentOf(context);
+    if (tab == null || tab == HubTab.clients) {
+      _buildingCounts = ref.watch(clientBuildingCountsProvider);
+      _buildingKeys = ref.watch(clientBuildingKeysProvider).value ?? const {};
+    }
 
     switch (widget.filter) {
       case ClientsFilterArchived():

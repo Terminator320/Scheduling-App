@@ -77,7 +77,7 @@ abstract class ClientRecord with _$ClientRecord {
   const ClientRecord._();
 
   factory ClientRecord.fromMap(String id, Map<String, dynamic> data) {
-    final rawContacts = (data['contacts'] as List?) ?? const [];
+    final rawContacts = firestoreList(data['contacts']);
     final wave = (data['wave'] as Map?)?.cast<String, dynamic>();
     // Back-compat for legacy `businessName` — keeps unnamed business docs
     // visible and searchable. Two halves: `name` falls back to it when blank

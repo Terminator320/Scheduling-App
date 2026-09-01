@@ -185,6 +185,52 @@ describe("syncUsersByUid bridge/presence isolation", () => {
         .toBeLessThan(presenceDelete.mock.invocationCallOrder[0]);
   });
 
+  // The doc-DELETED branch. Fourteen makeEvent(...) calls existed and not one
+  // passed `after` as null, so this path never ran — and it is the teardown
+  // for `usersByUid`, which is assertAdmin's ONLY data source and the
+  // collection every rules role gate resolves through. Break it and a deleted
+  // user's bridge row survives carrying `role: "admin", status: "active"`: a
+  // live admin credential for an account that no longer exists.
+  test("a DELETED user doc removes its bridge row", async () => {
+    presenceDelete.mockResolvedValue(undefined);
+    const before = {uid: "auth1", status: "active", role: "admin"};
+
+    await syncUsersByUid.run(makeEvent("u_doc", before, null));
+
+    expect(collectionDeletes).toContain("usersByUid/auth1");
+    // Terminal cleanup, so nothing is re-created.
+    expect(batch.set).not.toHaveBeenCalled();
+  });
+
+  test("a deleted doc with no uid deletes no bridge row", async () => {
+    // A pre-P4c doc that never got an Auth account has nothing to tear down,
+    // and deleting `usersByUid/` (empty id) would be a path error.
+    presenceDelete.mockResolvedValue(undefined);
+    const before = {uid: "", status: "invited", role: "employee"};
+
+    await syncUsersByUid.run(makeEvent("u_doc", before, null));
+
+    // Scoped to the bridge: the delivery-state purge legitimately deletes
+    // other markers on this same event.
+    expect(
+        collectionDeletes.filter((p) => p.startsWith("usersByUid/")),
+    ).toEqual([]);
+    expect(batch.set).not.toHaveBeenCalled();
+  });
+
+  test("a deleted user doc also revokes the Auth credential", async () => {
+    // authAccessChange already pins "revokes when the user doc is deleted";
+    // this is the same rule reached through the real handler, so the two
+    // cannot drift.
+    presenceDelete.mockResolvedValue(undefined);
+    const before = {uid: "auth1", status: "active", role: "admin"};
+
+    await syncUsersByUid.run(makeEvent("u_doc", before, null));
+
+    expect(auth.updateUser).toHaveBeenCalledWith("auth1", {disabled: true});
+    expect(auth.revokeRefreshTokens).toHaveBeenCalledWith("auth1");
+  });
+
   test("a successful presence purge resolves", async () => {
     const before = {uid: "auth1", status: "active", role: "employee"};
     const after = {uid: "auth1", status: "disabled", role: "employee"};

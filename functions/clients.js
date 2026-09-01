@@ -16,9 +16,8 @@ const logger = require("firebase-functions/logger");
 const {getFirestore} = require("firebase-admin/firestore");
 
 const {
-  assertPayloadShape,
   requireDocId,
-  assertAdmin,
+  assertAdminCall,
   enforceDurableRateLimit,
   APP_CHECK,
 } = require("./security");
@@ -65,11 +64,7 @@ async function performDeleteClient(db, clientId) {
 // payload -> rate limit -> work. The payload is validated before a limiter
 // slot is consumed so malformed bursts can't exhaust a real caller's window.
 const deleteClient = onCall(APP_CHECK, async (req) => {
-  if (!req.auth || !req.auth.uid) {
-    throw new HttpsError("unauthenticated", "auth-required");
-  }
-  await assertAdmin(req.auth.uid);
-  assertPayloadShape(req.data, new Set(["clientId"]));
+  await assertAdminCall(req, new Set(["clientId"]));
   const clientId = requireDocId(req.data, "clientId");
   await enforceDurableRateLimit(
       "deleteClient", req.auth.uid, DELETE_RATE_MAX, DELETE_RATE_WINDOW_MS);

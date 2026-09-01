@@ -17,8 +17,11 @@
  * @module recount_claim
  */
 
-/** Firestore's already-exists code, thrown by `create()` on a live claim. */
-const ALREADY_EXISTS = 6;
+// One owner, shared with `notification_policy`: both guard a `create()`-based
+// at-most-once ledger, and fixing one and not the other yields a duplicate
+// push or a suppressed recount, invisibly.
+const {ALREADY_EXISTS, isAlreadyExists} = require("./firestore_errors");
+const {toMillis} = require("./time_utils");
 
 /**
  * A claim older than this is presumed abandoned (an invocation killed between
@@ -34,16 +37,6 @@ const CLAIM_STALE_MS = 15 * 1000;
  * the policy has swept it, and the normal path deletes it explicitly.
  */
 const CLAIM_TTL_MS = 5 * 60 * 1000;
-
-/**
- * True for the error `create()` throws when the document already exists.
- * @param {*} err
- * @return {boolean}
- */
-function isAlreadyExists(err) {
-  if (!err) return false;
-  return err.code === ALREADY_EXISTS || err.code === "already-exists";
-}
 
 /**
  * The body every claim is written with.
@@ -91,10 +84,10 @@ async function claimRecount(collection, key, deps) {
   // recounts.
   try {
     const snap = await ref.get();
-    const claimed = snap.get("claimedAt");
-    const claimedMs = claimed && typeof claimed.toMillis === "function" ?
-      claimed.toMillis() :
-      (claimed instanceof Date ? claimed.getTime() : null);
+    // `toMillis` from time_utils, not a fourth inline spelling: this one had
+    // no number branch, so a claim stamped as epoch ms read as "no stamp" and
+    // was taken over immediately.
+    const claimedMs = toMillis(snap.get("claimedAt"));
     if (claimedMs != null &&
         nowDate.getTime() - claimedMs < CLAIM_STALE_MS) {
       return false;

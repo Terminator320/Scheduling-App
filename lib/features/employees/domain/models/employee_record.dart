@@ -54,9 +54,11 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     final colorValue =
         int.tryParse((data['colorValue'] ?? '').toString()) ??
         AppColors.crewDefault.toARGB32();
-    final storedDays = (data['workingDays'] as List?)
-        ?.map((v) => v == true)
-        .toList();
+    // `firestoreList`, never `as List?` — same leniency rule as the fields
+    // below, and a non-list collapses to the same default an absent one does.
+    final storedDays = firestoreList(
+      data['workingDays'],
+    ).map((v) => v == true).toList();
 
     return EmployeeRecord(
       id: id,
@@ -75,7 +77,7 @@ abstract class EmployeeRecord with _$EmployeeRecord {
       // "480" would throw app-wide — crew picker, day route, live-map roster
       // and calendar dots at once — and lock that person out of signing in.
       jobTitle: JobTitle.fromRaw(data['jobTitle']?.toString()),
-      workingDays: normalizeWorkingDays(storedDays ?? const []),
+      workingDays: normalizeWorkingDays(storedDays),
       workStartMinutes:
           firestoreInt(data['workStartMinutes']) ?? kDefaultWorkStartMinutes,
       workEndMinutes:

@@ -153,6 +153,14 @@ function toMillis(value) {
     const ms = value.getTime();
     return Number.isFinite(ms) ? ms : null;
   }
+  // A DocumentSnapshot field read through some admin-SDK paths exposes
+  // `toDate()` without `toMillis()`. `wave/worker.js` handled that shape and
+  // this owner did not, which is the whole reason a second spelling existed.
+  if (typeof value.toDate === "function") {
+    const d = value.toDate();
+    const ms = d instanceof Date ? d.getTime() : NaN;
+    return Number.isFinite(ms) ? ms : null;
+  }
   // Finite-checked so NaN/Infinity degrade to "" like every other bad input
   // here, instead of throwing RangeError out of Intl/new Date() and taking
   // down a notification build in a best-effort consumer.

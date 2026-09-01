@@ -6,6 +6,18 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<!-- The app ships EN + FR (lib/l10n), and iOS needs telling: without this
+	     the system treats the bundle as English-only, so every OS-drawn string
+	     - the permission prompts in en.lproj/fr.lproj InfoPlist.strings, the
+	     App Store language list - stays English on a French handset. The
+	     NS*UsageDescription values below remain the English source; a locale's
+	     InfoPlist.strings overrides them where it has the key, and falls back
+	     silently where it does not. -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>fr</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>ES Pro</string>
 	<key>CFBundleExecutable</key>

@@ -22,7 +22,9 @@ const {
   businessMinutesOfDay,
   hasWorkLeft,
   isCancelledStatus,
+  isCompletedStatus,
 } = require("./time_utils");
+const {isAlreadyExists} = require("./firestore_errors");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -147,6 +149,35 @@ function toIdList(value) {
       v.length <= 128 &&
       !v.includes("/"),
   );
+}
+
+/**
+ * Whether this write is a job the CREW just finished, worth telling the
+ * dispatcher about.
+ *
+ * Nothing fired on completion at all: `sendToActiveAdmins` had exactly one
+ * caller in the whole backend (the email-change notice), so the one signal a
+ * dispatcher most wants — "the work is happening" — was pull-only and two
+ * navigations deep behind drawer -> Business. The Attention list already
+ * existed; nothing pushed.
+ *
+ * Deliberately narrow, because this reaches every admin's Lock Screen:
+ *
+ *  - a real TRANSITION to `done`, so a re-save of an already-closed job is
+ *    silent (the same shape `diffAppointmentForNotifications` uses);
+ *  - `done` only, never `cancelled` — a cancellation is usually the admin's
+ *    own action, and telling them what they just did is noise;
+ *  - never a PERSONAL block or time off, which are not work and whose
+ *    completion is derived rather than written.
+ *
+ * @param {?Object} before Pre-write appointment data, or null on create.
+ * @param {?Object} after Post-write appointment data, or null on delete.
+ * @return {boolean}
+ */
+function isCrewCompletion(before, after) {
+  if (!after || !before) return false;
+  if (after.isPersonal === true || after.isDayOff === true) return false;
+  return isCompletedStatus(after.status) && !isCompletedStatus(before.status);
 }
 
 /**
@@ -353,15 +384,6 @@ function isStaleTokenError(code) {
 }
 
 /**
- * True for a Firestore create() that failed because the doc already exists.
- * @param {*} err
- * @return {boolean}
- */
-function isAlreadyExists(err) {
-  return !!err && (err.code === 6 || err.code === "already-exists");
-}
-
-/**
  * Converts a Firestore doc snapshot to a plain appointment record.
  * @param {!Object} doc
  * @return {!Object}
@@ -419,6 +441,7 @@ module.exports = {
   overduePromptLedgerId,
   isStaleTokenError,
   isAlreadyExists,
+  isCrewCompletion,
   recordOf,
   contextFor,
 };

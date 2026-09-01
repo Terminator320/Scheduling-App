@@ -9,7 +9,7 @@ const {
   requireString,
   requireDocId,
   optionalString,
-  assertAdmin,
+  assertAdminCall,
   enforceDurableRateLimit,
   assertFreshReauth,
   APP_CHECK,
@@ -270,12 +270,10 @@ async function performCreateAccount(db, fields, opts) {
 }
 
 const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
-  if (!req.auth || !req.auth.uid) {
-    throw new HttpsError("unauthenticated", "auth-required");
-  }
-  await assertAdmin(req.auth.uid);
   // Validate the payload before consuming a rate-limit slot so malformed
-  // submissions can't lock out a legitimate admin for an hour.
+  // submissions can't lock out a legitimate admin for an hour —
+  // `assertAdminCall` fixes that order (auth -> admin -> payload) so it cannot
+  // be re-decided here.
   // `isAdmin` was accepted-and-ignored here as `#compat-1.47.0`, so that admin
   // builds at or below 1.47.0 — which sent it unconditionally on both create
   // and reset-password — kept working. Retired 2026-08-29 once the fleet was
@@ -284,7 +282,7 @@ const createEmployeeAccount = onCall(APP_CHECK, async (req) => {
   // `unexpected-field`, which is the correct answer for a key no supported
   // build produces. The role remains hard-coded "employee" in
   // performCreateAccount regardless — that defence never depended on this set.
-  assertPayloadShape(req.data, new Set([
+  await assertAdminCall(req, new Set([
     "name", "firstName", "lastName", "email", "phone", "colorValue",
     "jobTitle",
   ]));
@@ -719,8 +717,11 @@ const completeEmployeeSetup = onCall(APP_CHECK, async (req) => {
   // 40 mirrors createEmployeeAccount's server cap (the client caps at
   // TextLimits.phone via PhoneInputFormatter).
   const phone = optionalString(req.data, "phone", 40);
-  const termsAccepted = req.data.termsAccepted === true;
-  const locationConsent = req.data.locationConsent === true;
+  // `?.`, like every sibling read here: assertPayloadShape ACCEPTS a null or
+  // undefined payload, so a bare call reached these two and threw a TypeError
+  // — an opaque `internal` where the shaped `invalid-argument` belongs.
+  const termsAccepted = req.data?.termsAccepted === true;
+  const locationConsent = req.data?.locationConsent === true;
   await enforceDurableRateLimit(
       "completeEmployeeSetup", req.auth.uid, SETUP_RATE_MAX,
       SETUP_RATE_WINDOW_MS);
@@ -786,11 +787,7 @@ async function performDeleteAccount(db, docId) {
 }
 
 const deleteEmployeeAccount = onCall(APP_CHECK, async (req) => {
-  if (!req.auth || !req.auth.uid) {
-    throw new HttpsError("unauthenticated", "auth-required");
-  }
-  await assertAdmin(req.auth.uid);
-  assertPayloadShape(req.data, new Set(["docId"]));
+  await assertAdminCall(req, new Set(["docId"]));
   const docId = requireDocId(req.data, "docId");
   await enforceDurableRateLimit(
       "deleteEmployeeAccount", req.auth.uid, CREATE_RATE_MAX,

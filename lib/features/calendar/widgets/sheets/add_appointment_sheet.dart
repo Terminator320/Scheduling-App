@@ -13,6 +13,7 @@ import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.da
 import 'package:scheduling/features/calendar/utils/assignee_availability_scope.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/personal_block_clash_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
@@ -25,6 +26,7 @@ import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/offline_form_notice.dart';
 import 'package:scheduling/shared/widgets/sheets/form_sheet_frame.dart';
 
 class AddEventSheet extends ConsumerStatefulWidget {
@@ -246,8 +248,10 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   Widget build(BuildContext context) {
     final state = ref.watch(_provider);
     // Crew only; dispatchers are not assignable.
-    final allEmployees =
-        ref.watch(assignableEmployeesProvider).asData?.value ?? const [];
+    final roster = ref.watch(assignableEmployeesProvider);
+    // An assignee is REQUIRED to save, so "still loading" and "the read
+    // failed" must not both render as "this business has no staff".
+    final allEmployees = roster.asData?.value ?? const [];
     // One span length feeds both the flag and label.
     final spanLength = _spanLength(state);
 
@@ -266,10 +270,16 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
         headerTourWrap: (child) => _tour.stepIf(TourStepId.apptSave, child),
         scrollCacheExtent: kTourScrollCacheExtent,
         children: [
+          // First, so the person is told BEFORE filling the form in — the
+          // submit controller already fails fast, and the app's global offline
+          // banner is drawn under the page, behind this sheet.
+          const OfflineFormNotice(),
           AppointmentFormFields(
             controllers: _controllers,
             tourWrap: _tour.stepIf,
             allEmployees: allEmployees,
+            rosterStatus: rosterStatusOf(roster),
+            onRetryRoster: () => ref.invalidate(assignableEmployeesProvider),
             // Nothing is stored yet, so the live selection is the whole of
             // "already on this job".
             assigneeAvailability: watchAssigneeAvailability(

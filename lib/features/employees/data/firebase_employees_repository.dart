@@ -198,8 +198,8 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     final normalizedEmail = normalizeEmail(employee.email);
     final ref = _users.doc(docId);
     final stored = (await ref.get()).data();
-    final storedEmail = normalizeEmail(stored?['email'] as String? ?? '');
-    final storedUid = stored?['uid'] as String? ?? '';
+    final storedEmail = normalizeEmail((stored?['email'] ?? '').toString());
+    final storedUid = (stored?['uid'] ?? '').toString();
 
     // What we believe the doc holds going into the commit below.
     var emailAtCheck = storedEmail;
@@ -273,7 +273,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       // check above settled on, so the guard would abort EVERY save on such a
       // doc rather than only a concurrent one.
       final currentEmail = normalizeEmail(
-        snapshot.data()?['email'] as String? ?? '',
+        (snapshot.data()?['email'] ?? '').toString(),
       );
       if (currentEmail != emailAtCheck) {
         // Concurrent edit — surface a retryable "try again" instead of

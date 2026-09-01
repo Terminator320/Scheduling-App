@@ -19,6 +19,7 @@ import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialo
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/personal_block_clash_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
+import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
@@ -117,8 +118,9 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     // Crew, plus anyone already on the job who is active but no longer
     // offerable by title — see `offerableAssignees`, which owns the rule and
     // the reason a DISABLED assignee must stay unoffered.
+    final roster = ref.watch(employeesStreamProvider);
     final allEmployees = offerableAssignees(
-      active: ref.watch(employeesStreamProvider).asData?.value ?? const [],
+      active: roster.asData?.value ?? const [],
       alreadyAssignedIds: appointment.employeeIds,
     );
     // One length feeds both the flag and the label, so they can't disagree:
@@ -129,6 +131,8 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     return AppointmentFormFields(
       controllers: widget.controllers,
       allEmployees: allEmployees,
+      rosterStatus: rosterStatusOf(roster),
+      onRetryRoster: () => ref.invalidate(employeesStreamProvider),
       // Excluding this doc, or its own assignees read as clashing with
       // themselves. `alreadyAssignedIds` is the STORED crew, so a
       // deselected assignee who is off keeps a tappable chip.

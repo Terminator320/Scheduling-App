@@ -75,7 +75,17 @@ class _Row extends StatelessWidget {
       fontWeight: row.emphasize ? FontWeight.w600 : FontWeight.w500,
       color: row.emphasize ? theme.palette.primaryAccent : null,
     );
-    final label = Text(row.label, style: theme.monoType.fieldLabel);
+    // The key column is a fixed 70px, so a label that is wider has nowhere to
+    // go. English never reaches it; French does — PHONE becomes TELEPHONE —
+    // and a bare Text in a fixed-width box wraps mid-column or overflows.
+    // Shrinking to fit keeps the two-column rhythm the panel is for.
+    final label = Text(
+      row.label,
+      style: theme.monoType.fieldLabel,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      softWrap: false,
+    );
     final value = Text(row.value, style: valueStyle);
 
     final content = Padding(
@@ -96,7 +106,15 @@ class _Row extends StatelessWidget {
                   width: KeyValuePanel._keyColumnWidth,
                   child: Padding(
                     padding: const EdgeInsets.only(top: 3),
-                    child: label,
+                    // Scales the glyphs down rather than clipping the word:
+                    // an ellipsised "TELEPHO…" is a worse key than a slightly
+                    // smaller one, and the value beside it is what carries the
+                    // information.
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: label,
+                    ),
                   ),
                 ),
                 Expanded(child: value),

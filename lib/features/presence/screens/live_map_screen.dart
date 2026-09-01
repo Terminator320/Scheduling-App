@@ -178,7 +178,10 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     final hasShownMap = _markers.isNotEmpty || _lastPoints.isNotEmpty;
     if (pointsAsync.hasError && !hasShownMap) {
       _mapTargetsRendered = false;
-      return CenteredErrorText(message: context.l10n.error_introLoadLiveMap);
+      return CenteredErrorText(
+        message: context.l10n.error_introLoadLiveMap,
+        onRetry: () => ref.invalidate(liveMapPointsProvider),
+      );
     }
     if (pointsAsync.isLoading && !hasShownMap) {
       _mapTargetsRendered = false;

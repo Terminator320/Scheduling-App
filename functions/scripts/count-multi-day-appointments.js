@@ -56,6 +56,7 @@
 "use strict";
 
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+const {scanByName} = require("./_scan");
 const {bootstrapScript} = require("./_project");
 const {
   dayCountOf,
@@ -102,71 +103,60 @@ async function countMultiDay(db, verbose) {
     // day count -> how many runs, for the runs that would actually be split.
     openHistogram: new Map(),
   };
-  let cursor = null;
 
-  for (;;) {
-    let query = db.collection("appointments")
-        .orderBy("__name__")
-        .limit(PAGE_SIZE);
-    if (cursor) query = query.startAfter(cursor);
+  for await (const doc of scanByName(
+      db.collection("appointments"),
+      {pageSize: PAGE_SIZE},
+  )) {
+    tally.scanned += 1;
+    const data = doc.data() || {};
 
-    const snap = await query.get();
-    if (snap.empty) break;
+    // Unclamped on purpose: the raw count is what says whether a document
+    // exceeds the cap at all, and `overCap` is one of the things a backfill
+    // has to be told about up front.
+    const rawDays = dayCountOf(data);
+    if (rawDays < 2) continue;
 
-    for (const doc of snap.docs) {
-      tally.scanned += 1;
-      const data = doc.data() || {};
+    tally.multiDay += 1;
+    if (rawDays > tally.longest) tally.longest = rawDays;
+    if (rawDays > MAX_APPOINTMENT_SPAN_DAYS) tally.overCap += 1;
 
-      // Unclamped on purpose: the raw count is what says whether a document
-      // exceeds the cap at all, and `overCap` is one of the things a backfill
-      // has to be told about up front.
-      const rawDays = dayCountOf(data);
-      if (rawDays < 2) continue;
+    const status = String(data.status || "").trim().toLowerCase();
+    const isClosed = TERMINAL_STATUSES.has(status);
+    // The derived `isTimeOff`, never the raw `isDayOff` flag — a client
+    // visit carrying a stray flag from a console edit is still real work.
+    const isTimeOff = data.isPersonal === true && data.isDayOff === true;
+    const photos = Number(data.pictureCount) || 0;
+    const seriesId = String(data.seriesId || "").trim();
 
-      tally.multiDay += 1;
-      if (rawDays > tally.longest) tally.longest = rawDays;
-      if (rawDays > MAX_APPOINTMENT_SPAN_DAYS) tally.overCap += 1;
-
-      const status = String(data.status || "").trim().toLowerCase();
-      const isClosed = TERMINAL_STATUSES.has(status);
-      // The derived `isTimeOff`, never the raw `isDayOff` flag — a client
-      // visit carrying a stray flag from a console edit is still real work.
-      const isTimeOff = data.isPersonal === true && data.isDayOff === true;
-      const photos = Number(data.pictureCount) || 0;
-      const seriesId = String(data.seriesId || "").trim();
-
-      if (isTimeOff) tally.timeOff += 1;
-      if (isClosed) {
-        tally.closed += 1;
+    if (isTimeOff) tally.timeOff += 1;
+    if (isClosed) {
+      tally.closed += 1;
+    } else {
+      tally.open += 1;
+      if (isTimeOff) {
+        tally.openTimeOff += 1;
       } else {
-        tally.open += 1;
-        if (isTimeOff) {
-          tally.openTimeOff += 1;
-        } else {
-          const days = Math.min(rawDays, MAX_APPOINTMENT_SPAN_DAYS);
-          tally.openWorkDays += days;
-          tally.openHistogram.set(
-              days, (tally.openHistogram.get(days) || 0) + 1);
-          if (photos > 0) tally.withPhotos += 1;
-          if (seriesId !== "") tally.inSeries += 1;
-        }
+        const days = Math.min(rawDays, MAX_APPOINTMENT_SPAN_DAYS);
+        tally.openWorkDays += days;
+        tally.openHistogram.set(
+            days, (tally.openHistogram.get(days) || 0) + 1);
+        if (photos > 0) tally.withPhotos += 1;
+        if (seriesId !== "") tally.inSeries += 1;
       }
+    }
 
-      if (verbose) {
-        const marks = [
+    if (verbose) {
+      const marks = [
           isClosed ? "closed" : "OPEN",
           isTimeOff ? "time off" : "work",
           photos > 0 ? `${photos} photo(s)` : null,
           seriesId !== "" ? `series ${seriesId}` : null,
           rawDays > MAX_APPOINTMENT_SPAN_DAYS ? "OVER CAP" : null,
-        ].filter(Boolean);
-        console.log(
-            `  ${rawDays}d  appointments/${doc.id}  [${marks.join(", ")}]`);
-      }
+      ].filter(Boolean);
+      console.log(
+          `  ${rawDays}d  appointments/${doc.id}  [${marks.join(", ")}]`);
     }
-
-    cursor = snap.docs[snap.docs.length - 1];
-    if (snap.size < PAGE_SIZE) break;
   }
 
   return tally;

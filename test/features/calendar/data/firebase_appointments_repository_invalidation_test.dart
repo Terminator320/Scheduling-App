@@ -54,10 +54,13 @@ const _photo = AppointmentImage(
   storagePath: 'appointments/a1/images/1754835600000_p.jpg',
 );
 
-/// One public write method, and how to call it.
+/// One public write method, how to call it, and what it should leave behind in
+/// the history scan window.
 typedef _WriteCase = ({
   String method,
   Future<void> Function(FirebaseAppointmentsRepository) run,
+  bool keepsA1,
+  String why,
 });
 
 /// Every public method of the repository that mutates Firestore.
@@ -66,9 +69,24 @@ typedef _WriteCase = ({
 /// a new write method is a compile-free, test-free way to break history search
 /// otherwise, and the symptom is a search result opening a detail view for a
 /// document that no longer exists.
+///
+/// `keepsA1` is the window membership rule, not a detail: the window is
+/// `status whereIn terminalStatusQueryValues`, so a write that leaves `a1`
+/// non-terminal must REMOVE it rather than merge into it. `_record()` defaults
+/// to `pending`, which is why every whole-record write below drops it.
 final List<_WriteCase> _writeCases = [
-  (method: 'addAppointment', run: (r) => r.addAppointment(_record())),
-  (method: 'addAppointments', run: (r) => r.addAppointments([_record()])),
+  (
+    method: 'addAppointment',
+    run: (r) => r.addAppointment(_record()),
+    keepsA1: false,
+    why: 'a create is pending, so it does not belong in a terminal window',
+  ),
+  (
+    method: 'addAppointments',
+    run: (r) => r.addAppointments([_record()]),
+    keepsA1: false,
+    why: 'a create is pending, so it does not belong in a terminal window',
+  ),
   (
     method: 'rewriteSeries',
     run: (r) => r.rewriteSeries(
@@ -76,33 +94,63 @@ final List<_WriteCase> _writeCases = [
       deleteIds: const ['a2'],
       copies: [_record(id: 'a3')],
     ),
+    keepsA1: false,
+    why: 'the rewritten occurrence is pending again',
   ),
-  (method: 'updateAppointment', run: (r) => r.updateAppointment(_record())),
+  (
+    method: 'updateAppointment',
+    run: (r) => r.updateAppointment(_record()),
+    keepsA1: false,
+    why: 'the edited record is pending, so history no longer holds it',
+  ),
   (
     method: 'updateAppointments',
     run: (r) => r.updateAppointments([_record()]),
+    keepsA1: false,
+    why: 'the edited record is pending, so history no longer holds it',
   ),
   (
     method: 'appendAppointmentPictures',
     run: (r) => r.appendAppointmentPictures('a1', const [_photo]),
+    keepsA1: true,
+    why: 'a photo write touches no field matchHistoryDocs reads',
   ),
   (
     method: 'removeAppointmentPictures',
     run: (r) => r.removeAppointmentPictures('a1', const [_photo]),
+    keepsA1: true,
+    why: 'a photo write touches no field matchHistoryDocs reads',
+  ),
+  (
+    method: 'updateFieldNotes',
+    run: (r) => r.updateFieldNotes(id: 'a1', notes: 'left a quote'),
+    keepsA1: true,
+    why: 'a crew note changes no field the history matcher reads',
   ),
   (
     method: 'updateAppointmentStatus',
     run: (r) => r.updateAppointmentStatus(id: 'a1', status: 'done'),
+    keepsA1: true,
+    why: 'done is terminal, and only the status field is merged',
   ),
   (
     method: 'updateAppointmentStatuses',
     run: (r) =>
         r.updateAppointmentStatuses(ids: const ['a1'], status: 'cancelled'),
+    keepsA1: true,
+    why: 'cancelled is terminal too',
   ),
-  (method: 'deleteAppointment', run: (r) => r.deleteAppointment('a1')),
+  (
+    method: 'deleteAppointment',
+    run: (r) => r.deleteAppointment('a1'),
+    keepsA1: false,
+    why: 'a deleted job must never surface in a search result',
+  ),
   (
     method: 'deleteAppointments',
     run: (r) => r.deleteAppointments(const ['a1']),
+    keepsA1: false,
+    why: 'a deleted job must never surface in a search result',
   ),
 ];
 
@@ -138,6 +186,7 @@ void main() {
     when(() => firestore.collection('appointments')).thenReturn(appointments);
     when(() => appointments.firestore).thenReturn(firestore);
     when(() => appointments.doc(any())).thenReturn(parentDoc);
+    when(() => parentDoc.id).thenReturn('a1');
     when(() => parentDoc.collection('images')).thenReturn(images);
     when(() => images.doc(any())).thenReturn(_MockDoc());
     when(() => parentDoc.update(any())).thenAnswer((_) async {});
@@ -180,25 +229,32 @@ void main() {
     // another stub is being defined.
     final hit = _MockQueryDocSnap();
     when(() => hit.id).thenReturn('a1');
-    when(hit.data).thenReturn({'clientName': 'Sophie Tremblay'});
+    when(hit.data).thenReturn({
+      'clientName': 'Sophie Tremblay',
+      'status': 'done',
+      'startTime': Timestamp.fromDate(DateTime(2026, 6, 24, 9)),
+      'endTime': Timestamp.fromDate(DateTime(2026, 6, 24, 10)),
+    });
     when(() => snapshot.docs).thenReturn([hit]);
   });
 
   FirebaseAppointmentsRepository repo() =>
       FirebaseAppointmentsRepository(firestore);
 
-  group('a local write drops the history-search cache', () {
-    // The repository is a long-lived singleton, so the cache outlives every
-    // autoDispose provider reading it. A write method that forgets
-    // `_invalidateSearchCache()` leaves history search serving a DELETED
-    // appointment for the whole TTL — tapping the result opens a detail view
-    // for a document that no longer exists, with no error anywhere.
+  group('a local write PATCHES the history scan window', () {
+    // The repository is a long-lived singleton, so the window outlives every
+    // autoDispose provider reading it. It used to be thrown away on every
+    // write, which made a one-field status change re-page the entire terminal
+    // archive — up to 5000 billed reads and four sequential round trips —
+    // behind whatever screen was open. Patching keeps the read, and the
+    // correctness half is that the patched window must still agree with
+    // Firestore about what is in history.
 
     test(
       'control: without a write, the second search is served from cache',
       () async {
         // Without this, every case below would pass against a repository that
-        // simply never caches, and the invalidation would be unasserted again.
+        // simply never caches.
         final r = repo();
         await r.searchHistory('sophie');
         await r.searchHistory('sophie');
@@ -208,15 +264,43 @@ void main() {
     );
 
     for (final c in _writeCases) {
-      test('${c.method} forces the next search to re-query', () async {
+      test('${c.method} costs NO second scan', () async {
         final r = repo();
         await r.searchHistory('sophie');
         await c.run(r);
         await r.searchHistory('sophie');
 
-        verify(() => query.get()).called(2);
+        verify(() => query.get()).called(1);
+      });
+
+      test('${c.method}: ${c.why}', () async {
+        final r = repo();
+        await r.searchHistory('sophie');
+        await c.run(r);
+        final after = await r.searchHistory('sophie');
+
+        expect(
+          after.map((a) => a.id),
+          c.keepsA1 ? ['a1'] : isEmpty,
+          reason: c.why,
+        );
       });
     }
+
+    test('an expired window is re-paged rather than patched forever', () async {
+      // The TTL is the safety net under the patch: a REMOTE write (another
+      // admin, a Cloud Function) changes nothing locally, so the window has to
+      // age out on its own.
+      var now = DateTime(2026, 9, 1, 12);
+      final r = FirebaseAppointmentsRepository(firestore, clock: () => now);
+
+      await r.searchHistory('sophie');
+      await r.updateAppointmentStatus(id: 'a1', status: 'done');
+      now = now.add(const Duration(seconds: 121));
+      await r.searchHistory('sophie');
+
+      verify(() => query.get()).called(2);
+    });
   });
 
   group('the table above covers the repository', () {
@@ -234,6 +318,7 @@ void main() {
       final code = source
           .split('\n')
           .where((l) => !l.trimLeft().startsWith('//'))
+          .where((l) => !l.trimLeft().startsWith('///'))
           .toList();
       // A member declaration sits at exactly two spaces of indent and names its
       // return type; a statement inside a body is indented further.
@@ -281,19 +366,22 @@ void main() {
         everyElement(isIn(_writeCases.map((c) => c.method))),
         reason:
             'a new write method must be added to _writeCases, or nothing '
-            'checks that it drops the history-search cache',
+            'checks what it leaves in the history scan window',
       );
     });
 
-    test('every mutating public method calls _invalidateSearchCache()', () {
+    test('every mutating public method patches or pokes', () {
       // The static half of the same rule: it fails on the method that forgot
       // the call, rather than only on the ones somebody remembered to add to
-      // the table.
+      // the table. `_notifyLocalWrite()` is the narrow alternative, for a write
+      // that provably changes no field `matchHistoryDocs` reads.
       for (final name in mutating) {
         expect(
           members[name],
-          contains('_invalidateSearchCache()'),
-          reason: '$name mutates Firestore without invalidating the cache',
+          anyOf(contains('_patchWindow('), contains('_notifyLocalWrite()')),
+          reason:
+              '$name mutates Firestore without telling the history scan '
+              'window, so search can serve a row that no longer exists',
         );
       }
     });

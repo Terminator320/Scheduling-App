@@ -14,11 +14,9 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$EventDetailsState {
 
- DateTime get selectedDate; DateTime get endDate; TimeOfDay get selectedStartTime; TimeOfDay get selectedEndTime; String get editingStatus; bool get isEditing;/// An existing record already has a real end date, so unlike the add flow
-/// this starts true: moving the start date must preserve the run's LENGTH
-/// rather than collapse it to a single day.
- bool get endDateTouched; RepeatInterval get repeat;// The repeat value as last saved — if the user changes it, that triggers new bookings.
- RepeatInterval get savedRepeat; List<EmployeeRecord> get selectedEmployees; List<AppointmentImage> get existingImages; List<AppointmentImage> get removedExistingImages; List<File> get newImages; bool get isSaving; ClientRecord? get client; ClientRecord? get selectedClient; List<ClientRecord> get clientResults; bool get isSearchingClient; bool get useCustomAddress; bool get isPersonal; bool get isDayOff; bool get isAllDay;// Set when the user explicitly removes the client, so we don't fall back to a placeholder.
+ DateTime get selectedDate; DateTime get endDate; TimeOfDay get selectedStartTime; TimeOfDay get selectedEndTime; String get editingStatus; bool get isEditing;/// Existing appointments preserve run length when the start date moves.
+ bool get endDateTouched; RepeatInterval get repeat;// Changing this value triggers repeat rebooking.
+ RepeatInterval get savedRepeat; List<EmployeeRecord> get selectedEmployees; List<AppointmentImage> get existingImages; List<AppointmentImage> get removedExistingImages; List<File> get newImages; bool get isSaving; ClientRecord? get client; ClientRecord? get selectedClient; List<ClientRecord> get clientResults; bool get isSearchingClient; bool get useCustomAddress; bool get isPersonal; bool get isDayOff; bool get isAllDay;// Prevents fallback to the original client.
  bool get clientCleared; Map<String, AppointmentFormError> get errors;
 /// Create a copy of EventDetailsState
 /// with the given fields replaced by the non-null parameter values.
@@ -267,12 +265,10 @@ class _EventDetailsState implements EventDetailsState {
 @override final  TimeOfDay selectedEndTime;
 @override final  String editingStatus;
 @override@JsonKey() final  bool isEditing;
-/// An existing record already has a real end date, so unlike the add flow
-/// this starts true: moving the start date must preserve the run's LENGTH
-/// rather than collapse it to a single day.
+/// Existing appointments preserve run length when the start date moves.
 @override@JsonKey() final  bool endDateTouched;
 @override@JsonKey() final  RepeatInterval repeat;
-// The repeat value as last saved — if the user changes it, that triggers new bookings.
+// Changing this value triggers repeat rebooking.
 @override@JsonKey() final  RepeatInterval savedRepeat;
  final  List<EmployeeRecord> _selectedEmployees;
 @override@JsonKey() List<EmployeeRecord> get selectedEmployees {
@@ -317,7 +313,7 @@ class _EventDetailsState implements EventDetailsState {
 @override@JsonKey() final  bool isPersonal;
 @override@JsonKey() final  bool isDayOff;
 @override@JsonKey() final  bool isAllDay;
-// Set when the user explicitly removes the client, so we don't fall back to a placeholder.
+// Prevents fallback to the original client.
 @override@JsonKey() final  bool clientCleared;
  final  Map<String, AppointmentFormError> _errors;
 @override@JsonKey() Map<String, AppointmentFormError> get errors {

@@ -22,6 +22,12 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     @Default(<String>[]) List<String> employeeNames,
     @Default('') String address,
     @Default('') String notes,
+    // What the CREW recorded on site, as distinct from [notes], which the
+    // dispatcher writes when booking. Two fields on purpose: they are written
+    // by different people under different rules, and one field would mean an
+    // assignee's write had to be allowed to overwrite the brief they were
+    // given.
+    @Default('') String fieldNotes,
     @Default('') String materialsNeeded,
     @Default('pending') String status,
     // Personal jobs block crew time without client fields.
@@ -57,6 +63,7 @@ abstract class AppointmentRecord with _$AppointmentRecord {
       employeeNames: firestoreStringList(data['employeeNames']),
       address: (data['address'] ?? '').toString(),
       notes: (data['notes'] ?? '').toString(),
+      fieldNotes: (data['fieldNotes'] ?? '').toString(),
       materialsNeeded: (data['materialsNeeded'] ?? '').toString(),
       status: (data['status'] ?? 'pending').toString(),
       isPersonal: data['isPersonal'] == true,
@@ -96,6 +103,7 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     'employeeNames': employeeNames,
     'address': address,
     'notes': notes,
+    'fieldNotes': fieldNotes,
     'materialsNeeded': materialsNeeded,
     'status': status,
     'isPersonal': isPersonal,

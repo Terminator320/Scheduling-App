@@ -22,6 +22,9 @@ const {
   clampedLastWorkDayMs,
   calendarDaysBetween,
 } = require("./day_slice_utils");
+// `_who` lives in job_naming so the Lock Screen card and the push beside it
+// cannot come to call the same job two different things.
+const {whoFor: _who} = require("./job_naming");
 
 /**
  * Localized "Wed, Jul 8, 2:00 p.m." style datetime. An all-day block stores a
@@ -71,17 +74,6 @@ function _repeatLabel(raw, locale) {
     case "one_year": return fr ? "chaque année" : "every year";
     default: return "";
   }
-}
-
-/**
- * Who a push names the job after: the client, or — for a personal job, which
- * has none — its title. Only a record with neither falls back to `generic`.
- * @param {!Object} c Message context or appointment record.
- * @param {string} generic Localized "Client" placeholder.
- * @return {string}
- */
-function _who(c, generic) {
-  return (c.clientName || "").trim() || (c.title || "").trim() || generic;
 }
 
 /**
@@ -342,9 +334,44 @@ function buildSelfEmailChangedMessage(name, locale) {
   };
 }
 
+/**
+ * "Marc finished Leak fix" — the completion notice the dispatcher gets.
+ *
+ * Names WHO and WHAT, and nothing else: it reaches a Lock Screen, and the
+ * address and the client's phone number are exactly what should not sit there.
+ * Both halves fall back, because a personal job has no client and an
+ * unassigned one has no crew — though `isCrewCompletion` refuses personal jobs
+ * outright, so the second fallback is for a job whose assignee list was
+ * emptied.
+ *
+ * @param {string} who The crew member's display name.
+ * @param {string} what The job's client name or title.
+ * @param {string} locale 'en' or 'fr'.
+ * @return {{title: string, body: string}}
+ */
+function buildJobCompletedMessage(who, what, locale) {
+  const crew = String(who || "").trim();
+  const job = String(what || "").trim();
+  if (locale === "fr") {
+    return {
+      title: "Travail terminé",
+      body: crew && job ?
+        `${crew} a terminé ${job}.` :
+        (job ? `${job} est terminé.` : "Un travail a été terminé."),
+    };
+  }
+  return {
+    title: "Job finished",
+    body: crew && job ?
+      `${crew} finished ${job}.` :
+      (job ? `${job} was marked complete.` : "A job was marked complete."),
+  };
+}
+
 module.exports = {
   buildNotificationMessage,
   buildDigestMessage,
   buildEmailChangedMessage,
   buildSelfEmailChangedMessage,
+  buildJobCompletedMessage,
 };

@@ -27,6 +27,7 @@
 "use strict";
 
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+const {scanByName} = require("./_scan");
 const {bootstrapScript} = require("./_project");
 const {buildCustomerPayload} = require("../wave/customer_contract");
 
@@ -59,35 +60,27 @@ async function audit(db) {
   const offenders = [];
   let scanned = 0;
   let refused = 0;
-  let cursor = null;
 
   // Paged on `__name__` so this needs no index and no orderBy field, which
   // matters: an orderBy makes Firestore EXCLUDE any doc missing that field,
   // and a legacy doc missing one is exactly the shape most likely to fail.
-  for (;;) {
-    let query = db.collection("clients").orderBy("__name__").limit(PAGE_SIZE);
-    if (cursor) query = query.startAfter(cursor);
-    const snap = await query.get();
-    if (snap.empty) break;
-
-    for (const doc of snap.docs) {
-      scanned += 1;
-      // NOT gated on `ok`: an ADVISORY problem rides along on a perfectly good
-      // result, and reporting only the blocked clients would hide the case
-      // this audit first turned up.
-      const {ok, problems} = buildCustomerPayload(doc.data() || {});
-      const found = Array.isArray(problems) ? problems : [];
-      if (found.length === 0) continue;
-      if (!ok) refused += 1;
-      offenders.push({id: doc.id, blocked: !ok, problems: found});
-      for (const problem of found) {
-        const key = `${problem.severity}  ${problem.field}:${problem.code}`;
-        byCode[key] = (byCode[key] || 0) + 1;
-      }
+  for await (const doc of scanByName(
+      db.collection("clients"),
+      {pageSize: PAGE_SIZE},
+  )) {
+    scanned += 1;
+    // NOT gated on `ok`: an ADVISORY problem rides along on a perfectly good
+    // result, and reporting only the blocked clients would hide the case
+    // this audit first turned up.
+    const {ok, problems} = buildCustomerPayload(doc.data() || {});
+    const found = Array.isArray(problems) ? problems : [];
+    if (found.length === 0) continue;
+    if (!ok) refused += 1;
+    offenders.push({id: doc.id, blocked: !ok, problems: found});
+    for (const problem of found) {
+      const key = `${problem.severity}  ${problem.field}:${problem.code}`;
+      byCode[key] = (byCode[key] || 0) + 1;
     }
-
-    cursor = snap.docs[snap.docs.length - 1];
-    if (snap.size < PAGE_SIZE) break;
   }
 
   return {scanned, refused, flagged: offenders.length, byCode, offenders};

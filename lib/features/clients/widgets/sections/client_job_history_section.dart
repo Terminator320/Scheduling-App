@@ -76,6 +76,8 @@ class ClientJobHistorySection extends ConsumerWidget {
               intro: context.l10n.error_introLoadHistory,
               error: e,
             ),
+            onRetry: () =>
+                ref.invalidate(clientJobHistoryProvider(clientId)),
           ),
         ),
       ],
@@ -129,18 +131,35 @@ class _JobList extends StatelessWidget {
 }
 
 class _EmptyLine extends StatelessWidget {
-  const _EmptyLine({required this.text});
+  const _EmptyLine({required this.text, this.onRetry});
 
   final String text;
+
+  /// Present on the ERROR branch only. Without it a transient read failure
+  /// left the section inert until the whole detail was closed and reopened.
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Text(
+    final retry = onRetry;
+    final line = Text(
       text,
       style: theme.textTheme.bodyMedium?.copyWith(
         color: theme.colorScheme.onSurfaceVariant,
       ),
+    );
+    if (retry == null) return line;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        line,
+        TextButton.icon(
+          onPressed: retry,
+          icon: const Icon(Icons.refresh),
+          label: Text(context.l10n.common_retry),
+        ),
+      ],
     );
   }
 }

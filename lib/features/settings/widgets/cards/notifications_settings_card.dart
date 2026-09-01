@@ -89,6 +89,9 @@ class NotificationsSettingsCard extends ConsumerWidget {
               iconColor: scheme.primary,
               label: context.l10n.settings_liveActivity,
               isLast: !showTravelAlerts,
+              onTap: isTogglingLiveActivity
+                  ? null
+                  : () => onToggleLiveActivity(value: !liveActivityEnabled),
               trailing: Switch.adaptive(
                 value: liveActivityEnabled,
                 onChanged: isTogglingLiveActivity
@@ -107,6 +110,9 @@ class NotificationsSettingsCard extends ConsumerWidget {
               iconColor: scheme.primary,
               label: context.l10n.settings_travelAlerts,
               isLast: true,
+              onTap: isTogglingTravelAlerts
+                  ? null
+                  : () => onToggleTravelAlerts(value: !travelAlertsEnabled!),
               trailing: Switch.adaptive(
                 key: const Key('travelAlertsSwitch'),
                 value: travelAlertsEnabled!,

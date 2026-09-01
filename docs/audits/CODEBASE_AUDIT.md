@@ -597,10 +597,50 @@ you can fill out an entire appointment before being told it can't be saved.
 
 ---
 
-## Next step
+---
 
-Say **"do everything but the pre-ship"** and I'll implement every non-pre-ship
-finding above. There are no pre-ship items this round, so that means all of it —
-though I'd suggest sequencing: **B1/B3/B4** (one-line crash guards), then
-**I4/I5/I6/I8** (the mutation-proven test gaps), then **S1/S2** as one rules
-deploy, then **I2** (the read-cost fix), then the product work in **I1/I3**.
+## Implementation status (2026-09-01)
+
+Owner asked for everything, including the product work. **Not deployed** — the
+rules and functions changes are landed in the tree only.
+
+**Closed:** S1, S2, S4, S5, S6 · B1-B7 · I1-I17, plus most of the
+code-quality section. Every mutation-proven finding was re-verified by
+removing the guard and confirming the new test fails.
+
+Notes on how three of them were implemented differently from the suggestion:
+
+- **S2** is guarded on `uid`, not a flat denylist entry. `updateEmployee`
+  writes `email` directly when the doc has no Auth account, and
+  `changeEmployeeEmail` refuses such a doc outright — a flat denial would
+  brick that doc's email with no path to repair it. The guarded form covers
+  the whole live fleet, since every P4c doc carries its uid from creation.
+- **I10** refreshes `fetchedAt` on a local patch *behind an absolute
+  ceiling* (`_scanWindowMaxAge`, 10 min). Refreshing alone would let a
+  steadily-edited window live forever and never see a REMOTE write, which is
+  the only thing the TTL protects against.
+- **I13**'s `SearchResultCache` made the LRU testable for the first time; the
+  eviction is not observable through either repository, since a hit and a
+  recompute return the same answer.
+
+**Left, and why:**
+
+- **S3** (Maps budget cap) needs `roles/billing.admin` — owner-only.
+- **I17**'s log-based exclusion for the CORS-middleware scanner noise is a
+  GCP console change. The other three I17 items are done (jest coverage
+  ratchet, `coverage/**` deploy ignore, `scanByName` + `stageDelete` tests).
+- **I18**: the mark-done haptic and the localized iOS permission prompts are
+  done. The week view, the per-technician calendar filter, "running late" /
+  "on my way", duplicate-a-job, technician search and a `startedAt`/
+  `completedAt` job time record are NOT — each is a product decision plus a
+  screen, not a cleanup.
+- Three code-quality refactors remain: the duplicated debounced-search block
+  across `clients_list_view` / `appointment_history_view`, `_onAddClient` in
+  two places, and the error-key clearing spelled at 7 sites.
+- The two new `ios/Runner/{en,fr}.lproj/InfoPlist.strings` must be added to
+  the Runner target in Xcode before they ship. `project.pbxproj` was not
+  hand-edited.
+
+**Still owner-only from the telemetry section:** confirm the two Crashlytics
+issues are gone once 1.55.0 has fleet time, and press "Retry failed" once on
+the Wave settings screen.

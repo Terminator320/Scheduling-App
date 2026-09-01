@@ -28,13 +28,32 @@ jest.mock("firebase-functions/logger", () => ({
 }));
 jest.mock("../security", () => {
   const actual = jest.requireActual("../security");
-  return {
+  const mock = {
     ...actual,
     assertAdmin: jest.fn().mockResolvedValue(undefined),
     enforceDurableRateLimit: jest.fn().mockResolvedValue({
       refund: jest.fn().mockResolvedValue(undefined),
     }),
   };
+  // The callables open with `assertAdminCall`, which COMPOSES the auth check,
+  // `assertAdmin` and `assertPayloadShape`. It holds a module-internal
+  // reference to the real `assertAdmin`, so stubbing the export alone would
+  // intercept nothing and every gate assertion below would pass vacuously —
+  // the same "mocked and never actually reached" shape that let three of these
+  // gates be deleted with a green suite. Re-composing it here against the MOCK
+  // keeps `security.assertAdmin` the thing the tests observe. The composition
+  // itself, order included, is proved against the real one in
+  // `assert_admin.test.js`.
+  mock.assertAdminCall = jest.fn(async (req, allowedKeys) => {
+    if (!req.auth || !req.auth.uid) {
+      throw new (require("firebase-functions/v2/https").HttpsError)(
+          "unauthenticated", "auth-required");
+    }
+    await mock.assertAdmin(req.auth.uid);
+    actual.assertPayloadShape(req.data, allowedKeys);
+    return req.auth.uid;
+  });
+  return mock;
 });
 jest.mock("../notification_utils", () => ({
   sendToEmployee: jest.fn().mockResolvedValue(0),
@@ -50,10 +69,12 @@ const {
   sendToEmployee,
   sendToActiveAdmins,
 } = require("../notification_utils");
+const security = require("../security");
 const {
   createEmployeeAccount,
   completeEmployeeSetup,
   changeEmployeeEmail,
+  deleteEmployeeAccount,
 } = require("../employee_accounts");
 
 const ADMIN = {uid: "admin-uid"};
@@ -135,6 +156,10 @@ function makeDb(docs, trace, bridge) {
         set: (ref, value) => {
           trace.push("db.set");
           docs[ref.id] = value;
+        },
+        delete: (ref) => {
+          trace.push("db.delete");
+          delete docs[ref.id];
         },
       };
       const out = await fn(tx);
@@ -320,6 +345,228 @@ describe("createEmployeeAccount ordering", () => {
         expect.objectContaining({uid: "new-uid"}),
     );
   });
+});
+
+// The admin gate on this callable was MUTATION-PROVEN open on 2026-09-01:
+// deleting `await assertAdmin(req.auth.uid)` left all 1636 tests green. The
+// stub above is a jest.fn() nothing ever asserted, and a mocked-and-never-
+// asserted dependency reads as covered without being it. This is not a read
+// path — it mints a real Firebase Auth account through the Admin SDK, which
+// bypasses firestore.rules entirely.
+describe("createEmployeeAccount admin gate", () => {
+  beforeEach(() => {
+    security.assertAdmin.mockResolvedValue(undefined);
+    security.enforceDurableRateLimit.mockResolvedValue({
+      refund: jest.fn().mockResolvedValue(undefined),
+    });
+  });
+
+  test("refuses a signed-out caller before the gate", async () => {
+    await expect(
+        createEmployeeAccount.run({data: VALID_CREATE, auth: null}),
+    ).rejects.toThrow(/auth-required/);
+    expect(security.assertAdmin).not.toHaveBeenCalled();
+  });
+
+  test("puts the caller uid through assertAdmin", async () => {
+    const trace = [];
+    getFirestore.mockReturnValue(makeDb({}, trace));
+    getAuth.mockReturnValue(makeAuth(trace));
+
+    await createEmployeeAccount.run({data: VALID_CREATE, auth: ADMIN});
+
+    expect(security.assertAdmin).toHaveBeenCalledWith(ADMIN.uid);
+  });
+
+  test("a non-admin mints nothing, in Auth or Firestore", async () => {
+    const trace = [];
+    const auth = makeAuth(trace);
+    const docs = {};
+    getFirestore.mockReturnValue(makeDb(docs, trace));
+    getAuth.mockReturnValue(auth);
+    security.assertAdmin.mockRejectedValueOnce(
+        new Error("permission-denied: admin-required"),
+    );
+
+    await expect(
+        createEmployeeAccount.run({data: VALID_CREATE, auth: ADMIN}),
+    ).rejects.toThrow(/admin-required/);
+
+    expect(auth.createUser).not.toHaveBeenCalled();
+    expect(trace).toEqual([]);
+    expect(docs).toEqual({});
+  });
+
+  test("a non-admin burns NO rate-limit slot", async () => {
+    // Guard order: auth -> assertAdmin -> payload -> limiter. Keeping the
+    // identity guard above the limiter is what stops a non-privileged caller
+    // exhausting a legitimate admin 20-per-hour window.
+    getFirestore.mockReturnValue(makeDb({}, []));
+    getAuth.mockReturnValue(makeAuth([]));
+    security.assertAdmin.mockRejectedValueOnce(new Error("admin-required"));
+
+    await expect(
+        createEmployeeAccount.run({data: VALID_CREATE, auth: ADMIN}),
+    ).rejects.toThrow(/admin-required/);
+
+    expect(security.enforceDurableRateLimit).not.toHaveBeenCalled();
+  });
+});
+
+// The entire callable wrapper was untested — only performDeleteAccount had a
+// suite — so its admin gate was mutation-proven deletable too. It removes a
+// real Firebase Auth account.
+describe("deleteEmployeeAccount callable", () => {
+  const pendingDocs = () => ({
+    "pending-doc": {status: "invited", uid: "pending-uid", email: "a@b.com"},
+  });
+
+  beforeEach(() => {
+    security.assertAdmin.mockResolvedValue(undefined);
+    security.enforceDurableRateLimit.mockResolvedValue({
+      refund: jest.fn().mockResolvedValue(undefined),
+    });
+  });
+
+  test("refuses a signed-out caller before the gate", async () => {
+    await expect(
+        deleteEmployeeAccount.run({data: {docId: "pending-doc"}, auth: null}),
+    ).rejects.toThrow(/auth-required/);
+    expect(security.assertAdmin).not.toHaveBeenCalled();
+  });
+
+  test("puts the caller uid through assertAdmin", async () => {
+    const trace = [];
+    getFirestore.mockReturnValue(makeDb(pendingDocs(), trace));
+    getAuth.mockReturnValue(makeAuth(trace));
+
+    await deleteEmployeeAccount.run({
+      data: {docId: "pending-doc"},
+      auth: ADMIN,
+    });
+
+    expect(security.assertAdmin).toHaveBeenCalledWith(ADMIN.uid);
+  });
+
+  test("a non-admin deletes nothing, in Firestore or Auth", async () => {
+    const trace = [];
+    const auth = makeAuth(trace);
+    const docs = pendingDocs();
+    getFirestore.mockReturnValue(makeDb(docs, trace));
+    getAuth.mockReturnValue(auth);
+    security.assertAdmin.mockRejectedValueOnce(new Error("admin-required"));
+
+    await expect(
+        deleteEmployeeAccount.run({
+          data: {docId: "pending-doc"},
+          auth: ADMIN,
+        }),
+    ).rejects.toThrow(/admin-required/);
+
+    expect(docs["pending-doc"]).toBeDefined();
+    expect(auth.deleteUser).not.toHaveBeenCalled();
+    expect(security.enforceDurableRateLimit).not.toHaveBeenCalled();
+  });
+
+  test("rejects a payload with an unexpected key", async () => {
+    getFirestore.mockReturnValue(makeDb(pendingDocs(), []));
+    getAuth.mockReturnValue(makeAuth([]));
+
+    await expect(
+        deleteEmployeeAccount.run({
+          data: {docId: "pending-doc", evil: 1},
+          auth: ADMIN,
+        }),
+    ).rejects.toThrow(/unexpected-field/);
+    expect(security.enforceDurableRateLimit).not.toHaveBeenCalled();
+  });
+
+  test("deletes the DOC first and the Auth account second", async () => {
+    // Ordering is load-bearing: an Auth account with no doc is invisible to
+    // every admin surface, while a doc with no Auth account is visible and
+    // fixable by re-creating.
+    const trace = [];
+    const docs = pendingDocs();
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb(docs, trace));
+    getAuth.mockReturnValue(auth);
+
+    const out = await deleteEmployeeAccount.run({
+      data: {docId: "pending-doc"},
+      auth: ADMIN,
+    });
+
+    expect(out).toEqual({ok: true});
+    expect(trace).toEqual(["db.delete", "db.commit", "auth.deleteUser"]);
+    expect(docs["pending-doc"]).toBeUndefined();
+  });
+
+  test("refuses an account that is no longer pending", async () => {
+    const trace = [];
+    const docs = {"pending-doc": {status: "active", uid: "pending-uid"}};
+    const auth = makeAuth(trace);
+    getFirestore.mockReturnValue(makeDb(docs, trace));
+    getAuth.mockReturnValue(auth);
+
+    await expect(
+        deleteEmployeeAccount.run({
+          data: {docId: "pending-doc"},
+          auth: ADMIN,
+        }),
+    ).rejects.toThrow(/account-not-pending/);
+
+    expect(docs["pending-doc"]).toBeDefined();
+    expect(auth.deleteUser).not.toHaveBeenCalled();
+  });
+
+  test("reports a missing doc as not-found", async () => {
+    getFirestore.mockReturnValue(makeDb({}, []));
+    getAuth.mockReturnValue(makeAuth([]));
+
+    await expect(
+        deleteEmployeeAccount.run({data: {docId: "ghost"}, auth: ADMIN}),
+    ).rejects.toThrow(/account-not-found/);
+  });
+
+  test("swallows auth/user-not-found so a partial earlier run converges",
+      async () => {
+        const trace = [];
+        const notFound = new Error("gone");
+        notFound.code = "auth/user-not-found";
+        getFirestore.mockReturnValue(makeDb(pendingDocs(), trace));
+        getAuth.mockReturnValue(makeAuth(trace, {deleteUserError: notFound}));
+
+        await expect(
+            deleteEmployeeAccount.run({
+              data: {docId: "pending-doc"},
+              auth: ADMIN,
+            }),
+        ).resolves.toEqual({ok: true});
+        expect(logger.error).not.toHaveBeenCalled();
+      });
+
+  test("logs the orphaned uid loudly when the Auth delete really fails",
+      async () => {
+        // The doc is already gone, so this leaves an Auth account no admin
+        // surface can see and whose email createEmployeeAccount will refuse.
+        const trace = [];
+        getFirestore.mockReturnValue(makeDb(pendingDocs(), trace));
+        getAuth.mockReturnValue(
+            makeAuth(trace, {deleteUserError: new Error("boom")}),
+        );
+
+        await expect(
+            deleteEmployeeAccount.run({
+              data: {docId: "pending-doc"},
+              auth: ADMIN,
+            }),
+        ).rejects.toThrow(/boom/);
+
+        expect(logger.error).toHaveBeenCalledWith(
+            expect.stringContaining("orphaned auth account"),
+            expect.objectContaining({uid: "pending-uid"}),
+        );
+      });
 });
 
 describe("completeEmployeeSetup activation", () => {

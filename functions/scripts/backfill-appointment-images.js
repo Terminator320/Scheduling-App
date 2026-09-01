@@ -49,6 +49,7 @@
 const {Timestamp} = require("firebase-admin/firestore");
 const {appointmentImageDocId} = require("../appointment_image_ids");
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
+const {scanByName} = require("./_scan");
 const {bootstrapScript} = require("./_project");
 
 /** Bare switches, matched EXACTLY — see `_flags.js`. */
@@ -167,37 +168,23 @@ async function main() {
   const argv = process.argv.slice(2);
   const {db, dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
 
-  let cursor = null;
   let appointments = 0;
   let withPhotos = 0;
   let copied = 0;
   let unrenderable = 0;
 
-  for (;;) {
-    // Ordered by document id — the only field every appointment is guaranteed
-    // to have. Ordering by a data field would silently exclude any document
-    // missing it, which is exactly how a backfill misses the rows that most
-    // need it.
-    let query = db.collection("appointments")
-        .orderBy("__name__")
-        .limit(PAGE_SIZE);
-    if (cursor) query = query.startAfter(cursor);
-    const snap = await query.get();
-    if (snap.empty) break;
-
-    for (const doc of snap.docs) {
-      appointments += 1;
-      const data = doc.data() || {};
-      const pictures = Array.isArray(data.pictures) ? data.pictures : [];
-      if (pictures.length === 0) continue;
-      withPhotos += 1;
-      const result = await backfillOne(db, doc, dryRun);
-      copied += result.copied;
-      unrenderable += result.skipped;
-    }
-
-    cursor = snap.docs[snap.docs.length - 1];
-    if (snap.size < PAGE_SIZE) break;
+  for await (const doc of scanByName(
+      db.collection("appointments"),
+      {pageSize: PAGE_SIZE},
+  )) {
+    appointments += 1;
+    const data = doc.data() || {};
+    const pictures = Array.isArray(data.pictures) ? data.pictures : [];
+    if (pictures.length === 0) continue;
+    withPhotos += 1;
+    const result = await backfillOne(db, doc, dryRun);
+    copied += result.copied;
+    unrenderable += result.skipped;
   }
 
   const prefix = dryRun ? "[dry run] would copy" : "copied";

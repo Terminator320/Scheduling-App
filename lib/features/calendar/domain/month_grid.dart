@@ -1,8 +1,17 @@
 import 'package:intl/intl.dart';
 
 /// The most rows any month can need: 6 lead cells + 31 days spills into a
-/// sixth week (August 2026 is the case — 31 days starting Saturday). Used to
-/// bound layout, never to pad a shorter month with an empty trailing week.
+/// sixth week (August 2026 is the case — 31 days starting Saturday).
+///
+/// **A TEST bound, not a layout one** — nothing in `lib/` reads it. The grid
+/// sizes itself from `monthGridRowCount`, which is derived per month precisely
+/// so a short month is not padded with an empty trailing week; a constant 6
+/// there is the bug that rule exists to prevent. It earns its keep in
+/// `month_grid_overscan_test.dart`, which walks every month across a leap
+/// cycle at all seven week starts and needs the worst case stated once (via
+/// `month_grid_test.dart`'s range assertion). The
+/// comment used to say "used to bound layout", which sent a reader looking for
+/// a caller that has never existed.
 const int monthGridMaxRows = 6;
 
 /// Dart's [DateTime.weekday] is Monday=1..Sunday=7; the grid works in

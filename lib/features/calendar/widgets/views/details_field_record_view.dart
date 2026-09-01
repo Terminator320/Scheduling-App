@@ -1,0 +1,169 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/core/validators/text_limits.dart';
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
+import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
+import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
+
+/// What the CREW can record about a job they are on.
+///
+/// The technician could read the job and tap "Mark as complete", and nothing
+/// else. For a trades business the field record IS the billable artifact and
+/// the upsell pipeline — "customer also wants the water heater quoted" — and
+/// it travelled by phone call instead. The photo pipeline, the offline upload
+/// queue and the magic-byte validation all already existed; they were wired to
+/// the admin-only edit form.
+///
+/// Rendered ONLY for a non-admin assignee, which is exactly the set
+/// `firestore.rules`' crew branches admit. An admin has the edit form, and a
+/// read-only surface (client job history) offers nothing.
+class DetailsFieldRecordView extends ConsumerStatefulWidget {
+  const DetailsFieldRecordView({required this.appointment, super.key});
+
+  final AppointmentRecord appointment;
+
+  @override
+  ConsumerState<DetailsFieldRecordView> createState() =>
+      _DetailsFieldRecordViewState();
+}
+
+class _DetailsFieldRecordViewState
+    extends ConsumerState<DetailsFieldRecordView> {
+  late final TextEditingController _notes = TextEditingController(
+    text: widget.appointment.fieldNotes,
+  );
+
+  /// The value last known to be stored, so Save can be offered only when there
+  /// is something to save — and so a successful write settles the dirty state
+  /// without re-reading the document.
+  late String _saved = widget.appointment.fieldNotes;
+
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _notes.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final id = widget.appointment.id;
+    if (id == null || _isSaving) return;
+    // Set BEFORE the first await, like every other submit in this codebase:
+    // awaiting first leaves the button live and a double tap starts a second
+    // write.
+    setState(() => _isSaving = true);
+
+    // Resolved up front — `ref.read` on an unmounted consumer throws under
+    // Riverpod 3, and this sheet can be dismissed mid-write.
+    final logger = ref.read(loggerProvider);
+    final notices = ref.read(noticeServiceProvider);
+    final repository = ref.read(appointmentsRepositoryProvider);
+    final text = _notes.text.trim();
+
+    if (guardedOffline(
+      context,
+      ref,
+      intro: context.l10n.error_introSaveFieldNotes,
+    )) {
+      setState(() => _isSaving = false);
+      return;
+    }
+
+    try {
+      await repository.updateFieldNotes(id: id, notes: text);
+      if (!mounted) return;
+      setState(() {
+        _saved = text;
+        _isSaving = false;
+      });
+      notices.success(context.l10n.calendar_fieldNotesSaved);
+    } catch (e, st) {
+      logger.warn('APPT-FIELDNOTE updateFieldNotes failed', e, st);
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      notices.error(
+        composeErrorNotice(
+          context,
+          intro: context.l10n.error_introSaveFieldNotes,
+          error: e,
+        ),
+      );
+    }
+  }
+
+  Future<void> _addPhotos() async {
+    final id = widget.appointment.id;
+    if (id == null) return;
+
+    // Deliberately NOT offline-guarded: photos go through the persistent
+    // upload queue and drain on reconnect, which is the one asymmetry this
+    // codebase draws between entity writes and photos. Someone in a basement
+    // should still be able to take the picture.
+    final logger = ref.read(loggerProvider);
+    final uploader = ref.read(appointmentImageUploadProvider);
+    try {
+      final files = await pickAppointmentImages(context, ref);
+      if (files.isEmpty) return;
+      uploader.uploadInBackground(appointmentId: id, newImages: files);
+    } catch (e, st) {
+      logger.warn('APPT-FIELDNOTE photo pick failed', e, st);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final isDirty = _notes.text.trim() != _saved;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: AppSpacing.sp16),
+        MonoSectionLabel(l10n.calendar_fieldRecordLabel),
+        const SizedBox(height: AppSpacing.sp8),
+        LabeledTextField(
+          controller: _notes,
+          label: l10n.calendar_fieldNotesLabel,
+          hint: l10n.calendar_fieldNotesHint,
+          maxLines: 4,
+          maxLength: TextLimits.appointmentNotes,
+          onChanged: (_) => setState(() {}),
+        ),
+        const SizedBox(height: AppSpacing.sp8),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _addPhotos,
+                icon: const Icon(Icons.add_a_photo_outlined),
+                label: Text(l10n.calendar_addPhotos),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sp8),
+            Expanded(
+              child: FilledButton(
+                // Disabled while unchanged, so the row cannot spend a write on
+                // a no-op — this is the one surface a technician taps with
+                // gloves on, glancing away.
+                onPressed: isDirty && !_isSaving ? _save : null,
+                child: Text(
+                  _isSaving ? l10n.common_saving : l10n.common_save,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}

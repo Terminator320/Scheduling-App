@@ -3,7 +3,9 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart' show compute;
 
 import 'package:scheduling/core/data/paged_scan.dart';
+import 'package:scheduling/core/data/search_result_cache.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
@@ -30,16 +32,31 @@ class FirebaseClientsRepository implements ClientsRepository {
   /// Injectable time source so the search-cache TTL is testable.
   final DateTime Function() _clock;
 
-  // Bounded LRU cache — once it hits _searchCacheMax entries, the oldest one
-  // gets evicted so this can't grow without limit.
-  static const int _searchCacheMax = 50;
+  /// Bounded LRU of recent results. The dials (50 entries, 2 minutes) live on
+  /// [SearchResultCache], which the appointments repository shares — they were
+  /// two byte-identical copies of one cost decision.
+  late final SearchResultCache<ClientRecord> _searchCache = SearchResultCache(
+    clock: _clock,
+  );
 
-  /// Cache TTL for search results and the scan window. Local writes patch the
-  /// cache immediately, so this TTL is really just a safety net for remote
-  /// writes.
-  static const Duration _searchCacheTtl = Duration(minutes: 2);
-
-  final Map<String, _CachedClientSearch> _searchCache = {};
+  /// How long a window may be kept alive by local patches before it is re-paged
+  /// regardless.
+  ///
+  /// `patched()` used to carry the ORIGINAL `fetchedAt` through, so the window
+  /// expired two minutes after the tab-open scan no matter how much activity
+  /// there had been — and the first client write after that idle re-paged all
+  /// ~700 docs, plus a `ClientRecord.fromMap` and a `buildingKeyFor` per doc
+  /// ON THE UI ISOLATE (unlike `searchClients`, which uses `compute`). It fires
+  /// from the inline add-client during booking too, when the Clients list is
+  /// not even on screen.
+  ///
+  /// Refreshing `fetchedAt` on a patch fixes that, but on its own it would let
+  /// a steadily-edited window live forever and never see a REMOTE write —
+  /// which is the only thing [SearchResultCache.ttl] protects against. This
+  /// ceiling
+  /// is what keeps that guarantee: however many local writes land, the window
+  /// is at most this stale with respect to another admin or a Cloud Function.
+  static const Duration _scanWindowMaxAge = Duration(minutes: 10);
 
   // Shared name-ordered scan window serving all queries within the TTL.
   _CachedClientScanWindow? _scanWindow;
@@ -52,15 +69,18 @@ class FirebaseClientsRepository implements ClientsRepository {
   /// the `compute` isolate boundary.
   static const int _clientScanLimit = 5000;
 
-  bool _isFresh(DateTime fetchedAt) =>
-      _clock().difference(fetchedAt) < _searchCacheTtl;
+  bool _isFresh(DateTime fetchedAt) => _searchCache.isFresh(fetchedAt);
 
-  void _cacheSearch(String key, List<ClientRecord> results) {
-    _searchCache.remove(key);
-    if (_searchCache.length >= _searchCacheMax) {
-      _searchCache.remove(_searchCache.keys.first);
-    }
-    _searchCache[key] = _CachedClientSearch(results, _clock());
+  /// The freshness stamp a patched [window] should carry.
+  ///
+  /// Now, because the doc that just changed is ours and the rest is unchanged
+  /// since the last read — unless the window has already been kept alive past
+  /// [_scanWindowMaxAge], in which case it keeps its old stamp and ages out.
+  DateTime _patchedFetchedAt(_CachedClientScanWindow window) {
+    final now = _clock();
+    return now.difference(window.firstFetchedAt) < _scanWindowMaxAge
+        ? now
+        : window.fetchedAt;
   }
 
   // For local writes we patch the written doc into the scan window directly, so
@@ -78,7 +98,7 @@ class FirebaseClientsRepository implements ClientsRepository {
           if (doc.id != id) doc,
         if (data != null) (id: id, data: {...?previous, ...data}),
       ];
-      _scanWindow = window.patched(docs, id);
+      _scanWindow = window.patched(docs, id, at: _patchedFetchedAt(window));
     } else {
       _scanWindow = null;
     }
@@ -271,12 +291,8 @@ class FirebaseClientsRepository implements ClientsRepository {
     if (!ClientSearchPolicy.shouldSearch(q)) return [];
 
     final cacheKey = ClientSearchPolicy.cacheKey(q);
-    final cached = _searchCache[cacheKey];
-    if (cached != null && _isFresh(cached.fetchedAt)) {
-      _cacheSearch(cacheKey, cached.results);
-      return cached.results;
-    }
-    _searchCache.remove(cacheKey);
+    final cached = _searchCache.read(cacheKey);
+    if (cached != null) return cached;
 
     final window = await _clientScanWindow();
     if (window == null) return const [];
@@ -285,7 +301,7 @@ class FirebaseClientsRepository implements ClientsRepository {
       matchClientDocs,
       ClientSearchScan(docs: window.docs, query: q),
     );
-    _cacheSearch(cacheKey, results);
+    _searchCache.write(cacheKey, results);
     return results;
   }
 
@@ -372,7 +388,7 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
 
     final client = ClientRecord.fromMap(doc.id, data);
 
-    final contacts = (data['contacts'] as List?) ?? const [];
+    final contacts = firestoreList(data['contacts']);
     final contactSearchText = contacts
         .whereType<Map<Object?, Object?>>()
         .map((contact) {
@@ -424,25 +440,27 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
       .toList();
 }
 
-class _CachedClientSearch {
-  const _CachedClientSearch(this.results, this.fetchedAt);
-
-  final List<ClientRecord> results;
-  final DateTime fetchedAt;
-}
-
 class _CachedClientScanWindow {
-  _CachedClientScanWindow(this.docs, this.fetchedAt);
+  _CachedClientScanWindow(this.docs, this.fetchedAt)
+    : firstFetchedAt = fetchedAt;
 
   _CachedClientScanWindow._patched(
     this.docs,
     this.fetchedAt,
+    this.firstFetchedAt,
     this._records,
     this._buildingKeys,
   );
 
   final List<RawClientDoc> docs;
+
+  /// When this window was last considered current. A local patch moves it
+  /// forward; see `_patchedFetchedAt`.
   final DateTime fetchedAt;
+
+  /// When the underlying Firestore read actually happened. Never moves, so a
+  /// steadily-patched window still ages out against `_scanWindowMaxAge`.
+  final DateTime firstFetchedAt;
 
   List<ClientRecord>? _records;
   Map<String, String?>? _buildingKeys;
@@ -489,11 +507,23 @@ class _CachedClientScanWindow {
   /// carrying it would mean re-deriving the count and label rules here — a
   /// second place the building rules live, which is what `buildingsIn` taking
   /// a required `keys` exists to prevent.
-  _CachedClientScanWindow patched(List<RawClientDoc> next, String changedId) {
+  _CachedClientScanWindow patched(
+    List<RawClientDoc> next,
+    String changedId, {
+    required DateTime at,
+  }) {
     final cachedRecords = _records;
     // Nothing has read the derived maps yet, so there is nothing to carry and
     // a plain window is both correct and free.
-    if (cachedRecords == null) return _CachedClientScanWindow(next, fetchedAt);
+    if (cachedRecords == null) {
+      return _CachedClientScanWindow._patched(
+        next,
+        at,
+        firstFetchedAt,
+        null,
+        null,
+      );
+    }
 
     final doc = next.where((d) => d.id == changedId).firstOrNull;
     // Absent (a delete) or archived: it leaves `records`, which excludes
@@ -520,7 +550,8 @@ class _CachedClientScanWindow {
 
     return _CachedClientScanWindow._patched(
       next,
-      fetchedAt,
+      at,
+      firstFetchedAt,
       records,
       buildingKeys,
     );

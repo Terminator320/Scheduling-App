@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
@@ -66,7 +69,17 @@ class DetailsActionBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppRadius.r16),
         ),
       ),
-      onPressed: isSaving ? null : onMarkDone,
+      // The one button a gloved field worker presses while glancing away, and
+      // the only confirmation it had was a notice they have to look at. The
+      // notice layer fires its own haptic per kind, but only once the write
+      // RETURNS — this one confirms the tap landed. Fired before the action so
+      // it is felt on press, and unawaited so it can never delay the write.
+      onPressed: isSaving
+          ? null
+          : () {
+              unawaited(HapticFeedback.mediumImpact());
+              onMarkDone();
+            },
       child: _ActionButtonContent(
         compact: compact,
         icon: BusyButtonIcon(

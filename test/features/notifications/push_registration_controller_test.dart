@@ -92,6 +92,31 @@ void main() {
     verifyNever(() => employees.findUserByUid(any()));
   });
 
+  test('a throwing account gate is contained, not escaped as a fatal',
+      () async {
+    // Shipped as a FATAL on 2026-08-31 and fixed by opening the try ABOVE the
+    // gate read. `sync()` is called unawaited from four sites, so nothing is
+    // left to catch a throw from `readAccountGateInputs` or the awaited
+    // `_refreshSub.cancel()` — it goes straight to the zone handler and is
+    // filed as an app-level crash.
+    //
+    // Move `final gate = readAccountGateInputs(...)` back above the try and
+    // this test fails.
+    when(() => auth.currentUser).thenThrow(StateError('auth blew up'));
+    final container = makeContainer(const {
+      'role': 'employee',
+      'status': 'active',
+    });
+    addTearDown(container.dispose);
+    await settleDoc(container);
+
+    await expectLater(
+      container.read(pushRegistrationControllerProvider).sync(),
+      completes,
+    );
+    verifyNever(() => service.requestPermission());
+  });
+
   test('inactive employee does not register', () async {
     final container = makeContainer(const {
       'role': 'employee',

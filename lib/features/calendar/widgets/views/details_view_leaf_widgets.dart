@@ -253,23 +253,33 @@ class DetailsPhotosView extends ConsumerWidget {
         DetailsSectionRow(
           label: context.l10n.calendar_photosLabel,
           value: '',
-          customValue: PhotoPickerSection(
-            existingImages: existingImages,
-            newImages: newImages,
-            isEditing: false,
-            onPickImages: () {},
-            onRemoveExisting: (_) {},
-            onRemoveNew: (_) {},
-            failedCount: failedCount,
-            tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
-            onRetry: failedCount > 0 && !isCancelled
-                ? () {
-                    if (appointmentId != null) {
-                      notifier.clearFailure(appointmentId);
+          // The queue depth is a ValueNotifier rather than a provider, so the
+          // rebuild is scoped to this row: a drain of a long queue republishes
+          // per entry, and rebuilding the whole detail body each time would be
+          // a real cost on the screen a technician has open in the field.
+          customValue: ValueListenableBuilder<Map<String, int>>(
+            valueListenable: notifier.pending,
+            builder: (context, pending, _) => PhotoPickerSection(
+              existingImages: existingImages,
+              newImages: newImages,
+              isEditing: false,
+              onPickImages: () {},
+              onRemoveExisting: (_) {},
+              onRemoveNew: (_) {},
+              failedCount: failedCount,
+              pendingCount: appointmentId == null
+                  ? 0
+                  : pending[appointmentId] ?? 0,
+              tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
+              onRetry: failedCount > 0 && !isCancelled
+                  ? () {
+                      if (appointmentId != null) {
+                        notifier.clearFailure(appointmentId);
+                      }
+                      onRetry();
                     }
-                    onRetry();
-                  }
-                : null,
+                  : null,
+            ),
           ),
         ),
       ],

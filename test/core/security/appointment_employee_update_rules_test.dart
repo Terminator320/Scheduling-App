@@ -24,19 +24,44 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   late final rules = File('firestore.rules').readAsStringSync();
 
-  /// The body of the assigned-employee disjunct of `allow update`.
-  String employeeBranch() {
-    final body = RegExp(
-      r'\|\| \(isAssignedEmployee\(resource\.data\)(.*?)\);',
-      dotAll: true,
-    ).firstMatch(rules)?.group(1);
+  /// Every assigned-employee disjunct of `allow update`, body only.
+  ///
+  /// There are TWO since 2026-09-01 — the mark-done flip and the crew notes
+  /// write — so a helper that cut at the first `);` after the first
+  /// `isAssignedEmployee(` would now return BOTH, and a term-ABSENCE
+  /// assertion over the pair would pass for the wrong reason.
+  ///
+  /// Split on literals rather than a regex. The split consumes each branch's
+  /// own opening marker, so a part already stops before the NEXT branch; the
+  /// last one is cut at the `);` that closes the whole `allow update`.
+  /// Comments riding along are harmless — every assertion here runs through
+  /// [collapsed], which drops them.
+  List<String> employeeBranches() {
+    final parts = rules.split('|| (isAssignedEmployee(resource.data)');
     expect(
-      body,
-      isNotNull,
-      reason: 'the assigned-employee branch of allow update was removed',
+      parts.length,
+      greaterThan(1),
+      reason: 'the assigned-employee branches of allow update were removed',
     );
-    return body!;
+    return [
+      for (final part in parts.skip(1))
+        part.contains(');')
+            ? part.substring(0, part.indexOf(');') + 1)
+            : part,
+    ];
   }
+
+  /// The disjunct whose `hasOnly` names [firstKey].
+  String employeeBranchNaming(String firstKey) {
+    for (final branch in employeeBranches()) {
+      if (branch.contains(firstKey)) return branch;
+    }
+    fail('no assigned-employee branch of allow update names $firstKey');
+  }
+
+  /// The mark-done branch — what every pre-existing test here means by "the"
+  /// employee branch.
+  String employeeBranch() => employeeBranchNaming("'status'");
 
   /// The branch as the rules ENGINE sees it: comments dropped, whitespace
   /// flattened. Dropping comments is what stops a term-absence assertion below
@@ -135,5 +160,97 @@ void main() {
     expect(branch, isNot(contains('isValidAppointmentData')));
     expect(branch, isNot(contains('isValidAppointmentSpan')));
     expect(branch, isNot(contains('appointmentSpanNotWidened')));
+  });
+
+  group('the crew-notes branch', () {
+    // Added 2026-09-01. The technician could read a job and tap "Mark as
+    // complete" and nothing else — no way to record what they found, on a
+    // trade where the field record IS the billable artifact and the upsell
+    // pipeline. It travelled by phone call instead.
+    String notesBranch() => employeeBranchNaming("'fieldNotes'");
+
+    test('is a SEPARATE disjunct from the mark-done flip', () {
+      // Not a widened `hasOnly` on the status branch: that branch is the most
+      // security-sensitive write in the app and its exact key set is what
+      // makes it possible to reason about. One write doing both would put
+      // every guarantee above it back in play.
+      expect(employeeBranches(), hasLength(2));
+      expect(collapsed(employeeBranch()), isNot(contains("'fieldNotes'")));
+      expect(collapsed(notesBranch()), isNot(contains("'status'")));
+    });
+
+    test('restricts the diff to fieldNotes and updatedAt', () {
+      expect(
+        collapsed(notesBranch()),
+        contains("affectedKeys() .hasOnly(['fieldNotes', 'updatedAt'])"),
+      );
+    });
+
+    test('writes fieldNotes, never the dispatcher NOTES field', () {
+      // Two fields on purpose: `notes` is the brief written when the job was
+      // booked, and an assignee must not be able to overwrite it. Keeping
+      // them separate is what makes "the crew may add, never edit the brief"
+      // a rules-level fact rather than a UI convention.
+      final body = collapsed(notesBranch());
+      expect(body, contains("'fieldNotes'"));
+      expect(body, isNot(contains("['notes'")));
+      expect(body, isNot(contains("'notes',")));
+    });
+
+    test('bounds the string', () {
+      expect(
+        collapsed(notesBranch()),
+        contains('isBoundedString(request.resource.data.fieldNotes, 4000)'),
+      );
+    });
+
+    test('the cap is conditional, so an updatedAt-only touch still passes',
+        () {
+      // `hasOnly` admits a SUBSET, and an assignee adding a photo touches this
+      // document with an `updatedAt`-only diff — the images store bumps the
+      // parent in the same batch as the rows. A flat cap evaluates against an
+      // ABSENT field on that write and refuses the whole batch, so the crew
+      // could add a photo row and never the photo.
+      expect(
+        collapsed(notesBranch()),
+        contains("!('fieldNotes' in request.resource.data)"),
+      );
+    });
+
+    test('pins updatedAt, like the flip beside it', () {
+      expect(
+        collapsed(notesBranch()),
+        contains('request.resource.data.updatedAt == request.time'),
+      );
+    });
+
+    test('carries NO status gate, deliberately', () {
+      // Unlike mark-done. A note is additive and is often the explanation for
+      // a job that went wrong — "nobody home", "needs a part" — so a
+      // cancelled or already-closed visit is exactly when one is worth
+      // recording.
+      final body = collapsed(notesBranch());
+      expect(body, isNot(contains("status != 'cancelled'")));
+      expect(body, isNot(contains('status ==')));
+    });
+
+    test('the shape guards stay off this branch too', () {
+      // Same reasoning as the flip: a legacy doc predating the caps must stay
+      // note-able, and the diff is already restricted to two keys.
+      final body = collapsed(notesBranch());
+      expect(body, isNot(contains('isValidAppointmentData')));
+      expect(body, isNot(contains('isValidAppointmentSpan')));
+    });
+
+    test('the field is capped on the ADMIN path as well', () {
+      // The admin re-serializes the whole record, so the cap has to live in
+      // the shape guard too or a long note is only bounded on one of the two
+      // ways it can be written.
+      expect(
+        rules,
+        contains("!('fieldNotes' in d.keys()) || "
+            'isBoundedString(d.fieldNotes, 4000)'),
+      );
+    });
   });
 }
