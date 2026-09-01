@@ -26,15 +26,6 @@
       ]
     },
     {
-      "collectionGroup": "users",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "email", "order": "ASCENDING" },
-        { "fieldPath": "role", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "appointments",
       "queryScope": "COLLECTION",
       "fields": [
@@ -63,6 +54,14 @@
       "fields": [
         { "fieldPath": "employeeIds", "arrayConfig": "CONTAINS" },
         { "fieldPath": "startTime", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "appointments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeIds", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "endTime", "order": "ASCENDING" }
       ]
     },
     {
@@ -278,6 +277,12 @@
     {
       "collectionGroup": "clients",
       "fieldPath": "billingTerms",
+      "ttl": false,
+      "indexes": []
+    },
+    {
+      "collectionGroup": "clients",
+      "fieldPath": "wave.problems",
       "ttl": false,
       "indexes": []
     },
