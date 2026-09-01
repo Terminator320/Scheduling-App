@@ -164,19 +164,34 @@ class EventDetailsController extends Notifier<EventDetailsState>
   Future<void> _loadClientIfNeeded(String clientId) async {
     final id = clientId.trim();
     if (id.isEmpty || state.client != null) return;
+    // Resolved BEFORE the first await: `ref.read` on an unmounted consumer
+    // throws under Riverpod 3, and the role gate below now awaits.
+    final logger = ref.read(loggerProvider);
+    final clientsRepo = ref.read(clientsRepositoryProvider);
     // Employees cannot read client documents.
     if (ref.exists(currentUserDocProvider)) {
       final docState = ref.read(currentUserDocProvider);
       if (docState.hasError) return;
-      final doc = docState.isLoading
-          ? await ref.read(currentUserDocProvider.future)
-          : (docState.value ?? const <String, dynamic>{});
+      final Map<String, dynamic> doc;
+      try {
+        doc = docState.isLoading
+            ? await ref.read(currentUserDocProvider.future)
+            : (docState.value ?? const <String, dynamic>{});
+      } on Object catch (e, st) {
+        // `.future` genuinely rejects when the stream errors before its first
+        // value — the `hasError` guard above only covers an ALREADY-settled
+        // error, not one arriving during this await. This whole method runs
+        // in a DISCARDED `Future.microtask`, so an escape here reaches the
+        // zone handler: `permission-denied` degrades to non-fatal, but
+        // `unavailable` records as a FATAL, from a sheet that merely failed
+        // to prefill a client name.
+        logger.warn('APPT-OPEN user doc read failed', e, st);
+        return;
+      }
       if (!ref.mounted) return;
       final role = (doc['role'] ?? '').toString().trim();
       if (role != 'admin') return;
     }
-    final logger = ref.read(loggerProvider);
-    final clientsRepo = ref.read(clientsRepositoryProvider);
     try {
       final client = await clientsRepo.getClientById(id);
       // Do not overwrite a client picked during the read.

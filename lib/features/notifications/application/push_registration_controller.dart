@@ -67,8 +67,7 @@ class PushRegistrationController with ReentrantSync {
 
   AppLogger get _logger => _ref.read(loggerProvider);
 
-  static String _currentLocale() =>
-      currentServerLocale;
+  static String _currentLocale() => currentServerLocale;
 
   /// Idempotent and safe to call on every account-doc emission or language
   /// change. Concurrent calls coalesce, so whichever finishes last wins.
@@ -81,31 +80,36 @@ class PushRegistrationController with ReentrantSync {
     // signed-out device registered and still receiving that account's pushes —
     // and the write succeeds, so nothing logs an error.
     final generation = syncGeneration;
-    final gate = readAccountGateInputs(_ref, _auth);
-    // Null is "we don't know yet" — leave the registration as it is.
-    if (gate == null) return;
-    if (!shouldRegisterPush(
-      role: gate.role,
-      status: gate.status,
-      signedIn: gate.signedIn,
-    )) {
-      await _refreshSub?.cancel();
-      _refreshSub = null;
-      return;
-    }
-
-    final uid = _auth.currentUser?.uid;
-    final locale = _currentLocale();
-    // Fast path — already registered for this uid+locale with a live refresh
-    // subscription, so skip the query and upsert.
-    if (uid != null &&
-        uid == _registeredUid &&
-        locale == _registeredLocale &&
-        _refreshSub != null) {
-      return;
-    }
-
+    // The guard opens HERE, not after the gate: `readAccountGateInputs` reads
+    // a provider and `_refreshSub.cancel()` is awaited, so both can throw —
+    // and `sync()` is called unawaited from four sites, which is exactly what
+    // the catch below exists to contain. `PresenceSyncController._syncGuarded`
+    // already puts the identical gate read inside its try.
     try {
+      final gate = readAccountGateInputs(_ref, _auth);
+      // Null is "we don't know yet" — leave the registration as it is.
+      if (gate == null) return;
+      if (!shouldRegisterPush(
+        role: gate.role,
+        status: gate.status,
+        signedIn: gate.signedIn,
+      )) {
+        await _refreshSub?.cancel();
+        _refreshSub = null;
+        return;
+      }
+
+      final uid = _auth.currentUser?.uid;
+      final locale = _currentLocale();
+      // Fast path — already registered for this uid+locale with a live
+      // refresh subscription, so skip the query and upsert.
+      if (uid != null &&
+          uid == _registeredUid &&
+          locale == _registeredLocale &&
+          _refreshSub != null) {
+        return;
+      }
+
       await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
       if (isSyncStale(generation)) return;
       final service = _ref.read(pushNotificationServiceProvider);
