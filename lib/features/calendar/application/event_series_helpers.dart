@@ -71,3 +71,32 @@ ClientRecord placeholderClient(AppointmentRecord a) => ClientRecord(
   phone: a.clientPhone,
   address: a.address,
 );
+
+/// How much of a series a "this and following" save would touch — the anchor
+/// plus the siblings [futureSeriesRecords] will actually write.
+///
+/// It lives beside that selection, and derives FROM it, because the dialog's
+/// number and the write have to agree. Counted independently they did not:
+/// a terminal sibling was counted but never written, and on a multi-day RUN
+/// the count compared `startTime` while the write compared `dayIndex`, so the
+/// figure the admin confirmed was not the number that changed. `last` is the
+/// latest instant among them, for the dialog's "through the 26th" line.
+({int count, DateTime? last}) seriesOutlook(
+  List<AppointmentRecord> series, {
+  required AppointmentRecord anchor,
+  required String excludeId,
+}) {
+  final future = futureSeriesRecords(
+    series,
+    excludeId: excludeId,
+    after: anchor.startTime,
+    anchor: anchor,
+  );
+  var last = anchor.startTime;
+  for (final occurrence in future) {
+    if (occurrence.startTime.isAfter(last)) last = occurrence.startTime;
+  }
+  // The anchor is the visit being saved, so it is always written and always
+  // counts — which is why this can never report zero.
+  return (count: future.length + 1, last: last);
+}

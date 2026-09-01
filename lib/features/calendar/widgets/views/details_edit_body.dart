@@ -10,10 +10,10 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
+import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
-import 'package:scheduling/features/calendar/domain/series_outlook.dart';
 import 'package:scheduling/features/calendar/utils/assignee_availability_scope.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
@@ -261,7 +261,11 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     final logger = ref.read(loggerProvider);
     try {
       final series = await repository.getSeries(appointment.seriesId);
-      return seriesOutlook(series, appointment.startTime);
+      return seriesOutlook(
+        series,
+        anchor: appointment,
+        excludeId: appointment.id ?? '',
+      );
     } on Object catch (e, st) {
       logger.warn('APPT-SAVE series outlook failed', e, st);
       return (count: 0, last: null);
