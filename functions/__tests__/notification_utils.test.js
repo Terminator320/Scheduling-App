@@ -1632,3 +1632,111 @@ describe("deliverRecipientOnce", () => {
     expect(res).toBe(0);
   });
 });
+
+describe("handleAppointmentWrite per-recipient isolation", () => {
+  // This trigger is registered WITHOUT `retry: true` ("a duplicate push is
+  // worse than a rare missed one"), so a throw that escapes the recipient
+  // loop drops the remaining assignees permanently — nothing retries them.
+  const threeCrew = {
+    users: {
+      e1: {role: "employee", status: "active"},
+      e2: {role: "employee", status: "active"},
+      e3: {role: "employee", status: "active"},
+    },
+    tokens: {
+      e1: [{id: "t1", locale: "en"}],
+      e2: [{id: "t2", locale: "en"}],
+      e3: [{id: "t3", locale: "en"}],
+    },
+  };
+
+  const assignAll = (db, messaging) => handleAppointmentWrite(
+      "appt1",
+      null,
+      {employeeIds: ["e1", "e2", "e3"], startTime: future(3 * HOUR)},
+      {db, messaging, now: NOW, logger: silentLogger},
+  );
+
+  test("a failed send still notifies the remaining crew", async () => {
+    const {db} = makeDb(threeCrew);
+    const sent = [];
+    let calls = 0;
+    const messaging = {
+      sent,
+      sendEach: async (messages) => {
+        calls += 1;
+        // The first recipient's send rejects, as a transient FCM failure
+        // does. `messaging.sendEach` sits outside `sendToEmployee`'s own
+        // try, so this reaches the loop.
+        if (calls === 1) throw new Error("fcm unavailable");
+        sent.push(...messages);
+        return {responses: messages.map(() => ({success: true}))};
+      },
+    };
+
+    const res = await assignAll(db, messaging);
+
+    // Two of three delivered rather than the whole event being dropped.
+    expect(res).toEqual({events: 3, sent: 2});
+    expect(sent.map((m) => m.token).sort()).toEqual(["t2", "t3"]);
+  });
+
+  test("a failed recipient read still notifies the rest", async () => {
+    // `_loadRecipient` does a users read plus a tokens read; either can
+    // reject, and it sits above the send in the same loop body.
+    const {db} = makeDb(threeCrew);
+    const broken = {
+      ...db,
+      collection: (name) => {
+        const col = db.collection(name);
+        if (name !== "users") return col;
+        return {
+          ...col,
+          doc: (id) => id === "e1" ?
+            {get: async () => {
+              throw new Error("firestore unavailable");
+            }} :
+            col.doc(id),
+        };
+      },
+    };
+    const messaging = makeMessaging();
+
+    const res = await assignAll(broken, messaging);
+
+    expect(res).toEqual({events: 3, sent: 2});
+    expect(messaging.sent.map((m) => m.token).sort()).toEqual(["t2", "t3"]);
+  });
+
+  test("the failure is logged, not swallowed", async () => {
+    const {db} = makeDb(threeCrew);
+    const warnings = [];
+    const logger = {
+      warn: (msg, ctx) => warnings.push({msg, ctx}),
+      info: () => {},
+      error: () => {},
+    };
+    let calls = 0;
+    const messaging = {
+      sent: [],
+      sendEach: async (messages) => {
+        calls += 1;
+        if (calls === 1) throw new Error("fcm unavailable");
+        return {responses: messages.map(() => ({success: true}))};
+      },
+    };
+
+    await handleAppointmentWrite(
+        "appt1",
+        null,
+        {employeeIds: ["e1", "e2", "e3"], startTime: future(3 * HOUR)},
+        {db, messaging, now: NOW, logger},
+    );
+
+    // A dropped push that logs nothing is invisible in Crashlytics.
+    const hit = warnings.find((w) => w.msg.includes("recipient failed"));
+    expect(hit).toBeDefined();
+    expect(hit.ctx.employeeDocId).toBe("e1");
+    expect(hit.ctx.id).toBe("appt1");
+  });
+});
