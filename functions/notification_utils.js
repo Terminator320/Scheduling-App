@@ -424,39 +424,58 @@ async function handleAppointmentWrite(id, before, after, deps) {
     // cannot be reached can only ever suppress that same recipient's sends,
     // which were already zero. The reads land in `recipients`, so the send
     // below reuses them rather than repeating them.
-    const recipient = await _loadRecipient(deps, employeeDocId, recipients);
-    if (!_canReachRecipient(recipient, CHANGE_RECIPIENT_ROLES)) continue;
-    if (seriesId !== "") {
-      const mine = await claimSeriesNotice(deps, {
-        seriesId, seriesOpId: freshOpId, kind, employeeDocId, nowDate: now,
-      });
-      // A sibling in this same batch already claimed it and will send the
-      // push for the series — the card was already refreshed per-occurrence
-      // above.
-      if (!mine) continue;
-    }
-    const data = {appointmentId: String(id), kind};
-    if (!windows.has(employeeDocId)) {
-      windows.set(
+    // Per-recipient isolation, the same guard the five other fan-outs here
+    // carry (`_deliverRecipientOnce`, `runDailyDigest`, `sendToActiveAdmins`,
+    // `endCardOnTerminal`, and the travel sweep). Both awaits below can
+    // reject — `_loadRecipient` does a users read plus a tokens read, and
+    // `sendToEmployee`'s `messaging.sendEach` sits outside its own try — and
+    // this trigger is registered WITHOUT `retry: true` on the reasoning that
+    // a duplicate push beats a rare missed one. So an unguarded throw here
+    // doesn't cost one recipient, it drops recipients 2..N permanently, with
+    // nothing to retry them. Caveat left deliberately: if the send throws
+    // after `claimSeriesNotice` committed, the claim still stands for its
+    // window and suppresses the sibling occurrence. Releasing it is a
+    // separate decision about claim semantics, not this guard's job.
+    try {
+      const recipient = await _loadRecipient(deps, employeeDocId, recipients);
+      if (!_canReachRecipient(recipient, CHANGE_RECIPIENT_ROLES)) continue;
+      if (seriesId !== "") {
+        const mine = await claimSeriesNotice(deps, {
+          seriesId, seriesOpId: freshOpId, kind, employeeDocId, nowDate: now,
+        });
+        // A sibling in this same batch already claimed it and will send the
+        // push for the series — the card was already refreshed per-occurrence
+        // above.
+        if (!mine) continue;
+      }
+      const data = {appointmentId: String(id), kind};
+      if (!windows.has(employeeDocId)) {
+        windows.set(
+            employeeDocId,
+            await fetchEmployeeWidgetWindow(
+                deps.db, employeeDocId, now, deps.logger),
+        );
+      }
+      const records = windows.get(employeeDocId);
+      const delivered = await sendToEmployee(
+          deps,
           employeeDocId,
-          await fetchEmployeeWidgetWindow(
-              deps.db, employeeDocId, now, deps.logger),
+          data,
+          (locale) => buildNotificationMessage(kind, ctx, locale),
+          CHANGE_RECIPIENT_ROLES,
+          recipients,
+          (locale) => ({
+            widgetPayload: JSON.stringify(
+                buildWidgetPayload(records, now, locale)),
+          }),
       );
+      sent += delivered;
+    } catch (err) {
+      if (deps.logger) {
+        deps.logger.warn("appointment-write: recipient failed",
+            {id: String(id), employeeDocId, kind, err});
+      }
     }
-    const records = windows.get(employeeDocId);
-    const delivered = await sendToEmployee(
-        deps,
-        employeeDocId,
-        data,
-        (locale) => buildNotificationMessage(kind, ctx, locale),
-        CHANGE_RECIPIENT_ROLES,
-        recipients,
-        (locale) => ({
-          widgetPayload: JSON.stringify(
-              buildWidgetPayload(records, now, locale)),
-        }),
-    );
-    sent += delivered;
   }
   return {events: events.length, sent};
 }
