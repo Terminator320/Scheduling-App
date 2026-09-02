@@ -119,6 +119,49 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   ASSIGNEE (`activeUserIdentityProvider`), which is exactly the set those rules
   admit — never `!showActions`, which the client job-history surface also
   passes and which is an admin reading somebody else's job.
+- **The job time record has ONE owner, the SERVER** (2026-09-01, the audit's
+  "no `startedAt`/`completedAt` anywhere"). `lifecycleStamps`
+  (`functions/notification_policy.js`) decides `startedAt`/`completedAt` on
+  the status TRANSITION only (into `in_progress`; into done, never cancelled;
+  never a personal block or time off) and `stampLifecycle`
+  (`notification_utils.js`, run by `handleAppointmentWrite` above its events
+  early-return) writes them with an Admin-SDK `update`. So every client status
+  path — an assignee's Start job or mark-done, the admin edit form's picker, a
+  series propagate — lands the same stamp, and NO client is allowed to write
+  one. The cost is one extra write and one silent trigger re-fire per
+  transition; `notification_lifecycle.test.js` proves the re-fire produces no
+  stamp, no event and no completion push. Don't move the stamp client-side to
+  save the write: that either widens the mark-done rules branch or leaves the
+  admin picker path unstamped.
+  **`toMap()` OMITS `startedAt`, `completedAt`, `crewStatus`, `crewStatusAt`
+  and `crewStatusBy`.** Every path that re-serializes a record writes through a
+  merging `update()`/`txn.update()`, so the stored values survive an admin
+  edit, while `addAppointments` and `rewriteSeries` copies are NEW documents
+  that must not inherit another job's record. `DetailsTimeRecordRow` renders
+  the pair (gated on the job not being cancelled) and `DetailsActionBar` offers
+  **Start job** (`onStart`, above Mark-as-complete) on an open job whose stored
+  status is not yet `in_progress`, to admins and to a non-admin assignee.
+  **Two more assignee `allow update` disjuncts, and NEITHER widens mark-done**:
+  Start job (`hasOnly(['status','updatedAt'])`, `status == 'in_progress'`,
+  refused when the stored status is already `in_progress` or closed,
+  `updatedAt` pinned) and crew status (`hasOnly` the four `crewStatus*` keys +
+  `updatedAt`, value in the two-string allowlist, both instants
+  `== request.time`, `crewStatusBy == myDocId()`, refused on a closed job).
+  The text tests split on the literal `|| (isAssignedEmployee(resource.data)`
+  and the mark-done helper keys on `== 'done'`, so keep both spellings.
+  **`updateCrewStatus` writes exactly four keys and no `seriesOpId`**;
+  `crewStatusRawValues` (`appointment_status_values.dart`) is the vocabulary
+  owner, hand-mirrored by `CREW_STATUS_VALUES` in `notification_policy.js`.
+  The chips ("On my way" / "Running late") live in `DetailsFieldRecordView`,
+  so they reach exactly the set the rule admits; everyone else sees
+  `DetailsCrewSignalLine` under the header while the job is open, and active
+  admins not on the job get a push (see `.claude/rules/notifications.md`).
+  **Push back (admin quick action) withholds any offset that crosses
+  midnight** — `pushBackOptionsFor` (`domain/policies/push_back_options.dart`)
+  keeps +15/+30/+60/+120 only while the shifted start stays on the day
+  `runsOn` puts it. `delayAppointment` is a single-document write (never the
+  series), runs the same busy check as Save, and the crew's "rescheduled" push
+  comes from the existing differ on the `startTime` change.
 - **Editing an appointment must preserve assignees not in the active picker.**
   The employee picker never shows a disabled/removed person, so such an assignee
   can't be deselected — saving must re-append original `employeeIds` not in the
@@ -421,6 +464,25 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   display bound** — `fetchClientHistory` used its `limit` (50) as both against
   a 1000 cap, so one client-detail open cost up to 20 sequential round-trips;
   it pages at 500 like the other two windows.
+- **A technician's History is the same terminal archive narrowed by
+  `employeeIds`** (2026-09-01, the audit's "technician has no search").
+  `_historyQuery(employeeId)` (`firebase_appointments_repository.dart`) is the
+  ONE owner of that narrowing for both the paged list and the search scan
+  window; served by the `(employeeIds CONTAINS, status ASC, startTime DESC)`
+  composite, which must be deployed and READY before an app build that ships
+  it. The repository keeps one scan window PER SCOPE (`_scanWindows`, `''` =
+  admin); `_patchWindow` patches every window, and a scoped window REMOVES a
+  doc whose `employeeIds` stops naming the scope, the same way the
+  terminal-status rule removes a reopened one. The search cache key carries
+  the scope. `HistorySearchKey` (query + employeeId) is the provider family
+  key; `AppointmentHistoryView.scopeEmployeeId` null means business-wide,
+  which only an admin may list, and `HistoryScreen` passes
+  `isAdmin ? null : employeeId`. No rules change was needed: the list is
+  constrained by `arrayContains` on the caller's own doc id, the same shape
+  `watchForEmployeeInRange` already relies on. The non-admin drawer gets the
+  History row under TODAY; `runAddClientFlow`
+  (`clients/widgets/sheets/add_client_flow.dart`) is the one add-client →
+  book-a-job flow, called by the Clients FAB and the list's empty state.
 - **Client "Job history" section** (`ClientJobHistorySection`, admin-only client
   detail) reads via `fetchClientHistory` (`clientJobHistoryProvider`, an
   `autoDispose.family` that re-fetches on `onLocalWrite`). It orders
@@ -501,7 +563,14 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   one underlying event.
 - Per-keystroke search debounces through `Debouncer` (`lib/core/utils/debouncer.dart`,
   own one per State, `dispose()` it) at the shared `kSearchDebounce` beside it.
-  That constant is one cost dial, not a per-surface taste, and it lives in
+  **The debounced-search-over-a-`PagingController` block has ONE owner,
+  `DebouncedPagedSearch`** (`clients/widgets/views/debounced_paged_search.dart`,
+  2026-09-01), mixed into `ClientsListView` and `AppointmentHistoryView`: it
+  builds the `Debouncer.tagged` in `initState`, owns `committedQuery`,
+  `scheduleSearch`, the `didUpdateWidget` trimmed-query diff and
+  `notifyFirstPageSettled`, and disposes the debouncer. Don't re-spell those
+  in a new paged list — they were byte-identical in two files.
+  `kSearchDebounce` itself is one cost dial, not a per-surface taste, and it lives in
   `core/` rather than on `ClientSearchPolicy` because its callers span features
   — the appointment sheets debounce a CLIENT search, History an APPOINTMENT
   one. **`Debouncer` is the ONLY one** — `SettingsSaveDebouncer` was deleted

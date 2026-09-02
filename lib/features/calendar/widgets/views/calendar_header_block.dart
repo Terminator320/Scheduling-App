@@ -18,6 +18,7 @@ class CalendarHeaderBlock extends StatelessWidget {
     required this.onPickMonth,
     required this.routeButton,
     super.key,
+    this.crewFilterButton,
     this.weekStrip,
   });
 
@@ -34,6 +35,10 @@ class CalendarHeaderBlock extends StatelessWidget {
   /// The Day-route icon button. Passed in because it is a feature-tour target
   /// the screen owns.
   final Widget routeButton;
+
+  /// The admin's crew-filter button, drawn before [routeButton]. Null for a
+  /// technician, whose calendar is already their own.
+  final Widget? crewFilterButton;
 
   /// The collapsed week strip, or null while the month grid is expanded.
   final Widget? weekStrip;
@@ -58,7 +63,10 @@ class CalendarHeaderBlock extends StatelessWidget {
       yearLabel: yearLabel,
       onPickMonth: onPickMonth,
     );
-    final controls = _Controls(routeButton: routeButton);
+    final controls = _Controls(
+      routeButton: routeButton,
+      crewFilterButton: crewFilterButton,
+    );
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: overlay,
@@ -160,14 +168,19 @@ class _TitleColumn extends StatelessWidget {
 }
 
 class _Controls extends StatelessWidget {
-  const _Controls({required this.routeButton});
+  const _Controls({required this.routeButton, this.crewFilterButton});
 
   final Widget routeButton;
+  final Widget? crewFilterButton;
 
   @override
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
+      if (crewFilterButton != null) ...[
+        crewFilterButton!,
+        const SizedBox(width: 6),
+      ],
       routeButton,
       const SizedBox(width: 6),
       // No Calendar pill here — this IS the calendar.

@@ -86,11 +86,15 @@ identity, so a rename replays or orphans a tour.
   replacement State's initState on a hub identity change), and every
   dismiss/mark-seen is gated by `_tourRunning` because the package fires
   onDismiss even when idle. Step catalogs are pure (`tourStepsFor`);
-  Clients/Employees/History/LiveMap/Dashboard and all three form sheets are
+  Clients/Employees/LiveMap/Dashboard and all three form sheets are
   admin-only, so their employee catalogs are empty and their screens guard
-  wraps on catalog membership. **Calendar, Day route and Settings are the
-  three destinations an employee can reach, and each has an employee tour** —
-  keep that set matching `drawerGroups(isAdmin: false)`.
+  wraps on catalog membership. **Calendar, Day route, History and Settings are
+  the four destinations an employee can reach, and each has an employee tour**
+  — keep that set matching `drawerGroups(isAdmin: false)`. History joined on
+  2026-09-01, when a technician got a History scoped to their own jobs; its
+  three targets (search, filter, row) render for that role, so its catalog is
+  NOT admin-gated and `tour_definitions_test.dart` pins the set against the
+  drawer.
   Seen flags are device-local SharedPreferences ONLY (`tour_seen_tabs`);
   sign-out does not reset them — the Settings "Replay app tour" row is the
   only reset.

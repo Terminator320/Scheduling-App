@@ -23,6 +23,8 @@ const {
   hasWorkLeft,
   isCancelledStatus,
   isCompletedStatus,
+  isTerminalStatus,
+  normalizedStatus,
 } = require("./time_utils");
 const {isAlreadyExists} = require("./firestore_errors");
 
@@ -178,6 +180,77 @@ function isCrewCompletion(before, after) {
   if (!after || !before) return false;
   if (after.isPersonal === true || after.isDayOff === true) return false;
   return isCompletedStatus(after.status) && !isCompletedStatus(before.status);
+}
+
+/**
+ * The job time record's two stamps, decided from one write.
+ *
+ * `startedAt`/`completedAt` have ONE owner and it is the server: the
+ * appointment write trigger applies these back onto the document, so every
+ * client path that flips a status — the assignee's two-key "Start job" and
+ * mark-done writes, the admin's edit form, a series propagation — lands the
+ * same stamp without any of them being allowed to write it. A client cannot
+ * forge a start time it did not have, and the mark-done rules branch keeps
+ * its exact `['status', 'updatedAt']` key set.
+ *
+ * Each stamp fires on the TRANSITION only, and only when the field is still
+ * absent — so the stamp-only rewrite that follows (which re-fires this same
+ * trigger) decides nothing, and a re-save of a started job never moves its
+ * start. A create is treated as a transition from nothing, so a document
+ * created already in that state is stamped once too. Personal blocks and
+ * time off are not work and get no record.
+ *
+ * @param {?Object} before Pre-write appointment fields (null on create).
+ * @param {?Object} after Post-write appointment fields (null on delete).
+ * @param {(Date|number)} now
+ * @return {{startedAt: (Date|undefined), completedAt: (Date|undefined)}}
+ */
+function lifecycleStamps(before, after, now) {
+  const stamps = {};
+  if (!after) return stamps;
+  if (after.isPersonal === true || after.isDayOff === true) return stamps;
+  const prev = before ? normalizedStatus(before.status) : "";
+  const next = normalizedStatus(after.status);
+  const nowDate = new Date(nowMillis(now));
+  if (next === "in_progress" && prev !== "in_progress" &&
+      after.startedAt == null) {
+    stamps.startedAt = nowDate;
+  }
+  if (isCompletedStatus(next) && !isCompletedStatus(prev) &&
+      after.completedAt == null) {
+    stamps.completedAt = nowDate;
+  }
+  return stamps;
+}
+
+/**
+ * The two crew signals an assignee may put on an open job. Hand-mirrors
+ * `crewStatusRawValues` in `appointment_status_values.dart` and the
+ * allowlist in the `firestore.rules` crew-status branch.
+ */
+const CREW_STATUS_VALUES = new Set(["onMyWay", "runningLate"]);
+
+/**
+ * Which crew signal this write just SENT, or null.
+ *
+ * Only a real transition counts: the same value re-saved (every other write
+ * to the document carries it along in `after`) is silent, so an admin edit
+ * or a photo append cannot re-page the office with a signal sent an hour
+ * ago. Personal blocks are not work, and a closed job has nobody to be on
+ * the way to — the rules refuse those writes, and this refuses to speak them.
+ *
+ * @param {?Object} before Pre-write appointment fields (null on create).
+ * @param {?Object} after Post-write appointment fields (null on delete).
+ * @return {?string} `onMyWay` | `runningLate` | null.
+ */
+function crewStatusSignal(before, after) {
+  if (!after) return null;
+  if (after.isPersonal === true || after.isDayOff === true) return null;
+  if (isTerminalStatus(after.status)) return null;
+  const next = String(after.crewStatus || "");
+  if (!CREW_STATUS_VALUES.has(next)) return null;
+  const prev = before ? String(before.crewStatus || "") : "";
+  return next === prev ? null : next;
 }
 
 /**
@@ -442,6 +515,9 @@ module.exports = {
   isStaleTokenError,
   isAlreadyExists,
   isCrewCompletion,
+  lifecycleStamps,
+  crewStatusSignal,
+  CREW_STATUS_VALUES,
   recordOf,
   contextFor,
 };

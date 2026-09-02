@@ -91,6 +91,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
             builder: (context, _) => AppointmentHistoryView(
               searchQuery: _searchController.text,
               isAdmin: widget.isAdmin,
+              // A technician's History is their own jobs; the rules reject
+              // the business-wide list for anyone else.
+              scopeEmployeeId: widget.isAdmin ? null : widget.employeeId,
               filterTourWrap: (child) =>
                   _tour.stepIf(TourStepId.historyFilter, child),
               firstRowTourWrap: (child) =>

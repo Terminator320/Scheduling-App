@@ -23,6 +23,7 @@ const toured = <AppDestination>{
 const employeeToured = <AppDestination>{
   HubTab.calendar,
   PushedDestination.dayRoute,
+  PushedDestination.history,
   PushedDestination.settings,
 };
 

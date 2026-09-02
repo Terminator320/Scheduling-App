@@ -231,7 +231,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     state = state.copyWith(
       selectedDate: date,
       endDate: addCalendarDays(date, length < 0 ? 0 : length),
-      errors: withoutKey(withoutKey(state.errors, 'date'), 'endDate'),
+      errors: withoutKeys(state.errors, const ['date', 'endDate']),
     );
   }
 
@@ -260,7 +260,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
   void setAllDay({required bool value}) {
     state = state.copyWith(
       isAllDay: value,
-      errors: withoutKey(withoutKey(state.errors, 'startTime'), 'endTime'),
+      errors: withoutKeys(state.errors, const ['startTime', 'endTime']),
     );
   }
 
@@ -277,10 +277,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     state = state.copyWith(
       isDayOff: value,
       isAllDay: value || state.isAllDay,
-      errors: withoutKey(
-        withoutKey(state.errors, 'startTime'),
-        'endTime',
-      ),
+      errors: withoutKeys(state.errors, const ['startTime', 'endTime']),
     );
   }
 
@@ -352,6 +349,69 @@ class EventDetailsController extends Notifier<EventDetailsState>
 
   Future<EventDetailsActionOutcome> markAsDone(AppointmentRecord appointment) {
     return _setStatusOnRepo(appointment, 'done');
+  }
+
+  /// Moves an open job into `in_progress`. The `startedAt` stamp is the
+  /// server's (`lifecycleStamps` in the write trigger), so this is the same
+  /// two-key status write as mark-done.
+  Future<EventDetailsActionOutcome> startJob(AppointmentRecord appointment) {
+    return _setStatusOnRepo(appointment, 'in_progress');
+  }
+
+  /// Shifts the whole job later by [minutes], keeping its length.
+  ///
+  /// A single-document write, never the series: the visit running late is
+  /// this occurrence. The crew's "rescheduled" push needs no client work —
+  /// the server differ fires it on any `startTime` change.
+  Future<EventDetailsSaveOutcome> delayAppointment(
+    AppointmentRecord appointment, {
+    required int minutes,
+    bool forceBusy = false,
+  }) async {
+    final id = appointment.id;
+    if (id == null) {
+      return EventDetailsFailed(
+        StateError('Cannot push back an appointment without an id.'),
+      );
+    }
+    if (state.isSaving) return const EventDetailsSaveBusy();
+    // Offline writes would wait forever for a server ack.
+    if (ref.read(isOfflineProvider)) {
+      return const EventDetailsFailed(SocketException('offline'));
+    }
+    state = state.copyWith(isSaving: true);
+    // Read dependencies before any await.
+    final repo = ref.read(appointmentsRepositoryProvider);
+    final logger = ref.read(loggerProvider);
+    final selectedEmployees = state.selectedEmployees;
+    final shift = Duration(minutes: minutes);
+    final updated = appointment.copyWith(
+      startTime: appointment.startTime.add(shift),
+      endTime: appointment.endTime.add(shift),
+      // A legacy status re-serialized verbatim is refused by the rules.
+      status: AppointmentStatus.storedRaw(appointment.status),
+    );
+    try {
+      if (!forceBusy && !appointment.isPersonal) {
+        final conflict = await findFirstAppointmentConflict(
+          repo: repo,
+          candidates: selectedEmployees,
+          bookings: [updated],
+          excludeOwnBookingIds: true,
+        );
+        if (conflict != null) {
+          if (ref.mounted) state = state.copyWith(isSaving: false);
+          return _busyEmployees(conflict);
+        }
+      }
+      await repo.updateAppointment(updated);
+      if (ref.mounted) state = state.copyWith(isSaving: false);
+      return EventDetailsSaved(updated);
+    } catch (e, st) {
+      logger.warn('APPT-SAVE delayAppointment failed', e, st);
+      if (ref.mounted) state = state.copyWith(isSaving: false);
+      return EventDetailsFailed(e);
+    }
   }
 
   Future<EventDetailsActionOutcome> cancelAppointment(

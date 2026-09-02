@@ -144,7 +144,7 @@ class AddEventController extends Notifier<AddEventState>
       selectedDate: date,
       endDate: endDate,
       repeat: _repeatForSpan(date, endDate),
-      errors: withoutKey(withoutKey(state.errors, 'date'), 'endDate'),
+      errors: withoutKeys(state.errors, const ['date', 'endDate']),
     );
   }
 
@@ -207,10 +207,7 @@ class AddEventController extends Notifier<AddEventState>
     state = state.copyWith(
       isDayOff: value,
       isAllDay: value || state.isAllDay,
-      errors: withoutKey(
-        withoutKey(state.errors, 'startTime'),
-        'endTime',
-      ),
+      errors: withoutKeys(state.errors, const ['startTime', 'endTime']),
     );
   }
 
@@ -229,9 +226,9 @@ class AddEventController extends Notifier<AddEventState>
       isAllDay: value
           ? state.selectedStartTime == null && state.selectedEndTime == null
           : state.isAllDay,
-      errors: withoutKey(
-        withoutKey(withoutKey(state.errors, 'client'), 'startTime'),
-        'endTime',
+      errors: withoutKeys(
+        state.errors,
+        const ['client', 'startTime', 'endTime'],
       ),
     );
   }
@@ -239,10 +236,7 @@ class AddEventController extends Notifier<AddEventState>
   void setAllDay({required bool value}) {
     state = state.copyWith(
       isAllDay: value,
-      errors: withoutKey(
-        withoutKey(state.errors, 'startTime'),
-        'endTime',
-      ),
+      errors: withoutKeys(state.errors, const ['startTime', 'endTime']),
     );
   }
 

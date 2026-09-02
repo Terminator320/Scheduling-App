@@ -35,6 +35,7 @@ class AgendaSliverList extends StatelessWidget {
     this.onAppointmentTap,
     this.selectedAppointmentId,
     this.bottomClearance = 0,
+    this.inWeek = false,
   });
 
   /// One entry per day the job runs — a multi-day job appears in the agenda of
@@ -53,6 +54,15 @@ class AgendaSliverList extends StatelessWidget {
   /// floating over it must not grow dead space at the bottom.
   final double bottomClearance;
 
+  /// One day of the week agenda rather than the whole agenda. The host draws
+  /// ONE skeleton for the week and its own holiday rows, so this renders
+  /// neither; an empty day is a quiet one-line row rather than a
+  /// `SliverFillRemaining`, which would claim the rest of the viewport for
+  /// each of seven days. It also returns a SINGLE sliver, never a group: the
+  /// host puts it under a pinned day bar inside a `SliverMainAxisGroup`, and
+  /// a group nested there lays the bar out with a clipped paint extent.
+  final bool inWeek;
+
   /// The day this agenda describes, used only to look up its holidays.
   ///
   /// Owned here rather than at the two call sites (the portrait calendar and
@@ -68,12 +78,13 @@ class AgendaSliverList extends StatelessWidget {
     // A LIST because the two Easters coincide roughly one year in three, and
     // the grid can only paint one hue on a shared day.
     final holidays = holidaysOn(day);
+    if (inWeek) return events.isEmpty ? _emptyState(context) : _jobList();
 
     return SliverMainAxisGroup(
       slivers: [
-        if (holidays.isNotEmpty) _holidayRows(holidays),
+        if (holidays.isNotEmpty) holidayRows(holidays),
         if (isLoading)
-          const SliverToBoxAdapter(child: _AgendaSkeleton())
+          const SliverToBoxAdapter(child: AgendaSkeleton())
         else if (events.isEmpty)
           _emptyState(context)
         else
@@ -82,7 +93,9 @@ class AgendaSliverList extends StatelessWidget {
     );
   }
 
-  Widget _holidayRows(List<Holiday> holidays) => SliverPadding(
+  /// The day's holiday rows, above its jobs. Public so the week agenda draws
+  /// the same rows beside its day bars.
+  static Widget holidayRows(List<Holiday> holidays) => SliverPadding(
     padding: const EdgeInsets.fromLTRB(
       AppSpacing.sp16,
       AppSpacing.sp8,
@@ -96,18 +109,39 @@ class AgendaSliverList extends StatelessWidget {
     ),
   );
 
-  Widget _emptyState(BuildContext context) => SliverFillRemaining(
-    hasScrollBody: false,
-    child: AppEmptyState(
-      icon: Icons.event_outlined,
-      title: context.l10n.common_noAppointmentsFound,
-      // Only admins have the '+' FAB, so don't tell employees to tap a
-      // button that isn't there.
-      body: isAdmin
-          ? context.l10n.common_tapToScheduleAnAppointment
-          : context.l10n.calendar_noAppointmentsForDay,
-    ),
-  );
+  Widget _emptyState(BuildContext context) {
+    if (inWeek) {
+      final theme = Theme.of(context);
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.sp16 + 2,
+            AppSpacing.sp8,
+            AppSpacing.sp16,
+            AppSpacing.sp12,
+          ),
+          child: Text(
+            context.l10n.calendar_noJobsThisDay,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.palette.textTertiary,
+            ),
+          ),
+        ),
+      );
+    }
+    return SliverFillRemaining(
+      hasScrollBody: false,
+      child: AppEmptyState(
+        icon: Icons.event_outlined,
+        title: context.l10n.common_noAppointmentsFound,
+        // Only admins have the '+' FAB, so don't tell employees to tap a
+        // button that isn't there.
+        body: isAdmin
+            ? context.l10n.common_tapToScheduleAnAppointment
+            : context.l10n.calendar_noAppointmentsForDay,
+      ),
+    );
+  }
 
   Widget _jobList() {
     // Where the day's remaining work ends, or -1 when nothing is closed.
@@ -151,7 +185,10 @@ class AgendaSliverList extends StatelessWidget {
             index: index,
             child: showClosedRule && index == firstClosedIndex
                 ? Column(
-                    children: [_ClosedRule(count: closedJobCount), card],
+                    children: [
+                      _ClosedRule(count: closedJobCount),
+                      card,
+                    ],
                   )
                 : card,
           );
@@ -226,10 +263,15 @@ class AgendaHeader extends StatelessWidget {
     required this.dayTitle,
     required this.jobLabel,
     super.key,
+    this.trailing,
   });
 
   final String dayTitle;
   final String jobLabel;
+
+  /// A control after the count — the day/week toggle. Must not grow the row:
+  /// the calendar's overflow margin is pinned against this header's height.
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -248,14 +290,19 @@ class AgendaHeader extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.sp8),
           Text(jobLabel, style: theme.monoType.data),
+          if (trailing != null) ...[
+            const SizedBox(width: AppSpacing.sp8),
+            trailing!,
+          ],
         ],
       ),
     );
   }
 }
 
-class _AgendaSkeleton extends StatelessWidget {
-  const _AgendaSkeleton();
+/// Three placeholder rows while the day's (or the week's) jobs load.
+class AgendaSkeleton extends StatelessWidget {
+  const AgendaSkeleton({super.key});
 
   @override
   Widget build(BuildContext context) => const Padding(

@@ -2,10 +2,10 @@ import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 
-/// Ordered step catalog for a scope and role. Clients, Employees, History,
-/// LiveMap, Dashboard and the three create-flow sheets are admin-only, so
-/// their employee catalogs are empty. A scope that mounts no tour host
-/// returns an empty catalog.
+/// Ordered step catalog for a scope and role. Clients, Employees, LiveMap,
+/// Dashboard and the three create-flow sheets are admin-only, so their
+/// employee catalogs are empty. A scope that mounts no tour host returns an
+/// empty catalog.
 List<TourStepId> tourStepsFor(TourScope scope, {required bool isAdmin}) =>
     switch (scope) {
       DestinationTour(:final destination) => _destinationSteps(
@@ -43,12 +43,12 @@ List<TourStepId> _destinationSteps(
       TourStepId.employeesRow,
     ],
   ],
+  // Not admin-gated: a technician reaches History too (their own jobs), and
+  // the three targets — search bar, filter row, first row — render for them.
   PushedDestination.history => [
-    if (isAdmin) ...[
-      TourStepId.historySearch,
-      TourStepId.historyFilter,
-      TourStepId.historyRow,
-    ],
+    TourStepId.historySearch,
+    TourStepId.historyFilter,
+    TourStepId.historyRow,
   ],
   HubTab.liveMap => [
     if (isAdmin) ...[TourStepId.liveMapRoster, TourStepId.liveMapRecenter],

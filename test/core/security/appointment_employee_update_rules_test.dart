@@ -60,8 +60,10 @@ void main() {
   }
 
   /// The mark-done branch — what every pre-existing test here means by "the"
-  /// employee branch.
-  String employeeBranch() => employeeBranchNaming("'status'");
+  /// employee branch. Picked by the term only IT carries: the Start-job
+  /// branch (2026-09-01) also names `'status'`, so the key alone would be
+  /// ambiguous the moment the branch order changed.
+  String employeeBranch() => employeeBranchNaming("== 'done'");
 
   /// The branch as the rules ENGINE sees it: comments dropped, whitespace
   /// flattened. Dropping comments is what stops a term-absence assertion below
@@ -174,7 +176,8 @@ void main() {
       // security-sensitive write in the app and its exact key set is what
       // makes it possible to reason about. One write doing both would put
       // every guarantee above it back in play.
-      expect(employeeBranches(), hasLength(2));
+      // Four since 2026-09-01: mark-done, crew notes, Start job, crew status.
+      expect(employeeBranches(), hasLength(4));
       expect(collapsed(employeeBranch()), isNot(contains("'fieldNotes'")));
       expect(collapsed(notesBranch()), isNot(contains("'status'")));
     });

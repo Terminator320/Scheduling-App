@@ -17,32 +17,35 @@ Widget _wrap(Widget child) => MaterialApp(
 );
 
 void main() {
-  testWidgets('additional contacts section does not overflow at 2x text on phone width', (
-    tester,
-  ) async {
-    final fields = ContactFields();
-    addTearDown(fields.dispose);
-    tester.view.physicalSize = const Size(320, 760);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'additional contacts section does not overflow at 2x text on phone width',
+    (
+      tester,
+    ) async {
+      final fields = ContactFields();
+      addTearDown(fields.dispose);
+      tester.view.physicalSize = const Size(320, 760);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(
-      MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(2)),
-        child: _wrap(
-          AdditionalContactsSection(
-            contacts: [fields],
-            errors: const {},
-            onAddContact: () {},
-            onRemoveContact: (_) {},
-            onClearError: (_) {},
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: _wrap(
+            AdditionalContactsSection(
+              contacts: [fields],
+              errors: const {},
+              onAddContact: () {},
+              onRemoveContact: (_) {},
+              onClearError: (_) {},
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(tester.takeException(), isNull);
-  });
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

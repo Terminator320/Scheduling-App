@@ -14,6 +14,7 @@ import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/application/calendar_crew_filter_provider.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/calendar/domain/collapse_state.dart';
@@ -27,8 +28,10 @@ import 'package:scheduling/features/calendar/widgets/views/calendar_month_grid.d
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_week_strip.dart';
 import 'package:scheduling/features/calendar/widgets/views/collapse_handle.dart';
+import 'package:scheduling/features/calendar/widgets/views/crew_filter_button.dart';
 import 'package:scheduling/features/calendar/widgets/views/event_list.dart';
 import 'package:scheduling/features/calendar/widgets/views/today_pill.dart';
+import 'package:scheduling/features/calendar/widgets/views/week_agenda_sliver_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -55,6 +58,9 @@ import 'package:scheduling/routes/app_routes.dart';
 /// `main_calendar_screen_test.dart` pins it at 2x text on the 375x667 pane.
 const double _kMaxGridShare = 0.7;
 
+/// What the agenda below the grid lists: the selected day, or its whole week.
+enum _AgendaMode { day, week }
+
 class MainCalendar extends ConsumerStatefulWidget {
   const MainCalendar({
     required this.isAdmin,
@@ -76,12 +82,15 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   late AppointmentDateRange _appointmentRange;
+  _AgendaMode _agendaMode = _AgendaMode.day;
 
   /// Captured so dispose can clear without touching `ref`.
   OpenCalendarRange? _openRange;
   late DateFormat _monthLabelFormat;
   late DateFormat _monthShortLabelFormat;
   late DateFormat _yearLabelFormat;
+  late DateFormat _dayMonthLabelFormat;
+  late DateFormat _dayLabelFormat;
   String _lastLocale = '';
 
   late final _tour = TourSteps(
@@ -96,10 +105,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   void initState() {
     super.initState();
     _selectedDay = _focusedDay;
-    _appointmentRange = AppointmentDateRange.forCalendar(
-      focusedDay: _focusedDay,
-      selectedDay: _focusedDay,
-    );
+    _appointmentRange = _rangeFor(_focusedDay, _focusedDay);
     if (widget.isAdmin) {
       _openRange = ref.read(openCalendarRangeProvider.notifier);
     }
@@ -138,20 +144,55 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     setState(() {
       _focusedDay = today;
       _selectedDay = today;
-      _appointmentRange = AppointmentDateRange.forCalendar(
-        focusedDay: today,
-        selectedDay: today,
-      );
+      _appointmentRange = _rangeFor(today, today);
     });
     _publishRange();
   }
 
+  /// The fetch window for a focus/selection pair.
+  ///
+  /// In week mode it is unioned with the selected week, which is the
+  /// guarantee rather than the common path: the week almost always sits
+  /// inside the month's overscan already, so the listener key rarely changes.
+  AppointmentDateRange _rangeFor(DateTime focusedDay, DateTime selectedDay) {
+    final range = AppointmentDateRange.forCalendar(
+      focusedDay: focusedDay,
+      selectedDay: selectedDay,
+    );
+    if (_agendaMode != _AgendaMode.week) return range;
+    final weekStart = _weekOf(selectedDay).first;
+    return range.union(
+      AppointmentDateRange(
+        start: weekStart,
+        end: addCalendarDays(weekStart, 7),
+      ),
+    );
+  }
+
+  /// The seven days around [day], in the locale's week order.
+  List<DateTime> _weekOf(DateTime day) =>
+      weekOf(day, weekStart: CalendarMonthGrid.weekStartOf(context));
+
+  void _setAgendaMode(_AgendaMode mode) {
+    if (mode == _agendaMode) return;
+    final day = _selectedDay ?? _focusedDay;
+    setState(() {
+      _agendaMode = mode;
+      final newRange = _rangeFor(_focusedDay, day);
+      if (newRange != _appointmentRange) _appointmentRange = newRange;
+    });
+    _publishRange();
+  }
+
+  /// A tap on a week bar: that day, in day mode.
+  void _onWeekDaySelected(DateTime day) {
+    setState(() => _agendaMode = _AgendaMode.day);
+    _onDaySelected(day);
+  }
+
   /// Moves focus and selection to the given month/day.
   void _setFocusedDay(DateTime day) {
-    final newRange = AppointmentDateRange.forCalendar(
-      focusedDay: day,
-      selectedDay: day,
-    );
+    final newRange = _rangeFor(day, day);
     setState(() {
       _focusedDay = day;
       _selectedDay = day;
@@ -171,6 +212,30 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   Map<DateTime, List<AppointmentDaySlice>>? _dayIndex;
   // Tracks the source list used for _dayIndex.
   List<AppointmentRecord>? _indexedAppointments;
+
+  // Memo for the crew filter, keyed on source identity and the filtered id.
+  List<AppointmentRecord>? _filterSource;
+  String? _filterId;
+  List<AppointmentRecord> _filtered = const [];
+
+  /// [source] narrowed to [employeeId]'s jobs, applied BEFORE the day index
+  /// so the dots, the counts, the agenda and the job label all agree. Memoized
+  /// so a rebuild does not re-index the month every frame.
+  List<AppointmentRecord> _applyCrewFilter(
+    List<AppointmentRecord> source,
+    String? employeeId,
+  ) {
+    if (employeeId == null) return source;
+    if (identical(source, _filterSource) && employeeId == _filterId) {
+      return _filtered;
+    }
+    _filterSource = source;
+    _filterId = employeeId;
+    return _filtered = [
+      for (final a in source)
+        if (a.employeeIds.contains(employeeId)) a,
+    ];
+  }
 
   /// Rebuilds [_dayIndex] only for a new source list.
   void _refreshDayIndex(List<AppointmentRecord> source) {
@@ -198,10 +263,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
   void _onDaySelected(DateTime selectedDay) {
     if (isSameDate(_selectedDay ?? _focusedDay, selectedDay)) return;
-    final newRange = AppointmentDateRange.forCalendar(
-      focusedDay: selectedDay,
-      selectedDay: selectedDay,
-    );
+    final newRange = _rangeFor(selectedDay, selectedDay);
     setState(() {
       _selectedDay = selectedDay;
       _focusedDay = selectedDay;
@@ -260,6 +322,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     String dayTitle,
     String jobLabel,
     DateTime today,
+    List<DateTime> weekDays,
   })
   _prepareBuild(BuildContext context) {
     final appointmentsAsync = ref.watch(_appointmentsProvider);
@@ -268,21 +331,32 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final nameMap = ref.watch(employeeNameMapProvider);
     // Watch currentDayProvider so midnight updates the UI.
     final today = ref.watch(currentDayProvider);
+    // A technician already streams only their own jobs; only the admin filters.
+    final crewFilter = widget.isAdmin
+        ? ref.watch(calendarCrewFilterProvider)
+        : null;
 
     // Error logging is owned by the onAsyncChange listener in build.
-    final visibleAppointments =
-        appointmentsAsync.value ?? const <AppointmentRecord>[];
+    final visibleAppointments = _applyCrewFilter(
+      appointmentsAsync.value ?? const <AppointmentRecord>[],
+      crewFilter,
+    );
 
     _refreshDayIndex(visibleAppointments);
 
     final selectedDay = _selectedDay ?? _focusedDay;
-    final selectedEvents = _getEventsForDay(selectedDay);
+    final weekDays = _weekOf(selectedDay);
+    final agendaEvents = _agendaMode == _AgendaMode.week
+        ? [for (final day in weekDays) ..._getEventsForDay(day)]
+        : _getEventsForDay(selectedDay);
 
     final locale = Localizations.localeOf(context).toString();
     if (locale != _lastLocale) {
       _monthLabelFormat = DateFormat.MMMM(locale);
       _monthShortLabelFormat = DateFormat.MMM(locale);
       _yearLabelFormat = DateFormat.y(locale);
+      _dayMonthLabelFormat = DateFormat.MMMd(locale);
+      _dayLabelFormat = DateFormat.d(locale);
       _lastLocale = locale;
     }
 
@@ -295,10 +369,23 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       monthLabel: _monthLabelFormat.format(_focusedDay),
       monthLabelShort: _monthShortLabelFormat.format(_focusedDay),
       yearLabel: _yearLabelFormat.format(_focusedDay),
-      dayTitle: DateUtilsHelper.formatDayHeader(selectedDay),
-      jobLabel: _jobLabel(context, selectedEvents),
+      dayTitle: _agendaMode == _AgendaMode.week
+          ? _weekLabel(weekDays)
+          : DateUtilsHelper.formatDayHeader(selectedDay),
+      jobLabel: _jobLabel(context, agendaEvents),
       today: today,
+      weekDays: weekDays,
     );
+  }
+
+  /// "Sep 1 – 7", or "Aug 31 – Sep 6" across a month boundary.
+  String _weekLabel(List<DateTime> days) {
+    final first = days.first;
+    final last = days.last;
+    final end = first.month == last.month
+        ? _dayLabelFormat.format(last)
+        : _dayMonthLabelFormat.format(last);
+    return '${_dayMonthLabelFormat.format(first)} – $end';
   }
 
   /// Agenda count label for work and done totals.
@@ -346,6 +433,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                   monthLabelShort: data.monthLabelShort,
                   yearLabel: data.yearLabel,
                   onPickMonth: _pickMonth,
+                  crewFilterButton: widget.isAdmin
+                      ? const CrewFilterButton()
+                      : null,
                   routeButton: _dayRouteButton(context),
                   weekStrip: _weekStrip(data.today, data.colorMap),
                 ),
@@ -362,6 +452,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                           today: data.today,
                           dayTitle: data.dayTitle,
                           jobLabel: data.jobLabel,
+                          weekDays: data.weekDays,
                         ),
                         Positioned(
                           bottom: AppSpacing.sp16,
@@ -500,46 +591,108 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     required DateTime today,
     required String dayTitle,
     required String jobLabel,
+    required List<DateTime> weekDays,
   }) {
     final agendaDay = _selectedDay ?? _focusedDay;
     final events = _getEventsForDay(agendaDay);
-    // The header is the stable tour target.
-    final agendaHeader = _tour.step(
-      TourStepId.calendarDayList,
-      child: AgendaHeader(dayTitle: dayTitle, jobLabel: jobLabel),
+    // The header is the stable tour target; the banner sits above it so the
+    // narrowed schedule is never mistaken for a quiet day.
+    final agendaHeader = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.isAdmin) const CrewFilterBanner(),
+        _tour.step(
+          TourStepId.calendarDayList,
+          child: AgendaHeader(
+            dayTitle: dayTitle,
+            jobLabel: jobLabel,
+            trailing: _agendaModeToggle(context),
+          ),
+        ),
+      ],
     );
+    // The FAB and the Today pill float over the list, so the last job needs
+    // somewhere to scroll clear of them.
+    final agenda = _agendaMode == _AgendaMode.week
+        ? weekAgendaSlivers(
+            context,
+            days: weekDays,
+            eventsFor: _getEventsForDay,
+            today: today,
+            onDaySelected: _onWeekDaySelected,
+            nameMap: nameMap,
+            colorMap: colorMap,
+            isAdmin: widget.isAdmin,
+            isLoading: isLoading,
+            bottomClearance: kAgendaFloatingControlsClearance,
+          )
+        : [
+            AgendaSliverList(
+              events: events,
+              nameMap: nameMap,
+              colorMap: colorMap,
+              isLoading: isLoading,
+              isAdmin: widget.isAdmin,
+              day: agendaDay,
+              bottomClearance: kAgendaFloatingControlsClearance,
+            ),
+          ];
 
     if (_splitCalendar) {
       return _splitContent(
-        events: events,
-        agendaDay: agendaDay,
+        agenda: agenda,
         agendaHeader: agendaHeader,
-        isLoading: isLoading,
         colorMap: colorMap,
-        nameMap: nameMap,
         today: today,
       );
     }
 
     return _portraitContent(
-      events: events,
-      agendaDay: agendaDay,
+      agenda: agenda,
       agendaHeader: agendaHeader,
-      isLoading: isLoading,
       colorMap: colorMap,
-      nameMap: nameMap,
       today: today,
     );
   }
 
-  /// Landscape phones and tablets: month grid | day agenda, side by side.
+  /// Icon-only day/week toggle. Fixed at 32px so the agenda header, whose
+  /// height the pane's overflow margin is pinned against, does not grow.
+  Widget _agendaModeToggle(BuildContext context) {
+    final l10n = context.l10n;
+    return SizedBox(
+      height: 32,
+      child: SegmentedButton<_AgendaMode>(
+        segments: [
+          ButtonSegment(
+            value: _AgendaMode.day,
+            icon: const Icon(Icons.view_day_outlined, size: 18),
+            tooltip: l10n.calendar_agendaDayView,
+          ),
+          ButtonSegment(
+            value: _AgendaMode.week,
+            icon: const Icon(Icons.view_week_outlined, size: 18),
+            tooltip: l10n.calendar_agendaWeekView,
+          ),
+        ],
+        selected: {_agendaMode},
+        onSelectionChanged: (modes) => _setAgendaMode(modes.single),
+        showSelectedIcon: false,
+        style: const ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          padding: WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: AppSpacing.sp8),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Landscape phones and tablets: month grid | agenda, side by side.
   Widget _splitContent({
-    required List<AppointmentDaySlice> events,
-    required DateTime agendaDay,
+    required List<Widget> agenda,
     required Widget agendaHeader,
-    required bool isLoading,
     required Map<String, Color> colorMap,
-    required Map<String, String> nameMap,
     required DateTime today,
   }) {
     // Give each split pane its own primary scroll controller.
@@ -563,16 +716,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
             child: Column(
               children: [
                 agendaHeader,
-                EventList(
-                  events: events,
-                  nameMap: nameMap,
-                  colorMap: colorMap,
-                  isLoading: isLoading,
-                  isAdmin: widget.isAdmin,
-                  day: agendaDay,
-                  // Reserve room for this pane's floating controls.
-                  bottomClearance: kAgendaFloatingControlsClearance,
-                ),
+                EventList.slivers(slivers: agenda),
               ],
             ),
           ),
@@ -583,12 +727,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
   /// Portrait layout with fixed grid and scrolling agenda.
   Widget _portraitContent({
-    required List<AppointmentDaySlice> events,
-    required DateTime agendaDay,
+    required List<Widget> agenda,
     required Widget agendaHeader,
-    required bool isLoading,
     required Map<String, Color> colorMap,
-    required Map<String, String> nameMap,
     required DateTime today,
   }) {
     // The agenda scrolls independently from the fixed grid, and the grid is
@@ -632,20 +773,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
               physics: const AlwaysScrollableScrollPhysics(
                 parent: BouncingScrollPhysics(),
               ),
-              slivers: [
-                AgendaSliverList(
-                  events: events,
-                  nameMap: nameMap,
-                  colorMap: colorMap,
-                  isLoading: isLoading,
-                  isAdmin: widget.isAdmin,
-                  day: agendaDay,
-                  // The FAB and the Today pill float over this list, so the
-                  // last job of the day needs somewhere to scroll clear of
-                  // them.
-                  bottomClearance: kAgendaFloatingControlsClearance,
-                ),
-              ],
+              slivers: agenda,
             ),
           ),
         ],

@@ -134,29 +134,6 @@ service cloud.firestore {
         || (isActiveUser() && resource.data.status == 'active')
         || (isSignedIn() && resource.data.uid == request.auth.uid);
 
-      // No delete grant, deliberately (withdrawn 2026-08-02 by P4, and the
-      // 1.37.1 compat grant that outlived it retired 2026-08-08): removing a
-      // users doc orphans every past appointment's employeeIds link — the visit
-      // keeps the denormalized employeeNames and loses the crew colour and the
-      // person. Disable is the shipping action and does strictly more
-      // (syncUsersByUid disables the Auth account, revokes tokens, and purges
-      // presence/FCM/LiveActivity rows). The Admin SDK bypasses rules, so
-      // console cleanup is unaffected.
-
-      // Same shape guard AND the same function-owned denylist as `allow update`
-      // below — otherwise the identical admin session that cannot EDIT `uid` or
-      // a consent stamp could simply CREATE a doc carrying forged ones, and a
-      // second doc claiming an existing employee's uid repoints the
-      // `usersByUid` bridge that every rules gate resolves through.
-      // No shipped client path creates a users doc: employee accounts go
-      // through the Admin-SDK-only `createEmployeeAccount`.
-      // `emergencyContact`/`emergencyPhone` are banned OUTRIGHT here. They
-      // moved to private/emergency, and nothing should ever mint a new users
-      // doc carrying them — a create has no existing doc to protect, so the
-      // flat denylist is safe. The UPDATE side cannot use this form (it would
-      // reject the FieldValue.delete() scrub and brick any doc that still
-      // carried the pair); it goes through `emergencyFieldNotSet` instead,
-      // which permits a removal and refuses a value. See that function.
       allow create: if isAdmin()
             && !request.resource.data.keys()
                  .hasAny(['uid', 'termsAcceptedAt', 'locationConsentAt',
@@ -179,12 +156,6 @@ service cloud.firestore {
         return s in ['active', 'disabled', 'invited'];
       }
 
-      // P4 field guards. NOTE the deliberate asymmetry: `name`, `email` and
-      // `phone` are capped at the widest value a shipped write path can already
-      // have produced (createEmployeeAccount allows phone up to 40 while
-      // TextLimits.phone is 24), NOT at the client-side limit. A cap tighter
-      // than an existing stored value would make that doc permanently
-      // un-updatable — including by deactivateEmployee.
       function isValidJobTitle(t) {
         return t is string
           && t in ['', 'lead_tech', 'technician', 'apprentice', 'dispatcher'];
@@ -201,24 +172,13 @@ service cloud.firestore {
       }
 
       function isValidUserData(d) {
-        // `name` is the JOIN of the two 100-char halves, so it legitimately
-        // reaches 201 — the cap mirrors the widest value a write path can
-        // produce, never the per-half client cap.
+
         return (!('name' in d.keys()) || isBoundedString(d.name, 250))
           && (!('firstName' in d.keys()) || isBoundedString(d.firstName, 200))
           && (!('lastName' in d.keys()) || isBoundedString(d.lastName, 200))
           && (!('email' in d.keys()) || isBoundedString(d.email, 320))
           && (!('phone' in d.keys()) || isBoundedString(d.phone, 40))
-          // emergencyContact/emergencyPhone moved to
-          // users/{userId}/private/emergency — this doc is readable by every
-          // active peer, and rules cannot hide a field from a document reader.
-          // No write path can put a VALUE here any more: `allow create` denies
-          // the keys outright and `allow update` goes through
-          // emergencyFieldNotSet above. These caps therefore only ever see a
-          // legacy value passing through untouched on an unrelated update, and
-          // they are what keeps that doc updatable instead of bricked. Cheap,
-          // and the one thing standing between a straggler and a hard failure —
-          // don't remove them as unreachable.
+
           && (!('emergencyContact' in d.keys())
               || isBoundedString(d.emergencyContact, 200))
           && (!('emergencyPhone' in d.keys())
@@ -242,71 +202,24 @@ service cloud.firestore {
           && (!('colorValue' in d.keys()) || isValidColorValue(d.colorValue))
           && (!('role' in d.keys()) || isValidRole(d.role))
           && (!('status' in d.keys()) || isValidUserStatus(d.status))
-          // Server-owned consent stamps. The denylists on `allow create` and
-          // `allow update` are what actually keep clients out of them; these
-          // caps only ever see a value the Admin SDK wrote, passing through on
-          // an unrelated update. `is timestamp` is exactly what the callables
-          // write, so the cap can't be tighter than a write path's widest
-          // value. (This comment used to say `allow create` had no field
-          // validation — it gained `isValidUserData` plus the key denylist on
-          // 2026-08-08.)
+
           && (!('termsAcceptedAt' in d.keys())
               || d.termsAcceptedAt is timestamp)
           && (!('locationConsentAt' in d.keys())
               || d.locationConsentAt is timestamp);
       }
 
-      // The emergency pair may be REMOVED but never WRITTEN on this doc. They
-      // live in users/{userId}/private/emergency, because this doc is readable
-      // by every active peer and the pair names a third party who is not an app
-      // user and never consented.
-      //
-      // Deliberately NOT a plain denylist entry beside `uid`. That form rejects
-      // any write that touches the key at all — including the
-      // `FieldValue.delete()` scrub `updateEmployee` sends on every save — so a
-      // doc that still carried the pair would become permanently un-updatable,
-      // including by deactivateEmployee (a partial update presents every
-      // untouched field in request.resource.data). This form instead says:
-      // leaving it alone is fine, and touching it is fine only when the field
-      // ends up ABSENT. A value can never land here, no doc can ever be
-      // bricked, and the client scrub still heals any straggler — so this
-      // needs no backfill and no migration.
       function emergencyFieldNotSet(f) {
         return !request.resource.data.diff(resource.data)
                   .affectedKeys().hasAny([f])
             || !(f in request.resource.data);
       }
 
-      // P5's self-service gate (2026-08-10). The uid match alone is not enough:
-      // a disabled account keeps its Auth credential until syncUsersByUid
-      // revokes it, and an `invited` account is mid-setup with
-      // completeEmployeeSetup owning its doc. Both must fall through to the
-      // admin-only branch rather than reaching the self one.
       function isSelf() {
         return isActiveUser()
           && resource.data.uid == request.auth.uid;
       }
 
-      // The self-service allowlist, called from `allow update` below (P5,
-      // 2026-08-10 — it was written in P4 and deliberately left uncalled until
-      // there was a UI behind it). Adding a key here grants every active
-      // employee the right to write it on their own doc, so check it is not a
-      // scheduling or identity field first. `email` in particular must NEVER
-      // join this list: it is a sign-in identity, and Auth and Firestore move
-      // together through changeEmployeeEmail or not at all.
-      //
-      // `updatedAt` is on the allowlist but has no cap in isValidUserData
-      // (which has no hasOnly, so an unlisted key is unchecked) — it was the
-      // last client-writable field here with no bound at all. Pinned to
-      // request.time, which is exactly what updateSelfDetails already sends
-      // (`FieldValue.serverTimestamp()`, unconditionally). Without it any
-      // active employee could park an arbitrary type or size there, and
-      // watchEmployees() re-delivers that doc to every signed-in peer on every
-      // snapshot — the same class the appointments branch already closes.
-      //
-      // SELF ONLY, deliberately: this function is called from the self branch
-      // alone. Pinning the admin branch too would make a legacy doc holding a
-      // bad `updatedAt` un-updatable by the one role that can repair it.
       function isAvailabilityOnlyChange() {
         return request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['workingDays', 'workStartMinutes', 'workEndMinutes',
@@ -314,21 +227,6 @@ service cloud.firestore {
           && request.resource.data.updatedAt == request.time;
       }
 
-      // `email` is a SIGN-IN IDENTITY: Auth and Firestore move together
-      // through changeEmployeeEmail, or not at all. Written directly here it
-      // desyncs the two stores — the person signs in at the old address while
-      // every admin surface shows the new one, and nothing in-app can find it.
-      // The self branch never reaches this (email is not on its allowlist);
-      // this is the ADMIN branch's half.
-      //
-      // Guarded on `uid` rather than denied outright, because the denial only
-      // means something where an Auth account exists to desync FROM.
-      // changeEmployeeEmail refuses a doc with no uid
-      // (`account-has-no-auth`), and updateEmployee's no-Auth branch is the
-      // only writer left for a pre-P4c doc that never got one — a flat denial
-      // would brick that doc's email with no path to repair it. Every P4c doc
-      // carries its uid from creation, so the guarded form covers the whole
-      // live fleet.
       function emailMovesThroughAuth() {
         return !request.resource.data.diff(resource.data)
                   .affectedKeys().hasAny(['email'])
@@ -336,28 +234,7 @@ service cloud.firestore {
             || resource.data.uid == '';
       }
 
-      // Two ways in. An ADMIN may update any doc. A PERSON may update their
-      // OWN doc, and only the keys isAvailabilityOnlyChange() names —
-      // availability, on-call and their own phone. Scheduling fields (role,
-      // jobTitle, colorValue, maxJobsPerDay, status) stay admin-only on both
-      // paths, and `uid` plus the consent stamps stay function-owned, which is
-      // why the self branch cannot reach them either: they are not on the
-      // allowlist, so `hasOnly` rejects the whole write.
-      //
-      // The parentheses around the disjunction are load-bearing. Without them
-      // the denylist and isValidUserData bind to the self branch alone and an
-      // admin write skips both.
-      //
-      // Account activation still happens server-side via completeEmployeeSetup,
-      // so there's no client self-activation path. `uid` links this doc to an
-      // Auth account and clients can never change it — rewriting it could
-      // hijack another account's bridge doc. The three P4b stamps are
-      // function-owned for the same reason `jobCount`/`wave` are on clients: a
-      // compromised admin session must not be able to forge a consent record.
-      // Diff-based, so it only fires when a write actually CHANGES one — every
-      // shipped path (updateEmployee's field-scoped map, updateSelfDetails,
-      // deactivate/reactivate) leaves them untouched. The callables write via
-      // the Admin SDK, which bypasses rules entirely.
+
       allow update: if (isAdmin() || (isSelf() && isAvailabilityOnlyChange()))
             && !request.resource.data.diff(resource.data)
                  .affectedKeys()
@@ -367,18 +244,6 @@ service cloud.firestore {
             && emergencyFieldNotSet('emergencyPhone')
             && isValidUserData(request.resource.data);
 
-      // Emergency contact — the ONLY users data gated to the admin and the
-      // person themselves. It sits in a subcollection precisely because rules
-      // are document-level: the `/users` read rule above deliberately lets any
-      // active employee read any active peer (crew pickers, names, colours),
-      // so a field on that doc is a field every employee's device receives.
-      // This pair names a THIRD PARTY who is not an app user and never
-      // consented, so peer-readable was the wrong default. Never move it back.
-      // Shape-locked like every other self-writable subcollection here: the doc
-      // id is pinned to `emergency` (so this can't become an unbounded
-      // write-anything store under the caller's own uid) and the key set,
-      // types and lengths are capped. The caps mirror isValidUserData's, which
-      // is what the pair used before the move.
       match /private/emergency {
         allow read: if isAdmin() || (isActiveUser() && myDocId() == userId);
         allow write: if (isAdmin() || (isActiveUser() && myDocId() == userId))
@@ -482,46 +347,10 @@ service cloud.firestore {
       return s in ['pending', 'in_progress', 'done', 'cancelled'];
     }
 
-    // Shape guard, mirroring isValidClientData/isValidUserData. Caps are the
-    // widest value a shipped write path can produce (TextLimits), never the
-    // typical one — a cap under a stored value makes that doc permanently
-    // un-updatable.
-    //
-    // The no-slash checks on the id fields are the load-bearing part: a doc id
-    // containing "/" makes `db.collection(...).doc(id)` throw SYNCHRONOUSLY in
-    // the Admin SDK, and several triggers/sweeps build refs from these values
-    // (sendToEmployee, writeCardMarker, recountClientJobs). One poisoned
-    // appointment would otherwise break those paths for good, outliving the
-    // session that wrote it.
     function isValidDocIdField(v) {
       return v is string && v.size() <= 128 && !v.matches('.*/.*');
     }
 
-    // The two instants are a DAILY WINDOW, and `maxAppointmentSpanDays` (14, in
-    // `calendar/domain/appointment_day_slice.dart`, hand-mirrored as
-    // MAX_APPOINTMENT_SPAN_DAYS in `functions/time_utils.js`) caps how long a
-    // run may be. Keep all three equal.
-    //
-    // 14 DAYS INCLUSIVE, PLUS A DST HOUR — the widest span a shipped write path
-    // can produce, not the typical one. A 14-day run booked at a single clock
-    // time (09:00 -> +14d 09:00) is a legitimate chain of 24-hour windows, so
-    // `<` would reject it; a 15th day fails AppointmentFormValidator before a
-    // save is attempted.
-    //
-    // The +2h is NOT slack, it is the unit mismatch. The app's cap counts
-    // CALENDAR days and `combineDateAndTime` composes LOCAL wall-clock
-    // instants, while `duration.value` is absolute. A window containing the
-    // autumn DST fall-back therefore stores one hour MORE than its calendar
-    // length: that widest run becomes 14d 1h, and an all-day 14-day block goes
-    // from 13d 23h59m to 14d 0h59m. A flat 14d bound rejected both — a booking
-    // the form had already accepted, failing as an opaque permission-denied for
-    // roughly two weeks each autumn. Sized to one DST hour plus the all-day
-    // minute; `_clampedDayCount` is still the real enforcement, and the
-    // calendar-day count is what a 15th day is refused by.
-    //
-    // `endTime >= startTime` holds for every shipped write because
-    // `appointmentSpan` rolls an overnight window's end onto the following
-    // calendar day rather than storing an end that precedes its start.
     function isValidAppointmentSpan(d) {
       return !('startTime' in d.keys()) || !('endTime' in d.keys())
         || (d.startTime is timestamp
@@ -531,16 +360,6 @@ service cloud.firestore {
                  <= duration.value(14, 'd') + duration.value(2, 'h'));
     }
 
-    // The Admin SDK and the console bypass these rules entirely, so a span past
-    // the cap can already exist and this can never be the thing that prevents
-    // one — it bounds CLIENT writes, which is why the app still clamps. Given
-    // such a doc exists, refusing to write it at all would leave it permanently
-    // un-updatable, including by the admin trying to CANCEL it, so an update
-    // that leaves the span no wider than it already was passes even out of
-    // range. Same asymmetry as emergencyFieldNotSet: the guard stops a bad
-    // value being INTRODUCED, it does not strand a doc that carries one.
-    // (An assignee's status flip never reaches here — that branch restricts the
-    // diff to status + updatedAt and skips the shape guards.)
     function appointmentSpanNotWidened() {
       return resource.data.startTime is timestamp
         && resource.data.endTime is timestamp
@@ -548,23 +367,6 @@ service cloud.firestore {
            <= resource.data.endTime - resource.data.startTime;
     }
 
-    // Each instant type-checked on its OWN, which isValidAppointmentSpan
-    // cannot do: that function short-circuits to true when EITHER key is
-    // absent, so a doc carrying only one of them was never checked at all.
-    //
-    // It matters because the failure is silent. A `startTime` that is not a
-    // timestamp is excluded from every `orderBy('startTime')`, so the job
-    // drops out of the travel sweep, the digest, the day-slice mirrors and the
-    // Siri snapshot at once, with nothing erroring anywhere — the same shape
-    // as a client doc missing `archived`.
-    //
-    // CREATE ONLY, deliberately. Such a doc can already exist (the console and
-    // the Admin SDK bypass rules), and `getAppointmentById` is written to still
-    // reach a legacy row missing an instant — so enforcing this on update
-    // would leave exactly those docs permanently un-updatable, including by the
-    // admin trying to cancel one. Same asymmetry as appointmentSpanNotWidened
-    // and emergencyFieldNotSet: stop a bad value being INTRODUCED, never
-    // strand a doc that already carries one.
     function hasValidAppointmentInstants(d) {
       return (!('startTime' in d.keys()) || d.startTime is timestamp)
         && (!('endTime' in d.keys()) || d.endTime is timestamp);
@@ -578,14 +380,21 @@ service cloud.firestore {
         && (!('address' in d.keys()) || isBoundedString(d.address, 500))
         && (!('notes' in d.keys()) || isBoundedString(d.notes, 4000))
         && (!('fieldNotes' in d.keys()) || isBoundedString(d.fieldNotes, 4000))
+        // The crew signal (`updateCrewStatus`) and the job time record. The
+        // three instants are stamped SERVER-SIDE — `lifecycleStamps` in the
+        // write trigger for `startedAt`/`completedAt`, the crew branch below
+        // for `crewStatusAt` — and an admin edit's `request.resource.data` is
+        // the MERGED document, so they are present on most updates: they are
+        // type-checked here, never banned, or every edit of a started job
+        // would be refused.
+        && (!('crewStatus' in d.keys()) || isBoundedString(d.crewStatus, 32))
+        && (!('crewStatusBy' in d.keys()) || isValidDocIdField(d.crewStatusBy))
+        && (!('startedAt' in d.keys()) || d.startedAt is timestamp)
+        && (!('completedAt' in d.keys()) || d.completedAt is timestamp)
+        && (!('crewStatusAt' in d.keys()) || d.crewStatusAt is timestamp)
         && (!('materialsNeeded' in d.keys())
             || isBoundedString(d.materialsNeeded, 2000))
-        // 401, not 200: this is the DENORMALIZED client display name, and
-        // `ClientRecord.displayName` composes it from `firstName` + " " +
-        // `lastName` — two 200-char client fields. Sized to `personName` it
-        // rejected the whole appointment save with an opaque
-        // `permission-denied`. Rules caps mirror the widest value a write path
-        // can produce, never the client cap. Pinned by text_limits_test.dart.
+
         && (!('clientName' in d.keys()) || isBoundedString(d.clientName, 401))
         && (!('clientPhone' in d.keys()) || isBoundedString(d.clientPhone, 40))
         && (!('clientId' in d.keys()) || isValidDocIdField(d.clientId))
@@ -593,49 +402,15 @@ service cloud.firestore {
         // Same reasoning as the ids above: `seriesOpId` is interpolated into
         // the `appointmentSeriesNotices/op_<opId>_<kind>_<emp>` doc id.
         && (!('seriesOpId' in d.keys()) || isValidDocIdField(d.seriesOpId))
-        // LEGACY ONLY, and as of 2026-08-27 no document carries one:
-        // photos moved to `appointments/{id}/images` at the CONTRACT step,
-        // nothing has written this array since 1.49.0+78, and
-        // `clear-appointment-picture-arrays.js` emptied the last of them
-        // (14 entries across 11 appointments, 67 scanned — every appointment).
-        //
-        // The cap STAYS anyway, and the reason changed rather than expired.
-        // It used to be "a document the script has not reached still carries
-        // its array"; now it is that `firestore.rules` reaches CLIENT writes
-        // only, so an Admin-SDK or console write is still free to put one
-        // back — and an unbounded array there grows the parent past its 1 MB
-        // ceiling and makes the job permanently un-updatable, which is the
-        // failure this number was chosen to stay clear of. It is not a ban:
-        // banning the key outright would refuse every edit of a document that
-        // somehow held one, which is the un-updatable state itself.
+
         && (!('pictures' in d.keys())
             || (d.pictures is list && d.pictures.size() <= 100))
-        // 500 = `_userStreamLimit`, the ceiling on how many employees the
-        // picker can even surface. NOT 30: that is the whereArrayContainsAny
-        // chunk size, which `findBusyEmployees` already batches around, so it
-        // bounds a QUERY, not how many people can be on a job. A cap at 30
-        // would reject a real assignment on a 31-person roster and, worse,
-        // make any existing such job permanently un-updatable.
+
         && (!('employeeIds' in d.keys())
             || (d.employeeIds is list && d.employeeIds.size() <= 500))
         && (!('employeeNames' in d.keys())
             || (d.employeeNames is list && d.employeeNames.size() <= 500))
-        // A day of a multi-day RUN: N documents sharing a seriesId, each one
-        // day long, linked by this pair. Bounded rather than merely
-        // type-checked so a client cannot write "Day 900 of 4000" — the Dart
-        // `_storedRunLabel` and the JS `storedRunLabel` both refuse an
-        // incoherent pair, but the rules are the last line of defence and an
-        // unbounded int here would reach every read surface's model.
-        //
-        // The cap is `maxAppointmentSpanDays` in
-        // `lib/features/calendar/domain/appointment_day_slice.dart` — the same
-        // 14 `isValidAppointmentSpan` bounds, so a run can never have more days
-        // than its span may cover. Pinned as text by
-        // `appointment_span_rules_test.dart`; the two caps move together.
-        //
-        // Absent-or-valid like every clause here: this validator has no
-        // `hasOnly`, and a required field would reject every one-day job and
-        // every document written before the split.
+
         && (!('dayIndex' in d.keys())
             || (d.dayIndex is int && d.dayIndex >= 1 && d.dayIndex <= 14))
         && (!('dayCount' in d.keys())
@@ -646,25 +421,6 @@ service cloud.firestore {
       // Read: admin sees all; assigned employee sees their appointments.
       allow read: if isAdmin() || isAssignedEmployee(resource.data);
 
-      // Admin only, and rejects any status value the client sends that isn't on
-      // the allowlist.
-      //
-      // `pictureCount` is function-owned, the same posture as `jobCount` on a
-      // client and for the same reason: `recountAppointmentPictures` writes it
-      // as an absolute count() aggregate over the `images` subcollection, so a
-      // client write could only ever put it out of step with the photos it
-      // claims to count — and it is what `AppointmentCard`'s photo indicator
-      // reads. `AppointmentRecord.toMap()` must never emit it.
-      //
-      // **A create may write it, and only as 0.** That is not a loosening for
-      // convenience: since the CONTRACT step the counter is the ONLY thing
-      // saying whether a job has photos, and the detail sheet skips its
-      // subcollection read when it is 0 — so "absent" would be a third state
-      // meaning "nobody knows yet", on every job until its first photo. The
-      // trigger cannot fill that in (it only fires on a photo write), so the
-      // create does, and pinning the value to 0 keeps the client unable to
-      // claim a count it has not earned. `addAppointments` writes it beside
-      // `toMap()`, never through it, so no UPDATE can carry one.
       allow create: if isAdmin()
         && (!('pictureCount' in request.resource.data.keys())
             || request.resource.data.pictureCount == 0)
@@ -675,39 +431,6 @@ service cloud.firestore {
         && hasValidAppointmentInstants(request.resource.data)
         && isValidAppointmentSpan(request.resource.data);
 
-      // Admins have full access (with the status allowlist still enforced); an
-      // assigned employee can only flip the status to 'done' — nothing else.
-      // The shape guard rides the ADMIN branch only: an assigned employee's
-      // status flip must keep working on a legacy doc that predates these caps,
-      // and that branch already restricts the diff to status + updatedAt.
-      // Diff-based on `pictureCount`, NOT the flat key ban `allow create` uses:
-      // the trigger's own value is present in `request.resource.data` on every
-      // partial update, so a flat ban would reject every ordinary edit of a job
-      // that has photos. Same asymmetry, and same reason, as
-      // `emergencyFieldNotSet` on /users.
-      //
-      // The employee branch also inspects the STORED status, which it did not
-      // until 2026-08-15: it tested only what was being WRITTEN, so an
-      // assignee could put 'done' over 'cancelled' and resurrect a cancelled
-      // visit as a completed one — in History, in the dashboard tallies and in
-      // purgeExpiredHistory's accounting, re-firing notifyAppointmentChanges
-      // and endCardOnTerminal on the way. `DetailsActionBar` hides the button
-      // (`!isDone && !isCancelled`), so rules are the only real gate and
-      // reaching it needed nothing but a modified client.
-      //
-      // Written as `!= 'cancelled'`, NOT as an
-      // `in ['pending', 'in_progress']` allowlist, deliberately: legacy docs
-      // carry `confirmed` and other off-allowlist values (see
-      // `AppointmentStatus.storedRaw`), the action bar offers the button on
-      // them, and an allowlist would refuse that close as an opaque
-      // `permission-denied`. It also keeps a re-tap on an already-`done` job
-      // harmless. Only the one resurrection is refused.
-      //
-      // There is deliberately NO DATE restriction on this branch. An employee
-      // who misses the button before midnight, or who is on day 2+ of a
-      // multi-day run, has no other way to close the job — the edit form's
-      // status picker is admin-only — while the server keeps sending
-      // "job finished?" nudges. Don't add one.
       allow update: if (isAdmin()
             && !request.resource.data.diff(resource.data)
                  .affectedKeys().hasAny(['pictureCount'])
@@ -720,80 +443,56 @@ service cloud.firestore {
                .affectedKeys()
                .hasOnly(['status', 'updatedAt'])
             && request.resource.data.status == 'done'
-            // `updatedAt` is admitted into the diff above, so pin it the way
-            // the presence rule pins its own: without this, a modified client
-            // closing a job it is assigned to may stamp an arbitrary — future,
-            // past, or non-timestamp — value on it. Nothing server-side
-            // branches on an appointment's `updatedAt`, so this is audit-trail
-            // integrity rather than an exploitable defect. Safe to pin because
-            // BOTH client write paths (`updateAppointmentStatus` and
-            // `updateAppointmentStatuses`) send `FieldValue.serverTimestamp()`
-            // unconditionally; a path that omitted it would be refused here.
+
             && request.resource.data.updatedAt == request.time
             && resource.data.status != 'cancelled')
-        // What the CREW recorded on site. A SEPARATE branch from the status
-        // flip above, deliberately: that one is the most security-sensitive
-        // write in the app and its `hasOnly(['status','updatedAt'])` is what
-        // makes it safe to reason about — widening that set to carry notes
-        // would let one write do both and put every guarantee above in play.
-        //
-        // `fieldNotes`, never `notes`: the dispatcher's brief is written when
-        // the job is booked and an assignee must not be able to overwrite it.
-        // Two fields is what makes "the crew may add, never edit the brief" a
-        // rules-level fact rather than a UI convention.
-        //
-        // No status gate, unlike mark-done. A note is additive and is often
-        // the explanation for a job that went wrong — "nobody home", "needs a
-        // part" — so a cancelled or already-closed visit is exactly when one
-        // is worth recording. `updatedAt` is pinned for the same audit-trail
-        // reason as the branch above.
-        //
-        // The cap is conditional on the field being PRESENT, and that is
-        // load-bearing rather than defensive: `hasOnly` admits a SUBSET, and
-        // an assignee adding a photo touches this document with an
-        // `updatedAt`-only diff (`AppointmentImagesStore.append` bumps the
-        // parent in the same batch as the image rows). A flat
-        // `isBoundedString(...fieldNotes)` evaluates against an absent field
-        // on that write and refuses the whole batch — so the crew could add a
-        // photo row and never the photo.
+
         || (isAssignedEmployee(resource.data)
             && request.resource.data.diff(resource.data)
                .affectedKeys()
                .hasOnly(['fieldNotes', 'updatedAt'])
             && (!('fieldNotes' in request.resource.data)
                 || isBoundedString(request.resource.data.fieldNotes, 4000))
-            && request.resource.data.updatedAt == request.time);
+            && request.resource.data.updatedAt == request.time)
+        // "Start job": the assignee moves an open job FORWARD into
+        // `in_progress`, and nothing else. Its own branch, not a widening of
+        // the mark-done one: that branch's `status == 'done'` is its whole
+        // guarantee, and admitting a second value there would let one write
+        // do either. This one can only ever go from an open status into
+        // in-progress — never backwards, never out of a closed state, and
+        // never twice (a re-tap is refused rather than re-stamped). The
+        // `startedAt` instant itself is stamped SERVER-SIDE by the write
+        // trigger (`lifecycleStamps`), so no client may write it here.
+        || (isAssignedEmployee(resource.data)
+            && request.resource.data.diff(resource.data)
+               .affectedKeys()
+               .hasOnly(['status', 'updatedAt'])
+            && request.resource.data.status == 'in_progress'
+            && request.resource.data.updatedAt == request.time
+            && !(resource.data.status in
+                ['in_progress', 'done', 'completed', 'cancelled']))
+        // "On my way" / "Running late": the assignee's own signal to the
+        // office, on an open job. Exactly four keys, every one pinned — the
+        // value to the two-string allowlist, both instants to the server
+        // clock, and `crewStatusBy` to the CALLER's own doc id, so a signal
+        // can never be put in somebody else's name. Refused on a closed job:
+        // there is nobody to be on the way to.
+        || (isAssignedEmployee(resource.data)
+            && request.resource.data.diff(resource.data)
+               .affectedKeys()
+               .hasOnly(['crewStatus', 'crewStatusAt', 'crewStatusBy',
+                         'updatedAt'])
+            && request.resource.data.crewStatus in ['onMyWay', 'runningLate']
+            && request.resource.data.crewStatusAt == request.time
+            && request.resource.data.crewStatusBy == myDocId()
+            && request.resource.data.updatedAt == request.time
+            && !(resource.data.status in ['done', 'completed', 'cancelled']));
 
       // Delete: admin only.
       allow delete: if isAdmin();
 
       // ── appointments/{id}/images ────────────────────────────────────────
-      // Photos are moving off the parent document. Every appointment read
-      // carried its whole photo array, and the calendar reads up to 1000
-      // appointments at a time while only the detail sheet ever shows a photo.
-      //
-      // The grant MIRRORS the parent's exactly — admin, or an assignee of THIS
-      // appointment — by resolving `resource.data` of the parent rather than
-      // restating the condition. Restating it is how the two drift, and a
-      // drift here means a photo readable by someone the job is not.
-      //
-      // NOTE the cost, because it is the reason not to reach for a
-      // subcollection lightly: `parentAppointment()` is a document `get()` on
-      // top of the `usersByUid` one every rule here already pays, so an
-      // employee listing a job's photos evaluates TWO rules reads. It is
-      // bounded (one per query, cached per request) and it buys the far larger
-      // saving on the range queries, but it is a real trade.
-      //
-      // An assignee may READ and CREATE, never update or delete. That widened
-      // on 2026-09-01: the read half was always theirs, and the write half was
-      // admin-only on the reasoning that photos come from the admin-only
-      // appointment form — which was true, and was the whole problem. The
-      // person standing in the basement could not record what they found.
-      // What stops a compromised employee session fabricating a row pointing
-      // at ANOTHER job's object is the path constraint on `storagePath`, not
-      // the role; `storage.rules` grants the same assignee the bytes at the
-      // same path, and `validateUploadedImage` still deletes anything whose
-      // magic bytes are not JPEG/PNG.
+
       match /images/{imageId} {
         function parentAppointment() {
           return get(/databases/$(database)/documents/appointments/$(appointmentId)).data;
@@ -801,50 +500,6 @@ service cloud.firestore {
 
         allow read: if isAdmin() || isAssignedEmployee(parentAppointment());
 
-        // Shape-locked like every other subcollection here. `storagePath` is
-        // what renders and deletes the photo, and it is now the ONLY handle a
-        // photo may carry.
-        //
-        // `url` USED TO BE ACCEPTED, for backfilled LEGACY rows that never had
-        // a storage path. It was dropped 2026-08-22 after a prod count came
-        // back ZERO (`functions/scripts/count-legacy-image-urls.js`: 14 image
-        // documents scanned, 0 with a url and no storagePath). That count is
-        // the whole justification — a `?alt=media&token=…` string is a
-        // permanent, rules-free, transferable download link, and the rotation
-        // that used to invalidate one on deactivation was deleted with the
-        // minting machinery, so accepting the field meant accepting a
-        // credential nothing could revoke. Refusing it here is what stops a
-        // NEW one being stored.
-        //
-        // It does not, on its own, mean none is readable: the parent
-        // `pictures[]` arrays carry a url alongside their storagePath and
-        // survive until `clear-appointment-picture-arrays.js` runs. That
-        // count is the second half of the claim (`countArrayUrls` in the same
-        // script) and it is the one that closes S1.
-        //
-        // Do not re-add it to this list to make some future write pass;
-        // re-home those bytes under a real `storagePath` instead.
-        // The path is CONSTRAINED to this appointment's own folder, not just
-        // capped: the cap alone let a compromised admin session plant a row
-        // pointing at another appointment's object, making that photo readable
-        // by the second appointment's assignees through the read rule above.
-        // `ImageStorageService.upload` builds exactly this shape
-        // (`appointments/{id}/images/{fileName}`), and `storage.rules` gates
-        // the bytes at the same path — so the two now agree on the folder
-        // rather than only on who may write.
-        // CREATE is open to an assignee, update and delete are not. A
-        // plumber's field record is the billable artifact and the upsell
-        // pipeline — the whole photo pipeline, the offline upload queue and
-        // the magic-byte validation already existed and were wired admin-only,
-        // so the crew who are actually standing in the basement could not use
-        // any of it. Adding is additive and path-scoped; EDITING or DELETING
-        // somebody else's photo row is a different decision and stays with the
-        // admin, so a record cannot be quietly removed after the fact.
-        //
-        // `storage.rules` grants the same assignee the bytes at the same path,
-        // and `validateUploadedImage` still deletes anything whose magic bytes
-        // are not JPEG/PNG. The path constraint below is what stops a
-        // compromised session pointing a row at another job's object.
         allow create: if (isAdmin() || isAssignedEmployee(parentAppointment()))
           && request.resource.data.keys().hasOnly(
               ['storagePath', 'fileName', 'uploadedAt'])

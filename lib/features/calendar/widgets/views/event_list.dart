@@ -9,22 +9,35 @@ import 'package:scheduling/features/calendar/widgets/views/agenda_sliver_list.da
 /// both hosts build the same rows.
 class EventList extends StatelessWidget {
   const EventList({
-    required this.events,
-    required this.day,
-    required this.nameMap,
-    required this.colorMap,
+    required List<AppointmentDaySlice> this.events,
+    required DateTime this.day,
+    required Map<String, String> this.nameMap,
+    required Map<String, Color> this.colorMap,
     super.key,
     this.isAdmin = true,
     this.isLoading = false,
     this.onAppointmentTap,
     this.selectedAppointmentId,
     this.bottomClearance = 0,
-  });
+  }) : slivers = null;
+
+  /// The pane around slivers the host already built — the calendar's week
+  /// agenda, which is not one day's rows.
+  const EventList.slivers({required List<Widget> this.slivers, super.key})
+    : events = null,
+      day = null,
+      nameMap = null,
+      colorMap = null,
+      isAdmin = true,
+      isLoading = false,
+      onAppointmentTap = null,
+      selectedAppointmentId = null,
+      bottomClearance = 0;
 
   /// One entry per day the job runs — see [AgendaSliverList.events].
-  final List<AppointmentDaySlice> events;
-  final Map<String, String> nameMap;
-  final Map<String, Color> colorMap;
+  final List<AppointmentDaySlice>? events;
+  final Map<String, String>? nameMap;
+  final Map<String, Color>? colorMap;
   final bool isAdmin;
   final bool isLoading;
   final void Function(AppointmentRecord appointment)? onAppointmentTap;
@@ -36,24 +49,29 @@ class EventList extends StatelessWidget {
 
   /// See [AgendaSliverList.day] — forwarded so the split layout shows the same
   /// holiday row the portrait calendar does.
-  final DateTime day;
+  final DateTime? day;
+
+  /// Host-built slivers, replacing the day agenda. See [EventList.slivers].
+  final List<Widget>? slivers;
 
   @override
   Widget build(BuildContext context) => Expanded(
     child: CustomScrollView(
-      slivers: [
-        AgendaSliverList(
-          events: events,
-          nameMap: nameMap,
-          colorMap: colorMap,
-          isAdmin: isAdmin,
-          isLoading: isLoading,
-          onAppointmentTap: onAppointmentTap,
-          selectedAppointmentId: selectedAppointmentId,
-          bottomClearance: bottomClearance,
-          day: day,
-        ),
-      ],
+      slivers:
+          slivers ??
+          [
+            AgendaSliverList(
+              events: events!,
+              nameMap: nameMap!,
+              colorMap: colorMap!,
+              isAdmin: isAdmin,
+              isLoading: isLoading,
+              onAppointmentTap: onAppointmentTap,
+              selectedAppointmentId: selectedAppointmentId,
+              bottomClearance: bottomClearance,
+              day: day!,
+            ),
+          ],
     ),
   );
 }

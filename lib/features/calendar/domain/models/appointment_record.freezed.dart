@@ -25,7 +25,13 @@ mixin _$AppointmentRecord {
  bool get isDayOff; RepeatInterval get repeat;// Links repeat occurrences or split days for one multi-day run.
  String get seriesId;// Multi-day run labels; read through `AppointmentDaySlice.sliceFor`.
  int get dayIndex; int get dayCount; DateTime? get createdAt; DateTime? get updatedAt;// Parent-card photo indicator, owned by server recounts after create.
- int get pictureCount;
+ int get pictureCount;// The job time record. Both are stamped SERVER-SIDE by the appointment
+// write trigger on the status transition (`lifecycleStamps` in
+// `functions/notification_policy.js`), never by a client.
+ DateTime? get startedAt; DateTime? get completedAt;// What an assignee last signalled on the way to the job; one of
+// `crewStatusRawValues` or empty. Written only through
+// `updateCrewStatus`, by the person named in [crewStatusBy].
+ String get crewStatus; DateTime? get crewStatusAt; String get crewStatusBy;
 /// Create a copy of AppointmentRecord
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -36,16 +42,16 @@ $AppointmentRecordCopyWith<AppointmentRecord> get copyWith => _$AppointmentRecor
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppointmentRecord&&(identical(other.startTime, startTime) || other.startTime == startTime)&&(identical(other.endTime, endTime) || other.endTime == endTime)&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.clientId, clientId) || other.clientId == clientId)&&(identical(other.clientName, clientName) || other.clientName == clientName)&&(identical(other.clientPhone, clientPhone) || other.clientPhone == clientPhone)&&const DeepCollectionEquality().equals(other.employeeIds, employeeIds)&&const DeepCollectionEquality().equals(other.employeeNames, employeeNames)&&(identical(other.address, address) || other.address == address)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.fieldNotes, fieldNotes) || other.fieldNotes == fieldNotes)&&(identical(other.materialsNeeded, materialsNeeded) || other.materialsNeeded == materialsNeeded)&&(identical(other.status, status) || other.status == status)&&(identical(other.isPersonal, isPersonal) || other.isPersonal == isPersonal)&&(identical(other.isAllDay, isAllDay) || other.isAllDay == isAllDay)&&(identical(other.isDayOff, isDayOff) || other.isDayOff == isDayOff)&&(identical(other.repeat, repeat) || other.repeat == repeat)&&(identical(other.seriesId, seriesId) || other.seriesId == seriesId)&&(identical(other.dayIndex, dayIndex) || other.dayIndex == dayIndex)&&(identical(other.dayCount, dayCount) || other.dayCount == dayCount)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&(identical(other.pictureCount, pictureCount) || other.pictureCount == pictureCount));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppointmentRecord&&(identical(other.startTime, startTime) || other.startTime == startTime)&&(identical(other.endTime, endTime) || other.endTime == endTime)&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.clientId, clientId) || other.clientId == clientId)&&(identical(other.clientName, clientName) || other.clientName == clientName)&&(identical(other.clientPhone, clientPhone) || other.clientPhone == clientPhone)&&const DeepCollectionEquality().equals(other.employeeIds, employeeIds)&&const DeepCollectionEquality().equals(other.employeeNames, employeeNames)&&(identical(other.address, address) || other.address == address)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.fieldNotes, fieldNotes) || other.fieldNotes == fieldNotes)&&(identical(other.materialsNeeded, materialsNeeded) || other.materialsNeeded == materialsNeeded)&&(identical(other.status, status) || other.status == status)&&(identical(other.isPersonal, isPersonal) || other.isPersonal == isPersonal)&&(identical(other.isAllDay, isAllDay) || other.isAllDay == isAllDay)&&(identical(other.isDayOff, isDayOff) || other.isDayOff == isDayOff)&&(identical(other.repeat, repeat) || other.repeat == repeat)&&(identical(other.seriesId, seriesId) || other.seriesId == seriesId)&&(identical(other.dayIndex, dayIndex) || other.dayIndex == dayIndex)&&(identical(other.dayCount, dayCount) || other.dayCount == dayCount)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&(identical(other.pictureCount, pictureCount) || other.pictureCount == pictureCount)&&(identical(other.startedAt, startedAt) || other.startedAt == startedAt)&&(identical(other.completedAt, completedAt) || other.completedAt == completedAt)&&(identical(other.crewStatus, crewStatus) || other.crewStatus == crewStatus)&&(identical(other.crewStatusAt, crewStatusAt) || other.crewStatusAt == crewStatusAt)&&(identical(other.crewStatusBy, crewStatusBy) || other.crewStatusBy == crewStatusBy));
 }
 
 
 @override
-int get hashCode => Object.hashAll([runtimeType,startTime,endTime,id,title,clientId,clientName,clientPhone,const DeepCollectionEquality().hash(employeeIds),const DeepCollectionEquality().hash(employeeNames),address,notes,fieldNotes,materialsNeeded,status,isPersonal,isAllDay,isDayOff,repeat,seriesId,dayIndex,dayCount,createdAt,updatedAt,pictureCount]);
+int get hashCode => Object.hashAll([runtimeType,startTime,endTime,id,title,clientId,clientName,clientPhone,const DeepCollectionEquality().hash(employeeIds),const DeepCollectionEquality().hash(employeeNames),address,notes,fieldNotes,materialsNeeded,status,isPersonal,isAllDay,isDayOff,repeat,seriesId,dayIndex,dayCount,createdAt,updatedAt,pictureCount,startedAt,completedAt,crewStatus,crewStatusAt,crewStatusBy]);
 
 @override
 String toString() {
-  return 'AppointmentRecord(startTime: $startTime, endTime: $endTime, id: $id, title: $title, clientId: $clientId, clientName: $clientName, clientPhone: $clientPhone, employeeIds: $employeeIds, employeeNames: $employeeNames, address: $address, notes: $notes, fieldNotes: $fieldNotes, materialsNeeded: $materialsNeeded, status: $status, isPersonal: $isPersonal, isAllDay: $isAllDay, isDayOff: $isDayOff, repeat: $repeat, seriesId: $seriesId, dayIndex: $dayIndex, dayCount: $dayCount, createdAt: $createdAt, updatedAt: $updatedAt, pictureCount: $pictureCount)';
+  return 'AppointmentRecord(startTime: $startTime, endTime: $endTime, id: $id, title: $title, clientId: $clientId, clientName: $clientName, clientPhone: $clientPhone, employeeIds: $employeeIds, employeeNames: $employeeNames, address: $address, notes: $notes, fieldNotes: $fieldNotes, materialsNeeded: $materialsNeeded, status: $status, isPersonal: $isPersonal, isAllDay: $isAllDay, isDayOff: $isDayOff, repeat: $repeat, seriesId: $seriesId, dayIndex: $dayIndex, dayCount: $dayCount, createdAt: $createdAt, updatedAt: $updatedAt, pictureCount: $pictureCount, startedAt: $startedAt, completedAt: $completedAt, crewStatus: $crewStatus, crewStatusAt: $crewStatusAt, crewStatusBy: $crewStatusBy)';
 }
 
 
@@ -56,7 +62,7 @@ abstract mixin class $AppointmentRecordCopyWith<$Res>  {
   factory $AppointmentRecordCopyWith(AppointmentRecord value, $Res Function(AppointmentRecord) _then) = _$AppointmentRecordCopyWithImpl;
 @useResult
 $Res call({
- DateTime startTime, DateTime endTime, String? id, String title, String clientId, String clientName, String clientPhone, List<String> employeeIds, List<String> employeeNames, String address, String notes, String fieldNotes, String materialsNeeded, String status, bool isPersonal, bool isAllDay, bool isDayOff, RepeatInterval repeat, String seriesId, int dayIndex, int dayCount, DateTime? createdAt, DateTime? updatedAt, int pictureCount
+ DateTime startTime, DateTime endTime, String? id, String title, String clientId, String clientName, String clientPhone, List<String> employeeIds, List<String> employeeNames, String address, String notes, String fieldNotes, String materialsNeeded, String status, bool isPersonal, bool isAllDay, bool isDayOff, RepeatInterval repeat, String seriesId, int dayIndex, int dayCount, DateTime? createdAt, DateTime? updatedAt, int pictureCount, DateTime? startedAt, DateTime? completedAt, String crewStatus, DateTime? crewStatusAt, String crewStatusBy
 });
 
 
@@ -73,7 +79,7 @@ class _$AppointmentRecordCopyWithImpl<$Res>
 
 /// Create a copy of AppointmentRecord
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? startTime = null,Object? endTime = null,Object? id = freezed,Object? title = null,Object? clientId = null,Object? clientName = null,Object? clientPhone = null,Object? employeeIds = null,Object? employeeNames = null,Object? address = null,Object? notes = null,Object? fieldNotes = null,Object? materialsNeeded = null,Object? status = null,Object? isPersonal = null,Object? isAllDay = null,Object? isDayOff = null,Object? repeat = null,Object? seriesId = null,Object? dayIndex = null,Object? dayCount = null,Object? createdAt = freezed,Object? updatedAt = freezed,Object? pictureCount = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? startTime = null,Object? endTime = null,Object? id = freezed,Object? title = null,Object? clientId = null,Object? clientName = null,Object? clientPhone = null,Object? employeeIds = null,Object? employeeNames = null,Object? address = null,Object? notes = null,Object? fieldNotes = null,Object? materialsNeeded = null,Object? status = null,Object? isPersonal = null,Object? isAllDay = null,Object? isDayOff = null,Object? repeat = null,Object? seriesId = null,Object? dayIndex = null,Object? dayCount = null,Object? createdAt = freezed,Object? updatedAt = freezed,Object? pictureCount = null,Object? startedAt = freezed,Object? completedAt = freezed,Object? crewStatus = null,Object? crewStatusAt = freezed,Object? crewStatusBy = null,}) {
   return _then(_self.copyWith(
 startTime: null == startTime ? _self.startTime : startTime // ignore: cast_nullable_to_non_nullable
 as DateTime,endTime: null == endTime ? _self.endTime : endTime // ignore: cast_nullable_to_non_nullable
@@ -99,7 +105,12 @@ as int,dayCount: null == dayCount ? _self.dayCount : dayCount // ignore: cast_nu
 as int,createdAt: freezed == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,updatedAt: freezed == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,pictureCount: null == pictureCount ? _self.pictureCount : pictureCount // ignore: cast_nullable_to_non_nullable
-as int,
+as int,startedAt: freezed == startedAt ? _self.startedAt : startedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,completedAt: freezed == completedAt ? _self.completedAt : completedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,crewStatus: null == crewStatus ? _self.crewStatus : crewStatus // ignore: cast_nullable_to_non_nullable
+as String,crewStatusAt: freezed == crewStatusAt ? _self.crewStatusAt : crewStatusAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,crewStatusBy: null == crewStatusBy ? _self.crewStatusBy : crewStatusBy // ignore: cast_nullable_to_non_nullable
+as String,
   ));
 }
 
@@ -184,10 +195,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( DateTime startTime,  DateTime endTime,  String? id,  String title,  String clientId,  String clientName,  String clientPhone,  List<String> employeeIds,  List<String> employeeNames,  String address,  String notes,  String fieldNotes,  String materialsNeeded,  String status,  bool isPersonal,  bool isAllDay,  bool isDayOff,  RepeatInterval repeat,  String seriesId,  int dayIndex,  int dayCount,  DateTime? createdAt,  DateTime? updatedAt,  int pictureCount)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( DateTime startTime,  DateTime endTime,  String? id,  String title,  String clientId,  String clientName,  String clientPhone,  List<String> employeeIds,  List<String> employeeNames,  String address,  String notes,  String fieldNotes,  String materialsNeeded,  String status,  bool isPersonal,  bool isAllDay,  bool isDayOff,  RepeatInterval repeat,  String seriesId,  int dayIndex,  int dayCount,  DateTime? createdAt,  DateTime? updatedAt,  int pictureCount,  DateTime? startedAt,  DateTime? completedAt,  String crewStatus,  DateTime? crewStatusAt,  String crewStatusBy)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _AppointmentRecord() when $default != null:
-return $default(_that.startTime,_that.endTime,_that.id,_that.title,_that.clientId,_that.clientName,_that.clientPhone,_that.employeeIds,_that.employeeNames,_that.address,_that.notes,_that.fieldNotes,_that.materialsNeeded,_that.status,_that.isPersonal,_that.isAllDay,_that.isDayOff,_that.repeat,_that.seriesId,_that.dayIndex,_that.dayCount,_that.createdAt,_that.updatedAt,_that.pictureCount);case _:
+return $default(_that.startTime,_that.endTime,_that.id,_that.title,_that.clientId,_that.clientName,_that.clientPhone,_that.employeeIds,_that.employeeNames,_that.address,_that.notes,_that.fieldNotes,_that.materialsNeeded,_that.status,_that.isPersonal,_that.isAllDay,_that.isDayOff,_that.repeat,_that.seriesId,_that.dayIndex,_that.dayCount,_that.createdAt,_that.updatedAt,_that.pictureCount,_that.startedAt,_that.completedAt,_that.crewStatus,_that.crewStatusAt,_that.crewStatusBy);case _:
   return orElse();
 
 }
@@ -205,10 +216,10 @@ return $default(_that.startTime,_that.endTime,_that.id,_that.title,_that.clientI
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( DateTime startTime,  DateTime endTime,  String? id,  String title,  String clientId,  String clientName,  String clientPhone,  List<String> employeeIds,  List<String> employeeNames,  String address,  String notes,  String fieldNotes,  String materialsNeeded,  String status,  bool isPersonal,  bool isAllDay,  bool isDayOff,  RepeatInterval repeat,  String seriesId,  int dayIndex,  int dayCount,  DateTime? createdAt,  DateTime? updatedAt,  int pictureCount)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( DateTime startTime,  DateTime endTime,  String? id,  String title,  String clientId,  String clientName,  String clientPhone,  List<String> employeeIds,  List<String> employeeNames,  String address,  String notes,  String fieldNotes,  String materialsNeeded,  String status,  bool isPersonal,  bool isAllDay,  bool isDayOff,  RepeatInterval repeat,  String seriesId,  int dayIndex,  int dayCount,  DateTime? createdAt,  DateTime? updatedAt,  int pictureCount,  DateTime? startedAt,  DateTime? completedAt,  String crewStatus,  DateTime? crewStatusAt,  String crewStatusBy)  $default,) {final _that = this;
 switch (_that) {
 case _AppointmentRecord():
-return $default(_that.startTime,_that.endTime,_that.id,_that.title,_that.clientId,_that.clientName,_that.clientPhone,_that.employeeIds,_that.employeeNames,_that.address,_that.notes,_that.fieldNotes,_that.materialsNeeded,_that.status,_that.isPersonal,_that.isAllDay,_that.isDayOff,_that.repeat,_that.seriesId,_that.dayIndex,_that.dayCount,_that.createdAt,_that.updatedAt,_that.pictureCount);case _:
+return $default(_that.startTime,_that.endTime,_that.id,_that.title,_that.clientId,_that.clientName,_that.clientPhone,_that.employeeIds,_that.employeeNames,_that.address,_that.notes,_that.fieldNotes,_that.materialsNeeded,_that.status,_that.isPersonal,_that.isAllDay,_that.isDayOff,_that.repeat,_that.seriesId,_that.dayIndex,_that.dayCount,_that.createdAt,_that.updatedAt,_that.pictureCount,_that.startedAt,_that.completedAt,_that.crewStatus,_that.crewStatusAt,_that.crewStatusBy);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -225,10 +236,10 @@ return $default(_that.startTime,_that.endTime,_that.id,_that.title,_that.clientI
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( DateTime startTime,  DateTime endTime,  String? id,  String title,  String clientId,  String clientName,  String clientPhone,  List<String> employeeIds,  List<String> employeeNames,  String address,  String notes,  String fieldNotes,  String materialsNeeded,  String status,  bool isPersonal,  bool isAllDay,  bool isDayOff,  RepeatInterval repeat,  String seriesId,  int dayIndex,  int dayCount,  DateTime? createdAt,  DateTime? updatedAt,  int pictureCount)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( DateTime startTime,  DateTime endTime,  String? id,  String title,  String clientId,  String clientName,  String clientPhone,  List<String> employeeIds,  List<String> employeeNames,  String address,  String notes,  String fieldNotes,  String materialsNeeded,  String status,  bool isPersonal,  bool isAllDay,  bool isDayOff,  RepeatInterval repeat,  String seriesId,  int dayIndex,  int dayCount,  DateTime? createdAt,  DateTime? updatedAt,  int pictureCount,  DateTime? startedAt,  DateTime? completedAt,  String crewStatus,  DateTime? crewStatusAt,  String crewStatusBy)?  $default,) {final _that = this;
 switch (_that) {
 case _AppointmentRecord() when $default != null:
-return $default(_that.startTime,_that.endTime,_that.id,_that.title,_that.clientId,_that.clientName,_that.clientPhone,_that.employeeIds,_that.employeeNames,_that.address,_that.notes,_that.fieldNotes,_that.materialsNeeded,_that.status,_that.isPersonal,_that.isAllDay,_that.isDayOff,_that.repeat,_that.seriesId,_that.dayIndex,_that.dayCount,_that.createdAt,_that.updatedAt,_that.pictureCount);case _:
+return $default(_that.startTime,_that.endTime,_that.id,_that.title,_that.clientId,_that.clientName,_that.clientPhone,_that.employeeIds,_that.employeeNames,_that.address,_that.notes,_that.fieldNotes,_that.materialsNeeded,_that.status,_that.isPersonal,_that.isAllDay,_that.isDayOff,_that.repeat,_that.seriesId,_that.dayIndex,_that.dayCount,_that.createdAt,_that.updatedAt,_that.pictureCount,_that.startedAt,_that.completedAt,_that.crewStatus,_that.crewStatusAt,_that.crewStatusBy);case _:
   return null;
 
 }
@@ -240,7 +251,7 @@ return $default(_that.startTime,_that.endTime,_that.id,_that.title,_that.clientI
 
 
 class _AppointmentRecord extends AppointmentRecord {
-  const _AppointmentRecord({required this.startTime, required this.endTime, this.id, this.title = '', this.clientId = '', this.clientName = '', this.clientPhone = '', final  List<String> employeeIds = const <String>[], final  List<String> employeeNames = const <String>[], this.address = '', this.notes = '', this.fieldNotes = '', this.materialsNeeded = '', this.status = 'pending', this.isPersonal = false, this.isAllDay = false, this.isDayOff = false, this.repeat = RepeatInterval.none, this.seriesId = '', this.dayIndex = 0, this.dayCount = 0, this.createdAt, this.updatedAt, this.pictureCount = 0}): _employeeIds = employeeIds,_employeeNames = employeeNames,super._();
+  const _AppointmentRecord({required this.startTime, required this.endTime, this.id, this.title = '', this.clientId = '', this.clientName = '', this.clientPhone = '', final  List<String> employeeIds = const <String>[], final  List<String> employeeNames = const <String>[], this.address = '', this.notes = '', this.fieldNotes = '', this.materialsNeeded = '', this.status = 'pending', this.isPersonal = false, this.isAllDay = false, this.isDayOff = false, this.repeat = RepeatInterval.none, this.seriesId = '', this.dayIndex = 0, this.dayCount = 0, this.createdAt, this.updatedAt, this.pictureCount = 0, this.startedAt, this.completedAt, this.crewStatus = '', this.crewStatusAt, this.crewStatusBy = ''}): _employeeIds = employeeIds,_employeeNames = employeeNames,super._();
   
 
 @override final  DateTime startTime;
@@ -290,6 +301,17 @@ class _AppointmentRecord extends AppointmentRecord {
 @override final  DateTime? updatedAt;
 // Parent-card photo indicator, owned by server recounts after create.
 @override@JsonKey() final  int pictureCount;
+// The job time record. Both are stamped SERVER-SIDE by the appointment
+// write trigger on the status transition (`lifecycleStamps` in
+// `functions/notification_policy.js`), never by a client.
+@override final  DateTime? startedAt;
+@override final  DateTime? completedAt;
+// What an assignee last signalled on the way to the job; one of
+// `crewStatusRawValues` or empty. Written only through
+// `updateCrewStatus`, by the person named in [crewStatusBy].
+@override@JsonKey() final  String crewStatus;
+@override final  DateTime? crewStatusAt;
+@override@JsonKey() final  String crewStatusBy;
 
 /// Create a copy of AppointmentRecord
 /// with the given fields replaced by the non-null parameter values.
@@ -301,16 +323,16 @@ _$AppointmentRecordCopyWith<_AppointmentRecord> get copyWith => __$AppointmentRe
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppointmentRecord&&(identical(other.startTime, startTime) || other.startTime == startTime)&&(identical(other.endTime, endTime) || other.endTime == endTime)&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.clientId, clientId) || other.clientId == clientId)&&(identical(other.clientName, clientName) || other.clientName == clientName)&&(identical(other.clientPhone, clientPhone) || other.clientPhone == clientPhone)&&const DeepCollectionEquality().equals(other._employeeIds, _employeeIds)&&const DeepCollectionEquality().equals(other._employeeNames, _employeeNames)&&(identical(other.address, address) || other.address == address)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.fieldNotes, fieldNotes) || other.fieldNotes == fieldNotes)&&(identical(other.materialsNeeded, materialsNeeded) || other.materialsNeeded == materialsNeeded)&&(identical(other.status, status) || other.status == status)&&(identical(other.isPersonal, isPersonal) || other.isPersonal == isPersonal)&&(identical(other.isAllDay, isAllDay) || other.isAllDay == isAllDay)&&(identical(other.isDayOff, isDayOff) || other.isDayOff == isDayOff)&&(identical(other.repeat, repeat) || other.repeat == repeat)&&(identical(other.seriesId, seriesId) || other.seriesId == seriesId)&&(identical(other.dayIndex, dayIndex) || other.dayIndex == dayIndex)&&(identical(other.dayCount, dayCount) || other.dayCount == dayCount)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&(identical(other.pictureCount, pictureCount) || other.pictureCount == pictureCount));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppointmentRecord&&(identical(other.startTime, startTime) || other.startTime == startTime)&&(identical(other.endTime, endTime) || other.endTime == endTime)&&(identical(other.id, id) || other.id == id)&&(identical(other.title, title) || other.title == title)&&(identical(other.clientId, clientId) || other.clientId == clientId)&&(identical(other.clientName, clientName) || other.clientName == clientName)&&(identical(other.clientPhone, clientPhone) || other.clientPhone == clientPhone)&&const DeepCollectionEquality().equals(other._employeeIds, _employeeIds)&&const DeepCollectionEquality().equals(other._employeeNames, _employeeNames)&&(identical(other.address, address) || other.address == address)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.fieldNotes, fieldNotes) || other.fieldNotes == fieldNotes)&&(identical(other.materialsNeeded, materialsNeeded) || other.materialsNeeded == materialsNeeded)&&(identical(other.status, status) || other.status == status)&&(identical(other.isPersonal, isPersonal) || other.isPersonal == isPersonal)&&(identical(other.isAllDay, isAllDay) || other.isAllDay == isAllDay)&&(identical(other.isDayOff, isDayOff) || other.isDayOff == isDayOff)&&(identical(other.repeat, repeat) || other.repeat == repeat)&&(identical(other.seriesId, seriesId) || other.seriesId == seriesId)&&(identical(other.dayIndex, dayIndex) || other.dayIndex == dayIndex)&&(identical(other.dayCount, dayCount) || other.dayCount == dayCount)&&(identical(other.createdAt, createdAt) || other.createdAt == createdAt)&&(identical(other.updatedAt, updatedAt) || other.updatedAt == updatedAt)&&(identical(other.pictureCount, pictureCount) || other.pictureCount == pictureCount)&&(identical(other.startedAt, startedAt) || other.startedAt == startedAt)&&(identical(other.completedAt, completedAt) || other.completedAt == completedAt)&&(identical(other.crewStatus, crewStatus) || other.crewStatus == crewStatus)&&(identical(other.crewStatusAt, crewStatusAt) || other.crewStatusAt == crewStatusAt)&&(identical(other.crewStatusBy, crewStatusBy) || other.crewStatusBy == crewStatusBy));
 }
 
 
 @override
-int get hashCode => Object.hashAll([runtimeType,startTime,endTime,id,title,clientId,clientName,clientPhone,const DeepCollectionEquality().hash(_employeeIds),const DeepCollectionEquality().hash(_employeeNames),address,notes,fieldNotes,materialsNeeded,status,isPersonal,isAllDay,isDayOff,repeat,seriesId,dayIndex,dayCount,createdAt,updatedAt,pictureCount]);
+int get hashCode => Object.hashAll([runtimeType,startTime,endTime,id,title,clientId,clientName,clientPhone,const DeepCollectionEquality().hash(_employeeIds),const DeepCollectionEquality().hash(_employeeNames),address,notes,fieldNotes,materialsNeeded,status,isPersonal,isAllDay,isDayOff,repeat,seriesId,dayIndex,dayCount,createdAt,updatedAt,pictureCount,startedAt,completedAt,crewStatus,crewStatusAt,crewStatusBy]);
 
 @override
 String toString() {
-  return 'AppointmentRecord(startTime: $startTime, endTime: $endTime, id: $id, title: $title, clientId: $clientId, clientName: $clientName, clientPhone: $clientPhone, employeeIds: $employeeIds, employeeNames: $employeeNames, address: $address, notes: $notes, fieldNotes: $fieldNotes, materialsNeeded: $materialsNeeded, status: $status, isPersonal: $isPersonal, isAllDay: $isAllDay, isDayOff: $isDayOff, repeat: $repeat, seriesId: $seriesId, dayIndex: $dayIndex, dayCount: $dayCount, createdAt: $createdAt, updatedAt: $updatedAt, pictureCount: $pictureCount)';
+  return 'AppointmentRecord(startTime: $startTime, endTime: $endTime, id: $id, title: $title, clientId: $clientId, clientName: $clientName, clientPhone: $clientPhone, employeeIds: $employeeIds, employeeNames: $employeeNames, address: $address, notes: $notes, fieldNotes: $fieldNotes, materialsNeeded: $materialsNeeded, status: $status, isPersonal: $isPersonal, isAllDay: $isAllDay, isDayOff: $isDayOff, repeat: $repeat, seriesId: $seriesId, dayIndex: $dayIndex, dayCount: $dayCount, createdAt: $createdAt, updatedAt: $updatedAt, pictureCount: $pictureCount, startedAt: $startedAt, completedAt: $completedAt, crewStatus: $crewStatus, crewStatusAt: $crewStatusAt, crewStatusBy: $crewStatusBy)';
 }
 
 
@@ -321,7 +343,7 @@ abstract mixin class _$AppointmentRecordCopyWith<$Res> implements $AppointmentRe
   factory _$AppointmentRecordCopyWith(_AppointmentRecord value, $Res Function(_AppointmentRecord) _then) = __$AppointmentRecordCopyWithImpl;
 @override @useResult
 $Res call({
- DateTime startTime, DateTime endTime, String? id, String title, String clientId, String clientName, String clientPhone, List<String> employeeIds, List<String> employeeNames, String address, String notes, String fieldNotes, String materialsNeeded, String status, bool isPersonal, bool isAllDay, bool isDayOff, RepeatInterval repeat, String seriesId, int dayIndex, int dayCount, DateTime? createdAt, DateTime? updatedAt, int pictureCount
+ DateTime startTime, DateTime endTime, String? id, String title, String clientId, String clientName, String clientPhone, List<String> employeeIds, List<String> employeeNames, String address, String notes, String fieldNotes, String materialsNeeded, String status, bool isPersonal, bool isAllDay, bool isDayOff, RepeatInterval repeat, String seriesId, int dayIndex, int dayCount, DateTime? createdAt, DateTime? updatedAt, int pictureCount, DateTime? startedAt, DateTime? completedAt, String crewStatus, DateTime? crewStatusAt, String crewStatusBy
 });
 
 
@@ -338,7 +360,7 @@ class __$AppointmentRecordCopyWithImpl<$Res>
 
 /// Create a copy of AppointmentRecord
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? startTime = null,Object? endTime = null,Object? id = freezed,Object? title = null,Object? clientId = null,Object? clientName = null,Object? clientPhone = null,Object? employeeIds = null,Object? employeeNames = null,Object? address = null,Object? notes = null,Object? fieldNotes = null,Object? materialsNeeded = null,Object? status = null,Object? isPersonal = null,Object? isAllDay = null,Object? isDayOff = null,Object? repeat = null,Object? seriesId = null,Object? dayIndex = null,Object? dayCount = null,Object? createdAt = freezed,Object? updatedAt = freezed,Object? pictureCount = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? startTime = null,Object? endTime = null,Object? id = freezed,Object? title = null,Object? clientId = null,Object? clientName = null,Object? clientPhone = null,Object? employeeIds = null,Object? employeeNames = null,Object? address = null,Object? notes = null,Object? fieldNotes = null,Object? materialsNeeded = null,Object? status = null,Object? isPersonal = null,Object? isAllDay = null,Object? isDayOff = null,Object? repeat = null,Object? seriesId = null,Object? dayIndex = null,Object? dayCount = null,Object? createdAt = freezed,Object? updatedAt = freezed,Object? pictureCount = null,Object? startedAt = freezed,Object? completedAt = freezed,Object? crewStatus = null,Object? crewStatusAt = freezed,Object? crewStatusBy = null,}) {
   return _then(_AppointmentRecord(
 startTime: null == startTime ? _self.startTime : startTime // ignore: cast_nullable_to_non_nullable
 as DateTime,endTime: null == endTime ? _self.endTime : endTime // ignore: cast_nullable_to_non_nullable
@@ -364,7 +386,12 @@ as int,dayCount: null == dayCount ? _self.dayCount : dayCount // ignore: cast_nu
 as int,createdAt: freezed == createdAt ? _self.createdAt : createdAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,updatedAt: freezed == updatedAt ? _self.updatedAt : updatedAt // ignore: cast_nullable_to_non_nullable
 as DateTime?,pictureCount: null == pictureCount ? _self.pictureCount : pictureCount // ignore: cast_nullable_to_non_nullable
-as int,
+as int,startedAt: freezed == startedAt ? _self.startedAt : startedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,completedAt: freezed == completedAt ? _self.completedAt : completedAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,crewStatus: null == crewStatus ? _self.crewStatus : crewStatus // ignore: cast_nullable_to_non_nullable
+as String,crewStatusAt: freezed == crewStatusAt ? _self.crewStatusAt : crewStatusAt // ignore: cast_nullable_to_non_nullable
+as DateTime?,crewStatusBy: null == crewStatusBy ? _self.crewStatusBy : crewStatusBy // ignore: cast_nullable_to_non_nullable
+as String,
   ));
 }
 

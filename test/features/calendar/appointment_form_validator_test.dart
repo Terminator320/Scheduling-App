@@ -395,4 +395,21 @@ void main() {
       );
     });
   });
+
+  group('withoutKeys', () {
+    const errors = {
+      'date': AppointmentFormError.dateRequired,
+      'startTime': AppointmentFormError.startTimeRequired,
+      'endTime': AppointmentFormError.endTimeRequired,
+    };
+
+    test('drops every named key and keeps the rest', () {
+      final result = withoutKeys(errors, const ['startTime', 'endTime']);
+      expect(result, {'date': AppointmentFormError.dateRequired});
+    });
+
+    test('returns the same map when none of the keys is present', () {
+      expect(identical(withoutKeys(errors, const ['client']), errors), isTrue);
+    });
+  });
 }

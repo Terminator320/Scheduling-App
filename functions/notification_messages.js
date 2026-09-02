@@ -368,10 +368,60 @@ function buildJobCompletedMessage(who, what, locale) {
   };
 }
 
+/**
+ * "Marc is on the way to Leak fix" / "Marc is running late for Leak fix" —
+ * the crew signal the dispatcher gets. Same shape and the same PII rule as
+ * [buildJobCompletedMessage]: who and what, never an address or a number.
+ *
+ * @param {string} kind `onMyWay` | `runningLate`.
+ * @param {string} who The crew member's display name.
+ * @param {string} what The job's client name or title.
+ * @param {string} locale 'en' or 'fr'.
+ * @return {{title: string, body: string}}
+ */
+function buildCrewStatusMessage(kind, who, what, locale) {
+  const crew = String(who || "").trim();
+  const job = String(what || "").trim();
+  const late = kind === "runningLate";
+  if (locale === "fr") {
+    if (late) {
+      return {
+        title: "En retard",
+        body: crew && job ?
+          `${crew} est en retard pour ${job}.` :
+          (job ? `Retard pour ${job}.` :
+            "Un membre de l'équipe est en retard."),
+      };
+    }
+    return {
+      title: "En route",
+      body: crew && job ?
+        `${crew} est en route vers ${job}.` :
+        (job ? `En route vers ${job}.` :
+          "Un membre de l'équipe est en route."),
+    };
+  }
+  if (late) {
+    return {
+      title: "Running late",
+      body: crew && job ?
+        `${crew} is running late for ${job}.` :
+        (job ? `Running late for ${job}.` : "A crew member is running late."),
+    };
+  }
+  return {
+    title: "On the way",
+    body: crew && job ?
+      `${crew} is on the way to ${job}.` :
+      (job ? `On the way to ${job}.` : "A crew member is on the way."),
+  };
+}
+
 module.exports = {
   buildNotificationMessage,
   buildDigestMessage,
   buildEmailChangedMessage,
   buildSelfEmailChangedMessage,
   buildJobCompletedMessage,
+  buildCrewStatusMessage,
 };

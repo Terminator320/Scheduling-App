@@ -5,6 +5,7 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
@@ -12,6 +13,7 @@ import 'package:scheduling/features/calendar/widgets/sections/photo_picker_secti
 import 'package:scheduling/features/calendar/widgets/views/details_view_widgets.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
+import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 
 class DetailsEditChip extends StatelessWidget {
   const DetailsEditChip({required this.onTap, super.key});
@@ -138,6 +140,100 @@ class DetailsHeader extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// "Started 9:12 AM · Finished 11:40 AM · 2 h 28 min" — the job's time
+/// record, one mono line under the header. Either half may be absent (a job
+/// under way has no finish; a job closed from the edit form was never
+/// started), and the elapsed segment needs both.
+class DetailsTimeRecordRow extends StatelessWidget {
+  const DetailsTimeRecordRow({
+    required this.startedAt,
+    required this.completedAt,
+    super.key,
+  });
+
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+
+  /// The segments, joined by the same middot the when-line uses.
+  static String label(
+    AppLocalizations l10n,
+    DateTime? started,
+    DateTime? done,
+  ) {
+    final parts = <String>[
+      if (started != null)
+        l10n.calendar_timeRecordStarted(DateUtilsHelper.formatTime(started)),
+      if (done != null)
+        l10n.calendar_timeRecordFinished(DateUtilsHelper.formatTime(done)),
+      if (started != null && done != null && done.isAfter(started))
+        elapsedLabel(l10n, done.difference(started)),
+    ];
+    return parts.join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: AppSpacing.sp4,
+        right: AppSpacing.sp4,
+        top: AppSpacing.sp4,
+      ),
+      child: Text(
+        label(context.l10n, startedAt, completedAt),
+        style: theme.monoType.data.copyWith(color: theme.palette.textTertiary),
+      ),
+    );
+  }
+}
+
+/// "2 h 28 min" / "45 min".
+String elapsedLabel(AppLocalizations l10n, Duration elapsed) {
+  final hours = elapsed.inHours;
+  final minutes = elapsed.inMinutes % 60;
+  return hours > 0
+      ? l10n.calendar_elapsedHoursMinutes(hours, minutes)
+      : l10n.calendar_elapsedMinutes(minutes);
+}
+
+/// "Marc is running late · 9:12 AM" — what an assignee last signalled on the
+/// way to this job, for whoever opens it. Unfilled: it sits inside the
+/// sheet's own surface, where a second amber panel reads as a nested box.
+class DetailsCrewSignalLine extends StatelessWidget {
+  const DetailsCrewSignalLine({required this.appointment, super.key});
+
+  final AppointmentRecord appointment;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final at = appointment.crewStatusAt;
+    final time = at == null ? '' : DateUtilsHelper.formatTime(at);
+    final name =
+        assigneeNameAt(
+          appointment.employeeNames,
+          appointment.employeeIds.indexOf(appointment.crewStatusBy),
+        ) ??
+        l10n.calendar_crewFallbackName;
+    final isLate = appointment.crewStatus == 'runningLate';
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: AppSpacing.sp4,
+        right: AppSpacing.sp4,
+        top: AppSpacing.sp8,
+      ),
+      child: WarningNote(
+        filled: false,
+        icon: isLate ? Icons.schedule_rounded : Icons.directions_car_outlined,
+        message: isLate
+            ? l10n.calendar_crewRunningLateAt(name, time)
+            : l10n.calendar_crewOnMyWayAt(name, time),
       ),
     );
   }
