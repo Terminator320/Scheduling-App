@@ -221,6 +221,43 @@
       }
     }
   },
+  "calendar_showJobsFor": "Show jobs for",
+  "@calendar_showJobsFor": {
+    "description": "Title of the action sheet the calendar's crew-filter button opens, listing every assignable crew member plus 'All crew'."
+  },
+  "calendar_allCrew": "All crew",
+  "@calendar_allCrew": {
+    "description": "The crew-filter sheet's first option, which clears the per-person calendar filter so every job shows again."
+  },
+  "calendar_crewFilter": "Filter by crew member",
+  "@calendar_crewFilter": {
+    "description": "Tooltip and semantics label of the calendar header's crew-filter button (admin only)."
+  },
+  "calendar_showingCrewMember": "Showing {name}",
+  "@calendar_showingCrewMember": {
+    "description": "Banner above the agenda while the calendar is filtered to one crew member's jobs, naming that person.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_clearFilter": "Clear",
+  "@calendar_clearFilter": {
+    "description": "The crew-filter banner's action that removes the per-person calendar filter."
+  },
+  "calendar_agendaDayView": "Day view",
+  "@calendar_agendaDayView": {
+    "description": "Semantics label of the agenda header's icon-only toggle segment that shows one selected day's jobs."
+  },
+  "calendar_agendaWeekView": "Week view",
+  "@calendar_agendaWeekView": {
+    "description": "Semantics label of the agenda header's icon-only toggle segment that shows the whole selected week, day by day."
+  },
+  "calendar_noJobsThisDay": "No jobs",
+  "@calendar_noJobsThisDay": {
+    "description": "One quiet line under a day bar of the week agenda when that day has nothing booked."
+  },
   "calendar_dayOfCount": "Day {index} of {count}",
   "@calendar_dayOfCount": {
     "description": "The position of one day within a multi-day job, shown on the appointment card after the time range.",
@@ -1210,6 +1247,10 @@
   "clients_noAppointmentsMatchFilters": "No appointments match your filters",
   "@clients_noAppointmentsMatchFilters": {
     "description": "Empty state shown when the active history filters exclude every appointment"
+  },
+  "clients_noHistoryYetForYou": "Your finished and cancelled jobs will appear here.",
+  "@clients_noHistoryYetForYou": {
+    "description": "Empty-state body on History when a technician has no closed jobs of their own yet"
   },
   "clients_clearFilters": "Clear filters",
   "@clients_clearFilters": {
@@ -3658,5 +3699,122 @@
   "calendar_holidayTagObservance": "Observance",
   "@calendar_holidayTagObservance": {
     "description": "Mono all-caps tag on a Greek Orthodox row in the day agenda, which is not a statutory holiday."
+  },
+  "calendar_startJob": "Start job",
+  "@calendar_startJob": {
+    "description": "Action bar button on an open, not-yet-started job: moves it to in progress and stamps its start time."
+  },
+  "calendar_jobStarted": "Job started",
+  "@calendar_jobStarted": {
+    "description": "Success notice after Start job."
+  },
+  "calendar_timeRecordStarted": "Started {time}",
+  "@calendar_timeRecordStarted": {
+    "description": "First segment of the mono time-record line under the detail header.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_timeRecordFinished": "Finished {time}",
+  "@calendar_timeRecordFinished": {
+    "description": "Second segment of the mono time-record line under the detail header.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_elapsedHoursMinutes": "{hours} h {minutes} min",
+  "@calendar_elapsedHoursMinutes": {
+    "description": "Elapsed time between a job's start and finish, when it ran an hour or more.",
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      },
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_elapsedMinutes": "{minutes} min",
+  "@calendar_elapsedMinutes": {
+    "description": "Elapsed time between a job's start and finish, when it ran under an hour.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_onMyWay": "On my way",
+  "@calendar_onMyWay": {
+    "description": "Crew status chip an assignee taps to tell the office they are driving to the job."
+  },
+  "calendar_runningLate": "Running late",
+  "@calendar_runningLate": {
+    "description": "Crew status chip an assignee taps to tell the office they will arrive late."
+  },
+  "calendar_crewStatusSent": "Status sent to the office",
+  "@calendar_crewStatusSent": {
+    "description": "Success notice after an assignee sends On my way / Running late."
+  },
+  "calendar_crewOnMyWayAt": "{name} is on the way · {time}",
+  "@calendar_crewOnMyWayAt": {
+    "description": "Line under the detail header while an assignee has signalled On my way.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_crewRunningLateAt": "{name} is running late · {time}",
+  "@calendar_crewRunningLateAt": {
+    "description": "Line under the detail header while an assignee has signalled Running late.",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "calendar_crewFallbackName": "Crew",
+  "@calendar_crewFallbackName": {
+    "description": "Stands in for the assignee's name on the crew status line when the record carries none."
+  },
+  "calendar_pushBack": "Push back",
+  "@calendar_pushBack": {
+    "description": "Admin quick action on an open job's detail sheet: shifts the job later by a few minutes."
+  },
+  "calendar_pushBackTitle": "Push back by",
+  "@calendar_pushBackTitle": {
+    "description": "Title of the action sheet listing the push-back offsets."
+  },
+  "calendar_pushBackBy": "+{minutes} min",
+  "@calendar_pushBackBy": {
+    "description": "One push-back option, e.g. '+30 min'.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "calendar_pushedBack": "Pushed back by {minutes} min",
+  "@calendar_pushedBack": {
+    "description": "Success notice after a push-back saved.",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "error_introUpdateCrewStatus": "Couldn't send your status",
+  "@error_introUpdateCrewStatus": {
+    "description": "Intro of the failure notice when an assignee's On my way / Running late write fails."
   }
 }

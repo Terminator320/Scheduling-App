@@ -128,6 +128,16 @@ final List<_WriteCase> _writeCases = [
     why: 'a crew note changes no field the history matcher reads',
   ),
   (
+    method: 'updateCrewStatus',
+    run: (r) => r.updateCrewStatus(
+      id: 'a1',
+      status: 'onMyWay',
+      byEmployeeId: 'e1',
+    ),
+    keepsA1: true,
+    why: 'a crew signal changes no field the history matcher reads',
+  ),
+  (
     method: 'updateAppointmentStatus',
     run: (r) => r.updateAppointmentStatus(id: 'a1', status: 'done'),
     keepsA1: true,

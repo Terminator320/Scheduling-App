@@ -12,13 +12,17 @@ typedef DrawerGroup = ({
 
 /// Grouped drawer rows for a role, grouped by WHEN you would reach for
 /// them, not by object type. Employees get TODAY + ACCOUNT only.
+///
+/// History sits under BUSINESS for an admin and under TODAY for a technician:
+/// it is the one search a technician has — their own finished and cancelled
+/// jobs — and there is no BUSINESS group to put it in for them.
 List<DrawerGroup> drawerGroups({required bool isAdmin}) => [
   (
     title: (l10n) => l10n.nav_groupToday,
     rows: [
       HubTab.calendar,
       PushedDestination.dayRoute,
-      if (isAdmin) HubTab.liveMap,
+      if (isAdmin) HubTab.liveMap else PushedDestination.history,
     ],
   ),
   if (isAdmin)

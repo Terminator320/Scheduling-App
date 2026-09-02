@@ -17,20 +17,32 @@ class HistoryPager {
 
   final AppointmentsRepository _repo;
 
+  /// [employeeId] scopes the page to one assignee's jobs; null is the
+  /// business-wide archive.
   Future<List<AppointmentRecord>> fetchPage({
     required int limit,
     AppointmentRecord? after,
+    String? employeeId,
   }) {
-    return _repo.fetchHistoryPage(after: after, limit: limit);
+    return _repo.fetchHistoryPage(
+      after: after,
+      limit: limit,
+      employeeId: employeeId,
+    );
   }
 }
+
+/// One history search: the words, and whose history. `employeeId` null is the
+/// business-wide archive. A record so two views asking the same question share
+/// one provider instance, and a technician's search never aliases an admin's.
+typedef HistorySearchKey = ({String query, String? employeeId});
 
 /// Database-backed history search across the whole window. It's autoDispose, so each
 /// query instance gets freed once nothing's watching it anymore.
 final historySearchProvider = FutureProvider.autoDispose
-    .family<List<AppointmentRecord>, String>((
+    .family<List<AppointmentRecord>, HistorySearchKey>((
       ref,
-      query,
+      key,
     ) async {
       final repo = ref.watch(appointmentsRepositoryProvider);
       // Resolved HERE, not inside the callback: this is autoDispose, so the
@@ -45,7 +57,7 @@ final historySearchProvider = FutureProvider.autoDispose
             logger.warn('HIST-SEARCH invalidate error', e, st),
       );
       ref.onDispose(sub.cancel);
-      return repo.searchHistory(query);
+      return repo.searchHistory(key.query, employeeId: key.employeeId);
     });
 
 /// Client appointments for the Job history section. AutoDispose, keyed by clientId,

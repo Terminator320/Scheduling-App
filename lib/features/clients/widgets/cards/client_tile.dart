@@ -59,8 +59,7 @@ class ClientTile extends StatelessWidget {
       if (hasType) _TypeChip(type: client.type),
       // Skipped when the type chip beside it already reads "Building" — the
       // two pills carry the same word and would render as a duplicate.
-      if (isShared && client.type != ClientType.building)
-        const _BuildingPill(),
+      if (isShared && client.type != ClientType.building) const _BuildingPill(),
     ];
 
     // Resolved once: `displayName` is an uncached getter that runs `stripPhone`

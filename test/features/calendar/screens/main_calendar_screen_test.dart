@@ -12,9 +12,12 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/calendar/screens/main_calendar_screen.dart';
+import 'package:scheduling/features/calendar/widgets/views/agenda_sliver_list.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_header_block.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_month_pager.dart';
 import 'package:scheduling/features/calendar/widgets/views/calendar_week_strip.dart';
+import 'package:scheduling/features/calendar/widgets/views/crew_filter_button.dart';
+import 'package:scheduling/features/calendar/widgets/views/week_agenda_sliver_list.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -27,6 +30,13 @@ const _jane = EmployeeRecord(
   id: 'e1',
   name: 'Jane Doe',
   email: 'jane@example.com',
+  status: 'active',
+);
+
+const _bob = EmployeeRecord(
+  id: 'e2',
+  name: 'Bob Roy',
+  email: 'bob@example.com',
   status: 'active',
 );
 
@@ -46,12 +56,16 @@ Widget _wrap({
   required EmployeesRepository repo,
   bool isAdmin = true,
   double textScale = 1,
+  Stream<List<EmployeeRecord>>? employees,
 }) {
   return ProviderScope(
     overrides: [
       employeesRepositoryProvider.overrideWithValue(repo),
       currentUserNameProvider.overrideWithValue('Jane'),
       allUsersStreamProvider.overrideWith((_) => allUsers),
+      // The crew-filter sheet lists the assignable roster.
+      if (employees != null)
+        employeesStreamProvider.overrideWith((_) => employees),
       appointmentsInRangeProvider.overrideWith((_, _) => appointments),
       myAppointmentsProvider.overrideWith((_, _) => appointments),
     ],
@@ -312,7 +326,9 @@ void main() {
     // whole of September, which is not a regression this test should report.
     final monthLabel = find.text(DateFormat.MMMM().format(today));
     final shortLabel = find.text(DateFormat.MMM().format(today));
-    await tester.tap(monthLabel.evaluate().isNotEmpty ? monthLabel : shortLabel);
+    await tester.tap(
+      monthLabel.evaluate().isNotEmpty ? monthLabel : shortLabel,
+    );
     await tester.pumpAndSettle();
 
     // Both wheels — every month and the whole year window, as before the
@@ -763,5 +779,158 @@ void main() {
     expect(find.text('Calendar'), findsNothing);
     expect(find.byType(AppHeaderPair), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the crew filter button is offered to an admin only', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(CrewFilterButton), findsOneWidget);
+    expect(find.byTooltip('Filter by crew member'), findsOneWidget);
+
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value(const []),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+        isAdmin: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(CrewFilterButton), findsNothing);
+  });
+
+  testWidgets('filtering to one person hides the rest and clears back', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today).copyWith(
+            employeeIds: const ['e1'],
+            employeeNames: const ['Jane Doe'],
+          ),
+          _appointment(2, today).copyWith(
+            employeeIds: const ['e2'],
+            employeeNames: const ['Bob Roy'],
+          ),
+        ]),
+        allUsers: Stream.value(const [_jane, _bob]),
+        employees: Stream.value(const [_jane, _bob]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Appt 1'), findsOneWidget);
+    expect(find.text('Appt 2'), findsOneWidget);
+    expect(find.text('2 JOBS'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Filter by crew member'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Jane Doe').last);
+    await tester.pumpAndSettle();
+
+    // The banner names the person, the other job is gone from the agenda AND
+    // from the header count — the filter runs before the day index.
+    expect(find.byType(CrewFilterBanner), findsOneWidget);
+    expect(find.text('Showing Jane Doe'), findsOneWidget);
+    expect(find.text('Appt 1'), findsOneWidget);
+    expect(find.text('Appt 2'), findsNothing);
+    expect(find.text('1 JOB'), findsOneWidget);
+
+    await tester.tap(find.text('Clear'));
+    await tester.pumpAndSettle();
+    expect(find.text('Showing Jane Doe'), findsNothing);
+    expect(find.text('Appt 2'), findsOneWidget);
+    expect(find.text('2 JOBS'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('week mode lists every day of the week and a bar tap returns', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    // Sunday-first (en_CA), spelled as the index: the locale table is only
+    // loaded once the app below has pumped, and the jobs are built before it.
+    final week = weekOf(today, weekStart: 0);
+    // Another day of the SAME week, so its job is off the day agenda but on
+    // the week one.
+    final other = week.first.day == today.day ? week.last : week.first;
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([
+          _appointment(1, today),
+          _appointment(2, DateTime(other.year, other.month, other.day, 9)),
+        ]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Appt 2'), findsNothing);
+
+    // Collapse the grid so the agenda viewport can hold the whole week.
+    await tester.drag(find.byTooltip('Hide calendar'), const Offset(0, -60));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Week view'));
+    await tester.pumpAndSettle();
+
+    for (final day in week) {
+      expect(
+        find.byKey(WeekDayBar.keyFor(day)),
+        findsOneWidget,
+        reason: '$day',
+      );
+    }
+    expect(find.text('Appt 1'), findsOneWidget);
+    expect(find.text('Appt 2'), findsOneWidget);
+    expect(find.text('2 JOBS'), findsOneWidget);
+
+    await tester.tap(find.byKey(WeekDayBar.keyFor(other)));
+    await tester.pumpAndSettle();
+
+    // Back in day mode, on the day whose bar was tapped.
+    expect(find.byKey(WeekDayBar.keyFor(today)), findsNothing);
+    expect(find.text(_dayHeader(other)), findsOneWidget);
+    expect(find.text('Appt 2'), findsOneWidget);
+    expect(find.text('Appt 1'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the week toggle does not grow the agenda header at 2x text', (
+    tester,
+  ) async {
+    await withPhoneViewport(tester);
+    Future<double> headerHeight(double scale) async {
+      await tester.pumpWidget(
+        _wrap(
+          appointments: Stream.value(const []),
+          allUsers: Stream.value(const [_jane]),
+          repo: repo,
+          textScale: scale,
+        ),
+      );
+      await tester.pumpAndSettle();
+      return tester.getSize(find.byType(AgendaHeader)).height;
+    }
+
+    // The icon-only toggle is fixed at 32px, under the title line at 1x, so
+    // the row keeps the 60px it had before the toggle (18 + 10 padding plus a
+    // titleLarge line) and the pane's pinned overflow margin is untouched.
+    final atDouble = await headerHeight(2);
+    final atNormal = await headerHeight(1);
+    expect(atDouble, greaterThan(atNormal));
+    expect(atNormal, lessThanOrEqualTo(60));
   });
 }

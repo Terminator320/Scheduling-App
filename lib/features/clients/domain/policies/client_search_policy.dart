@@ -228,8 +228,7 @@ class ClientSearchPolicy {
     required String queryDigits,
   }) {
     if (displayName == queryText || phoneDigits == queryDigits) return 0;
-    if (displayName.startsWith(queryText) ||
-        personName.startsWith(queryText)) {
+    if (displayName.startsWith(queryText) || personName.startsWith(queryText)) {
       return 1;
     }
     if (queryDigits.isNotEmpty && phoneDigits.startsWith(queryDigits)) return 2;

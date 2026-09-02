@@ -46,6 +46,17 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     DateTime? updatedAt,
     // Parent-card photo indicator, owned by server recounts after create.
     @Default(0) int pictureCount,
+    // The job time record. Both are stamped SERVER-SIDE by the appointment
+    // write trigger on the status transition (`lifecycleStamps` in
+    // `functions/notification_policy.js`), never by a client.
+    DateTime? startedAt,
+    DateTime? completedAt,
+    // What an assignee last signalled on the way to the job; one of
+    // `crewStatusRawValues` or empty. Written only through
+    // `updateCrewStatus`, by the person named in [crewStatusBy].
+    @Default('') String crewStatus,
+    DateTime? crewStatusAt,
+    @Default('') String crewStatusBy,
   }) = _AppointmentRecord;
   const AppointmentRecord._();
 
@@ -76,8 +87,16 @@ abstract class AppointmentRecord with _$AppointmentRecord {
       createdAt: firestoreDateTime(data['createdAt']),
       updatedAt: firestoreDateTime(data['updatedAt']),
       pictureCount: _parseCount(data['pictureCount']),
+      startedAt: firestoreDateTime(data['startedAt']),
+      completedAt: firestoreDateTime(data['completedAt']),
+      crewStatus: (data['crewStatus'] ?? '').toString(),
+      crewStatusAt: firestoreDateTime(data['crewStatusAt']),
+      crewStatusBy: (data['crewStatusBy'] ?? '').toString(),
     );
   }
+
+  /// Whether an assignee has signalled on the way to this job.
+  bool get hasCrewSignal => crewStatus.isNotEmpty;
 
   /// Whether this job should show the card photo indicator.
   bool get hasPictures => pictureCount > 0;
@@ -121,6 +140,13 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     // it. Same asymmetry as `appointmentSpanNotWidened`.
     if (hasRunLabels) 'dayIndex': dayIndex,
     if (hasRunLabels) 'dayCount': dayCount,
+    // `startedAt`, `completedAt` and the three `crewStatus*` fields are
+    // deliberately NOT here. Every client path that re-serializes a record
+    // writes through `.update()` / `txn.update()`, which MERGES, so the stored
+    // values survive an admin edit untouched — while `addAppointments` and
+    // `rewriteSeries` copies are NEW documents that must not inherit another
+    // job's time record or crew signal. The stamps have one server-side owner
+    // and the signal has one write path (`updateCrewStatus`).
   };
 
   /// Whether the stored run pair is coherent enough to write back.
@@ -203,6 +229,18 @@ class AppointmentDateRange {
       start: day.start.isBefore(month.start) ? day.start : month.start,
       end: day.end.isAfter(month.end) ? day.end : month.end,
     );
+  }
+
+  /// The smallest range covering both this one and [other].
+  ///
+  /// Value-equal to `this` whenever [other] already sits inside it, so a
+  /// consumer that unions a sub-range onto the calendar's window keeps the
+  /// same listener key in the common case.
+  AppointmentDateRange union(AppointmentDateRange other) {
+    final newStart = other.start.isBefore(start) ? other.start : start;
+    final newEnd = other.end.isAfter(end) ? other.end : end;
+    if (newStart == start && newEnd == end) return this;
+    return AppointmentDateRange(start: newStart, end: newEnd);
   }
 
   /// Query start widened for long appointments that overlap this range.

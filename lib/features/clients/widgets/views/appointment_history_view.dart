@@ -6,7 +6,6 @@ import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/current_day_provider.dart';
-import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/history_search_policy.dart';
@@ -15,6 +14,7 @@ import 'package:scheduling/features/clients/domain/history_grouping.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/clients/widgets/lists/history_sliver_list.dart';
 import 'package:scheduling/features/clients/widgets/sections/history_filter_bar.dart';
+import 'package:scheduling/features/clients/widgets/views/debounced_paged_search.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
@@ -36,6 +36,7 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
     required this.searchQuery,
     super.key,
     this.isAdmin = false,
+    this.scopeEmployeeId,
     this.filterTourWrap,
     this.firstRowTourWrap,
     this.onFirstPageSettled,
@@ -45,6 +46,11 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
 
   /// Caller role gate passed to appointment details.
   final bool isAdmin;
+
+  /// Whose history this is. Null lists the business-wide archive, which only
+  /// an admin may read; a technician passes their own doc id and both the
+  /// paged list and the search scan narrow to jobs they were assigned to.
+  final String? scopeEmployeeId;
 
   /// Optional feature-tour wrapper for the filter bar.
   final Widget Function(Widget child)? filterTourWrap;
@@ -60,21 +66,25 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
       _AppointmentHistoryViewState();
 }
 
-class _AppointmentHistoryViewState
-    extends ConsumerState<AppointmentHistoryView> {
+class _AppointmentHistoryViewState extends ConsumerState<AppointmentHistoryView>
+    with DebouncedPagedSearch<AppointmentHistoryView> {
   static const int _pageSize = 25;
 
   /// Remaining-row threshold before fetching the next page.
   static const int _prefetchThreshold = 3;
 
-  // Debounced server search mirrors the clients list.
-  late final Debouncer _searchDebounce;
+  @override
+  String searchQueryOf(AppointmentHistoryView widget) => widget.searchQuery;
+
+  @override
+  VoidCallback? get onFirstPageSettled => widget.onFirstPageSettled;
+
+  @override
+  String get searchDebounceTag => 'HIST-SEARCH debounced search failed';
 
   int? _year;
   String? _employeeId;
   HistoryStatusFilter? _status;
-
-  String _committedQuery = '';
 
   // Recompute filter/search indexes only when pages change.
   List<List<AppointmentRecord>>? _filterOptionsPages;
@@ -113,11 +123,6 @@ class _AppointmentHistoryViewState
   @override
   void initState() {
     super.initState();
-    _searchDebounce = Debouncer.tagged(
-      kSearchDebounce,
-      logger: ref.read(loggerProvider),
-      tag: 'HIST-SEARCH debounced search failed',
-    );
     // Load the first page after the widget mounts.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _pagingController.fetchNextPage();
@@ -134,49 +139,21 @@ class _AppointmentHistoryViewState
           : items.last;
       return await ref
           .read(historyPagerProvider)
-          .fetchPage(after: after, limit: _pageSize);
+          .fetchPage(
+            after: after,
+            limit: _pageSize,
+            employeeId: widget.scopeEmployeeId,
+          );
     } catch (e, st) {
       logger.warn('HIST-LOAD history page fetch error', e, st);
       rethrow;
     } finally {
-      if (pageKey == 1) _notifyFirstPageSettled();
+      if (pageKey == 1) notifyFirstPageSettled();
     }
-  }
-
-  /// Notifies after tour targets have laid out.
-  void _notifyFirstPageSettled() {
-    final notify = widget.onFirstPageSettled;
-    if (notify == null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) notify();
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant AppointmentHistoryView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.searchQuery.trim() == oldWidget.searchQuery.trim()) return;
-    _scheduleSearch();
-  }
-
-  // Clearing the query commits immediately.
-  void _scheduleSearch() {
-    final next = widget.searchQuery.trim();
-    if (next.isEmpty) {
-      _searchDebounce.cancel();
-      if (_committedQuery.isNotEmpty) setState(() => _committedQuery = '');
-      return;
-    }
-    _searchDebounce.run(() {
-      if (mounted && next != _committedQuery) {
-        setState(() => _committedQuery = next);
-      }
-    });
   }
 
   @override
   void dispose() {
-    _searchDebounce.dispose();
     _pagingController.dispose();
     super.dispose();
   }
@@ -252,8 +229,6 @@ class _AppointmentHistoryViewState
           row.appointment,
     ];
   }
-
-
 
   /// Filter row for the loaded history.
   Widget _filterBar(List<int> years, List<HistoryEmployeeOption> employees) {
@@ -347,7 +322,10 @@ class _AppointmentHistoryViewState
         _ => AppEmptyState(
           icon: Icons.history_outlined,
           title: context.l10n.common_noAppointmentsFound,
-          body: context.l10n.common_tapToScheduleAnAppointment,
+          // A technician has no "+" to tap.
+          body: widget.scopeEmployeeId == null
+              ? context.l10n.common_tapToScheduleAnAppointment
+              : context.l10n.clients_noHistoryYetForYou,
         ),
       };
     }
@@ -444,12 +422,12 @@ class _AppointmentHistoryViewState
       return local.isEmpty ? onEmpty() : list(local, inSearch: true);
     }
 
-    if (_committedQuery != query) {
+    if (committedQuery != query) {
       return localOr(_skeleton);
     }
 
     return ref
-        .watch(historySearchProvider(query))
+        .watch(historySearchProvider(_searchKey(query)))
         .when(
           data: (results) => list(
             // Provider identity holds until it refetches.
@@ -465,10 +443,13 @@ class _AppointmentHistoryViewState
         );
   }
 
+  HistorySearchKey _searchKey(String query) =>
+      (query: query, employeeId: widget.scopeEmployeeId);
+
   // Retry invalidates the watched search provider.
   Widget _searchError(Object error, String query) => _errorState(
     error,
-    onRetry: () => ref.invalidate(historySearchProvider(query)),
+    onRetry: () => ref.invalidate(historySearchProvider(_searchKey(query))),
   );
 
   Widget _errorState(Object error, {required VoidCallback onRetry}) =>

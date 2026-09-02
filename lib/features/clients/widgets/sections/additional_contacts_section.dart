@@ -195,7 +195,12 @@ class _AdditionalContactCard extends StatelessWidget {
     );
 
     if (!context.isCompact) {
-      return Row(children: [Expanded(child: title), removeButton]);
+      return Row(
+        children: [
+          Expanded(child: title),
+          removeButton,
+        ],
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

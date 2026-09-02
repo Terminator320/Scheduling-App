@@ -10,6 +10,8 @@ import 'package:scheduling/features/clients/application/appointment_history_prov
 
 class _MockAppointmentsRepo extends Mock implements AppointmentsRepository {}
 
+const HistorySearchKey _leak = (query: 'leak', employeeId: null);
+
 void main() {
   late _MockAppointmentsRepo repo;
   late StreamController<void> localWrites;
@@ -32,21 +34,21 @@ void main() {
 
   test('a local appointment write invalidates the committed search results '
       '(a just-deleted visit must not stay listed)', () async {
-    container.listen(historySearchProvider('leak'), (_, _) {});
-    await container.read(historySearchProvider('leak').future);
+    container.listen(historySearchProvider(_leak), (_, _) {});
+    await container.read(historySearchProvider(_leak).future);
     verify(() => repo.searchHistory('leak')).called(1);
 
     localWrites.add(null);
     // Let the stream event deliver and the invalidation land.
     await Future<void>.delayed(Duration.zero);
-    await container.read(historySearchProvider('leak').future);
+    await container.read(historySearchProvider(_leak).future);
 
     verify(() => repo.searchHistory('leak')).called(1);
   });
 
   test('disposing the provider cancels its local-write subscription', () async {
-    final sub = container.listen(historySearchProvider('leak'), (_, _) {});
-    await container.read(historySearchProvider('leak').future);
+    final sub = container.listen(historySearchProvider(_leak), (_, _) {});
+    await container.read(historySearchProvider(_leak).future);
     expect(localWrites.hasListener, isTrue);
 
     sub.close();

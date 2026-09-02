@@ -77,6 +77,19 @@ abstract class AppointmentsRepository {
   /// record here would be refused as an opaque `permission-denied`.
   Future<void> updateFieldNotes({required String id, required String notes});
 
+  /// Records what an assignee signalled on the way to the job — one of
+  /// `crewStatusRawValues`, stamped with who sent it.
+  ///
+  /// Its own method for the same reason [updateFieldNotes] is: the rules
+  /// branch behind it is `hasOnly(['crewStatus', 'crewStatusAt',
+  /// 'crewStatusBy', 'updatedAt'])`, so the write must carry exactly those
+  /// keys — no `seriesOpId`, no re-serialized record.
+  Future<void> updateCrewStatus({
+    required String id,
+    required String status,
+    required String byEmployeeId,
+  });
+
   Future<void> updateAppointmentStatus({
     required String id,
     required String status,
@@ -109,13 +122,24 @@ abstract class AppointmentsRepository {
 
   /// One newest-first page of terminal appointments. Pass [after] as the
   /// cursor to continue from, or null to start from the beginning.
+  ///
+  /// [employeeId] narrows the page to that assignee's own jobs — a
+  /// technician's History. Null is the business-wide archive, which only an
+  /// admin may list.
   Future<List<AppointmentRecord>> fetchHistoryPage({
     required int limit,
     AppointmentRecord? after,
+    String? employeeId,
   });
 
   /// Search terminal appointments by client/employee name or phone, newest-first.
-  Future<List<AppointmentRecord>> searchHistory(String query);
+  ///
+  /// [employeeId] scopes the scan to that assignee's jobs, like
+  /// [fetchHistoryPage]; the two must agree on what one person's history is.
+  Future<List<AppointmentRecord>> searchHistory(
+    String query, {
+    String? employeeId,
+  });
 
   /// This client's appointments in any status, newest-first.
   ///

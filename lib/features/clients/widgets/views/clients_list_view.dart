@@ -7,8 +7,6 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/core/utils/debouncer.dart';
-import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
@@ -17,9 +15,10 @@ import 'package:scheduling/features/clients/domain/policies/client_building.dart
 import 'package:scheduling/features/clients/domain/policies/client_delete_policy.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
-import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
+import 'package:scheduling/features/clients/widgets/sheets/add_client_flow.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_actions_host.dart';
+import 'package:scheduling/features/clients/widgets/views/debounced_paged_search.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
@@ -63,12 +62,19 @@ class ClientsListView extends ConsumerStatefulWidget {
 }
 
 class _ClientsListViewState extends ConsumerState<ClientsListView>
-    with ClientActionsHost<ClientsListView> {
+    with
+        ClientActionsHost<ClientsListView>,
+        DebouncedPagedSearch<ClientsListView> {
   static const int _pageSize = 50;
-  // Debounce before the server search, so we don't fire a read on every keystroke —
-  // the local filter covers the gap in the meantime so it still feels immediate.
-  late final Debouncer _searchDebounce;
-  String _committedQuery = '';
+
+  @override
+  String searchQueryOf(ClientsListView widget) => widget.searchQuery;
+
+  @override
+  VoidCallback? get onFirstPageSettled => widget.onFirstPageSettled;
+
+  @override
+  String get searchDebounceTag => 'CLI-SEARCH debounced search failed';
 
   late final PagingController<int, ClientRecord> _pagingController =
       PagingController<int, ClientRecord>(
@@ -81,16 +87,6 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
         },
         fetchPage: _fetchPage,
       );
-
-  @override
-  void initState() {
-    super.initState();
-    _searchDebounce = Debouncer.tagged(
-      kSearchDebounce,
-      logger: ref.read(loggerProvider),
-      tag: 'CLI-SEARCH debounced search failed',
-    );
-  }
 
   Future<List<ClientRecord>> _fetchPage(int pageKey) async {
     // Read before the await — switching tabs mid-fetch unmounts this consumer,
@@ -108,56 +104,14 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
       logger.warn('CLI-LIST clients page fetch error', e, st);
       rethrow;
     } finally {
-      if (pageKey == 1) _notifyFirstPageSettled();
+      if (pageKey == 1) notifyFirstPageSettled();
     }
-  }
-
-  /// Post-frame, so the row the tour targets has actually been laid out by the
-  /// time the host asks showcase whether it is rendered.
-  void _notifyFirstPageSettled() {
-    final notify = widget.onFirstPageSettled;
-    if (notify == null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) notify();
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant ClientsListView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.searchQuery.trim() == oldWidget.searchQuery.trim()) return;
-    _scheduleSearch();
-  }
-
-  // The debounce restarts on every query change, but clearing the query commits
-  // instantly, so returning to the paged list has zero lag.
-  void _scheduleSearch() {
-    final next = widget.searchQuery.trim();
-    if (next.isEmpty) {
-      _searchDebounce.cancel();
-      if (_committedQuery.isNotEmpty) setState(() => _committedQuery = '');
-      return;
-    }
-    _searchDebounce.run(() {
-      if (mounted && next != _committedQuery) {
-        setState(() => _committedQuery = next);
-      }
-    });
   }
 
   @override
   void dispose() {
-    _searchDebounce.dispose();
     _pagingController.dispose();
     super.dispose();
-  }
-
-  Future<void> _onAddClient() async {
-    final result = await showAddClientSheet(context);
-    if (result == null || result.next != AddClientNext.bookJob) return;
-    if (!mounted) return;
-    // Sequential, never stacked — the add-client sheet has already popped.
-    await showAddEventPopup(context, initialClient: result.client);
   }
 
   Future<void> _openClient(ClientRecord client) async {
@@ -253,7 +207,9 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
       actionLabel: query.isEmpty && widget.isAdmin
           ? context.l10n.clients_addClient
           : null,
-      onAction: query.isEmpty && widget.isAdmin ? _onAddClient : null,
+      onAction: query.isEmpty && widget.isAdmin
+          ? () => runAddClientFlow(context)
+          : null,
     );
   }
 
@@ -326,7 +282,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
   Widget _buildSearchResults(String query) {
     final local = _localFilter(query);
 
-    if (_committedQuery != query) {
+    if (committedQuery != query) {
       // Still typing — show instant local results (skeleton if none yet).
       return local.isEmpty ? _fittedSkeleton() : _resultsList(local);
     }

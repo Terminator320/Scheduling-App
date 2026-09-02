@@ -12,6 +12,7 @@ void main() {
 
   test('an employee sees only TODAY and ACCOUNT', () {
     final groups = drawerGroups(isAdmin: false);
+    expect(groups, hasLength(2));
     final rows = groups.expand((g) => g.rows).toList();
     expect(rows, contains(HubTab.calendar));
     expect(rows, contains(PushedDestination.dayRoute));
@@ -20,7 +21,13 @@ void main() {
     expect(rows, isNot(contains(HubTab.employees)));
     expect(rows, isNot(contains(HubTab.liveMap)));
     expect(rows, isNot(contains(PushedDestination.dashboard)));
-    expect(rows, isNot(contains(PushedDestination.history)));
+  });
+
+  test('an employee reaches History from the TODAY group', () {
+    // Their one search: the finished and cancelled jobs they were on. Under
+    // TODAY because a technician has no BUSINESS group.
+    final today = drawerGroups(isAdmin: false).first.rows;
+    expect(today, contains(PushedDestination.history));
   });
 
   test('no destination appears in more than one group', () {

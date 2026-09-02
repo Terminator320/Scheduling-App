@@ -215,7 +215,10 @@ void main() {
   testWidgets('a seeded name and number lands the name in the halves', (
     tester,
   ) async {
-    final repo = await pumpSheet(tester, initialName: 'Marc Tremblay 5145551234');
+    final repo = await pumpSheet(
+      tester,
+      initialName: 'Marc Tremblay 5145551234',
+    );
 
     await tester.tap(find.byType(SwitchListTile));
     await tester.pumpAndSettle();
@@ -254,72 +257,77 @@ void main() {
   // number, the halves carry the real name, `phone` stays formatted. Every
   // realistic way a new client is entered has to land on the same triple —
   // typed, pasted, or seeded by the inline booking flow, bracketed or not.
-  group('a new PERSON always stores name=bare, halves=name, phone=formatted', () {
-    Future<void> expectStoredShape(
-      _FakeClientsRepository repo,
-      WidgetTester tester,
-    ) async {
-      await tester.tap(find.byType(SwitchListTile));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Add'));
-      await tester.pumpAndSettle();
+  group(
+    'a new PERSON always stores name=bare, halves=name, phone=formatted',
+    () {
+      Future<void> expectStoredShape(
+        _FakeClientsRepository repo,
+        WidgetTester tester,
+      ) async {
+        await tester.tap(find.byType(SwitchListTile));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Add'));
+        await tester.pumpAndSettle();
 
-      expect(repo.added, isNotNull);
-      expect(repo.added!.name, '5145551234');
-      expect(repo.added!.firstName, 'Marc');
-      expect(repo.added!.lastName, 'Tremblay');
-      expect(repo.added!.phone, '(514) 555-1234');
-    }
+        expect(repo.added, isNotNull);
+        expect(repo.added!.name, '5145551234');
+        expect(repo.added!.firstName, 'Marc');
+        expect(repo.added!.lastName, 'Tremblay');
+        expect(repo.added!.phone, '(514) 555-1234');
+      }
 
-    testWidgets('name typed, number typed into Phone', (tester) async {
-      final repo = await pumpSheet(tester);
-      await tester.enterText(find.byType(TextField).first, 'Marc Tremblay');
-      await tester.enterText(_fieldLabelled('Phone'), '5145551234');
-      await expectStoredShape(repo, tester);
-    });
+      testWidgets('name typed, number typed into Phone', (tester) async {
+        final repo = await pumpSheet(tester);
+        await tester.enterText(find.byType(TextField).first, 'Marc Tremblay');
+        await tester.enterText(_fieldLabelled('Phone'), '5145551234');
+        await expectStoredShape(repo, tester);
+      });
 
-    testWidgets('name and bare number pasted together', (tester) async {
-      final repo = await pumpSheet(tester);
-      await tester.enterText(
-        find.byType(TextField).first,
-        'Marc Tremblay 5145551234',
-      );
-      await expectStoredShape(repo, tester);
-    });
+      testWidgets('name and bare number pasted together', (tester) async {
+        final repo = await pumpSheet(tester);
+        await tester.enterText(
+          find.byType(TextField).first,
+          'Marc Tremblay 5145551234',
+        );
+        await expectStoredShape(repo, tester);
+      });
 
-    testWidgets('name and BRACKETED number pasted together', (tester) async {
-      final repo = await pumpSheet(tester);
-      await tester.enterText(
-        find.byType(TextField).first,
-        'Marc Tremblay (514) 555-1234',
-      );
-      await expectStoredShape(repo, tester);
-    });
+      testWidgets('name and BRACKETED number pasted together', (tester) async {
+        final repo = await pumpSheet(tester);
+        await tester.enterText(
+          find.byType(TextField).first,
+          'Marc Tremblay (514) 555-1234',
+        );
+        await expectStoredShape(repo, tester);
+      });
 
-    testWidgets('bare number seeded, halves typed', (tester) async {
-      final repo = await pumpSheet(tester, initialName: '5145551234');
-      await tester.enterText(_fieldLabelled('First name'), 'Marc');
-      await tester.enterText(_fieldLabelled('Last name'), 'Tremblay');
-      await expectStoredShape(repo, tester);
-    });
+      testWidgets('bare number seeded, halves typed', (tester) async {
+        final repo = await pumpSheet(tester, initialName: '5145551234');
+        await tester.enterText(_fieldLabelled('First name'), 'Marc');
+        await tester.enterText(_fieldLabelled('Last name'), 'Tremblay');
+        await expectStoredShape(repo, tester);
+      });
 
-    // The brackets must not survive into the stored name — `composeStored`
-    // reduces it through `bareNumber` even though the FIELD keeps the shape
-    // that was pasted.
-    testWidgets('BRACKETED number seeded, halves typed', (tester) async {
-      final repo = await pumpSheet(tester, initialName: '(514) 555-1234');
-      await tester.enterText(_fieldLabelled('First name'), 'Marc');
-      await tester.enterText(_fieldLabelled('Last name'), 'Tremblay');
-      await expectStoredShape(repo, tester);
-    });
+      // The brackets must not survive into the stored name — `composeStored`
+      // reduces it through `bareNumber` even though the FIELD keeps the shape
+      // that was pasted.
+      testWidgets('BRACKETED number seeded, halves typed', (tester) async {
+        final repo = await pumpSheet(tester, initialName: '(514) 555-1234');
+        await tester.enterText(_fieldLabelled('First name'), 'Marc');
+        await tester.enterText(_fieldLabelled('Last name'), 'Tremblay');
+        await expectStoredShape(repo, tester);
+      });
 
-    testWidgets('bracketed number typed into Phone, name typed', (tester) async {
-      final repo = await pumpSheet(tester);
-      await tester.enterText(find.byType(TextField).first, 'Marc Tremblay');
-      await tester.enterText(_fieldLabelled('Phone'), '(514) 555-1234');
-      await expectStoredShape(repo, tester);
-    });
-  });
+      testWidgets('bracketed number typed into Phone, name typed', (
+        tester,
+      ) async {
+        final repo = await pumpSheet(tester);
+        await tester.enterText(find.byType(TextField).first, 'Marc Tremblay');
+        await tester.enterText(_fieldLabelled('Phone'), '(514) 555-1234');
+        await expectStoredShape(repo, tester);
+      });
+    },
+  );
 
   testWidgets('a COMMERCIAL client keeps its typed name', (tester) async {
     // The type has to reach `composeStored`, or a real company is booked into

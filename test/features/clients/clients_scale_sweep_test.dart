@@ -24,7 +24,6 @@ import 'package:scheduling/features/clients/widgets/views/client_detail_view.dar
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-
 import '../../support/tour_test_support.dart';
 
 class _MockClientsRepo extends Mock implements ClientsRepository {}

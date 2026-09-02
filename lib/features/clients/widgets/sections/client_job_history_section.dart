@@ -76,8 +76,7 @@ class ClientJobHistorySection extends ConsumerWidget {
               intro: context.l10n.error_introLoadHistory,
               error: e,
             ),
-            onRetry: () =>
-                ref.invalidate(clientJobHistoryProvider(clientId)),
+            onRetry: () => ref.invalidate(clientJobHistoryProvider(clientId)),
           ),
         ),
       ],

@@ -32,6 +32,7 @@ const {
   buildNotificationMessage,
   buildDigestMessage,
   buildJobCompletedMessage,
+  buildCrewStatusMessage,
 } = require("./notification_messages");
 
 const {
@@ -55,6 +56,9 @@ const {
   isStaleTokenError,
   isAlreadyExists,
   isCrewCompletion,
+  lifecycleStamps,
+  crewStatusSignal,
+  CREW_STATUS_VALUES,
   recordOf: _record,
   contextFor: _contextFor,
 } = require("./notification_policy");
@@ -377,6 +381,11 @@ async function handleAppointmentWrite(id, before, after, deps) {
   // transition it exists for. Best-effort and never throws, like every other
   // notice here.
   await notifyAdminsOfCompletion(id, before, after, deps);
+  // The job time record and the crew signal, same posture and same position
+  // as the completion notice: best-effort, never throwing, and above the
+  // events early-return because neither produces a crew-facing event.
+  await stampLifecycle(id, before, after, deps);
+  await notifyAdminsOfCrewStatus(id, before, after, deps);
   const events = diffAppointmentForNotifications(before, after, now, id);
   if (events.length === 0) return {events: 0, sent: 0};
   let sent = 0;
@@ -906,6 +915,88 @@ async function notifyAdminsOfCompletion(id, before, after, deps) {
 const ADMIN_FANOUT_MAX = 100;
 
 /**
+ * Applies the `startedAt`/`completedAt` stamps `lifecycleStamps` decides
+ * for this write — the ONE owner of the job time record.
+ *
+ * Admin SDK, so the rules' client-side refusal of these fields is not in
+ * play. Best-effort: the status change is already committed and the trigger
+ * must not retry the whole write handler over a missed stamp. The write
+ * re-fires this trigger; the policy stamps on the transition only, so that
+ * re-fire decides nothing (pinned in notification_lifecycle.test.js).
+ *
+ * @param {string} id appointment doc id.
+ * @param {?Object} before
+ * @param {?Object} after
+ * @param {!Object} deps `{db, logger, now}`.
+ * @return {!Promise<void>}
+ */
+async function stampLifecycle(id, before, after, deps) {
+  const stamps = lifecycleStamps(before, after, deps.now || new Date());
+  if (Object.keys(stamps).length === 0) return;
+  try {
+    await deps.db.collection("appointments").doc(String(id)).update(stamps);
+  } catch (e) {
+    if (deps.logger) {
+      deps.logger.warn("stampLifecycle failed",
+          {appointmentId: String(id), err: String(e)});
+    }
+  }
+}
+
+/**
+ * Pushes "Marc is on the way to Leak fix" / "Marc is running late for Leak
+ * fix" to every active admin who is not on the job — the same fan-out, the
+ * same exclusion and the same best-effort contract as
+ * [notifyAdminsOfCompletion], for the other signal a dispatcher wants
+ * pushed rather than pulled.
+ *
+ * `who` is the SENDER, resolved by position from `crewStatusBy` against the
+ * denormalized name list, so a two-person crew names the one who tapped.
+ *
+ * @param {string} id appointment doc id.
+ * @param {?Object} before
+ * @param {?Object} after
+ * @param {!Object} deps `{db, messaging, logger}`.
+ * @return {!Promise<void>}
+ */
+async function notifyAdminsOfCrewStatus(id, before, after, deps) {
+  const signal = crewStatusSignal(before, after);
+  if (!signal) return;
+  try {
+    const ids = toIdList(after.employeeIds);
+    const assignees = new Set(ids);
+    const what = String(after.clientName || after.title || "").trim();
+    const names = Array.isArray(after.employeeNames) ? after.employeeNames : [];
+    const at = ids.indexOf(String(after.crewStatusBy || ""));
+    const who = String(at >= 0 ? names[at] || "" : "").trim();
+    const kind = signal === "runningLate" ? "crewRunningLate" : "crewOnMyWay";
+
+    const snap = await deps.db.collection("users")
+        .where("role", "==", "admin")
+        .where("status", "==", "active")
+        .limit(ADMIN_FANOUT_MAX)
+        .get();
+    const cache = new Map(snap.docs.map(
+        (doc) => [doc.id, {user: doc.data() || {}, tokenDocs: null}]));
+    await Promise.all(snap.docs
+        .filter((doc) => !assignees.has(doc.id))
+        .map((doc) => sendToEmployee(
+            deps,
+            doc.id,
+            {kind, appointmentId: String(id)},
+            (locale) => buildCrewStatusMessage(signal, who, what, locale),
+            ADMIN_RECIPIENT_ROLES,
+            cache,
+        ).catch(() => {})));
+  } catch (e) {
+    if (deps.logger) {
+      deps.logger.warn("notifyAdminsOfCrewStatus failed",
+          {appointmentId: String(id), err: String(e)});
+    }
+  }
+}
+
+/**
  * Pushes one localized message to every ACTIVE ADMIN.
  *
  * Shared fan-out: the self-service email change needs it, and P6's time-off
@@ -1006,6 +1097,11 @@ module.exports = {
   sendToEmployee,
   sendToActiveAdmins,
   notifyAdminsOfCompletion,
+  stampLifecycle,
+  notifyAdminsOfCrewStatus,
+  lifecycleStamps,
+  crewStatusSignal,
+  CREW_STATUS_VALUES,
   deliverRecipientOnce: _deliverRecipientOnce,
   handleAppointmentWrite,
   runDailyDigest,

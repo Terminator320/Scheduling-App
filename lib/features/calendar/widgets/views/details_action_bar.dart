@@ -19,6 +19,8 @@ class DetailsActionBar extends StatelessWidget {
     super.key,
     this.showCancel = true,
     this.onEdit,
+    this.onStart,
+    this.isInProgress = false,
   });
 
   final bool isDone;
@@ -27,6 +29,15 @@ class DetailsActionBar extends StatelessWidget {
   final bool showCancel;
   final VoidCallback onMarkDone;
   final VoidCallback onCancel;
+
+  /// "Start job" — offered on an open job that is not yet under way. Null on
+  /// a surface that may not start it (a read-only view, a personal block).
+  final VoidCallback? onStart;
+
+  /// The STORED status is already `in_progress`, so there is nothing to
+  /// start. Display-derived in-progress (the clock passed the start time) does
+  /// not count: the crew may still want the record to say when they arrived.
+  final bool isInProgress;
 
   /// Edit action for a job that is already done. Null on a read-only surface,
   /// which falls back to the inert "Complete" indicator.
@@ -39,6 +50,10 @@ class DetailsActionBar extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: AppSpacing.sp24),
+        if (onStart != null && !isDone && !isCancelled && !isInProgress) ...[
+          _startButton(context, compact),
+          const SizedBox(height: AppSpacing.sp8),
+        ],
         if (!isDone && !isCancelled) _markDoneButton(context, compact),
         if (isDone) ..._doneSlot(context, compact),
         if (showCancel && !isCancelled && !isDone)
@@ -49,6 +64,29 @@ class DetailsActionBar extends StatelessWidget {
       ],
     );
   }
+
+  /// The arrival tap. Same haptic contract as mark-done below: felt on press,
+  /// never awaited, so it can neither delay nor be delayed by the write.
+  Widget _startButton(BuildContext context, bool compact) => OutlinedButton(
+    style: OutlinedButton.styleFrom(
+      minimumSize: const Size(double.infinity, 48),
+    ),
+    onPressed: isSaving
+        ? null
+        : () {
+            unawaited(HapticFeedback.mediumImpact());
+            onStart!();
+          },
+    child: _ActionButtonContent(
+      compact: compact,
+      icon: BusyButtonIcon(
+        isBusy: isSaving,
+        icon: Icons.play_arrow_rounded,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+      label: context.l10n.calendar_startJob,
+    ),
+  );
 
   /// Offered for the whole life of an open job — there is no "has it started
   /// yet" gate (owner call, 2026-08-17). A crew that finishes early, or an

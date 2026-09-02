@@ -142,3 +142,14 @@ Map<String, AppointmentFormError> withoutKey(
   if (!errors.containsKey(key)) return errors;
   return Map<String, AppointmentFormError>.from(errors)..remove(key);
 }
+
+/// [withoutKey] over several keys at once — the form setters clear a field's
+/// error together with the errors of the fields it implies.
+Map<String, AppointmentFormError> withoutKeys(
+  Map<String, AppointmentFormError> errors,
+  Iterable<String> keys,
+) {
+  if (!keys.any(errors.containsKey)) return errors;
+  return Map<String, AppointmentFormError>.from(errors)
+    ..removeWhere((k, _) => keys.contains(k));
+}

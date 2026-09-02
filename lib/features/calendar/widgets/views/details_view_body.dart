@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
@@ -11,6 +12,8 @@ import 'package:scheduling/features/calendar/application/event_details_controlle
 import 'package:scheduling/features/calendar/domain/day_off_reason.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
+import 'package:scheduling/features/calendar/domain/policies/push_back_options.dart';
+import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/cancel_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_action_bar.dart';
@@ -58,6 +61,19 @@ class DetailsViewBody extends ConsumerWidget {
             address: appointment.address,
           )
         : null;
+    // Push back is the admin's, on a job that still has a time to move; an
+    // all-day block has no clock to shift and a closed one nothing to delay.
+    // Withheld outright when no same-day offset exists (a job at 23:50).
+    final pushBackOptions = pushBackOptionsFor(appointment.startTime);
+    final onPushBack =
+        showActions &&
+            !data.isClosed &&
+            !appointment.isAllDay &&
+            pushBackOptions.isNotEmpty
+        ? () => _onPushBack(context, ref, notifier, pushBackOptions)
+        : null;
+    // Resolved once: it gates the field record below AND the Start button.
+    final canRecordFieldWork = _canRecordFieldWork(ref, appointment);
 
     // TIME OFF is its own body: it has no client, no address, no materials and
     // no photos, and no lifecycle to act on — so it renders who it is for,
@@ -92,6 +108,15 @@ class DetailsViewBody extends ConsumerWidget {
           status: data.displayStatus,
           compact: compactHeader,
         ),
+        // The time record outlives the job; a cancelled one has no work to
+        // time. The crew signal is only meaningful while the job is open.
+        if (data.hasTimeRecord && !data.isCancelled)
+          DetailsTimeRecordRow(
+            startedAt: appointment.startedAt,
+            completedAt: appointment.completedAt,
+          ),
+        if (appointment.hasCrewSignal && !data.isClosed)
+          DetailsCrewSignalLine(appointment: appointment),
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),
@@ -103,6 +128,7 @@ class DetailsViewBody extends ConsumerWidget {
           notes: data.notes,
           onCall: onCall,
           onDirections: onDirections,
+          onPushBack: onPushBack,
         ),
         ClientContactsCards(contacts: data.extraContacts, collapsible: true),
         if (data.materials.isNotEmpty) ...[
@@ -120,14 +146,21 @@ class DetailsViewBody extends ConsumerWidget {
         // cannot disagree about who may write. An admin has the edit form;
         // a read-only surface (client job history) is an admin looking at
         // somebody else's job and gets nothing.
-        if (_canRecordFieldWork(ref, appointment))
+        if (canRecordFieldWork)
           DetailsFieldRecordView(appointment: appointment),
         DetailsActionBar(
           isDone: data.isDone,
           isCancelled: data.isCancelled,
+          isInProgress: data.isInProgress,
           isSaving: isSaving,
           showCancel: showActions,
           onEdit: showActions ? notifier.enterEditing : null,
+          // Anyone who may close the job may start it; a personal block has
+          // no arrival to record.
+          onStart:
+              (showActions || canRecordFieldWork) && !appointment.isPersonal
+              ? () => _onStart(context, ref, notifier)
+              : null,
           onMarkDone: () => _onMarkDone(context, ref, notifier),
           onCancel: () => _onCancel(context, ref, notifier),
         ),
@@ -139,7 +172,10 @@ class DetailsViewBody extends ConsumerWidget {
   ///
   /// Deliberately NOT `!showActions`: the client job-history surface passes
   /// that too, and it is an ADMIN reading a job they are not on.
-  static bool _canRecordFieldWork(WidgetRef ref, AppointmentRecord appointment) {
+  static bool _canRecordFieldWork(
+    WidgetRef ref,
+    AppointmentRecord appointment,
+  ) {
     final identity = ref.watch(activeUserIdentityProvider).value;
     if (identity == null || identity.role == 'admin') return false;
     return appointment.employeeIds.contains(identity.docId);
@@ -158,6 +194,82 @@ class DetailsViewBody extends ConsumerWidget {
       outcome,
       successMessage: context.l10n.common_appointmentMarkedAsDone,
     );
+  }
+
+  Future<void> _onStart(
+    BuildContext context,
+    WidgetRef ref,
+    EventDetailsController notifier,
+  ) async {
+    final outcome = await notifier.startJob(appointment);
+    if (!context.mounted) return;
+    _onStatusOutcome(
+      context,
+      ref,
+      outcome,
+      successMessage: context.l10n.calendar_jobStarted,
+    );
+  }
+
+  /// Push back: pick an offset, shift the job, and — like the edit form —
+  /// let the admin push through a clash the shift creates.
+  Future<void> _onPushBack(
+    BuildContext context,
+    WidgetRef ref,
+    EventDetailsController notifier,
+    List<int> options,
+  ) async {
+    final l10n = context.l10n;
+    // Resolved before the awaits: this sheet can be dismissed mid-flight.
+    final notices = ref.read(noticeServiceProvider);
+    final minutes = await showAdaptiveActionSheet<int>(
+      context,
+      title: l10n.calendar_pushBackTitle,
+      actions: [
+        for (final m in options)
+          AdaptiveSheetAction(value: m, label: l10n.calendar_pushBackBy(m)),
+      ],
+    );
+    if (minutes == null || !context.mounted) return;
+
+    var outcome = await notifier.delayAppointment(
+      appointment,
+      minutes: minutes,
+    );
+    if (!context.mounted) return;
+    if (outcome is EventDetailsBusyEmployees) {
+      final confirmed = await showBusyConflictDialog(
+        context,
+        busyEmployees: outcome.busyEmployees,
+        start: outcome.start,
+        end: outcome.end,
+      );
+      if (!confirmed || !context.mounted) return;
+      outcome = await notifier.delayAppointment(
+        appointment,
+        minutes: minutes,
+        forceBusy: true,
+      );
+      if (!context.mounted) return;
+    }
+    switch (outcome) {
+      case EventDetailsSaved():
+        notices.success(l10n.calendar_pushedBack(minutes));
+        onClose();
+      case EventDetailsFailed(:final error):
+        notices.error(
+          composeErrorNotice(
+            context,
+            intro: l10n.error_introSaveAppointment,
+            error: error,
+          ),
+        );
+      // Busy skipped the write; a clash the admin declined stays as it was.
+      case EventDetailsSaveBusy() ||
+          EventDetailsInvalid() ||
+          EventDetailsBusyEmployees():
+        break;
+    }
   }
 
   Future<void> _onCancel(
@@ -325,6 +437,8 @@ class _DetailsViewData {
     required this.displayStatus,
     required this.isCancelled,
     required this.isDone,
+    required this.isInProgress,
+    required this.hasTimeRecord,
     required this.clientName,
     required this.phone,
     required this.displayAddress,
@@ -354,6 +468,9 @@ class _DetailsViewData {
       displayStatus: displayStatus,
       isCancelled: status.isCancelled,
       isDone: status.isDone,
+      isInProgress: status == AppointmentStatus.inProgress,
+      hasTimeRecord:
+          appointment.startedAt != null || appointment.completedAt != null,
       clientName: client?.displayName ?? appointment.clientName,
       phone: phone,
       displayAddress: appointment.address.isNotEmpty
@@ -368,6 +485,10 @@ class _DetailsViewData {
   final AppointmentStatus displayStatus;
   final bool isCancelled;
   final bool isDone;
+  final bool isInProgress;
+  final bool hasTimeRecord;
+
+  bool get isClosed => isDone || isCancelled;
   final String clientName;
   final String phone;
   final String displayAddress;
@@ -388,6 +509,7 @@ class _ClientSection extends StatelessWidget {
     required this.notes,
     required this.onCall,
     required this.onDirections,
+    required this.onPushBack,
   });
 
   /// A personal job has no client, so the client row names it as personal
@@ -400,12 +522,15 @@ class _ClientSection extends StatelessWidget {
   final VoidCallback? onCall;
   final VoidCallback? onDirections;
 
+  /// Admin-only, on an open timed job — see the gate in the parent's build.
+  final VoidCallback? onPushBack;
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (onCall != null || onDirections != null) ...[
+        if (onCall != null || onDirections != null || onPushBack != null) ...[
           QuickActionsRow(
             buttons: [
               if (onCall != null)
@@ -419,6 +544,12 @@ class _ClientSection extends StatelessWidget {
                   icon: Icons.directions_outlined,
                   label: context.l10n.clients_directions,
                   onTap: onDirections!,
+                ),
+              if (onPushBack != null)
+                QuickActionButton(
+                  icon: Icons.update_rounded,
+                  label: context.l10n.calendar_pushBack,
+                  onTap: onPushBack!,
                 ),
             ],
           ),

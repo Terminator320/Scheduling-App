@@ -5,12 +5,11 @@ import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
 import 'package:scheduling/features/clients/widgets/sections/client_type_filter_bar.dart';
-import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
+import 'package:scheduling/features/clients/widgets/sheets/add_client_flow.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
@@ -61,14 +60,6 @@ class _ListInformationState extends State<ListInformation> {
   void _onListSettled() {
     if (_listSettled) return;
     setState(() => _listSettled = true);
-  }
-
-  Future<void> _onAddClient() async {
-    final result = await showAddClientSheet(context);
-    if (result == null || result.next != AddClientNext.bookJob) return;
-    if (!mounted) return;
-    // Sequential, never stacked — the add-client sheet has already popped.
-    await showAddEventPopup(context, initialClient: result.client);
   }
 
   Future<void> _onClientTap(ClientRecord client) async {
@@ -126,7 +117,7 @@ class _ListInformationState extends State<ListInformation> {
                 child: FloatingActionButton(
                   // Needs to be unique across tabs, since IndexedStack keeps every tab's FAB mounted at the same time.
                   heroTag: 'clientsAddFab',
-                  onPressed: _onAddClient,
+                  onPressed: () => runAddClientFlow(context),
                   tooltip: context.l10n.clients_addClient,
                   child: const Icon(Icons.add),
                 ),

@@ -1,0 +1,86 @@
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/utils/debouncer.dart';
+
+/// The debounced-search half of a paged list — the ONE owner of the block
+/// `ClientsListView` and `AppointmentHistoryView` used to carry as five
+/// byte-identical members each.
+///
+/// A host keeps typing into `searchQuery`; the loaded pages filter locally on
+/// every keystroke, and [committedQuery] follows at [kSearchDebounce] so the
+/// server search fires once the typing pauses. Clearing the query commits
+/// immediately, so returning to the paged list has zero lag.
+///
+/// The `Debouncer` is built in [initState] with the logger read THERE: its
+/// callback can fire after dispose, and Riverpod 3's `ref.read` throws on an
+/// unmounted consumer, so the logger must be resolved at construction — which
+/// `Debouncer.tagged`'s required parameter enforces.
+mixin DebouncedPagedSearch<W extends ConsumerStatefulWidget>
+    on ConsumerState<W> {
+  late final Debouncer searchDebounce;
+
+  /// The query the server search is running for. Trails the live query by the
+  /// debounce; empty when the paged list is showing.
+  String committedQuery = '';
+
+  /// The host widget's live search text.
+  String searchQueryOf(W widget);
+
+  /// Fires once the first page has replaced the skeleton, for a tour host.
+  VoidCallback? get onFirstPageSettled;
+
+  /// The Crashlytics warn tag for a search that throws inside the timer.
+  String get searchDebounceTag;
+
+  @override
+  void initState() {
+    super.initState();
+    searchDebounce = Debouncer.tagged(
+      kSearchDebounce,
+      logger: ref.read(loggerProvider),
+      tag: searchDebounceTag,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant W oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (searchQueryOf(widget).trim() == searchQueryOf(oldWidget).trim()) {
+      return;
+    }
+    scheduleSearch();
+  }
+
+  /// Restarts the debounce for the current query; clearing commits at once.
+  void scheduleSearch() {
+    final next = searchQueryOf(widget).trim();
+    if (next.isEmpty) {
+      searchDebounce.cancel();
+      if (committedQuery.isNotEmpty) setState(() => committedQuery = '');
+      return;
+    }
+    searchDebounce.run(() {
+      if (mounted && next != committedQuery) {
+        setState(() => committedQuery = next);
+      }
+    });
+  }
+
+  /// Post-frame, so the row a tour targets has actually been laid out by the
+  /// time the host asks showcase whether it is rendered.
+  void notifyFirstPageSettled() {
+    final notify = onFirstPageSettled;
+    if (notify == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) notify();
+    });
+  }
+
+  @override
+  void dispose() {
+    searchDebounce.dispose();
+    super.dispose();
+  }
+}
