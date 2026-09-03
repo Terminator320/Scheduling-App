@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 
 final RegExp _nonDigit = RegExp(r'\D');
+final RegExp _allowedPhoneChars = RegExp(r'^[0-9()+.\-\s#extEXT]+$');
 
 /// Digits of [value], with every separator dropped.
 String phoneDigits(String value) => value.replaceAll(_nonDigit, '');
@@ -20,6 +21,17 @@ String bareNumber(String phone) {
   final digits = phoneDigits(trimmed);
   if (digits.isEmpty) return trimmed;
   return trimmed.startsWith('+') ? '+$digits' : digits;
+}
+
+/// Flexible validity check for typed phone fields.
+///
+/// Allows common punctuation and extension markers while requiring enough
+/// digits to be dialable.
+bool isUsablePhoneNumber(String phone) {
+  final trimmed = phone.trim();
+  if (trimmed.isEmpty) return true;
+  return _allowedPhoneChars.hasMatch(trimmed) &&
+      phoneDigits(trimmed).length >= 7;
 }
 
 /// Renders a North-American number as `(514) 555-1234`, formatting

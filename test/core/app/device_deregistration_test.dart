@@ -91,6 +91,7 @@ void main() {
         'presence',
         'liveActivity',
         'imageCache',
+        'imageUploads',
         'clients',
         'appointments',
       ]);
@@ -111,6 +112,7 @@ void main() {
       'presence',
       'liveActivity',
       'imageCache',
+      'imageUploads',
       'clients',
       'appointments',
     ]);
@@ -127,6 +129,7 @@ void main() {
       'push',
       'liveActivity',
       'imageCache',
+      'imageUploads',
       'clients',
       'appointments',
     ]);

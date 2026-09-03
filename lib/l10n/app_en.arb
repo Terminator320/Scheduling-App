@@ -651,6 +651,15 @@
   "@clients_addAnotherContact": {
     "description": "Add another contact"
   },
+  "clients_additionalContactsLimit": "Maximum {count} contacts",
+  "@clients_additionalContactsLimit": {
+    "description": "Helper text shown when the client form reaches the additional-contact limit",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "clients_contact": "Contact",
   "@clients_contact": {
     "description": "Contact"
@@ -670,6 +679,10 @@
   "validation_phoneOrEmailIsRequired": "Phone or email is required",
   "@validation_phoneOrEmailIsRequired": {
     "description": "Phone or email is required"
+  },
+  "validation_enterAValidPhone": "Enter a valid phone number",
+  "@validation_enterAValidPhone": {
+    "description": "Validation message when a phone field has too few digits or unsupported characters"
   },
   "validation_addressIsRequired": "Address is required",
   "@validation_addressIsRequired": {
@@ -1974,6 +1987,14 @@
   "error_introSaveTravelAlerts": "Couldn't change your alert setting",
   "@error_introSaveTravelAlerts": {
     "description": "Error intro when the time-to-leave toggle fails to save"
+  },
+  "settings_locationSharing": "Staff map location",
+  "@settings_locationSharing": {
+    "description": "Settings toggle for live location sharing used by the admin staff map and travel-time presence"
+  },
+  "error_introSaveLocationSharing": "Couldn't change your location sharing",
+  "@error_introSaveLocationSharing": {
+    "description": "Error intro when the staff map location sharing toggle fails to save"
   },
   "settings_changeEmail": "Change sign-in email",
   "@settings_changeEmail": {

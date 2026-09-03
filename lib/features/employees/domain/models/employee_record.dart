@@ -34,6 +34,9 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     @Default(false) bool onCall,
     // Per-person opt-out for the traffic-aware "time to leave" push.
     @Default(true) bool travelAlertsEnabled,
+    // Explicit consent for live location uploads used by the staff map and
+    // travel-time presence.
+    @Default(false) bool locationSharingEnabled,
     // NOTE: emergencyContact/emergencyPhone are NOT here — they live in
     // users/{docId}/private/emergency so rules can gate them to the admin and
     // the person themselves.
@@ -77,6 +80,7 @@ abstract class EmployeeRecord with _$EmployeeRecord {
       onCall: data['onCall'] == true,
       // `!= false`, never `== true`: an absent field must read as ON.
       travelAlertsEnabled: data['travelAlertsEnabled'] != false,
+      locationSharingEnabled: data['locationSharingEnabled'] == true,
       createdAt: firestoreDateTime(data['createdAt']),
     );
   }
@@ -100,6 +104,7 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     // person's own notification preference, written only by `updateSelfDetails`
     // — an admin save must leave it exactly as it was, and emitting it here
     // would let a future whole-record write flip somebody else's push setting.
+    // `locationSharingEnabled` follows the same self-service-only contract.
   };
 
   /// The name every in-app surface renders — the split halves first, then the

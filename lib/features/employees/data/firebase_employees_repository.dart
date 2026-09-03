@@ -280,6 +280,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       'workEndMinutes': employee.workEndMinutes,
       'onCall': employee.onCall,
       'travelAlertsEnabled': employee.travelAlertsEnabled,
+      'locationSharingEnabled': employee.locationSharingEnabled,
       'updatedAt': FieldValue.serverTimestamp(),
     };
     assert(

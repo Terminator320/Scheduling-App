@@ -4,6 +4,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/policies/client_contacts_policy.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
@@ -52,6 +53,7 @@ class AdditionalContactsSection extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final compact = context.isCompact;
+    final canAdd = contacts.length < kMaxAdditionalContacts;
 
     return Container(
       width: double.infinity,
@@ -78,7 +80,7 @@ class AdditionalContactsSection extends StatelessWidget {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
-                    onPressed: onAddContact,
+                    onPressed: canAdd ? onAddContact : null,
                     icon: const Icon(Icons.add),
                     label: Text(context.l10n.clients_add),
                   ),
@@ -97,7 +99,7 @@ class AdditionalContactsSection extends StatelessWidget {
                   ),
                 ),
                 TextButton.icon(
-                  onPressed: onAddContact,
+                  onPressed: canAdd ? onAddContact : null,
                   icon: const Icon(Icons.add),
                   label: Text(context.l10n.clients_add),
                 ),
@@ -112,10 +114,19 @@ class AdditionalContactsSection extends StatelessWidget {
               color: scheme.onSurfaceVariant,
             ),
           ),
+          if (!canAdd) ...[
+            const SizedBox(height: AppSpacing.sp8),
+            Text(
+              context.l10n.clients_additionalContactsLimit(
+                kMaxAdditionalContacts,
+              ),
+              style: theme.textTheme.bodySmall?.copyWith(color: scheme.error),
+            ),
+          ],
           if (contacts.isEmpty) ...[
             const SizedBox(height: AppSpacing.sp12),
             OutlinedButton.icon(
-              onPressed: onAddContact,
+              onPressed: canAdd ? onAddContact : null,
               icon: const Icon(Icons.person_add_alt_1),
               label: Text(context.l10n.clients_addAnotherContact),
             ),

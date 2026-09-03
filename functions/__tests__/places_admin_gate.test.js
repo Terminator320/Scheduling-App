@@ -37,6 +37,7 @@ describe("placesAutocomplete admin gate + validation", () => {
     global.fetch = jest.fn();
     security.assertAdmin.mockClear();
     security.assertAdmin.mockResolvedValue(undefined);
+    security.enforceDurableRateLimit.mockClear();
   });
 
   test("rejects an unauthenticated caller without fetching", async () => {
@@ -63,6 +64,23 @@ describe("placesAutocomplete admin gate + validation", () => {
           auth: ADMIN,
         }),
     ).rejects.toThrow();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  test("enforces the durable limiter before fetching", async () => {
+    security.enforceDurableRateLimit.mockRejectedValueOnce(
+        new Error("too-many-attempts"),
+    );
+
+    await expect(
+        placesAutocomplete.run({data: {input: "123 Main"}, auth: ADMIN}),
+    ).rejects.toThrow(/too-many-attempts/);
+    expect(security.enforceDurableRateLimit).toHaveBeenCalledWith(
+        "placesAutocomplete",
+        ADMIN.uid,
+        20,
+        60000,
+    );
     expect(global.fetch).not.toHaveBeenCalled();
   });
 });

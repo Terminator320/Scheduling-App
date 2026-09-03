@@ -11,12 +11,16 @@ class PendingUpload {
     required this.appointmentId,
     required this.paths,
     required this.enqueuedAtMs,
+    this.ownerUid = 'uid-1',
+    this.ownerEmployeeId = 'doc-1',
     this.uploaded = const [],
   });
 
   final String appointmentId;
   final List<String> paths;
   final int enqueuedAtMs;
+  final String ownerUid;
+  final String ownerEmployeeId;
 
   /// Already-uploaded images waiting for an append-only retry.
   final List<AppointmentImage> uploaded;
@@ -27,6 +31,8 @@ class PendingUpload {
     'appointmentId': appointmentId,
     'paths': paths,
     'enqueuedAtMs': enqueuedAtMs,
+    'ownerUid': ownerUid,
+    'ownerEmployeeId': ownerEmployeeId,
     if (uploaded.isNotEmpty) 'uploaded': uploaded.map(_imageToJson).toList(),
   };
 
@@ -36,7 +42,13 @@ class PendingUpload {
     final appointmentId = (map['appointmentId'] ?? '').toString();
     final enqueuedAtMs = map['enqueuedAtMs'];
     final paths = map['paths'];
-    if (appointmentId.isEmpty || enqueuedAtMs is! int || paths is! List) {
+    final ownerUid = (map['ownerUid'] ?? '').toString();
+    final ownerEmployeeId = (map['ownerEmployeeId'] ?? '').toString();
+    if (appointmentId.isEmpty ||
+        enqueuedAtMs is! int ||
+        paths is! List ||
+        ownerUid.isEmpty ||
+        ownerEmployeeId.isEmpty) {
       return null;
     }
     final rawUploaded = map['uploaded'];
@@ -44,6 +56,8 @@ class PendingUpload {
       appointmentId: appointmentId,
       paths: paths.map((p) => p.toString()).toList(),
       enqueuedAtMs: enqueuedAtMs,
+      ownerUid: ownerUid,
+      ownerEmployeeId: ownerEmployeeId,
       uploaded: rawUploaded is List
           ? rawUploaded
                 .whereType<Map<Object?, Object?>>()
@@ -144,4 +158,12 @@ class PendingUploadStore {
         }
         return pruned;
       });
+
+  Future<List<PendingUpload>> clearAll() => _serialized(() async {
+    final entries = await load();
+    if (entries.isEmpty) return const [];
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+    return entries;
+  });
 }

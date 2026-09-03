@@ -18,8 +18,11 @@ class NotificationsSettingsCard extends ConsumerWidget {
     required this.onToggleLiveActivity,
     required this.travelAlertsEnabled,
     required this.onToggleTravelAlerts,
+    required this.locationSharingEnabled,
+    required this.onToggleLocationSharing,
     this.isTogglingLiveActivity = false,
     this.isTogglingTravelAlerts = false,
+    this.isTogglingLocationSharing = false,
     super.key,
   });
 
@@ -33,6 +36,9 @@ class NotificationsSettingsCard extends ConsumerWidget {
   final bool? travelAlertsEnabled;
   final void Function({required bool value}) onToggleTravelAlerts;
   final bool isTogglingTravelAlerts;
+  final bool? locationSharingEnabled;
+  final void Function({required bool value}) onToggleLocationSharing;
+  final bool isTogglingLocationSharing;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -50,6 +56,7 @@ class NotificationsSettingsCard extends ConsumerWidget {
         (ref.watch(liveActivitySupportedProvider).asData?.value ?? false) &&
         liveActivityReady;
     final showTravelAlerts = travelAlertsEnabled != null;
+    final showLocationSharing = locationSharingEnabled != null;
     return SettingsSectionCard(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -61,7 +68,8 @@ class NotificationsSettingsCard extends ConsumerWidget {
                 : Icons.notifications_off_rounded,
             iconColor: granted ? scheme.primary : scheme.error,
             label: context.l10n.settings_notifications,
-            isLast: !showLiveActivity && !showTravelAlerts,
+            isLast:
+                !showLiveActivity && !showTravelAlerts && !showLocationSharing,
             trailing: Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,
               spacing: AppSpacing.sp4,
@@ -88,7 +96,7 @@ class NotificationsSettingsCard extends ConsumerWidget {
               icon: Icons.directions_car_rounded,
               iconColor: scheme.primary,
               label: context.l10n.settings_liveActivity,
-              isLast: !showTravelAlerts,
+              isLast: !showTravelAlerts && !showLocationSharing,
               onTap: isTogglingLiveActivity
                   ? null
                   : () => onToggleLiveActivity(value: !liveActivityEnabled),
@@ -98,7 +106,6 @@ class NotificationsSettingsCard extends ConsumerWidget {
                     ? null
                     : (value) => onToggleLiveActivity(value: value),
                 activeTrackColor: scheme.primary,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
           ],
@@ -109,7 +116,7 @@ class NotificationsSettingsCard extends ConsumerWidget {
               icon: Icons.schedule_send_rounded,
               iconColor: scheme.primary,
               label: context.l10n.settings_travelAlerts,
-              isLast: true,
+              isLast: !showLocationSharing,
               onTap: isTogglingTravelAlerts
                   ? null
                   : () => onToggleTravelAlerts(value: !travelAlertsEnabled!),
@@ -120,7 +127,29 @@ class NotificationsSettingsCard extends ConsumerWidget {
                     ? null
                     : (value) => onToggleTravelAlerts(value: value),
                 activeTrackColor: scheme.primary,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+          if (showLocationSharing) ...[
+            const SettingsTileDivider(),
+            SettingsTile(
+              iconBg: scheme.primaryContainer,
+              icon: Icons.location_on_rounded,
+              iconColor: scheme.primary,
+              label: context.l10n.settings_locationSharing,
+              isLast: true,
+              onTap: isTogglingLocationSharing
+                  ? null
+                  : () => onToggleLocationSharing(
+                      value: !locationSharingEnabled!,
+                    ),
+              trailing: Switch.adaptive(
+                key: const Key('locationSharingSwitch'),
+                value: locationSharingEnabled!,
+                onChanged: isTogglingLocationSharing
+                    ? null
+                    : (value) => onToggleLocationSharing(value: value),
+                activeTrackColor: scheme.primary,
               ),
             ),
           ],

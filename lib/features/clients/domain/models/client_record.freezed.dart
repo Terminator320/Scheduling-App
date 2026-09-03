@@ -277,18 +277,14 @@ as String,
 /// @nodoc
 mixin _$ClientRecord {
 
- String get id; String get name; String get firstName; String get lastName; String get address; String get apt; String get city; String get province; String get country; String get postalCode; String get phone; String get mobile; String get email; List<ClientContact> get contacts; bool get noFixedAddress;// Hidden from the paginated list, still searchable and still bookable. The
-// list filters on it SERVER-side, and Firestore excludes docs missing a
-// filtered field — so every client doc has to carry it, always.
- bool get archived; ClientType get type; String get accessNotes; String get onSiteManager; String get billingTerms; bool get autoInvoice;// Legacy pre-Wave-reshape field, READ-ONLY — never emitted in toMap, and
-// no UI edits it. Carried only so search can still reach it: `name` falls
-// back to it when blank, but a legacy doc holding BOTH a name and a
-// different business name would otherwise be unfindable by the business.
+ String get id; String get name; String get firstName; String get lastName; String get address; String get apt; String get city; String get province; String get country; String get postalCode; String get phone; String get mobile; String get email; List<ClientContact> get contacts; bool get noFixedAddress;// Hidden from the paginated list, still searchable and still bookable.
+ bool get archived; ClientType get type; String get accessNotes; String get onSiteManager; String get billingTerms; bool get autoInvoice;// Legacy pre-Wave-reshape field, READ-ONLY — never emitted in toMap, and no
+// UI edits it.
  String get businessName;// Function-owned absolute recount — never emitted in toMap, and null until
 // the trigger has written it once.
  int? get jobCount;// Read-only server timestamp used for dashboard trends — never emitted in toMap.
- DateTime? get createdAt;// Wave projection — read-only and function-owned, so it's omitted from toMap
-// per firestore.rules.
+ DateTime? get createdAt;// Wave projection — read-only and function-owned, so it's omitted from
+// toMap per firestore.rules.
  String? get waveCustomerId; String get waveSyncState; String? get waveSyncError;
 /// Create a copy of ClientRecord
 /// with the given fields replaced by the non-null parameter values.
@@ -531,27 +527,23 @@ class _ClientRecord extends ClientRecord {
 }
 
 @override@JsonKey() final  bool noFixedAddress;
-// Hidden from the paginated list, still searchable and still bookable. The
-// list filters on it SERVER-side, and Firestore excludes docs missing a
-// filtered field — so every client doc has to carry it, always.
+// Hidden from the paginated list, still searchable and still bookable.
 @override@JsonKey() final  bool archived;
 @override@JsonKey() final  ClientType type;
 @override@JsonKey() final  String accessNotes;
 @override@JsonKey() final  String onSiteManager;
 @override@JsonKey() final  String billingTerms;
 @override@JsonKey() final  bool autoInvoice;
-// Legacy pre-Wave-reshape field, READ-ONLY — never emitted in toMap, and
-// no UI edits it. Carried only so search can still reach it: `name` falls
-// back to it when blank, but a legacy doc holding BOTH a name and a
-// different business name would otherwise be unfindable by the business.
+// Legacy pre-Wave-reshape field, READ-ONLY — never emitted in toMap, and no
+// UI edits it.
 @override@JsonKey() final  String businessName;
 // Function-owned absolute recount — never emitted in toMap, and null until
 // the trigger has written it once.
 @override@JsonKey() final  int? jobCount;
 // Read-only server timestamp used for dashboard trends — never emitted in toMap.
 @override final  DateTime? createdAt;
-// Wave projection — read-only and function-owned, so it's omitted from toMap
-// per firestore.rules.
+// Wave projection — read-only and function-owned, so it's omitted from
+// toMap per firestore.rules.
 @override@JsonKey() final  String? waveCustomerId;
 @override@JsonKey() final  String waveSyncState;
 @override@JsonKey() final  String? waveSyncError;

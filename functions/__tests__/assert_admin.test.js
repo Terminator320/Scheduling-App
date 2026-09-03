@@ -16,7 +16,7 @@ jest.mock("firebase-functions/logger", () => ({
 
 const {getFirestore} = require("firebase-admin/firestore");
 const logger = require("firebase-functions/logger");
-const {assertAdmin, assertAdminCall} = require("../security");
+const {assertAdmin, assertAdminCall, shortHash} = require("../security");
 
 /**
  * In-memory Firestore double exposing one `usersByUid` document.
@@ -108,12 +108,13 @@ describe("assertAdmin", () => {
     expect(logger.warn).toHaveBeenCalledTimes(1);
     const [, payload] = logger.warn.mock.calls[0];
     expect(payload).toEqual({
-      uid: "caller-uid",
+      uidHash: shortHash("caller-uid"),
       role: "employee",
       status: "active",
     });
-    // No email, name or token material may ride along in the warn.
-    expect(JSON.stringify(payload)).not.toMatch(/@/);
+    // No raw uid, email, name or token material may ride along in the warn.
+    expect(payload).not.toHaveProperty("uid");
+    expect(JSON.stringify(payload)).not.toMatch(/caller-uid|@/);
   });
 
   test("a passing check logs nothing", async () => {

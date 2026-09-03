@@ -26,6 +26,7 @@ import 'package:scheduling/features/live_activity/application/live_activity_pref
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
+import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/settings/application/app_info_provider.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
 import 'package:scheduling/features/settings/application/my_details_providers.dart';
@@ -123,6 +124,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   bool? _pendingAppLockValue;
   bool? _pendingLiveActivityValue;
   bool? _pendingTravelAlertsValue;
+  bool? _pendingLocationSharingValue;
 
   Future<void> _toggleAppLock({required bool value}) async {
     if (_pendingAppLockValue != null) return;
@@ -272,6 +274,46 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       );
     } finally {
       if (mounted) setState(() => _pendingTravelAlertsValue = null);
+    }
+  }
+
+  Future<void> _toggleLocationSharing({required bool value}) async {
+    if (_pendingLocationSharingValue != null) return;
+    final record = ref.read(myEmployeeRecordProvider);
+    if (record == null) return;
+
+    final l10n = context.l10n;
+    final notices = ref.read(noticeServiceProvider);
+    final logger = ref.read(loggerProvider);
+    if (guardedOffline(
+      context,
+      ref,
+      intro: l10n.error_introSaveLocationSharing,
+    )) {
+      return;
+    }
+
+    setState(() => _pendingLocationSharingValue = value);
+    try {
+      final next = record.copyWith(locationSharingEnabled: value);
+      await ref.read(employeesRepositoryProvider).updateSelfDetails(next);
+      if (value) {
+        await ref.read(presenceSyncControllerProvider).sync();
+      } else {
+        await ref.read(presenceSyncControllerProvider).unregister();
+      }
+    } catch (error, stackTrace) {
+      logger.warn('ME-SAVE location sharing failed', error, stackTrace);
+      if (!mounted) return;
+      notices.error(
+        composeErrorNotice(
+          context,
+          intro: l10n.error_introSaveLocationSharing,
+          error: error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _pendingLocationSharingValue = null);
     }
   }
 
@@ -433,8 +475,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       child: NotificationsSettingsCard(
         onNotificationsTap: _onNotificationsTap,
         liveActivityEnabled:
-            _pendingLiveActivityValue ??
-            ref.watch(liveActivityEnabledProvider),
+            _pendingLiveActivityValue ?? ref.watch(liveActivityEnabledProvider),
         onToggleLiveActivity: _toggleLiveActivity,
         isTogglingLiveActivity: _pendingLiveActivityValue != null,
         // Null hides the row until the person's own record has loaded —
@@ -445,6 +486,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             ref.watch(myEmployeeRecordProvider)?.travelAlertsEnabled,
         onToggleTravelAlerts: _toggleTravelAlerts,
         isTogglingTravelAlerts: _pendingTravelAlertsValue != null,
+        locationSharingEnabled:
+            _pendingLocationSharingValue ??
+            ref.watch(myEmployeeRecordProvider)?.locationSharingEnabled,
+        onToggleLocationSharing: _toggleLocationSharing,
+        isTogglingLocationSharing: _pendingLocationSharingValue != null,
       ),
     ),
     if (_isAdmin) ...[

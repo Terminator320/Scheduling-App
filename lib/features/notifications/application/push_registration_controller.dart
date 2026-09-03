@@ -113,8 +113,11 @@ class PushRegistrationController with ReentrantSync {
       await _ref.read(firebaseReadyProvider.future).catchError((Object _) {});
       if (isSyncStale(generation)) return;
       final service = _ref.read(pushNotificationServiceProvider);
-      final granted = await service.requestPermission();
-      if (!granted || isSyncStale(generation)) return;
+      final status = await service.authorizationStatus();
+      if (!PushNotificationService.isGranted(status) ||
+          isSyncStale(generation)) {
+        return;
+      }
       await service.configureForegroundPresentation();
       if (isSyncStale(generation)) return;
 

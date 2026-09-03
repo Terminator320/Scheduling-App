@@ -13,6 +13,16 @@ const DOC_ID_MAX_LEN = 128;
 const MAX_PAYLOAD_BYTES = 4 * 1024;
 
 /**
+ * Stable, short log token for identifiers that should not be emitted raw.
+ * @param {string} value identifier to hash.
+ * @return {string}
+ */
+function shortHash(value) {
+  return crypto.createHash("sha256").update(value)
+      .digest("hex").slice(0, 12);
+}
+
+/**
  * True if the string contains a C0 control character or DEL.
  * @param {string} s value to inspect.
  * @return {boolean}
@@ -187,10 +197,11 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
   });
   if (overLimit) {
     // Never log the raw key — it's PII for the email-keyed route.
-    const keyHash = crypto.createHash("sha256").update(key)
-        .digest("hex").slice(0, 12);
-    logger.warn("enforceDurableRateLimit: limit exceeded",
-        {route, keyKind, keyHash});
+    logger.warn("enforceDurableRateLimit: limit exceeded", {
+      route,
+      keyKind,
+      keyHash: shortHash(key),
+    });
     throw new HttpsError("resource-exhausted", "too-many-attempts");
   }
 
@@ -247,7 +258,7 @@ async function assertAdmin(uid) {
   const data = snap.exists ? snap.data() : null;
   if (!data || data.role !== "admin" || data.status !== "active") {
     logger.warn("assertAdmin: caller is not an active admin", {
-      uid,
+      uidHash: shortHash(uid),
       role: data ? data.role : null,
       status: data ? data.status : null,
     });
@@ -280,7 +291,7 @@ function assertFreshReauth(auth, route, maxAgeSeconds) {
   const nowSec = Math.floor(Date.now() / 1000);
   if (isReauthStale(authTime, nowSec, maxAgeSeconds)) {
     logger.warn(`${route}: stale auth_time; reauth required`, {
-      uid: auth ? auth.uid : null,
+      uidHash: auth ? shortHash(auth.uid) : null,
       authTime,
       ageSec: typeof authTime === "number" ? nowSec - authTime : null,
     });
@@ -297,6 +308,7 @@ const APP_CHECK = {enforceAppCheck: true};
 
 module.exports = {
   APP_CHECK,
+  shortHash,
   hasControlChar,
   assertPayloadShape,
   requireString,

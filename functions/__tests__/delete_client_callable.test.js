@@ -16,6 +16,7 @@ jest.mock("../security", () => {
     assertPayloadShape: jest.fn(),
     requireDocId: jest.fn(),
     enforceDurableRateLimit: jest.fn(),
+    shortHash: jest.fn((value) => `hash:${value}`),
   };
   // `deleteClient` opens with `assertAdminCall`, which composes the three steps
   // below.

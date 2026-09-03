@@ -184,12 +184,32 @@ void main() {
       );
     });
 
+    test('location sharing is off until explicitly enabled', () {
+      expect(
+        EmployeeRecord.fromMap('e1', const {}).locationSharingEnabled,
+        isFalse,
+      );
+      expect(
+        EmployeeRecord.fromMap('e1', {
+          'locationSharingEnabled': true,
+        }).locationSharingEnabled,
+        isTrue,
+      );
+      expect(
+        EmployeeRecord.fromMap('e1', {
+          'locationSharingEnabled': 'true',
+        }).locationSharingEnabled,
+        isFalse,
+      );
+    });
+
     test('toMap never emits travelAlertsEnabled', () {
       // It is the person's own notification preference, written only by
       // updateSelfDetails — an admin save must leave it exactly as it was.
       const record = EmployeeRecord(id: 'e1', travelAlertsEnabled: false);
 
       expect(record.toMap().containsKey('travelAlertsEnabled'), isFalse);
+      expect(record.toMap().containsKey('locationSharingEnabled'), isFalse);
     });
 
     test('an unknown stored jobTitle falls back to unset', () {

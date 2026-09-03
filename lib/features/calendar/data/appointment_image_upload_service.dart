@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -13,6 +14,7 @@ import 'package:scheduling/features/calendar/application/photo_upload_notifier.d
 import 'package:scheduling/features/calendar/data/pending_upload_store.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
 
 typedef _UploadFilesResult = ({
   List<AppointmentImage> uploaded,
@@ -30,12 +32,16 @@ class AppointmentImageUploadService {
     AppLogger? logger,
     PendingUploadStore? store,
     Future<Directory> Function()? stagingDirProvider,
+    FirebaseAuth? auth,
+    Future<String?> Function(String uid)? employeeIdForUid,
   }) : _appointments = appointments,
        _notifier = notifier,
        _storage = storage ?? ImageStorageService(),
        _logger = logger ?? AppLogger(),
        _store = store ?? PendingUploadStore(),
-       _stagingDirProvider = stagingDirProvider ?? _defaultStagingDir;
+       _stagingDirProvider = stagingDirProvider ?? _defaultStagingDir,
+       _auth = auth ?? FirebaseAuth.instance,
+       _employeeIdForUid = employeeIdForUid;
 
   final AppointmentsRepository _appointments;
   final PhotoUploadNotifier _notifier;
@@ -44,6 +50,8 @@ class AppointmentImageUploadService {
   final PendingUploadStore _store;
 
   final Future<Directory> Function() _stagingDirProvider;
+  final FirebaseAuth _auth;
+  final Future<String?> Function(String uid)? _employeeIdForUid;
 
   bool _draining = false;
 
@@ -71,6 +79,7 @@ class AppointmentImageUploadService {
     var staged = <File>[];
     try {
       final dir = await _stagingDirProvider();
+      final owner = await _currentOwner();
       final enqueuedAtMs = DateTime.now().millisecondsSinceEpoch;
       for (var i = 0; i < images.length; i++) {
         staged.add(await _stage(images[i], dir, i, enqueuedAtMs));
@@ -79,6 +88,8 @@ class AppointmentImageUploadService {
         appointmentId: appointmentId,
         paths: staged.map((f) => f.path).toList(),
         enqueuedAtMs: enqueuedAtMs,
+        ownerUid: owner.uid,
+        ownerEmployeeId: owner.employeeId,
       );
       await _store.add(entry);
       // Now owned by the queue, so nothing below may delete them.
@@ -191,6 +202,13 @@ class AppointmentImageUploadService {
 
   /// Uploads one queued batch and updates its queue entry.
   Future<void> _attempt(PendingUpload entry) async {
+    if (!await _matchesCurrentOwner(entry)) {
+      _logger.warn(
+        'IMG-UPLOAD skipped queue entry for ${entry.appointmentId}: '
+        'owner mismatch',
+      );
+      return;
+    }
     final files = entry.paths
         .map(File.new)
         .where((f) => f.existsSync())
@@ -221,6 +239,8 @@ class AppointmentImageUploadService {
           appointmentId: entry.appointmentId,
           paths: survivors,
           enqueuedAtMs: entry.enqueuedAtMs,
+          ownerUid: entry.ownerUid,
+          ownerEmployeeId: entry.ownerEmployeeId,
           uploaded: outcome.uploadedToCarry,
         ),
       );
@@ -278,11 +298,53 @@ class AppointmentImageUploadService {
     }
   }
 
+  Future<void> clearPending() async {
+    final entries = await _store.clearAll();
+    for (final entry in entries) {
+      for (final path in entry.paths) {
+        await _deleteQuietly(File(path));
+      }
+      _notifier.clearFailure(entry.appointmentId);
+    }
+    await _publishPending();
+  }
+
+  Future<({String uid, String employeeId})> _currentOwner() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) throw StateError('signed out');
+    final employeeId = await _employeeIdForUid?.call(uid);
+    if (employeeId == null || employeeId.isEmpty) {
+      throw StateError('no users doc for uid');
+    }
+    return (uid: uid, employeeId: employeeId);
+  }
+
+  Future<({String uid, String employeeId})?> _currentOwnerOrNull() async {
+    try {
+      return await _currentOwner();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool> _matchesCurrentOwner(PendingUpload entry) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null || uid != entry.ownerUid) return false;
+    final employeeId = await _employeeIdForUid?.call(uid);
+    return employeeId == entry.ownerEmployeeId;
+  }
+
   /// Republishes the queue depth per appointment from the store itself.
   Future<void> _publishPending() async {
     try {
       final counts = <String, int>{};
+      final owner = await _currentOwnerOrNull();
       for (final entry in await _store.load()) {
+        if (owner == null ||
+            entry.ownerUid != owner.uid ||
+            entry.ownerEmployeeId != owner.employeeId) {
+          continue;
+        }
         counts[entry.appointmentId] =
             (counts[entry.appointmentId] ?? 0) + entry.paths.length;
       }
@@ -355,5 +417,13 @@ final appointmentImageUploadProvider = Provider<AppointmentImageUploadService>((
   return AppointmentImageUploadService(
     appointments: ref.watch(appointmentsRepositoryProvider),
     notifier: ref.watch(photoUploadNotifierProvider),
+    employeeIdForUid: (uid) async {
+      final match = await ref
+          .read(employeesRepositoryProvider)
+          .findUserByUid(
+            uid,
+          );
+      return match?.id;
+    },
   );
 });

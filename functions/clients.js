@@ -19,6 +19,7 @@ const {
   requireDocId,
   assertAdminCall,
   enforceDurableRateLimit,
+  shortHash,
   APP_CHECK,
 } = require("./security");
 
@@ -60,7 +61,10 @@ const deleteClient = onCall(APP_CHECK, async (req) => {
       "deleteClient", req.auth.uid, DELETE_RATE_MAX, DELETE_RATE_WINDOW_MS);
 
   await performDeleteClient(getFirestore(), clientId);
-  logger.info("deleteClient: deleted", {uid: req.auth.uid, clientId});
+  logger.info("deleteClient: deleted", {
+    uidHash: shortHash(req.auth.uid),
+    clientId,
+  });
 });
 
 module.exports = {deleteClient, performDeleteClient};

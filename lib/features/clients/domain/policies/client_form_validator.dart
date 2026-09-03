@@ -1,4 +1,5 @@
 import 'package:scheduling/core/validators/auth_validators.dart';
+import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
@@ -21,8 +22,9 @@ class ClientFormValidator {
   }) {
     final errors = <String, String?>{
       // `name` is the only required field. Email has to be well-formed if provided;
-      // phone/mobile aren't format-checked at all.
       'name': name.isEmpty ? l10n.validation_nameIsRequired : null,
+      'phone': _validatePhone(l10n, phone),
+      'mobile': _validatePhone(l10n, mobile),
       'email': _validateEmail(l10n, email),
       'address': (!noFixedAddress && address.isEmpty)
           ? l10n.validation_addressIsRequired
@@ -45,7 +47,7 @@ class ClientFormValidator {
           : null;
       errors['contact_${i}_phone'] = !hasAdditionalContactMethod
           ? l10n.validation_phoneOrEmailIsRequired
-          : null;
+          : _validatePhone(l10n, contact.phone);
       errors['contact_${i}_email'] = _validateEmail(l10n, contact.email);
     }
 
@@ -58,5 +60,10 @@ class ClientFormValidator {
       return l10n.validation_enterAValidEmail;
     }
     return null;
+  }
+
+  static String? _validatePhone(AppLocalizations l10n, String phone) {
+    if (phone.isEmpty) return null;
+    return isUsablePhoneNumber(phone) ? null : l10n.validation_enterAValidPhone;
   }
 }

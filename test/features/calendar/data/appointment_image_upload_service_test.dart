@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:scheduling/core/images/image_storage_service.dart';
@@ -16,6 +17,10 @@ class _MockAppointmentsRepository extends Mock
     implements AppointmentsRepository {}
 
 class _MockImageStorageService extends Mock implements ImageStorageService {}
+
+class _MockFirebaseAuth extends Mock implements FirebaseAuth {}
+
+class _MockFirebaseUser extends Mock implements User {}
 
 /// Fails the requeue write, to pin that a throw there leaves the queue entry
 /// (and therefore its staged files) reachable.
@@ -38,6 +43,8 @@ void main() {
 
   late _MockAppointmentsRepository appointments;
   late _MockImageStorageService storage;
+  late _MockFirebaseAuth auth;
+  late _MockFirebaseUser user;
   late PhotoUploadNotifier notifier;
   late PendingUploadStore store;
   late Directory tempRoot;
@@ -50,6 +57,8 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     appointments = _MockAppointmentsRepository();
     storage = _MockImageStorageService();
+    auth = _MockFirebaseAuth();
+    user = _MockFirebaseUser();
     notifier = PhotoUploadNotifier();
     store = PendingUploadStore();
     tempRoot = Directory.systemTemp.createTempSync('img_upload_test');
@@ -59,6 +68,8 @@ void main() {
     when(
       () => appointments.appendAppointmentPictures(any(), any()),
     ).thenAnswer((_) async {});
+    when(() => user.uid).thenReturn('uid-1');
+    when(() => auth.currentUser).thenReturn(user);
   });
 
   tearDown(() {
@@ -72,6 +83,8 @@ void main() {
     storage: storage,
     store: store,
     stagingDirProvider: () async => stagingDir,
+    auth: auth,
+    employeeIdForUid: (_) async => 'doc-1',
   );
 
   File makeSource(String name) =>
@@ -203,9 +216,12 @@ void main() {
       await makeService().drainPending();
 
       verifyNever(() => storage.uploadImage(any(), any()));
-      final appended = verify(
-        () => appointments.appendAppointmentPictures(any(), captureAny()),
-      ).captured.single as List<AppointmentImage>;
+      final appended =
+          verify(
+                () =>
+                    appointments.appendAppointmentPictures(any(), captureAny()),
+              ).captured.single
+              as List<AppointmentImage>;
       expect(appended.single.storagePath, 'appointments/a1/images/1.jpg');
       expect(await store.load(), isEmpty);
     });
@@ -362,6 +378,26 @@ void main() {
       verifyNever(() => storage.uploadImage(any(), any()));
       verifyNever(() => appointments.appendAppointmentPictures(any(), any()));
       expect(notifier.failureFor('a1'), isNull);
+    });
+
+    test('skips queued files owned by a different account', () async {
+      final path = '${stagingDir.path}/other-user.jpg';
+      File(path).writeAsStringSync('data');
+      final entry = PendingUpload(
+        appointmentId: 'a1',
+        paths: [path],
+        enqueuedAtMs: DateTime.now().millisecondsSinceEpoch,
+        ownerUid: 'uid-2',
+        ownerEmployeeId: 'doc-2',
+      );
+      await store.add(entry);
+
+      await makeService().drainPending();
+
+      expect((await store.load()).single.id, entry.id);
+      expect(File(path).existsSync(), isTrue);
+      verifyNever(() => storage.uploadImage(any(), any()));
+      verifyNever(() => appointments.appendAppointmentPictures(any(), any()));
     });
   });
 

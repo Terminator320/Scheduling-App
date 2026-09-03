@@ -14,5 +14,6 @@ const Set<String> kSelfServiceUserFields = {
   'onCall',
   'phone',
   'travelAlertsEnabled',
+  'locationSharingEnabled',
   'updatedAt',
 };

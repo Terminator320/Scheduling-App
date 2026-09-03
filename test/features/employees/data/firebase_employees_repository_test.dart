@@ -1114,6 +1114,7 @@ void main() {
       int workEndMinutes = 960,
       bool onCall = true,
       bool travelAlertsEnabled = true,
+      bool locationSharingEnabled = false,
     }) async {
       await repo().updateSelfDetails(
         EmployeeRecord(
@@ -1126,6 +1127,7 @@ void main() {
           workEndMinutes: workEndMinutes,
           onCall: onCall,
           travelAlertsEnabled: travelAlertsEnabled,
+          locationSharingEnabled: locationSharingEnabled,
         ),
       );
       return (verify(() => docRef.update(captureAny())).captured.single as Map)
@@ -1140,12 +1142,19 @@ void main() {
       expect(captured['workStartMinutes'], 420);
       expect(captured['workEndMinutes'], 960);
       expect(captured['travelAlertsEnabled'], isTrue);
+      expect(captured['locationSharingEnabled'], isFalse);
     });
 
     test('writes the travel-alert preference explicitly', () async {
       final captured = await save(travelAlertsEnabled: false);
 
       expect(captured['travelAlertsEnabled'], isFalse);
+    });
+
+    test('writes the location-sharing preference explicitly', () async {
+      final captured = await save(locationSharingEnabled: true);
+
+      expect(captured['locationSharingEnabled'], isTrue);
     });
 
     test('the patch carries no key outside the rules allowlist', () async {

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 import 'package:scheduling/core/images/appointment_image_loader.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
@@ -20,6 +21,7 @@ class DeviceDeregistrationDeps {
     required this.presence,
     required this.liveActivity,
     required this.imageLoader,
+    required this.imageUploads,
     required this.clients,
     required this.appointments,
   });
@@ -33,6 +35,7 @@ class DeviceDeregistrationDeps {
     presence: read(presenceSyncControllerProvider),
     liveActivity: read(liveActivityRegistrationControllerProvider),
     imageLoader: read(appointmentImageLoaderProvider),
+    imageUploads: read(appointmentImageUploadProvider),
     clients: read(clientsRepositoryProvider),
     appointments: read(appointmentsRepositoryProvider),
   );
@@ -42,6 +45,7 @@ class DeviceDeregistrationDeps {
   final PresenceSyncController presence;
   final LiveActivityRegistrationController liveActivity;
   final AppointmentImageLoader imageLoader;
+  final AppointmentImageUploadService imageUploads;
   final ClientsRepository clients;
   final AppointmentsRepository appointments;
 }
@@ -54,6 +58,7 @@ Future<void> deregisterThisDevice(DeviceDeregistrationDeps deps) async {
   final liveActivity = deps.liveActivity;
   // Hoisted so teardown-time reads fail before any awaited steps.
   final imageLoader = deps.imageLoader;
+  final imageUploads = deps.imageUploads;
   // Hoisted for the same teardown-time read behavior.
   final clients = deps.clients;
   final appointments = deps.appointments;
@@ -64,6 +69,7 @@ Future<void> deregisterThisDevice(DeviceDeregistrationDeps deps) async {
 
   // Local caches clear last because credential-dependent unregisters come first.
   await _step(logger, 'imageCache de-registration', imageLoader.clear);
+  await _step(logger, 'pending image upload clear', imageUploads.clearPending);
   // Repository search windows also live for the process.
   await _step(logger, 'client cache clear', () async => clients.clearCaches());
   await _step(

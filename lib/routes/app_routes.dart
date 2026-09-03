@@ -63,14 +63,12 @@ class AppRoutes {
           // once showed employees Edit/Cancel/Delete affordances the rules
           // then rejected. An argless push is a caller bug, not a licence.
           //
-          // THE ASYMMETRY WITH THE `settings.arguments!` CASES BELOW IS
-          // DELIBERATE. Those seven bang out to a red screen on an argless
-          // push, which is the right answer for a route whose whole content
-          // is its argument — there is nothing to render. This one is the
-          // app's HOME, reached from a cold start and from every back stack,
-          // so a crash costs the user their session where a
-          // least-privilege degrade costs them a couple of affordances. Don't
-          // "unify" the two: neither shape is the general rule.
+          // THE ASYMMETRY WITH THE ARG-REQUIRED ROUTES BELOW IS DELIBERATE.
+          // Those seven recover to an invalid-link screen on an argless push,
+          // which is the right answer for a route whose whole content is its
+          // argument: there is nothing to render. This one is the app's HOME,
+          // reached from a cold start and from every back stack, so blocking
+          // admin-only affordances is the least-privilege fallback.
           builder: (_) => DashboardScreen(
             isAdmin: args?.isAdmin ?? false,
             employeeId: args?.employeeId ?? '',
@@ -80,7 +78,8 @@ class AppRoutes {
         );
 
       case dayRoute:
-        final args = settings.arguments! as DayRouteArgs;
+        final args = _args<DayRouteArgs>(settings);
+        if (args == null) return _invalidRoute(settings);
         return AppPageRoute(
           settings: settings,
           builder: (_) => DayRouteScreen(
@@ -92,7 +91,8 @@ class AppRoutes {
       case mainCalendar:
         // This is the post-login entry point — always builds a fresh shell
         // via pushReplacement.
-        final args = settings.arguments! as MainCalendarArgs;
+        final args = _args<MainCalendarArgs>(settings);
+        if (args == null) return _invalidRoute(settings);
         return AppPageRoute(
           settings: settings,
           builder: (_) => HubShell(
@@ -102,7 +102,8 @@ class AppRoutes {
         );
 
       case employees:
-        final args = settings.arguments! as MainCalendarArgs;
+        final args = _args<MainCalendarArgs>(settings);
+        if (args == null) return _invalidRoute(settings);
         return _hubRoute(
           settings,
           HubTab.employees,
@@ -111,7 +112,8 @@ class AppRoutes {
         );
 
       case clients:
-        final args = settings.arguments! as ClientsListArgs;
+        final args = _args<ClientsListArgs>(settings);
+        if (args == null) return _invalidRoute(settings);
         return _hubRoute(
           settings,
           HubTab.clients,
@@ -120,7 +122,8 @@ class AppRoutes {
         );
 
       case history:
-        final args = settings.arguments! as HistoryArgs;
+        final args = _args<HistoryArgs>(settings);
+        if (args == null) return _invalidRoute(settings);
         return AppPageRoute(
           settings: settings,
           builder: (_) => HistoryScreen(
@@ -130,7 +133,8 @@ class AppRoutes {
         );
 
       case liveMap:
-        final args = settings.arguments! as MainCalendarArgs;
+        final args = _args<MainCalendarArgs>(settings);
+        if (args == null) return _invalidRoute(settings);
         return _hubRoute(
           settings,
           HubTab.liveMap,
@@ -146,7 +150,8 @@ class AppRoutes {
 
       case AppRoutes.settings:
         // Settings is only reachable post-login, so args are always present.
-        final args = settings.arguments! as SettingsArgs;
+        final args = _args<SettingsArgs>(settings);
+        if (args == null) return _invalidRoute(settings);
         return AppPageRoute(
           settings: settings,
           builder: (_) => SettingsScreen(
@@ -160,6 +165,18 @@ class AppRoutes {
       default:
         return null;
     }
+  }
+
+  static T? _args<T>(RouteSettings settings) {
+    final args = settings.arguments;
+    return args is T ? args : null;
+  }
+
+  static Route<dynamic> _invalidRoute(RouteSettings settings) {
+    return AppPageRoute<void>(
+      settings: settings,
+      builder: (_) => const InvalidRouteScreen(),
+    );
   }
 
   /// Route for any non-calendar hub tab — redirects into a tab switch if a
@@ -190,6 +207,40 @@ class AppRoutes {
         employeeId: employeeId,
         userName: userName,
         userEmail: userEmail,
+      ),
+    );
+  }
+}
+
+class InvalidRouteScreen extends StatelessWidget {
+  const InvalidRouteScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.link_off_rounded, size: 40, color: scheme.error),
+              const SizedBox(height: 12),
+              Text(
+                "This link can't be opened.",
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () => Navigator.maybePop(context),
+                child: const Text('Back'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

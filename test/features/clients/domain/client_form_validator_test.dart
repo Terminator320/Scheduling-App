@@ -68,6 +68,34 @@ void main() {
       expect(errors['email'], isNotNull);
     });
 
+    test('malformed phone values are rejected without requiring phone', () {
+      expect(
+        validate(name: 'Jane', phone: 'abc', address: '1 Main St')['phone'],
+        isNotNull,
+      );
+      expect(
+        validate(
+          name: 'Jane',
+          phone: '(514) 555-1234 ext 9',
+          address: '1 Main St',
+        )['phone'],
+        isNull,
+      );
+      expect(validate(name: 'Jane', address: '1 Main St')['phone'], isNull);
+    });
+
+    test('additional-contact phone values are format-checked', () {
+      final errors = validate(
+        name: 'Acme',
+        address: '1 Main St',
+        additionalContacts: const [
+          ClientContact(name: 'Bob', phone: 'abc'),
+        ],
+      );
+
+      expect(errors['contact_0_phone'], isNotNull);
+    });
+
     test('address is required whenever not marked no-fixed-address', () {
       expect(validate(name: 'Jane', phone: '555-1234')['address'], isNotNull);
       expect(
