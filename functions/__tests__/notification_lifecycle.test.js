@@ -9,7 +9,6 @@
 const {
   lifecycleStamps,
   isCrewCompletion,
-  crewStatusSignal,
   diffAppointmentForNotifications,
 } = require("../notification_policy");
 const {stampLifecycle} = require("../notification_utils");
@@ -107,10 +106,6 @@ describe("the stamp-only rewrite is silent", () => {
 
   test("is not a completion for the office", () => {
     expect(isCrewCompletion(before, after)).toBe(false);
-  });
-
-  test("is not a crew signal", () => {
-    expect(crewStatusSignal(before, after)).toBeNull();
   });
 
   test("produces no crew-facing event", () => {

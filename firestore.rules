@@ -380,18 +380,13 @@ service cloud.firestore {
         && (!('address' in d.keys()) || isBoundedString(d.address, 500))
         && (!('notes' in d.keys()) || isBoundedString(d.notes, 4000))
         && (!('fieldNotes' in d.keys()) || isBoundedString(d.fieldNotes, 4000))
-        // The crew signal (`updateCrewStatus`) and the job time record. The
-        // three instants are stamped SERVER-SIDE — `lifecycleStamps` in the
-        // write trigger for `startedAt`/`completedAt`, the crew branch below
-        // for `crewStatusAt` — and an admin edit's `request.resource.data` is
-        // the MERGED document, so they are present on most updates: they are
-        // type-checked here, never banned, or every edit of a started job
-        // would be refused.
-        && (!('crewStatus' in d.keys()) || isBoundedString(d.crewStatus, 32))
-        && (!('crewStatusBy' in d.keys()) || isValidDocIdField(d.crewStatusBy))
+        // The job time record. Both instants are stamped SERVER-SIDE by
+        // `lifecycleStamps` in the write trigger, and an admin edit's
+        // `request.resource.data` is the MERGED document, so they are present
+        // on most updates: they are type-checked here, never banned, or every
+        // edit of a started job would be refused.
         && (!('startedAt' in d.keys()) || d.startedAt is timestamp)
         && (!('completedAt' in d.keys()) || d.completedAt is timestamp)
-        && (!('crewStatusAt' in d.keys()) || d.crewStatusAt is timestamp)
         && (!('materialsNeeded' in d.keys())
             || isBoundedString(d.materialsNeeded, 2000))
 
@@ -470,23 +465,7 @@ service cloud.firestore {
             && request.resource.data.status == 'in_progress'
             && request.resource.data.updatedAt == request.time
             && !(resource.data.status in
-                ['in_progress', 'done', 'completed', 'cancelled']))
-        // "On my way" / "Running late": the assignee's own signal to the
-        // office, on an open job. Exactly four keys, every one pinned — the
-        // value to the two-string allowlist, both instants to the server
-        // clock, and `crewStatusBy` to the CALLER's own doc id, so a signal
-        // can never be put in somebody else's name. Refused on a closed job:
-        // there is nobody to be on the way to.
-        || (isAssignedEmployee(resource.data)
-            && request.resource.data.diff(resource.data)
-               .affectedKeys()
-               .hasOnly(['crewStatus', 'crewStatusAt', 'crewStatusBy',
-                         'updatedAt'])
-            && request.resource.data.crewStatus in ['onMyWay', 'runningLate']
-            && request.resource.data.crewStatusAt == request.time
-            && request.resource.data.crewStatusBy == myDocId()
-            && request.resource.data.updatedAt == request.time
-            && !(resource.data.status in ['done', 'completed', 'cancelled']));
+                ['in_progress', 'done', 'completed', 'cancelled']));
 
       // Delete: admin only.
       allow delete: if isAdmin();

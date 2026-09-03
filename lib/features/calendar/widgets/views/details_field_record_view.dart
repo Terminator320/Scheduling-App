@@ -1,7 +1,4 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/errors/error_cause.dart';
@@ -9,7 +6,6 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
-import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -42,88 +38,10 @@ class _DetailsFieldRecordViewState
 
   bool _isSaving = false;
 
-  /// The crew signal this sheet has sent, so the chip stays selected after the
-  /// write without re-reading the document the sheet was opened with.
-  String? _sentStatus;
-  bool _isSending = false;
-
   @override
   void dispose() {
     _notes.dispose();
     super.dispose();
-  }
-
-  /// Writes "On my way" / "Running late" in this person's name.
-  Future<void> _sendCrewStatus(String status, String byEmployeeId) async {
-    final id = widget.appointment.id;
-    if (id == null || _isSending) return;
-    // Before the first await, like every other submit here.
-    setState(() => _isSending = true);
-    unawaited(HapticFeedback.lightImpact());
-
-    final logger = ref.read(loggerProvider);
-    final notices = ref.read(noticeServiceProvider);
-    final repository = ref.read(appointmentsRepositoryProvider);
-
-    if (guardedOffline(
-      context,
-      ref,
-      intro: context.l10n.error_introUpdateCrewStatus,
-    )) {
-      setState(() => _isSending = false);
-      return;
-    }
-
-    try {
-      await repository.updateCrewStatus(
-        id: id,
-        status: status,
-        byEmployeeId: byEmployeeId,
-      );
-      if (!mounted) return;
-      setState(() {
-        _sentStatus = status;
-        _isSending = false;
-      });
-      notices.success(context.l10n.calendar_crewStatusSent);
-    } catch (e, st) {
-      logger.warn('APPT-CREWSTATUS updateCrewStatus failed', e, st);
-      if (!mounted) return;
-      setState(() => _isSending = false);
-      notices.error(
-        composeErrorNotice(
-          context,
-          intro: context.l10n.error_introUpdateCrewStatus,
-          error: e,
-        ),
-      );
-    }
-  }
-
-  /// The two crew chips, on an open job only — there is nobody to be on the way
-  /// to once it is closed.
-  Widget _crewStatusChips(BuildContext context, String byEmployeeId) {
-    final l10n = context.l10n;
-    final a = widget.appointment;
-    final current =
-        _sentStatus ?? (a.crewStatusBy == byEmployeeId ? a.crewStatus : '');
-    return Wrap(
-      spacing: AppSpacing.sp8,
-      children: [
-        for (final (status, label, icon) in [
-          ('onMyWay', l10n.calendar_onMyWay, Icons.directions_car_outlined),
-          ('runningLate', l10n.calendar_runningLate, Icons.schedule_rounded),
-        ])
-          ChoiceChip(
-            avatar: Icon(icon, size: 18),
-            label: Text(label),
-            selected: current == status,
-            onSelected: _isSending || current == status
-                ? null
-                : (_) => _sendCrewStatus(status, byEmployeeId),
-          ),
-      ],
-    );
   }
 
   Future<void> _save() async {
@@ -194,10 +112,6 @@ class _DetailsFieldRecordViewState
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final isDirty = _notes.text.trim() != _saved;
-    // The parent renders this view for a non-admin assignee only, so the
-    // identity is normally settled by now; a null (still resolving) just
-    // withholds the chips for that build.
-    final byEmployeeId = ref.watch(activeUserIdentityProvider).value?.docId;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -205,10 +119,6 @@ class _DetailsFieldRecordViewState
         const SizedBox(height: AppSpacing.sp16),
         MonoSectionLabel(l10n.calendar_fieldRecordLabel),
         const SizedBox(height: AppSpacing.sp8),
-        if (!widget.appointment.isClosed && byEmployeeId != null) ...[
-          _crewStatusChips(context, byEmployeeId),
-          const SizedBox(height: AppSpacing.sp8),
-        ],
         LabeledTextField(
           controller: _notes,
           label: l10n.calendar_fieldNotesLabel,

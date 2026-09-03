@@ -48,11 +48,6 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     // `functions/notification_policy.js`), never by a client.
     DateTime? startedAt,
     DateTime? completedAt,
-    // What an assignee last signalled on the way to the job; one of
-    // `crewStatusRawValues` or empty.
-    @Default('') String crewStatus,
-    DateTime? crewStatusAt,
-    @Default('') String crewStatusBy,
   }) = _AppointmentRecord;
   const AppointmentRecord._();
 
@@ -85,14 +80,8 @@ abstract class AppointmentRecord with _$AppointmentRecord {
       pictureCount: _parseCount(data['pictureCount']),
       startedAt: firestoreDateTime(data['startedAt']),
       completedAt: firestoreDateTime(data['completedAt']),
-      crewStatus: (data['crewStatus'] ?? '').toString(),
-      crewStatusAt: firestoreDateTime(data['crewStatusAt']),
-      crewStatusBy: (data['crewStatusBy'] ?? '').toString(),
     );
   }
-
-  /// Whether an assignee has signalled on the way to this job.
-  bool get hasCrewSignal => crewStatus.isNotEmpty;
 
   /// Whether this job should show the card photo indicator.
   bool get hasPictures => pictureCount > 0;
@@ -129,8 +118,7 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     // Single-day jobs omit run labels.
     if (hasRunLabels) 'dayIndex': dayIndex,
     if (hasRunLabels) 'dayCount': dayCount,
-    // `startedAt`, `completedAt` and the three `crewStatus*` fields are
-    // deliberately NOT here.
+    // `startedAt` and `completedAt` are deliberately NOT here.
   };
 
   /// Whether the stored run pair is coherent enough to write back.

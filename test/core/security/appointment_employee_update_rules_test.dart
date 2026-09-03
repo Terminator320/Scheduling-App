@@ -130,7 +130,7 @@ void main() {
       // Not a widened `hasOnly` on the status branch: that branch is the most
       // security-sensitive write in the app and its exact key set is what makes
       // it possible to reason about.
-      expect(employeeBranches(), hasLength(4));
+      expect(employeeBranches(), hasLength(3));
       expect(collapsed(employeeBranch()), isNot(contains("'fieldNotes'")));
       expect(collapsed(notesBranch()), isNot(contains("'status'")));
     });

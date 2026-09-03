@@ -131,8 +131,6 @@ class DetailsViewBody extends ConsumerWidget {
             startedAt: appointment.startedAt,
             completedAt: appointment.completedAt,
           ),
-        if (appointment.hasCrewSignal && !data.isClosed)
-          DetailsCrewSignalLine(appointment: appointment),
         const SizedBox(height: AppSpacing.sp16),
         const Divider(height: 1),
         const SizedBox(height: AppSpacing.sp16),

@@ -53,14 +53,6 @@ abstract class AppointmentsRepository {
   /// Writes what the CREW recorded on site.
   Future<void> updateFieldNotes({required String id, required String notes});
 
-  /// Records what an assignee signalled on the way to the job — one of
-  /// `crewStatusRawValues`, stamped with who sent it.
-  Future<void> updateCrewStatus({
-    required String id,
-    required String status,
-    required String byEmployeeId,
-  });
-
   Future<void> updateAppointmentStatus({
     required String id,
     required String status,

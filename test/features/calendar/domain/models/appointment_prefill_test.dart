@@ -47,9 +47,6 @@ final _finished = _bare.copyWith(
   pictureCount: 3,
   startedAt: DateTime(2026, 5, 10, 9, 5),
   completedAt: DateTime(2026, 5, 10, 10, 40),
-  crewStatus: 'onMyWay',
-  crewStatusAt: DateTime(2026, 5, 10, 8, 40),
-  crewStatusBy: 'e1',
 );
 
 void main() {
