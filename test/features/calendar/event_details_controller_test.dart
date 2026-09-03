@@ -167,7 +167,8 @@ void main() {
       expect(state.selectedStartTime, const TimeOfDay(hour: 9, minute: 0));
       expect(state.selectedEndTime, const TimeOfDay(hour: 10, minute: 0));
       // The fixture's unknown 'booked' status normalizes to 'pending' via
-      // AppointmentStatus.fromRaw so it's always re-written as an allowlisted value.
+      // AppointmentStatus.fromRaw so it's always re-written as an allowlisted
+      // value.
       expect(state.editingStatus, 'pending');
       expect(state.isEditing, isFalse);
     });
@@ -199,8 +200,8 @@ void main() {
         ],
       );
       addTearDown(scoped.dispose);
-      // Keep the user-doc stream alive and settled before the controller
-      // builds — mirrors main.dart's app-lifetime listen.
+      // Keep the user-doc stream alive and settled before the controller builds
+      // — mirrors main.dart's app-lifetime listen.
       scoped.listen(currentUserDocProvider, (_, _) {});
       await scoped.read(currentUserDocProvider.future);
 
@@ -260,54 +261,50 @@ void main() {
       },
     );
 
-    test('a user-doc stream that ERRORS mid-await does not escape as a fatal',
-        () async {
-      // Shipped as a FATAL on 2026-08-31 and fixed by putting the await
-      // INSIDE the try. `_loadClientIfNeeded` runs in a DISCARDED
-      // `Future.microtask`, so nothing is left to catch a throw and it reaches
-      // the zone handler — from a sheet that merely failed to prefill a name.
-      // The `hasError` guard above the await covers an ALREADY-settled error,
-      // never one arriving during it, which is exactly this case.
-      //
-      // Hoist that await back above the try and this test fails.
-      final scopedClients = _MockClientsRepo();
-      final docs = StreamController<Map<String, dynamic>>();
-      when(
-        () => scopedClients.getClientById(any()),
-      ).thenAnswer((_) async => _existingClient);
-      final scoped = ProviderContainer(
-        overrides: [
-          appointmentsRepositoryProvider.overrideWithValue(appointments),
-          clientsRepositoryProvider.overrideWithValue(scopedClients),
-          employeesRepositoryProvider.overrideWithValue(employees),
-          appointmentImageUploadProvider.overrideWithValue(uploader),
-          imageStorageProvider.overrideWithValue(storage),
-          currentUserDocProvider.overrideWith((ref) => docs.stream),
-        ],
-      );
-      addTearDown(docs.close);
-      addTearDown(scoped.dispose);
+    test(
+      'a user-doc stream that ERRORS mid-await does not escape as a fatal',
+      () async {
+        // Shipped as a FATAL on 2026-08-31 and fixed by putting the await INSIDE
+        // the try.
+        final scopedClients = _MockClientsRepo();
+        final docs = StreamController<Map<String, dynamic>>();
+        when(
+          () => scopedClients.getClientById(any()),
+        ).thenAnswer((_) async => _existingClient);
+        final scoped = ProviderContainer(
+          overrides: [
+            appointmentsRepositoryProvider.overrideWithValue(appointments),
+            clientsRepositoryProvider.overrideWithValue(scopedClients),
+            employeesRepositoryProvider.overrideWithValue(employees),
+            appointmentImageUploadProvider.overrideWithValue(uploader),
+            imageStorageProvider.overrideWithValue(storage),
+            currentUserDocProvider.overrideWith((ref) => docs.stream),
+          ],
+        );
+        addTearDown(docs.close);
+        addTearDown(scoped.dispose);
 
-      scoped
-        ..listen(currentUserDocProvider, (_, _) {})
-        ..listen(
-          eventDetailsControllerProvider(EventDetailsKey(_appointment)),
-          (_, _) {},
-        )
-        ..read(eventDetailsControllerProvider(EventDetailsKey(_appointment)));
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+        scoped
+          ..listen(currentUserDocProvider, (_, _) {})
+          ..listen(
+            eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+            (_, _) {},
+          )
+          ..read(eventDetailsControllerProvider(EventDetailsKey(_appointment)));
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
 
-      // The controller is now parked on `.future`, mid-await.
-      docs.addError(StateError('unavailable'));
-      await pumpEventQueue();
+        // The controller is now parked on `.future`, mid-await.
+        docs.addError(StateError('unavailable'));
+        await pumpEventQueue();
 
-      // The doc really did settle as an error, the client load was abandoned,
-      // and nothing escaped — an unhandled async error out of the discarded
-      // microtask fails this test on its own.
-      expect(scoped.read(currentUserDocProvider).hasError, isTrue);
-      verifyNever(() => scopedClients.getClientById(any()));
-    });
+        // The doc really did settle as an error, the client load was abandoned,
+        // and nothing escaped — an unhandled async error out of the discarded
+        // microtask fails this test on its own.
+        expect(scoped.read(currentUserDocProvider).hasError, isTrue);
+        verifyNever(() => scopedClients.getClientById(any()));
+      },
+    );
 
     test('loads the client once an admin role settles', () async {
       final scopedClients = _MockClientsRepo();
@@ -533,11 +530,8 @@ void main() {
     });
 
     test('a double-tapped save returns SaveBusy, not Invalid', () async {
-      // The save family's sibling of `EventDetailsActionBusy`, which the
-      // status setters and the delete already return. Reporting a skipped
-      // write as `Invalid` makes it indistinguishable from a form that failed
-      // validation — the same conflation that once let this sheet announce
-      // "marked as complete" without having written anything.
+      // The save family's sibling of `EventDetailsActionBusy`, which the status
+      // setters and the delete already return.
       readNotifier();
       await waitForSeed();
       final gate = Completer<void>();
@@ -570,11 +564,7 @@ void main() {
     test(
       'an all-day edit saves midnight to 23:59, not the picked times',
       () async {
-        // The EDIT half of the appointmentSpan invariant. The add path was
-        // covered end-to-end but this one only ever asserted the isAllDay STATE
-        // flag, so a regression in the saved instants here would have shipped
-        // silently — which is exactly what routing both paths through one helper
-        // is meant to prevent.
+        // The EDIT half of the appointmentSpan invariant.
         readNotifier();
         await waitForSeed();
         final c = readNotifier()
@@ -617,9 +607,7 @@ void main() {
       expect(outcome, isA<EventDetailsSaved>());
       final saved = (outcome as EventDetailsSaved).appointment;
       expect(saved.isPersonal, isTrue);
-      // The client is cleared — its picker is gone from the form. The address
-      // is not: that field stays on screen as an optional one, so the user can
-      // see and edit whatever gets saved.
+      // The client is cleared — its picker is gone from the form.
       expect(saved.clientId, isEmpty);
       expect(saved.clientName, isEmpty);
       expect(saved.address, '99 New St');
@@ -691,13 +679,7 @@ void main() {
     });
 
     test('a genuinely-empty active list retains every original assignee', () {
-      // The counterpart to the retain rule above. When NOBODY is active,
-      // nobody is deselectable, so keeping all of them is correct — the
-      // failure mode the invariant guards against is reading a COLD stream
-      // value and mistaking it for this, which is why
-      // `_resolveActiveEmployees` awaits a real emission (pinned by the
-      // seed-race test below). Recorded so a future change doesn't "fix" this
-      // into dropping assignees.
+      // The counterpart to the retain rule above.
       when(employees.watchEmployees).thenAnswer((_) => Stream.value(const []));
 
       final withTwo = _appointment.copyWith(
@@ -735,7 +717,8 @@ void main() {
         );
 
         // Intentionally omits waitForSeed — save() must settle the seed itself,
-        // or validation would see an empty selection and return employeesRequired.
+        // or validation would see an empty selection and return
+        // employeesRequired.
         final outcome = await c.save(
           fresh,
           title: 'x',
@@ -1092,7 +1075,8 @@ void main() {
         expect(batch.every((a) => a.address == 'New address'), isTrue);
         expect(batch.every((a) => a.seriesId == 'series-1'), isTrue);
         // Status stays per-visit (never propagated) but is canonicalized:
-        // 'confirmed' normalizes to 'pending', 'in_progress' round-trips unchanged.
+        // 'confirmed' normalizes to 'pending', 'in_progress' round-trips
+        // unchanged.
         expect(batch[1].status, 'pending');
         expect(batch[2].status, 'in_progress');
         // Each sibling keeps its own date but takes the new time of day.
@@ -1199,7 +1183,8 @@ void main() {
 
     test('seeds the stored repeat and does not re-book it unchanged', () async {
       // Distinct id — the family is keyed by appointment id, so reusing
-      // _appointment's id would return setUp's already-seeded (repeat: none) instance.
+      // _appointment's id would return setUp's already-seeded (repeat: none)
+      // instance.
       final repeating = _appointment.copyWith(
         id: 'repeat-seed-1',
         repeat: RepeatInterval.sixMonths,
@@ -1279,24 +1264,22 @@ void main() {
     );
 
     // The offline invariant covered `save()` alone, and there are FOUR guards
-    // on this controller. Drop the one on `_setStatusOnRepo` and "Mark as
-    // complete" offline spins on an un-acked write until reconnect with the
-    // button disabled — the action a technician out of signal is most likely
-    // to press, and exactly the failure the invariant exists for.
+    // on this controller.
     ProviderContainer offlineContainer() {
-      final c = ProviderContainer(
-        overrides: [
-          appointmentsRepositoryProvider.overrideWithValue(appointments),
-          clientsRepositoryProvider.overrideWithValue(clients),
-          employeesRepositoryProvider.overrideWithValue(employees),
-          appointmentImageUploadProvider.overrideWithValue(uploader),
-          imageStorageProvider.overrideWithValue(storage),
-          isOfflineProvider.overrideWithValue(true),
-        ],
-      )..listen(
-        eventDetailsControllerProvider(EventDetailsKey(_appointment)),
-        (_, _) {},
-      );
+      final c =
+          ProviderContainer(
+            overrides: [
+              appointmentsRepositoryProvider.overrideWithValue(appointments),
+              clientsRepositoryProvider.overrideWithValue(clients),
+              employeesRepositoryProvider.overrideWithValue(employees),
+              appointmentImageUploadProvider.overrideWithValue(uploader),
+              imageStorageProvider.overrideWithValue(storage),
+              isOfflineProvider.overrideWithValue(true),
+            ],
+          )..listen(
+            eventDetailsControllerProvider(EventDetailsKey(_appointment)),
+            (_, _) {},
+          );
       addTearDown(c.dispose);
       return c;
     }
@@ -1349,29 +1332,31 @@ void main() {
       );
     });
 
-    test('a series cancel fails fast offline and never reads the series',
-        () async {
-      final offline = offlineContainer();
-      final key = EventDetailsKey(_appointment);
+    test(
+      'a series cancel fails fast offline and never reads the series',
+      () async {
+        final offline = offlineContainer();
+        final key = EventDetailsKey(_appointment);
 
-      final outcome = await offline
-          .read(eventDetailsControllerProvider(key).notifier)
-          .cancelAppointment(
-            _appointment.copyWith(seriesId: 'series-1'),
-            includeFuture: true,
-          );
+        final outcome = await offline
+            .read(eventDetailsControllerProvider(key).notifier)
+            .cancelAppointment(
+              _appointment.copyWith(seriesId: 'series-1'),
+              includeFuture: true,
+            );
 
-      expect(outcome, isA<EventDetailsActionFailed>());
-      expect(
-        (outcome as EventDetailsActionFailed).error,
-        isA<SocketException>(),
-      );
-      verifyNever(() => appointments.getSeries(any()));
-      expect(
-        offline.read(eventDetailsControllerProvider(key)).isSaving,
-        isFalse,
-      );
-    });
+        expect(outcome, isA<EventDetailsActionFailed>());
+        expect(
+          (outcome as EventDetailsActionFailed).error,
+          isA<SocketException>(),
+        );
+        verifyNever(() => appointments.getSeries(any()));
+        expect(
+          offline.read(eventDetailsControllerProvider(key)).isSaving,
+          isFalse,
+        );
+      },
+    );
 
     test(
       'offline fails fast without touching the repo or the busy flag',
@@ -1528,7 +1513,7 @@ void main() {
       'handles it after the write',
       () async {
         // Two dialogs about the same clash, back to back, is what running both
-        // would give. The add flow's twin pins the same rule.
+        // would give.
         await waitForSeed();
         when(
           () => appointments.findBusyEmployees(
@@ -1632,7 +1617,7 @@ void main() {
 
       expect(outcome, isA<EventDetailsActionOk>());
       // THE regression this whole change exists to prevent: one document, one
-      // status. Do not delete.
+      // status.
       verify(
         () => appointments.updateAppointmentStatus(id: 'd3', status: 'done'),
       ).called(1);

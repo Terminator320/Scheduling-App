@@ -10,9 +10,9 @@ import 'package:scheduling/features/calendar/data/firebase_appointments_reposito
 
 /// `updateCrewStatus` is pinned field by field, like the status write: the
 /// rules branch behind it is `hasOnly(['crewStatus', 'crewStatusAt',
-/// 'crewStatusBy', 'updatedAt'])` with both instants pinned to
-/// `request.time`, so one extra key — a `seriesOpId`, say — or one client
-/// clock is an opaque `permission-denied` on the field.
+/// 'crewStatusBy', 'updatedAt'])` with both instants pinned to `request.time`,
+/// so one extra key — a `seriesOpId`, say — or one client clock is an opaque
+/// `permission-denied` on the field.
 
 class _MockFirestore extends Mock implements FirebaseFirestore {}
 

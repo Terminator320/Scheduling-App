@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_prefill.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
 import 'package:scheduling/features/clients/application/client_form_controller.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
@@ -36,8 +37,7 @@ class ClientDetailView extends ConsumerStatefulWidget {
   final double bottomPadding;
 
   /// How the host dismisses this view once its record is gone — the sheet pops
-  /// itself, the two-pane detail clears its selection. The host decides, since
-  /// only it knows how it is presented.
+  /// itself, the two-pane detail clears its selection.
   final VoidCallback? onDeleted;
 
   @override
@@ -47,23 +47,11 @@ class ClientDetailView extends ConsumerStatefulWidget {
 class _ClientDetailViewState extends ConsumerState<ClientDetailView>
     with ClientActionsHost<ClientDetailView> {
   /// Seed record, and the fallback whenever the live doc read has nothing to
-  /// give. Kept up to date by the edit/archive handlers so those still work if
-  /// the listener is unavailable.
+  /// give.
   late ClientRecord _client;
 
-  /// The record this view renders: the live doc when the listener has one,
-  /// else [_client].
-  ///
-  /// The live read is what makes the Wave sync badge truthful. `wave.syncState`
-  /// is written by Cloud Functions AFTER the save returns — `pending` from the
-  /// `waveUpsertCustomer` trigger, then `synced` once the outbox reaches Wave —
-  /// so the record the edit sheet pops back (a `copyWith` of the record this
-  /// view was handed) still carries the PRE-EDIT sync state. Rendering that,
-  /// the badge could never change in response to an edit: it sat on "Synced
-  /// with Wave" while the push was still queued.
-  ///
-  /// The fallback is not a nicety: an offline or refused read must leave the
-  /// detail on screen with what we already had, never blank it.
+  /// The record this view renders: the live doc when the listener has one, else
+  /// [_client].
   ClientRecord get _resolved =>
       ref.read(clientStreamProvider(_client.id)).value ?? _client;
 
@@ -94,7 +82,10 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView>
   void onClientDeleted(ClientRecord client) => widget.onDeleted?.call();
 
   Future<void> _bookJob() async {
-    await showAddEventPopup(context, initialClient: _resolved);
+    await showAddEventPopup(
+      context,
+      prefill: AppointmentPrefill(client: _resolved),
+    );
   }
 
   @override
@@ -102,7 +93,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView>
     final busy = ref.watch(clientFormControllerProvider);
     // Watched, not read: the whole point is that the server keeps changing this
     // doc after the user's save (the Wave sync state, and `jobCount`), so the
-    // view has to rebuild on those. See [_resolved] for the fallback.
+    // view has to rebuild on those.
     final client = ref.watch(clientStreamProvider(_client.id)).value ?? _client;
     return DetailSheetListView(
       scrollController: widget.scrollController,
@@ -128,9 +119,7 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView>
                 : context.l10n.clients_archive,
           ),
         ),
-        // Advisory only — the callable re-checks with a live count(). Withheld
-        // rather than shown-and-refused, so the footer never offers an action
-        // the server will reject.
+        // Advisory only — the callable re-checks with a live count().
         if (canDeleteClient(client)) ...[
           const SizedBox(height: AppSpacing.sp8),
           OutlinedButton.icon(
@@ -149,16 +138,15 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView>
 }
 
 /// Avatar, name, a `<type> · since <Mon YYYY>` line, and the Edit pill — one
-/// card, as the approved design draws it. The pill lives inside the card rather
-/// than floating above it.
+/// card, as the approved design draws it.
 class _ProfileCard extends StatelessWidget {
   const _ProfileCard({required this.client, required this.onEdit});
 
   final ClientRecord client;
   final VoidCallback onEdit;
 
-  /// "Building · since Apr 2023" — either half is dropped when absent,
-  /// so a typeless client with no createdAt renders no line at all.
+  /// "Building · since Apr 2023" — either half is dropped when absent, so a
+  /// typeless client with no createdAt renders no line at all.
   String _subtitle(BuildContext context) {
     final l10n = context.l10n;
     final parts = <String>[
@@ -180,16 +168,14 @@ class _ProfileCard extends StatelessWidget {
     final subtitle = _subtitle(context);
     // Shown only when it says something the name doesn't already — a business
     // with a named individual on file.
-    // Resolved once: `displayName` is an uncached getter that runs `stripPhone`
-    // (two regex passes), and this body reads it four times.
     final displayName = client.displayName;
     final fullName = [
       client.firstName,
       client.lastName,
     ].where((part) => part.trim().isNotEmpty).join(' ').trim();
-    // Compared against what the title actually RENDERS, not the stored `name`
-    // — that one carries the phone number, so it never equals `fullName` and
-    // this line used to repeat the title verbatim on every person client.
+    // Compared against what the title actually RENDERS, not the stored `name` —
+    // that one carries the phone number, so it never equals `fullName` and this
+    // line used to repeat the title verbatim on every person client.
     final showPersonName = fullName.isNotEmpty && fullName != displayName;
 
     final identity = Column(

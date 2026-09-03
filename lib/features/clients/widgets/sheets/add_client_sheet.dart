@@ -36,8 +36,7 @@ enum AddClientNext { none, bookJob }
 /// action.
 typedef AddClientResult = ({ClientRecord client, AddClientNext next});
 
-/// Opens the add-client sheet. Resolves to the created client and the follow-up
-/// action, or null if the sheet was dismissed.
+/// Opens the add-client sheet.
 Future<AddClientResult?> showAddClientSheet(
   BuildContext context, {
   String? initialName,
@@ -52,16 +51,15 @@ Future<AddClientResult?> showAddClientSheet(
     builder: (_) => AddClientSheet(initialName: initialName),
   );
   if (settleFocus && context.mounted) await SheetFocus.unfocusAfterSheet();
-  // Guard against the widget unmounting while the sheet is open — we shouldn't hand
-  // the client back to a form that's already been disposed.
+  // Guard against the widget unmounting while the sheet is open — we shouldn't
+  // hand the client back to a form that's already been disposed.
   return context.mounted ? created : null;
 }
 
 class AddClientSheet extends ConsumerStatefulWidget {
   const AddClientSheet({super.key, this.initialName});
 
-  /// Prefills the name field (e.g. the text typed into the appointment client
-  /// search before choosing to add a new client).
+  /// Prefills the name field (e.g.
   final String? initialName;
 
   @override
@@ -69,8 +67,7 @@ class AddClientSheet extends ConsumerStatefulWidget {
 }
 
 // ClientFormState supplies `noFixedAddress`, `setNoFixedAddress`, `errors` and
-// `clearError`. Additional contacts are deliberately NOT offered here — New
-// stays one fast screen and extra contacts are added on the next edit.
+// `clearError`.
 class _AddClientSheetState extends ConsumerState<AddClientSheet>
     with ClientFormState<AddClientSheet> {
   final _nameController = TextEditingController();
@@ -88,8 +85,8 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
 
   ClientType _type = ClientType.unset;
 
-  // Admin-only surface: reached from the Clients FAB and the appointment
-  // form's inline add-client, both admin-gated.
+  // Admin-only surface: reached from the Clients FAB and the appointment form's
+  // inline add-client, both admin-gated.
   final _tour = TourSteps(const FormTour(TourForm.addClient), isAdmin: true);
 
   @override
@@ -97,9 +94,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     super.initState();
     _nameController.text = widget.initialName ?? '';
     // The seed is a programmatic write, which never fires the name field's
-    // `onChanged` — so the lift below has to be run by hand here. The inline
-    // booking flow seeds this from the client search, and people are searched
-    // for by phone number, so the seed IS routinely the number.
+    // `onChanged` — so the lift below has to be run by hand here.
     liftPhoneFromNameField(name: _nameController, phone: _phoneController);
   }
 
@@ -122,9 +117,9 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
       controller.dispose();
     }
     // A no-op today — this sheet deliberately offers no additional contacts
-    // (see the note above the class) — but the mixin owns those controllers,
-    // so the day someone adds the field for parity there is no compile-time
-    // signal that this line is missing. The edit sheet already calls it.
+    // (see the note above the class) — but the mixin owns those controllers, so
+    // the day someone adds the field for parity there is no compile-time signal
+    // that this line is missing.
     disposeAdditionalContacts();
     super.dispose();
   }
@@ -135,12 +130,8 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
   );
 
   ClientRecord _draft() {
-    // The STORED name is the Wave CUSTOMER name: the phone number for a
-    // person, the typed name for a business. `type` has to be passed or a
-    // business is renamed to its number on the invoices it appears on.
-    // `composeSave`, not `composeStored` — Name is required here while both
-    // halves are optional, so for a person it is routinely the only copy of
-    // the typed name and composing alone would discard it.
+    // The STORED name is the Wave CUSTOMER name: the phone number for a person,
+    // the typed name for a business.
     final composed = ClientNamePolicy.composeSave(
       baseName: _nameController.text,
       phone: _phoneController.text,
@@ -170,7 +161,6 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
   Future<void> _save({required AddClientNext next}) async {
     // The EXISTING validator, not a fast-capture variant: address is required
     // unless noFixedAddress is on, which is what makes that toggle meaningful.
-    // Fields this sheet doesn't render are passed empty and validate clean.
     final nextErrors = ClientFormValidator.validate(
       l10n: context.l10n,
       name: _nameController.text.trim(),
@@ -249,10 +239,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     );
   }
 
-  /// Label + tour-wrapped body. The body is one Column so the walkthrough has
-  /// a single target per section — each step describes the whole section, and
-  /// highlighting only its first field would misdescribe it. Stretch-aligned
-  /// like its parent, so the layout is unchanged.
+  /// Label + tour-wrapped body.
   List<Widget> _section(TourStepId id, String label, List<Widget> body) => [
     MonoSectionLabel(label),
     const SizedBox(height: AppSpacing.sp8),
@@ -281,8 +268,8 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
           // both typing and the clear "x".
           onChanged: (_) {
             clearError('name');
-            // Pulls a phone number out of what was just typed or pasted —
-            // quiet unless the phone field is still empty.
+            // Pulls a phone number out of what was just typed or pasted — quiet
+            // unless the phone field is still empty.
             if (liftPhoneFromNameField(
               name: _nameController,
               phone: _phoneController,
@@ -293,8 +280,7 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
         ),
       ),
       const SizedBox(height: AppSpacing.sp16),
-      // Owner change 6: always rendered, both optional. The type chips never
-      // swap these in or out.
+      // Owner change 6: always rendered, both optional.
       SheetFocusScroll(
         child: LabeledTextField(
           label: l10n.clients_firstName,

@@ -15,8 +15,7 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
-/// Job history block on the admin-only detail view. Shows appointments most-recent
-/// first, and each one is tappable into the detail sheet.
+/// Job history block on the admin-only detail view.
 // "Book again" is deferred for now — it would need invasive changes to the create flow.
 class ClientJobHistorySection extends ConsumerWidget {
   const ClientJobHistorySection({required this.clientId, super.key});
@@ -28,12 +27,7 @@ class ClientJobHistorySection extends ConsumerWidget {
     final history = ref.watch(clientJobHistoryProvider(clientId));
 
     // The data→error transition, NOT `.when`'s error branch, which fires on
-    // every rebuild and would spam Crashlytics. Nothing else logs this read:
-    // `fetchClientHistory` has no try/catch, `pageToCap` has none, and the
-    // provider's own `onError` covers only its invalidate subscription. Until
-    // this existed a missing composite index, a rules rejection or a cold
-    // offline read showed the notice below on every admin client detail while
-    // Crashlytics stayed silent.
+    // every rebuild and would spam Crashlytics.
     ref.listen<AsyncValue<List<AppointmentRecord>>>(
       clientJobHistoryProvider(clientId),
       (previous, next) {
@@ -92,9 +86,7 @@ class _JobList extends StatelessWidget {
 
   /// This section is a plain `Column` inside the detail body's own scroll view,
   /// so every row it emits is built whether or not it is on screen — and the
-  /// repository scans a client's history up to its 1000-doc ceiling. Each row
-  /// is an `IntrinsicHeight` card with an avatar stack, so the slice is bounded
-  /// here rather than paid for off-screen.
+  /// repository scans a client's history up to its 1000-doc ceiling.
   static const int _maxRendered = 50;
 
   @override
@@ -134,8 +126,7 @@ class _EmptyLine extends StatelessWidget {
 
   final String text;
 
-  /// Present on the ERROR branch only. Without it a transient read failure
-  /// left the section inert until the whole detail was closed and reopened.
+  /// Present on the ERROR branch only.
   final VoidCallback? onRetry;
 
   @override

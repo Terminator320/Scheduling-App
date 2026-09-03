@@ -94,9 +94,9 @@ class _ListInformationState extends State<ListInformation> {
       scope: _tour.scope,
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
-      // The client-row step has no target while the list is still its
-      // skeleton, and a tour started then drops it and marks the WHOLE scope
-      // seen — the row step would never be shown again.
+      // The client-row step has no target while the list is still its skeleton,
+      // and a tour started then drops it and marks the WHOLE scope seen — the
+      // row step would never be shown again.
       ready: _listSettled,
       child: Scaffold(
         appBar: AppTopBar(

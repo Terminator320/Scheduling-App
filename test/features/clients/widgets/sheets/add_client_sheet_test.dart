@@ -37,7 +37,8 @@ void main() {
   });
 
   // A viewport tall enough that the whole sheet (a DraggableScrollableSheet at
-  // 95% of height) lays out its fields without scrolling, so finders are stable.
+  // 95% of height) lays out its fields without scrolling, so finders are
+  // stable.
   Future<void> setTallViewport(WidgetTester tester) async {
     tester.view.physicalSize = const Size(800, 2400);
     tester.view.devicePixelRatio = 1.0;
@@ -92,8 +93,7 @@ void main() {
     final repo = await pumpSheet(tester);
 
     // Customer name (first field) satisfies the name requirement; the phone
-    // field satisfies the contact-method requirement. With no-fixed-address on,
-    // no address is required.
+    // field satisfies the contact-method requirement.
     await tester.enterText(find.byType(TextField).first, 'City of Montreal');
     await tester.enterText(
       find.widgetWithText(TextField, 'Phone'),
@@ -156,7 +156,7 @@ void main() {
 
   // I4: `repo.added!.name` had zero assertions here, though the stored name IS
   // the Wave customer name — the one field a wrong save renames on live
-  // invoices. Both branches of `composeStored`, from the form.
+  // invoices.
   testWidgets('a PERSON is stored under their phone number', (tester) async {
     final repo = await pumpSheet(tester);
 
@@ -175,8 +175,8 @@ void main() {
 
   testWidgets('a PERSON keeps the typed name in the halves', (tester) async {
     // Name is required here and both halves are optional, so composing alone
-    // would leave the typed name nowhere — the card would render a bare
-    // number and nothing in the app could recover it.
+    // would leave the typed name nowhere — the card would render a bare number
+    // and nothing in the app could recover it.
     final repo = await pumpSheet(tester);
 
     await tester.enterText(find.byType(TextField).first, 'Marc Tremblay');
@@ -193,11 +193,9 @@ void main() {
     expect(repo.added!.lastName, 'Tremblay');
   });
 
-  // The inline 'add client while booking' flow seeds the name from whatever
-  // was typed into the client search — and this business searches people by
-  // phone number, so that seed IS the number. The seed is a programmatic
-  // controller write, which does not fire `onChanged`, so the keyboard lift
-  // never ran and the client was stored with nothing to dial.
+  // The inline 'add client while booking' flow seeds the name from whatever was
+  // typed into the client search — and this business searches people by phone
+  // number, so that seed IS the number.
   testWidgets('a seeded phone number is lifted into the phone field', (
     tester,
   ) async {
@@ -230,9 +228,7 @@ void main() {
     expect(repo.added!.lastName, 'Tremblay');
   });
 
-  // The everyday paste: a number in the shape the app itself renders. The
-  // number's own bracket used to be left in the name, so the client was
-  // stored with firstName "(" and every card showed it.
+  // The everyday paste: a number in the shape the app itself renders.
   testWidgets('a pasted bracketed number leaves the name clean', (
     tester,
   ) async {
@@ -254,9 +250,7 @@ void main() {
   });
 
   // The stored shape for a PERSON, spelled out end-to-end: `name` is the BARE
-  // number, the halves carry the real name, `phone` stays formatted. Every
-  // realistic way a new client is entered has to land on the same triple —
-  // typed, pasted, or seeded by the inline booking flow, bracketed or not.
+  // number, the halves carry the real name, `phone` stays formatted.
   group(
     'a new PERSON always stores name=bare, halves=name, phone=formatted',
     () {

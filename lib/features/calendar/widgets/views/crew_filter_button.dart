@@ -5,20 +5,20 @@ import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/application/calendar_crew_filter_provider.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 /// The admin calendar's "show one person's jobs" control.
-///
-/// Sits beside the day-route button in the header and wears the same 48px
-/// chip. Painted primary while a filter is active, since the header is the
-/// one thing still on screen once the grid collapses.
 class CrewFilterButton extends ConsumerWidget {
   const CrewFilterButton({super.key});
 
-  Future<void> _pick(BuildContext context, WidgetRef ref) async {
+  Future<void> _pick(
+    BuildContext context,
+    WidgetRef ref,
+    List<EmployeeRecord> roster,
+  ) async {
     final l10n = context.l10n;
-    final roster = ref.read(assignableEmployeesProvider).asData?.value ?? [];
     final filter = ref.read(calendarCrewFilterProvider.notifier);
     // Chosen by INDEX: the "All crew" row selects null, which is also what a
     // dismissal returns.
@@ -40,6 +40,15 @@ class CrewFilterButton extends ConsumerWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isActive = ref.watch(calendarCrewFilterProvider) != null;
+    // WATCHED here, never read inside the tap handler: a `ref.read` at tap time
+    // built the roster cold, got `AsyncLoading` back and disposed it again —
+    // the sheet offered "All crew" and nobody else, every single time.
+    final roster = [
+      for (final e
+          in ref.watch(allUsersStreamProvider).asData?.value ??
+              const <EmployeeRecord>[])
+        if (e.isActive && e.isAssignable) e,
+    ];
     final label = context.l10n.calendar_crewFilter;
     return Semantics(
       button: true,
@@ -55,7 +64,7 @@ class CrewFilterButton extends ConsumerWidget {
               borderRadius: BorderRadius.circular(AppRadius.rIcon),
               clipBehavior: Clip.antiAlias,
               child: InkWell(
-                onTap: () => _pick(context, ref),
+                onTap: () => _pick(context, ref, roster),
                 highlightColor: theme.palette.blueTintPressed,
                 child: SizedBox(
                   width: 38,
@@ -77,8 +86,8 @@ class CrewFilterButton extends ConsumerWidget {
   }
 }
 
-/// "Showing Marc · Clear" — drawn above the agenda header while the calendar
-/// is filtered, so the narrowed schedule is never mistaken for a quiet day.
+/// "Showing Marc · Clear" — drawn above the agenda header while the calendar is
+/// filtered, so the narrowed schedule is never mistaken for a quiet day.
 class CrewFilterBanner extends ConsumerWidget {
   const CrewFilterBanner({super.key});
 

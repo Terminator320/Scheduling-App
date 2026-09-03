@@ -2,7 +2,31 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-09-01 (release 1.55.0+84 — **the export list is unchanged at 25
+refreshed 2026-09-02 (release 1.56.0+85 — **the export list is unchanged at 25
+and no row below moved**. The security-relevant change is that every ADMIN-ONLY
+callable now opens with the composed `assertAdminCall(req, allowedKeys)`
+(`security.js`) instead of re-deciding auth → `assertAdmin` →
+`assertPayloadShape` at each site — `deleteClient`, `createEmployeeAccount`,
+`deleteEmployeeAccount` and all three `places.js` callables, six in all.
+It returns the caller's uid, which every one of them needs next for its
+rate limiter. It exists because on 2026-09-01 three of those `assertAdmin` gates
+turned out to be DELETABLE with the whole suite green — on the callables that
+mint and delete real Firebase Auth accounts. The composition and its ORDER are
+proved against the real `assertAdmin` in `assert_admin.test.js`; the callable
+suites stub the COMPOSER, because stubbing `assertAdmin` alone intercepts
+nothing (the composer holds a module-internal reference) and every gate
+assertion would pass vacuously — the same shape that hid the original gap. NOT
+for a self-service callable: `changeEmployeeEmail` keeps
+`resolveEmailChangeCaller`. Two other server-side changes:
+`assertPayloadShape`'s 4 KB cap now measures BYTES
+(`Buffer.byteLength`) rather than UTF-16 code units, which accented and CJK
+text could exceed by 3-4x under a constant and an error code that both said
+bytes; and `notifyAppointmentChanges` additionally stamps the server-owned
+`startedAt`/`completedAt` job time record on the status transition and pushes
+an assignee's On-my-way / Running-late signal to active admins not on the job.
+Rules WIDENED — the crew branches now admit an assignee's `fieldNotes` and
+their photo writes to the `images` subcollection.)
+Previously refreshed 2026-09-01 (release 1.55.0+84 — **the export list is unchanged at 25
 and no row below moved**. Three server-side changes, all inside existing
 functions: `waveUpsertCustomer` now records `wave.problems` from the new
 customer contract (report-only — see below the summary table);
@@ -68,7 +92,8 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 - **Wiring:** `index.js` is a thin re-export surface; implementations live in
   domain modules. Shared callable guards (`assertPayloadShape`, `requireString`,
   `optionalString`, `requireDocId`, `requireNumberInRange`, `readSessionToken`,
-  `enforceDurableRateLimit`, `assertAdmin`, `assertFreshReauth`) live in
+  `enforceDurableRateLimit`, `assertAdmin`, `assertAdminCall`,
+  `assertFreshReauth`) live in
   `security.js` — put a new
   one there, never back in a feature module (`optionalString` was a private copy
   in the retired `invites.js` and was carried verbatim into

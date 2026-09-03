@@ -1,55 +1,6 @@
 #!/usr/bin/env node
 // One-off, READ-ONLY: counts `appointments/{id}/images` documents that carry a
 // `url` and no `storagePath`.
-//
-// WHY this exists: such a document holds a `?alt=media&token=…` download link.
-// That link is served with NO auth and NO `storage.rules` evaluation, its token
-// is stable per object and it never expires — so it is a transferable,
-// permanent credential that deactivating the employee does not reach.
-// `rotateAssignedImageTokens` used to invalidate exactly these on deactivation;
-// it was deleted at the photo-subcollection CONTRACT step (deployed
-// 2026-08-22), so there is no revocation path left. This count is the open
-// question that decides what to do about that, and it is S1 in
-// `docs/audits/CODEBASE_AUDIT.md`.
-//
-// ANSWERED 2026-08-22 for the SUBCOLLECTION: 14 documents scanned, ZERO
-// carrying a url with no storagePath, so the field was retired (rules
-// allowlist, loader fallback, store write) without stranding any bytes.
-//
-// That is NOT the same as "no rules-free link remains", and the two were
-// conflated once. A pre-CONTRACT upload wrote a url alongside the
-// storagePath into the parent `pictures[]` array, and those arrays are still
-// there until `clear-appointment-picture-arrays.js` runs (step 4 of the
-// runbook in docs/DEPLOYMENT.md) - each entry a permanent link readable off
-// the appointment document by any assigned employee. `countArrayUrls` counts
-// exactly those, so the script now answers BOTH questions and the second one
-// is the security claim.
-//
-// What the answer means:
-//   ZERO — the deletion premise holds. Drop `url` from the `images` rules
-//     allowlist and delete `AppointmentImageLoader`'s url fallback, which makes
-//     "there is no such link left to invalidate" true rather than merely
-//     hoped-for.
-//   ANY  — those bytes need re-homing to a real `storagePath` (then strip the
-//     url), or a rotation scoped to just these objects has to come back.
-//
-// WHY IT SCANS INSTEAD OF QUERYING: `images.url` is index-EXEMPT in
-// `firestore.indexes.json` ("indexes": []), so `where("url", ...)` fails
-// outright. The filter therefore runs in memory over a `__name__`-paged
-// collection-group read. Do not "optimize" this into a where clause without
-// first removing that exemption.
-//
-// Usage:
-//   For prod:
-//     export GOOGLE_APPLICATION_CREDENTIALS=/path/to/prod-service-account.json
-//     node functions/scripts/count-legacy-image-urls.js
-//
-//   For the local emulator:
-//     export FIRESTORE_EMULATOR_HOST=localhost:8080
-//     export GCLOUD_PROJECT=schedulingapp-88727
-//     node functions/scripts/count-legacy-image-urls.js
-//
-//   --verbose  also lists the appointment id of every affected photo.
 
 "use strict";
 
@@ -60,8 +11,7 @@ const {bootstrapScript} = require("./_project");
 const EXACT_FLAGS = ["--verbose"];
 
 /**
- * Rejects any argument this script does not recognize. The rule itself lives
- * in the shared `_flags.js` — this wrapper only supplies the flag list.
+ * Rejects any argument this script does not recognize.
  * @param {!Array<string>} argv Arguments after the node + script paths.
  */
 function assertKnownFlags(argv) {
@@ -76,9 +26,9 @@ const PAGE_SIZE = 500;
  * @param {!Object} db The Firestore handle.
  * @param {boolean} verbose Whether to list each affected appointment id.
  * @return {!Promise<{scanned: number, legacy: number, orphans: number}>} The
- *   tally. `orphans` are documents with NEITHER a storagePath nor a url —
- *   they can never be rendered and the clear script refuses them, so they are
- *   worth surfacing here rather than leaving for that run to discover.
+ * tally. `orphans` are documents with NEITHER a storagePath nor a url —
+ * they can never be rendered and the clear script refuses them, so they are
+ * worth surfacing here rather than leaving for that run to discover.
  */
 async function countLegacyUrls(db, verbose) {
   let scanned = 0;
@@ -93,18 +43,17 @@ async function countLegacyUrls(db, verbose) {
     const data = doc.data() || {};
     const storagePath = String(data.storagePath || "").trim();
     const url = String(data.url || "").trim();
-    // Both branches below name the document, so `doc.ref.parent.parent` —
-    // the appointment, which is what an operator needs to act on one of
-    // these — is resolved once for the pair.
+    // Both branches below name the document, so `doc.ref.parent.parent` — the
+    // appointment, which is what an operator needs to act on one of these — is
+    // resolved once for the pair.
     const appointmentId =
         doc.ref.parent.parent ? doc.ref.parent.parent.id : "(unknown)";
     const path = `appointments/${appointmentId}/images/${doc.id}`;
 
-    // The two halves of ONE classification of a document with no
-    // storagePath, spelled side by side so neither can drift from the
-    // other: a url makes it a legacy permanent link, no url makes it
-    // unrenderable, and the clear script refuses an appointment on the
-    // second.
+    // The two halves of ONE classification of a document with no storagePath,
+    // spelled side by side so neither can drift from the other: a url makes it
+    // a legacy permanent link, no url makes it unrenderable, and the clear
+    // script refuses an appointment on the second.
     if (storagePath !== "") continue;
     if (url !== "") {
       legacy += 1;
@@ -120,20 +69,10 @@ async function countLegacyUrls(db, verbose) {
 
 /**
  * Counts the `url` strings still sitting in parent `pictures[]` arrays.
- *
- * The subcollection scan above CANNOT see these, and they are the larger set:
- * a pre-CONTRACT upload wrote BOTH `storagePath` and a `getDownloadURL()`
- * link into every array entry, so an entry is typically not url-ONLY but
- * still carries a permanent, rules-free, transferable link - readable off the
- * appointment document by any assigned employee, and unrevocable since
- * `rotateAssignedImageTokens` was deleted. Nothing writes these any more;
- * `clear-appointment-picture-arrays.js` is what removes them, and until that
- * has run "no rules-free link remains" is a statement about the
- * SUBCOLLECTION only.
  * @param {!Object} db The Firestore handle.
  * @param {boolean} verbose Whether to list each affected appointment id.
  * @return {!Promise<{appointments: number, withArray: number, urls: number}>}
- *   The tally.
+ * The tally.
  */
 async function countArrayUrls(db, verbose) {
   let appointments = 0;
@@ -167,9 +106,9 @@ async function countArrayUrls(db, verbose) {
  */
 async function main() {
   const argv = process.argv.slice(2);
-  // Read-only: `--dry-run` is not in this script's flag allowlist, so
-  // `dryRun` comes back false and the banner carries no misleading
-  // "[dry-run]" prefix — see `bootstrapScript`.
+  // Read-only: `--dry-run` is not in this script's flag allowlist, so `dryRun`
+  // comes back false and the banner carries no misleading "[dry-run]" prefix —
+  // see `bootstrapScript`.
   const {db} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
   const verbose = argv.includes("--verbose");
   const {scanned, legacy, orphans} = await countLegacyUrls(db, verbose);
@@ -196,10 +135,7 @@ async function main() {
         "goes. Re-run with --verbose to list them.");
   }
 
-  // Deliberately a SECOND sentence. The two counts answer different questions
-  // and only the pair supports the security claim: the first says whether
-  // dropping the field loses any bytes, this one says whether a permanent
-  // rules-free link is still readable ANYWHERE.
+  // Deliberately a SECOND sentence.
   if (array.urls === 0) {
     console.log(
         "ZERO array urls: no permanent rules-free link remains in the " +
@@ -214,10 +150,7 @@ async function main() {
   }
 }
 
-// Only run when invoked directly. Without this the module ran a PRODUCTION
-// scan the moment anything required it, which is why its pure helpers could
-// not be tested — and this script's verdict is what authorizes irreversible
-// follow-up work.
+// Only run when invoked directly.
 if (require.main === module) {
   main().then(() => process.exit(0)).catch((err) => {
     console.error(err);

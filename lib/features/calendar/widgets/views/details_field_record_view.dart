@@ -19,17 +19,6 @@ import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
 
 /// What the CREW can record about a job they are on.
-///
-/// The technician could read the job and tap "Mark as complete", and nothing
-/// else. For a trades business the field record IS the billable artifact and
-/// the upsell pipeline — "customer also wants the water heater quoted" — and
-/// it travelled by phone call instead. The photo pipeline, the offline upload
-/// queue and the magic-byte validation all already existed; they were wired to
-/// the admin-only edit form.
-///
-/// Rendered ONLY for a non-admin assignee, which is exactly the set
-/// `firestore.rules`' crew branches admit. An admin has the edit form, and a
-/// read-only surface (client job history) offers nothing.
 class DetailsFieldRecordView extends ConsumerStatefulWidget {
   const DetailsFieldRecordView({required this.appointment, super.key});
 
@@ -53,8 +42,8 @@ class _DetailsFieldRecordViewState
 
   bool _isSaving = false;
 
-  /// The crew signal this sheet has sent, so the chip stays selected after
-  /// the write without re-reading the document the sheet was opened with.
+  /// The crew signal this sheet has sent, so the chip stays selected after the
+  /// write without re-reading the document the sheet was opened with.
   String? _sentStatus;
   bool _isSending = false;
 
@@ -64,9 +53,7 @@ class _DetailsFieldRecordViewState
     super.dispose();
   }
 
-  /// Writes "On my way" / "Running late" in this person's name. Their doc id
-  /// is what the rules pin `crewStatusBy` to, so it is read from the same
-  /// identity the render gate uses rather than from the record.
+  /// Writes "On my way" / "Running late" in this person's name.
   Future<void> _sendCrewStatus(String status, String byEmployeeId) async {
     final id = widget.appointment.id;
     if (id == null || _isSending) return;
@@ -113,9 +100,8 @@ class _DetailsFieldRecordViewState
     }
   }
 
-  /// The two crew chips, on an open job only — there is nobody to be on the
-  /// way to once it is closed. Selected when the record's signal is THIS
-  /// person's, or when this sheet just sent one.
+  /// The two crew chips, on an open job only — there is nobody to be on the way
+  /// to once it is closed.
   Widget _crewStatusChips(BuildContext context, String byEmployeeId) {
     final l10n = context.l10n;
     final a = widget.appointment;
@@ -190,10 +176,9 @@ class _DetailsFieldRecordViewState
     final id = widget.appointment.id;
     if (id == null) return;
 
-    // Deliberately NOT offline-guarded: photos go through the persistent
-    // upload queue and drain on reconnect, which is the one asymmetry this
-    // codebase draws between entity writes and photos. Someone in a basement
-    // should still be able to take the picture.
+    // Deliberately NOT offline-guarded: photos go through the persistent upload
+    // queue and drain on reconnect, which is the one asymmetry this codebase
+    // draws between entity writes and photos.
     final logger = ref.read(loggerProvider);
     final uploader = ref.read(appointmentImageUploadProvider);
     try {

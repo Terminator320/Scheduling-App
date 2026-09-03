@@ -13,16 +13,9 @@ import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 /// Whether the roster feeding [EmployeePicker.allEmployees] has settled.
-///
-/// Three states, because an empty chip row means three different things and
-/// the picker used to render all of them identically.
 enum AssigneeRosterStatus { loading, ready, failed }
 
 /// [AssigneeRosterStatus] for the roster provider both save flows watch.
-///
-/// One owner so the add sheet and the edit body cannot disagree about what an
-/// empty chip row means; they read two different providers but answer the same
-/// question.
 AssigneeRosterStatus rosterStatusOf(AsyncValue<Object?> roster) {
   if (roster.hasValue) return AssigneeRosterStatus.ready;
   if (roster.hasError) return AssigneeRosterStatus.failed;
@@ -56,14 +49,6 @@ class EmployeePicker extends StatelessWidget {
   final AssigneeAvailability availability;
 
   /// Whether the roster behind [allEmployees] has actually arrived.
-  ///
-  /// Both save flows used to read it as `.asData?.value ?? const []`, which
-  /// collapses "still loading", "the read failed" and "there is nobody" into
-  /// one empty list. An assignee is REQUIRED to save
-  /// (`appointment_form_validator.dart`), so a slow first load or a transient
-  /// permission error made the booking form look like the business has no
-  /// staff — no spinner, no message, and no way forward on the only
-  /// appointment-creation path.
   final AssigneeRosterStatus rosterStatus;
 
   /// Re-runs the roster read. Only reachable from the failed state.
@@ -187,10 +172,8 @@ class EmployeePicker extends StatelessWidget {
     );
   }
 
-  /// The divider plus either the per-person lines or, when there is nobody
-  /// left to pick, the one amber sentence that replaces them.
-  ///
-  /// Null when nothing clashes — no date picked yet, or everyone is free.
+  /// The divider plus either the per-person lines or, when there is nobody left
+  /// to pick, the one amber sentence that replaces them.
   Widget? _availabilityBlock(BuildContext context, List<_Offer> offers) {
     final notes = [
       for (final offer in offers)
@@ -242,9 +225,7 @@ class EmployeePicker extends StatelessWidget {
   }) {
     final l10n = context.l10n;
     // Four sentences, not three: someone ALREADY on the job who also has
-    // another booking must not read as a refusal. That is the ordinary
-    // outcome of moving the date after picking the crew, and their chip is
-    // still selected and still tappable.
+    // another booking must not read as a refusal.
     return AssigneeNote(
       sentence: switch ((clash.isTimeOff, onTheJob)) {
         (true, true) => l10n.calendar_assigneeOffStillOnJob(name),
@@ -287,8 +268,7 @@ class _EmployeeChip extends StatelessWidget {
   final String shortName;
   final bool isSelected;
 
-  /// Dimmed and untappable: a dashed empty slot rather than a button. One
-  /// treatment for every reason — the line underneath says which.
+  /// Dimmed and untappable: a dashed empty slot rather than a button.
   final bool isUnavailable;
   final bool hasError;
   final VoidCallback? onTap;
@@ -375,10 +355,6 @@ class _EmployeeChip extends StatelessWidget {
 }
 
 /// The unavailable chip's dashed outline.
-///
-/// A `Border` cannot dash, and the dash is what makes the chip read as an empty
-/// SLOT rather than a faint button — the one non-colour cue that it can't be
-/// picked, since the design dropped the per-chip glyphs.
 class _DashedPill extends Decoration {
   const _DashedPill({required this.color});
 

@@ -4,8 +4,7 @@ import 'package:scheduling/features/feature_tour/domain/tour_definitions.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 
-/// Destinations that mount a FeatureTourHost. A new destination must
-/// either join this set with a catalog, or keep an empty one.
+/// Destinations that mount a FeatureTourHost.
 const toured = <AppDestination>{
   HubTab.calendar,
   HubTab.clients,
@@ -18,8 +17,7 @@ const toured = <AppDestination>{
 };
 
 /// The destinations an employee can actually reach — exactly the drawer rows
-/// `drawerGroups(isAdmin: false)` offers. Everything else is admin-only, so
-/// its employee catalog must be empty.
+/// `drawerGroups(isAdmin: false)` offers.
 const employeeToured = <AppDestination>{
   HubTab.calendar,
   PushedDestination.dayRoute,

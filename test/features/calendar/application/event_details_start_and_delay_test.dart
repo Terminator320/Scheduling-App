@@ -51,8 +51,8 @@ final _appointment = AppointmentRecord(
   status: 'booked',
 );
 
-/// The two detail-sheet actions added 2026-09-01: "Start job" and the
-/// admin's "Push back".
+/// The two detail-sheet actions added 2026-09-01: "Start job" and the admin's
+/// "Push back".
 void main() {
   setUpAll(() {
     registerFallbackValue(
@@ -103,8 +103,8 @@ void main() {
         status: any(named: 'status'),
       ),
     ).thenAnswer((_) async {});
-    // The single-booking check excludes the job's own id, which routes
-    // through `findBusyEmployees`; no clash by default.
+    // The single-booking check excludes the job's own id, which routes through
+    // `findBusyEmployees`; no clash by default.
     when(
       () => appointments.findBusyEmployees(
         candidates: any(named: 'candidates'),

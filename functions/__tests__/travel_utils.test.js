@@ -2,9 +2,7 @@
 
 /**
  * `live_activity_dispatch` is mocked for the whole file so the multi-day skip
- * at the bottom can observe whether a CARD was started. Nothing else in here
- * asserts on Live Activities, and the real dispatch no-ops against this
- * harness anyway.
+ * at the bottom can observe whether a CARD was started.
  */
 jest.mock("../live_activity_dispatch", () => ({
   startLiveActivity: jest.fn(async () => 1),
@@ -409,11 +407,9 @@ describe("travelReminderLedgerId", () => {
 // ----- sweep orchestration with mocks ---------------------------------------
 
 /**
- * Fakes Firestore for the travel sweep. It tells queries apart by their
- * where() field, serves presence data through getAll, and backs the
- * reminder ledger with get/create/delete stubs.
+ * Fakes Firestore for the travel sweep.
  * @param {!Object} config users/tokens/appointments/context/presence/
- *   ledgerExisting/throwLedgerGetFor fixtures.
+ * ledgerExisting/throwLedgerGetFor fixtures.
  * @return {!Object} `{db, ledgerCreates, ledgerDeletes, appointmentQueries}`.
  */
 function makeTravelDb(config) {
@@ -552,19 +548,7 @@ describe("runTravelAwareReminderSweep", () => {
 
   test("the per-employee CONTEXT query is backed by a declared index",
       async () => {
-        // THE SITE OF THE 2026-08-29 TWO-DAY INVISIBLE OUTAGE. This query's
-        // trailing `orderBy("endTime")` needs the composite
-        // (employeeIds CONTAINS, endTime ASC). That index was deleted as a
-        // "redundant prefix" of (employeeIds, endTime, startTime) — it is not
-        // one, because `__name__` lands at the END of an index, so the longer
-        // one cannot serve the shorter query. The sweep is best-effort and
-        // swallows its own failure, so nothing surfaced; only the Cloud
-        // Functions log showed it.
-        //
-        // No test anywhere coupled a sweep query to the manifest, though the
-        // precedent existed (notification_policy_ledger_body.test.js reads it
-        // for TTL policies). This is that coupling: delete the index and this
-        // fails, rather than production going quiet for two days.
+        // THE SITE OF THE 2026-08-29 TWO-DAY INVISIBLE OUTAGE.
         const {db, appointmentQueries} = makeTravelDb({
           ...activeE1,
           appointments: [job],
@@ -579,8 +563,8 @@ describe("runTravelAwareReminderSweep", () => {
         const context = appointmentQueries.find(
             (q) => q.wheres.some((w) => w.field === "employeeIds"));
         expect(context).toBeDefined();
-        // The shape the index has to serve: one array-contains, then a
-        // range + orderBy on a single other field.
+        // The shape the index has to serve: one array-contains, then a range +
+        // orderBy on a single other field.
         expect(context.wheres.map((w) => `${w.field} ${w.op}`)).toEqual([
           "employeeIds array-contains",
           "endTime >",
@@ -603,12 +587,6 @@ describe("runTravelAwareReminderSweep", () => {
 
   test("the candidate query is capped and ordered by startTime", async () => {
     // Every other sweep in this codebase names a ceiling; this one did not.
-    // In practice the 90-minute window keeps it small, so the cap is a tail
-    // guard: a bulk import or a wide series landing in one window is
-    // otherwise an unbounded fan-out that then makes a BILLABLE Routes call
-    // per candidate assignee. The ordering is what makes the cap safe to
-    // have — it keeps the most imminent departures, and anything deferred
-    // self-heals on the next 5-minute run.
     const {db, appointmentQueries} = makeTravelDb({
       ...activeE1,
       appointments: [job],
@@ -661,9 +639,9 @@ describe("runTravelAwareReminderSweep", () => {
 
   test("an opted-out assignee degrades to reminder, keeping the push",
       async () => {
-        // The toggle turns off traffic-aware DEPARTURE alerts, not the
-        // reminder itself — losing the notification entirely would be a
-        // different, much worse feature.
+        // The toggle turns off traffic-aware DEPARTURE alerts, not the reminder
+        // itself — losing the notification entirely would be a different, much
+        // worse feature.
         const {db, ledgerCreates} = makeTravelDb({
           users: {
             e1: {
@@ -866,9 +844,7 @@ describe("runTravelAwareReminderSweep", () => {
 
 describe("wantsTravelAlerts", () => {
   test("an absent flag means ON", () => {
-    // Every users doc written before this field existed has no value. Reading
-    // undefined as off would silence the whole fleet, and the symptom is a
-    // push that does not arrive — which nobody reports.
+    // Every users doc written before this field existed has no value.
     expect(wantsTravelAlerts({})).toBe(true);
   });
 
@@ -898,11 +874,6 @@ describe("wantsTravelAlerts", () => {
 describe("an opted-out assignee", () => {
   // `wantsTravelAlerts` is unit-tested above, but the flag was only READ where
   // `kind` is chosen — after the Routes call and after `computeLeadMinutes`.
-  // So an opted-out tech got the generic "Upcoming job" push at the
-  // TRAVEL-derived instant (up to MAX_LEAD_MINUTES early) rather than at the
-  // documented fixed 30, and the business paid Google Routes for an estimate
-  // that changed nothing. Both the code comment and CLAUDE.md described the
-  // degradation as "the fixed 30-minute reminder"; the code did not do it.
   const job = {
     id: "job1",
     status: "pending",
@@ -960,12 +931,7 @@ describe("an opted-out assignee", () => {
 // ----- the multi-day Live Activity skip -------------------------------------
 
 describe("the multi-day Live Activity skip", () => {
-  // Built 2026-08-11 and shipped untested. A regression is invisible in every
-  // other signal — the leaveNow push still goes out and `reminded` is
-  // unchanged — and the only symptom is a Lock Screen card counting down to the
-  // END of a multi-day run, which is days of countdown on somebody's phone.
-  // CLAUDE.md asserted this gate as fact for a day before it existed, which is
-  // exactly why it needs a test and not a sentence.
+  // Built 2026-08-11 and shipped untested.
   const dayJob = {
     id: "job1",
     status: "pending",
@@ -1023,9 +989,6 @@ describe("the multi-day Live Activity skip", () => {
       async () => {
         // The gate is the run's LENGTH in work days, not how many hours it
         // covers — a night shift must not lose its card.
-        // 12:20 -> 06:00 the next morning. The window crosses midnight, so
-        // the run counts NIGHTS and the end date names the morning it
-        // finishes — one work day, one card.
         await sweepWith({
           ...dayJob,
           endTime: future(20 * MIN + 17 * 60 * MIN + 40 * MIN),

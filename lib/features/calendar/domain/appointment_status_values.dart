@@ -13,10 +13,6 @@ bool isTerminalStatusRaw(String raw) =>
     terminalStatusRawValues.contains(raw.toLowerCase());
 
 /// The two crew signals an assignee may put on an open job, as stored.
-///
-/// Material-free like [terminalStatusRawValues], and for the same reason: the
-/// repository's write guard and the field-record chips both read it. The
-/// `firestore.rules` crew-status branch admits exactly these two strings.
 const Set<String> crewStatusRawValues = {'onMyWay', 'runningLate'};
 
 /// True when [raw] means the visit was called off.
@@ -27,7 +23,6 @@ bool isCompletedStatusRaw(String raw) =>
     isTerminalStatusRaw(raw) && !isCancelledStatusRaw(raw);
 
 /// Appointment states run pending → in_progress → done, plus cancelled.
-/// Overdue is display-only — it's never actually stored.
 enum AppointmentStatus {
   pending,
   inProgress,
@@ -47,15 +42,14 @@ enum AppointmentStatus {
   /// Pickable statuses (excludes display-only overdue).
   static const appointmentValues = [pending, inProgress, done];
 
-  /// Normalizes a stored status to the allowlist — legacy, unknown, and
-  /// overdue values all collapse to pending.
+  /// Normalizes a stored status to the allowlist — legacy, unknown, and overdue
+  /// values all collapse to pending.
   static String storedRaw(String raw) {
     final status = fromRaw(raw);
     return status == overdue ? pending.raw : status.raw;
   }
 
-  /// The stored raw string for this status. overdue throws here, to catch
-  /// an accidental write early.
+  /// The stored raw string for this status.
   String get raw => switch (this) {
     inProgress => 'in_progress',
     overdue => throw StateError(
@@ -68,9 +62,5 @@ enum AppointmentStatus {
   bool get isCancelled => this == cancelled;
 
   /// Terminal states exit the active workflow.
-  ///
-  /// The enum-level mirror of `terminalStatusRawValues` above, which owns the
-  /// raw-string vocabulary the History query and `AppointmentRecord` share.
-  /// `appointment_status_values_test.dart` pins the two together.
   bool get isTerminal => isDone || isCancelled;
 }

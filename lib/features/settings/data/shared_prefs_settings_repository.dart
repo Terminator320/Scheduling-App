@@ -30,10 +30,6 @@ class SharedPrefsSettingsRepository implements SettingsRepository {
   }
 
   /// The STORED preference, or the device's language on a first launch.
-  ///
-  /// The fallback is a seed, not a derivation: `getString` returns null only
-  /// until something is saved, and every save path writes an explicit code, so
-  /// a person who picked English on a French handset keeps English.
   String _sanitizeLanguage(String? value) =>
       value == null ? _deviceLanguage() : serverLocaleOf(value);
 

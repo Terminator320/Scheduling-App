@@ -21,10 +21,6 @@ import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
 
 /// Pre-normalized row text for cheap local filtering, paired with its row.
-///
-/// The projection itself is `HistorySearchEntry` in `history_search_policy`,
-/// which is also what the debounced server scan matches — the two are the same
-/// search at two layers and must not drift.
 typedef _HistoryRow = ({
   AppointmentRecord appointment,
   HistorySearchEntry entry,
@@ -47,9 +43,9 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
   /// Caller role gate passed to appointment details.
   final bool isAdmin;
 
-  /// Whose history this is. Null lists the business-wide archive, which only
-  /// an admin may read; a technician passes their own doc id and both the
-  /// paged list and the search scan narrow to jobs they were assigned to.
+  /// Whose history this is. Null lists the business-wide archive, which only an
+  /// admin may read; a technician passes their own doc id and both the paged
+  /// list and the search scan narrow to jobs they were assigned to.
   final String? scopeEmployeeId;
 
   /// Optional feature-tour wrapper for the filter bar.

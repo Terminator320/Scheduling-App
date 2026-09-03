@@ -111,8 +111,8 @@ class DetailsHeader extends StatelessWidget {
                   ? context.l10n.calendar_allDay
                   : null,
               // The sheet is not day-scoped, so it names the whole run rather
-              // than a "Day N of M" counter — otherwise a 5-day job opened
-              // from its day 3 card still read as day 1 with no hint it ran on.
+              // than a "Day N of M" counter — otherwise a 5-day job opened from
+              // its day 3 card still read as day 1 with no hint it ran on.
               lastDay: lastWorkDayOf(appointment),
             ),
             style: theme.monoType.data,
@@ -145,10 +145,8 @@ class DetailsHeader extends StatelessWidget {
   }
 }
 
-/// "Started 9:12 AM · Finished 11:40 AM · 2 h 28 min" — the job's time
-/// record, one mono line under the header. Either half may be absent (a job
-/// under way has no finish; a job closed from the edit form was never
-/// started), and the elapsed segment needs both.
+/// "Started 9:12 AM · Finished 11:40 AM · 2 h 28 min" — the job's time record,
+/// one mono line under the header.
 class DetailsTimeRecordRow extends StatelessWidget {
   const DetailsTimeRecordRow({
     required this.startedAt,
@@ -203,8 +201,7 @@ String elapsedLabel(AppLocalizations l10n, Duration elapsed) {
 }
 
 /// "Marc is running late · 9:12 AM" — what an assignee last signalled on the
-/// way to this job, for whoever opens it. Unfilled: it sits inside the
-/// sheet's own surface, where a second amber panel reads as a nested box.
+/// way to this job, for whoever opens it.
 class DetailsCrewSignalLine extends StatelessWidget {
   const DetailsCrewSignalLine({required this.appointment, super.key});
 
@@ -215,12 +212,16 @@ class DetailsCrewSignalLine extends StatelessWidget {
     final l10n = context.l10n;
     final at = appointment.crewStatusAt;
     final time = at == null ? '' : DateUtilsHelper.formatTime(at);
-    final name =
-        assigneeNameAt(
-          appointment.employeeNames,
-          appointment.employeeIds.indexOf(appointment.crewStatusBy),
-        ) ??
-        l10n.calendar_crewFallbackName;
+    // Trimmed-empty falls back too, not just null: `mergeRetainedAssignees`
+    // legitimately writes '' into `employeeNames` for a retained assignee whose
+    // name could not be resolved, and `??
+    final resolved = assigneeNameAt(
+      appointment.employeeNames,
+      appointment.employeeIds.indexOf(appointment.crewStatusBy),
+    )?.trim();
+    final name = resolved == null || resolved.isEmpty
+        ? l10n.calendar_crewFallbackName
+        : resolved;
     final isLate = appointment.crewStatus == 'runningLate';
     return Padding(
       padding: const EdgeInsets.only(

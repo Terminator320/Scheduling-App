@@ -15,14 +15,16 @@ void main() {
       SharedPrefsSettingsRepository(deviceLanguage: () => 'en');
 
   group('load', () {
-    test('returns defaults when nothing saved (device language seeds it)',
-        () async {
-      final settings = await repo().load();
+    test(
+      'returns defaults when nothing saved (device language seeds it)',
+      () async {
+        final settings = await repo().load();
 
-      expect(settings.themeMode, ThemeMode.system);
-      expect(settings.textScale, 1.0);
-      expect(settings.language, 'en');
-    });
+        expect(settings.themeMode, ThemeMode.system);
+        expect(settings.textScale, 1.0);
+        expect(settings.language, 'en');
+      },
+    );
 
     test('returns persisted themeMode after save', () async {
       await repo().save(themeMode: ThemeMode.dark);
@@ -86,8 +88,8 @@ void main() {
     });
 
     test('an unsupported language loads back as English', () async {
-      // The app ships EN + FR only, so a stored locale from anywhere else -
-      // an older build, a hand-edited pref - must not reach MaterialApp.
+      // The app ships EN + FR only, so a stored locale from anywhere else - an
+      // older build, a hand-edited pref - must not reach MaterialApp.
       await repo().save(language: 'es');
 
       expect((await repo().load()).language, 'en');
@@ -141,8 +143,8 @@ void main() {
     });
 
     test('is case-insensitive on the language subtag', () {
-      // A platform locale can arrive with an uppercase subtag; without the
-      // fold this would silently fall through to English.
+      // A platform locale can arrive with an uppercase subtag; without the fold
+      // this would silently fall through to English.
       expect(deviceServerLocale(const Locale('FR', 'CA')), 'fr');
     });
   });

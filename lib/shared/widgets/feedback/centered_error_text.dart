@@ -4,13 +4,6 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 /// Centered muted error text — reads as an empty state, not an alarm.
-///
-/// Pass [onRetry] wherever the failure is a LOAD rather than a permanent
-/// condition. Without it the screen is inert: the only way out of a transient
-/// error was to back out and come in again, and My Details — the one
-/// self-service screen an employee has — had four such dead ends. History
-/// already did this properly (`appointment_history_view.dart`), which is where
-/// the shape comes from.
 class CenteredErrorText extends StatelessWidget {
   const CenteredErrorText({required this.message, this.onRetry, super.key});
 

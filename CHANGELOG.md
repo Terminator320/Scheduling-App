@@ -10,6 +10,91 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.56.0+85] - 2026-09-02
+
+The release the field crew gets something out of. Until now a technician could
+read a job and press one button; they can now say they are on the way, start
+the clock, write down what they found and photograph it, and search their own
+finished work. On the office side the calendar answers "what is Marc doing this
+week" for the first time, and a finished job can be re-booked in one tap. The
+app also opens in French on a French phone, which it never did.
+
+### Added
+- **The crew can record what they found.** An assignee on a job now gets their
+  own notes field and photo picker on the job itself — what they found, what
+  they did, anything worth quoting — separate from the brief the office wrote
+  when booking, so neither can overwrite the other. Previously the only thing a
+  technician could write to a job was "complete", and everything else travelled
+  by phone call.
+- **"On my way" and "Running late".** One tap from the job tells the office
+  which it is, and the admins who are not on that job are notified with the
+  time. The job itself shows the signal and who sent it.
+- **Start job, and a real time record.** Pressing Start stamps the arrival and
+  marking it complete stamps the finish, both recorded server-side rather than
+  taken on trust, so the job shows when it actually started, when it finished
+  and how long it took.
+- **A week view on the calendar.** The agenda toggles between one day and the
+  whole week, each day under its own pinned bar with its job count. Three other
+  screens could answer "what is this person doing this week"; the calendar
+  could not.
+- **Filter the calendar to one crew member.** A control in the calendar header
+  narrows the whole screen — agenda, counts and all — to one person, with a
+  banner naming them and a Clear button. It is deliberately not remembered
+  across restarts, so it can never quietly hide the schedule.
+- **"Book again" on a finished job.** Repeat callbacks are common, and they had
+  to be typed out again. The action opens the ordinary new-appointment sheet
+  already carrying the client, address, job title, brief, materials, crew and
+  expected length — and no date or time, because that is the part that is
+  actually new.
+- **Push a job back without opening the edit form.** A running-late job can be
+  moved by a fixed amount from the job itself.
+- **A technician can search their own job history.** The one search the field
+  crew had was none at all; their finished and cancelled jobs are now reachable
+  and searchable from the menu.
+- **Photos waiting to upload are visible.** Photographing a job underground no
+  longer looks identical to a completed upload — the job says how many photos
+  are still queued, and a form you open while offline says so before you fill
+  it in rather than after you press Save.
+
+### Changed
+- **The app opens in the language of the phone.** A French handset gets French
+  on first launch, including push notifications, the Lock Screen card and the
+  home-screen widget. Before this, everyone started in English until they found
+  the Settings toggle. An explicit choice still wins and is never re-derived.
+- **iOS permission prompts are translated.** The camera, photo library and
+  location prompts asked in English on a bilingual product.
+- **Bold Text and Increase Contrast are honoured.** Both iOS settings were
+  claimed on the public accessibility page and did nothing; text now takes the
+  extra weight and secondary text and hairlines lift with the contrast setting.
+- **Settings switch rows are tappable across the whole row**, not only on the
+  switch, and the button that removes a photo is a full-size target instead of
+  a two-thirds-size one.
+- **A failed load offers a Retry instead of a dead end.** My Details had four
+  places where a transient error left the screen inert with no way out but
+  backing out and coming in again.
+- **The assignee picker says whether it is loading or has failed** rather than
+  rendering as though the business has no staff — which, since an assignee is
+  required to save, could block the only way to book a job.
+
+### Fixed
+- **The crew filter offered nobody.** Its list was built at the moment it was
+  tapped, before the staff list had loaded, so it showed "All crew" and no one
+  else — every time.
+- **Marking a job complete no longer re-reads the entire job archive.** Any
+  write from a History search re-fetched every settled job behind the sheet:
+  thousands of reads and four round trips for a one-field change, and it grew
+  with the archive.
+- **A working-days value the app could not read no longer locks someone out.**
+- **Swiping a client row to archive no longer removes it when the write
+  failed.**
+- **A client whose contacts are stored in an unexpected shape no longer breaks
+  the client stream or the search.**
+- **A very long field can no longer slip past the size limit** on the server —
+  the cap counted characters where it should have counted bytes, so accented
+  and emoji text could be three to four times over it.
+- **The key column of a job's details no longer overflows in French**, where
+  "TÉLÉPHONE" wraps and "PHONE" never did.
+
 ## [1.55.0+84] - 2026-09-01
 
 Two things that were quietly wrong are now right: on the four or five months a

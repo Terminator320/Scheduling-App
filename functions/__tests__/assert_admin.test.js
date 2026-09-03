@@ -4,17 +4,6 @@
  * Tests for `assertAdmin` — the admin gate on 8 of the 14 callables
  * (`deleteClient`, `createEmployeeAccount`, `deleteEmployeeAccount`, the two
  * durably-limited Places routes and all five Wave callables).
- *
- * Every OTHER suite that touches it does so through a `jest.mock` stub, so
- * until this file existed the real predicate
- * `role !== "admin" || status !== "active"` was never executed by any test in
- * the repo. Both halves matter and neither is obvious from a call site:
- *   1. the ROLE check is the actual privilege gate;
- *   2. the STATUS check is what makes deactivation effective — drop it and a
- *      disabled admin keeps full write access to every callable above, with
- *      nothing anywhere noticing.
- * It also resolves the caller through the `usersByUid` BRIDGE, not `users`, so
- * a missing bridge row must fail closed rather than throw.
  */
 
 jest.mock("firebase-admin/firestore");
@@ -85,8 +74,7 @@ describe("assertAdmin", () => {
   });
 
   test("a DISABLED admin is refused", async () => {
-    // The half most likely to be dropped as redundant. Without it,
-    // deactivating an admin revokes nothing on any of the eight callables.
+    // The half most likely to be dropped as redundant.
     const err = await attempt({role: "admin", status: "disabled"});
     expect(err).not.toBeNull();
     expect(err.code).toBe("permission-denied");
@@ -136,13 +124,8 @@ describe("assertAdmin", () => {
 
 /**
  * `assertAdminCall` composes the three-step opening every admin-only callable
- * needs, and it is what makes a MISSING gate unrepresentable rather than
- * merely tested for. On 2026-09-01 three callables turned out to have a
- * deletable `assertAdmin` — the whole suite stayed green with the gate gone,
- * on the endpoints that mint and delete real Firebase Auth accounts.
- *
- * The call sites now assert only that they USE it; this is where the
- * composition itself is proved, against the real `assertAdmin` above.
+ * needs, and it is what makes a MISSING gate unrepresentable rather than merely
+ * tested for.
  */
 describe("assertAdminCall", () => {
   const req = (over) => ({
@@ -202,8 +185,7 @@ describe("assertAdminCall", () => {
     // Order is the security-relevant part: a non-privileged caller must be
     // refused before anything reads their data, and both must sit above
     // whatever rate limiter the caller adds next so a burst of malformed
-    // submissions cannot exhaust a legitimate admin's window. A bad payload
-    // from a NON-admin must therefore report the admin failure.
+    // submissions cannot exhaust a legitimate admin's window.
     getFirestore.mockReturnValue(
         makeDb({role: "employee", status: "active"}).db);
 

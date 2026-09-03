@@ -3,13 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/data/search_result_cache.dart';
 
 /// The LRU behind both repositories' search caches.
-///
-/// It was implemented twice — byte-identical `_isFresh`/`_cacheSearch` over
-/// identical dials — and NEITHER copy had a test for expiry or eviction: the
-/// injected clock existed so they could, and `clock:` appeared in zero calendar
-/// test files. Only invalidation was ever pinned. Extracting the class is what
-/// makes the eviction observable at all; through a repository it is not, since
-/// a hit and a recompute return the same answer.
 void main() {
   late DateTime now;
   SearchResultCache<String> cache({int maxEntries = 50}) =>

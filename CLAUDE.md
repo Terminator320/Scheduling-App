@@ -390,9 +390,13 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   - Every key MUST carry a `@key` metadata block (description + typed
     placeholders). Enforced by `required-resource-attributes: true` in
     `l10n.yaml` — `flutter gen-l10n` fails on a bare key.
-  - Key naming: `feature_keyName`. Prefix buckets: `auth_`, `calendar_`,
-    `clients_`, `employees_`, `settings_`, `maps_`, `status_`,
-    `validation_`, `error_`, `common_`, `nav_`, `app_`.
+  - Key naming: `feature_keyName`. Prefix buckets: `calendar_`, `clients_`,
+    `tour_`, `employees_`, `error_`, `settings_`, `common_`, `dashboard_`,
+    `auth_`, `wave_`, `validation_`, `liveMap_`, `onboarding_`, `nav_`,
+    `status_`, `maps_`, `applock_`. `liveMap_` is the one lowerCamel prefix —
+    every other bucket is all-lowercase, so don't add a key by pattern-matching
+    a random existing one. `app_` is not a real bucket (zero keys) — drop it
+    if it resurfaces from an old copy of this list.
   - Adding a key: update both ARBs in lockstep, add the `@key` block in EN,
     run `flutter gen-l10n`. EN/FR drift surfaces in
     `lib/l10n/.gen/untranslated.json`.

@@ -123,9 +123,9 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       active: roster.asData?.value ?? const [],
       alreadyAssignedIds: appointment.employeeIds,
     );
-    // One length feeds both the flag and the label, so they can't disagree:
-    // the run-length string is a plain interpolation, and a multi-day flag
-    // paired with a length of 1 would render "1 days".
+    // One length feeds both the flag and the label, so they can't disagree: the
+    // run-length string is a plain interpolation, and a multi-day flag paired
+    // with a length of 1 would render "1 days".
     final spanLength = runLengthDays(state.selectedDate, state.endDate);
 
     return AppointmentFormFields(
@@ -134,8 +134,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       rosterStatus: rosterStatusOf(roster),
       onRetryRoster: () => ref.invalidate(employeesStreamProvider),
       // Excluding this doc, or its own assignees read as clashing with
-      // themselves. `alreadyAssignedIds` is the STORED crew, so a
-      // deselected assignee who is off keeps a tappable chip.
+      // themselves.
       assigneeAvailability: watchAssigneeAvailability(
         ref,
         date: state.selectedDate,
@@ -158,9 +157,8 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       isPersonal: state.isPersonal,
       isDayOff: state.isDayOff,
       isAllDay: state.isAllDay,
-      // Offered only on a job that was already personal, so an ordinary
-      // client visit can't be converted mid-life (which would wipe its
-      // client).
+      // Offered only on a job that was already personal, so an ordinary client
+      // visit can't be converted mid-life (which would wipe its client).
       onPersonalChanged: appointment.isPersonal
           ? (value) => notifier.setPersonal(value: value)
           : null,
@@ -172,16 +170,12 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       onStatusChanged: notifier.setStatus,
       onRequestAddClient: requestAddClient,
       isMultiDay: spanLength > 1,
-      // One day of a multi-day RUN: the end date goes away, because the
-      // run's length is fixed at booking.
+      // One day of a multi-day RUN: the end date goes away, because the run's
+      // length is fixed at booking.
       isRunMember: appointment.isRunMember,
-      // Editing may not widen a ONE-DAY client job into a multi-day one:
-      // only the ADD path splits a span into per-day documents, so this
-      // would write the wide document that closes every day at once.
-      // A job that is ALREADY multi-day keeps the row — a legacy wide
-      // document has to stay visible and shortenable, and hiding it there
-      // strands the very records this split is migrating away from.
-      // Personal blocks keep it too: they legitimately stay wide.
+      // Editing may not widen a ONE-DAY client job into a multi-day one: only
+      // the ADD path splits a span into per-day documents, so this would write
+      // the wide document that closes every day at once.
       canSpanDays: appointment.isPersonal || spanLength > 1,
       isOvernight:
           !state.isAllDay &&
@@ -214,9 +208,9 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
   /// The date rows drop an inline month calendar down beneath themselves, so a
   /// date arrives already picked — no modal to await, no cancelled outcome.
   void _onStartDateSelected(EventDetailsController notifier, DateTime picked) {
-    // No setState around the controller writes: the body watches the
-    // controller provider and `selectDate` always emits a new state, so the
-    // rebuild is already coming. This matches `_pickStartTime` below.
+    // No setState around the controller writes: the body watches the controller
+    // provider and `selectDate` always emits a new state, so the rebuild is
+    // already coming.
     widget.controllers.date.text = DateUtilsHelper.formatDate(picked);
     notifier.selectDate(picked);
     // selectDate shifts the end date to preserve the run's length, and the end
@@ -262,17 +256,15 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     notifier.selectEndTime(picked);
   }
 
-  /// The occurrences a "this and all future" save would touch. A failed count
-  /// must never block the edit, so this degrades to an empty outlook and the
-  /// dialog just renders without its consequence lines.
+  /// The occurrences a "this and all future" save would touch.
   Future<({int count, DateTime? last})> _seriesOutlook(
     WidgetRef ref,
     AppointmentRecord appointment,
   ) async {
-    // Both reads happen before the await: this method promises to degrade to
-    // an empty outlook rather than block the edit, and a `ref.read` in the
-    // catch would defeat exactly that once the sheet has been dismissed
-    // mid-fetch (Riverpod 3 throws on an unmounted consumer).
+    // Both reads happen before the await: this method promises to degrade to an
+    // empty outlook rather than block the edit, and a `ref.read` in the catch
+    // would defeat exactly that once the sheet has been dismissed mid-fetch
+    // (Riverpod 3 throws on an unmounted consumer).
     final repository = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
     try {
@@ -334,8 +326,8 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       outcome = await attempt(forceBusy: true);
       if (!context.mounted) return;
     }
-    // Editing a day off's DATES re-runs the check on the days that were added
-    // — extending Mon–Tue to Friday is the common case — because the span this
+    // Editing a day off's DATES re-runs the check on the days that were added —
+    // extending Mon–Tue to Friday is the common case — because the span this
     // reads is the saved record's, not the one it had before.
     if (outcome case EventDetailsSaved(:final appointment)) {
       await showPersonalBlockClashesIfAny(context, ref, block: appointment);
@@ -344,19 +336,8 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     _announce(context, ref, outcome);
   }
 
-  /// Asks whether an edit to a repeating visit applies to this visit only or
-  /// to future ones too, and returns that as `applyToSeries`.
-  ///
-  /// **`null` means "stop"** — the admin dismissed the dialog, or the sheet was
-  /// torn down while it was open. `false` is a real answer, not an absence.
-  ///
-  /// Split out of [_save] because it owns a busy-flag handoff of its own: the
-  /// form is marked busy for the duration so a second tap cannot stack a
-  /// duplicate dialog, and every exit from here — including the mounted bail —
-  /// has to clear it before `save()` takes the flag over.
-  ///
-  /// Skipped entirely when the repeat RULE is what changed: that rewrites the
-  /// whole series regardless, so there is nothing to ask.
+  /// Asks whether an edit to a repeating visit applies to this visit only or to
+  /// future ones too, and returns that as `applyToSeries`.
   Future<bool?> _resolveSeriesScope(
     BuildContext context,
     WidgetRef ref,
@@ -381,10 +362,7 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     }
     // A run member and a repeat occurrence take the same dialog with different
     // words: one is "the rest of this job", the other "the visits after this
-    // one". They can never both apply — the repeat picker is hidden on a run
-    // day as well as a multi-day form, so a run carries `RepeatInterval.none`.
-    // A run member wins the label either way, in case a stored repeat predates
-    // that gate.
+    // one".
     final isRun = appointment.isRunMember;
     final choice = await showSeriesScopeDialog(
       context,
@@ -437,18 +415,14 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
   }
 
   /// Turns a settled save outcome into the one notice it earns.
-  ///
-  /// Both no-op outcomes surface NOTHING: `Invalid` is already shown as field
-  /// errors, and `BusyEmployees` was resolved above — the dialog either forced
-  /// a retry or the admin backed out.
   void _announce(
     BuildContext context,
     WidgetRef ref,
     EventDetailsSaveOutcome outcome,
   ) {
     switch (outcome) {
-      // Each surfaces nothing: the form already shows its own field errors,
-      // the conflict prompt owns `BusyEmployees`, and `SaveBusy` is a skipped
+      // Each surfaces nothing: the form already shows its own field errors, the
+      // conflict prompt owns `BusyEmployees`, and `SaveBusy` is a skipped
       // duplicate save rather than a failure.
       case EventDetailsInvalid() ||
           EventDetailsBusyEmployees() ||
@@ -566,9 +540,7 @@ class _EditPhotosSection extends ConsumerWidget {
       onPickImages: () async {
         final picked = await pickAppointmentImages(context, ref);
         // The longest await in the app — an OS action sheet and then the
-        // camera/Photos picker. The notifier is autoDispose.family, so
-        // calling it after this view was torn down under the picker throws a
-        // StateError out of an unawaited callback, filed as FATAL.
+        // camera/Photos picker.
         if (!context.mounted) return;
         if (picked.isNotEmpty) notifier.addImages(picked);
       },

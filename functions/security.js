@@ -6,17 +6,14 @@ const {getFirestore} = require("firebase-admin/firestore");
 const SESSION_TOKEN_MAX_LEN = 64;
 
 // Firestore's own document-id ceiling as the rules state it — hand-mirrored
-// from `isValidDocIdField` in firestore.rules. Raise both together.
+// from `isValidDocIdField` in firestore.rules.
 const DOC_ID_MAX_LEN = 128;
 
-// Hard cap on a callable payload once serialized. Every payload here is just
-// a couple of short strings, so anything larger is malformed or abusive.
+// Hard cap on a callable payload once serialized.
 const MAX_PAYLOAD_BYTES = 4 * 1024;
 
 /**
- * True if the string contains a C0 control character or DEL. We guard
- * against these so logged values can't carry log-injection or odd upstream
- * behaviour.
+ * True if the string contains a C0 control character or DEL.
  * @param {string} s value to inspect.
  * @return {boolean}
  */
@@ -31,7 +28,7 @@ function hasControlChar(s) {
 /**
  * Throws HttpsError("invalid-argument") when `data` isn't a plain object, is
  * oversized once serialized, or carries a key outside `allowedKeys` — this is
- * our mass-assignment defence. null/undefined is treated as empty.
+ * our mass-assignment defence.
  * @param {*} data raw callable request data.
  * @param {!Set<string>} allowedKeys the only keys this endpoint accepts.
  */
@@ -47,9 +44,8 @@ function assertPayloadShape(data, allowedKeys) {
     throw new HttpsError("invalid-argument", "malformed-payload");
   }
   // BYTES, not `.length`: that counts UTF-16 code units, so 4096 emoji or CJK
-  // characters serialize to ~12-16 KB and passed a cap whose constant and
-  // error code both say bytes. `notification_utils.js` already measures this
-  // way; this is the same measurement in the other direction.
+  // characters serialize to ~12-16 KB and passed a cap whose constant and error
+  // code both say bytes.
   if (Buffer.byteLength(serialized, "utf8") > MAX_PAYLOAD_BYTES) {
     throw new HttpsError("invalid-argument", "payload-too-large");
   }
@@ -80,14 +76,6 @@ function requireString(data, key, maxLen) {
 /**
  * Validates and returns a Firestore document id: a required string of at most
  * `DOC_ID_MAX_LEN` characters that carries no "/".
- *
- * The slash check is the load-bearing half, not tidiness. `db.collection(...)
- * .doc(id)` throws SYNCHRONOUSLY on an id containing one, which surfaces to
- * the caller as an opaque `internal` instead of a shaped validation failure.
- * This is the callable-side owner of the same rule `isValidDocIdField` states
- * in CEL (`firestore.rules`) — it was restated at three call sites, two of
- * them byte-identical down to the comment. Keep the 128 in step with the
- * rules copy.
  * @param {object} data callable request data.
  * @param {string} key field name.
  * @return {string}
@@ -101,8 +89,8 @@ function requireDocId(data, key) {
 }
 
 /**
- * Same as requireString but allows the field to be absent or empty — the
- * length cap and the control-char reject still apply to whatever is there.
+ * Same as requireString but allows the field to be absent or empty — the length
+ * cap and the control-char reject still apply to whatever is there.
  * @param {object} data callable request data.
  * @param {string} key field name.
  * @param {number} maxLen max length (inclusive).
@@ -118,8 +106,8 @@ function optionalString(data, key, maxLen) {
 
 /**
  * Validates and returns a finite number within [min, max], throwing
- * HttpsError("invalid-argument") when missing, non-numeric, non-finite, or
- * out of range.
+ * HttpsError("invalid-argument") when missing, non-numeric, non-finite, or out
+ * of range.
  * @param {*} value raw payload value.
  * @param {string} name field name, used to build the error code.
  * @param {number} min minimum allowed value (inclusive).
@@ -154,22 +142,19 @@ function readSessionToken(data) {
 
 /**
  * A sliding-window rate limit backed by Firestore, so it survives across
- * function instances and cold starts (unlike the in-memory limiter). Throws
- * HttpsError("resource-exhausted") once the caller exceeds `max` attempts
- * within `windowMs`. Counters live in `rateLimits/*`, which firestore.rules
- * denies to all clients.
+ * function instances and cold starts (unlike the in-memory limiter).
  * @param {string} route stable endpoint identifier (part of the doc key).
  * @param {string} key per-caller limiter key — usually the Auth uid, but any
- *   stable per-caller identifier a route needs (see `keyKind`).
+ * stable per-caller identifier a route needs (see `keyKind`).
  * @param {number} max max attempts per window.
  * @param {number} windowMs window length in milliseconds.
  * @param {string} [keyKind] label for `key` ("uid" | "email"), purely for log
- *   discrimination; email keys are PII, so only a hash is logged.
+ * discrimination; email keys are PII, so only a hash is logged.
  * @return {!Promise<{refund: function(): !Promise<void>}>} A handle whose
- *   `refund()` undoes the recorded attempt on a best-effort basis, so a
- *   server-side failure (not the caller's fault) doesn't burn one of their
- *   limited attempts. Existing callers that ignore the return value are
- *   unaffected.
+ * `refund()` undoes the recorded attempt on a best-effort basis, so a
+ * server-side failure (not the caller's fault) doesn't burn one of their
+ * limited attempts. Existing callers that ignore the return value are
+ * unaffected.
  */
 async function enforceDurableRateLimit(route, key, max, windowMs,
     keyKind = "uid") {
@@ -181,8 +166,8 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
     const snap = await tx.get(ref);
     const data = snap.exists ? snap.data() : null;
     const prior = data && Array.isArray(data.attempts) ? data.attempts : [];
-    // We track per-attempt timestamps instead of a single windowStart
-    // counter — a counter would let a caller burst 2×max across the boundary.
+    // We track per-attempt timestamps instead of a single windowStart counter —
+    // a counter would let a caller burst 2×max across the boundary.
     const recent = prior.filter(
         (t) => typeof t === "number" && now - t < windowMs,
     );
@@ -201,8 +186,7 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
     });
   });
   if (overLimit) {
-    // Never log the raw key — it's PII for the email-keyed route. Log a
-    // short sha256 prefix instead so operators can still correlate breaches.
+    // Never log the raw key — it's PII for the email-keyed route.
     const keyHash = crypto.createHash("sha256").update(key)
         .digest("hex").slice(0, 12);
     logger.warn("enforceDurableRateLimit: limit exceeded",
@@ -210,9 +194,7 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
     throw new HttpsError("resource-exhausted", "too-many-attempts");
   }
 
-  // Best-effort refund of the recorded attempt. It swallows its own errors
-  // since refunding is just an optimization — not worth failing the
-  // caller's error path.
+  // Best-effort refund of the recorded attempt.
   const refund = async () => {
     try {
       await db.runTransaction(async (tx) => {
@@ -238,35 +220,10 @@ async function enforceDurableRateLimit(route, key, max, windowMs,
 /**
  * The whole opening of an ADMIN-ONLY callable: signed in, actually an admin,
  * and a payload of exactly [allowedKeys].
- *
- * One owner because the three steps were re-decided at eleven call sites, and
- * on 2026-09-01 three of those sites turned out to have a DELETABLE
- * `assertAdmin` — the whole suite stayed green with the gate removed, on the
- * callables that mint and delete real Firebase Auth accounts. Tests close
- * that for the three that were found; this closes it for the ones nobody has
- * looked at yet, because a callable that opens with this cannot be missing a
- * step.
- *
- * The ORDER is the security-relevant part and is fixed here:
- *
- *   auth -> assertAdmin -> assertPayloadShape
- *
- * Identity guards sit ABOVE the payload check so a non-privileged caller is
- * refused before anything reads their data, and the payload check sits above
- * whatever rate limiter the caller adds next, so a burst of malformed
- * submissions cannot exhaust a legitimate admin's window. `.claude/rules/
- * security.md` states that order; this is it made mechanical.
- *
- * NOT for a self-service callable. `changeEmployeeEmail` and
- * `completeEmployeeSetup` are deliberately not admin-only, and
- * `changeEmployeeEmail` resolves its caller through the pure
- * `resolveEmailChangeCaller` precisely so widening it past admins cannot
- * widen WHICH doc a caller reaches. Don't reach for this there.
- *
  * @param {!Object} req The callable request.
  * @param {!Set<string>} allowedKeys The only keys this endpoint accepts.
  * @return {!Promise<string>} The caller's uid, which every site needs next for
- *   its rate limiter.
+ * its rate limiter.
  */
 async function assertAdminCall(req, allowedKeys) {
   if (!req.auth || !req.auth.uid) {
@@ -280,7 +237,7 @@ async function assertAdminCall(req, allowedKeys) {
 /**
  * Throws HttpsError("permission-denied", "wave/not-admin") unless the
  * `usersByUid/{uid}` bridge (kept in sync by syncUsersByUid) shows an active
- * admin. Role always comes from Firestore, never from the client.
+ * admin.
  * @param {string} uid Firebase Auth uid of the caller.
  * @return {!Promise<void>}
  */
@@ -300,10 +257,7 @@ async function assertAdmin(uid) {
 
 /**
  * True when the caller's re-authentication is missing or too old to permit an
- * irreversible or identity-rewriting action. Pure/testable.
- *
- * Fails CLOSED on a missing or non-numeric `auth_time`: a caller that presents
- * no token claim must not read as "recently re-authenticated".
+ * irreversible or identity-rewriting action.
  * @param {*} authTime ID-token `auth_time` (epoch seconds) or undefined.
  * @param {number} nowSec Current time in epoch seconds.
  * @param {number} maxAgeSeconds Allowed staleness window in seconds.
@@ -316,9 +270,6 @@ function isReauthStale(authTime, nowSec, maxAgeSeconds) {
 
 /**
  * Rejects a caller whose re-authentication is older than [maxAgeSeconds].
- *
- * Belongs ABOVE the rate limiter at every call site, so a stale-auth rejection
- * doesn't burn one of the caller's slots, and below the identity guards.
  * @param {!Object} auth The callable's `req.auth`.
  * @param {string} route Callable name, for the log line.
  * @param {number} maxAgeSeconds Allowed staleness window in seconds.
@@ -337,15 +288,11 @@ function assertFreshReauth(auth, route, maxAgeSeconds) {
   }
 }
 
-// The App Check option block every callable spreads. It was declared as an
-// identical private const in two modules; a callable that also sets a region,
-// a timeout or a secret still writes `enforceAppCheck: true` inline beside
-// them, because spreading a one-key constant into a larger options object
-// reads as less explicit, not more, on a security-critical line.
+// The App Check option block every callable spreads.
 const APP_CHECK = {enforceAppCheck: true};
 
-// Keep guards inline per callable — a shared helper here would close over
-// the real assertAdmin and break the guard-order mocks in
+// Keep guards inline per callable — a shared helper here would close over the
+// real assertAdmin and break the guard-order mocks in
 // __tests__/places_admin_gate.test.js.
 
 module.exports = {

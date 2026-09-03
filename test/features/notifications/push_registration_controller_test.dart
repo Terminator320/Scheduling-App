@@ -92,30 +92,26 @@ void main() {
     verifyNever(() => employees.findUserByUid(any()));
   });
 
-  test('a throwing account gate is contained, not escaped as a fatal',
-      () async {
-    // Shipped as a FATAL on 2026-08-31 and fixed by opening the try ABOVE the
-    // gate read. `sync()` is called unawaited from four sites, so nothing is
-    // left to catch a throw from `readAccountGateInputs` or the awaited
-    // `_refreshSub.cancel()` — it goes straight to the zone handler and is
-    // filed as an app-level crash.
-    //
-    // Move `final gate = readAccountGateInputs(...)` back above the try and
-    // this test fails.
-    when(() => auth.currentUser).thenThrow(StateError('auth blew up'));
-    final container = makeContainer(const {
-      'role': 'employee',
-      'status': 'active',
-    });
-    addTearDown(container.dispose);
-    await settleDoc(container);
+  test(
+    'a throwing account gate is contained, not escaped as a fatal',
+    () async {
+      // Shipped as a FATAL on 2026-08-31 and fixed by opening the try ABOVE the
+      // gate read.
+      when(() => auth.currentUser).thenThrow(StateError('auth blew up'));
+      final container = makeContainer(const {
+        'role': 'employee',
+        'status': 'active',
+      });
+      addTearDown(container.dispose);
+      await settleDoc(container);
 
-    await expectLater(
-      container.read(pushRegistrationControllerProvider).sync(),
-      completes,
-    );
-    verifyNever(() => service.requestPermission());
-  });
+      await expectLater(
+        container.read(pushRegistrationControllerProvider).sync(),
+        completes,
+      );
+      verifyNever(() => service.requestPermission());
+    },
+  );
 
   test('inactive employee does not register', () async {
     final container = makeContainer(const {
@@ -163,8 +159,8 @@ void main() {
 
     final controller = container.read(pushRegistrationControllerProvider);
     await controller.sync();
-    // Same uid + locale + live refresh subscription → the second sync must
-    // skip the findUserByUid query and the token upsert entirely.
+    // Same uid + locale + live refresh subscription → the second sync must skip
+    // the findUserByUid query and the token upsert entirely.
     await controller.sync();
 
     verify(() => employees.findUserByUid('uid-1')).called(1);
@@ -190,28 +186,31 @@ void main() {
       when(() => service.deleteToken()).thenAnswer((_) async {});
     });
 
-    test('a session that never registered still deletes the stale row', () async {
-      // `_registeredDocId`/`_registeredToken` are set only on a fully-successful
-      // sync, so an incomplete session left one `fcmTokens` row per device that
-      // the server keeps pushing to - `syncUsersByUid` purges those on DISABLE,
-      // not on sign-out, so they just accumulate.
-      when(() => service.requestPermission()).thenAnswer((_) async => false);
-      final container = makeContainer(const {
-        'role': 'employee',
-        'status': 'active',
-      });
-      addTearDown(container.dispose);
-      await settleDoc(container);
-      final controller = container.read(pushRegistrationControllerProvider);
-      await controller.sync();
+    test(
+      'a session that never registered still deletes the stale row',
+      () async {
+        // `_registeredDocId`/`_registeredToken` are set only on a
+        // fully-successful sync, so an incomplete session left one `fcmTokens`
+        // row per device that the server keeps pushing to - `syncUsersByUid`
+        // purges those on DISABLE, not on sign-out, so they just accumulate.
+        when(() => service.requestPermission()).thenAnswer((_) async => false);
+        final container = makeContainer(const {
+          'role': 'employee',
+          'status': 'active',
+        });
+        addTearDown(container.dispose);
+        await settleDoc(container);
+        final controller = container.read(pushRegistrationControllerProvider);
+        await controller.sync();
 
-      await controller.unregisterCurrentDevice();
+        await controller.unregisterCurrentDevice();
 
-      verify(
-        () => fcm.deleteToken(userDocId: 'doc-1', token: 'tok-1'),
-      ).called(1);
-      verify(() => service.deleteToken()).called(1);
-    });
+        verify(
+          () => fcm.deleteToken(userDocId: 'doc-1', token: 'tok-1'),
+        ).called(1);
+        verify(() => service.deleteToken()).called(1);
+      },
+    );
 
     test('deletes nothing when the device has no token at all', () async {
       when(() => service.currentToken()).thenAnswer((_) async => null);

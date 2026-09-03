@@ -28,10 +28,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   final FirebaseFunctions _functions;
   final AppLogger _logger;
 
-  /// Ceiling shared by all three `users` listeners. These are live
-  /// `snapshots()` held open for the whole session, so an unbounded one grows
-  /// with the roster forever; the sort happens in Dart, so the cap is a safety
-  /// valve rather than a pagination window.
+  /// Ceiling shared by all three `users` listeners.
   static const int _userStreamLimit = 1000;
 
   @override
@@ -178,9 +175,9 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
           'completeEmployeeSetup',
           options: HttpsCallableOptions(timeout: _callableTimeout),
         )
-        // All five keys, always: the server reads the strings leniently
-        // (empty == absent) and the flags as `=== true`, so a conditional
-        // payload shape would be a second thing to test for no benefit.
+        // All five keys, always: the server reads the strings leniently (empty
+        // == absent) and the flags as `=== true`, so a conditional payload
+        // shape would be a second thing to test for no benefit.
         .call<dynamic>({
           'firstName': firstName.trim(),
           'lastName': lastName.trim(),
@@ -207,11 +204,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
     if (normalizedEmail != storedEmail) {
       if (storedUid.isEmpty) {
         // No Auth account behind this doc, so the email is ours to write.
-        // Uniqueness isn't atomic here; the transaction below re-checks.
-        // Bounded like every other query in this layer. Two is enough to
-        // answer "does anyone else already hold this address" — the result
-        // set is 0-1 in practice, so this is the missing guardrail rather
-        // than a live cost.
         final existing = await _users
             .where('email', isEqualTo: normalizedEmail)
             .limit(2)
@@ -221,10 +213,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
         }
       } else {
         // The sign-in identity moves through the callable, which owns BOTH
-        // stores. It runs FIRST and the write below merely re-states what it
-        // committed — the reverse order is the bug this closes: a
-        // Firestore-only change leaves the person signing in at the old
-        // address while every admin surface shows the new one.
+        // stores.
         await _changeAuthEmail(docId: docId, email: normalizedEmail);
         emailAtCheck = normalizedEmail;
       }
@@ -253,19 +242,15 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       'onCall': employee.onCall,
       // Scrub, not write: the emergency pair moved to
       // users/{docId}/private/emergency, and any value left on the parent doc
-      // by a pre-move build is still readable by every active peer. Deleting
-      // the keys on each save heals the fleet the way the client `mobile`
-      // promotion does. Safe to send when they're already absent, and
-      // `isValidUserData` passes a removed key. Drop this once no doc can
-      // still carry them.
+      // by a pre-move build is still readable by every active peer.
       'emergencyContact': FieldValue.delete(),
       'emergencyPhone': FieldValue.delete(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
     // This is the best client-side hardening we can do: commit inside a
-    // transaction that re-reads the doc and aborts if the email changed
-    // since the uniqueness check — say, a concurrent admin edit.
+    // transaction that re-reads the doc and aborts if the email changed since
+    // the uniqueness check — say, a concurrent admin edit.
     await ref.firestore.runTransaction<void>((txn) async {
       final snapshot = await txn.get(ref);
       // Same `?? ''` normalization the pre-flight read uses: a doc with no
@@ -287,16 +272,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   @override
   Future<void> updateSelfDetails(EmployeeRecord employee) async {
     // Exactly the rules allowlist and nothing else — `hasOnly` rejects the
-    // whole write on one stray key. In particular NO emergency scrub here:
-    // `updateEmployee` sends one, and it would add two unnamed keys.
-    //
-    // Takes the WHOLE record rather than loose scalars, the same shape and for
-    // the same reason as `createAccount`: because `hasOnly` forces the patch to
-    // name every allowlisted key, each caller has to pass through the fields it
-    // is NOT changing, and the three of them re-spelled all seven. A field
-    // omitted there silently overwrote somebody's setting, and adding a key to
-    // `kSelfServiceUserFields` meant three edits with no compile error to catch
-    // a miss. Callers now hand over `record.copyWith(...)` of just what changed.
+    // whole write on one stray key.
     final patch = <String, dynamic>{
       'phone': employee.phone.trim(),
       'workingDays': normalizeWorkingDays(employee.workingDays),
@@ -317,10 +293,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   /// Moves the sign-in email in Firebase Auth AND on the users doc.
-  ///
-  /// Private on purpose: `updateEmployee` is the only caller, so "an email edit
-  /// always moves both stores" is a property of the save path rather than a
-  /// second method a call site could forget to pair with it.
   Future<void> _changeAuthEmail({
     required String docId,
     required String email,
@@ -336,8 +308,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
       if (e.message == 'email-exists') {
         throw const EmployeesFailureEmailAlreadyExists();
       }
-      // A concurrent admin edit landed between our read and the commit. Same
-      // "try again" the local transaction guard raises for the same race.
+      // A concurrent admin edit landed between our read and the commit.
       if (e.message == 'email-changed') {
         throw const EmployeesFailureUnknown();
       }
@@ -366,10 +337,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   ) async {
     // set(merge) rather than update(): the doc doesn't exist until the first
     // save, and update() on a missing doc throws not-found.
-    //
-    // Deliberately NO parent-doc scrub here. This path is used by self-service
-    // settings, and the users/{id} self-write allowlist would reject the extra
-    // emergencyContact/emergencyPhone delete keys outright.
     await _emergencyDoc(docId).set({
       ...contact.toMap(),
       'updatedAt': FieldValue.serverTimestamp(),
@@ -401,7 +368,6 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
   }
 
   /// Memo of the doc id [watchUserDoc] resolved, keyed by the uid it was for.
-  /// See [cachedUserDocId].
   String? _cachedUserDocId;
   String? _cachedUserDocUid;
 
@@ -419,9 +385,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
           .snapshots()
           .where((snapshot) {
             // Skip the transient empty snapshot you get from a cold cache —
-            // reporting it as deleted would falsely sign the user out. An
-            // authoritative empty snapshot from the server still gets
-            // through, so a real deletion still gets flagged.
+            // reporting it as deleted would falsely sign the user out.
             return snapshot.docs.isNotEmpty || !snapshot.metadata.isFromCache;
           })
           .map((snapshot) {
@@ -432,9 +396,7 @@ class FirebaseEmployeesRepository implements EmployeesRepository {
               }
               return const <String, dynamic>{};
             }
-            // Remember the id this snapshot already carries. Without it,
-            // activeUserIdentityProvider re-queried the same doc by uid on
-            // every emission purely to learn something this stream had.
+            // Remember the id this snapshot already carries.
             _cachedUserDocUid = uid;
             _cachedUserDocId = snapshot.docs.first.id;
             return snapshot.docs.first.data();

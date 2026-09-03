@@ -4,10 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/theme/themes.dart';
 
 /// `docs/legal/accessibility.html` publicly claims the app picks up iOS **Bold
-/// Text** and **Increase Contrast** "straight away". Nothing in `lib/` read
-/// `boldTextOf` or `highContrastOf`, and Flutter honours neither on its own —
-/// it surfaces the flags and applies them to nothing. These pin the two halves
-/// that make the claim true.
+/// Text** and **Increase Contrast** "straight away".
 void main() {
   group('boldTextTheme', () {
     test('moves every text style one weight step up', () {
@@ -113,8 +110,8 @@ void main() {
     });
 
     test('leaves the brand colours alone', () {
-      // Lifting these would make it a different app rather than a more
-      // legible one.
+      // Lifting these would make it a different app rather than a more legible
+      // one.
       expect(
         highContrastLightTheme().colorScheme.primary,
         lightTheme().colorScheme.primary,

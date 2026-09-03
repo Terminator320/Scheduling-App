@@ -7,22 +7,8 @@ import 'package:scheduling/features/calendar/domain/month_grid.dart';
 import 'package:scheduling/features/calendar/widgets/views/agenda_sliver_list.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// The whole selected week, day by day: a pinned day bar over each day's
-/// agenda rows. Answers "what is Marc doing this week" on the calendar itself,
-/// which neither the day agenda nor the roster could.
-///
-/// A LIST of slivers rather than one widget, and that is load-bearing: each
-/// day is a `SliverMainAxisGroup` so its pinned bar scrolls away with its own
-/// rows (the History month bars' rule), and a pinned header whose group is
-/// nested in another group — or holds a group — lays out with a clipped paint
-/// extent and asserts. So the host spreads these straight into its viewport,
-/// and each group holds only plain slivers: the bar, the holiday rows, the
-/// day's rows.
-///
-/// Each day's rows are [AgendaSliverList] with `inWeek: true` — no per-day
-/// skeleton (one is drawn here for the week), a quiet one-line empty row, and
-/// the same closed-jobs rule the day agenda draws. The bottom clearance is
-/// applied ONCE after the last day, not under each.
+/// The whole selected week, day by day: a pinned day bar over each day's agenda
+/// rows.
 List<Widget> weekAgendaSlivers(
   BuildContext context, {
   required List<DateTime> days,
@@ -74,10 +60,6 @@ List<Widget> weekAgendaSlivers(
 }
 
 /// The pinned `MON 1 · 3 JOBS` bar over one day of the week agenda.
-///
-/// Pinned for the same reason History's month bar is: scrolling from one day
-/// into the next, a bar still on screen is what says the rows below belong to
-/// a different day.
 class WeekDayBar extends SliverPersistentHeaderDelegate {
   WeekDayBar({
     required this.day,
@@ -121,8 +103,8 @@ class WeekDayBar extends SliverPersistentHeaderDelegate {
   ) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    // Today is the accent, the rest read as headings — colour is never the
-    // only cue, since the number is also bold.
+    // Today is the accent, the rest read as headings — colour is never the only
+    // cue, since the number is also bold.
     final dayColor = isToday ? scheme.primary : scheme.onSurface;
     return Material(
       // Opaque on purpose: pinned, it scrolls over the rows beneath it.

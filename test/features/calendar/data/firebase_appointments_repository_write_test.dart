@@ -37,8 +37,8 @@ AppointmentRecord _record({
   status: status,
 );
 
-// Declared as a top-level function (not a closure) so its runtime type
-// exactly matches mocktail's `any()` for the repo's transaction handler.
+// Declared as a top-level function (not a closure) so its runtime type exactly
+// matches mocktail's `any()` for the repo's transaction handler.
 Future<Null> _fallbackHandler(Transaction _) async => null;
 
 void main() {
@@ -81,14 +81,12 @@ void main() {
       // update must NOT stamp createdAt (only inserts do), or a re-save would
       // reset the original creation time.
       expect(payload.containsKey('createdAt'), isFalse);
-      // Nor `pictureCount`: the recount trigger owns it after creation, and
-      // the rules reject an update that moves it — so emitting the record's
+      // Nor `pictureCount`: the recount trigger owns it after creation, and the
+      // rules reject an update that moves it — so emitting the record's
       // possibly-stale copy here turns every edit of a job with photos into an
       // opaque permission-denied.
       expect(payload.containsKey('pictureCount'), isFalse);
-      // Nor the retired `pictures` array. Photos live in the `images`
-      // subcollection; writing the field again would put the whole photo list
-      // back on a document the calendar reads a thousand of at a time.
+      // Nor the retired `pictures` array.
       expect(payload.containsKey('pictures'), isFalse);
     });
 
@@ -130,12 +128,9 @@ void main() {
     });
 
     test('seeds pictureCount at zero — the one client write of it', () async {
-      // A create is the only write the rules let touch this counter, and it
-      // has to: the recount trigger fires on a photo write, so without the
-      // seed every photo-less job would read as count-unknown forever. The
-      // card's photo indicator reads this number. (The detail sheet no longer
-      // does — gating a READ on a debounced counter is what made a
-      // just-uploaded photo invisible.)
+      // A create is the only write the rules let touch this counter, and it has
+      // to: the recount trigger fires on a photo write, so without the seed
+      // every photo-less job would read as count-unknown forever.
       final doc = _MockDoc();
       final batch = _MockBatch();
       // `addAppointments` reads the ref's id to patch the history scan window.
@@ -209,13 +204,18 @@ void main() {
       when(() => firestore.batch()).thenReturn(batch);
       when(() => batch.update(any(), any())).thenReturn(null);
       when(() => batch.delete(any())).thenReturn(null);
-      when(() => batch.set<Map<String, dynamic>>(any(), any())).thenReturn(null);
+      when(
+        () => batch.set<Map<String, dynamic>>(any(), any()),
+      ).thenReturn(null);
       when(batch.commit).thenAnswer((_) async {});
 
       await repo().rewriteSeries(
         updated: _record(),
         deleteIds: const ['a9'],
-        copies: [_record(id: 'a2'), _record(id: 'a3')],
+        copies: [
+          _record(id: 'a2'),
+          _record(id: 'a3'),
+        ],
       );
 
       final written = <String>[
@@ -232,11 +232,7 @@ void main() {
     }
 
     test('is the SAME on every document of one batch', () async {
-      // The producer half of the notification-collapse contract. Every doc a
-      // single series edit touches carries one id, so the server folds the
-      // fan-out into one push per employee. The server half is pinned; nothing
-      // pinned this, which is the half that fixed "cancel Tuesday then
-      // Thursday → second push dropped".
+      // The producer half of the notification-collapse contract.
       final ids = await opIdsFromRewrite();
 
       expect(ids, hasLength(3));

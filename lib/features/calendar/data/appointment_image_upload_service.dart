@@ -268,8 +268,8 @@ class AppointmentImageUploadService {
           await _publishPending();
         } catch (e, st) {
           _logger.warn('IMG-UPLOAD drain failed', e, st);
-          // A failed drain leaves the queue as it was; republish so the
-          // waiting count is never left stale by the failure path.
+          // A failed drain leaves the queue as it was; republish so the waiting
+          // count is never left stale by the failure path.
           await _publishPending();
         }
       } while (_pendingDrain);
@@ -279,11 +279,6 @@ class AppointmentImageUploadService {
   }
 
   /// Republishes the queue depth per appointment from the store itself.
-  ///
-  /// A full read rather than a hand-maintained counter: a drain that partially
-  /// succeeds re-queues a SUBSET, and a counter kept by arithmetic drifts the
-  /// first time that happens. It is a SharedPreferences-backed list of a
-  /// handful of entries, so the read is cheap.
   Future<void> _publishPending() async {
     try {
       final counts = <String, int>{};

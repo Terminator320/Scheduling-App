@@ -126,8 +126,6 @@ int runLengthDays(DateTime? start, DateTime? end) {
 }
 
 /// True when a daily window runs past midnight.
-///
-/// Equal times count as a full overnight window.
 bool isOvernightWindow(TimeOfDay start, TimeOfDay end) =>
     end.hour * 60 + end.minute <= start.hour * 60 + start.minute;
 

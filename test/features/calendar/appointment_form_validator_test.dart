@@ -38,9 +38,9 @@ void main() {
     });
 
     test('an all-day block ignores stale times left over from before', () {
-      // Regression: times picked BEFORE all-day was switched on stay in
-      // state; the validator must not raise a time error against rows that
-      // are no longer on screen.
+      // Regression: times picked BEFORE all-day was switched on stay in state;
+      // the validator must not raise a time error against rows that are no
+      // longer on screen.
       final errors = AppointmentFormValidator.validate(
         _input(
           isPersonal: true,
@@ -166,8 +166,8 @@ void main() {
 
   group('allDaySpan / appointmentSpan', () {
     test('an all-day block spans midnight to 23:59 of the same date', () {
-      // Real instants, not sentinels — every range query and the overdue
-      // sweep keep treating it as an ordinary appointment.
+      // Real instants, not sentinels — every range query and the overdue sweep
+      // keep treating it as an ordinary appointment.
       final span = allDaySpan(
         DateTime(2026, 5, 10, 14, 37),
         DateTime(2026, 5, 10, 14, 37),
@@ -363,9 +363,9 @@ void main() {
     });
 
     test('counts the end date INCLUSIVELY', () {
-      // "The end date names the last day the crew STARTS work" — Aug 2 to
-      // Aug 6 is five work days, which is what the card's "Day 3 of 5" and
-      // the 14-day cap both count.
+      // "The end date names the last day the crew STARTS work" — Aug 2 to Aug 6
+      // is five work days, which is what the card's "Day 3 of 5" and the 14-day
+      // cap both count.
       expect(runLengthDays(DateTime(2026, 8, 2), DateTime(2026, 8, 6)), 5);
     });
 

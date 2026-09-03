@@ -3813,6 +3813,10 @@
       }
     }
   },
+  "calendar_bookAgain": "Book again",
+  "@calendar_bookAgain": {
+    "description": "Action bar button on a client job's detail sheet (admin only, open or closed job): opens the new-appointment sheet pre-filled with this job's client, address, title, notes, materials, crew and length, with no date or time."
+  },
   "error_introUpdateCrewStatus": "Couldn't send your status",
   "@error_introUpdateCrewStatus": {
     "description": "Intro of the failure notice when an assignee's On my way / Running late write fails."

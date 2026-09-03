@@ -39,22 +39,17 @@ class ClientsListView extends ConsumerStatefulWidget {
   final String searchQuery;
   final bool isAdmin;
 
-  /// Which slice of the roster to show. Anything but [ClientsFilterAll] is
-  /// read as one bounded query rather than filtered out of the paginated list.
+  /// Which slice of the roster to show.
   final ClientsFilter filter;
   final void Function(ClientRecord client)? onClientTap;
   final String? selectedClientId;
 
-  /// Wraps the FIRST row only, as that row's feature-tour step. One row, not
-  /// every row — the step's GlobalKey has to stay unique. Null when the host
-  /// has no tour (the booking flow's client picker).
+  /// Wraps the FIRST row only, as that row's feature-tour step.
   final Widget Function(Widget child)? firstRowTourWrap;
 
   /// Fires after the first page has settled and been laid out — success or
   /// failure, since either way the skeleton is gone and no further row will
-  /// appear on its own. A tour host gates `FeatureTourHost.ready` on this:
-  /// [firstRowTourWrap]'s target doesn't exist while the skeleton is up, and
-  /// a tour started then drops that step and marks the WHOLE scope seen.
+  /// appear on its own.
   final VoidCallback? onFirstPageSettled;
 
   @override
@@ -123,8 +118,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
     await showClientDetailSheet(context, client);
   }
 
-  // An archived client leaves this list and a deleted one is gone, so both
-  // are the same refresh here.
+  // An archived client leaves this list and a deleted one is gone, so both are
+  // the same refresh here.
   @override
   void onClientArchived(ClientRecord client, {required bool archived}) =>
       _pagingController.refresh();
@@ -148,14 +143,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
       endActionPane: ActionPane(
         motion: const DrawerMotion(),
         extentRatio: canDeleteClient(client) ? 0.5 : 0.28,
-        // Full swipe commits Archive ONLY. Delete is never gesture-committed
-        // — it needs a deliberate tap plus a confirm.
-        //
-        // The work runs in `confirmDismiss`, NOT `onDismissed`: the row is
-        // collapsed before `onDismissed` fires, so an archive that wrote
-        // nothing (offline, reentrancy skip, failure) still removed the row,
-        // and the keyed `Slidable` kept it gone until a pull-to-refresh.
-        // `archiveClient` returns true only when the write committed.
+        // Full swipe commits Archive ONLY.
         dismissible: DismissiblePane(
           confirmDismiss: () => archiveClient(client),
           onDismissed: () {},
@@ -188,8 +176,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
         client: client,
         selected: widget.selectedClientId == client.id,
         onOpen: () => _openClient(client),
-        // Both halves are read once per build off the SAME cached window, not
-        // a provider watch and not a key derivation per row.
+        // Both halves are read once per build off the SAME cached window, not a
+        // provider watch and not a key derivation per row.
         buildingCount: _buildingCounts[_buildingKeyOf(client)],
       ),
     ),
@@ -213,21 +201,21 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
     );
   }
 
-  // A skeleton row is fixed-height whatever the text scale — SkeletonListTile is
-  // all fixed boxes — so how many fit is arithmetic: a 56px tile plus its own 8px
-  // bottom margin, with another sp8 between rows.
+  // A skeleton row is fixed-height whatever the text scale — SkeletonListTile
+  // is all fixed boxes — so how many fit is arithmetic: a 56px tile plus its
+  // own 8px bottom margin, with another sp8 between rows.
   static const double _skeletonRowExtent = 64;
   static const int _skeletonMaxRows = 4;
 
   // The first-page indicator lands inside ISP's SliverFillRemaining, which asks
-  // its child for intrinsic dimensions — so this one can neither scroll (a nested
-  // ListView throws) nor measure (LayoutBuilder can't report intrinsics either).
-  // It is laid out against the sliver's own extent, so a fixed count can't clip.
+  // its child for intrinsic dimensions — so this one can neither scroll (a
+  // nested ListView throws) nor measure (LayoutBuilder can't report intrinsics
+  // either).
   Widget _skeleton() => const SkeletonList(rows: _skeletonMaxRows);
 
-  // The search and type paths instead hand the skeleton the whole body of a tight
-  // Expanded, which the keyboard shortens well below four rows' worth — no sliver
-  // above it here, so the row count can follow the height.
+  // The search and type paths instead hand the skeleton the whole body of a
+  // tight Expanded, which the keyboard shortens well below four rows' worth —
+  // no sliver above it here, so the row count can follow the height.
   Widget _fittedSkeleton() => LayoutBuilder(
     builder: (context, constraints) => ClipRect(
       child: SkeletonList(
@@ -277,8 +265,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
     ];
   }
 
-  // The full search runs on the debounced, committed query across all fields and
-  // pages. The instant local filter fills the gap until that settles.
+  // The full search runs on the debounced, committed query across all fields
+  // and pages.
   Widget _buildSearchResults(String query) {
     final local = _localFilter(query);
 
@@ -295,8 +283,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
               : _resultsList(results),
           loading: () =>
               local.isEmpty ? _fittedSkeleton() : _resultsList(local),
-          // A failed search must not look like "no such client" — show an
-          // error when the instant local fallback is also empty, not the empty state.
+          // A failed search must not look like "no such client" — show an error
+          // when the instant local fallback is also empty, not the empty state.
           error: (e, _) =>
               local.isEmpty ? _searchError(e, query) : _resultsList(local),
         );
@@ -321,8 +309,6 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
 
   // Every non-All filter is a bounded, already-in-memory list, so searching
   // within it is the shared local matcher rather than a second server query.
-  // Both filter branches render through here so they can't drift on the
-  // loading / error / empty handling.
   Widget _buildFromAsync(
     AsyncValue<List<ClientRecord>> async, {
     required VoidCallback onRetry,
@@ -374,8 +360,8 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
         : context.l10n.common_tryADifferentSearchTerm,
   );
 
-  // Retry re-runs the failed search by invalidating its provider instance;
-  // this rebuild is already watching it, so it refetches immediately.
+  // Retry re-runs the failed search by invalidating its provider instance; this
+  // rebuild is already watching it, so it refetches immediately.
   Widget _searchError(Object error, String query) => _errorState(
     error,
     onRetry: () => ref.invalidate(clientSearchProvider(query)),
@@ -417,15 +403,11 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
   Map<String, int> _buildingCounts = const {};
 
   /// The window's per-client building keys, from the same source and for the
-  /// same reason. See [_buildingKeyOf] for why it is not read directly.
+  /// same reason.
   Map<String, String?> _buildingKeys = const {};
 
   /// This client's building key, derived only for a row the scan window never
   /// saw — an archived client, which [buildingKeysIn] omits.
-  ///
-  /// `containsKey`, not `??`: a live client with no address maps to a real
-  /// `null`, and falling through on that would recompute the key for every one
-  /// of them on every rebuild.
   String? _buildingKeyOf(ClientRecord client) =>
       _buildingKeys.containsKey(client.id)
       ? _buildingKeys[client.id]
@@ -435,12 +417,7 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
   Widget build(BuildContext context) {
     ref.listen(clientsRefreshProvider, (_, _) => _pagingController.refresh());
 
-    // Only while this tab is the visible one. The view lives in the hub's
-    // IndexedStack, so once visited it stayed subscribed for the rest of the
-    // session and both derivations re-ran on every client write — including
-    // one made from the inline add-client during booking, with the Clients
-    // list nowhere on screen. `currentOf` is null outside the shell (a pushed
-    // route, or the picker host), where the pill is wanted anyway.
+    // Only while this tab is the visible one.
     final tab = HubShellScope.currentOf(context);
     if (tab == null || tab == HubTab.clients) {
       _buildingCounts = ref.watch(clientBuildingCountsProvider);

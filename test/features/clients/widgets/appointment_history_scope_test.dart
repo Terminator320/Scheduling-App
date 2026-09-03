@@ -52,9 +52,7 @@ Widget _wrap(
   ),
 );
 
-/// A technician's History is their own jobs. The view carries the scope to
-/// both reads — the page and the search — and its empty state stops telling a
-/// person with no "+" button to tap it.
+/// A technician's History is their own jobs.
 void main() {
   late _MockAppointmentsRepository repo;
 
@@ -76,7 +74,7 @@ void main() {
     ).thenAnswer((_) async => rows);
   }
 
-  testWidgets('a scoped view pages that person\'s history', (tester) async {
+  testWidgets("a scoped view pages that person's history", (tester) async {
     stubPage([_marcsJob]);
 
     await tester.pumpWidget(_wrap(repo, scopeEmployeeId: 'e1'));
@@ -103,6 +101,8 @@ void main() {
       () => repo.fetchHistoryPage(
         limit: any(named: 'limit'),
         after: any(named: 'after'),
+        // Spelled out even though null is the default: it is the assertion.
+        // ignore: avoid_redundant_argument_values
         employeeId: null,
       ),
     ).called(1);

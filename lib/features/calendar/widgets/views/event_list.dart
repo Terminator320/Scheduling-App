@@ -5,8 +5,7 @@ import 'package:scheduling/features/calendar/widgets/views/agenda_sliver_list.da
 
 /// The agenda as a standalone scrolling pane, for hosts that are not the
 /// portrait calendar's single viewport — the split layout's right pane and the
-/// master-detail surfaces. The content itself lives in [AgendaSliverList], so
-/// both hosts build the same rows.
+/// master-detail surfaces.
 class EventList extends StatelessWidget {
   const EventList({
     required List<AppointmentDaySlice> this.events,
@@ -43,8 +42,8 @@ class EventList extends StatelessWidget {
   final void Function(AppointmentRecord appointment)? onAppointmentTap;
   final String? selectedAppointmentId;
 
-  /// See [AgendaSliverList.bottomClearance] — forwarded so a host that floats
-  /// a FAB over this pane can clear the last card.
+  /// See [AgendaSliverList.bottomClearance] — forwarded so a host that floats a
+  /// FAB over this pane can clear the last card.
   final double bottomClearance;
 
   /// See [AgendaSliverList.day] — forwarded so the split layout shows the same

@@ -1,13 +1,11 @@
 "use strict";
 
 /**
- * The crew signal to the dispatcher (I18, 2026-09-01): "On my way" and
- * "Running late", the other operational signal that used to travel by phone
- * call. Same shape as the completion notice, and narrowed for the same
- * reasons — this reaches a Lock Screen.
+ * The crew signal to the dispatcher (I18, 2026-09-01): "On my way" and "Running
+ * late", the other operational signal that used to travel by phone call.
  */
 
-const {crewStatusSignal, CREW_STATUS_VALUES} =
+const {crewStatusSignal, crewStatusSenderName, CREW_STATUS_VALUES} =
   require("../notification_policy");
 const {buildCrewStatusMessage} = require("../notification_messages");
 const {notifyAdminsOfCrewStatus} = require("../notification_utils");
@@ -37,8 +35,8 @@ describe("crewStatusSignal", () => {
   });
 
   test("the same value carried along by another write is silent", () => {
-    // Every write to the document re-fires the trigger with the signal still
-    // in `after` — a photo append, a client-edit propagation, an admin edit.
+    // Every write to the document re-fires the trigger with the signal still in
+    // `after` — a photo append, a client-edit propagation, an admin edit.
     expect(crewStatusSignal(
         job({crewStatus: "runningLate"}),
         job({crewStatus: "runningLate", title: "renamed"}),
@@ -109,6 +107,52 @@ describe("buildCrewStatusMessage", () => {
   test("carries no address and no phone number", () => {
     const msg = buildCrewStatusMessage("onMyWay", "Marc", "Acme", "en");
     expect(JSON.stringify(msg)).not.toMatch(/\d{3}/);
+  });
+});
+
+describe("crewStatusSenderName", () => {
+  test("names the assignee who sent the signal", () => {
+    expect(crewStatusSenderName(
+        job({crewStatus: "onMyWay", crewStatusBy: "e2"}),
+    )).toBe("Nadia");
+  });
+
+  test("a filtered id ahead of the sender does not shift the name", () => {
+    // `toIdList` DROPS a blank id, so resolving the index against the filtered
+    // list would put e2 at 0 and report "Marc" for a signal Nadia sent.
+    expect(crewStatusSenderName(job({
+      employeeIds: ["", "e2"],
+      employeeNames: ["Marc", "Nadia"],
+      crewStatus: "runningLate",
+      crewStatusBy: "e2",
+    }))).toBe("Nadia");
+  });
+
+  test("a stored blank name resolves to no name, not a blank sentence", () => {
+    // `mergeRetainedAssignees` legitimately writes '' for a retained assignee
+    // whose name could not be resolved; every message builder renders "" as its
+    // nameless variant.
+    expect(crewStatusSenderName(job({
+      employeeNames: ["Marc", "   "],
+      crewStatus: "onMyWay",
+      crewStatusBy: "e2",
+    }))).toBe("");
+  });
+
+  test("a sender who is not on the job resolves to no name", () => {
+    expect(crewStatusSenderName(
+        job({crewStatus: "onMyWay", crewStatusBy: "e9"}),
+    )).toBe("");
+  });
+
+  test("missing or malformed arrays are answered, not thrown on", () => {
+    expect(crewStatusSenderName(null)).toBe("");
+    expect(crewStatusSenderName({crewStatusBy: "e1"})).toBe("");
+    expect(crewStatusSenderName({
+      employeeIds: "e1",
+      employeeNames: "Marc",
+      crewStatusBy: "e1",
+    })).toBe("");
   });
 });
 

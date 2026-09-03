@@ -43,10 +43,7 @@ class _AppointmentImageCarouselState extends State<AppointmentImageCarousel> {
               itemBuilder: (context, index) {
                 final image = widget.images[index];
                 // A refused photo is a transparent 1x1, which renders as a
-                // BLANK page — indistinguishable from an empty one. The
-                // editable strip already draws an error tile for the same
-                // state; this is the read-only half agreeing with it. Not
-                // tappable, for the same reason it is not there.
+                // BLANK page — indistinguishable from an empty one.
                 if (isRefusedImage(image)) return const _RefusedSlide();
                 return GestureDetector(
                   onTap: () => ImageViewer.open(
@@ -88,10 +85,6 @@ class _AppointmentImageCarouselState extends State<AppointmentImageCarousel> {
 }
 
 /// What the carousel shows in place of a photo Storage refused.
-///
-/// Deliberately the same vocabulary as the editable strip's error tile —
-/// muted error ground, broken-image glyph — so the two surfaces do not
-/// describe the same failure two different ways.
 class _RefusedSlide extends StatelessWidget {
   const _RefusedSlide();
 

@@ -28,9 +28,7 @@ class _FakeDocSnap extends Fake
     implements QueryDocumentSnapshot<Map<String, dynamic>> {}
 
 /// A technician's History is the business-wide terminal archive narrowed by
-/// `employeeIds`. The scope has to reach three places or it leaks: the paged
-/// query, the search scan window, and the local-write patch that keeps that
-/// window honest.
+/// `employeeIds`.
 void main() {
   setUpAll(() {
     registerFallbackValue(_FakeDocSnap());
@@ -142,7 +140,7 @@ void main() {
   });
 
   group('the search scan window', () {
-    test('a scoped search reads only that person\'s archive', () async {
+    test("a scoped search reads only that person's archive", () async {
       final results = await repo().searchHistory('sophie', employeeId: 'e1');
 
       expect(results.map((a) => a.id), ['a1']);

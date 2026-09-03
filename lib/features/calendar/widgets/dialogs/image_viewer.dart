@@ -219,8 +219,8 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     final theme = Theme.of(context);
     // Raw white, deliberately: the viewer paints its own black ground in BOTH
     // themes — a photo is shown against black wherever it is opened — so this
-    // is not a theme-dependent foreground, and a `ColorScheme` token here
-    // would flip it to dark-on-black in the light theme.
+    // is not a theme-dependent foreground, and a `ColorScheme` token here would
+    // flip it to dark-on-black in the light theme.
     const foreground = Colors.white;
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final dragFraction = (_dragOffset.abs() / (_dismissDistance * 2)).clamp(
@@ -314,8 +314,8 @@ class _ViewerOverlay extends StatelessWidget {
   final VoidCallback onClose;
   final TextTheme textTheme;
 
-  /// Raw white for the same reason as the viewer body: this chrome sits on
-  /// the viewer's own black ground in both themes.
+  /// Raw white for the same reason as the viewer body: this chrome sits on the
+  /// viewer's own black ground in both themes.
   static const Color _foreground = Colors.white;
 
   @override
@@ -378,9 +378,6 @@ class _ViewerOverlay extends StatelessWidget {
 }
 
 /// Placeholder provider for a photo the loader refused.
-///
-/// Test it with [isRefusedImage] rather than comparing here — the read-only
-/// carousel needs the same answer and cannot see this file's privates.
 final refusedImage = MemoryImage(
   Uint8List.fromList(const [
     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, //
@@ -397,13 +394,8 @@ final refusedImage = MemoryImage(
 
 /// Whether [provider] is the placeholder [buildImageProviders] substitutes for
 /// a photo Storage refused.
-///
-/// The slot has to stay in the list — indexes are shared with the viewer and
-/// the strip — but a transparent 1x1 renders as a BLANK page in the read-only
-/// carousel, which reads as "this job has an empty photo" rather than "this
-/// photo could not be loaded". The editable strip already draws an error tile;
-/// this is what lets the carousel agree with it.
-bool isRefusedImage(ImageProvider provider) => identical(provider, refusedImage);
+bool isRefusedImage(ImageProvider provider) =>
+    identical(provider, refusedImage);
 
 List<ImageProvider> buildImageProviders({
   required List<Uint8List> bytes,

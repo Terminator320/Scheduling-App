@@ -49,27 +49,23 @@ abstract class ClientRecord with _$ClientRecord {
     @Default('') String email,
     @Default(<ClientContact>[]) List<ClientContact> contacts,
     @Default(false) bool noFixedAddress,
-    // Hidden from the paginated list, still searchable and still bookable. The
-    // list filters on it SERVER-side, and Firestore excludes docs missing a
-    // filtered field — so every client doc has to carry it, always.
+    // Hidden from the paginated list, still searchable and still bookable.
     @Default(false) bool archived,
     @Default(ClientType.unset) ClientType type,
     @Default('') String accessNotes,
     @Default('') String onSiteManager,
     @Default('') String billingTerms,
     @Default(false) bool autoInvoice,
-    // Legacy pre-Wave-reshape field, READ-ONLY — never emitted in toMap, and
-    // no UI edits it. Carried only so search can still reach it: `name` falls
-    // back to it when blank, but a legacy doc holding BOTH a name and a
-    // different business name would otherwise be unfindable by the business.
+    // Legacy pre-Wave-reshape field, READ-ONLY — never emitted in toMap, and no
+    // UI edits it.
     @Default('') String businessName,
     // Function-owned absolute recount — never emitted in toMap, and null until
     // the trigger has written it once.
     @Default(null) int? jobCount,
     // Read-only server timestamp used for dashboard trends — never emitted in toMap.
     DateTime? createdAt,
-    // Wave projection — read-only and function-owned, so it's omitted from toMap
-    // per firestore.rules.
+    // Wave projection — read-only and function-owned, so it's omitted from
+    // toMap per firestore.rules.
     @Default(null) String? waveCustomerId,
     @Default('') String waveSyncState,
     @Default(null) String? waveSyncError,
@@ -80,10 +76,7 @@ abstract class ClientRecord with _$ClientRecord {
     final rawContacts = firestoreList(data['contacts']);
     final wave = (data['wave'] as Map?)?.cast<String, dynamic>();
     // Back-compat for legacy `businessName` — keeps unnamed business docs
-    // visible and searchable. Two halves: `name` falls back to it when blank
-    // (which is the documented legacy shape), and it is ALSO carried through
-    // verbatim so ClientSearchPolicy can index it — a doc holding both a name
-    // and a different business name is findable by either.
+    // visible and searchable.
     final businessName = (data['businessName'] ?? '').toString();
     final rawName = (data['name'] ?? '').toString();
     final name = rawName.trim().isNotEmpty ? rawName : businessName;
@@ -106,9 +99,9 @@ abstract class ClientRecord with _$ClientRecord {
           .whereType<Map<Object?, Object?>>()
           .map((c) => ClientContact.fromMap(Map<String, dynamic>.from(c)))
           .toList(),
-      // `== true`, not a cast: this factory maps a live snapshot stream, so
-      // one console-written `"false"` would throw for the whole page rather
-      // than for the field. Same reasoning as `ClientType.fromRaw` below.
+      // `== true`, not a cast: this factory maps a live snapshot stream, so one
+      // console-written `"false"` would throw for the whole page rather than
+      // for the field.
       noFixedAddress: data['noFixedAddress'] == true,
       archived: data['archived'] == true,
       type: ClientType.fromRaw(data['type']?.toString()),
@@ -125,14 +118,9 @@ abstract class ClientRecord with _$ClientRecord {
     );
   }
 
-  /// The whole address on one line, rebuilt from the street plus the
-  /// structured locality fields — what every surface that shows an address or
-  /// hands one to a maps app wants.
-  ///
-  /// The owner exists because the composition takes FIVE fields off this
-  /// record and is needed at six call sites; spelled by hand it is six chances
-  /// to omit one and silently ship an address missing its city. Safe on both
-  /// stored shapes — see [AddressParser.composeFull].
+  /// The whole address on one line, rebuilt from the street plus the structured
+  /// locality fields — what every surface that shows an address or hands one to
+  /// a maps app wants.
   String get fullAddress => AddressParser.composeFull(
     address,
     city: city,
@@ -154,8 +142,9 @@ abstract class ClientRecord with _$ClientRecord {
     ),
   );
 
-  /// User-owned fields only. `waveCustomerId`/`wave`/`jobCount` are function-owned
-  /// and get rejected by the update rule, so they're left out here.
+  /// User-owned fields only. `waveCustomerId`/`wave`/`jobCount` are
+  /// function-owned and get rejected by the update rule, so they're left out
+  /// here.
   Map<String, dynamic> toMap() => {
     'name': name.trim(),
     'firstName': firstName.trim(),
@@ -180,12 +169,8 @@ abstract class ClientRecord with _$ClientRecord {
   };
 
   /// The clean name for every in-app surface — the stored [name] IS the
-  /// client's phone number, because that is what Wave shows as the customer,
-  /// so nothing renders it. A business shows its business name, a person their
-  /// first/last halves. See [ClientNamePolicy].
-  ///
-  /// This is also what gets denormalized onto an appointment as `clientName`,
-  /// so a card, a push and the Live Activity all say "Marc Tremblay".
+  /// client's phone number, because that is what Wave shows as the customer, so
+  /// nothing renders it.
   String get displayName => ClientNamePolicy.displayFor(
     name: name,
     phone: phone,

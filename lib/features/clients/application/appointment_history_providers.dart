@@ -5,8 +5,8 @@ import 'package:scheduling/features/calendar/application/appointments_providers.
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
-/// A thin facade over calendar-owned appointment history, so this file only needs
-/// the calendar domain import for the record type.
+/// A thin facade over calendar-owned appointment history, so this file only
+/// needs the calendar domain import for the record type.
 final historyPagerProvider = Provider<HistoryPager>(
   (ref) => HistoryPager(ref.watch(appointmentsRepositoryProvider)),
 );
@@ -32,13 +32,10 @@ class HistoryPager {
   }
 }
 
-/// One history search: the words, and whose history. `employeeId` null is the
-/// business-wide archive. A record so two views asking the same question share
-/// one provider instance, and a technician's search never aliases an admin's.
+/// One history search: the words, and whose history.
 typedef HistorySearchKey = ({String query, String? employeeId});
 
-/// Database-backed history search across the whole window. It's autoDispose, so each
-/// query instance gets freed once nothing's watching it anymore.
+/// Database-backed history search across the whole window.
 final historySearchProvider = FutureProvider.autoDispose
     .family<List<AppointmentRecord>, HistorySearchKey>((
       ref,
@@ -47,8 +44,7 @@ final historySearchProvider = FutureProvider.autoDispose
       final repo = ref.watch(appointmentsRepositoryProvider);
       // Resolved HERE, not inside the callback: this is autoDispose, so the
       // `Ref` is gone the moment the last listener does, and Riverpod 3's
-      // `ref.read` THROWS on a disposed one. Same rule, same reason, as the
-      // hoist in `error_cause.dart`'s catch sites.
+      // `ref.read` THROWS on a disposed one.
       final logger = ref.read(loggerProvider);
       // Invalidate on local write so deleted visits don't linger in cached results.
       final sub = repo.onLocalWrite.listen(
@@ -60,8 +56,7 @@ final historySearchProvider = FutureProvider.autoDispose
       return repo.searchHistory(key.query, employeeId: key.employeeId);
     });
 
-/// Client appointments for the Job history section. AutoDispose, keyed by clientId,
-/// and re-fetches whenever there's a local write.
+/// Client appointments for the Job history section.
 final clientJobHistoryProvider = FutureProvider.autoDispose
     .family<List<AppointmentRecord>, String>((ref, clientId) async {
       final repo = ref.watch(appointmentsRepositoryProvider);

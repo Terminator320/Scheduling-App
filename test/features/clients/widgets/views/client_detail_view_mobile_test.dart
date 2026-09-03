@@ -13,8 +13,7 @@ import 'package:scheduling/l10n/l10n.dart';
 
 class _MockClientsRepo extends Mock implements ClientsRepository {}
 
-/// The detail view holds a live listener on its doc. This test only cares about
-/// layout, so it yields nothing and the view renders the record it was handed.
+/// The detail view holds a live listener on its doc.
 _MockClientsRepo _quietRepo() {
   final repo = _MockClientsRepo();
   when(

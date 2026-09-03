@@ -17,7 +17,7 @@ class EventDetailsView extends ConsumerStatefulWidget {
     required this.appointment,
     super.key,
     // Defaults CLOSED — a default of true once exposed admin-only Edit/Cancel/
-    // Delete affordances to employees. Never re-add a `true` default.
+    // Delete affordances to employees.
     this.showActions = false,
     this.initialEditing = false,
     this.scrollController,
@@ -121,6 +121,8 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
           appointment: widget.appointment,
           showActions: widget.showActions,
           onClose: _handleClose,
+          // Closes with the draft; `showEventDetails` opens the add sheet.
+          onBookAgain: _handleClose,
         ),
       ],
     );

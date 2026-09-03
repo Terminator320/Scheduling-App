@@ -1,7 +1,7 @@
-// Pins the two things the forced-exit flow calls load-bearing: the
-// teardown ORDER (de-register everything BEFORE signOut, because each
-// de-registration needs the credential sign-out revokes) and the one-exit-at-a-
-// time guard (three listeners can fire for a single underlying event).
+// Pins the two things the forced-exit flow calls load-bearing: the teardown
+// ORDER (de-register everything BEFORE signOut, because each de-registration
+// needs the credential sign-out revokes) and the one-exit-at-a- time guard
+// (three listeners can fire for a single underlying event).
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -86,8 +86,7 @@ void main() {
           scaffoldMessengerKey: messengerKey,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          // Records what the exit pushes. `home` still serves '/', so the
-          // existing tests are unaffected.
+          // Records what the exit pushes.
           onGenerateRoute: (settings) {
             pushedRoutes.add(settings.name);
             return MaterialPageRoute<void>(
@@ -129,8 +128,8 @@ void main() {
     await tester.pumpAndSettle();
 
     // Reordering signOut above any de-registration makes those writes fail
-    // permission-denied — swallowed by the best-effort catches, so a
-    // terminated user quietly keeps receiving pushes.
+    // permission-denied — swallowed by the best-effort catches, so a terminated
+    // user quietly keeps receiving pushes.
     expect(calls, ['push', 'presence', 'liveActivity', 'signOut']);
   });
 
@@ -139,9 +138,8 @@ void main() {
   ) async {
     final controller = await pumpController(tester);
 
-    // Three listeners can fire for one underlying event (a delete flips
-    // status AND empties the doc). Without the guard each starts its own
-    // teardown and navigation.
+    // Three listeners can fire for one underlying event (a delete flips status
+    // AND empties the doc).
     final first = controller.exitAccount(
       selectMessage: (l10n) => 'disabled',
       navigatorKey: navigatorKey,
@@ -208,11 +206,7 @@ void main() {
   );
 
   testWidgets('sends the signed-out user to the login route', (tester) async {
-    // The ORDER and the guard were pinned; the navigation was not. Drop the
-    // push and a deleted or disabled user is signed out but left standing on
-    // whatever screen they had open — with `persistenceEnabled: true` still
-    // serving cached client names and addresses out of the local Firestore
-    // cache.
+    // The ORDER and the guard were pinned; the navigation was not.
     final controller = await pumpController(tester);
 
     await controller.exitAccount(
@@ -221,10 +215,10 @@ void main() {
       scaffoldMessengerKey: messengerKey,
       isMounted: () => true,
     );
-    // The navigation and the snack bar run from an addPostFrameCallback, and
-    // a callback registered while the binding is idle does not run until a
-    // frame is actually scheduled — in the app something is always rendering,
-    // in a test nothing is.
+    // The navigation and the snack bar run from an addPostFrameCallback, and a
+    // callback registered while the binding is idle does not run until a frame
+    // is actually scheduled — in the app something is always rendering, in a
+    // test nothing is.
     tester.binding.scheduleFrame();
     await tester.pumpAndSettle();
 
@@ -240,10 +234,10 @@ void main() {
       scaffoldMessengerKey: messengerKey,
       isMounted: () => true,
     );
-    // The navigation and the snack bar run from an addPostFrameCallback, and
-    // a callback registered while the binding is idle does not run until a
-    // frame is actually scheduled — in the app something is always rendering,
-    // in a test nothing is.
+    // The navigation and the snack bar run from an addPostFrameCallback, and a
+    // callback registered while the binding is idle does not run until a frame
+    // is actually scheduled — in the app something is always rendering, in a
+    // test nothing is.
     tester.binding.scheduleFrame();
     await tester.pumpAndSettle();
 

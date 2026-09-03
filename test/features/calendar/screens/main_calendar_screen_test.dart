@@ -56,18 +56,29 @@ Widget _wrap({
   required EmployeesRepository repo,
   bool isAdmin = true,
   double textScale = 1,
-  Stream<List<EmployeeRecord>>? employees,
 }) {
+  // `appointmentsInRangeProvider` is a family keyed by RANGE, so anything that
+  // moves the focused month — tapping a week bar that belongs to the previous
+  // month, paging, entering week mode near a boundary — builds a second
+  // instance and listens AGAIN.
+  final replayAppointments = appointments.first
+    // The error-branch case completes this with an error, and a future nobody
+    // has listened to yet reports that as an UNHANDLED async error and fails
+    // the test.
+    ..ignore();
   return ProviderScope(
     overrides: [
       employeesRepositoryProvider.overrideWithValue(repo),
       currentUserNameProvider.overrideWithValue('Jane'),
       allUsersStreamProvider.overrideWith((_) => allUsers),
-      // The crew-filter sheet lists the assignable roster.
-      if (employees != null)
-        employeesStreamProvider.overrideWith((_) => employees),
-      appointmentsInRangeProvider.overrideWith((_, _) => appointments),
-      myAppointmentsProvider.overrideWith((_, _) => appointments),
+      // is deliberately NOT overridden: the crew-filter sheet must fill itself
+      // from the stream this screen already watches.
+      appointmentsInRangeProvider.overrideWith(
+        (_, _) => Stream.fromFuture(replayAppointments),
+      ),
+      myAppointmentsProvider.overrideWith(
+        (_, _) => Stream.fromFuture(replayAppointments),
+      ),
     ],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
@@ -92,12 +103,6 @@ Widget _wrap({
 }
 
 /// The en_CA agenda day header, spelled out literally.
-///
-/// These assertions used to call `DateUtilsHelper.formatDayHeader` — the
-/// function that PRODUCES the string on screen — so they passed for any
-/// output, including the French word order (`mercredi, aout 5`) the locale
-/// skeleton exists to prevent. The expectation has to come from somewhere
-/// other than the code under test.
 String _dayHeader(DateTime day) {
   const weekdays = [
     'Monday',
@@ -322,8 +327,7 @@ void main() {
     // EITHER label, because the header picks between them by measured width
     // (`calendar_header_block.dart`) — and this test is date-dependent, so a
     // month whose full name does not fit the phone viewport renders the short
-    // one. Pinned to the full name it passed all year and then failed for the
-    // whole of September, which is not a regression this test should report.
+    // one.
     final monthLabel = find.text(DateFormat.MMMM().format(today));
     final shortLabel = find.text(DateFormat.MMM().format(today));
     await tester.tap(
@@ -331,8 +335,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Both wheels — every month and the whole year window, as before the
-    // header block replaced the app bar.
+    // Both wheels — every month and the whole year window, as before the header
+    // block replaced the app bar.
     expect(find.byType(CupertinoPicker), findsNWidgets(2));
     expect(find.text(DateFormat.y().format(today)), findsWidgets);
     expect(tester.takeException(), isNull);
@@ -533,9 +537,7 @@ void main() {
     expect(find.byType(CalendarMonthPager), findsOneWidget);
     expect(find.byType(CalendarWeekStrip), findsNothing);
 
-    // FadeInItem staggers its first 8 rows by 30ms each. The lazy sliver builds
-    // some of them mid-scroll, so those delays are still pending here and would
-    // trip the "timer still pending after dispose" invariant at teardown.
+    // FadeInItem staggers its first 8 rows by 30ms each.
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
   });
@@ -568,8 +570,8 @@ void main() {
     tester,
   ) async {
     await withPhoneViewport(tester);
-    // Days 1–3 of the visible month: always in-month, so every cell is
-    // tappable whatever today's date is.
+    // Days 1–3 of the visible month: always in-month, so every cell is tappable
+    // whatever today's date is.
     final now = DateTime.now();
     final spanning = AppointmentRecord(
       id: 'span',
@@ -669,11 +671,9 @@ void main() {
   testWidgets('a six-week month paints its last row above the handle', (
     tester,
   ) async {
-    // A real phone WITH its insets, not the roomier bare test viewport: the
-    // bug was the grid taking an even flex share of the pane, which only
-    // starves a six-week month once the pane is short enough. The status bar
-    // and home indicator are 81px of that, so a padding-free viewport hides
-    // it.
+    // A real phone WITH its insets, not the roomier bare test viewport: the bug
+    // was the grid taking an even flex share of the pane, which only starves a
+    // six-week month once the pane is short enough.
     tester.view.physicalSize = const Size(390 * 3, 844 * 3);
     tester.view.devicePixelRatio = 3;
     tester.view.padding = const FakeViewPadding(top: 47 * 3, bottom: 34 * 3);
@@ -716,17 +716,6 @@ void main() {
     tester,
   ) async {
     // The companion to the test above, and it guards the OTHER direction.
-    // Capping the grid at a share of the pane made it a non-flex child, so
-    // unlike the `Flexible` it replaced it can no longer be squeezed by the
-    // agenda beside it — the column is free to exceed the pane instead. The
-    // documented contract is that a tall month CLIPS rather than overflows, and
-    // only a test at a large text scale can hold anyone to it: the 1.0x test
-    // above passes with metres of headroom.
-    //
-    // 375x667 with real insets is the smallest pane that can run the iOS 18
-    // floor. Nothing guards a margin below that, deliberately — but if
-    // `_kMaxGridShare`, the handle or the agenda header grows, this is what
-    // fails.
     tester.view.physicalSize = const Size(375 * 3, 667 * 3);
     tester.view.devicePixelRatio = 3;
     tester.view.padding = const FakeViewPadding(top: 20 * 3);
@@ -826,7 +815,6 @@ void main() {
           ),
         ]),
         allUsers: Stream.value(const [_jane, _bob]),
-        employees: Stream.value(const [_jane, _bob]),
         repo: repo,
       ),
     );
@@ -864,8 +852,8 @@ void main() {
     // Sunday-first (en_CA), spelled as the index: the locale table is only
     // loaded once the app below has pumped, and the jobs are built before it.
     final week = weekOf(today, weekStart: 0);
-    // Another day of the SAME week, so its job is off the day agenda but on
-    // the week one.
+    // Another day of the SAME week, so its job is off the day agenda but on the
+    // week one.
     final other = week.first.day == today.day ? week.last : week.first;
     await tester.pumpWidget(
       _wrap(
@@ -925,8 +913,8 @@ void main() {
       return tester.getSize(find.byType(AgendaHeader)).height;
     }
 
-    // The icon-only toggle is fixed at 32px, under the title line at 1x, so
-    // the row keeps the 60px it had before the toggle (18 + 10 padding plus a
+    // The icon-only toggle is fixed at 32px, under the title line at 1x, so the
+    // row keeps the 60px it had before the toggle (18 + 10 padding plus a
     // titleLarge line) and the pane's pinned overflow margin is untouched.
     final atDouble = await headerHeight(2);
     final atNormal = await headerHeight(1);

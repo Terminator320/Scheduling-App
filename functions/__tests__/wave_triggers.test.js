@@ -1,18 +1,6 @@
 "use strict";
 
-/**
- * `wave/triggers.js` had no test file of its own. Its two exports were only
- * ever reached through `notifications_riders.test.js`, which MOCKS the whole
- * module, so two seams were mutation-provable:
- *
- *   - the `runWaveDaily` connection-read guard deployed 2026-09-01: hoist that
- *     `await ref.get()` back above the try and the "never throws" contract in
- *     its own JSDoc breaks again, green.
- *   - the `waveUpsertCustomer` batch payload: it executes on every enqueue but
- *     nothing asserted its contents, so deleting `...problemsPatch(after)`
- *     passes the whole suite and Wave Phase 1 silently stops writing the only
- *     data source its report reads.
- */
+/** `wave/triggers.js` had no test file of its own. */
 
 jest.mock("firebase-admin/firestore");
 jest.mock("firebase-functions/logger", () => ({
@@ -49,7 +37,7 @@ const makeEvent = (clientId, before, after) => ({
 /**
  * Firestore double recording the batch this trigger builds.
  * @param {!Object=} opts `connection` doc data, `connectionError` to throw on
- *   the read, or `commitError` to throw on commit.
+ * the read, or `commitError` to throw on commit.
  * @return {!Object} `{db, batchUpdates, commits}`
  */
 function makeDb(opts = {}) {
@@ -113,8 +101,7 @@ describe("waveUpsertCustomer mark-pending batch", () => {
         expect(patch["wave.syncState"]).toBe("pending");
         expect(patch["wave.syncError"]).toBeNull();
 
-        // Phase 1 reads nothing else. Delete `...problemsPatch(after)` from
-        // the trigger and this is the assertion that notices.
+        // Phase 1 reads nothing else.
         const expected = problemsPatch(CLIENT);
         expect(Object.keys(expected).length).toBeGreaterThan(0);
         for (const [k, v] of Object.entries(expected)) {
@@ -163,8 +150,7 @@ describe("runWaveDaily connection read", () => {
   test("a THROWING connection read returns quietly, never rejects",
       async () => {
         // The JSDoc says "never throws", and the caller is a rider on a
-        // user-facing push whose real work has already completed. Hoist the
-        // `await ref.get()` above the try and this rejects instead.
+        // user-facing push whose real work has already completed.
         const {db} = makeDb({connectionError: new Error("unavailable")});
         getFirestore.mockReturnValue(db);
 
@@ -186,8 +172,7 @@ describe("runWaveDaily connection read", () => {
   });
 
   test("drains even when the import cadence is off", async () => {
-    // The `off` setting governs the PULL only. Gating the push on it would
-    // mean the default configuration never pushes automatically at all.
+    // The `off` setting governs the PULL only.
     const {db} = makeDb({
       connection: {businessId: "biz-1", importSchedule: "off"},
     });

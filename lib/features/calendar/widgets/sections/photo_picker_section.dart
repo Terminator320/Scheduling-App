@@ -37,10 +37,6 @@ class PhotoPickerSection extends ConsumerStatefulWidget {
   final int failedCount;
 
   /// Photos still in the offline upload queue for this appointment.
-  ///
-  /// The strip renders LOCAL files, so a queued photo looks identical to an
-  /// uploaded one — which is why the queue needs a line of its own rather
-  /// than a badge on a thumbnail.
   final int pendingCount;
 
   final List<String> tooLargeFileNames;
@@ -86,18 +82,15 @@ class _PhotoPickerSectionState extends ConsumerState<PhotoPickerSection> {
       return;
     }
     // Both providers are read BEFORE the await: `ref.read` on an unmounted
-    // consumer throws under Riverpod 3, and this future is fired unawaited
-    // from `initState`, so a read in the catch below would throw exactly in
-    // the case the catch exists for.
+    // consumer throws under Riverpod 3, and this future is fired unawaited from
+    // `initState`, so a read in the catch below would throw exactly in the case
+    // the catch exists for.
     final loader = ref.read(appointmentImageLoaderProvider);
     final logger = ref.read(loggerProvider);
 
-    // `loadAll` swallows its own per-image failures today, so this catch is
-    // for the shapes it does not own — an OOM decoding a large batch, or a
-    // future refactor that lets one through. Nothing awaits this future, so
-    // without the guard a throw reaches the zone handler and is stamped as an
-    // app-level crash from a gallery that merely failed to render. Safety
-    // that depends on a property of a DIFFERENT file is not safety.
+    // `loadAll` swallows its own per-image failures today, so this catch is for
+    // the shapes it does not own — an OOM decoding a large batch, or a future
+    // refactor that lets one through.
     final List<Uint8List> bytes;
     try {
       bytes = await loader.loadAll(images);
@@ -334,8 +327,8 @@ class _EditablePhotoStrip extends StatelessWidget {
     int thumbCache,
   ) {
     // Offset by the entries the viewer will actually be handed, NOT by
-    // existingImages: while a load is outstanding `existingBytes` is empty,
-    // so counting the images would point past the end of the provider list.
+    // existingImages: while a load is outstanding `existingBytes` is empty, so
+    // counting the images would point past the end of the provider list.
     final viewerIndex = existingBytes.length + entry.key;
     return Stack(
       children: [
@@ -474,10 +467,6 @@ class _FailedPhotoThumb extends StatelessWidget {
 }
 
 /// "N photos waiting to upload" — the queue, made visible.
-///
-/// Deliberately NOT an error colour: nothing has gone wrong, the phone just
-/// has no signal yet. It is the same row shape as [_UploadFailedRow] so the
-/// two read as one status area rather than two designs.
 class _UploadPendingRow extends StatelessWidget {
   const _UploadPendingRow({required this.count});
 

@@ -1,16 +1,6 @@
 "use strict";
 
-/**
- * Pins that an upstream Places/Geocoding request cannot hang.
- *
- * `fetch()` has no default timeout in Node, so a slow Geocoding response held
- * the function until the platform deadline. The CLIENT gives up at 10 s
- * (`_callableTimeout`, `google_places_repository.dart`) and surfaces
- * `deadline-exceeded` — but the function kept running, so every abandoned
- * lookup still spent a billed upstream call and a durable rate-limit slot for
- * an answer nobody was waiting for any more. Production showed ten of these
- * failing together, once per staff row on the live-map roster.
- */
+/** Pins that an upstream Places/Geocoding request cannot hang. */
 jest.mock("../security", () => {
   const actual = jest.requireActual("../security");
   const mock = {
@@ -21,14 +11,7 @@ jest.mock("../security", () => {
     }),
   };
   // The callables open with `assertAdminCall`, which COMPOSES the auth check,
-  // `assertAdmin` and `assertPayloadShape`. It holds a module-internal
-  // reference to the real `assertAdmin`, so stubbing the export alone would
-  // intercept nothing and every gate assertion below would pass vacuously —
-  // the same "mocked and never actually reached" shape that let three of these
-  // gates be deleted with a green suite. Re-composing it here against the MOCK
-  // keeps `security.assertAdmin` the thing the tests observe. The composition
-  // itself, order included, is proved against the real one in
-  // `assert_admin.test.js`.
+  // `assertAdmin` and `assertPayloadShape`.
   mock.assertAdminCall = jest.fn(async (req, allowedKeys) => {
     if (!req.auth || !req.auth.uid) {
       throw new (require("firebase-functions/v2/https").HttpsError)(
@@ -101,9 +84,7 @@ describe("an upstream request that hangs", () => {
   });
 
   test("gives up BEFORE the client does, so the work is not orphaned", () => {
-    // The client's own callable timeout is 10 s. A server budget at or above
-    // that means the function is still burning a billed upstream call and a
-    // rate-limit slot for a caller that has already given up.
+    // The client's own callable timeout is 10 s.
     expect(UPSTREAM_TIMEOUT_MS).toBeLessThan(10_000);
   });
 
@@ -121,8 +102,8 @@ describe("an upstream request that hangs", () => {
     const ours = errors.filter(([msg]) => msg.includes("placesReverseGeocode"));
     expect(ours).toHaveLength(1);
     const [, meta] = ours[0];
-    // `timedOut` is what separates "Google is slow" from "the network broke"
-    // in Cloud Logging; without it both read as a transport error.
+    // `timedOut` is what separates "Google is slow" from "the network broke" in
+    // Cloud Logging; without it both read as a transport error.
     expect(meta.timedOut).toBe(true);
     // Never the coordinates — staff-location PII.
     const logged = JSON.stringify(errors);

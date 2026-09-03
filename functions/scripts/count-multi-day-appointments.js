@@ -2,56 +2,6 @@
 // One-off, READ-ONLY: counts appointments stored as a MULTI-DAY run — one
 // document whose `startTime`/`endTime` describe a daily window spanning two or
 // more work days.
-//
-// WHY this exists: a multi-day run is one document with ONE `status`, so
-// marking day 1 complete closes the whole run. The proposed fix is to book each
-// day as its own appointment (linked by `seriesId`, carrying a stored
-// day index/count) so each day closes on its own. This count is what decides
-// what happens to the runs ALREADY in the database:
-//
-//   backfill everything      — viable when the total is small
-//   backfill only OPEN runs  — a finished run needs no per-day cards, so only
-//                              pending/in_progress work has to be split
-//   leave them alone         — viable when the total is ~zero, since then the
-//                              day-slice machinery only has to survive for
-//                              history
-//
-// The tally is therefore split OPEN vs CLOSED, which is the line those three
-// options are drawn on. It also reports:
-//
-//   photos     — the `images` subcollection belongs to ONE document, so a run
-//                split into N docs can only keep its photos on day 1. A run
-//                carrying photos is the one shape a backfill degrades.
-//   series     — a run already inside a repeating series would have to fan
-//                each occurrence into its days, so the two mechanics compose;
-//                a non-zero number here is a complexity signal, not a blocker.
-//   time off   — `isPersonal && isDayOff`. A week of booked holiday is a
-//                multi-day run that nothing wants split into 5 cards, so it is
-//                counted apart from real work rather than folded into the
-//                total that drives the decision.
-//   over cap   — a raw day count above MAX_APPOINTMENT_SPAN_DAYS. Only the
-//                console and the Admin SDK can write one (`firestore.rules`
-//                bounds client writes), and a backfill must clamp it exactly
-//                the way `sliceForDay` does rather than fanning out hundreds
-//                of documents.
-//
-// The day count comes from `day_slice_utils.dayCountOf`, the same server-side
-// mirror the widget, the Siri snapshot and the push text already use — so this
-// script cannot disagree with them about how long a run is. In particular a
-// NIGHT SHIFT (end time at or before start time) counts nights, so 22:00-06:00
-// on a single date is ONE day here, not two.
-//
-// Usage:
-//   For prod:
-//     export GOOGLE_APPLICATION_CREDENTIALS=/path/to/prod-service-account.json
-//     node functions/scripts/count-multi-day-appointments.js
-//
-//   For the local emulator:
-//     export FIRESTORE_EMULATOR_HOST=localhost:8080
-//     export GCLOUD_PROJECT=schedulingapp-88727
-//     node functions/scripts/count-multi-day-appointments.js
-//
-//   --verbose  also lists every multi-day run it finds.
 
 "use strict";
 
@@ -69,8 +19,7 @@ const {TERMINAL_STATUSES} = require("../time_utils");
 const EXACT_FLAGS = ["--verbose"];
 
 /**
- * Rejects any argument this script does not recognize. The rule itself lives
- * in the shared `_flags.js` — this wrapper only supplies the flag list.
+ * Rejects any argument this script does not recognize.
  * @param {!Array<string>} argv Arguments after the node + script paths.
  */
 function assertKnownFlags(argv) {
@@ -112,8 +61,8 @@ async function countMultiDay(db, verbose) {
     const data = doc.data() || {};
 
     // Unclamped on purpose: the raw count is what says whether a document
-    // exceeds the cap at all, and `overCap` is one of the things a backfill
-    // has to be told about up front.
+    // exceeds the cap at all, and `overCap` is one of the things a backfill has
+    // to be told about up front.
     const rawDays = dayCountOf(data);
     if (rawDays < 2) continue;
 
@@ -123,8 +72,8 @@ async function countMultiDay(db, verbose) {
 
     const status = String(data.status || "").trim().toLowerCase();
     const isClosed = TERMINAL_STATUSES.has(status);
-    // The derived `isTimeOff`, never the raw `isDayOff` flag — a client
-    // visit carrying a stray flag from a console edit is still real work.
+    // The derived `isTimeOff`, never the raw `isDayOff` flag — a client visit
+    // carrying a stray flag from a console edit is still real work.
     const isTimeOff = data.isPersonal === true && data.isDayOff === true;
     const photos = Number(data.pictureCount) || 0;
     const seriesId = String(data.seriesId || "").trim();
@@ -168,9 +117,9 @@ async function countMultiDay(db, verbose) {
  */
 async function main() {
   const argv = process.argv.slice(2);
-  // Read-only: `--dry-run` is not in this script's flag allowlist, so
-  // `dryRun` comes back false and the banner carries no misleading
-  // "[dry-run]" prefix — see `bootstrapScript`.
+  // Read-only: `--dry-run` is not in this script's flag allowlist, so `dryRun`
+  // comes back false and the banner carries no misleading "[dry-run]" prefix —
+  // see `bootstrapScript`.
   const {db} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
   const verbose = argv.includes("--verbose");
   const t = await countMultiDay(db, verbose);
@@ -237,10 +186,7 @@ function sumCounts(histogram) {
   return total;
 }
 
-// Only run when invoked directly. Without this the module ran a PRODUCTION
-// scan the moment anything required it, which is why its pure helpers could
-// not be tested — and this script's verdict is what authorizes irreversible
-// follow-up work.
+// Only run when invoked directly.
 if (require.main === module) {
   main().then(() => process.exit(0)).catch((err) => {
     console.error(err);

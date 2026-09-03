@@ -1,14 +1,6 @@
 "use strict";
 
-/**
- * The document-id paging loop the operator scripts share.
- *
- * It was hand-written SIX times across five scripts and tested nowhere. All
- * six were correct, which is the point: these scripts produce the migration
- * and audit NUMBERS this project makes decisions on, so a seventh copy that
- * forgets the cursor advance re-scans page one forever and reports a tally
- * nobody can tell is wrong.
- */
+/** The document-id paging loop the operator scripts share. */
 
 const {scanByName} = require("../scripts/_scan");
 
@@ -111,7 +103,6 @@ describe("scanByName", () => {
   test("orders by __name__, never a data field", async () => {
     // An orderBy on a data field makes Firestore EXCLUDE any document missing
     // it — which is exactly the legacy row a backfill or audit exists to find.
-    // The stand-in throws on any other field.
     const {source} = fakeCollection(idsUpTo(3));
 
     await expect(drain(source, 2)).resolves.toHaveLength(3);

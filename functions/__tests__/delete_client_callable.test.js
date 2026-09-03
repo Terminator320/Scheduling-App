@@ -1,24 +1,6 @@
 "use strict";
 
-/**
- * Guard-chain tests for the `deleteClient` CALLABLE.
- *
- * `performDeleteClient` — the `count()` gate that refuses a client with
- * history — is fully covered by `clients.test.js`. The wrapper around it was
- * not: nothing exercised the non-admin rejection, the `unexpected-field`
- * refusal, or the ORDER the guards run in, which
- * `.claude/rules/security.md` fixes as auth -> assertAdmin ->
- * assertPayloadShape/requireDocId -> enforceDurableRateLimit -> work.
- *
- * The order is not cosmetic. Validating the payload BEFORE consuming a limiter
- * slot is what stops a burst of malformed submissions exhausting a legitimate
- * admin's window, and keeping `assertAdmin` above the limiter is what stops a
- * non-privileged caller burning slots at all.
- *
- * This matters more here than on most callables: `allow delete` on `/clients`
- * is withdrawn in `firestore.rules`, so this callable is the ONLY path that
- * can delete a client.
- */
+/** Guard-chain tests for the `deleteClient` CALLABLE. */
 
 jest.mock("firebase-admin/firestore");
 jest.mock("firebase-functions/logger", () => ({
@@ -35,11 +17,8 @@ jest.mock("../security", () => {
     requireDocId: jest.fn(),
     enforceDurableRateLimit: jest.fn(),
   };
-  // `deleteClient` opens with `assertAdminCall`, which composes the three
-  // steps below. Re-composed here against the MOCKS so every existing
-  // assertion on `assertAdmin`/`assertPayloadShape` still observes the real
-  // call — stubbing the parts alone would intercept nothing, since the
-  // composer holds module-internal references.
+  // `deleteClient` opens with `assertAdminCall`, which composes the three steps
+  // below.
   mock.assertAdminCall = jest.fn(async (req, allowedKeys) => {
     if (!req.auth || !req.auth.uid) {
       throw new (require("firebase-functions/v2/https").HttpsError)(
@@ -88,7 +67,8 @@ function expectCalledBefore(first, second) {
       .toBeLessThan(second.mock.invocationCallOrder[0]);
 }
 
-/** A db whose client has no appointments, so the delete succeeds.
+/**
+ * A db whose client has no appointments, so the delete succeeds.
  * @return {!Object}
  */
 function cleanDb() {

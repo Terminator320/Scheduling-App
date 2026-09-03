@@ -47,8 +47,19 @@ across all three rather than living under `functions/`.
   (`notification_policy.js` — a real change of `crewStatus` to one of the two
   values, never on a personal block or a closed job), with the same
   active-admin fan-out, `ADMIN_FANOUT_MAX` cap and assignee exclusion as
-  `jobCompleted`; text from `buildCrewStatusMessage`, where WHO is the SENDER
-  resolved by position from `crewStatusBy`. `handleAppointmentWrite` also runs
+  `jobCompleted`; text from `buildCrewStatusMessage`, where WHO is the SENDER.
+  **That name is resolved by POSITION, so it has one owner,
+  `crewStatusSenderName` (`notification_policy.js`), and it indexes the RAW
+  `employeeIds` — never `toIdList`'s.** `toIdList` FILTERS (non-strings,
+  blanks, over-long, slash-bearing), and `firestore.rules` bounds `employeeIds`
+  only by type and size and validates no element, so one droppable entry ahead
+  of the sender shifted the ids out of step with `employeeNames` and told the
+  office the wrong person was running late. The two lists answer two different
+  questions: the RECIPIENT set is filtered (an id that cannot address a
+  document cannot be excluded by one either), the NAME index is not. The Dart
+  twin (`DetailsCrewSignalLine`) resolves it the same way, and both treat a
+  trimmed-EMPTY name as no name — `mergeRetainedAssignees` legitimately writes
+  `''` there, and a `??`-only fallback rendered " is running late". `handleAppointmentWrite` also runs
   `stampLifecycle` (the server-owned `startedAt`/`completedAt`) above its
   events early-return; its own rewrite is provably silent
   (`notification_lifecycle.test.js`). The push-tap opener keys on

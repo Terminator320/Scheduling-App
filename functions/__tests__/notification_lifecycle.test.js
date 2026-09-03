@@ -1,15 +1,9 @@
 "use strict";
 
 /**
- * The job time record (I18, 2026-09-01): `startedAt`/`completedAt` are
- * stamped SERVER-SIDE on the status transition, by the appointment write
- * trigger, and by nothing else.
- *
- * The property that matters most is the one an ordinary reading misses: the
- * stamp is itself a write to the same document, so it re-fires the trigger
- * that produced it. That re-fire must decide NOTHING — no second stamp, no
- * push to the crew, no completion notice to the office — or every mark-done
- * pages twice.
+ * The job time record (I18, 2026-09-01): `startedAt`/`completedAt` are stamped
+ * SERVER-SIDE on the status transition, by the appointment write trigger, and
+ * by nothing else.
  */
 
 const {
@@ -41,9 +35,9 @@ describe("lifecycleStamps", () => {
   });
 
   test("pending -> done stamps completedAt only", () => {
-    // A job closed without ever being started (the edit form's status
-    // picker, a crew that never tapped Start) gets a finish and no start:
-    // inventing one would put a wrong number on the record.
+    // A job closed without ever being started (the edit form's status picker, a
+    // crew that never tapped Start) gets a finish and no start: inventing one
+    // would put a wrong number on the record.
     expect(lifecycleStamps(job(), job({status: "done"}), NOW))
         .toEqual({completedAt: NOW});
   });
@@ -93,8 +87,8 @@ describe("lifecycleStamps", () => {
   });
 
   test("a stamp already present is never overwritten", () => {
-    // A console repair or an Admin-SDK backfill that set the field keeps
-    // its value across the next status flip.
+    // A console repair or an Admin-SDK backfill that set the field keeps its
+    // value across the next status flip.
     const before = job();
     const after = job({status: "done", completedAt: LATER});
     expect(lifecycleStamps(before, after, NOW)).toEqual({});
@@ -102,8 +96,8 @@ describe("lifecycleStamps", () => {
 });
 
 describe("the stamp-only rewrite is silent", () => {
-  // What the trigger sees on its re-fire: the document the stamp just
-  // landed on, differing from `before` by that field alone.
+  // What the trigger sees on its re-fire: the document the stamp just landed
+  // on, differing from `before` by that field alone.
   const before = job({status: "done"});
   const after = job({status: "done", completedAt: NOW});
 
@@ -167,8 +161,7 @@ describe("stampLifecycle", () => {
   });
 
   test("never throws; a failed stamp is a warning", async () => {
-    // The status change is already committed. Failing the trigger here
-    // would retry the whole write handler — pushes included.
+    // The status change is already committed.
     const update = jest.fn(async () => {
       throw new Error("unavailable");
     });

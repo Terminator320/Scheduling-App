@@ -16,11 +16,6 @@ import 'package:scheduling/l10n/l10n.dart';
 const int _pageSize = 25;
 
 /// A repository that actually honours the cursor.
-///
-/// Every stub before this one returned the same list whatever `after` held, so
-/// no test had ever loaded a second page: the prefetch threshold, the
-/// end-of-list rule, the bail conditions and the post-frame deferral were all
-/// unexercised.
 class _FakeHistoryRepo implements AppointmentsRepository {
   _FakeHistoryRepo(this.all, {this.failOnCall});
 
@@ -135,9 +130,7 @@ void main() {
     await _scrollToEnd(tester);
 
     expect(repo.calls, greaterThanOrEqualTo(2));
-    // The tail row, which only exists on page two. Asserting on page two's
-    // FIRST row would fail for the wrong reason — by the time the list is
-    // exhausted that row has scrolled off the top and been recycled.
+    // The tail row, which only exists on page two.
     expect(find.text('Job ${_pageSize + 9}'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -191,9 +184,7 @@ void main() {
 
   group('refresh', () {
     testWidgets('pull-to-refresh actually re-fetches', (tester) async {
-      // `PagingController.refresh()` only RESETS state — it does not fetch. If
-      // nothing notices the reset and asks again, the skeleton shimmers
-      // forever with no request in flight.
+      // `PagingController.refresh()` only RESETS state — it does not fetch.
       final repo = _FakeHistoryRepo(_history(_pageSize));
       await pumpView(tester, repo);
       expect(repo.calls, 1);

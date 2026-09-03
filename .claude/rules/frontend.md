@@ -287,6 +287,26 @@ Material Design 3 (Flat / Elevation). Use `ColorScheme`, `TextTheme`, and `Theme
 - Large lists: use `ListView.builder`, not `ListView(children: [...])`.
 - Avoid rebuilding heavy subtrees — use `const` or lift state.
 - Images from Firebase Storage: show `SkeletonLoader` while loading, handle errors gracefully.
+- **Never `ref.read` an `autoDispose` provider's value from a tap handler.**
+  Nothing is subscribed at that moment, so the read BUILDS it cold, gets
+  `AsyncLoading` back, takes the `?? []` branch and disposes it again — a
+  failure that looks like empty data, is identical on every tap rather than
+  only the first, and logs nothing. `CrewFilterButton` shipped this: its sheet
+  offered "All crew" and nobody else, always. Watch the value in `build` and
+  pass it into the handler.
+  **Then pick WHICH stream to watch by how long the widget lives.** A permanent
+  widget must not watch `employeesStreamProvider` (or anything derived from it,
+  such as `assignableEmployeesProvider`): it is `autoDispose` precisely so a
+  transient sheet cannot pin a SECOND live `users` listener for the session, and
+  a widget on a `HubShell` tab is alive as long as the session is. The calendar
+  header already watches `allUsersStreamProvider` for its colour and name maps,
+  so deriving from that one is warm at tap time AND free. A sheet or dialog is
+  transient and should keep using the autoDispose stream.
+  **A `Notifier` that awaits one must HOLD it** — `ref.listen(p, (_, _) {})`
+  around the await, closed in a `finally` — rather than trusting whatever
+  happens to be watching from the widget layer. `AddEventController.applyPrefill`
+  is the reference; the tell that it was missing was a keep-alive in the unit
+  test with no production counterpart.
 - **`DateFormat` is memoized per locale** (`calendar/domain/month_grid.dart`:
   `longDateFormatFor`, `weekdayAbbrevFormatFor`, `_symbolsFormat`). Constructing
   one verifies the locale and parses a skeleton into pattern fields, and the

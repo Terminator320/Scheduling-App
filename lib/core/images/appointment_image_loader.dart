@@ -67,7 +67,7 @@ class AppointmentImageLoader {
     // `clear()` before `signOut()`, so a load whose disk read is in flight
     // resumes and would read the ALREADY-BUMPED generation — the write then
     // matches and one user's job photo lands on disk after sign-out, outliving
-    // the process on a shared handset. That is the leak the guard exists for.
+    // the process on a shared handset.
     final generation = _disk.generation;
 
     final onDisk = await _disk.read(key);
