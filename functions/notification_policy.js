@@ -20,7 +20,6 @@ const {
   hasWorkLeft,
   isCancelledStatus,
   isCompletedStatus,
-  isTerminalStatus,
   normalizedStatus,
 } = require("./time_utils");
 const {isAlreadyExists} = require("./firestore_errors");
@@ -133,40 +132,6 @@ function lifecycleStamps(before, after, now) {
     stamps.completedAt = nowDate;
   }
   return stamps;
-}
-
-/** The two crew signals an assignee may put on an open job. */
-const CREW_STATUS_VALUES = new Set(["onMyWay", "runningLate"]);
-
-/**
- * Which crew signal this write just SENT, or null.
- * @param {?Object} before Pre-write appointment fields (null on create).
- * @param {?Object} after Post-write appointment fields (null on delete).
- * @return {?string} `onMyWay` | `runningLate` | null.
- */
-function crewStatusSignal(before, after) {
-  if (!after) return null;
-  if (after.isPersonal === true || after.isDayOff === true) return null;
-  if (isTerminalStatus(after.status)) return null;
-  const next = String(after.crewStatus || "");
-  if (!CREW_STATUS_VALUES.has(next)) return null;
-  const prev = before ? String(before.crewStatus || "") : "";
-  return next === prev ? null : next;
-}
-
-/**
- * The display name of the assignee who sent the crew signal, or "" when the
- * record does not carry one.
- * @param {?Object} after Post-write appointment fields.
- * @return {string} The name, or "" — which every message builder already
- * renders as a nameless variant rather than a dangling sentence.
- */
-function crewStatusSenderName(after) {
-  if (!after) return "";
-  const ids = Array.isArray(after.employeeIds) ? after.employeeIds : [];
-  const names = Array.isArray(after.employeeNames) ? after.employeeNames : [];
-  const at = ids.indexOf(String(after.crewStatusBy || ""));
-  return at < 0 ? "" : String(names[at] || "").trim();
 }
 
 /**
@@ -402,9 +367,6 @@ module.exports = {
   isAlreadyExists,
   isCrewCompletion,
   lifecycleStamps,
-  crewStatusSignal,
-  crewStatusSenderName,
-  CREW_STATUS_VALUES,
   recordOf,
   contextFor,
 };

@@ -3747,46 +3747,6 @@
       }
     }
   },
-  "calendar_onMyWay": "On my way",
-  "@calendar_onMyWay": {
-    "description": "Crew status chip an assignee taps to tell the office they are driving to the job."
-  },
-  "calendar_runningLate": "Running late",
-  "@calendar_runningLate": {
-    "description": "Crew status chip an assignee taps to tell the office they will arrive late."
-  },
-  "calendar_crewStatusSent": "Status sent to the office",
-  "@calendar_crewStatusSent": {
-    "description": "Success notice after an assignee sends On my way / Running late."
-  },
-  "calendar_crewOnMyWayAt": "{name} is on the way · {time}",
-  "@calendar_crewOnMyWayAt": {
-    "description": "Line under the detail header while an assignee has signalled On my way.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      },
-      "time": {
-        "type": "String"
-      }
-    }
-  },
-  "calendar_crewRunningLateAt": "{name} is running late · {time}",
-  "@calendar_crewRunningLateAt": {
-    "description": "Line under the detail header while an assignee has signalled Running late.",
-    "placeholders": {
-      "name": {
-        "type": "String"
-      },
-      "time": {
-        "type": "String"
-      }
-    }
-  },
-  "calendar_crewFallbackName": "Crew",
-  "@calendar_crewFallbackName": {
-    "description": "Stands in for the assignee's name on the crew status line when the record carries none."
-  },
   "calendar_pushBack": "Push back",
   "@calendar_pushBack": {
     "description": "Admin quick action on an open job's detail sheet: shifts the job later by a few minutes."
@@ -3816,9 +3776,5 @@
   "calendar_bookAgain": "Book again",
   "@calendar_bookAgain": {
     "description": "Action bar button on a client job's detail sheet (admin only, open or closed job): opens the new-appointment sheet pre-filled with this job's client, address, title, notes, materials, crew and length, with no date or time."
-  },
-  "error_introUpdateCrewStatus": "Couldn't send your status",
-  "@error_introUpdateCrewStatus": {
-    "description": "Intro of the failure notice when an assignee's On my way / Running late write fails."
   }
 }

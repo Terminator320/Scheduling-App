@@ -5,7 +5,6 @@ import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
-import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
@@ -13,7 +12,6 @@ import 'package:scheduling/features/calendar/widgets/sections/photo_picker_secti
 import 'package:scheduling/features/calendar/widgets/views/details_view_widgets.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
-import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 
 class DetailsEditChip extends StatelessWidget {
   const DetailsEditChip({required this.onTap, super.key});
@@ -198,46 +196,6 @@ String elapsedLabel(AppLocalizations l10n, Duration elapsed) {
   return hours > 0
       ? l10n.calendar_elapsedHoursMinutes(hours, minutes)
       : l10n.calendar_elapsedMinutes(minutes);
-}
-
-/// "Marc is running late · 9:12 AM" — what an assignee last signalled on the
-/// way to this job, for whoever opens it.
-class DetailsCrewSignalLine extends StatelessWidget {
-  const DetailsCrewSignalLine({required this.appointment, super.key});
-
-  final AppointmentRecord appointment;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final at = appointment.crewStatusAt;
-    final time = at == null ? '' : DateUtilsHelper.formatTime(at);
-    // Trimmed-empty falls back too, not just null: `mergeRetainedAssignees`
-    // legitimately writes '' into `employeeNames` for a retained assignee whose
-    // name could not be resolved, and `??
-    final resolved = assigneeNameAt(
-      appointment.employeeNames,
-      appointment.employeeIds.indexOf(appointment.crewStatusBy),
-    )?.trim();
-    final name = resolved == null || resolved.isEmpty
-        ? l10n.calendar_crewFallbackName
-        : resolved;
-    final isLate = appointment.crewStatus == 'runningLate';
-    return Padding(
-      padding: const EdgeInsets.only(
-        left: AppSpacing.sp4,
-        right: AppSpacing.sp4,
-        top: AppSpacing.sp8,
-      ),
-      child: WarningNote(
-        filled: false,
-        icon: isLate ? Icons.schedule_rounded : Icons.directions_car_outlined,
-        message: isLate
-            ? l10n.calendar_crewRunningLateAt(name, time)
-            : l10n.calendar_crewOnMyWayAt(name, time),
-      ),
-    );
-  }
 }
 
 class DetailsMaterialsRow extends StatelessWidget {

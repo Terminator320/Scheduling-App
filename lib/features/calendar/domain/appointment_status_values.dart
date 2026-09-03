@@ -12,9 +12,6 @@ final List<String> terminalStatusQueryValues = List.unmodifiable(
 bool isTerminalStatusRaw(String raw) =>
     terminalStatusRawValues.contains(raw.toLowerCase());
 
-/// The two crew signals an assignee may put on an open job, as stored.
-const Set<String> crewStatusRawValues = {'onMyWay', 'runningLate'};
-
 /// True when [raw] means the visit was called off.
 bool isCancelledStatusRaw(String raw) => raw.toLowerCase() == 'cancelled';
 

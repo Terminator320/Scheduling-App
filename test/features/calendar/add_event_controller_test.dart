@@ -1031,9 +1031,6 @@ void main() {
         pictureCount: 3,
         startedAt: DateTime(2026, 5, 10, 9, 5),
         completedAt: DateTime(2026, 5, 10, 10, 40),
-        crewStatus: 'onMyWay',
-        crewStatusAt: DateTime(2026, 5, 10, 8, 40),
-        crewStatusBy: 'e1',
       );
       final prefill = AppointmentPrefill.bookAgain(source, client: _aClient);
       final c = readNotifier();

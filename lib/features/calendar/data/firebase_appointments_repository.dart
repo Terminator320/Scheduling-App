@@ -397,33 +397,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   @override
-  Future<void> updateCrewStatus({
-    required String id,
-    required String status,
-    required String byEmployeeId,
-  }) async {
-    if (!crewStatusRawValues.contains(status)) {
-      throw ArgumentError.value(
-        status,
-        'status',
-        'must be one of $crewStatusRawValues',
-      );
-    }
-    // EXACTLY the four keys the crew-status rules branch allows; the two
-    // instants are pinned to `request.time` there, so both must be server
-    // timestamps.
-    await _appointments.doc(id).update({
-      'crewStatus': status,
-      'crewStatusAt': FieldValue.serverTimestamp(),
-      'crewStatusBy': byEmployeeId,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    _patchWindow({
-      id: {'crewStatus': status, 'crewStatusBy': byEmployeeId},
-    });
-  }
-
-  @override
   Future<void> updateAppointmentStatus({
     required String id,
     required String status,

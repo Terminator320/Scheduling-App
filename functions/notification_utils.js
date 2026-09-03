@@ -30,7 +30,6 @@ const {
   buildNotificationMessage,
   buildDigestMessage,
   buildJobCompletedMessage,
-  buildCrewStatusMessage,
 } = require("./notification_messages");
 
 const {
@@ -55,9 +54,6 @@ const {
   isAlreadyExists,
   isCrewCompletion,
   lifecycleStamps,
-  crewStatusSignal,
-  crewStatusSenderName,
-  CREW_STATUS_VALUES,
   recordOf: _record,
   contextFor: _contextFor,
 } = require("./notification_policy");
@@ -319,11 +315,10 @@ async function handleAppointmentWrite(id, before, after, deps) {
   await endCardOnTerminal(id, before, after, deps, now);
   // Tell the dispatcher the work happened.
   await notifyAdminsOfCompletion(id, before, after, deps);
-  // The job time record and the crew signal, same posture and same position as
-  // the completion notice: best-effort, never throwing, and above the events
-  // early-return because neither produces a crew-facing event.
+  // The job time record, same posture and same position as the completion
+  // notice: best-effort, never throwing, and above the events early-return
+  // because it produces no crew-facing event.
   await stampLifecycle(id, before, after, deps);
-  await notifyAdminsOfCrewStatus(id, before, after, deps);
   const events = diffAppointmentForNotifications(before, after, now, id);
   if (events.length === 0) return {events: 0, sent: 0};
   let sent = 0;
@@ -743,55 +738,6 @@ async function stampLifecycle(id, before, after, deps) {
 }
 
 /**
- * Pushes "Marc is on the way to Leak fix" / "Marc is running late for Leak fix"
- * to every active admin who is not on the job — the same fan-out, the same
- * exclusion and the same best-effort contract as [notifyAdminsOfCompletion],
- * for the other signal a dispatcher wants pushed rather than pulled.
- * @param {string} id appointment doc id.
- * @param {?Object} before
- * @param {?Object} after
- * @param {!Object} deps `{db, messaging, logger}`.
- * @return {!Promise<void>}
- */
-async function notifyAdminsOfCrewStatus(id, before, after, deps) {
-  const signal = crewStatusSignal(before, after);
-  if (!signal) return;
-  try {
-    // The RECIPIENT set is filtered — an id that cannot address a document
-    // cannot be excluded by one either — while the sender's NAME is resolved
-    // against the raw arrays by `crewStatusSenderName`, because that index has
-    // to line up with `employeeNames`.
-    const assignees = new Set(toIdList(after.employeeIds));
-    const what = String(after.clientName || after.title || "").trim();
-    const who = crewStatusSenderName(after);
-    const kind = signal === "runningLate" ? "crewRunningLate" : "crewOnMyWay";
-
-    const snap = await deps.db.collection("users")
-        .where("role", "==", "admin")
-        .where("status", "==", "active")
-        .limit(ADMIN_FANOUT_MAX)
-        .get();
-    const cache = new Map(snap.docs.map(
-        (doc) => [doc.id, {user: doc.data() || {}, tokenDocs: null}]));
-    await Promise.all(snap.docs
-        .filter((doc) => !assignees.has(doc.id))
-        .map((doc) => sendToEmployee(
-            deps,
-            doc.id,
-            {kind, appointmentId: String(id)},
-            (locale) => buildCrewStatusMessage(signal, who, what, locale),
-            ADMIN_RECIPIENT_ROLES,
-            cache,
-        ).catch(() => {})));
-  } catch (e) {
-    if (deps.logger) {
-      deps.logger.warn("notifyAdminsOfCrewStatus failed",
-          {appointmentId: String(id), err: String(e)});
-    }
-  }
-}
-
-/**
  * Pushes one localized message to every ACTIVE ADMIN.
  * @param {!Object} deps `{db, messaging, logger}`.
  * @param {!Object} data Data payload (string values); `kind` etc.
@@ -877,11 +823,7 @@ module.exports = {
   sendToActiveAdmins,
   notifyAdminsOfCompletion,
   stampLifecycle,
-  notifyAdminsOfCrewStatus,
   lifecycleStamps,
-  crewStatusSignal,
-  crewStatusSenderName,
-  CREW_STATUS_VALUES,
   deliverRecipientOnce: _deliverRecipientOnce,
   handleAppointmentWrite,
   runDailyDigest,

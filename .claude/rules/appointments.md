@@ -752,29 +752,27 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   stamp, no event and no completion push. Don't move the stamp client-side to
   save the write: that either widens the mark-done rules branch or leaves the
   admin picker path unstamped.
-  **`toMap()` OMITS `startedAt`, `completedAt`, `crewStatus`, `crewStatusAt`
-  and `crewStatusBy`.** Every path that re-serializes a record writes through a
+  **`toMap()` OMITS `startedAt` and `completedAt`.** Every path that
+  re-serializes a record writes through a
   merging `update()`/`txn.update()`, so the stored values survive an admin
   edit, while `addAppointments` and `rewriteSeries` copies are NEW documents
   that must not inherit another job's record. `DetailsTimeRecordRow` renders
   the pair (gated on the job not being cancelled) and `DetailsActionBar` offers
   **Start job** (`onStart`, above Mark-as-complete) on an open job whose stored
   status is not yet `in_progress`, to admins and to a non-admin assignee.
-  **Two more assignee `allow update` disjuncts, and NEITHER widens mark-done**:
-  Start job (`hasOnly(['status','updatedAt'])`, `status == 'in_progress'`,
-  refused when the stored status is already `in_progress` or closed,
-  `updatedAt` pinned) and crew status (`hasOnly` the four `crewStatus*` keys +
-  `updatedAt`, value in the two-string allowlist, both instants
-  `== request.time`, `crewStatusBy == myDocId()`, refused on a closed job).
-  The text tests split on the literal `|| (isAssignedEmployee(resource.data)`
-  and the mark-done helper keys on `== 'done'`, so keep both spellings.
-  **`updateCrewStatus` writes exactly four keys and no `seriesOpId`**;
-  `crewStatusRawValues` (`appointment_status_values.dart`) is the vocabulary
-  owner, hand-mirrored by `CREW_STATUS_VALUES` in `notification_policy.js`.
-  The chips ("On my way" / "Running late") live in `DetailsFieldRecordView`,
-  so they reach exactly the set the rule admits; everyone else sees
-  `DetailsCrewSignalLine` under the header while the job is open, and active
-  admins not on the job get a push (see `.claude/rules/notifications.md`).
+  **One more assignee `allow update` disjunct, and it does NOT widen
+  mark-done**: Start job (`hasOnly(['status','updatedAt'])`,
+  `status == 'in_progress'`, refused when the stored status is already
+  `in_progress` or closed, `updatedAt` pinned). The text tests split on the
+  literal `|| (isAssignedEmployee(resource.data)` and the mark-done helper keys
+  on `== 'done'`, so keep both spellings; `appointment_employee_update_rules_test.dart`
+  pins the disjunct COUNT at three (mark-done, field notes, Start job), so a
+  new one is a deliberate edit there rather than a silent widening.
+  **A crew "On my way" / "Running late" signal was built on 2026-09-01 and
+  REMOVED on 2026-09-03 (owner call), across rules, Dart, `functions/` and both
+  ARBs** — don't reintroduce `crewStatus`/`crewStatusAt`/`crewStatusBy`, the
+  fourth assignee disjunct, or the two admin push kinds from an older copy of
+  this file.
   **Push back (admin quick action) withholds any offset that crosses
   midnight** — `pushBackOptionsFor` (`domain/policies/push_back_options.dart`)
   keeps +15/+30/+60/+120 only while the shifted start stays on the day

@@ -2,9 +2,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-/// The two assigned-employee branches added 2026-09-01 — "Start job" and the
-/// "On my way" / "Running late" signal — and the one thing they must NOT have
-/// done: widen the mark-done branch.
+/// The assigned-employee "Start job" branch added 2026-09-01, and the one
+/// thing it must NOT have done: widen the mark-done branch.
 void main() {
   late final rules = File('firestore.rules').readAsStringSync();
 
@@ -29,7 +28,6 @@ void main() {
 
   String markDone() => branchNaming("== 'done'");
   String startJob() => branchNaming("== 'in_progress'");
-  String crewStatus() => branchNaming("'crewStatus'");
 
   group('the mark-done branch is untouched', () {
     test('still restricts the diff to status and updatedAt', () {
@@ -89,55 +87,6 @@ void main() {
     });
   });
 
-  group('the crew-status branch', () {
-    test('restricts the diff to exactly the four crew-status keys', () {
-      expect(
-        crewStatus(),
-        contains(
-          "affectedKeys() .hasOnly(['crewStatus', 'crewStatusAt', "
-          "'crewStatusBy', 'updatedAt'])",
-        ),
-      );
-      expect(crewStatus(), isNot(contains("'status'")));
-    });
-
-    test('admits only the two signal strings', () {
-      expect(
-        crewStatus(),
-        contains(
-          "request.resource.data.crewStatus in ['onMyWay', 'runningLate']",
-        ),
-      );
-    });
-
-    test('pins both instants to the server clock', () {
-      expect(
-        crewStatus(),
-        contains('request.resource.data.crewStatusAt == request.time'),
-      );
-      expect(
-        crewStatus(),
-        contains('request.resource.data.updatedAt == request.time'),
-      );
-    });
-
-    test("a signal can only be sent in the caller's own name", () {
-      expect(
-        crewStatus(),
-        contains('request.resource.data.crewStatusBy == myDocId()'),
-      );
-    });
-
-    test('is refused on a closed job', () {
-      expect(
-        crewStatus(),
-        contains(
-          "!(resource.data.status in ['done', 'completed', 'cancelled'])",
-        ),
-      );
-    });
-  });
-
   group('the admin shape guard', () {
     // `request.resource.data` on an admin edit is the MERGED document, so the
     // server-stamped instants ride along: they must be type-checked, never
@@ -149,13 +98,8 @@ void main() {
       ),
     );
 
-    test('caps the crew signal and its sender', () {
-      expect(validator, contains('isBoundedString(d.crewStatus, 32)'));
-      expect(validator, contains('isValidDocIdField(d.crewStatusBy)'));
-    });
-
-    test('type-checks the three instants, absent-or-valid', () {
-      for (final field in const ['startedAt', 'completedAt', 'crewStatusAt']) {
+    test('type-checks both instants, absent-or-valid', () {
+      for (final field in const ['startedAt', 'completedAt']) {
         expect(
           validator,
           contains("(!('$field' in d.keys()) || d.$field is timestamp)"),
