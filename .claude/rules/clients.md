@@ -576,3 +576,28 @@ Root context: `../../CLAUDE.md`.
   which is what tracks a new page or a new search result; the query and chips
   compare by value). A new row-producing path needs its own cache entry, not a
   second memo at the far end.
+
+- **Client "Job history" section** (`ClientJobHistorySection`, admin-only client
+  detail) reads via `fetchClientHistory` (`clientJobHistoryProvider`, an
+  `autoDispose.family` that re-fetches on `onLocalWrite`). It orders
+  `startTime` DESC on the **server** — `(clientId ASC, startTime DESC)`, added
+  2026-08-13 — and the `orderBy` is what makes the `limit` mean anything. It
+  filtered on `clientId` alone before that, on the reasoning that the automatic
+  single-field index served it and Dart could sort the page: but with no
+  `orderBy` Firestore falls back to `__name__` order, so a client with more
+  visits than the cap got an **arbitrary** slice of its history, and sorting
+  that slice newest-first afterwards made the wrong page look like the right
+  one. (The composite index the old note said this would need already existed —
+  `propagateClientEdits` added it.) Consequence to keep in mind: an
+  `orderBy('startTime')` makes Firestore exclude a doc that has no `startTime`,
+  so `getAppointmentById` is now the only read in that repository that can
+  reach a legacy or console-written row missing one — which is what
+  `_recordFrom`'s breadcrumb is left for.
+  **The SECTION renders at most `_maxRendered` (50) of them**, because it is a
+  non-lazy `Column` inside the detail body's own scroll view — there is no
+  sliver context to hand a builder, so every row it is given is built eagerly,
+  and each is an `AppointmentCard` (an `IntrinsicHeight` subtree). Adding
+  paging to the repository silently took that from 50 rows to up to 1000. Keep
+  the bound until the surface grows a "show all" affordance or hands off to
+  History filtered by client; a taller list means a builder, not a bigger
+  number.

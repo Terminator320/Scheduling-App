@@ -4,6 +4,8 @@ paths:
   - "functions/**"
   - "test/features/calendar/**"
   - "test/core/security/appointment*"
+  - "firestore.rules"
+  - "storage.rules"
 ---
 
 # Appointments
@@ -699,3 +701,189 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   still surfaces. A clash returns the sealed `EventDetailsBusyEmployees` (not an
   error) and **must clear `isSaving`** before returning, or Save stays stuck
   once the dialog is dismissed.
+
+- **An ASSIGNEE may record their own work: crew notes and photos** (2026-09-01).
+  Until then a technician could read a job and tap "Mark as complete", and
+  nothing else — the photo pipeline, the offline upload queue and the
+  magic-byte validation all existed and were wired to the admin-only edit form,
+  so for a trade where the field record IS the billable artifact it travelled
+  by phone call. Three grants, each deliberately narrow:
+  **`fieldNotes` is its OWN `allow update` disjunct**, never a widened
+  `hasOnly` on the mark-done branch — that branch is the most
+  security-sensitive write in the app and its exact key set is what makes it
+  reasonable about; one write doing both puts every guarantee on it back in
+  play. It is `fieldNotes`, never `notes`: the dispatcher's brief is written at
+  booking and an assignee must not overwrite it, so two fields is what makes
+  "the crew may add, never edit the brief" a rules-level fact. It carries no
+  status gate (a note is often the explanation for a job that went wrong), and
+  **its length cap is conditional on the field being PRESENT** — `hasOnly`
+  admits a SUBSET, and an assignee adding a photo touches the parent with an
+  `updatedAt`-only diff, which a flat cap refuses, so the crew could add the
+  photo ROW and never the photo.
+  **`appointments/{id}/images` allows CREATE to an assignee**, with update and
+  delete still admin-only: adding to the record is additive, removing from it
+  is not, and a field record must not be quietly deletable by the person whose
+  work it documents. `storage.rules` grants the same assignee the BYTES at the
+  same path — the two move together, since a row create with no object write
+  leaves a photo pointing at nothing. What stops a compromised employee session
+  pointing a row at another job's object is the `storagePath` path constraint,
+  not the role.
+  The UI half is `DetailsFieldRecordView`, rendered only for a NON-ADMIN
+  ASSIGNEE (`activeUserIdentityProvider`), which is exactly the set those rules
+  admit — never `!showActions`, which the client job-history surface also
+  passes and which is an admin reading somebody else's job.
+- **The job time record has ONE owner, the SERVER** (2026-09-01, the audit's
+  "no `startedAt`/`completedAt` anywhere"). `lifecycleStamps`
+  (`functions/notification_policy.js`) decides `startedAt`/`completedAt` on
+  the status TRANSITION only (into `in_progress`; into done, never cancelled;
+  never a personal block or time off) and `stampLifecycle`
+  (`notification_utils.js`, run by `handleAppointmentWrite` above its events
+  early-return) writes them with an Admin-SDK `update`. So every client status
+  path — an assignee's Start job or mark-done, the admin edit form's picker, a
+  series propagate — lands the same stamp, and NO client is allowed to write
+  one. The cost is one extra write and one silent trigger re-fire per
+  transition; `notification_lifecycle.test.js` proves the re-fire produces no
+  stamp, no event and no completion push. Don't move the stamp client-side to
+  save the write: that either widens the mark-done rules branch or leaves the
+  admin picker path unstamped.
+  **`toMap()` OMITS `startedAt`, `completedAt`, `crewStatus`, `crewStatusAt`
+  and `crewStatusBy`.** Every path that re-serializes a record writes through a
+  merging `update()`/`txn.update()`, so the stored values survive an admin
+  edit, while `addAppointments` and `rewriteSeries` copies are NEW documents
+  that must not inherit another job's record. `DetailsTimeRecordRow` renders
+  the pair (gated on the job not being cancelled) and `DetailsActionBar` offers
+  **Start job** (`onStart`, above Mark-as-complete) on an open job whose stored
+  status is not yet `in_progress`, to admins and to a non-admin assignee.
+  **Two more assignee `allow update` disjuncts, and NEITHER widens mark-done**:
+  Start job (`hasOnly(['status','updatedAt'])`, `status == 'in_progress'`,
+  refused when the stored status is already `in_progress` or closed,
+  `updatedAt` pinned) and crew status (`hasOnly` the four `crewStatus*` keys +
+  `updatedAt`, value in the two-string allowlist, both instants
+  `== request.time`, `crewStatusBy == myDocId()`, refused on a closed job).
+  The text tests split on the literal `|| (isAssignedEmployee(resource.data)`
+  and the mark-done helper keys on `== 'done'`, so keep both spellings.
+  **`updateCrewStatus` writes exactly four keys and no `seriesOpId`**;
+  `crewStatusRawValues` (`appointment_status_values.dart`) is the vocabulary
+  owner, hand-mirrored by `CREW_STATUS_VALUES` in `notification_policy.js`.
+  The chips ("On my way" / "Running late") live in `DetailsFieldRecordView`,
+  so they reach exactly the set the rule admits; everyone else sees
+  `DetailsCrewSignalLine` under the header while the job is open, and active
+  admins not on the job get a push (see `.claude/rules/notifications.md`).
+  **Push back (admin quick action) withholds any offset that crosses
+  midnight** — `pushBackOptionsFor` (`domain/policies/push_back_options.dart`)
+  keeps +15/+30/+60/+120 only while the shifted start stays on the day
+  `runsOn` puts it. `delayAppointment` is a single-document write (never the
+  series), runs the same busy check as Save, and the crew's "rescheduled" push
+  comes from the existing differ on the `startTime` change.
+- **Editing an appointment must preserve assignees not in the active picker.**
+  The employee picker never shows a disabled/removed person, so such an assignee
+  can't be deselected — saving must re-append original `employeeIds` not in the
+  active set, or that staff is silently unassigned (which also changes who can
+  see the visit). **What the picker DOES offer has one owner,
+  `offerableAssignees` (same file as the merge), and it narrows the ACTIVE list
+  rather than unioning onto a pre-filtered one** — active crew, plus anyone
+  active who is already on the job but no longer offerable by title (a
+  dispatcher assigned before that rule existed, so it can be taken off). It
+  keys on the appointment's STORED `employeeIds`, never the live selection —
+  keyed on the selection, deselecting that dispatcher removed their own chip on
+  the next rebuild, so the toggle was one-way and an accidental tap could only
+  be undone by abandoning the edit. The
+  distinction is the trap: a union of "assignable + already selected" also
+  re-offers a DISABLED assignee, whose chip then deselects and is silently
+  put back by the merge below on every save. Narrowing an active-only list
+  cannot express that, which is why the rule lives beside the merge it has to
+  agree with rather than inside `EmployeePicker`. The merge itself is the pure, tested `mergeRetainedAssignees`
+  (`calendar/domain/assignee_resolver.dart`) — route the retain logic through it.
+  Resolve the active set through the ONE owner, `_resolveActiveEmployees`
+  (`event_details_controller.dart`), which awaits `watchEmployees().first` —
+  never a cached provider value, and never a `.value ?? []` read. The await is
+  the point: a cold or empty stream value at save time makes every original
+  assignee look inactive, so all of them are retained and a real deselection is
+  silently undone. (This bullet previously described a two-tier "cached value
+  falling back to a fresh read" that the code does not have and should not
+  grow — the single awaited read is both simpler and strictly safer.)
+  **`employeeIds` and `employeeNames` are paired POSITIONALLY, and the bounds
+  check has one owner: `assigneeNameAt(names, i)`** (same file, returns null for
+  "no name here"). It was re-spelled at five sites; the differing missing-name
+  fallbacks around it are legitimately per-surface (the day route shows the id,
+  the history filter shows nothing), so the helper owns only the LOOKUP and each
+  caller keeps its own substitute. The edit-sheet copy is the dangerous one — a
+  blank name there flows into `mergeRetainedAssignees` and is written back.
+- **The picker DIMS whoever can't take the job on the chosen date, and the
+  already-assigned test WINS over it.** `assigneeOfferState`
+  (`calendar/domain/assignee_resolver.dart`, beside the two rules above because
+  all three must agree) returns `free` / `unavailable` / `onTheJob`; only
+  `unavailable` dims, and it is dimmed AND untappable, which is precisely why
+  someone already on the job must never be. A chip that can't be tapped can't
+  be taken off, and — worse — an assignee who is active but merely un-offered
+  is NOT retained by `mergeRetainedAssignees`, so they'd be silently
+  unassigned. The "on the job" set is the live selection **union the
+  appointment's STORED `employeeIds`**: keyed on the selection alone,
+  deselecting an unavailable stored assignee dims their own chip on the next
+  rebuild and the toggle is one-way. Same trap as `offerableAssignees`.
+  **ANY clash dims, not just a day off** (owner call, 2026-08-24), and the
+  accepted cost is that deliberate double-booking is no longer reachable from
+  the picker — the Save-time prompt stays as a backstop for races but will
+  rarely fire. If putting two people on one big job turns out to matter, keep
+  BOOKED chips tappable with a warning look and dim only time off.
+  **Availability is date-DERIVED, live where it can be, one-shot where it
+  can't.** `assigneeAvailabilityProvider` reduces the range the calendar
+  ALREADY holds open (`openCalendarRangeProvider`, published by
+  `MainCalendarScreen` and admin-only, since that stream constrains
+  `startTime` alone and the rules reject a technician's query) and falls back
+  to `findClashingAppointments` when the span falls outside it. The fallback is
+  not optional: without it a date past the open range makes every clash
+  invisible and the picker silently reports everyone as free, which is worse
+  than not dimming at all. Forking a listener keyed on a span-derived range is
+  what `forWeekBucketOf` and `forMirrors` carry long comments against.
+  **An undetermined span answers nothing** — a date with no times could still
+  become an 8 pm job, so `watchAssigneeAvailability`
+  (`calendar/utils/assignee_availability_scope.dart`) offers everyone until the
+  span is real, which covers "no date picked yet" too.
+  **A PERSONAL block dims NOBODY, and that carve-out is load-bearing.** Dimming
+  means untappable, and the person a day off is FOR is the one most likely to
+  have jobs that day — so dimming made their absence unbookable, and made the
+  clash alert that exists to clean up afterwards unreachable. It is the same
+  carve-out, for the same reason, as both controllers skipping the Save-time
+  busy prompt when `isPersonal`; both halves take `isPersonal` and must keep
+  agreeing. A clash is never a reason to refuse time off — it is what the
+  alert reports after the write.
+- **Job templates are display-only quick-fill, NEVER stored.** `JobTemplate`
+  (`calendar/domain/models/job_template.dart`) backs the one-tap chips on the
+  **add** flow only (`onApplyTemplate`, null on edit); picking one just seeds the
+  title text and — if a start time is set — the end time from
+  `defaultDurationMinutes` (clamped inside the same day). The appointment still
+  saves with `status: 'pending'` and whatever the admin edits afterwards; there
+  is no template field on the record. Add new types to the enum + a
+  `jobTemplateLabel` case + EN/FR ARB keys (mirrors `statusLabel`).
+- **The dashboard's window is SPLIT: one live listener, one `.get()`.**
+  `DashboardAggregator.liveRangeAround` (this ISO week through next Monday /
+  the 3-day pending horizon) is watched; `historyRangeAround` (the seven
+  settled weeks behind it) is read once through
+  `AppointmentsRepository.fetchInRange`. Held as one range it was a **70-day**
+  business-wide live listener capped at `_rangeStreamLimit` (3000), so above ~42
+  jobs/day the 8-week trends, busiest-weekday and Attention list were computed
+  over a silent PREFIX. The two results **must be merged by doc id**
+  (`DashboardAggregator.mergeById`, live wins) and never concatenated — each
+  query reaches back to its own `fetchStart`, so they overlap by a fortnight.
+  Adding a reducer that needs older data means widening the HISTORY half, not
+  the live one.
+- **A technician's History is the same terminal archive narrowed by
+  `employeeIds`** (2026-09-01, the audit's "technician has no search").
+  `_historyQuery(employeeId)` (`firebase_appointments_repository.dart`) is the
+  ONE owner of that narrowing for both the paged list and the search scan
+  window; served by the `(employeeIds CONTAINS, status ASC, startTime DESC)`
+  composite, which must be deployed and READY before an app build that ships
+  it. The repository keeps one scan window PER SCOPE (`_scanWindows`, `''` =
+  admin); `_patchWindow` patches every window, and a scoped window REMOVES a
+  doc whose `employeeIds` stops naming the scope, the same way the
+  terminal-status rule removes a reopened one. The search cache key carries
+  the scope. `HistorySearchKey` (query + employeeId) is the provider family
+  key; `AppointmentHistoryView.scopeEmployeeId` null means business-wide,
+  which only an admin may list, and `HistoryScreen` passes
+  `isAdmin ? null : employeeId`. No rules change was needed: the list is
+  constrained by `arrayContains` on the caller's own doc id, the same shape
+  `watchForEmployeeInRange` already relies on. The non-admin drawer gets the
+  History row under TODAY; `runAddClientFlow`
+  (`clients/widgets/sheets/add_client_flow.dart`) is the one add-client →
+  book-a-job flow, called by the Clients FAB and the list's empty state.

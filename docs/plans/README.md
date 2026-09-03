@@ -168,8 +168,7 @@ item; each is listed so nobody re-runs one.**
   still outstanding, not one**: step 3 (ship the app build) and then step 4 (the
   irreversible clear script, gated on the fleet ageing off builds that still
   write the array). See the deploy log in `docs/DEPLOYMENT.md`, which is the
-  authority here — and read 🔴 S1 in `docs/audits/CODEBASE_AUDIT.md` before
-  running step 4, because the clear script alone revokes nothing.
+  authority here; the full audit history is in `docs/archive/`.
 - **The three "orphaned Cloud Scheduler jobs" NEVER EXISTED — RESOLVED
   2026-08-23.** Checking found exactly the 3 expected scheduled jobs and no
   orphans; this bullet claimed otherwise for nine days. What the check DID turn
@@ -187,7 +186,7 @@ item; each is listed so nobody re-runs one.**
   breaks the Firebase MCP's Firestore reads). If an opaque `permission-denied`
   ever appears on an ordinary client save, check that field first.
 - **A hard budget cap for Google Maps Platform is still unset** —
-  `docs/audits/AUDIT_FOLLOWUPS.md` §2, the one item in that file still open. It
+  `docs/audits/AUDIT_FOLLOWUPS.md`, the one item in that file still open. It
   needs GCP billing access, so it cannot be done from here.
 
 ### 7. App Store — SHIPPED. The runbook is now a release checklist, not a launch one

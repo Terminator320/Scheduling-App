@@ -145,6 +145,16 @@ Material Design 3 (Flat / Elevation). Use `ColorScheme`, `TextTheme`, and `Theme
   photos render as an `AppointmentImageCarousel` (`smooth_page_indicator`);
   edit mode uses the `PhotoPickerSection` thumbnail strip.
 
+- **`TourSteps`** (`feature_tour/domain/tour_steps.dart`) owns a screen's step
+  ids, keys and `step()` wrapper. Six screens had a copy of the trio that had to
+  stay in sync (`keys[id]!` force-unwraps; `indexOf`/`length` feed "step N of
+  M") and Settings had already drifted. One `late final _tour = TourSteps(dest,
+  isAdmin:)` per screen — don't re-inline it. **The app bar's `bottom:` slot
+  uses `stepBarIf`**, the `PreferredSizeWidget` sibling of `stepIf`: without it
+  that one slot escaped the class's ownership and Clients, History and Team each
+  re-spelled the same six-line `has(id) ? TourShowcaseBar(...) : bar` block by
+  hand.
+
 ## Layout
 
 - Use `Column`, `Row`, `Stack`, `Expanded`, `Flexible`, `Wrap` for layout. Prefer `SizedBox` over `Padding` when only size is needed.
@@ -277,3 +287,9 @@ Material Design 3 (Flat / Elevation). Use `ColorScheme`, `TextTheme`, and `Theme
 - Large lists: use `ListView.builder`, not `ListView(children: [...])`.
 - Avoid rebuilding heavy subtrees — use `const` or lift state.
 - Images from Firebase Storage: show `SkeletonLoader` while loading, handle errors gracefully.
+- **`DateFormat` is memoized per locale** (`calendar/domain/month_grid.dart`:
+  `longDateFormatFor`, `weekdayAbbrevFormatFor`, `_symbolsFormat`). Constructing
+  one verifies the locale and parses a skeleton into pattern fields, and the
+  calendar built a fresh one PER DAY CELL for a semantics label — 30–90 per
+  rebuild on every day tap and month swipe. Never call a `DateFormat.*`
+  constructor inside a cell/item builder.
