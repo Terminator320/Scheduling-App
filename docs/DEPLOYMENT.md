@@ -777,8 +777,8 @@ recognising again.
 the tree in `7ace6528` and disappears from prod on the next `functions` deploy,
 after which deactivating someone rotates nothing — so any legacy
 `appointments/*/images` doc still carrying a `url` remains a permanent,
-rules-free download link. Whether that set is empty is the open 🔴 S1 count in
-`docs/audits/CODEBASE_AUDIT.md`, not a question this paragraph answers.
+rules-free download link. Whether that set is empty is the image-url audit count
+in the archived audit snapshots, not a question this paragraph answers.
 
 The 2026-08-16 row above deployed the follow-up audit. The release pass cut
 straight after it (**1.46.2+75**) then changed `functions/` again, so prod is
@@ -853,11 +853,9 @@ doc (permanently orphaning every past appointment's `employeeIds` crew link).
 **One related hole is still OPEN and is NOT part of this sweep:** `allow update`
 on `/users` denylists only `uid`/`termsAcceptedAt`/`locationConsentAt`, so
 `email` can still be written directly to Firestore without the matching Auth
-change. The current build never does — every email edit routes through
-`changeEmployeeEmail` — so tightening the rule now costs nothing, and the reason
-it waited (breaking 1.37.1's employee edit) is gone. The suggested clause is in
-`docs/audits/CODEBASE_AUDIT.md`. Do it as its own reviewed change; it is a rules
-*tightening*, not a removal.
+change. This was closed by the 2026-09-01 audit cleanup; see
+`docs/archive/CODEBASE_AUDIT_2026-09-01.md` for the original finding and
+implementation note.
 
 Also unblocked by this retirement, and likewise not done here: **disabling open
 sign-up in the Firebase Auth console** (F1 in

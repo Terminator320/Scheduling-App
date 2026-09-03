@@ -977,8 +977,8 @@ Export Compliance needs no action: `ITSAppUsesNonExemptEncryption = false` is in
   if a Play release is ever revisited.
 - **Series bulk edits** write N appointment docs → N pushes. Accepted for v1
   (each is a real change).
-- The rest of the audit's findings live in `docs/audits/CODEBASE_AUDIT.md`.
-  Nothing there blocks the steps above.
+- The remaining audit work lives in `docs/audits/CODEBASE_AUDIT.md`. Nothing
+  there blocks the steps above.
 
 ## Part 15. Assumptions the owner must verify
 

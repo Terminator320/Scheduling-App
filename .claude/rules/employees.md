@@ -761,3 +761,13 @@ self-service settings. Root context: `../../CLAUDE.md`.
   against a guessed default. `EmployeeRecord.toMap()` deliberately does NOT emit
   it: an admin save must leave it exactly as it was.
 
+- **The team roster's "jobs today" count is ONE listener, not one per row.**
+  `employeeJobsTodayProvider` reduces a single `appointmentsInRangeProvider` over
+  today's range into a `Map<String,int>`; every row reads the map. The range
+  comes from `todayRangeProvider`, which watches `currentDayProvider` — never
+  `DateTime.now()`, or the counts stick on yesterday in an app left open across
+  midnight. Cancelled visits don't count. **The employee detail's TODAY panel
+  filters that SAME stream** (`employeeTodayJobsProvider`) rather than opening a
+  per-employee query — the Team tab already holds the day range open, so a
+  detail costs no extra read and the panel can't disagree with the count on the
+  row that opened it.

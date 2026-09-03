@@ -148,13 +148,13 @@ this one".
 
 ## Superseded audit snapshots
 Point-in-time whole-repo audits; each run's findings were implemented at the
-time. Superseded by later audits — **the active one is
-`docs/audits/CODEBASE_AUDIT.md`, the 2026-08-15 sweep**, whose 41 findings are
-all closed and deployed, so it too is now a record rather than a work list.
-`docs/audits/` also keeps `SECURITY_ASSESSMENT_2026-08-04.md` and
-`AUDIT_FOLLOWUPS.md` (one item, §2, still open), plus two read-only repair-audit
-scripts for the client-rename damage (`audit-renamed-client-names.js` and the
-earlier `audit-client-phone-backfill-damage.js`).
+time. Superseded by later audits. The active
+`docs/audits/CODEBASE_AUDIT.md` file is now a cleaned current action list, not a
+full historical snapshot. `docs/audits/` also keeps
+`SECURITY_ASSESSMENT_2026-08-04.md` and `AUDIT_FOLLOWUPS.md` (the owner-only
+Maps budget cap), plus two read-only repair-audit scripts for the client-rename
+damage (`audit-renamed-client-names.js` and the earlier
+`audit-client-phone-backfill-damage.js`).
 - `CODEBASE_AUDIT_2026-06-26.md`
 - `CODEBASE_AUDIT_2026-07-01.md`
 - `CODEBASE_AUDIT_2026-07-04.md`
@@ -183,6 +183,16 @@ earlier `audit-client-phone-backfill-damage.js`).
   toward what breaks once deployed. 27 findings, all closed at `a30eb3ef`.
   **Both 2026-08-14 snapshots were restored from git history on 2026-08-15** —
   each had been overwritten in place by the sweep that followed it.
+- `CODEBASE_AUDIT_2026-08-19.md` — the follow-up audit after the appointment
+  image migration and Wave fixes; its active items were carried into later
+  deploy logs and audits.
+- `CODEBASE_AUDIT_2026-08-28-second-pass.md` — the late-August sweep; all
+  reported findings were closed, with the index lesson later corrected in the
+  2026-09-01 deploy log.
+- `CODEBASE_AUDIT_2026-09-01.md` — the full audit snapshot that produced the
+  current rolling action list. Most findings were closed in-tree; the remaining
+  owner-only, product and refactor work is tracked in
+  `docs/audits/CODEBASE_AUDIT.md`.
 - `MOBILE_AUDIT_2026-07-13.md` — a mobile-optimization-lens pass (perf, memory,
   battery, network, mobile UX) rather than a general audit. Nothing mechanical
   to fix; its verdict was that the hot paths already implement the mitigations
