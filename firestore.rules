@@ -199,6 +199,8 @@ service cloud.firestore {
           // sweep reads undefined as enabled. See wantsTravelAlerts.
           && (!('travelAlertsEnabled' in d.keys())
               || d.travelAlertsEnabled is bool)
+          && (!('locationSharingEnabled' in d.keys())
+              || d.locationSharingEnabled is bool)
           && (!('colorValue' in d.keys()) || isValidColorValue(d.colorValue))
           && (!('role' in d.keys()) || isValidRole(d.role))
           && (!('status' in d.keys()) || isValidUserStatus(d.status))
@@ -223,7 +225,8 @@ service cloud.firestore {
       function isAvailabilityOnlyChange() {
         return request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['workingDays', 'workStartMinutes', 'workEndMinutes',
-                      'onCall', 'phone', 'travelAlertsEnabled', 'updatedAt'])
+                      'onCall', 'phone', 'travelAlertsEnabled',
+                      'locationSharingEnabled', 'updatedAt'])
           && request.resource.data.updatedAt == request.time;
       }
 

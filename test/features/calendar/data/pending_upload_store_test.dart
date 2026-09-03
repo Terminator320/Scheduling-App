@@ -216,6 +216,32 @@ void main() {
     expect(await store.load(), isEmpty);
   });
 
+  test('ownerless legacy entries are dropped on load', () async {
+    SharedPreferences.setMockInitialValues({
+      'pending_photo_uploads':
+          '[{"appointmentId":"a1","paths":["/x/1.jpg"],"enqueuedAtMs":1}]',
+    });
+
+    final store = PendingUploadStore();
+
+    expect(await store.load(), isEmpty);
+  });
+
+  test('clearAll returns existing entries and removes the queue', () async {
+    final store = PendingUploadStore();
+    const entry = PendingUpload(
+      appointmentId: 'a1',
+      paths: ['/x/1.jpg'],
+      enqueuedAtMs: 1,
+    );
+    await store.add(entry);
+
+    final cleared = await store.clearAll();
+
+    expect(cleared.single.id, entry.id);
+    expect(await store.load(), isEmpty);
+  });
+
   test('an overlapping add and remove do not erase each other', () async {
     // Every other test here drives ONE mutation at a time, which is exactly
     // the shape that passed while this bug was live. `add`/`remove`/`prune`

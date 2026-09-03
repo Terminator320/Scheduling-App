@@ -28,7 +28,8 @@ final currentUserDocProvider = StreamProvider<Map<String, dynamic>>((ref) {
 });
 
 /// Returns null while the account doc is unsettled.
-({bool signedIn, String role, String status})? readAccountGateInputs(
+({bool signedIn, String role, String status, bool locationSharingEnabled})?
+readAccountGateInputs(
   Ref ref,
   FirebaseAuth auth,
 ) {
@@ -39,6 +40,7 @@ final currentUserDocProvider = StreamProvider<Map<String, dynamic>>((ref) {
     signedIn: auth.currentUser != null,
     role: (doc['role'] ?? '').toString().trim(),
     status: (doc['status'] ?? '').toString().trim(),
+    locationSharingEnabled: doc['locationSharingEnabled'] == true,
   );
 }
 

@@ -1,6 +1,10 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:scheduling/core/images/appointment_image_loader.dart';
+import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
+import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
@@ -28,6 +32,7 @@ import 'package:scheduling/features/clients/domain/clients_repository.dart';
 /// difference between the two variants this replaces, so it is the only knob.
 List<Override> accountExitStubOverrides({List<String>? calls}) => [
   appointmentImageLoaderProvider.overrideWithValue(_StubLoader(calls)),
+  appointmentImageUploadProvider.overrideWithValue(_StubUploads(calls)),
   clientsRepositoryProvider.overrideWithValue(_StubClients(calls)),
   appointmentsRepositoryProvider.overrideWithValue(_StubAppointments(calls)),
 ];
@@ -41,6 +46,32 @@ class _StubLoader extends AppointmentImageLoader {
 
   @override
   Future<void> clear() async => calls?.add('imageCache');
+}
+
+class _StubUploads extends AppointmentImageUploadService {
+  _StubUploads(this.calls)
+    : super(
+        appointments: _StubAppointments(null),
+        notifier: PhotoUploadNotifier(),
+        storage: _StubImageStorage(),
+        auth: _StubAuth(),
+        employeeIdForUid: (_) async => null,
+      );
+
+  final List<String>? calls;
+
+  @override
+  Future<void> clearPending() async => calls?.add('imageUploads');
+}
+
+class _StubImageStorage implements ImageStorageService {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _StubAuth implements FirebaseAuth {
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _StubClients implements ClientsRepository {

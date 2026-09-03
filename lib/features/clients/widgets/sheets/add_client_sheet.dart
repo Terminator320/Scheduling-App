@@ -324,6 +324,8 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
             inputFormatters: const [PhoneInputFormatter()],
             textInputAction: TextInputAction.next,
             maxLength: TextLimits.phone,
+            errorText: errors['phone'],
+            onChanged: (_) => clearError('phone'),
           ),
         ),
         const SizedBox(height: AppSpacing.sp16),

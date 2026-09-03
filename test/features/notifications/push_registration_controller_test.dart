@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -38,6 +39,9 @@ void main() {
 
     when(() => user.uid).thenReturn('uid-1');
     when(() => auth.currentUser).thenReturn(user);
+    when(
+      () => service.authorizationStatus(),
+    ).thenAnswer((_) async => AuthorizationStatus.authorized);
     when(() => service.requestPermission()).thenAnswer((_) async => true);
     when(
       () => service.configureForegroundPresentation(),
@@ -88,6 +92,7 @@ void main() {
 
     await container.read(pushRegistrationControllerProvider).sync();
 
+    verifyNever(() => service.authorizationStatus());
     verifyNever(() => service.requestPermission());
     verifyNever(() => employees.findUserByUid(any()));
   });
@@ -109,6 +114,7 @@ void main() {
         container.read(pushRegistrationControllerProvider).sync(),
         completes,
       );
+      verifyNever(() => service.authorizationStatus());
       verifyNever(() => service.requestPermission());
     },
   );
@@ -123,6 +129,7 @@ void main() {
 
     await container.read(pushRegistrationControllerProvider).sync();
 
+    verifyNever(() => service.authorizationStatus());
     verifyNever(() => service.requestPermission());
     verifyNever(() => employees.findUserByUid(any()));
   });
@@ -145,6 +152,7 @@ void main() {
 
     await container.read(pushRegistrationControllerProvider).sync();
 
+    verifyNever(() => service.authorizationStatus());
     verifyNever(() => service.requestPermission());
     verifyNever(() => employees.findUserByUid(any()));
   });
@@ -193,7 +201,9 @@ void main() {
         // fully-successful sync, so an incomplete session left one `fcmTokens`
         // row per device that the server keeps pushing to - `syncUsersByUid`
         // purges those on DISABLE, not on sign-out, so they just accumulate.
-        when(() => service.requestPermission()).thenAnswer((_) async => false);
+        when(
+          () => service.authorizationStatus(),
+        ).thenAnswer((_) async => AuthorizationStatus.denied);
         final container = makeContainer(const {
           'role': 'employee',
           'status': 'active',
@@ -205,6 +215,7 @@ void main() {
 
         await controller.unregisterCurrentDevice();
 
+        verifyNever(() => service.requestPermission());
         verify(
           () => fcm.deleteToken(userDocId: 'doc-1', token: 'tok-1'),
         ).called(1);

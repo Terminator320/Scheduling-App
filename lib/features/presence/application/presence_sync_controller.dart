@@ -46,7 +46,10 @@ bool shouldTrackPresence({
   required String role,
   required String status,
   required bool signedIn,
-}) => shouldRegisterPush(role: role, status: status, signedIn: signedIn);
+  required bool locationSharingEnabled,
+}) =>
+    locationSharingEnabled &&
+    shouldRegisterPush(role: role, status: status, signedIn: signedIn);
 
 /// Pure throttle for movement-driven fixes.
 bool shouldWritePresenceFix({
@@ -112,6 +115,7 @@ class PresenceSyncController with ReentrantSync {
         role: gate.role,
         status: gate.status,
         signedIn: gate.signedIn,
+        locationSharingEnabled: gate.locationSharingEnabled,
       )) {
         _stop();
         return;
@@ -225,16 +229,18 @@ class PresenceSyncController with ReentrantSync {
     // from a disposed consumer.
     final logger = _logger;
     unawaited(
-      _upload(position).then((result) {
-        if (result == PresenceWriteResult.ok) return;
-        if (_lastUploadAt == attemptedAt) _lastUploadAt = previous;
-        if (result == PresenceWriteResult.denied) _stop();
-      }).catchError((Object e, StackTrace st) {
-        // Runs from a Timer callback, so a throw here has no caller left and
-        // would land in Crashlytics as a fatal from a background GPS write.
-        if (_lastUploadAt == attemptedAt) _lastUploadAt = previous;
-        logger.warn('PRESENCE upload failed', e, st);
-      }),
+      _upload(position)
+          .then((result) {
+            if (result == PresenceWriteResult.ok) return;
+            if (_lastUploadAt == attemptedAt) _lastUploadAt = previous;
+            if (result == PresenceWriteResult.denied) _stop();
+          })
+          .catchError((Object e, StackTrace st) {
+            // Runs from a Timer callback, so a throw here has no caller left and
+            // would land in Crashlytics as a fatal from a background GPS write.
+            if (_lastUploadAt == attemptedAt) _lastUploadAt = previous;
+            logger.warn('PRESENCE upload failed', e, st);
+          }),
     );
   }
 

@@ -14,8 +14,8 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$AppointmentPrefill {
 
- ClientRecord? get client;/// True when the job's address was not the client's, so the sheet opens
-/// on the address field rather than the client-address pill.
+ ClientRecord? get client;/// True when the job's address was not the client's, so the sheet opens on
+/// the address field rather than the client-address pill.
  bool get useCustomAddress;/// Canonical, as stored; the sheet renders the display spelling.
  String get address; String get title; String get notes; String get materialsNeeded;/// Resolved against the live roster by the sheet — only crew still
 /// assignable carries over, so a disabled person can't be put on a new job.
@@ -236,8 +236,8 @@ class _AppointmentPrefill extends AppointmentPrefill {
   
 
 @override final  ClientRecord? client;
-/// True when the job's address was not the client's, so the sheet opens
-/// on the address field rather than the client-address pill.
+/// True when the job's address was not the client's, so the sheet opens on
+/// the address field rather than the client-address pill.
 @override@JsonKey() final  bool useCustomAddress;
 /// Canonical, as stored; the sheet renders the display spelling.
 @override@JsonKey() final  String address;

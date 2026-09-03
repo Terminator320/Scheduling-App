@@ -659,7 +659,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         showSelectedIcon: false,
         style: const ButtonStyle(
           visualDensity: VisualDensity.compact,
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           padding: WidgetStatePropertyAll(
             EdgeInsets.symmetric(horizontal: AppSpacing.sp8),
           ),

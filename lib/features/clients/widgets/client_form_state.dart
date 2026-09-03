@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:scheduling/features/clients/domain/policies/client_contacts_policy.dart';
 import 'package:scheduling/features/clients/widgets/sections/additional_contacts_section.dart';
 
 /// Shared form-state plumbing for the add/edit forms. Remember to call
@@ -27,6 +28,7 @@ mixin ClientFormState<T extends StatefulWidget> on State<T> {
   }
 
   void addAdditionalContact() {
+    if (additionalContacts.length >= kMaxAdditionalContacts) return;
     setState(() => additionalContacts.add(ContactFields()));
   }
 

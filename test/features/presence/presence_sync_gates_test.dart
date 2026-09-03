@@ -8,21 +8,36 @@ void main() {
   group('shouldTrackPresence', () {
     test('true only for a signed-in active employee', () {
       expect(
-        shouldTrackPresence(role: 'employee', status: 'active', signedIn: true),
+        shouldTrackPresence(
+          role: 'employee',
+          status: 'active',
+          signedIn: true,
+          locationSharingEnabled: true,
+        ),
         isTrue,
       );
     });
 
     test('admins are tracked too (they receive the timed pushes)', () {
       expect(
-        shouldTrackPresence(role: 'admin', status: 'active', signedIn: true),
+        shouldTrackPresence(
+          role: 'admin',
+          status: 'active',
+          signedIn: true,
+          locationSharingEnabled: true,
+        ),
         isTrue,
       );
     });
 
     test('unknown roles are excluded', () {
       expect(
-        shouldTrackPresence(role: '', status: 'active', signedIn: true),
+        shouldTrackPresence(
+          role: '',
+          status: 'active',
+          signedIn: true,
+          locationSharingEnabled: true,
+        ),
         isFalse,
       );
     });
@@ -33,6 +48,7 @@ void main() {
           role: 'employee',
           status: 'invited',
           signedIn: true,
+          locationSharingEnabled: true,
         ),
         isFalse,
       );
@@ -41,11 +57,17 @@ void main() {
           role: 'employee',
           status: 'disabled',
           signedIn: true,
+          locationSharingEnabled: true,
         ),
         isFalse,
       );
       expect(
-        shouldTrackPresence(role: 'employee', status: '', signedIn: true),
+        shouldTrackPresence(
+          role: 'employee',
+          status: '',
+          signedIn: true,
+          locationSharingEnabled: true,
+        ),
         isFalse,
       );
     });
@@ -56,10 +78,26 @@ void main() {
           role: 'employee',
           status: 'active',
           signedIn: false,
+          locationSharingEnabled: true,
         ),
         isFalse,
       );
     });
+
+    test(
+      'an active signed-in user is excluded until location sharing is on',
+      () {
+        expect(
+          shouldTrackPresence(
+            role: 'employee',
+            status: 'active',
+            signedIn: true,
+            locationSharingEnabled: false,
+          ),
+          isFalse,
+        );
+      },
+    );
   });
 
   group('shouldWritePresenceFix', () {

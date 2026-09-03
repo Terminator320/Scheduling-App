@@ -16,17 +16,12 @@ const {GOOGLE_MAP_API_KEY} = require("./params");
 const PLACE_ID_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const INPUT_MAX_LEN = 200;
 
-// Per-uid sliding-window rate limit, in-memory per function instance — a cheap,
-// latency-free guard for the high-volume autocomplete path, chosen over the
-// durable Firestore limiter the other routes use because this one fires on a
-// keystroke debounce and a round-trip per request would be felt.
+// Per-uid durable sliding-window limit for the high-volume autocomplete path.
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
-const rateBuckets = new Map();
 
-// placesGetDetails is low-volume, so it uses the durable Firestore cap rather
-// than the in-memory limiter, with a limit generous enough for an admin
-// entering many appointments at once.
+// placesGetDetails is low-volume and gets a more generous durable cap for an
+// admin entering many appointments at once.
 const UPSTREAM_TIMEOUT_MS = 8_000;
 
 const PLACES_DETAILS_RATE_MAX = 40;
@@ -128,35 +123,6 @@ async function _fetchPlacesJson(url, options, {label, uid}, controller) {
   }
 }
 
-/**
- * Throws HttpsError("resource-exhausted") when the caller's uid exceeds
- * RATE_LIMIT_MAX requests within RATE_LIMIT_WINDOW_MS.
- * @param {string} uid Firebase Auth uid of the caller.
- */
-function enforceRateLimit(uid) {
-  const now = Date.now();
-  // Evict expired entries when the map grows beyond the expected user count.
-  if (rateBuckets.size > 200) {
-    for (const [key, val] of rateBuckets) {
-      if (now - val.windowStart >= RATE_LIMIT_WINDOW_MS) {
-        rateBuckets.delete(key);
-      }
-    }
-  }
-  const bucket = rateBuckets.get(uid);
-  if (!bucket || now - bucket.windowStart >= RATE_LIMIT_WINDOW_MS) {
-    rateBuckets.set(uid, {count: 1, windowStart: now});
-    return;
-  }
-  bucket.count += 1;
-  if (bucket.count > RATE_LIMIT_MAX) {
-    throw new HttpsError(
-        "resource-exhausted",
-        "too-many-places-requests",
-    );
-  }
-}
-
 const placesAutocomplete = onCall(
     {
       enforceAppCheck: true,
@@ -165,11 +131,19 @@ const placesAutocomplete = onCall(
     async (req) => {
       // This is admin-only — address autocomplete is only surfaced on admin
       // appointment forms.
-      await assertAdminCall(req, new Set(["input", "sessionToken"]));
+      const uid = await assertAdminCall(
+          req,
+          new Set(["input", "sessionToken"]),
+      );
       const input = requireString(req.data, "input", INPUT_MAX_LEN);
       const sessionToken = readSessionToken(req.data);
 
-      enforceRateLimit(req.auth.uid);
+      await enforceDurableRateLimit(
+          "placesAutocomplete",
+          uid,
+          RATE_LIMIT_MAX,
+          RATE_LIMIT_WINDOW_MS,
+      );
 
       const body = {
         input,
@@ -198,7 +172,7 @@ const placesAutocomplete = onCall(
           },
           {
             label: "placesAutocomplete",
-            uid: req.auth.uid,
+            uid,
           },
       );
       return {suggestions: Array.isArray(data.suggestions) ?
