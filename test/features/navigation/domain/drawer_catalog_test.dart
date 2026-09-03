@@ -24,8 +24,7 @@ void main() {
   });
 
   test('an employee reaches History from the TODAY group', () {
-    // Their one search: the finished and cancelled jobs they were on. Under
-    // TODAY because a technician has no BUSINESS group.
+    // Their one search: the finished and cancelled jobs they were on.
     final today = drawerGroups(isAdmin: false).first.rows;
     expect(today, contains(PushedDestination.history));
   });
@@ -58,8 +57,8 @@ void main() {
   });
 
   test('no two destinations share an icon', () {
-    // Colour is never the sole indicator of a row, so the icon has to carry
-    // the row's identity on its own.
+    // Colour is never the sole indicator of a row, so the icon has to carry the
+    // row's identity on its own.
     final icons = [for (final d in allDestinations) drawerRowIcon(d)];
     expect(icons.toSet().length, icons.length);
   });

@@ -179,10 +179,6 @@ class _AdditionalContactCard extends StatelessWidget {
   }
 
   /// "Contact N" and its remove button.
-  ///
-  /// Stacked when compact: at a narrow width with large text the title and the
-  /// button competed for one row, and the label saying WHICH contact is being
-  /// removed is the half that must not be the one to ellipsize.
   Widget _header(BuildContext context, ThemeData theme) {
     final title = Text(
       '${context.l10n.clients_contact} ${index + 1}',
@@ -238,9 +234,9 @@ class _AdditionalContactCard extends StatelessWidget {
     ),
   );
 
-  /// Clearing the PHONE error from the email field is deliberate: the
-  /// "one of phone or email" rule reports on the phone row, so supplying an
-  /// email is what resolves it.
+  /// Clearing the PHONE error from the email field is deliberate: the "one of
+  /// phone or email" rule reports on the phone row, so supplying an email is
+  /// what resolves it.
   Widget _emailField(BuildContext context) => SheetFocusScroll(
     child: LabeledTextField(
       label: context.l10n.common_email,

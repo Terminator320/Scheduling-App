@@ -53,11 +53,7 @@ Widget formRemoveButton(BuildContext context, {required VoidCallback onTap}) {
     child: GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      // 48x48, which is Material's minimum and clears iOS's 44pt. It was 32
-      // under a comment claiming it met the minimum, and it did not — this is
-      // the control for destroying a photo, on a screen a gloved field worker
-      // uses. The GLYPH stays 32 and centred, so only the hit area grew; the
-      // caller positions the box, not the glyph.
+      // 48x48, which is Material's minimum and clears iOS's 44pt.
       child: SizedBox(
         width: 48,
         height: 48,

@@ -1,12 +1,10 @@
-// The default end time is start + 1h, and the only interesting case is the
-// one that wraps: an 11:30 PM start must yield 12:30 AM, not hour 24. A
-// TimeOfDay built with hour 24 asserts in debug and renders nonsense in
-// release, and both call sites (the add controller's seed and the picker's
-// auto-fill) push it straight into the form.
+// The default end time is start + 1h, and the only interesting case is the one
+// that wraps: an 11:30 PM start must yield 12:30 AM, not hour 24.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 
 void main() {
@@ -50,6 +48,37 @@ void main() {
           expect(end.minute, inInclusiveRange(0, 59), reason: '$hour:$minute');
         }
       }
+    });
+  });
+
+  group('AppointmentDraftDefaults.endTimeFor', () {
+    test('adds the duration within the same day', () {
+      // Water heater is a 120-minute job, so 09:00 becomes 11:00.
+      expect(
+        AppointmentDraftDefaults.endTimeFor(
+          const TimeOfDay(hour: 9, minute: 0),
+          JobTemplate.waterHeater.defaultDurationMinutes,
+        ),
+        const TimeOfDay(hour: 11, minute: 0),
+      );
+      // Leak diagnostic is a 30-minute job, so 14:15 becomes 14:45.
+      expect(
+        AppointmentDraftDefaults.endTimeFor(
+          const TimeOfDay(hour: 14, minute: 15),
+          JobTemplate.leakDiagnostic.defaultDurationMinutes,
+        ),
+        const TimeOfDay(hour: 14, minute: 45),
+      );
+    });
+
+    test('clamps inside the day so a late start cannot wrap past midnight', () {
+      expect(
+        AppointmentDraftDefaults.endTimeFor(
+          const TimeOfDay(hour: 23, minute: 30),
+          JobTemplate.waterHeater.defaultDurationMinutes,
+        ),
+        const TimeOfDay(hour: 23, minute: 59),
+      );
     });
   });
 }

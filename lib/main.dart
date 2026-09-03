@@ -47,8 +47,7 @@ import 'package:scheduling/routes/app_routes.dart';
 
 const bool _useFirebaseEmulator = bool.fromEnvironment('USE_FIREBASE_EMULATOR');
 // The iOS Simulator shares the host's network, so localhost is the right
-// default. (It was 10.0.2.2, the Android emulator's loopback alias, until
-// android/ was deleted on 2026-08-05.)
+// default.
 const String _emulatorHost = String.fromEnvironment(
   'EMULATOR_HOST',
   defaultValue: '127.0.0.1',
@@ -185,9 +184,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   final _settingsRepository = SharedPrefsSettingsRepository();
   late final Debouncer _settingsSaveDebouncer;
   final _topRouteObserver = TopRouteObserver();
-  // Held so `dispose` can cancel them. Harmless in production — this is the
-  // root widget and only dies with the process — but a widget test pumping
-  // this app stacks a live plugin listener per pump.
+  // Held so `dispose` can cancel them.
   late final AppointmentLinkOpener _linkOpener;
   DeepLinkDispatcher? _deepLinkDispatcher;
   late ThemeMode _themeMode;
@@ -211,8 +208,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _setupDeepLinkHandling();
   }
 
-  /// The two external entry points the `app_links` dispatcher doesn't own:
-  /// iOS home-widget taps and notification taps.
+  /// The two external entry points the `app_links` dispatcher doesn't own: iOS
+  /// home-widget taps and notification taps.
   void _setupLinkOpening() {
     _linkOpener = AppointmentLinkOpener(
       ref: ref,
@@ -222,8 +219,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   }
 
   /// Inbound `esproschedule://` URLs — appointment links only since the invite
-  /// code flow was retired. Widget/Live-Activity/Siri taps carry `homeWidget`
-  /// and are skipped here; the `home_widget` channel above still owns them.
+  /// code flow was retired.
   void _setupDeepLinkHandling() {
     _deepLinkDispatcher = DeepLinkDispatcher(
       logger: ref.read(loggerProvider),
@@ -267,10 +263,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     unawaited(ref.read(pushRegistrationControllerProvider).sync());
     // Same for the Live Activity tokens — `locale` drives the card's text.
     unawaited(ref.read(liveActivityRegistrationControllerProvider).sync());
-    // The iOS home widget localizes its chrome/status labels from the
-    // payload's `locale`. Recompute the payload now so the widget follows
-    // the app language right away, instead of waiting for the next
-    // appointment-stream emission.
+    // The iOS home widget localizes its chrome/status labels from the payload's
+    // `locale`.
     ref.invalidate(widgetPayloadProvider);
   }
 
@@ -338,8 +332,8 @@ class _PaulAppState extends ConsumerState<PaulApp> {
             darkTheme: darkTheme(),
             // iOS "Increase Contrast". MaterialApp swaps to these itself when
             // MediaQuery.highContrastOf is true, so nothing branches at a call
-            // site. docs/legal/accessibility.html claimed the app honoured
-            // this setting while nothing in lib/ read the flag.
+            // site. docs/legal/accessibility.html claimed the app honoured this
+            // setting while nothing in lib/ read the flag.
             highContrastTheme: highContrastLightTheme(),
             highContrastDarkTheme: highContrastDarkTheme(),
             themeMode: _themeMode,

@@ -7,21 +7,28 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
+import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_prefill.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
+import 'package:scheduling/features/employees/domain/models/job_title.dart';
 
 class _MockAppointmentsRepo extends Mock implements AppointmentsRepository {}
 
 class _MockClientsRepo extends Mock implements ClientsRepository {}
+
+class _MockEmployeesRepo extends Mock implements EmployeesRepository {}
 
 class _MockUploader extends Mock implements AppointmentImageUploadService {}
 
@@ -34,6 +41,11 @@ const _aClient = ClientRecord(
 
 const _employeeA = EmployeeRecord(id: 'e1', name: 'Alex');
 const _employeeB = EmployeeRecord(id: 'e2', name: 'Bea');
+const _dispatcher = EmployeeRecord(
+  id: 'e3',
+  name: 'Dee',
+  jobTitle: JobTitle.dispatcher,
+);
 
 void main() {
   setUpAll(() {
@@ -52,13 +64,20 @@ void main() {
 
   late _MockAppointmentsRepo appointments;
   late _MockClientsRepo clients;
+  late _MockEmployeesRepo employees;
   late _MockUploader uploader;
   late ProviderContainer container;
 
   setUp(() {
     appointments = _MockAppointmentsRepo();
     clients = _MockClientsRepo();
+    employees = _MockEmployeesRepo();
     uploader = _MockUploader();
+
+    // The roster a prefill resolves its crew against: two crew, one dispatcher.
+    when(employees.watchEmployees).thenAnswer(
+      (_) => Stream.value(const [_employeeA, _employeeB, _dispatcher]),
+    );
 
     when(appointments.newDocId).thenReturn('appt-1');
     when(() => appointments.addAppointment(any())).thenAnswer((_) async {});
@@ -75,11 +94,15 @@ void main() {
         appointmentsRepositoryProvider.overrideWithValue(appointments),
         clientsRepositoryProvider.overrideWithValue(clients),
         appointmentImageUploadProvider.overrideWithValue(uploader),
+        employeesRepositoryProvider.overrideWithValue(employees),
+        authUidProvider.overrideWith((ref) => Stream<String?>.value('uid-1')),
         // Online by default here — the offline test below builds its own.
         isOfflineProvider.overrideWithValue(false),
       ],
     );
     addTearDown(container.dispose);
+    // Auto-dispose: keep the roster stream alive across the prefill's read.
+    container.listen(employeesStreamProvider, (_, _) {});
   });
 
   AddEventController readNotifier([DateTime? initialDate]) =>
@@ -298,8 +321,7 @@ void main() {
       'handles it after the write',
       () async {
         // Both would fire otherwise, giving two dialogs about the same clash
-        // back to back. The alert is strictly more useful: it names the jobs
-        // and offers a swap on each, where this prompt only names the person.
+        // back to back.
         when(
           () => appointments.findBusyEmployees(
             candidates: any(named: 'candidates'),
@@ -427,8 +449,7 @@ void main() {
 
     test('turning Personal off KEEPS an explicitly set all-day', () {
       // Retired invariant: all-day used to be personal-only, so turning
-      // Personal off cleared it. The switch is on every job now, so the flag
-      // stays — clearing it would discard a deliberate choice.
+      // Personal off cleared it.
       readNotifier()
         ..setPersonal(value: true)
         ..setAllDay(value: true)
@@ -460,9 +481,6 @@ void main() {
       () async {
         // The form hides BOTH the all-day switch and the time rows behind
         // `isDayOff`, while the validator demands times whenever `!isAllDay`.
-        // Reaching Day off with all-day off therefore left a block that could
-        // neither satisfy the validator nor show the error — Save did nothing,
-        // silently, with no way back that a user would find.
         final c = readNotifier()
           ..selectDate(DateTime(2026, 5, 10))
           ..setPersonal(value: true)
@@ -587,8 +605,8 @@ void main() {
       // The picker is hidden once the span exceeds a day, so a rule chosen
       // while the draft was single-day would otherwise stay in state: submit
       // books NO copies for a run yet stamps the rule on every day document,
-      // producing a repeat that silently does nothing on records that then
-      // read as both a run and a series.
+      // producing a repeat that silently does nothing on records that then read
+      // as both a run and a series.
       readNotifier()
         ..selectDate(DateTime(2026, 8, 3))
         ..selectRepeat(RepeatInterval.fourMonths)
@@ -605,8 +623,8 @@ void main() {
     });
 
     test('moving the START date so the span widens also clears it', () async {
-      // selectDate carries the touched end date along, so it can widen the
-      // span just as selectEndDate can.
+      // selectDate carries the touched end date along, so it can widen the span
+      // just as selectEndDate can.
       readNotifier()
         ..selectDate(DateTime(2026, 8, 3))
         ..selectEndDate(DateTime(2026, 8, 3))
@@ -810,8 +828,7 @@ void main() {
 
       expect(outcome, isA<AddEventSubmitted>());
       // A run's later days are NOT repeat occurrences: `futureBookings` counts
-      // repeat copies only, and the run's length is reported separately. Held
-      // as one number, a 3-day booking announced "2 future visits booked".
+      // repeat copies only, and the run's length is reported separately.
       expect((outcome as AddEventSubmitted).futureBookings, 0);
       expect(outcome.runDays, 3);
 
@@ -879,6 +896,183 @@ void main() {
       expect(captured.startTime, DateTime(2026, 5, 10, 9));
       expect(captured.endTime, DateTime(2026, 5, 14, 10));
       expect(captured.dayCount, 0);
+    });
+  });
+
+  group('setDurationMinutes', () {
+    test('a seeded length lands the end after a later-picked start', () {
+      readNotifier()
+        ..setDurationMinutes(90)
+        ..selectStartTime(const TimeOfDay(hour: 9, minute: 0));
+      expect(
+        readState().selectedEndTime,
+        const TimeOfDay(hour: 10, minute: 30),
+      );
+    });
+
+    test('clamps inside the day', () {
+      readNotifier()
+        ..setDurationMinutes(90)
+        ..selectStartTime(const TimeOfDay(hour: 23, minute: 0));
+      expect(
+        readState().selectedEndTime,
+        const TimeOfDay(hour: 23, minute: 59),
+      );
+    });
+
+    test('re-seeds an end already derived from a picked start', () {
+      readNotifier()
+        ..selectStartTime(const TimeOfDay(hour: 9, minute: 0))
+        ..setDurationMinutes(120);
+      expect(readState().selectedEndTime, const TimeOfDay(hour: 11, minute: 0));
+    });
+
+    test('the seeded end keeps following a later start change', () {
+      readNotifier()
+        ..selectStartTime(const TimeOfDay(hour: 9, minute: 0))
+        ..setDurationMinutes(30)
+        ..selectStartTime(const TimeOfDay(hour: 11, minute: 0));
+      expect(
+        readState().selectedEndTime,
+        const TimeOfDay(hour: 11, minute: 30),
+      );
+    });
+
+    test('seeding over a manual end pick re-owns the end', () {
+      readNotifier()
+        ..selectStartTime(const TimeOfDay(hour: 9, minute: 0))
+        ..selectEndTime(const TimeOfDay(hour: 14, minute: 0))
+        ..setDurationMinutes(30)
+        ..selectStartTime(const TimeOfDay(hour: 11, minute: 0));
+      expect(
+        readState().selectedEndTime,
+        const TimeOfDay(hour: 11, minute: 30),
+      );
+    });
+
+    test('a manual end pick after the seed still wins', () {
+      readNotifier()
+        ..setDurationMinutes(30)
+        ..selectStartTime(const TimeOfDay(hour: 9, minute: 0))
+        ..selectEndTime(const TimeOfDay(hour: 14, minute: 0))
+        ..selectStartTime(const TimeOfDay(hour: 11, minute: 0));
+      expect(readState().selectedEndTime, const TimeOfDay(hour: 14, minute: 0));
+    });
+  });
+
+  group('applyPrefill', () {
+    test('seeds the client, the address mode and the job length', () async {
+      await readNotifier().applyPrefill(
+        const AppointmentPrefill(
+          client: _aClient,
+          useCustomAddress: true,
+          durationMinutes: 90,
+        ),
+      );
+      final state = readState();
+      expect(state.selectedClient, _aClient);
+      expect(state.useCustomAddress, isTrue);
+      expect(state.durationMinutes, 90);
+    });
+
+    test(
+      'a client-only prefill leaves the address mode to selectClient',
+      () async {
+        await readNotifier().applyPrefill(
+          const AppointmentPrefill(client: _aClient),
+        );
+        expect(readState().useCustomAddress, isFalse);
+      },
+    );
+
+    test(
+      'a client with no address is custom whatever the prefill says',
+      () async {
+        await readNotifier().applyPrefill(
+          AppointmentPrefill(client: _aClient.copyWith(address: '')),
+        );
+        expect(readState().useCustomAddress, isTrue);
+      },
+    );
+
+    test('carries only the crew still assignable', () async {
+      // e3 is a dispatcher and e9 is no longer on the roster.
+      await readNotifier().applyPrefill(
+        const AppointmentPrefill(employeeIds: ['e1', 'e3', 'e9']),
+      );
+      expect(readState().selectedEmployees, const [_employeeA]);
+    });
+
+    test('a book-again write carries nothing of the source visit', () async {
+      // Every field that belongs to the visit itself set non-default; the
+      // written duplicate must equal a bare record built from the carried
+      // fields plus the newly picked when.
+      final source = AppointmentRecord(
+        id: 'appt-old',
+        title: 'Water heater',
+        startTime: DateTime(2026, 5, 10, 9),
+        endTime: DateTime(2026, 5, 10, 10, 30),
+        clientId: 'c1',
+        clientName: 'Jane Doe',
+        clientPhone: '555-0001',
+        employeeIds: const ['e1', 'e2', 'e9'],
+        employeeNames: const ['Alex', 'Bea', 'Gone'],
+        address: '99 Other Rd',
+        notes: 'Gate code 4821',
+        fieldNotes: 'Replaced the anode rod',
+        materialsNeeded: 'anode rod',
+        status: 'done',
+        repeat: RepeatInterval.sixMonths,
+        seriesId: 'appt-old',
+        dayIndex: 2,
+        dayCount: 3,
+        createdAt: DateTime(2026, 5),
+        updatedAt: DateTime(2026, 5, 10, 12),
+        pictureCount: 3,
+        startedAt: DateTime(2026, 5, 10, 9, 5),
+        completedAt: DateTime(2026, 5, 10, 10, 40),
+        crewStatus: 'onMyWay',
+        crewStatusAt: DateTime(2026, 5, 10, 8, 40),
+        crewStatusBy: 'e1',
+      );
+      final prefill = AppointmentPrefill.bookAgain(source, client: _aClient);
+      final c = readNotifier();
+      await c.applyPrefill(prefill);
+      c
+        ..selectDate(DateTime(2026, 6))
+        ..selectStartTime(const TimeOfDay(hour: 13, minute: 0));
+
+      // The sheet hands its text fields back exactly as seeded.
+      final outcome = await c.submit(
+        title: prefill.title,
+        address: prefill.address,
+        notes: prefill.notes,
+        materialsNeeded: prefill.materialsNeeded,
+      );
+
+      expect(outcome, isA<AddEventSubmitted>());
+      final written =
+          verify(
+                () => appointments.addAppointment(captureAny()),
+              ).captured.single
+              as AppointmentRecord;
+      expect(
+        written,
+        AppointmentRecord(
+          id: 'appt-1',
+          title: 'Water heater',
+          startTime: DateTime(2026, 6, 1, 13),
+          endTime: DateTime(2026, 6, 1, 14, 30),
+          clientId: 'c1',
+          clientName: _aClient.displayName,
+          clientPhone: '555-0001',
+          employeeIds: const ['e1', 'e2'],
+          employeeNames: const ['Alex', 'Bea'],
+          address: '99 Other Rd',
+          notes: 'Gate code 4821',
+          materialsNeeded: 'anode rod',
+        ),
+      );
     });
   });
 }

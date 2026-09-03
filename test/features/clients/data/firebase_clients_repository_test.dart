@@ -156,9 +156,7 @@ void main() {
     test('normalizes EVERY contact email, not just the top-level one', () async {
       // The loop was unhit: only the top-level address was ever asserted, so a
       // regression that normalized the client and skipped its contacts would
-      // ship green. Contact emails feed the same `matchesClient` search
-      // matching as the main one, where a stray space or capital means the
-      // person is simply not found.
+      // ship green.
       await repo().addClient(
         client().copyWith(
           email: '  Owner@Example.COM ',
@@ -180,8 +178,7 @@ void main() {
     });
 
     test('a contact with no email normalizes to empty, not null', () async {
-      // `normalizeEmail` is fed `?? ''`, so the key must survive as a string —
-      // a null here would break the Dart-side matcher that reads it.
+      // `normalizeEmail` is fed `??
       await repo().addClient(
         client().copyWith(
           contacts: const [ClientContact(name: 'Site')],
@@ -283,11 +280,7 @@ void main() {
   });
 
   group('the client scan window warns at its cap', () {
-    // This is the quietest truncation in the app. The window is ordered by
-    // `name`, so at the cap it is the alphabetically FIRST 1000 clients —
-    // everything past that point goes invisible to search, to the type-filter
-    // chips and to the Archived chip at once, gradually, as the roster grows,
-    // with no error anywhere. The warn is the entire mitigation.
+    // This is the quietest truncation in the app.
     void withClients(int count) => when(() => snapshot.docs).thenReturn([
       for (var i = 0; i < count; i++)
         _FakeDoc('c$i', {'name': 'Client ${i.toString().padLeft(4, '0')}'}),
@@ -332,10 +325,9 @@ void main() {
 
       await repo().searchClients('client');
 
-      // 5000 / 500 per page, PLUS one 1-document probe past the cap — the
-      // only way to tell a roster of exactly 5000 (nothing hidden) from a
-      // larger one, and paid only in the cap case. It must stop there rather
-      // than walk the collection.
+      // 5000 / 500 per page, PLUS one 1-document probe past the cap — the only
+      // way to tell a roster of exactly 5000 (nothing hidden) from a larger
+      // one, and paid only in the cap case.
       verify(() => query.get()).called(11);
       expect(logger.warnings, hasLength(1));
       expect(logger.warnings.single, startsWith('CLI-SEARCH'));
@@ -398,11 +390,10 @@ void main() {
     });
 
     test('a local write keeps the window alive past the plain TTL', () async {
-      // `patched()` used to carry the ORIGINAL fetchedAt through, so the
-      // window expired two minutes after the tab-open scan however much
-      // activity there had been — and the first write after that idle re-paged
-      // every client doc, plus a `fromMap` and a `buildingKeyFor` each, on the
-      // UI isolate.
+      // `patched()` used to carry the ORIGINAL fetchedAt through, so the window
+      // expired two minutes after the tab-open scan however much activity there
+      // had been — and the first write after that idle re-paged every client
+      // doc, plus a `fromMap` and a `buildingKeyFor` each, on the UI isolate.
       final docs = [
         doc('c1', {'name': 'John Smith'}),
       ];
@@ -424,8 +415,7 @@ void main() {
 
     test('but never past the absolute ceiling', () async {
       // The TTL is the only protection against a REMOTE write, so a steadily
-      // edited window must still age out. Without this bound an admin who
-      // saves a client every minute would never see another admin's change.
+      // edited window must still age out.
       final docs = [
         doc('c1', {'name': 'John Smith'}),
       ];
@@ -486,15 +476,12 @@ void main() {
     );
 
     // I7: `_patchWindow` MERGES the write over the cached doc rather than
-    // substituting it, because `toMap()` emits user-owned fields only. Nothing
-    // asserted that, so a "simplification" back to a plain replace would blank
-    // every function-owned field on every search and type-filter result until
-    // the TTL expired — with no test failing.
+    // substituting it, because `toMap()` emits user-owned fields only.
     test(
       'a local write KEEPS the function-owned fields on the cached doc',
       () async {
-        // Built before the stub: `doc()` stubs internally, and mocktail
-        // refuses a `when` inside a stub response.
+        // Built before the stub: `doc()` stubs internally, and mocktail refuses
+        // a `when` inside a stub response.
         final docs = [
           doc('c1', {
             'name': 'John Smith',
@@ -533,8 +520,8 @@ void main() {
 
       final results = await repo().searchClients('John');
 
-      // Prefix matches (John Smith, Johnny Cash) rank above the substring
-      // match (Aaron Johnson); ties break alphabetically.
+      // Prefix matches (John Smith, Johnny Cash) rank above the substring match
+      // (Aaron Johnson); ties break alphabetically.
       expect(results.map((c) => c.id), ['c2', 'c3', 'c1']);
     });
   });
@@ -620,10 +607,7 @@ void main() {
     test(
       'fetchBuildingKeys answers for every live client, null included',
       () async {
-        // The row builder's half of the pill. An entry per client is what lets a
-        // caller tell "no building" from "not in the scan window" — the archived
-        // rows the list still renders fall in the second bucket and derive their
-        // own key.
+        // The row builder's half of the pill.
         final docs = [
           ...paton(),
           doc('c4', {'name': 'Nowhere'}),
@@ -654,12 +638,10 @@ void main() {
       expect(keys.values.where((k) => k == key), hasLength(2));
     });
 
-    // `_patchWindow` carries the already-materialized records and building
-    // keys across a local write and re-derives only the one client that
-    // changed, rather than discarding the window's memos and rebuilding every
-    // record and key on the UI isolate. These pin the four write shapes it
-    // has to get right; the win is that they stay correct while the whole
-    // window is no longer recomputed.
+    // `_patchWindow` carries the already-materialized records and building keys
+    // across a local write and re-derives only the one client that changed,
+    // rather than discarding the window's memos and rebuilding every record and
+    // key on the UI isolate.
     group('a local write patches the derived maps in place', () {
       ClientRecord patonClient(String id, String name, String address) =>
           ClientRecord(
@@ -716,10 +698,10 @@ void main() {
       );
 
       test('an untouched client is NOT rebuilt across a write', () async {
-        // The point of the patch, asserted the only way it can be from
-        // outside: a record the write did not touch comes back as the SAME
-        // instance, which is only true if the window carried it across
-        // instead of re-running `ClientRecord.fromMap` over the whole scan.
+        // The point of the patch, asserted the only way it can be from outside:
+        // a record the write did not touch comes back as the SAME instance,
+        // which is only true if the window carried it across instead of
+        // re-running `ClientRecord.fromMap` over the whole scan.
         final docs = paton();
         when(() => snapshot.docs).thenReturn(docs);
         final r = repo();

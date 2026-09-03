@@ -64,16 +64,6 @@ typedef _WriteCase = ({
 });
 
 /// Every public method of the repository that mutates Firestore.
-///
-/// Kept honest by the `covers every mutating method in the source` test below —
-/// a new write method is a compile-free, test-free way to break history search
-/// otherwise, and the symptom is a search result opening a detail view for a
-/// document that no longer exists.
-///
-/// `keepsA1` is the window membership rule, not a detail: the window is
-/// `status whereIn terminalStatusQueryValues`, so a write that leaves `a1`
-/// non-terminal must REMOVE it rather than merge into it. `_record()` defaults
-/// to `pending`, which is why every whole-record write below drops it.
 final List<_WriteCase> _writeCases = [
   (
     method: 'addAppointment',
@@ -253,12 +243,7 @@ void main() {
 
   group('a local write PATCHES the history scan window', () {
     // The repository is a long-lived singleton, so the window outlives every
-    // autoDispose provider reading it. It used to be thrown away on every
-    // write, which made a one-field status change re-page the entire terminal
-    // archive — up to 5000 billed reads and four sequential round trips —
-    // behind whatever screen was open. Patching keeps the read, and the
-    // correctness half is that the patched window must still agree with
-    // Firestore about what is in history.
+    // autoDispose provider reading it.
 
     test(
       'control: without a write, the second search is served from cache',
@@ -316,11 +301,11 @@ void main() {
   group('the table above covers the repository', () {
     // Dart has no reflection here, so the guard is the source itself: the same
     // read-the-file posture `text_limits_test.dart` uses against
-    // `firestore.rules`. Without it, adding a write method is invisible to
-    // every test in this directory.
+    // `firestore.rules`.
 
-    /// Method name -> body, for the members of `FirebaseAppointmentsRepository`,
-    /// with comments stripped so a token quoted in prose can't count as code.
+    /// Method name -> body, for the members of
+    /// `FirebaseAppointmentsRepository`, with comments stripped so a token
+    /// quoted in prose can't count as code.
     Map<String, String> repositoryMembers() {
       final source = File(
         'lib/features/calendar/data/firebase_appointments_repository.dart',
@@ -348,8 +333,7 @@ void main() {
       };
     }
 
-    /// Anything that changes a document. `runTransaction` counts on its own —
-    /// its writes happen through the handler's `txn`, not this body.
+    /// Anything that changes a document.
     bool mutates(String body) => const [
       '.set(',
       '.update(',
@@ -383,8 +367,7 @@ void main() {
     test('every mutating public method patches or pokes', () {
       // The static half of the same rule: it fails on the method that forgot
       // the call, rather than only on the ones somebody remembered to add to
-      // the table. `_notifyLocalWrite()` is the narrow alternative, for a write
-      // that provably changes no field `matchHistoryDocs` reads.
+      // the table.
       for (final name in mutating) {
         expect(
           members[name],

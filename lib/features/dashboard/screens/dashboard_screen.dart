@@ -81,8 +81,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       scope: _tour.scope,
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
-      // Gated on the data: an ungated start against the loading skeleton
-      // finds zero targets and permanently marks the screen seen.
+      // Gated on the data: an ungated start against the loading skeleton finds
+      // zero targets and permanently marks the screen seen.
       ready: stats is AsyncData<DashboardStats>,
       autoScroll: true,
       child: _buildScaffold(context, stats),
@@ -97,8 +97,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       appBar: AppTopBar(
         title: context.l10n.dashboard_title,
         compact: context.isLandscape,
-        // A pushed route now, so back means back. The Calendar pill covers
-        // go-home.
+        // A pushed route now, so back means back.
         onBack: () => Navigator.maybePop(context),
         actions: const [AppHeaderPair()],
       ),
@@ -147,8 +146,8 @@ class _StatsList extends ConsumerWidget {
     final colorMap = ref.watch(employeeColorMapProvider);
     final nameMap = ref.watch(employeeNameMapProvider);
     final now = ref.watch(dashboardClockProvider)();
-    // List padding is zero so the hero bleeds edge-to-edge — the sections
-    // below add their own sp16 inset.
+    // List padding is zero so the hero bleeds edge-to-edge — the sections below
+    // add their own sp16 inset.
     return ListView(
       padding: EdgeInsets.zero,
       children: [
@@ -162,13 +161,7 @@ class _StatsList extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Its own provider, so changing the period recomputes four
-              // counters instead of every section on the screen. It shares the
-              // stats' sources, so by the time this subtree builds it has
-              // settled too — the guard is for the frame where it has not.
-              //
-              // An ERROR renders a retry rather than nothing: `whenOrNull`
-              // made the whole section disappear, which reads as "this period
-              // has no data" instead of "the read failed".
+              // counters instead of every section on the screen.
               ?switch (ref.watch(dashboardPeriodSummaryProvider)) {
                 AsyncData(:final value) => Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.sp24),
@@ -226,8 +219,8 @@ class _StatsList extends ConsumerWidget {
                   colorMap: colorMap,
                   nameMap: nameMap,
                   isAdmin: isAdmin,
-                  // Both default to empty, so a source still settling shows
-                  // the appointment flags rather than blocking the section.
+                  // Both default to empty, so a source still settling shows the
+                  // appointment flags rather than blocking the section.
                   neverSetUp:
                       ref.watch(neverSetUpAccountsProvider).value ?? const [],
                   availabilityConflicts:

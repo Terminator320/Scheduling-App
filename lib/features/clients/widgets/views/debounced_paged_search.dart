@@ -7,22 +7,11 @@ import 'package:scheduling/core/utils/debouncer.dart';
 /// The debounced-search half of a paged list — the ONE owner of the block
 /// `ClientsListView` and `AppointmentHistoryView` used to carry as five
 /// byte-identical members each.
-///
-/// A host keeps typing into `searchQuery`; the loaded pages filter locally on
-/// every keystroke, and [committedQuery] follows at [kSearchDebounce] so the
-/// server search fires once the typing pauses. Clearing the query commits
-/// immediately, so returning to the paged list has zero lag.
-///
-/// The `Debouncer` is built in [initState] with the logger read THERE: its
-/// callback can fire after dispose, and Riverpod 3's `ref.read` throws on an
-/// unmounted consumer, so the logger must be resolved at construction — which
-/// `Debouncer.tagged`'s required parameter enforces.
 mixin DebouncedPagedSearch<W extends ConsumerStatefulWidget>
     on ConsumerState<W> {
   late final Debouncer searchDebounce;
 
-  /// The query the server search is running for. Trails the live query by the
-  /// debounce; empty when the paged list is showing.
+  /// The query the server search is running for.
   String committedQuery = '';
 
   /// The host widget's live search text.

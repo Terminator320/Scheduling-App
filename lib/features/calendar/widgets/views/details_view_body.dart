@@ -9,7 +9,9 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
+import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
 import 'package:scheduling/features/calendar/domain/day_off_reason.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_prefill.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/domain/policies/push_back_options.dart';
@@ -34,11 +36,16 @@ class DetailsViewBody extends ConsumerWidget {
     required this.showActions,
     required this.onClose,
     super.key,
+    this.onBookAgain,
   });
 
   final AppointmentRecord appointment;
   final bool showActions;
   final VoidCallback onClose;
+
+  /// Hands a "book again" draft to the host, which closes this view and opens
+  /// the add sheet with it.
+  final ValueChanged<AppointmentPrefill>? onBookAgain;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -63,7 +70,6 @@ class DetailsViewBody extends ConsumerWidget {
         : null;
     // Push back is the admin's, on a job that still has a time to move; an
     // all-day block has no clock to shift and a closed one nothing to delay.
-    // Withheld outright when no same-day offset exists (a job at 23:50).
     final pushBackOptions = pushBackOptionsFor(appointment.startTime);
     final onPushBack =
         showActions &&
@@ -74,12 +80,24 @@ class DetailsViewBody extends ConsumerWidget {
         : null;
     // Resolved once: it gates the field record below AND the Start button.
     final canRecordFieldWork = _canRecordFieldWork(ref, appointment);
+    // Book again is the admin's, on any client job — a repeat callback most
+    // often follows a FINISHED visit, so a closed job offers it too.
+    final bookAgain =
+        onBookAgain != null &&
+            showActions &&
+            !appointment.isPersonal &&
+            appointment.clientId.trim().isNotEmpty
+        ? () => onBookAgain!(
+            AppointmentPrefill.bookAgain(
+              appointment,
+              client: client ?? placeholderClient(appointment),
+            ),
+          )
+        : null;
 
     // TIME OFF is its own body: it has no client, no address, no materials and
     // no photos, and no lifecycle to act on — so it renders who it is for,
-    // which days, and the note, and nothing else. The edit chip above it is
-    // the only action, because a day off completes itself and is undone by
-    // deleting it.
+    // which days, and the note, and nothing else.
     if (appointment.isTimeOff) {
       return _DayOffBody(
         appointment: appointment,
@@ -93,9 +111,7 @@ class DetailsViewBody extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // Cancelled visits still show the edit affordance — `showActions` is
-        // the only thing that gates it. A DONE job is the exception: its edit
-        // moves down to the action bar, which has no mark-done or cancel
-        // action left to offer there.
+        // the only thing that gates it.
         if (showActions && !data.isDone)
           Align(
             alignment: compactHeader
@@ -109,7 +125,7 @@ class DetailsViewBody extends ConsumerWidget {
           compact: compactHeader,
         ),
         // The time record outlives the job; a cancelled one has no work to
-        // time. The crew signal is only meaningful while the job is open.
+        // time.
         if (data.hasTimeRecord && !data.isCancelled)
           DetailsTimeRecordRow(
             startedAt: appointment.startedAt,
@@ -143,9 +159,7 @@ class DetailsViewBody extends ConsumerWidget {
         ),
         // Offered to a NON-ADMIN ASSIGNEE only — exactly the set the crew
         // branches of `firestore.rules` admit, so the surface and the rule
-        // cannot disagree about who may write. An admin has the edit form;
-        // a read-only surface (client job history) is an admin looking at
-        // somebody else's job and gets nothing.
+        // cannot disagree about who may write.
         if (canRecordFieldWork)
           DetailsFieldRecordView(appointment: appointment),
         DetailsActionBar(
@@ -155,23 +169,21 @@ class DetailsViewBody extends ConsumerWidget {
           isSaving: isSaving,
           showCancel: showActions,
           onEdit: showActions ? notifier.enterEditing : null,
-          // Anyone who may close the job may start it; a personal block has
-          // no arrival to record.
+          // Anyone who may close the job may start it; a personal block has no
+          // arrival to record.
           onStart:
               (showActions || canRecordFieldWork) && !appointment.isPersonal
               ? () => _onStart(context, ref, notifier)
               : null,
           onMarkDone: () => _onMarkDone(context, ref, notifier),
           onCancel: () => _onCancel(context, ref, notifier),
+          onBookAgain: bookAgain,
         ),
       ],
     );
   }
 
   /// Whether the viewer is a non-admin assignee of [appointment].
-  ///
-  /// Deliberately NOT `!showActions`: the client job-history surface passes
-  /// that too, and it is an ADMIN reading a job they are not on.
   static bool _canRecordFieldWork(
     WidgetRef ref,
     AppointmentRecord appointment,
@@ -208,11 +220,13 @@ class DetailsViewBody extends ConsumerWidget {
       ref,
       outcome,
       successMessage: context.l10n.calendar_jobStarted,
+      // Mark-done and cancel close because the job is FINISHED.
+      closeOnSuccess: false,
     );
   }
 
-  /// Push back: pick an offset, shift the job, and — like the edit form —
-  /// let the admin push through a clash the shift creates.
+  /// Push back: pick an offset, shift the job, and — like the edit form — let
+  /// the admin push through a clash the shift creates.
   Future<void> _onPushBack(
     BuildContext context,
     WidgetRef ref,
@@ -296,14 +310,13 @@ class DetailsViewBody extends ConsumerWidget {
     );
   }
 
-  /// Surfaces the result of a status write. [EventDetailsActionBusy] stays
-  /// silent because the guard already skipped the write, so the sheet just
-  /// stays open.
+  /// Surfaces the result of a status write.
   void _onStatusOutcome(
     BuildContext context,
     WidgetRef ref,
     EventDetailsActionOutcome outcome, {
     required String successMessage,
+    bool closeOnSuccess = true,
   }) {
     switch (outcome) {
       case EventDetailsActionBusy():
@@ -320,27 +333,12 @@ class DetailsViewBody extends ConsumerWidget {
             );
       case EventDetailsActionOk():
         ref.read(noticeServiceProvider).success(successMessage);
-        onClose();
+        if (closeOnSuccess) onClose();
     }
   }
 }
 
-/// Pure-data derivations for [DetailsViewBody]. These are computed once per
-/// build and don't need a context — the layout flag (`compactHeader`) and any
-/// ref-dependent callbacks stay in `build`.
-/// The opened view of a day off.
-///
-/// Leads with the typed REASON and puts the person under it (2026-08-25), the
-/// same hierarchy `_DayOffStrip` renders on the agenda — tapping a strip that
-/// says "Vacation" must not open a screen that has dropped the word. With no
-/// reason typed the person takes the headline back and the sub-line is
-/// omitted, so there is one header shape rather than two.
-///
-/// What counts as "no reason" is [dayOffReason]'s call, not this widget's:
-/// an untitled personal block saves the localized "Personal" placeholder
-/// rather than a blank, and leading with THAT is the outcome naming the person
-/// exists to avoid. It is matched across EVERY locale, not the reader's — the
-/// title is stored in whichever one the author had.
+/// Pure-data derivations for [DetailsViewBody].
 class _DayOffBody extends StatelessWidget {
   const _DayOffBody({
     required this.appointment,
@@ -452,9 +450,9 @@ class _DetailsViewData {
     ClientRecord? client,
   ) {
     final status = AppointmentStatus.fromRaw(appointment.status);
-    // The actions (mark-done/cancel/edit) are gated on the real stored
-    // status, while the header chip uses the time-derived one instead, so it
-    // matches what the card shows.
+    // The actions (mark-done/cancel/edit) are gated on the real stored status,
+    // while the header chip uses the time-derived one instead, so it matches
+    // what the card shows.
     final displayStatus = AppointmentStatus.fromRaw(appointment.displayStatus);
     final phone = (client?.phone.isNotEmpty ?? false)
         ? client!.phone
@@ -497,9 +495,7 @@ class _DetailsViewData {
   final List<ClientContact> extraContacts;
 }
 
-/// Quick-actions row plus the client panel (name/phone/address/notes). The call
-/// and directions callbacks are resolved in the parent's `build`, where `ref`
-/// lives, and a null callback just hides that affordance.
+/// Quick-actions row plus the client panel (name/phone/address/notes).
 class _ClientSection extends StatelessWidget {
   const _ClientSection({
     required this.isPersonal,

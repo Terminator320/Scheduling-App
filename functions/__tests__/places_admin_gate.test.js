@@ -1,6 +1,5 @@
 // assertAdmin and enforceDurableRateLimit are mocked here since they need live
-// Firestore. Everything else stays real so we lock in the actual guard order
-// for these billable endpoints.
+// Firestore.
 jest.mock("../security", () => {
   const actual = jest.requireActual("../security");
   const mock = {
@@ -11,14 +10,7 @@ jest.mock("../security", () => {
     }),
   };
   // The callables open with `assertAdminCall`, which COMPOSES the auth check,
-  // `assertAdmin` and `assertPayloadShape`. It holds a module-internal
-  // reference to the real `assertAdmin`, so stubbing the export alone would
-  // intercept nothing and every gate assertion below would pass vacuously —
-  // the same "mocked and never actually reached" shape that let three of these
-  // gates be deleted with a green suite. Re-composing it here against the MOCK
-  // keeps `security.assertAdmin` the thing the tests observe. The composition
-  // itself, order included, is proved against the real one in
-  // `assert_admin.test.js`.
+  // `assertAdmin` and `assertPayloadShape`.
   mock.assertAdminCall = jest.fn(async (req, allowedKeys) => {
     if (!req.auth || !req.auth.uid) {
       throw new (require("firebase-functions/v2/https").HttpsError)(
@@ -112,9 +104,7 @@ describe("placesGetDetails admin gate + validation", () => {
 
 // This block had no counterpart until 2026-09-01, and its absence was
 // MUTATION-PROVEN: deleting `await assertAdmin(req.auth.uid)` from
-// placesReverseGeocode left the whole suite green. It is the third billable
-// Places proxy and the one the live-location map calls, so an open gate means
-// any signed-in employee can bill reverse geocodes against the project key.
+// placesReverseGeocode left the whole suite green.
 describe("placesReverseGeocode admin gate + validation", () => {
   const COORDS = {lat: 45.5, lng: -73.6, locale: "en"};
 
@@ -143,8 +133,8 @@ describe("placesReverseGeocode admin gate + validation", () => {
   });
 
   test("a non-admin burns NO rate-limit slot", async () => {
-    // Guard order: assertAdmin sits ABOVE enforceDurableRateLimit, so a
-    // refused caller cannot exhaust a legitimate admin's window.
+    // Guard order: assertAdmin sits ABOVE enforceDurableRateLimit, so a refused
+    // caller cannot exhaust a legitimate admin's window.
     security.assertAdmin.mockRejectedValueOnce(new Error("admin-required"));
     await expect(
         placesReverseGeocode.run({data: COORDS, auth: ADMIN}),

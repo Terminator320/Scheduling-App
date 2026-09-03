@@ -1,18 +1,6 @@
 "use strict";
 
-/**
- * The completion signal to the dispatcher (I11, 2026-09-01).
- *
- * Nothing fired when work finished: `sendToActiveAdmins` had exactly ONE
- * caller in the whole backend — the email-change notice — so the signal a
- * dispatcher most wants was pull-only, behind drawer -> Business, while an
- * admin's home is the calendar.
- *
- * The predicate is deliberately narrow because this reaches a Lock Screen, and
- * every one of those narrowings is a decision that would be invisible if it
- * regressed: a re-save of a closed job pushing again, a cancellation reading
- * as "finished", or a day off announcing itself as completed work.
- */
+/** The completion signal to the dispatcher (I11, 2026-09-01). */
 
 const {isCrewCompletion} = require("../notification_policy");
 const {buildJobCompletedMessage} = require("../notification_messages");
@@ -38,8 +26,7 @@ describe("isCrewCompletion", () => {
 
   test("a RE-SAVE of an already-done job is silent", () => {
     // Every write re-fires this trigger — a photo append, a client-edit
-    // propagation, a recount's parent touch. Without the transition test the
-    // dispatcher gets the same notice again each time.
+    // propagation, a recount's parent touch.
     expect(
         isCrewCompletion(job({status: "done"}), job({status: "done"})),
     ).toBe(false);
@@ -47,7 +34,7 @@ describe("isCrewCompletion", () => {
 
   test("a CANCELLATION is not a completion", () => {
     // Usually the admin's own action, and telling somebody what they just did
-    // is noise. It is also plainly not "the work happened".
+    // is noise.
     expect(isCrewCompletion(job(), job({status: "cancelled"}))).toBe(false);
   });
 
@@ -155,8 +142,7 @@ describe("notifyAdminsOfCompletion", () => {
   });
 
   test("never throws, whatever the roster read does", async () => {
-    // The completion is already committed. A push failure must not fail the
-    // trigger, which would retry the whole write handler.
+    // The completion is already committed.
     const d = {
       db: {
         collection: () => {

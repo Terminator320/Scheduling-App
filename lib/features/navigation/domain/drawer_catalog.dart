@@ -10,12 +10,8 @@ typedef DrawerGroup = ({
   List<AppDestination> rows,
 });
 
-/// Grouped drawer rows for a role, grouped by WHEN you would reach for
-/// them, not by object type. Employees get TODAY + ACCOUNT only.
-///
-/// History sits under BUSINESS for an admin and under TODAY for a technician:
-/// it is the one search a technician has — their own finished and cancelled
-/// jobs — and there is no BUSINESS group to put it in for them.
+/// Grouped drawer rows for a role, grouped by WHEN you would reach for them,
+/// not by object type.
 List<DrawerGroup> drawerGroups({required bool isAdmin}) => [
   (
     title: (l10n) => l10n.nav_groupToday,
@@ -60,13 +56,8 @@ String drawerRowLabel(AppLocalizations l10n, AppDestination destination) =>
     };
 
 /// The row's icon. Seven of these are the icons the pre-redesign drawer used
-/// before P1 replaced them with bare colour squares; `dayRoute` is the one
-/// row that had no predecessor.
-///
-/// This is a second exhaustive switch beside [drawerDotColor] rather than a
-/// record returned from one, because the two answer different questions and a
-/// row's icon is stable while its hue is decoration. A new destination is a
-/// compile error in both.
+/// before P1 replaced them with bare colour squares; `dayRoute` is the one row
+/// that had no predecessor.
 IconData drawerRowIcon(AppDestination destination) => switch (destination) {
   HubTab.calendar => Icons.calendar_today_rounded,
   PushedDestination.dayRoute => Icons.route_rounded,
@@ -78,12 +69,9 @@ IconData drawerRowIcon(AppDestination destination) => switch (destination) {
   PushedDestination.settings => Icons.settings_rounded,
 };
 
-/// The row's colour. These are crew-palette hues used as decoration,
-/// so a call site must resolve them through `crewColorOf` to get the dark
-/// lift — never paint the stored value directly.
-///
-/// The eight `nav*` tokens are a SEPARATE palette from `AppColors.crewPalette`
-/// on purpose — see the note beside them in `design_tokens.dart`.
+/// The row's colour. These are crew-palette hues used as decoration, so a call
+/// site must resolve them through `crewColorOf` to get the dark lift — never
+/// paint the stored value directly.
 Color drawerDotColor(AppDestination destination) => switch (destination) {
   HubTab.calendar => AppColors.navCalendar,
   PushedDestination.dayRoute => AppColors.navDayRoute,

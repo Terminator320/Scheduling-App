@@ -11,12 +11,8 @@ enum JobTemplate {
 
   const JobTemplate(this.defaultDurationMinutes);
 
-  /// Typical on-site duration.
+  /// Typical on-site duration, seeded through `setDurationMinutes`.
   final int defaultDurationMinutes;
-
-  /// Seeded end time, clamped to the same day.
-  int endMinutesOfDay(int startMinutesOfDay) =>
-      (startMinutesOfDay + defaultDurationMinutes).clamp(0, 24 * 60 - 1);
 }
 
 /// Localized display title for a [JobTemplate] (mirrors `statusLabel`).

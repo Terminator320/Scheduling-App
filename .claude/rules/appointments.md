@@ -732,6 +732,12 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   ASSIGNEE (`activeUserIdentityProvider`), which is exactly the set those rules
   admit — never `!showActions`, which the client job-history surface also
   passes and which is an admin reading somebody else's job.
+- **"Start job" must NOT dismiss the detail sheet.** Mark-done and cancel close
+  because the job is finished; Start is mid-job, and that sheet is where the
+  crew records it — the status chips, the notes box and the photo picker are
+  all on it, and so is the "Started …" line the tap just created. It shares
+  `_onStatusOutcome` with the closing actions and passes `closeOnSuccess:
+  false`; pinned by `details_view_body_actions_test.dart`.
 - **The job time record has ONE owner, the SERVER** (2026-09-01, the audit's
   "no `startedAt`/`completedAt` anywhere"). `lifecycleStamps`
   (`functions/notification_policy.js`) decides `startedAt`/`completedAt` on
@@ -851,11 +857,41 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
 - **Job templates are display-only quick-fill, NEVER stored.** `JobTemplate`
   (`calendar/domain/models/job_template.dart`) backs the one-tap chips on the
   **add** flow only (`onApplyTemplate`, null on edit); picking one just seeds the
-  title text and — if a start time is set — the end time from
-  `defaultDurationMinutes` (clamped inside the same day). The appointment still
+  title text and the job LENGTH. The appointment still
   saves with `status: 'pending'` and whatever the admin edits afterwards; there
   is no template field on the record. Add new types to the enum + a
   `jobTemplateLabel` case + EN/FR ARB keys (mirrors `statusLabel`).
+  **A seeded length goes through `AddEventController.setDurationMinutes`, never
+  through the widget** (2026-09-02): the chip and a book-again both hand it a
+  number of minutes, it survives until a start is picked LATER (`durationMinutes`
+  on the state), and it re-owns the end — `endTimeWasPickedManually: false` — so
+  the end keeps following the start afterwards. `JobTemplate.endMinutesOfDay` was
+  its own third spelling of the clamp and is gone; the arithmetic owner is
+  `AppointmentDraftDefaults.endTimeFor`, whose only difference from
+  `defaultEndTime` is that it CLAMPS at 23:59 where the plain default WRAPS past
+  midnight. Both behaviours are pinned; don't collapse them without deciding
+  which one a bare late start should get.
+- **"Book again" carries the WHO and the WHAT, never the WHEN** (2026-09-02).
+  `AppointmentPrefill` (`calendar/domain/models/appointment_prefill.dart`) is
+  what the add sheet opens pre-filled with, for both the book-a-job flows (a
+  bare client) and the repeat callback (`AppointmentPrefill.bookAgain`). The
+  contract is the pure factory and it is pinned from BOTH sides — what carries
+  over (client, address, title, brief, materials, crew, length) and what stays
+  behind (date and times, status, photos, field notes, the time record, the crew
+  signal, series and run fields, ids and timestamps) — so a field added to
+  `AppointmentRecord` that leaks into a duplicate fails a test. The draft saves
+  as an ordinary `pending` appointment; nothing about it is a copy operation.
+  Two gates are load-bearing: the crew is re-resolved against the LIVE roster so
+  a disabled person can't be put on a new job, and the action is offered only
+  when `clientId` is non-empty — not merely when the job is not personal —
+  because the `placeholderClient` fallback composes an EMPTY `ClientRecord` on a
+  row with no client, and `clientRequired` only checks for non-null.
+- **Whether a job used its own address has ONE owner, `usesCustomAddress`**
+  (`calendar/domain/policies/custom_address_policy.dart`, 2026-09-02). The edit
+  form's address pill and the book-again prefill both ask it, and they must not
+  be able to disagree. It compares against `fullAddress` and canonicalises both
+  sides; a `noFixedAddress` client is always custom. See the comment there for
+  why the raw `address` field is the wrong side of the comparison.
 - **The dashboard's window is SPLIT: one live listener, one `.get()`.**
   `DashboardAggregator.liveRangeAround` (this ISO week through next Monday /
   the 3-day pending horizon) is watched; `historyRangeAround` (the seven

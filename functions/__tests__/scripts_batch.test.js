@@ -2,10 +2,7 @@
 
 /**
  * The shared batched-write loop behind every bulk backfill in
- * `functions/scripts/`. This is the code that performs unattended,
- * irreversible writes against prod; it was hand-spelled in four scripts and
- * tested in none. `backfill-clients-archived.js`'s one decision rides along
- * here, since it had no test either.
+ * `functions/scripts/`.
  */
 
 const {commitInBatches, MAX_BATCH_SIZE} = require("../scripts/_batch");
@@ -26,8 +23,8 @@ function fakeDb() {
       const b = {
         updates: [],
         deletes: [],
-        // Every staged op, in order, so a commit reports what it really
-        // carried rather than only its updates.
+        // Every staged op, in order, so a commit reports what it really carried
+        // rather than only its updates.
         ops: [],
         update(ref, patch) {
           b.updates.push([ref, patch]);
@@ -80,10 +77,8 @@ describe("commitInBatches", () => {
   });
 
   test("DRY RUN writes nothing at all", async () => {
-    // The safety property this module exists for: `--dry-run` is enforced
-    // here, so a script cannot forget the guard at its call site. A backfill
-    // in this directory has previously written everything under --dry-run
-    // and then thrown.
+    // The safety property this module exists for: `--dry-run` is enforced here,
+    // so a script cannot forget the guard at its call site.
     const {db, batches, commits} = fakeDb();
     const writer = commitInBatches(db, {dryRun: true, batchSize: 2});
 
@@ -94,11 +89,9 @@ describe("commitInBatches", () => {
     expect(commits).toEqual([]);
   });
 
-  // `stageDelete` had ZERO test references — the only irreversible operation
-  // in this directory, behind `backfill.js --prune-orphans`, and its own
-  // docstring says "a delete is not re-runnable". A field patch written by a
-  // forgotten guard can be undone; a deleted `usersByUid` row locks a live
-  // employee out of everything until someone notices.
+  // `stageDelete` had ZERO test references — the only irreversible operation in
+  // this directory, behind `backfill.js --prune-orphans`, and its own docstring
+  // says "a delete is not re-runnable".
   describe("stageDelete", () => {
     test("DRY RUN deletes nothing, and opens no batch at all", async () => {
       const {db, batches, commits} = fakeDb();
@@ -137,8 +130,8 @@ describe("commitInBatches", () => {
         });
 
     test("deletes and updates share one batch and one cap", async () => {
-      // They are staged through the same `stageOp`, so a mixed run must not
-      // be able to exceed the batch size by counting them separately.
+      // They are staged through the same `stageOp`, so a mixed run must not be
+      // able to exceed the batch size by counting them separately.
       const {db, commits} = fakeDb();
       const writer = commitInBatches(db, {batchSize: 2});
 

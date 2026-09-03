@@ -2,10 +2,7 @@ import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 
-/// Ordered step catalog for a scope and role. Clients, Employees, LiveMap,
-/// Dashboard and the three create-flow sheets are admin-only, so their
-/// employee catalogs are empty. A scope that mounts no tour host returns an
-/// empty catalog.
+/// Ordered step catalog for a scope and role.
 List<TourStepId> tourStepsFor(TourScope scope, {required bool isAdmin}) =>
     switch (scope) {
       DestinationTour(:final destination) => _destinationSteps(
@@ -43,8 +40,8 @@ List<TourStepId> _destinationSteps(
       TourStepId.employeesRow,
     ],
   ],
-  // Not admin-gated: a technician reaches History too (their own jobs), and
-  // the three targets — search bar, filter row, first row — render for them.
+  // Not admin-gated: a technician reaches History too (their own jobs), and the
+  // three targets — search bar, filter row, first row — render for them.
   PushedDestination.history => [
     TourStepId.historySearch,
     TourStepId.historyFilter,
@@ -58,8 +55,8 @@ List<TourStepId> _destinationSteps(
     TourStepId.settingsNotifications,
     TourStepId.settingsReplay,
   ],
-  // Employees reach the day route too, so this catalog isn't admin-gated —
-  // only the picker step is, since an employee sees just their own route.
+  // Employees reach the day route too, so this catalog isn't admin-gated — only
+  // the picker step is, since an employee sees just their own route.
   PushedDestination.dayRoute => [
     TourStepId.dayRouteDaySwitcher,
     if (isAdmin) TourStepId.dayRouteEmployee,
@@ -76,9 +73,7 @@ List<TourStepId> _destinationSteps(
   ],
 };
 
-/// The create-flow walkthroughs. Every one of these sheets is reachable only
-/// from an admin surface, so ALL the employee catalogs are empty — hence the
-/// one guard here rather than a copy of it wrapping each list.
+/// The create-flow walkthroughs.
 List<TourStepId> _formSteps(TourForm form, {required bool isAdmin}) {
   if (!isAdmin) return const [];
   return switch (form) {

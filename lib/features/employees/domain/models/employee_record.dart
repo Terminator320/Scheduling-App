@@ -32,20 +32,11 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     // 0 means no cap.
     @Default(0) int maxJobsPerDay,
     @Default(false) bool onCall,
-    // Per-person opt-out for the traffic-aware "time to leave" push. Defaults
-    // to TRUE and an absent field reads as true, matching `wantsTravelAlerts`
-    // in `functions/travel_utils.js` — every doc written before this field
-    // existed has no value, and a default of false would silence the fleet.
-    // Opting out degrades to the fixed 30-minute reminder; it does not drop
-    // the notification.
+    // Per-person opt-out for the traffic-aware "time to leave" push.
     @Default(true) bool travelAlertsEnabled,
     // NOTE: emergencyContact/emergencyPhone are NOT here — they live in
     // users/{docId}/private/emergency so rules can gate them to the admin and
-    // the person themselves. See EmergencyContact.
-    // Server timestamp, same read-only contract as ClientRecord.createdAt —
-    // though unlike that one it has no reader yet (ClientRecord's drives the
-    // dashboard trends). Parsed so the field is available and never written
-    // back: toMap() must not emit it.
+    // the person themselves.
     DateTime? createdAt,
   }) = _EmployeeRecord;
   const EmployeeRecord._();
@@ -92,19 +83,6 @@ abstract class EmployeeRecord with _$EmployeeRecord {
 
   /// Editable fields only. `createdAt` is function-owned and deliberately
   /// absent — see its declaration.
-  ///
-  /// `uid` and `status` are absent for the same reason: `uid` is on the
-  /// `/users` update denylist in `firestore.rules`, and `status` belongs to
-  /// deactivate/reactivate. Emitting either would make a whole-record write
-  /// fail with an opaque `permission-denied`.
-  ///
-  /// `email` is absent for a sharper one: it is the person's SIGN-IN identity,
-  /// and it moves through `changeEmployeeEmail` — which owns Auth and
-  /// Firestore together — or not at all. A whole-record write carrying it
-  /// would rewrite the doc while Auth kept the old address, the exact desync
-  /// that callable exists to end, and it is the key `updateEmployee`'s
-  /// uniqueness query reads. `updateEmployee` writes the normalized address
-  /// itself, after the callable has committed.
   Map<String, dynamic> toMap() => {
     'name': name,
     'firstName': firstName,
@@ -119,14 +97,13 @@ abstract class EmployeeRecord with _$EmployeeRecord {
     'maxJobsPerDay': maxJobsPerDay,
     'onCall': onCall,
     // NOTE: `travelAlertsEnabled` is deliberately NOT emitted. It is the
-    // person's own notification preference, written only by
-    // `updateSelfDetails` — an admin save must leave it exactly as it was, and
-    // emitting it here would let a future whole-record write flip somebody
-    // else's push setting.
+    // person's own notification preference, written only by `updateSelfDetails`
+    // — an admin save must leave it exactly as it was, and emitting it here
+    // would let a future whole-record write flip somebody else's push setting.
   };
 
   /// The name every in-app surface renders — the split halves first, then the
-  /// stored composed [name], then [email]. See [displayEmployeeName].
+  /// stored composed [name], then [email].
   String get displayName => displayEmployeeName(
     firstName: firstName,
     lastName: lastName,
@@ -144,9 +121,5 @@ abstract class EmployeeRecord with _$EmployeeRecord {
 
   /// The account exists with a real `uid` but setup has never been completed —
   /// the person is still on the password their admin handed them.
-  ///
-  /// This is the one non-active status the auth gates route rather than sign
-  /// out, so it is an EXACT match: an empty or unknown status must keep
-  /// falling through to the sign-out branch, exactly as `isDisabled` does.
   bool get isInvited => status == 'invited';
 }

@@ -116,8 +116,8 @@ void main() {
     () async {
       // Two inequalities bound this in practice, so it is tail risk rather than
       // steady state — but a 14-day booking across a large roster reads every
-      // overlapping job for up to 30 assignees per chunk on every Save, and this
-      // was the last query in the repository naming no ceiling at all.
+      // overlapping job for up to 30 assignees per chunk on every Save, and
+      // this was the last query in the repository naming no ceiling at all.
       await repo().findBusyEmployees(
         candidates: employees(31),
         start: start,
@@ -184,29 +184,30 @@ void main() {
     // `dailyWindowsOverlap`'s maths is pinned in its own suite, but nothing
     // ever reached it from here: every fixture above omits parseable times, so
     // the `docStart != null && docEnd != null` guard short-circuits and the
-    // filter never runs. These three give the docs real instants.
+    // filter never runs.
 
-    test('a multi-day run does NOT clash with an evening job inside it',
-        () async {
-      // The phantom clash the helper exists to remove: instant-overlap said a
-      // Mon–Fri 9-5 run collides with Wednesday 19:00, so the admin had to
-      // force every evening job through the conflict dialog.
-      // Built before `thenReturn`: mocktail refuses a `when` inside a stub.
-      final run = doc({
-        'employeeIds': ['e0'],
-        'startTime': Timestamp.fromDate(DateTime(2026, 6, 22, 9)),
-        'endTime': Timestamp.fromDate(DateTime(2026, 6, 26, 17)),
-      }, id: 'run');
-      when(() => snapshot.docs).thenReturn([run]);
+    test(
+      'a multi-day run does NOT clash with an evening job inside it',
+      () async {
+        // The phantom clash the helper exists to remove: instant-overlap said a
+        // Mon–Fri 9-5 run collides with Wednesday 19:00, so the admin had to
+        // force every evening job through the conflict dialog.
+        final run = doc({
+          'employeeIds': ['e0'],
+          'startTime': Timestamp.fromDate(DateTime(2026, 6, 22, 9)),
+          'endTime': Timestamp.fromDate(DateTime(2026, 6, 26, 17)),
+        }, id: 'run');
+        when(() => snapshot.docs).thenReturn([run]);
 
-      final result = await repo().findBusyEmployees(
-        candidates: employees(1),
-        start: DateTime(2026, 6, 24, 19),
-        end: DateTime(2026, 6, 24, 20),
-      );
+        final result = await repo().findBusyEmployees(
+          candidates: employees(1),
+          start: DateTime(2026, 6, 24, 19),
+          end: DateTime(2026, 6, 24, 20),
+        );
 
-      expect(result, isEmpty);
-    });
+        expect(result, isEmpty);
+      },
+    );
 
     test('a genuine same-window clash is still reported', () async {
       final run = doc({
@@ -225,8 +226,7 @@ void main() {
       expect(result.map((e) => e.id), ['e0']);
     });
 
-    test('a doc with unparseable times is kept, not silently dropped',
-        () async {
+    test('a doc with unparseable times is kept, not silently dropped', () async {
       // Fail toward REPORTING a clash: a legacy or console-written row with no
       // usable times must not quietly disappear from a booking-conflict check.
       final legacy = doc({
@@ -386,9 +386,7 @@ void main() {
   });
   group('the conflict query stays bounded', () {
     // Every other ceiling in this repository has a paired test; this one had
-    // none. Truncate it and clashes past the cap go unreported, so the picker
-    // under-dims and the Save-time busy prompt under-fires — a double-booking
-    // that no surface warns about.
+    // none.
     _MockDocSnap clash(int i) => doc({
       'startTime': Timestamp.fromDate(start),
       'endTime': Timestamp.fromDate(end),

@@ -6,10 +6,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 
-/// The calendar's fixed header. Deliberately NOT an `AppTopBar`: a
-/// `PreferredSizeWidget` has a height fixed per build and cannot host a week
-/// strip that rises in and out without clipping. Every other screen keeps
-/// `AppTopBar`.
+/// The calendar's fixed header.
 class CalendarHeaderBlock extends StatelessWidget {
   const CalendarHeaderBlock({
     required this.monthLabel,
@@ -25,19 +22,15 @@ class CalendarHeaderBlock extends StatelessWidget {
   final String monthLabel;
 
   /// The locale's abbreviated month, used when the full name doesn't fit the
-  /// row. Measured, not guessed from a text-scale threshold — the in-app XL
-  /// setting is exactly 1.4, which a `> 1.4` gate misses by a hair, and the
-  /// OS scaler and the locale's month lengths move independently anyway.
+  /// row.
   final String monthLabelShort;
   final String yearLabel;
   final VoidCallback onPickMonth;
 
-  /// The Day-route icon button. Passed in because it is a feature-tour target
-  /// the screen owns.
+  /// The Day-route icon button.
   final Widget routeButton;
 
-  /// The admin's crew-filter button, drawn before [routeButton]. Null for a
-  /// technician, whose calendar is already their own.
+  /// The admin's crew-filter button, drawn before [routeButton].
   final Widget? crewFilterButton;
 
   /// The collapsed week strip, or null while the month grid is expanded.
@@ -50,8 +43,6 @@ class CalendarHeaderBlock extends StatelessWidget {
     final topInset = MediaQuery.paddingOf(context).top;
 
     // No AppBar means nothing sets the system overlay style for this screen.
-    // Derived from the surface colour, not the theme brightness — the same
-    // data-driven rule as contrastingForegroundFor.
     final overlay =
         ThemeData.estimateBrightnessForColor(scheme.surface) == Brightness.dark
         ? SystemUiOverlayStyle.light
@@ -202,9 +193,7 @@ class _MonthRow extends StatelessWidget {
   final String yearLabel;
   final VoidCallback onTap;
 
-  /// Width [text] would paint at, at the ambient text scale. The painter owns a
-  /// native paragraph, so it is disposed rather than left for the finalizer —
-  /// this runs on every calendar rebuild.
+  /// Width [text] would paint at, at the ambient text scale.
   static double _widthOf(BuildContext context, String text, TextStyle? style) {
     final painter = TextPainter(
       text: TextSpan(text: text, style: style),
@@ -228,10 +217,7 @@ class _MonthRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         // Everything the month has to share the row with: the gap, the year,
-        // the gap before the chevron, and the chevron. Whatever is left is
-        // what the month name has to fit inside; if the full name doesn't, the
-        // abbreviation takes its place rather than ellipsizing "September"
-        // into a stub.
+        // the gap before the chevron, and the chevron.
         final reserved =
             AppSpacing.sp8 + _widthOf(context, yearLabel, yearStyle) + 6 + 18;
         final available = constraints.maxWidth - reserved;
@@ -250,8 +236,8 @@ class _MonthRow extends StatelessWidget {
             onTap: onTap,
             borderRadius: BorderRadius.circular(AppRadius.r8),
             child: ConstrainedBox(
-              // 40 is the painted row; the header's own padding carries it
-              // past the 48px tap floor.
+              // 40 is the painted row; the header's own padding carries it past
+              // the 48px tap floor.
               constraints: const BoxConstraints(minHeight: 40),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

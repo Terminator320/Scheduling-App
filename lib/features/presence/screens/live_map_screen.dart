@@ -52,9 +52,7 @@ class LiveMapConfig {
 }
 
 /// Admin-only live staff-location map — a colored avatar marker per active
-/// staff member, with per-person freshness and a tap-to-open info card. Sits
-/// as the hub tab between History and Settings, modeled on `HistoryScreen`
-/// for its chrome.
+/// staff member, with per-person freshness and a tap-to-open info card.
 class LiveMapScreen extends ConsumerStatefulWidget {
   const LiveMapScreen({
     required this.isAdmin,
@@ -96,8 +94,8 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   String? _lastSignature;
 
   // True once the map body (which hosts the tour's FAB targets) is rendered;
-  // gates the tour so it isn't auto-marked-seen against a body with no
-  // targets yet.
+  // gates the tour so it isn't auto-marked-seen against a body with no targets
+  // yet.
   bool _mapTargetsRendered = false;
 
   late final _tour = TourSteps(
@@ -120,14 +118,13 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Mirrors the hub's TickerMode — false when the tab is hidden or an
-    // opaque route covers the hub. Defaults to true outside the shell
-    // (standalone / tests).
+    // Mirrors the hub's TickerMode — false when the tab is hidden or an opaque
+    // route covers the hub.
     final visible = TickerMode.valuesOf(context).enabled;
 
     // Paused (tab hidden) — render the kept-alive map with the last-known
-    // markers, and don't watch the data providers, so autoDispose can tear
-    // down the presence listener and ticker.
+    // markers, and don't watch the data providers, so autoDispose can tear down
+    // the presence listener and ticker.
     final Widget body;
     if (visible) {
       body = _liveBody(context);
@@ -220,7 +217,7 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
   }
 
   /// The stored selection, or null once that person has left the current
-  /// points. Clears post-frame so a stale card doesn't render over vanished data.
+  /// points.
   String? _effectiveSelected(List<StaffMapPoint> points) {
     final id = _selectedDocId;
     if (id == null) return null;
@@ -333,17 +330,17 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     _animateCamera(CameraUpdate.newLatLngBounds(_boundsOf(points), 48));
   }
 
-  /// The map controller can outlive its platform view — a shell swap
-  /// recreates the GoogleMap subtree — so `animateCamera` can throw "used
-  /// after disposed" on a stale controller.
+  /// The map controller can outlive its platform view — a shell swap recreates
+  /// the GoogleMap subtree — so `animateCamera` can throw "used after disposed"
+  /// on a stale controller.
   void _animateCamera(CameraUpdate update) {
     final controller = _mapController;
     if (controller == null) return;
     try {
       controller.animateCamera(update);
       // google_maps_flutter throws a bare StateError from a disposed
-      // controller; there is no public API to test for that first, so the
-      // catch is intentional.
+      // controller; there is no public API to test for that first, so the catch
+      // is intentional.
       // ignore: avoid_catching_errors
     } on StateError {
       _mapController = null;
@@ -453,9 +450,9 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
     myLocationButtonEnabled: false,
     onMapCreated: config.onMapCreated,
     onTap: config.onTap,
-    // The map is a platform view nested inside a Stack/shell; without an
-    // eager recognizer the Flutter gesture arena swallows pan/zoom drags
-    // (taps still reach the map), so the map appears frozen on iOS.
+    // The map is a platform view nested inside a Stack/shell; without an eager
+    // recognizer the Flutter gesture arena swallows pan/zoom drags (taps still
+    // reach the map), so the map appears frozen on iOS.
     gestureRecognizers: const <Factory<OneSequenceGestureRecognizer>>{
       Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
     },

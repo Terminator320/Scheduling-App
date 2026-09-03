@@ -49,9 +49,7 @@ ThemeData darkTheme() => _darkThemeCache ??= _buildDarkTheme();
 
 ThemeData _buildLightTheme() {
   // onPrimary, onError and surface are left to ColorScheme.light's defaults,
-  // which already equal the tokens we want. `light_scheme_defaults_test.dart`
-  // pins them, so a framework change to those defaults fails a test instead of
-  // silently repainting the app.
+  // which already equal the tokens we want.
   const cs = ColorScheme.light(
     primary: AppColors.blue,
     primaryContainer: AppColors.blueTint,
@@ -409,13 +407,6 @@ ThemeData _buildDarkTheme() {
 }
 
 /// [base] with every text style one weight step heavier.
-///
-/// iOS **Bold Text** is a system setting the app claimed to honour on its
-/// public accessibility page while nothing in `lib/` read `boldTextOf` —
-/// Flutter surfaces the flag but applies it to nothing. Applied in
-/// `MaterialApp.builder`, where the resolved theme and the MediaQuery are both
-/// in scope, so it composes with light/dark and with high contrast rather than
-/// needing a fourth cached theme.
 ThemeData boldTextTheme(ThemeData base) {
   TextStyle? bolder(TextStyle? s) {
     if (s == null) return null;
@@ -454,12 +445,6 @@ ThemeData boldTextTheme(ThemeData base) {
 ThemeData? _highContrastLightCache;
 
 /// The light theme with lifted foregrounds, for iOS **Increase Contrast**.
-///
-/// Handed to `MaterialApp.highContrastTheme`, which is the framework's own
-/// hook: it swaps to this whenever `MediaQuery.highContrastOf` is true, so no
-/// call site branches. The changes are deliberately narrow — secondary text
-/// and hairlines are what the setting is actually for, and repainting the brand
-/// blues would make the app a different app rather than a more legible one.
 ThemeData highContrastLightTheme() => _highContrastLightCache ??= _liftContrast(
   lightTheme(),
   onSurfaceVariant: AppColors.ink,
@@ -469,8 +454,7 @@ ThemeData highContrastLightTheme() => _highContrastLightCache ??= _liftContrast(
 
 ThemeData? _highContrastDarkCache;
 
-/// The dark theme's counterpart. Same reasoning as
-/// [highContrastLightTheme].
+/// The dark theme's counterpart.
 ThemeData highContrastDarkTheme() => _highContrastDarkCache ??= _liftContrast(
   darkTheme(),
   onSurfaceVariant: AppColors.darkTextPrimary,

@@ -23,10 +23,7 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     @Default('') String address,
     @Default('') String notes,
     // What the CREW recorded on site, as distinct from [notes], which the
-    // dispatcher writes when booking. Two fields on purpose: they are written
-    // by different people under different rules, and one field would mean an
-    // assignee's write had to be allowed to overwrite the brief they were
-    // given.
+    // dispatcher writes when booking.
     @Default('') String fieldNotes,
     @Default('') String materialsNeeded,
     @Default('pending') String status,
@@ -52,8 +49,7 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     DateTime? startedAt,
     DateTime? completedAt,
     // What an assignee last signalled on the way to the job; one of
-    // `crewStatusRawValues` or empty. Written only through
-    // `updateCrewStatus`, by the person named in [crewStatusBy].
+    // `crewStatusRawValues` or empty.
     @Default('') String crewStatus,
     DateTime? crewStatusAt,
     @Default('') String crewStatusBy,
@@ -130,23 +126,11 @@ abstract class AppointmentRecord with _$AppointmentRecord {
     'isDayOff': isDayOff,
     'repeat': repeat.raw,
     'seriesId': seriesId,
-    // Single-day jobs omit run labels. Both halves are gated on the PAIR being
-    // coherent, not on `isRunMember` alone: `dayIndex` defaults to 0 when the
-    // source doc had none, and the rules bound it at `>= 1`, so a doc carrying
-    // `dayCount: 5` with no `dayIndex` would re-serialize as `dayIndex: 0` and
-    // be refused — permanently, on every edit including the cancel that would
-    // clear it. Only a console or Admin-SDK write can produce that pair, and
-    // dropping the labels repairs it where emitting a rejected value strands
-    // it. Same asymmetry as `appointmentSpanNotWidened`.
+    // Single-day jobs omit run labels.
     if (hasRunLabels) 'dayIndex': dayIndex,
     if (hasRunLabels) 'dayCount': dayCount,
     // `startedAt`, `completedAt` and the three `crewStatus*` fields are
-    // deliberately NOT here. Every client path that re-serializes a record
-    // writes through `.update()` / `txn.update()`, which MERGES, so the stored
-    // values survive an admin edit untouched — while `addAppointments` and
-    // `rewriteSeries` copies are NEW documents that must not inherit another
-    // job's time record or crew signal. The stamps have one server-side owner
-    // and the signal has one write path (`updateCrewStatus`).
+    // deliberately NOT here.
   };
 
   /// Whether the stored run pair is coherent enough to write back.
@@ -232,10 +216,6 @@ class AppointmentDateRange {
   }
 
   /// The smallest range covering both this one and [other].
-  ///
-  /// Value-equal to `this` whenever [other] already sits inside it, so a
-  /// consumer that unions a sub-range onto the calendar's window keeps the
-  /// same listener key in the common case.
   AppointmentDateRange union(AppointmentDateRange other) {
     final newStart = other.start.isBefore(start) ? other.start : start;
     final newEnd = other.end.isAfter(end) ? other.end : end;

@@ -1,26 +1,12 @@
 import 'package:intl/intl.dart';
 
-/// The most rows any month can need: 6 lead cells + 31 days spills into a
-/// sixth week (August 2026 is the case — 31 days starting Saturday).
-///
-/// **A TEST bound, not a layout one** — nothing in `lib/` reads it. The grid
-/// sizes itself from `monthGridRowCount`, which is derived per month precisely
-/// so a short month is not padded with an empty trailing week; a constant 6
-/// there is the bug that rule exists to prevent. It earns its keep in
-/// `month_grid_overscan_test.dart`, which walks every month across a leap
-/// cycle at all seven week starts and needs the worst case stated once (via
-/// `month_grid_test.dart`'s range assertion). The
-/// comment used to say "used to bound layout", which sent a reader looking for
-/// a caller that has never existed.
+/// The most rows any month can need: 6 lead cells + 31 days spills into a sixth
+/// week (August 2026 is the case — 31 days starting Saturday).
 const int monthGridMaxRows = 6;
 
 /// Dart's [DateTime.weekday] is Monday=1..Sunday=7; the grid works in
 /// Sunday=0..Saturday=6, matching intl's weekday-symbol arrays — and the same
 /// indexing `workingDays` is stored in.
-///
-/// Public because every surface that reads a Sunday-indexed list needs it, and
-/// CLAUDE.md's stated hazard is that "one missed conversion shifts a whole
-/// roster by a day". It had four spellings before; don't add a fifth.
 int sundayIndexOf(DateTime day) => day.weekday % 7;
 
 int _leadFor(DateTime month, int weekStart) =>
@@ -30,18 +16,12 @@ int _leadFor(DateTime month, int weekStart) =>
 int _daysInMonth(DateTime month) =>
     DateTime(month.year, month.month + 1, 0).day;
 
-/// Weeks [month] actually occupies at [weekStart] — 4, 5, or 6. The grid renders
-/// exactly these; a fixed 6 would trail an all-off-month week, and a fixed 5
-/// would drop the end of months like August 2026.
+/// Weeks [month] actually occupies at [weekStart] — 4, 5, or 6.
 int monthGridRowCount(DateTime month, {required int weekStart}) =>
     ((_leadFor(month, weekStart) + _daysInMonth(month)) / 7).ceil();
 
-/// The days the grid renders for [month], starting at [weekStart]
-/// (0 = Sunday … 6 = Saturday). Length is a multiple of 7 —
-/// `7 * monthGridRowCount(...)`.
-///
-/// Built with `DateTime(y, m, d + i)` rather than `add(Duration(days: 1))` so a
-/// DST transition can't shift a cell onto the wrong calendar day.
+/// The days the grid renders for [month], starting at [weekStart] (0 = Sunday …
+/// 6 = Saturday).
 List<DateTime> monthGridDays(DateTime month, {required int weekStart}) {
   final lead = _leadFor(month, weekStart);
   // Same count monthGridRowCount gives, reusing the lead already in hand.
@@ -63,13 +43,10 @@ List<DateTime> weekOf(DateTime day, {required int weekStart}) {
 
 /// Cached per locale: resolving the week start builds a `DateFormat` just to
 /// read its symbols, and the grid, the pager and the week strip each ask for it
-/// on every calendar rebuild. The app ships two locales.
+/// on every calendar rebuild.
 final _weekStartCache = <String, int>{};
 
 /// The locale's first day of the week as a Sunday-based index.
-///
-/// intl stores `FIRSTDAYOFWEEK` Monday-based (0 = Monday), so Sunday-first
-/// locales report 6.
 int weekStartForLocale(String locale) => _weekStartCache.putIfAbsent(
   locale,
   () => (_symbolsFormat(locale).dateSymbols.FIRSTDAYOFWEEK + 1) % 7,
@@ -87,10 +64,6 @@ DateFormat _symbolsFormat(String locale) =>
     _symbolsCache.putIfAbsent(locale, () => DateFormat.yMMMM(locale));
 
 /// "Wednesday, July 8, 2026" — the calendar cells' semantics label.
-///
-/// Built once per locale, NOT once per cell: a month grid renders 28-31 in-month
-/// cells and the pager keeps cached neighbours, so an unmemoized call cost
-/// 30-90 constructions on every day tap, month swipe and stream emission.
 DateFormat longDateFormatFor(String locale) =>
     _longDateCache.putIfAbsent(locale, () => DateFormat.yMMMMEEEEd(locale));
 
@@ -100,9 +73,6 @@ DateFormat weekdayAbbrevFormatFor(String locale) =>
     _weekdayAbbrevCache.putIfAbsent(locale, () => DateFormat.E(locale));
 
 /// "August 2026" — History's sticky month bar.
-///
-/// The same skeleton [_symbolsFormat] already builds per locale, exposed rather
-/// than constructed a second time.
 DateFormat monthYearFormatFor(String locale) => _symbolsFormat(locale);
 
 /// "Aug" — the History date rail's top line in search mode, where results are
@@ -110,8 +80,7 @@ DateFormat monthYearFormatFor(String locale) => _symbolsFormat(locale);
 DateFormat monthAbbrevFormatFor(String locale) =>
     _monthAbbrevCache.putIfAbsent(locale, () => DateFormat.MMM(locale));
 
-/// Narrow weekday labels ordered from the locale's first day. Never hardcode
-/// `S M T W T F S` — it is wrong for fr_CA.
+/// Narrow weekday labels ordered from the locale's first day.
 List<String> weekdayLabelsForLocale(String locale) {
   final symbols = _symbolsFormat(locale).dateSymbols;
   final start = weekStartForLocale(locale);
@@ -120,8 +89,7 @@ List<String> weekdayLabelsForLocale(String locale) {
 }
 
 /// Abbreviated weekday labels, Sunday-indexed (NOT rotated — callers that need
-/// display order rotate themselves). The narrow twin above is right for a
-/// seven-cell grid; this one is for prose, where "M, W, F" is unreadable.
+/// display order rotate themselves).
 List<String> weekdayAbbreviationsForLocale(String locale) {
   final symbols = _symbolsFormat(locale).dateSymbols;
   return [for (var i = 0; i < 7; i++) symbols.SHORTWEEKDAYS[i]];

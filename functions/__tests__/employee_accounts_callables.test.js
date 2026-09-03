@@ -1,21 +1,6 @@
 "use strict";
 
-/**
- * Ordering tests for the two employee-account callables.
- *
- * Every PURE piece here already has a suite (`performCreateAccount`,
- * `provisionAuthAccount`, `performChangeEmail`, `buildActivationPatch`). What
- * had none was the sequencing BETWEEN them — which is the entire security
- * story, and where both known bugs lived:
- *
- *   - the password reset must run only AFTER the doc transaction has claimed
- *     the person as still-`invited`;
- *   - the create rollback must delete the Auth account only when WE minted it;
- *   - the email change must write Auth FIRST and revert it if the doc fails,
- *     logging uid+docId and never the addresses (PII).
- *
- * A refactor that drops any of those passes the rest of the suite.
- */
+/** Ordering tests for the two employee-account callables. */
 
 jest.mock("firebase-admin/firestore");
 jest.mock("firebase-admin/auth");
@@ -36,14 +21,7 @@ jest.mock("../security", () => {
     }),
   };
   // The callables open with `assertAdminCall`, which COMPOSES the auth check,
-  // `assertAdmin` and `assertPayloadShape`. It holds a module-internal
-  // reference to the real `assertAdmin`, so stubbing the export alone would
-  // intercept nothing and every gate assertion below would pass vacuously —
-  // the same "mocked and never actually reached" shape that let three of these
-  // gates be deleted with a green suite. Re-composing it here against the MOCK
-  // keeps `security.assertAdmin` the thing the tests observe. The composition
-  // itself, order included, is proved against the real one in
-  // `assert_admin.test.js`.
+  // `assertAdmin` and `assertPayloadShape`.
   mock.assertAdminCall = jest.fn(async (req, allowedKeys) => {
     if (!req.auth || !req.auth.uid) {
       throw new (require("firebase-functions/v2/https").HttpsError)(
@@ -90,14 +68,8 @@ const VALID_CREATE = {
 };
 
 /**
- * Firestore double. `docs` is the users collection keyed by doc id.
- * Records an ordered trace of the operations the callables perform.
- *
- * `usersByUid` is a SEPARATE map, because changeEmployeeEmail resolves its
- * caller through that bridge rather than through assertAdmin — it has to tell
- * an admin from the person editing their own row. It defaults to an active
- * admin so every pre-existing test keeps its old meaning.
- *
+ * Firestore double. `docs` is the users collection keyed by doc id. Records an
+ * ordered trace of the operations the callables perform.
  * @param {!Object} docs Map of docId -> doc data (the `users` collection).
  * @param {!Array<string>} trace Shared ordered call log.
  * @param {!Object=} bridge Map of auth uid -> `usersByUid` doc data.
@@ -241,10 +213,7 @@ describe("createEmployeeAccount ordering", () => {
 
         // Builds at or below 1.47.0 sent `isAdmin` unconditionally, so the
         // allowlist accepted-and-ignored it until the fleet reached 1.53
-        // (retired 2026-08-29). No supported build sends it now, so it is an
-        // unexpected field like any other. This test is the tripwire: if a
-        // client is ever changed to send it again, this fails rather than the
-        // create silently breaking in production.
+        // (retired 2026-08-29).
         await expect(createEmployeeAccount.run({
           data: {...VALID_CREATE, isAdmin: true},
           auth: ADMIN,
@@ -270,9 +239,7 @@ describe("createEmployeeAccount ordering", () => {
 
         await createEmployeeAccount.run({data: VALID_CREATE, auth: ADMIN});
 
-        // The rotation must come after "db.commit". Resetting first meant a
-        // setup committing in that window left the person ACTIVE on a password
-        // nobody told them had been reverted.
+        // The rotation must come after "db.commit".
         expect(trace.indexOf("auth.updateUser"))
             .toBeGreaterThan(trace.indexOf("db.commit"));
       });
@@ -348,11 +315,7 @@ describe("createEmployeeAccount ordering", () => {
 });
 
 // The admin gate on this callable was MUTATION-PROVEN open on 2026-09-01:
-// deleting `await assertAdmin(req.auth.uid)` left all 1636 tests green. The
-// stub above is a jest.fn() nothing ever asserted, and a mocked-and-never-
-// asserted dependency reads as covered without being it. This is not a read
-// path — it mints a real Firebase Auth account through the Admin SDK, which
-// bypasses firestore.rules entirely.
+// deleting `await assertAdmin(req.auth.uid)` left all 1636 tests green.
 describe("createEmployeeAccount admin gate", () => {
   beforeEach(() => {
     security.assertAdmin.mockResolvedValue(undefined);
@@ -398,9 +361,7 @@ describe("createEmployeeAccount admin gate", () => {
   });
 
   test("a non-admin burns NO rate-limit slot", async () => {
-    // Guard order: auth -> assertAdmin -> payload -> limiter. Keeping the
-    // identity guard above the limiter is what stops a non-privileged caller
-    // exhausting a legitimate admin 20-per-hour window.
+    // Guard order: auth -> assertAdmin -> payload -> limiter.
     getFirestore.mockReturnValue(makeDb({}, []));
     getAuth.mockReturnValue(makeAuth([]));
     security.assertAdmin.mockRejectedValueOnce(new Error("admin-required"));
@@ -414,8 +375,7 @@ describe("createEmployeeAccount admin gate", () => {
 });
 
 // The entire callable wrapper was untested — only performDeleteAccount had a
-// suite — so its admin gate was mutation-proven deletable too. It removes a
-// real Firebase Auth account.
+// suite — so its admin gate was mutation-proven deletable too.
 describe("deleteEmployeeAccount callable", () => {
   const pendingDocs = () => ({
     "pending-doc": {status: "invited", uid: "pending-uid", email: "a@b.com"},
@@ -589,12 +549,6 @@ describe("completeEmployeeSetup activation", () => {
     // The mailbox check went with the shared starting password (2026-08-21):
     // the password is now a random per-account secret, so signing in is itself
     // the proof that guard used to provide.
-    //
-    // ONE anchor, and deliberately the empty token rather than
-    // `email_verified: false`: the callable can no longer distinguish true,
-    // false and absent, so three tests could not fail independently. The
-    // empty token is the strictest of the three — it also pins that the
-    // removal left no claim-shaped read behind.
     const out = await completeEmployeeSetup.run({
       data: SETUP,
       auth: {uid: "emp-uid", token: {}},

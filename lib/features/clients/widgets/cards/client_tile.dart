@@ -22,11 +22,7 @@ class ClientTile extends StatelessWidget {
   final bool selected;
 
   /// How many clients share this one's street address, when that is more than
-  /// one. Passed IN rather than looked up: the list reduces the whole window
-  /// once and hands each row its number, the way the team roster's "jobs
-  /// today" count does — a per-row provider watch would be one listener per
-  /// visible client. Null on any surface with no index to hand (the booking
-  /// flow's client picker), which simply shows no pill.
+  /// one.
   final int? buildingCount;
 
   Future<void> _open(BuildContext context) async {
@@ -57,8 +53,8 @@ class ClientTile extends StatelessWidget {
     final badges = <Widget>[
       if (client.archived) const _ArchivedPill(),
       if (hasType) _TypeChip(type: client.type),
-      // Skipped when the type chip beside it already reads "Building" — the
-      // two pills carry the same word and would render as a duplicate.
+      // Skipped when the type chip beside it already reads "Building" — the two
+      // pills carry the same word and would render as a duplicate.
       if (isShared && client.type != ClientType.building) const _BuildingPill(),
     ];
 
@@ -89,10 +85,7 @@ class ClientTile extends StatelessWidget {
   }
 }
 
-/// "Archived", as a neutral pill under the address. Neutral rather than
-/// warning-tinted: archiving is a routine filing action, not a fault. Takes
-/// the same slot colours `UserStatusChip` gives a disabled account, which
-/// carries the same "out of the working set" meaning.
+/// "Archived", as a neutral pill under the address.
 class _ArchivedPill extends StatelessWidget {
   const _ArchivedPill();
 
@@ -127,15 +120,7 @@ class _TypeChip extends StatelessWidget {
 }
 
 /// "Building", as a neutral pill under the address — this client's address is
-/// shared with others. Neutral rather than accented: it is a fact about the
-/// site, not a status, and the accent slot beside it already belongs to the
-/// client's type. It says WHAT the site is, not how many neighbours the row
-/// has: the count belongs to the Address filter menu, where it ranks one
-/// building against another.
-///
-/// Deliberately NOT tappable. The whole row is one `InkWell` that opens the
-/// client, so a tappable pill inside it is a nested gesture on a 48px target;
-/// the Address menu above the list is where filtering to a building belongs.
+/// shared with others.
 class _BuildingPill extends StatelessWidget {
   const _BuildingPill();
 

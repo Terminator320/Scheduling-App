@@ -1,28 +1,6 @@
 #!/usr/bin/env node
 // One-off, READ-ONLY: replays the Wave customer contract over every client and
 // reports what it would refuse.
-//
-// WHY: every Wave incident on record was a value Wave refused, discovered at
-// push time, where the rejection is non-retryable and therefore permanent.
-// This is the check that moves that discovery before the deploy. Run it after
-// any change to the contract, the mappers, or ClientNamePolicy.
-//
-// It reports BOTH severities, and the split is the point:
-//   BLOCKING  — Wave would refuse it; the push dead-letters permanently.
-//   ADVISORY  — Wave accepts it, but the data is wrong (a phone nobody can
-//               dial). Syncs fine; still worth fixing.
-// Reporting only the blocked clients would hide exactly the case this audit
-// first turned up on 2026-08-30.
-//
-// It writes NOTHING. Safe against production at any time.
-//
-// Usage:
-//   export GOOGLE_APPLICATION_CREDENTIALS=/path/to/prod-service-account.json
-//   node functions/scripts/audit-wave-contract.js
-//   node functions/scripts/audit-wave-contract.js --verbose
-//
-//   --verbose  lists every affected client id and its problems, not just the
-//              per-code tally.
 
 "use strict";
 
@@ -35,8 +13,7 @@ const {buildCustomerPayload} = require("../wave/customer_contract");
 const EXACT_FLAGS = ["--verbose"];
 
 /**
- * Rejects any argument this script does not recognize. The rule itself lives
- * in the shared `_flags.js`; this wrapper only supplies THIS script's list.
+ * Rejects any argument this script does not recognize.
  * @param {!Array<string>} argv Arguments after the node + script paths.
  */
 function assertKnownFlags(argv) {
@@ -50,10 +27,10 @@ const PAGE_SIZE = 500;
  * Replays the contract over every client document.
  * @param {!Object} db The Firestore handle.
  * @return {!Promise<{scanned: number, refused: number, flagged: number,
- *   byCode: !Object<string, number>, offenders: !Array<!Object>}>} The tally.
- *   `refused` counts clients with a BLOCKING problem (the push would
- *   dead-letter); `flagged` also counts advisory-only ones, which sync fine
- *   but carry data worth fixing.
+ * byCode: !Object<string, number>, offenders: !Array<!Object>}>} The tally.
+ * `refused` counts clients with a BLOCKING problem (the push would
+ * dead-letter); `flagged` also counts advisory-only ones, which sync fine
+ * but carry data worth fixing.
  */
 async function audit(db) {
   const byCode = {};
@@ -62,16 +39,16 @@ async function audit(db) {
   let refused = 0;
 
   // Paged on `__name__` so this needs no index and no orderBy field, which
-  // matters: an orderBy makes Firestore EXCLUDE any doc missing that field,
-  // and a legacy doc missing one is exactly the shape most likely to fail.
+  // matters: an orderBy makes Firestore EXCLUDE any doc missing that field, and
+  // a legacy doc missing one is exactly the shape most likely to fail.
   for await (const doc of scanByName(
       db.collection("clients"),
       {pageSize: PAGE_SIZE},
   )) {
     scanned += 1;
     // NOT gated on `ok`: an ADVISORY problem rides along on a perfectly good
-    // result, and reporting only the blocked clients would hide the case
-    // this audit first turned up.
+    // result, and reporting only the blocked clients would hide the case this
+    // audit first turned up.
     const {ok, problems} = buildCustomerPayload(doc.data() || {});
     const found = Array.isArray(problems) ? problems : [];
     if (found.length === 0) continue;
@@ -92,9 +69,9 @@ async function audit(db) {
  */
 async function main() {
   const argv = process.argv.slice(2);
-  // Read-only: `--dry-run` is not in this script's flag allowlist, so
-  // `dryRun` comes back false and the banner carries no misleading
-  // "[dry-run]" prefix — see `bootstrapScript`.
+  // Read-only: `--dry-run` is not in this script's flag allowlist, so `dryRun`
+  // comes back false and the banner carries no misleading "[dry-run]" prefix —
+  // see `bootstrapScript`.
   const {app, db} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
   const verbose = argv.includes("--verbose");
 
@@ -122,11 +99,7 @@ async function main() {
   await app.delete();
 }
 
-// Only run when invoked directly. Without this guard `main()` fired at REQUIRE
-// time against whatever credentials were ambient, so a test could not load the
-// file without running the audit — the sole script here that was shaped that
-// way. `audit` already takes an injected `db`, so the guard is all that stood
-// between it and being testable.
+// Only run when invoked directly.
 if (require.main === module) {
   main().catch((err) => {
     console.error(err && err.message ? err.message : err);

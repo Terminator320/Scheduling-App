@@ -43,8 +43,7 @@ Future<AssigneeAvailability> _resolve(
 
 void main() {
   // The production `whenLabel` formats through DateFormat, which needs locale
-  // data. Nothing reached that branch before, which is why no test here ever
-  // had to initialize it.
+  // data.
   setUpAll(() async {
     await initializeDateFormatting('en_CA');
   });
@@ -53,9 +52,9 @@ void main() {
 
   testWidgets('a PERSONAL block dims nobody, so time off stays bookable for '
       'the person who is busy', (tester) async {
-    // Dimming means untappable, and the person a day off is FOR is exactly
-    // the one most likely to have jobs that day — dimming them makes the
-    // absence unbookable and the after-save clash alert unreachable.
+    // Dimming means untappable, and the person a day off is FOR is exactly the
+    // one most likely to have jobs that day — dimming them makes the absence
+    // unbookable and the after-save clash alert unreachable.
     final availability = await _resolve(tester, date: date, isPersonal: true);
 
     expect(availability.clashes, isEmpty);
@@ -84,7 +83,7 @@ void main() {
 
   // Everything above stops at an early return, so the PRODUCTION `whenLabel`
   // was never built: the picker test injects a literal, which pins the
-  // rendering but not the string. These reach the settled branch.
+  // rendering but not the string.
   group('the when-label the nobody-free sentence names', () {
     final clash = AppointmentRecord(
       id: 'a1',

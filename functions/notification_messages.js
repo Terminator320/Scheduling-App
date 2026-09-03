@@ -8,7 +8,6 @@
  * `day_slice_utils` (the run's last work day), both of which are leaves, so it
  * closes no require cycle — nothing here requires back into
  * `notification_utils`.
- *
  * @module notification_messages
  */
 
@@ -27,9 +26,7 @@ const {
 const {whoFor: _who} = require("./job_naming");
 
 /**
- * Localized "Wed, Jul 8, 2:00 p.m." style datetime. An all-day block stores a
- * real midnight start, so speaking its clock time ("Wed, Jul 8, 12:00 a.m.")
- * would be actively wrong — the date alone is the whole of what it means.
+ * Localized "Wed, Jul 8, 2:00 p.m." style datetime.
  * @param {string} locale
  * @param {*} startTime
  * @param {boolean=} allDay
@@ -60,8 +57,7 @@ function _timeOnly(locale, startTime, allDay) {
 /**
  * Localized recurrence phrase ("every 6 months"/"aux 6 mois") for a
  * RepeatInterval raw value, mirroring RepeatInterval.raw
- * (repeat_interval.dart). Returns "" for none/unknown, so a one-off job
- * reads as a plain assignment.
+ * (repeat_interval.dart).
  * @param {string} raw
  * @param {string} locale 'en' | 'fr'.
  * @return {string}
@@ -78,17 +74,6 @@ function _repeatLabel(raw, locale) {
 
 /**
  * `_dateTime` for a message context — all-day and multi-day aware.
- *
- * A run spanning days reads as a range ("Wed, Aug 1, 9:00 a.m. – Sun, Aug 5"),
- * because naming only the first morning tells a tech nothing about a job they
- * are on for the rest of the week. The tail is date-only: the daily window
- * means the clock time is the same every day, and it has already been spoken.
- *
- * The range ends on the last day the crew STARTS work, so a night shift
- * finishing Tuesday 06:00 reads as ending Monday — `lastWorkDayMs` owns that
- * rule for both this and the widget payload. Rendered through the CLAMPED form:
- * a doc written past the cap by the console must not print a tail the counter,
- * the snapshot and the card all disagree with.
  * @param {string} locale
  * @param {!Object} c
  * @return {string}
@@ -224,9 +209,8 @@ const _MESSAGES = {
 
 /**
  * Builds a localized {title, body} for a per-appointment notification.
- * Pure — unit-testable.
  * @param {string} kind
- *   assigned|rescheduled|cancelled|removed|reminder|doneCheck.
+ * assigned|rescheduled|cancelled|removed|reminder|doneCheck.
  * @param {{clientName: string, startTime: *, address: string}} ctx
  * @param {string} locale 'en' | 'fr'.
  * @return {{title: string, body: string}}
@@ -240,7 +224,7 @@ function buildNotificationMessage(kind, ctx, locale) {
 }
 
 /**
- * Builds the nightly-digest {title, body}. Pure — unit-testable.
+ * Builds the nightly-digest {title, body}.
  * @param {!Array<!Object>} jobs Tomorrow's jobs for one employee.
  * @param {string} locale 'en' | 'fr'.
  * @return {{title: string, body: string}}
@@ -277,13 +261,7 @@ function buildDigestMessage(jobs, locale) {
 }
 
 /**
- * Builds the "an admin changed your sign-in email" {title, body}. Pure.
- *
- * The new address is IN the body on purpose: this push is the only warning the
- * person gets before their old address stops working, so it has to be
- * actionable on the lock screen rather than send them hunting. It is their own
- * address going to their own device — not a disclosure.
- *
+ * Builds the "an admin changed your sign-in email" {title, body}.
  * @param {string} email The new sign-in email.
  * @param {string} locale 'en' | 'fr'.
  * @return {{title: string, body: string}}
@@ -308,10 +286,6 @@ function buildEmailChangedMessage(email, locale) {
 
 /**
  * Tells an ADMIN that a team member moved their OWN sign-in address.
- *
- * Carries the NAME, never the address — this lands on every admin's Lock
- * Screen and an email is PII. The admin opens the roster to see the new one.
- *
  * @param {string} name The person's display name.
  * @param {string} locale 'en' or 'fr'.
  * @return {{title: string, body: string}}
@@ -336,14 +310,6 @@ function buildSelfEmailChangedMessage(name, locale) {
 
 /**
  * "Marc finished Leak fix" — the completion notice the dispatcher gets.
- *
- * Names WHO and WHAT, and nothing else: it reaches a Lock Screen, and the
- * address and the client's phone number are exactly what should not sit there.
- * Both halves fall back, because a personal job has no client and an
- * unassigned one has no crew — though `isCrewCompletion` refuses personal jobs
- * outright, so the second fallback is for a job whose assignee list was
- * emptied.
- *
  * @param {string} who The crew member's display name.
  * @param {string} what The job's client name or title.
  * @param {string} locale 'en' or 'fr'.
@@ -369,10 +335,8 @@ function buildJobCompletedMessage(who, what, locale) {
 }
 
 /**
- * "Marc is on the way to Leak fix" / "Marc is running late for Leak fix" —
- * the crew signal the dispatcher gets. Same shape and the same PII rule as
- * [buildJobCompletedMessage]: who and what, never an address or a number.
- *
+ * "Marc is on the way to Leak fix" / "Marc is running late for Leak fix" — the
+ * crew signal the dispatcher gets.
  * @param {string} kind `onMyWay` | `runningLate`.
  * @param {string} who The crew member's display name.
  * @param {string} what The job's client name or title.

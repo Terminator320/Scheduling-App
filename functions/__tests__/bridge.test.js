@@ -136,8 +136,8 @@ describe("syncUsersByUid bridge/presence isolation", () => {
     };
     presenceDelete = jest.fn().mockRejectedValue(new Error("boom"));
     // recursiveDeletes records the collection paths passed to
-    // db.recursiveDelete, and collectionDeletes records the deleted
-    // doc-marker paths.
+    // db.recursiveDelete, and collectionDeletes records the deleted doc-marker
+    // paths.
     recursiveDeletes = [];
     collectionDeletes = [];
     db = {
@@ -186,11 +186,11 @@ describe("syncUsersByUid bridge/presence isolation", () => {
   });
 
   // The doc-DELETED branch. Fourteen makeEvent(...) calls existed and not one
-  // passed `after` as null, so this path never ran — and it is the teardown
-  // for `usersByUid`, which is assertAdmin's ONLY data source and the
-  // collection every rules role gate resolves through. Break it and a deleted
-  // user's bridge row survives carrying `role: "admin", status: "active"`: a
-  // live admin credential for an account that no longer exists.
+  // passed `after` as null, so this path never ran — and it is the teardown for
+  // `usersByUid`, which is assertAdmin's ONLY data source and the collection
+  // every rules role gate resolves through. Break it and a deleted user's
+  // bridge row survives carrying `role: "admin", status: "active"`: a live
+  // admin credential for an account that no longer exists.
   test("a DELETED user doc removes its bridge row", async () => {
     presenceDelete.mockResolvedValue(undefined);
     const before = {uid: "auth1", status: "active", role: "admin"};
@@ -210,8 +210,8 @@ describe("syncUsersByUid bridge/presence isolation", () => {
 
     await syncUsersByUid.run(makeEvent("u_doc", before, null));
 
-    // Scoped to the bridge: the delivery-state purge legitimately deletes
-    // other markers on this same event.
+    // Scoped to the bridge: the delivery-state purge legitimately deletes other
+    // markers on this same event.
     expect(
         collectionDeletes.filter((p) => p.startsWith("usersByUid/")),
     ).toEqual([]);
@@ -220,8 +220,8 @@ describe("syncUsersByUid bridge/presence isolation", () => {
 
   test("a deleted user doc also revokes the Auth credential", async () => {
     // authAccessChange already pins "revokes when the user doc is deleted";
-    // this is the same rule reached through the real handler, so the two
-    // cannot drift.
+    // this is the same rule reached through the real handler, so the two cannot
+    // drift.
     presenceDelete.mockResolvedValue(undefined);
     const before = {uid: "auth1", status: "active", role: "admin"};
 
@@ -254,8 +254,8 @@ describe("syncUsersByUid bridge/presence isolation", () => {
             syncUsersByUid.run(makeEvent("u_doc", before, after)),
         ).resolves.toBeUndefined();
 
-        // Both token subcollections were recursively deleted — that's what
-        // lets us paginate past the 500-write batch cap.
+        // Both token subcollections were recursively deleted — that's what lets
+        // us paginate past the 500-write batch cap.
         expect(recursiveDeletes).toEqual([
           "users/u_doc/fcmTokens",
           "users/u_doc/liveActivityTokens",
@@ -336,9 +336,7 @@ describe("syncUsersByUid bridge/presence isolation", () => {
       async () => {
         // The hot path: My details' availability panel commits per switch with
         // no debounce, so flipping five working days is five invocations of
-        // this trigger. The bridge body is {role, docId, status} and docId is
-        // the userId in the trigger path, so an identical role/status/uid
-        // means the set() below would rewrite the exact same document.
+        // this trigger.
         const before = {
           uid: "auth1", status: "active", role: "employee",
           workingDays: [false, true, true, true, true, true, false],

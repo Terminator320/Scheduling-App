@@ -32,30 +32,13 @@ class FirebaseClientsRepository implements ClientsRepository {
   /// Injectable time source so the search-cache TTL is testable.
   final DateTime Function() _clock;
 
-  /// Bounded LRU of recent results. The dials (50 entries, 2 minutes) live on
-  /// [SearchResultCache], which the appointments repository shares — they were
-  /// two byte-identical copies of one cost decision.
+  /// Bounded LRU of recent results.
   late final SearchResultCache<ClientRecord> _searchCache = SearchResultCache(
     clock: _clock,
   );
 
   /// How long a window may be kept alive by local patches before it is re-paged
   /// regardless.
-  ///
-  /// `patched()` used to carry the ORIGINAL `fetchedAt` through, so the window
-  /// expired two minutes after the tab-open scan no matter how much activity
-  /// there had been — and the first client write after that idle re-paged all
-  /// ~700 docs, plus a `ClientRecord.fromMap` and a `buildingKeyFor` per doc
-  /// ON THE UI ISOLATE (unlike `searchClients`, which uses `compute`). It fires
-  /// from the inline add-client during booking too, when the Clients list is
-  /// not even on screen.
-  ///
-  /// Refreshing `fetchedAt` on a patch fixes that, but on its own it would let
-  /// a steadily-edited window live forever and never see a REMOTE write —
-  /// which is the only thing [SearchResultCache.ttl] protects against. This
-  /// ceiling
-  /// is what keeps that guarantee: however many local writes land, the window
-  /// is at most this stale with respect to another admin or a Cloud Function.
   static const Duration _scanWindowMaxAge = Duration(minutes: 10);
 
   // Shared name-ordered scan window serving all queries within the TTL.
@@ -63,19 +46,12 @@ class FirebaseClientsRepository implements ClientsRepository {
 
   static const int _clientScanPageSize = 500;
 
-  /// Ceiling on the paged client scan windows. Archived clients are never
-  /// deleted, so the roster only ever grows; without this the first committed
-  /// keystroke walks the whole collection and copies every raw doc map across
-  /// the `compute` isolate boundary.
+  /// Ceiling on the paged client scan windows.
   static const int _clientScanLimit = 5000;
 
   bool _isFresh(DateTime fetchedAt) => _searchCache.isFresh(fetchedAt);
 
   /// The freshness stamp a patched [window] should carry.
-  ///
-  /// Now, because the doc that just changed is ours and the rest is unchanged
-  /// since the last read — unless the window has already been kept alive past
-  /// [_scanWindowMaxAge], in which case it keeps its old stamp and ages out.
   DateTime _patchedFetchedAt(_CachedClientScanWindow window) {
     final now = _clock();
     return now.difference(window.firstFetchedAt) < _scanWindowMaxAge
@@ -84,8 +60,7 @@ class FirebaseClientsRepository implements ClientsRepository {
   }
 
   // For local writes we patch the written doc into the scan window directly, so
-  // search can recompute without an extra read. A null [data] means the doc is
-  // gone (a delete) and is dropped rather than re-appended.
+  // search can recompute without an extra read.
   void _patchWindow(String id, {Map<String, dynamic>? data}) {
     final window = _scanWindow;
     if (window != null && _isFresh(window.fetchedAt)) {
@@ -105,8 +80,7 @@ class FirebaseClientsRepository implements ClientsRepository {
     _searchCache.clear();
   }
 
-  // Page-boundary doc names keyed by id. The cursor needs the exact Firestore
-  // `name` value, not the `businessName` fallback, or we'd end up skipping docs.
+  // Page-boundary doc names keyed by id.
   final Map<String, String> _pageBoundaryNames = {};
 
   /// Page boundaries retained — ~`_clientsPageSize` × this many clients deep.
@@ -370,14 +344,7 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
     final data = doc.data;
 
     // The MATCH TEST COMES FIRST, and everything the scoring ladder needs is
-    // built below it — INCLUDING the record itself. The scan window is up to
-    // `_clientScanLimit` documents and a committed search keeps at most 25, so
-    // anything computed above this `continue` is paid ~200× over for nothing —
-    // and it is not cheap: `normalize` is eight sequential `replaceAll`s,
-    // `stripPhone` two regexes, and there were six such values per document.
-    // `ClientRecord.fromMap` was the most expensive of the lot and sat right
-    // here until 2026-08-25; `rawMatches` is its raw-map twin, beside `index`
-    // so the two field sets cannot drift.
+    // built below it — INCLUDING the record itself.
     if (!ClientSearchPolicy.rawMatches(
       data,
       queryText: normalizedQuery,
@@ -454,33 +421,23 @@ class _CachedClientScanWindow {
 
   final List<RawClientDoc> docs;
 
-  /// When this window was last considered current. A local patch moves it
-  /// forward; see `_patchedFetchedAt`.
+  /// When this window was last considered current.
   final DateTime fetchedAt;
 
-  /// When the underlying Firestore read actually happened. Never moves, so a
-  /// steadily-patched window still ages out against `_scanWindowMaxAge`.
+  /// When the underlying Firestore read actually happened.
   final DateTime firstFetchedAt;
 
   List<ClientRecord>? _records;
   Map<String, String?>? _buildingKeys;
   List<ClientBuilding>? _buildings;
 
-  /// Materialized once per window. Three reducers read this and `_patchWindow`
-  /// keeps a window alive across writes, so the Firestore read was cached
-  /// while the record-building pass re-ran on every filter tap — on the UI
-  /// isolate, unlike `searchClients`, which offloads through `compute`.
+  /// Materialized once per window.
   List<ClientRecord> get records => _records ??= [
     for (final doc in docs)
       if (doc.data['archived'] != true) ClientRecord.fromMap(doc.id, doc.data),
   ];
 
   /// Every record's building key, derived ONCE per window.
-  ///
-  /// Three surfaces want it — the Building menu's counts, the building filter
-  /// and the per-row pill — and `buildingKeyFor` is ~8 regex `replaceAll`s, a
-  /// `splitApt` and two per-codeunit `normalize` passes each, so deriving it
-  /// per surface meant paying for the whole window three times over.
   Map<String, String?> get buildingKeys =>
       _buildingKeys ??= buildingKeysIn(records);
 
@@ -491,30 +448,14 @@ class _CachedClientScanWindow {
       _buildings ??= buildingsIn(records, keys: buildingKeys);
 
   /// The window after a local write, carrying the derived maps ACROSS it.
-  ///
-  /// A local write patches one document, but building a fresh window discarded
-  /// [records] and [buildingKeys] wholesale — and `_patchWindow`'s caller
-  /// bumps `clientsRefreshProvider`, so the three building providers re-read
-  /// immediately and both maps rebuilt on the spot. At a few hundred clients
-  /// that is a `ClientRecord.fromMap` and a `buildingKeyFor` per client, on
-  /// the UI isolate (unlike `searchClients`, which offloads through
-  /// `compute`), landing right behind the archive-swipe dismissal and the
-  /// save-sheet close. Only [changedId] can have changed, so only it is
-  /// re-derived.
-  ///
-  /// [buildings] is deliberately NOT carried: it is a reduction over the two
-  /// maps rather than a per-client derivation, so recomputing it is cheap and
-  /// carrying it would mean re-deriving the count and label rules here — a
-  /// second place the building rules live, which is what `buildingsIn` taking
-  /// a required `keys` exists to prevent.
   _CachedClientScanWindow patched(
     List<RawClientDoc> next,
     String changedId, {
     required DateTime at,
   }) {
     final cachedRecords = _records;
-    // Nothing has read the derived maps yet, so there is nothing to carry and
-    // a plain window is both correct and free.
+    // Nothing has read the derived maps yet, so there is nothing to carry and a
+    // plain window is both correct and free.
     if (cachedRecords == null) {
       return _CachedClientScanWindow._patched(
         next,

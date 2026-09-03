@@ -10,30 +10,16 @@ const {
 } = require("./security");
 const {GOOGLE_MAP_API_KEY} = require("./params");
 
-// Both callables proxy the Places API v1 so the billing-sensitive key (kept
-// in Secret Manager) never ships in the Flutter binary. Clients must be
-// authenticated and pass App Check.
+// Both callables proxy the Places API v1 so the billing-sensitive key (kept in
+// Secret Manager) never ships in the Flutter binary.
 
 const PLACE_ID_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const INPUT_MAX_LEN = 200;
 
-// Per-uid sliding-window rate limit, in-memory per function instance — a
-// cheap, latency-free guard for the high-volume autocomplete path, chosen over
-// the durable Firestore limiter the other routes use because this one fires on
-// a keystroke debounce and a round-trip per request would be felt.
-//
-// BE HONEST ABOUT WHAT IT BUYS. The bucket is per INSTANCE and
-// `setGlobalOptions({maxInstances: 10})` (`index.js`) means up to ten of them,
-// so the real per-uid ceiling on a BILLED Google Places endpoint is ~200/min,
-// not 20 — and a cold start resets a bucket, so a caller who spreads requests
-// across new instances is limited by nothing here at all. That is a
-// billing-DoS bound, not a security one: `assertAdmin` + App Check mean it
-// takes a compromised admin session to reach. The real backstop is a GCP
-// billing alert on the Places API, which lives in the console and NOT in this
-// repo — if that alert does not exist, this limiter is the only thing between
-// a stolen admin session and an unbounded bill. Move to
-// `enforceDurableRateLimit` (which `placesGetDetails` below already tolerates)
-// if the latency trade ever stops being worth it.
+// Per-uid sliding-window rate limit, in-memory per function instance — a cheap,
+// latency-free guard for the high-volume autocomplete path, chosen over the
+// durable Firestore limiter the other routes use because this one fires on a
+// keystroke debounce and a round-trip per request would be felt.
 const RATE_LIMIT_MAX = 20;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const rateBuckets = new Map();
@@ -41,38 +27,20 @@ const rateBuckets = new Map();
 // placesGetDetails is low-volume, so it uses the durable Firestore cap rather
 // than the in-memory limiter, with a limit generous enough for an admin
 // entering many appointments at once.
-// Upstream budget for one Places/Geocoding request. Deliberately under the
-// client's 10 s callable timeout — see [fetchPlacesJson].
 const UPSTREAM_TIMEOUT_MS = 8_000;
 
 const PLACES_DETAILS_RATE_MAX = 40;
 const PLACES_DETAILS_RATE_WINDOW_MS = 15 * 60 * 1000;
 
 // Reverse geocoding backs the live staff-location map (tap-driven, not
-// keystroke-driven). A generous hourly cap via the durable Firestore limiter
-// covers normal admin usage while bounding cost.
+// keystroke-driven).
 const REVERSE_GEOCODE_RATE_MAX = 120;
 const REVERSE_GEOCODE_RATE_WINDOW_MS = 60 * 60 * 1000;
 const REVERSE_GEOCODE_LOCALES = new Set(["en", "fr"]);
 
 /**
- * The upstream error CODE carried by a non-200 body, or `""` when there is
- * none to read.
- *
- * Deliberately never the message, and never the body. Places API (New) and
- * the Geocoding API both echo the offending request field back in prose
- * (`Invalid value at 'input' ...`), so a rejected autocomplete request
- * carries the client street address an admin was mid-typing — into Cloud
- * Logging, where there is no retention control over it. `placesReverseGeocode`
- * opted out of body logging for exactly that reason while the two Places
- * callables opted in, which left the two paths inconsistent about the same
- * class of data.
- *
- * The codes themselves are a fixed enum vocabulary (`INVALID_ARGUMENT`,
- * `PERMISSION_DENIED`, `REQUEST_DENIED`, `RESOURCE_EXHAUSTED`) or a numeric
- * HTTP status, so they carry no caller data — and the shape test is what
- * keeps it that way if an upstream ever puts prose in the field.
- *
+ * The upstream error CODE carried by a non-200 body, or `""` when there is none
+ * to read.
  * @param {string} bodyText Raw response body.
  * @return {string} An enum-shaped code, or "".
  */
@@ -91,24 +59,17 @@ function upstreamErrorCode(bodyText) {
 
 /**
  * Handles the three things every Places/Geocoding proxy needs to check —
- * transport errors, non-200 responses, and JSON parse failures. Request
- * construction stays at each call site, since it differs per callable.
+ * transport errors, non-200 responses, and JSON parse failures.
  * @param {string} url Fully-built request URL.
  * @param {?object} options fetch() options (method, headers, body).
  * @param {{label: string, uid: string}} opts label: log-message prefix
- *   matching the callable name. uid: caller uid, logged only on transport
- *   error.
+ * matching the callable name. uid: caller uid, logged only on transport
+ * error.
  * @return {Promise<object>} parsed JSON body.
  */
 async function fetchPlacesJson(url, options, {label, uid}) {
   // `fetch()` has no default timeout in Node, so a slow upstream held the
-  // function open indefinitely. The CLIENT gives up at 10 s
-  // (`_callableTimeout`, `google_places_repository.dart`) and reports
-  // `deadline-exceeded`, but the function carried on — still spending a
-  // billed upstream call and the durable rate-limit slot it already consumed,
-  // for an answer nobody was waiting for. Budget stays UNDER the client's, so
-  // the server gives up first and the work is never orphaned; raise the two
-  // together or this stops being true.
+  // function open indefinitely.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
   try {
@@ -169,7 +130,7 @@ async function _fetchPlacesJson(url, options, {label, uid}, controller) {
 
 /**
  * Throws HttpsError("resource-exhausted") when the caller's uid exceeds
- * RATE_LIMIT_MAX requests within RATE_LIMIT_WINDOW_MS. Mutates the bucket.
+ * RATE_LIMIT_MAX requests within RATE_LIMIT_WINDOW_MS.
  * @param {string} uid Firebase Auth uid of the caller.
  */
 function enforceRateLimit(uid) {
@@ -203,8 +164,7 @@ const placesAutocomplete = onCall(
     },
     async (req) => {
       // This is admin-only — address autocomplete is only surfaced on admin
-      // appointment forms. The in-memory limiter below is a cost guard, not
-      // a hard cap.
+      // appointment forms.
       await assertAdminCall(req, new Set(["input", "sessionToken"]));
       const input = requireString(req.data, "input", INPUT_MAX_LEN);
       const sessionToken = readSessionToken(req.data);
@@ -252,8 +212,7 @@ const placesGetDetails = onCall(
       secrets: [GOOGLE_MAP_API_KEY],
     },
     async (req) => {
-      // Place details is admin-only for the same reason as autocomplete. It
-      // also keeps the durable Firestore rate cap below.
+      // Place details is admin-only for the same reason as autocomplete.
       await assertAdminCall(req, new Set(["placeId", "sessionToken"]));
       const placeId = requireString(req.data, "placeId", 256);
       if (!PLACE_ID_PATTERN.test(placeId)) {
@@ -299,8 +258,7 @@ const placesGetDetails = onCall(
 );
 
 // Reverse-geocodes a lat/lng into a human-readable address for the live
-// staff-location map. Uses the classic Geocoding API, since that's the
-// endpoint that offers reverse-geocode mode.
+// staff-location map.
 const placesReverseGeocode = onCall(
     {
       enforceAppCheck: true,
@@ -370,8 +328,8 @@ module.exports = {
   placesAutocomplete,
   placesGetDetails,
   placesReverseGeocode,
-  // Exported for jest — it is the one thing standing between a rejected
-  // address lookup and the typed street address landing in Cloud Logging.
+  // Exported for jest — it is the one thing standing between a rejected address
+  // lookup and the typed street address landing in Cloud Logging.
   upstreamErrorCode,
   // Exported for jest — the test asserts it stays under the client's own
   // callable timeout, which is the whole point of the budget.

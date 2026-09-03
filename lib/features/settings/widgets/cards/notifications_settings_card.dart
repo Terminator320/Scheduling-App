@@ -10,8 +10,7 @@ import 'package:scheduling/features/notifications/application/push_registration_
 import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
-/// OS-notification and Live Activity rows. Watches the auth/support/enabled
-/// providers; the host supplies the tap + toggle handlers.
+/// OS-notification and Live Activity rows.
 class NotificationsSettingsCard extends ConsumerWidget {
   const NotificationsSettingsCard({
     required this.onNotificationsTap,
@@ -43,8 +42,9 @@ class NotificationsSettingsCard extends ConsumerWidget {
         ref.watch(notificationAuthStatusProvider).asData?.value ??
         AuthorizationStatus.notDetermined;
     final granted = PushNotificationService.isGranted(status);
-    final liveActivityReady =
-        ref.watch(liveActivityPreferenceReadyProvider).hasValue;
+    final liveActivityReady = ref
+        .watch(liveActivityPreferenceReadyProvider)
+        .hasValue;
     // Hidden when the device/OS version can't host a Live Activity card.
     final showLiveActivity =
         (ref.watch(liveActivitySupportedProvider).asData?.value ?? false) &&

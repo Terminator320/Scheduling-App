@@ -25,11 +25,11 @@ import 'package:scheduling/features/calendar/domain/models/appointment_image.dar
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
+import 'package:scheduling/features/calendar/domain/policies/custom_address_policy.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
-import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 
 // Re-export for single-source imports.
@@ -180,11 +180,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
       } on Object catch (e, st) {
         // `.future` genuinely rejects when the stream errors before its first
         // value — the `hasError` guard above only covers an ALREADY-settled
-        // error, not one arriving during this await. This whole method runs
-        // in a DISCARDED `Future.microtask`, so an escape here reaches the
-        // zone handler: `permission-denied` degrades to non-fatal, but
-        // `unavailable` records as a FATAL, from a sheet that merely failed
-        // to prefill a client name.
+        // error, not one arriving during this await.
         logger.warn('APPT-OPEN user doc read failed', e, st);
         return;
       }
@@ -201,19 +197,10 @@ class EventDetailsController extends Notifier<EventDetailsState>
         state = state.copyWith(
           client: client,
           selectedClient: client,
-          // No-fixed-address clients always use custom mode.
-          //
-          // Compared against `fullAddress`, never the raw `address`: since the
-          // street/locality split that field is the STREET LINE only, while an
-          // appointment's address is seeded from the composed line — so a
-          // client with a city never matched and every detail opened in custom
-          // mode, retiring the client-address pill everywhere. Both sides go
-          // through `toCanonical` because the seed is stored canonicalised on
-          // save while `fullAddress` composes the display spelling.
-          useCustomAddress:
-              client.noFixedAddress ||
-              AddressParser.toCanonical(appointment.address) !=
-                  AddressParser.toCanonical(client.fullAddress),
+          useCustomAddress: usesCustomAddress(
+            appointmentAddress: appointment.address,
+            client: client,
+          ),
         );
       } else {
         state = state.copyWith(client: client);
@@ -351,18 +338,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
     return _setStatusOnRepo(appointment, 'done');
   }
 
-  /// Moves an open job into `in_progress`. The `startedAt` stamp is the
-  /// server's (`lifecycleStamps` in the write trigger), so this is the same
-  /// two-key status write as mark-done.
+  /// Moves an open job into `in_progress`.
   Future<EventDetailsActionOutcome> startJob(AppointmentRecord appointment) {
     return _setStatusOnRepo(appointment, 'in_progress');
   }
 
   /// Shifts the whole job later by [minutes], keeping its length.
-  ///
-  /// A single-document write, never the series: the visit running late is
-  /// this occurrence. The crew's "rescheduled" push needs no client work —
-  /// the server differ fires it on any `startTime` change.
   Future<EventDetailsSaveOutcome> delayAppointment(
     AppointmentRecord appointment, {
     required int minutes,
@@ -466,8 +447,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
     // Reject duplicate status writes.
     if (state.isSaving) return const EventDetailsActionBusy();
     // Offline writes would wait forever for a server ack, so Mark as complete
-    // would spin until reconnect — the one action a technician out of signal
-    // is most likely to press.
+    // would spin until reconnect — the one action a technician out of signal is
+    // most likely to press.
     if (ref.read(isOfflineProvider)) {
       return const EventDetailsActionFailed(SocketException('offline'));
     }
@@ -650,10 +631,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
     required bool checkConflicts,
   }) async {
     final seriesEditor = AppointmentSeriesEditor(repo);
-    // A run member never rewrites its series. Its `seriesId` names the run,
-    // so a rewrite would delete the run's trailing days and their photos.
-    // The picker is hidden on a run day, so this only catches a stored repeat
-    // that predates that gate.
+    // A run member never rewrites its series.
     if (repeat != savedRepeat && !appointment.isRunMember) {
       final plan = await seriesEditor.planRewrite(
         updated: updated,

@@ -10,6 +10,19 @@ alwaysApply: true
 - Don't add features beyond what was asked.
 - No dead code or commented-out blocks. Git has history.
 - Comments: one line max, only where intent isn't obvious from the code.
+  **This is enforced, not aspirational** (owner call, 2026-09-03). The rationale
+  comments in `firestore.rules` were deleted deliberately and the same trim was
+  applied across the codebase; a comment block explaining WHY a guard has its
+  shape belongs in these rules files, which is where an audit and a new session
+  actually read it. Don't restore a deleted block, and don't file its absence
+  as a finding — check whether the fact is recorded here first, and add it here
+  if it is not.
+- **Two exceptions, both mechanical.** Analyzer and linter directives
+  (`// ignore:`, `// ignore_for_file:`, `// eslint-disable*`, `@pragma`) are
+  code, not commentary. And `functions/` runs eslint's `require-jsdoc` +
+  `valid-jsdoc`, so every function there MUST carry a JSDoc block with a
+  `@param` per parameter and a `@return`: keep the skeleton and a one-line
+  description, and trim only the prose.
 
 ## Naming (Dart conventions)
 

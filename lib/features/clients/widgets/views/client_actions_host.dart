@@ -9,29 +9,14 @@ import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 
 /// Archive / delete handlers shared by the clients list and the client detail.
-///
-/// Both surfaces must agree on the notices, the CLI-ARCH / CLI-DEL log tags and
-/// the confirm copy, so the flow lives here once rather than being copied into
-/// each host — two copies of a rule whose answers must match is exactly the
-/// drift this codebase keeps paying for.
 mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
-  /// Called after a successful archive / un-archive. Deliberately separate
-  /// from [onClientDeleted]: the list just refreshes for both, but the detail
-  /// view must STAY OPEN here (so it can offer Unarchive) and dismiss there.
-  /// One shared hook could not express that difference.
+  /// Called after a successful archive / un-archive.
   void onClientArchived(ClientRecord client, {required bool archived});
 
   /// Called after a successful delete, once the record is gone.
   void onClientDeleted(ClientRecord client);
 
   /// Toggles [client]'s archived state.
-  ///
-  /// Returns true ONLY when the write committed, which is what lets the list's
-  /// full-swipe run this from `confirmDismiss` rather than `onDismissed`.
-  /// `flutter_slidable` collapses the row to zero extent BEFORE `onDismissed`,
-  /// so the three paths that write nothing — the offline guard, the reentrancy
-  /// skip and a failure — each removed a client that was never archived, and
-  /// the keyed `Slidable` kept it collapsed until a pull-to-refresh.
   Future<bool> archiveClient(ClientRecord client) async {
     final next = !client.archived;
     if (guardedOffline(
@@ -72,8 +57,7 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     }
   }
 
-  /// Confirms, then deletes [client]. The server refuses a client that still
-  /// has appointments; [ClientsFailureHasHistory] is what says so usefully.
+  /// Confirms, then deletes [client].
   Future<void> confirmDeleteClient(ClientRecord client) async {
     final confirmed = await showConfirmDialog(
       context,

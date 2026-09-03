@@ -12,11 +12,13 @@ import 'package:scheduling/features/calendar/application/appointment_form_concer
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_prefill.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 part 'add_event_controller.freezed.dart';
@@ -34,6 +36,9 @@ abstract class AddEventState
     TimeOfDay? selectedStartTime,
     TimeOfDay? selectedEndTime,
     @Default(false) bool endTimeWasPickedManually,
+
+    /// Seeded job length; the end follows the start by this many minutes.
+    int? durationMinutes,
     ClientRecord? selectedClient,
     @Default(<ClientRecord>[]) List<ClientRecord> clientResults,
     @Default(false) bool isSearchingClient,
@@ -83,10 +88,6 @@ class AddEventSubmitted extends AddEventSubmitOutcome {
   final AppointmentRecord appointment;
 
   /// Pre-booked REPEAT occurrences created alongside [appointment].
-  ///
-  /// Counts repeat copies only. A multi-day run's later days are reported by
-  /// [runDays] instead — they are the same job, and folding them in here made
-  /// a 5-day booking announce "4 future visits booked".
   final int futureBookings;
 
   /// How many days the booked run covers; 1 for an ordinary single-day job.
@@ -149,12 +150,6 @@ class AddEventController extends Notifier<AddEventState>
   }
 
   /// A multi-day draft cannot carry a hidden repeat rule.
-  ///
-  /// The picker is hidden once the span exceeds a day, so a rule chosen while
-  /// the draft was still single-day would otherwise stay in state: `submit`
-  /// books no copies for a run, yet stamps the rule on every day document —
-  /// a repeat that silently does nothing, on records that then read as both a
-  /// run and a series.
   RepeatInterval _repeatForSpan(DateTime? start, DateTime? end) =>
       runLengthDays(start, end) > 1 ? RepeatInterval.none : state.repeat;
 
@@ -184,11 +179,68 @@ class AddEventController extends Notifier<AddEventState>
     if (auto) errors = withoutKey(errors, 'endTime');
     state = state.copyWith(
       selectedStartTime: time,
-      selectedEndTime: auto
-          ? AppointmentDraftDefaults.defaultEndTime(time)
-          : state.selectedEndTime,
+      selectedEndTime: auto ? _seededEndTime(time) : state.selectedEndTime,
       errors: errors,
     );
+  }
+
+  TimeOfDay _seededEndTime(TimeOfDay start) {
+    final duration = state.durationMinutes;
+    return duration == null
+        ? AppointmentDraftDefaults.defaultEndTime(start)
+        : AppointmentDraftDefaults.endTimeFor(start, duration);
+  }
+
+  /// Seeds the job length: the end lands [minutes] after the start, clamped
+  /// inside the day — now if a start is picked, else when one is.
+  void setDurationMinutes(int minutes) {
+    final start = state.selectedStartTime;
+    if (start == null) {
+      state = state.copyWith(durationMinutes: minutes);
+      return;
+    }
+    // Seeding over a picked start re-owns the end, so it follows the start from
+    // here on even if it had been picked by hand before.
+    state = state.copyWith(
+      durationMinutes: minutes,
+      selectedEndTime: AppointmentDraftDefaults.endTimeFor(start, minutes),
+      endTimeWasPickedManually: false,
+      errors: withoutKey(state.errors, 'endTime'),
+    );
+  }
+
+  /// Seeds a draft from [prefill]: the client, whether the source used its own
+  /// address, the job length, and whichever of its crew is still assignable —
+  /// resolved against the roster STREAM's first value, so a cold provider
+  /// cannot make a carried assignee silently vanish.
+  Future<void> applyPrefill(AppointmentPrefill prefill) async {
+    final client = prefill.client;
+    if (client != null) selectClient(client);
+    // selectClient already forces custom for a client with no address; the
+    // source's own choice can only add to that, never undo it.
+    if (prefill.useCustomAddress) setUseCustomAddress(value: true);
+    final duration = prefill.durationMinutes;
+    if (duration != null) setDurationMinutes(duration);
+    if (prefill.employeeIds.isEmpty) return;
+    // Read before the await: `ref` may be unmounted by the time it resolves.
+    final logger = ref.read(loggerProvider);
+    // The roster stream is autoDispose, so this HOLDS it for the length of the
+    // read rather than trusting whatever else happens to be watching it.
+    final subscription = ref.listen(employeesStreamProvider, (_, _) {});
+    try {
+      final roster = await ref.read(employeesStreamProvider.future);
+      if (!ref.mounted) return;
+      state = state.copyWith(
+        selectedEmployees: [
+          for (final e in roster)
+            if (e.isAssignable && prefill.employeeIds.contains(e.id)) e,
+        ],
+      );
+    } catch (e, st) {
+      logger.warn('APPT-CREATE prefill roster read failed', e, st);
+    } finally {
+      subscription.close();
+    }
   }
 
   void selectEndTime(TimeOfDay time) {

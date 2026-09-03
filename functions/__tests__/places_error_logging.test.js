@@ -2,8 +2,8 @@
 
 /**
  * Pins that a non-200 from Places/Geocoding never puts the request body — and
- * therefore never puts the client street address an admin was mid-typing —
- * into Cloud Logging. Only the structured, enum-shaped upstream code is kept.
+ * therefore never puts the client street address an admin was mid-typing — into
+ * Cloud Logging.
  */
 jest.mock("../security", () => {
   const actual = jest.requireActual("../security");
@@ -15,14 +15,7 @@ jest.mock("../security", () => {
     }),
   };
   // The callables open with `assertAdminCall`, which COMPOSES the auth check,
-  // `assertAdmin` and `assertPayloadShape`. It holds a module-internal
-  // reference to the real `assertAdmin`, so stubbing the export alone would
-  // intercept nothing and every gate assertion below would pass vacuously —
-  // the same "mocked and never actually reached" shape that let three of these
-  // gates be deleted with a green suite. Re-composing it here against the MOCK
-  // keeps `security.assertAdmin` the thing the tests observe. The composition
-  // itself, order included, is proved against the real one in
-  // `assert_admin.test.js`.
+  // `assertAdmin` and `assertPayloadShape`.
   mock.assertAdminCall = jest.fn(async (req, allowedKeys) => {
     if (!req.auth || !req.auth.uid) {
       throw new (require("firebase-functions/v2/https").HttpsError)(
@@ -45,8 +38,8 @@ jest.mock("firebase-functions/logger", () => ({
 
 const {placesAutocomplete, upstreamErrorCode} = require("../places");
 
-// The shape Places API (New) actually returns on a rejected input — the
-// message quotes the offending field back, which is the whole problem.
+// The shape Places API (New) actually returns on a rejected input — the message
+// quotes the offending field back, which is the whole problem.
 const REJECTION_BODY = JSON.stringify({
   error: {
     code: 400,

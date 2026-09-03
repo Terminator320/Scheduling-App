@@ -27,20 +27,6 @@ import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/centered_error_text.dart';
 
 /// The one surface where a person edits their OWN record.
-///
-/// It exists because `/users` `allow update` is otherwise admin-only, and two
-/// grants have no other way to be exercised: the `private/emergency`
-/// subcollection (admin OR the owner) and P5's self-service clause
-/// (`isSelf() && isAvailabilityOnlyChange()`).
-///
-/// Deliberately not a general profile editor. Everything not on one of those
-/// two grants — name, role, job title, crew colour, status — stays admin-only
-/// on the Team sheet, and a control for it here would fail with an opaque
-/// `permission-denied`.
-///
-/// **Two save behaviours on one screen, on purpose** (owner call, 2026-08-10).
-/// The identity fields are explicitly saved behind a dirty-gated Save/Discard
-/// bar; the availability controls apply immediately. See the section widgets.
 class MyDetailsScreen extends ConsumerStatefulWidget {
   const MyDetailsScreen({super.key});
 
@@ -60,12 +46,6 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
   bool _onCall = false;
 
   /// The phone as STORED, not as typed.
-  ///
-  /// An availability write is one patch that carries every self-service key, so
-  /// it has to send a phone — and it must be the committed one. Sending the
-  /// identity controller's text instead would make toggling a working day
-  /// silently commit a half-typed phone number, which is exactly the auto-save
-  /// the identity bar exists to prevent.
   String _storedPhone = '';
   String _storedEmergencyContact = '';
   String _storedEmergencyPhone = '';
@@ -83,7 +63,8 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
   }
 
   void _seedEmergencyContact(EmergencyContact contact) {
-    if (_storedEmergencyContact.isNotEmpty || _storedEmergencyPhone.isNotEmpty) {
+    if (_storedEmergencyContact.isNotEmpty ||
+        _storedEmergencyPhone.isNotEmpty) {
       return;
     }
     _storedEmergencyContact = contact.contact;
@@ -91,13 +72,13 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
   }
 
   /// Identity save — the emergency contact (subcollection) AND the phone (users
-  /// doc). Two stores, so both are awaited before the success notice.
+  /// doc).
   Future<void> _saveIdentity(
     EmployeeRecord record,
     MyIdentityEdit edit,
   ) async {
-    // Set synchronously before the first await, or a double-tap starts a
-    // second concurrent write.
+    // Set synchronously before the first await, or a double-tap starts a second
+    // concurrent write.
     if (_isSaving) return;
     FocusScope.of(context).unfocus();
 
@@ -159,11 +140,6 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
   }
 
   /// Availability applies immediately (P5 spec).
-  ///
-  /// Optimistic: the local state moves first so a switch doesn't lag a
-  /// Firestore round trip, and a failure rolls it back and says so. Rolling
-  /// back matters more than the latency — a toggle left showing the new value
-  /// after a refused write is a lie about what the server holds.
   Future<void> _applyAvailability(
     EmployeeRecord record,
     List<bool> days,
@@ -235,19 +211,13 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
 
   /// Collects the new address + a re-auth password, then moves BOTH stores
   /// through the callable.
-  ///
-  /// Never a users-doc write: `email` is a sign-in identity and is deliberately
-  /// absent from the self-service rules allowlist, so Auth and Firestore move
-  /// together through `changeEmployeeEmail` or not at all.
   Future<void> _changeEmail(String docId, String currentEmail) async {
     if (_isSaving || _isEmailSheetOpen) return;
     // Its OWN guard, set synchronously before the sheet opens, rather than
     // `_isSaving`: the modal barrier is not up yet on the frame the row is
     // tapped, so an unguarded double-tap stacks two change-email sheets and
     // dismissing the top one leaves a second live — two `changeOwnEmail` calls
-    // queued back to back against a 5/hour budget. It is deliberately NOT
-    // `_isSaving`, which drives the identity Save button's spinner and would
-    // render a busy state behind a sheet that has saved nothing.
+    // queued back to back against a 5/hour budget.
     _isEmailSheetOpen = true;
     final ChangeEmailDraft? draft;
     try {
@@ -291,8 +261,8 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
       if (!mounted) return;
       // `changeOwnEmail` re-authenticates before it calls, so every
       // context-sensitive AuthFailure reaching here is from that step — the
-      // address in "no account found with this email" would be the CURRENT
-      // one, not the new one the sheet just took.
+      // address in "no account found with this email" would be the CURRENT one,
+      // not the new one the sheet just took.
       notices.error(
         failure.toLocalizedMessageInContext(
           context,
@@ -361,9 +331,7 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     final l10n = context.l10n;
     // Switch on the AsyncValue, never on `.value`: this provider awaits a
     // findUserByUid wrapped in retryAsync (500ms + 1500ms), so `.value` is null
-    // for up to ~2s on a cold read. Treating that null as an error filled the
-    // screen with "Something went wrong" before the form appeared, and built
-    // the drawer with the employee nav set for an admin.
+    // for up to ~2s on a cold read.
     final identity = ref.watch(activeUserIdentityProvider);
 
     return Scaffold(
@@ -407,13 +375,6 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     // Both reads must land before the form is safe to show: the identity
     // section seeds its controllers ONCE, and a blank-by-default field over a
     // stored value invites the person to save the blank back.
-    //
-    // A SETTLED roster that still doesn't hold us is an error, not a pending
-    // read. `myEmployeeRecordProvider` resolves the person by scanning
-    // `allUsersStreamProvider`, which is still bounded by `_userStreamLimit`.
-    // Treating that settled miss as "still loading" leaves an indefinite
-    // spinner with no error and no retry. The identity is already settled
-    // here (see the caller), so this cannot fire on a slow sign-in.
     final roster = ref.watch(allUsersStreamProvider);
     if (record == null) {
       if (roster.isLoading) {
@@ -429,8 +390,8 @@ class _MyDetailsScreenState extends ConsumerState<MyDetailsScreen> {
     if (emergency.isLoading) {
       return const Center(child: AdaptiveProgressIndicator(size: 32));
     }
-    // A failed emergency read is "we couldn't load it", never "you have none
-    // on file" — the same distinction the edit-person sheet draws.
+    // A failed emergency read is "we couldn't load it", never "you have none on
+    // file" — the same distinction the edit-person sheet draws.
     if (emergency.hasError) {
       return Center(
         child: CenteredErrorText(

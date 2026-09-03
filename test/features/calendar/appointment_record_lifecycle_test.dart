@@ -5,11 +5,6 @@ import 'package:scheduling/features/calendar/domain/appointment_status_values.da
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 
 /// The job time record and the crew signal on the record (2026-09-01).
-///
-/// Both are READ by the model and never WRITTEN through it: `toMap` omits all
-/// five fields, because every client path that re-serializes a record goes
-/// through a merging `update()`, while the create and series-copy paths write
-/// NEW documents that must not inherit another job's start time.
 void main() {
   final started = DateTime(2026, 9, 1, 9, 12);
   final done = DateTime(2026, 9, 1, 11, 40);

@@ -16,10 +16,7 @@ class SecuritySettingsCard extends StatelessWidget {
   final bool enabled;
   final bool isBusy;
 
-  /// `Future`-returning on purpose. Typed `void Function` this silently
-  /// DROPPED the host's future, so a keychain fault while writing the flag
-  /// escaped to the zone handler as a FATAL Crashlytics record and the switch
-  /// snapped back with no message at all.
+  /// `Future`-returning on purpose.
   final Future<void> Function({required bool value}) onToggleAppLock;
 
   @override

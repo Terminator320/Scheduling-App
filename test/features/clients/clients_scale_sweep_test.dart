@@ -1,6 +1,5 @@
 // Sweeps the P3 client surfaces at every text scale on a 375×667 small-phone
-// viewport, catching RenderFlex overflow before it reaches a device. The
-// fixture populates every new field so the widest rows are exercised.
+// viewport, catching RenderFlex overflow before it reaches a device.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -28,9 +27,7 @@ import '../../support/tour_test_support.dart';
 
 class _MockClientsRepo extends Mock implements ClientsRepository {}
 
-/// The client detail view holds a live listener on its doc. These sweeps only
-/// care about layout, so it yields nothing and the view renders the record it
-/// was handed.
+/// The client detail view holds a live listener on its doc.
 _MockClientsRepo _quietRepo() {
   final repo = _MockClientsRepo();
   when(

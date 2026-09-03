@@ -4,14 +4,11 @@
  * @fileoverview Pure notification POLICY — the clock/data decisions behind
  * push, extracted from notification_utils.js so the rules can be read and
  * tested without the Firestore/FCM orchestration wrapped around them.
- *
  * Everything here is a pure function of its arguments (plus the injected
  * `now`): no db, no messaging, no I/O. That is the boundary — if a helper
  * needs `deps`, it belongs in notification_utils.js, not here.
- *
  * notification_utils.js re-exports every symbol below under its original
  * name, so existing call sites and tests are unaffected.
- *
  * @module notification_policy
  */
 
@@ -30,60 +27,27 @@ const {isAlreadyExists} = require("./firestore_errors");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// How long after its endTime a job stays eligible for the overdue prompt. A
-// job left open longer than this just gets no prompt — an accepted v1 gap.
-//
-// This is BOTH the eligibility window and the sweep's query floor, because the
-// sweep queries `endTime` directly (index `(status, endTime DESC)`). It used
-// to query `startTime` and so needed a floor of this PLUS the longest bookable
-// span — about 15 days — which meant re-reading every open job started in the
-// last fortnight, every 15 minutes, to act on the few that had just ended.
-// Querying the field the rule is actually about makes the scan the width of
-// the rule. It also drops the span coupling entirely: a run longer than
-// MAX_APPOINTMENT_SPAN_DAYS (only reachable by a console or Admin-SDK write,
-// which bypass the rules' span bound) is now swept on its real end time
-// instead of falling out of the floor.
-//
-// **The WIDTH is sized against the sweep CADENCE, and the two must be revisited
-// together.** It was 24 h under the standalone `sendOverdueJobPrompts` timer
-// (`every 15 minutes`, 96 runs/day). Folding that sweep into
-// `sendUpcomingJobReminders` on 2026-08-13 tripled the cadence to 288 runs/day
-// and left the width alone, so every job sitting open past its end was re-read
-// and had its ledger `create()` re-attempted on 287 further sweeps — every one
-// of them guaranteed to fail ALREADY_EXISTS. At 2 h the window still gives 24
-// examinations per job at the current cadence (fewer wasted, more than the 8
-// the old cadence gave over the same two hours), and the ledger — never the
-// cadence — is what makes delivery at-most-once. What the extra reach actually
-// bought was the retry after a RELEASED claim (a zero-delivery pass releases it
-// for a later sweep, so an assignee registering a token late is re-tried) and
-// slack across an outage; both now span 2 h rather than a day.
+// How long after its endTime a job stays eligible for the overdue prompt.
 const OVERDUE_LOOKBACK_MS = 2 * 60 * 60 * 1000;
 
 // Safety valve bounding the candidate set so one run can't blow the function
-// timeout. Logs a warning instead of silently truncating if it's ever hit.
+// timeout.
 const OVERDUE_SWEEP_MAX = 500;
 
 // The same valve for the nightly digest, which reads a ~15-day window of open
-// jobs business-wide. Larger than OVERDUE_SWEEP_MAX because the window is
-// wider and a truncated digest means a crew is told nothing about tomorrow —
-// a silent omission, unlike an overdue nudge that simply arrives on the next
-// 5-minute run.
+// jobs business-wide.
 const DIGEST_SWEEP_MAX = 1000;
 
-// FCM's hard cap on a message's data map is 4 KB. This leaves headroom for
-// the other data keys (kind, appointment id, deep link) alongside the payload.
+// FCM's hard cap on a message's data map is 4 KB.
 const WIDGET_PAYLOAD_MAX_BYTES = 3000;
 
 // Ledger docs are useless once their occurrence ages out of eligibility, so
-// expiresAt plus a Firestore TTL policy on both ledger collections keeps
-// them from piling up forever.
+// expiresAt plus a Firestore TTL policy on both ledger collections keeps them
+// from piling up forever.
 const LEDGER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * The body every claim-ledger doc in this file is written with. `expiresAt`
- * is the ABSOLUTE deletion instant, so the Firestore TTL policy on these
- * collections must use expiration offset 0.
- *
+ * The body every claim-ledger doc in this file is written with.
  * @param {!Date} nowDate Sweep/trigger time.
  * @return {{createdAt: !Date, expiresAt: !Date}}
  */
@@ -94,9 +58,7 @@ function ledgerBody(nowDate) {
   };
 }
 
-// Statuses that leave a job open past endTime (shown as `overdue`). This is
-// deliberately an allowlist, so terminal statuses (`done`/`cancelled`,
-// legacy `completed`) stay excluded.
+// Statuses that leave a job open past endTime (shown as `overdue`).
 const OPEN_LIKE = new Set(["pending", "in_progress", "confirmed"]);
 
 // Same allowlist as an array for `where("status", "in", ...)` queries,
@@ -112,33 +74,15 @@ const KIND_PRIORITY = {
 };
 
 // Change-driven pushes go to employees only — an admin usually makes those
-// edits themselves. Time-based pushes also reach an assigned admin.
+// edits themselves.
 const CHANGE_RECIPIENT_ROLES = new Set(["employee"]);
 const TIMED_RECIPIENT_ROLES = new Set(["employee", "admin"]);
 // Admin-only fan-outs: something a person did that the managers need to know
-// about. `sendToEmployee` re-checks the recipient's role against whichever set
-// it is handed, so passing one of the two above would silently deliver nothing
-// useful here (they both admit employees).
+// about.
 const ADMIN_RECIPIENT_ROLES = new Set(["admin"]);
 
 /**
  * Normalizes an employeeIds field to an array of usable doc ids.
- *
- * Shape-validated, not merely type-checked: firestore.rules validates scalar
- * id fields with `isValidDocIdField`, but rules cannot iterate a LIST, so
- * `employeeIds` reaches here unchecked. Consumers feed these straight to
- * `db.collection("users").doc(id)`, which throws SYNCHRONOUSLY on a slash —
- * and one poisoned element in one appointment was enough to reject the whole
- * daily-digest batch and silence it for every employee.
- *
- * Deliberately NOT `security.requireDocId`, which owns the same rule for the
- * callables. Two reasons, either alone sufficient: this DROPS a bad element
- * and keeps the rest, where the callable form throws `HttpsError` — turning a
- * trigger's one poisoned id into a thrown request is the exact failure this
- * filter exists to prevent; and this module is the pure-policy half of the
- * push stack (no `deps`, no db, no messaging), so requiring `security.js`
- * would drag firebase-functions and a firebase-admin handle into it. Change
- * the 128 here and in `requireDocId`/`isValidDocIdField` together.
  * @param {*} value
  * @return {!Array<string>}
  */
@@ -156,22 +100,6 @@ function toIdList(value) {
 /**
  * Whether this write is a job the CREW just finished, worth telling the
  * dispatcher about.
- *
- * Nothing fired on completion at all: `sendToActiveAdmins` had exactly one
- * caller in the whole backend (the email-change notice), so the one signal a
- * dispatcher most wants — "the work is happening" — was pull-only and two
- * navigations deep behind drawer -> Business. The Attention list already
- * existed; nothing pushed.
- *
- * Deliberately narrow, because this reaches every admin's Lock Screen:
- *
- *  - a real TRANSITION to `done`, so a re-save of an already-closed job is
- *    silent (the same shape `diffAppointmentForNotifications` uses);
- *  - `done` only, never `cancelled` — a cancellation is usually the admin's
- *    own action, and telling them what they just did is noise;
- *  - never a PERSONAL block or time off, which are not work and whose
- *    completion is derived rather than written.
- *
  * @param {?Object} before Pre-write appointment data, or null on create.
  * @param {?Object} after Post-write appointment data, or null on delete.
  * @return {boolean}
@@ -184,22 +112,6 @@ function isCrewCompletion(before, after) {
 
 /**
  * The job time record's two stamps, decided from one write.
- *
- * `startedAt`/`completedAt` have ONE owner and it is the server: the
- * appointment write trigger applies these back onto the document, so every
- * client path that flips a status — the assignee's two-key "Start job" and
- * mark-done writes, the admin's edit form, a series propagation — lands the
- * same stamp without any of them being allowed to write it. A client cannot
- * forge a start time it did not have, and the mark-done rules branch keeps
- * its exact `['status', 'updatedAt']` key set.
- *
- * Each stamp fires on the TRANSITION only, and only when the field is still
- * absent — so the stamp-only rewrite that follows (which re-fires this same
- * trigger) decides nothing, and a re-save of a started job never moves its
- * start. A create is treated as a transition from nothing, so a document
- * created already in that state is stamped once too. Personal blocks and
- * time off are not work and get no record.
- *
  * @param {?Object} before Pre-write appointment fields (null on create).
  * @param {?Object} after Post-write appointment fields (null on delete).
  * @param {(Date|number)} now
@@ -223,22 +135,11 @@ function lifecycleStamps(before, after, now) {
   return stamps;
 }
 
-/**
- * The two crew signals an assignee may put on an open job. Hand-mirrors
- * `crewStatusRawValues` in `appointment_status_values.dart` and the
- * allowlist in the `firestore.rules` crew-status branch.
- */
+/** The two crew signals an assignee may put on an open job. */
 const CREW_STATUS_VALUES = new Set(["onMyWay", "runningLate"]);
 
 /**
  * Which crew signal this write just SENT, or null.
- *
- * Only a real transition counts: the same value re-saved (every other write
- * to the document carries it along in `after`) is silent, so an admin edit
- * or a photo append cannot re-page the office with a signal sent an hour
- * ago. Personal blocks are not work, and a closed job has nobody to be on
- * the way to — the rules refuse those writes, and this refuses to speak them.
- *
  * @param {?Object} before Pre-write appointment fields (null on create).
  * @param {?Object} after Post-write appointment fields (null on delete).
  * @return {?string} `onMyWay` | `runningLate` | null.
@@ -251,6 +152,21 @@ function crewStatusSignal(before, after) {
   if (!CREW_STATUS_VALUES.has(next)) return null;
   const prev = before ? String(before.crewStatus || "") : "";
   return next === prev ? null : next;
+}
+
+/**
+ * The display name of the assignee who sent the crew signal, or "" when the
+ * record does not carry one.
+ * @param {?Object} after Post-write appointment fields.
+ * @return {string} The name, or "" — which every message builder already
+ * renders as a nameless variant rather than a dangling sentence.
+ */
+function crewStatusSenderName(after) {
+  if (!after) return "";
+  const ids = Array.isArray(after.employeeIds) ? after.employeeIds : [];
+  const names = Array.isArray(after.employeeNames) ? after.employeeNames : [];
+  const at = ids.indexOf(String(after.crewStatusBy || ""));
+  return at < 0 ? "" : String(names[at] || "").trim();
 }
 
 /**
@@ -269,25 +185,11 @@ function _accumulate(acc, employeeDocId, kind) {
 
 /**
  * Computes the per-employee notification events for one appointment write.
- * Pure — unit-testable.
- *
- * kinds: assigned | rescheduled | cancelled | removed.
- *   - created           -> assigned for every employeeId (skipped if the doc
- *                          is created already cancelled).
- *   - deleted           -> cancelled for before.employeeIds.
- *   - status->cancelled -> cancelled for before.employeeIds.
- *   - ids removed       -> removed; ids added -> assigned; startTime changed
- *                          -> rescheduled for the ids that stayed.
- * Finished appointments (relevant endTime < now) are skipped — the gate is the
- * run's END, not its start, so a multi-day job cancelled mid-run still tells
- * its crew. One event per employee, priority
- * cancelled > removed > rescheduled > assigned.
- *
  * @param {?Object} before Pre-write appointment fields (null on create).
  * @param {?Object} after Post-write appointment fields (null on delete).
  * @param {(Date|number)} now
  * @param {string=} id This appointment's doc id (for repeat-series anchor
- *   dedup; only meaningful on create).
+ * dedup; only meaningful on create).
  * @return {!Array<{employeeDocId: string, kind: string}>}
  */
 function diffAppointmentForNotifications(before, after, now, id) {
@@ -300,9 +202,7 @@ function diffAppointmentForNotifications(before, after, now, id) {
   if (!before && after) {
     if (isCancelled(after) || !stillLive(after)) return [];
     // Only the anchor (id === seriesId) sends the assignment push, so a
-    // repeating series notifies once instead of once per pre-booked
-    // occurrence. Non-repeating appointments (empty seriesId) are never
-    // suppressed by this check.
+    // repeating series notifies once instead of once per pre-booked occurrence.
     const seriesId = String((after && after.seriesId) || "");
     if (seriesId !== "" && seriesId !== String(id)) return [];
     for (const eid of toIdList(after.employeeIds)) {
@@ -347,12 +247,11 @@ function diffAppointmentForNotifications(before, after, now, id) {
 }
 
 /**
- * Filters appointment records to those overdue for a "job finished?" prompt
- * — still open per OPEN_LIKE, with an endTime within OVERDUE_LOOKBACK_MS (2 h),
- * mirroring the app's AppointmentRecord.displayStatus. A status OPEN_LIKE
- * doesn't recognize is never swept. Pure — unit-testable.
+ * Filters appointment records to those overdue for a "job finished?" prompt —
+ * still open per OPEN_LIKE, with an endTime within OVERDUE_LOOKBACK_MS (2 h),
+ * mirroring the app's AppointmentRecord.displayStatus.
  * @param {!Array<!Object>} records Appointment records ({id, status,
- *   endTime, ...}).
+ * endTime, ...}).
  * @param {(Date|number)} now
  * @return {!Array<!Object>}
  */
@@ -363,7 +262,7 @@ function selectOverdueCandidates(records, now) {
     if (!OPEN_LIKE.has(String(r.status || "").toLowerCase())) return false;
     // A personal block is not a job to finish — "job finished?" is the wrong
     // question for a dentist appointment, and the app never shows one as
-    // overdue either (AppointmentRecord.displayStatus). Keep the two in sync.
+    // overdue either (AppointmentRecord.displayStatus).
     if (r.isPersonal === true) return false;
     const ms = toMillis(r.endTime);
     return ms != null && ms <= nowMs && ms > floorMs;
@@ -372,15 +271,7 @@ function selectOverdueCandidates(records, now) {
 
 /**
  * Groups the jobs RUNNING tomorrow (Toronto) by employee doc id, cancelled
- * excluded, each list sorted by clock time. Pure — unit-testable.
- *
- * A job counts when its run overlaps tomorrow, not merely when it starts
- * then. This is an instant-span overlap rather than the app's daily-window
- * model (`AppointmentDaySlice`), so an overnight run can still be listed on
- * the morning it finishes — over-inclusive, which is the safe direction here.
- * Plan 2 mirrored that model into JS as `./day_slice_utils` (2026-08-10) and
- * deliberately left the digest on the coarser test; switching it is a
- * behaviour change, not a port.
+ * excluded, each list sorted by clock time.
  * @param {!Array<!Object>} records Appointment records.
  * @param {(Date|number)} now
  * @return {!Object<string, !Array<!Object>>}
@@ -394,10 +285,9 @@ function groupTomorrowsJobsByEmployee(records, now) {
     if (isCancelledStatus(r.status)) continue;
     const ms = toMillis(r.startTime);
     if (ms == null) continue;
-    // Overlap, not "starts tomorrow": a multi-day run booked days ago is
-    // still on site tomorrow, and testing startTime alone told that crew
-    // "no jobs tomorrow" while they were mid-run. Falls back to the start
-    // instant when endTime is missing.
+    // Overlap, not "starts tomorrow": a multi-day run booked days ago is still
+    // on site tomorrow, and testing startTime alone told that crew "no jobs
+    // tomorrow" while they were mid-run.
     const runEndsMs = toMillis(r.endTime) ?? ms;
     if (ms >= endMs || runEndsMs < startMs) continue;
     for (const id of toIdList(r.employeeIds)) {
@@ -405,9 +295,9 @@ function groupTomorrowsJobsByEmployee(records, now) {
     }
   }
   // By CLOCK time, not the absolute instant: a run that began days ago still
-  // works its daily window tomorrow, and ordering on the raw instant floated
-  // it to the front of the list — so the digest named its time as the day's
-  // first job.
+  // works its daily window tomorrow, and ordering on the raw instant floated it
+  // to the front of the list — so the digest named its time as the day's first
+  // job.
   for (const id of Object.keys(grouped)) {
     grouped[id].sort(
         (a, b) =>
@@ -431,10 +321,8 @@ function tomorrowWindowToronto(now) {
 }
 
 /**
- * Overdue-prompt ledger doc id, keyed on the END time (that's what makes a
- * job overdue) and the recipient. That way a reschedule that moves endTime
- * re-arms the prompt, and each assignee is tracked independently. Pure —
- * unit-testable.
+ * Overdue-prompt ledger doc id, keyed on the END time (that's what makes a job
+ * overdue) and the recipient.
  * @param {string} appointmentId
  * @param {number} endTimeMillis
  * @param {string} employeeDocId
@@ -446,8 +334,6 @@ function overduePromptLedgerId(appointmentId, endTimeMillis, employeeDocId) {
 
 /**
  * True for FCM error codes meaning the token is dead and should be deleted.
- * Deliberately excludes `messaging/invalid-argument`, since that can signal
- * a bad payload rather than a bad token. Pure — unit-testable.
  * @param {string} code
  * @return {boolean}
  */
@@ -517,6 +403,7 @@ module.exports = {
   isCrewCompletion,
   lifecycleStamps,
   crewStatusSignal,
+  crewStatusSenderName,
   CREW_STATUS_VALUES,
   recordOf,
   contextFor,

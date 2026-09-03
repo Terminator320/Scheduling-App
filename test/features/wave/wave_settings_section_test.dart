@@ -164,16 +164,16 @@ void main() {
 
       expect(find.text('3 clients waiting to sync'), findsOneWidget);
       expect(find.text('2 clients failed to sync'), findsOneWidget);
-      // A dead-lettered job never retries on its own, so the recovery has to
-      // be offered right beside the count.
+      // A dead-lettered job never retries on its own, so the recovery has to be
+      // offered right beside the count.
       expect(find.text('Retry failed'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
     testWidgets('an UNKNOWN count renders nothing, never zero', (tester) async {
-      // null is not 0. Zero means the outbox is empty, which is the one
-      // reading an admin would act on by not pressing Sync — so a count the
-      // server could not take must not be able to claim it.
+      // null is not 0. Zero means the outbox is empty, which is the one reading
+      // an admin would act on by not pressing Sync — so a count the server
+      // could not take must not be able to claim it.
       final service = _mockService();
       when(service.getConnection).thenAnswer(
         (_) async => const WaveConnection(
@@ -249,8 +249,7 @@ void main() {
       tester,
     ) async {
       // The requeue is the durable half — those jobs ARE back in the queue and
-      // will drain. Reporting an error would tell the admin nothing was
-      // recovered when something was.
+      // will drain.
       final service = _mockService();
       final notices = NoticeService();
       final emitted = <String>[];
@@ -285,9 +284,9 @@ void main() {
     testWidgets('a job that dies again is surfaced as a failure, not success', (
       tester,
     ) async {
-      // The press that looked broken: the drain behind the requeue
-      // dead-letters a non-retryable job in the same call, so the failed row
-      // does not move — a success notice over it is an affirmative lie.
+      // The press that looked broken: the drain behind the requeue dead-letters
+      // a non-retryable job in the same call, so the failed row does not move —
+      // a success notice over it is an affirmative lie.
       final service = _mockService();
       final notices = NoticeService();
       final emitted = <AppNotice>[];
@@ -390,8 +389,8 @@ void main() {
       await tester.pumpWidget(_wrapSection(service));
       await tester.pumpAndSettle();
 
-      // Sync only appears once connected, so a disconnected admin can't
-      // trigger a guaranteed-to-fail sync in the first place.
+      // Sync only appears once connected, so a disconnected admin can't trigger
+      // a guaranteed-to-fail sync in the first place.
       expect(find.text('Sync with Wave'), findsNothing);
       verifyNever(service.syncCustomers);
       expect(tester.takeException(), isNull);
@@ -478,13 +477,9 @@ void main() {
     testWidgets('a NON-WaveFailure throw still surfaces a notice', (
       tester,
     ) async {
-      // Shipped as a FATAL on 2026-08-31: the catch was narrowed to
-      // `on WaveFailure`, so any other throw escaped to the zone handler with
-      // NO notice shown — the admin taps Connect and nothing visibly happens.
-      // `WaveService` maps its own throws, but the action closures also run
-      // notices, `ref.invalidate` and `setState`, so this is reachable.
-      //
-      // Narrow the catch back to `on WaveFailure` and this test fails.
+      // Shipped as a FATAL on 2026-08-31: the catch was narrowed to `on
+      // WaveFailure`, so any other throw escaped to the zone handler with NO
+      // notice shown — the admin taps Connect and nothing visibly happens.
       final service = _mockService();
       final notices = NoticeService();
       final emitted = <String>[];

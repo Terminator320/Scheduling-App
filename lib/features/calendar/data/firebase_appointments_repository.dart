@@ -37,29 +37,22 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   final CollectionReference<Map<String, dynamic>> _appointments;
   final AppLogger _logger;
 
-  /// The photo half — the `appointments/{id}/images` subcollection. A
-  /// collaborator because the migration's contract step rewrote that whole
-  /// surface; see [AppointmentImagesStore].
+  /// The photo half — the `appointments/{id}/images` subcollection.
   late final AppointmentImagesStore _images;
 
   /// Lets tests inject a fake clock so the search-cache TTL is testable.
   final DateTime Function() _clock;
 
-  /// Generates a fresh id for each write op, so all the notifications a
-  /// single write triggers collapse into one per employee.
+  /// Generates a fresh id for each write op, so all the notifications a single
+  /// write triggers collapse into one per employee.
   String _newSeriesOpId() => const Uuid().v4();
 
   static const int _historySearchPageSize = 500;
 
-  /// Ceiling on the live business-wide range listeners. Paging fixed the silent
-  /// truncation these used to have, but a listener still has to be bounded: it
-  /// is re-established per month page and held open by the calendar, the day
-  /// route, the drawer badge, the roster reducer and the dashboard at once.
+  /// Ceiling on the live business-wide range listeners.
   static const int _rangeStreamLimit = 3000;
 
-  /// Ceiling on the paged history-search scan window. The archive is only
-  /// pruned at the 2-year retention mark, so without this the first committed
-  /// keystroke walks every terminal appointment the business has ever had.
+  /// Ceiling on the paged history-search scan window.
   static const int _historySearchScanLimit = 5000;
 
   /// Ceiling on one client's paged job history.
@@ -69,62 +62,46 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   /// costs two round-trips to reach the ceiling, not twenty.
   static const int _clientHistoryPageSize = 500;
 
-  /// Bounded LRU of recent results. The dials (50 entries, 2 minutes) live on
-  /// [SearchResultCache], which the clients repository shares — they were two
-  /// byte-identical copies of one cost decision.
+  /// Bounded LRU of recent results.
   late final SearchResultCache<AppointmentRecord> _searchCache =
       SearchResultCache(clock: _clock);
 
   /// The history scan windows, keyed by scope: `''` for the business-wide
   /// archive an admin searches, or an employee doc id for that person's own
-  /// history. A technician's History is the same paged terminal archive
-  /// narrowed by `employeeIds`, so it needs its own window — the admin one
-  /// would leak every other crew member's jobs into their search.
+  /// history.
   final Map<String, _CachedHistoryScanWindow> _scanWindows = {};
 
-  static String _scopeKey(String? employeeId) => employeeId ?? '';
+  /// The map key for a scope: `''` for the admin archive, `'emp:<id>'` for one
+  /// person's.
+  static String _scopeKey(String? employeeId) =>
+      employeeId == null ? '' : 'emp:$employeeId';
+
+  /// The employee id a [_scopeKey] narrows to, or `''` for the admin archive —
+  /// which is what [_windowDoc] tests to decide whether the membership rule
+  /// applies at all.
+  static String _scopeIdOf(String key) =>
+      key.isEmpty ? '' : key.substring('emp:'.length);
 
   bool _isFresh(DateTime fetchedAt) => _searchCache.isFresh(fetchedAt);
 
   /// Merges locally-written appointments into the history scan window instead
   /// of dropping it.
-  ///
-  /// **Every appointment-write method must call this or [_notifyLocalWrite].**
-  /// It replaced `_invalidateSearchCache`, which threw the window away: a new
-  /// write path that calls neither serves stale history-search results,
-  /// including a just-deleted appointment that opens a detail view for a doc
-  /// that no longer exists.
-  ///
-  /// [changed] maps doc id to the fields just written, or null for a delete.
-  /// The window is the full paged terminal-status archive capped at
-  /// [_historySearchScanLimit] (5000), and NINE write paths used to discard it
-  /// outright — so an admin who searched History, opened a result and marked
-  /// it complete re-paged the whole archive behind the sheet: thousands of
-  /// billed reads and four sequential round trips for a one-field write, then
-  /// `compute` marshalling every raw map across the isolate boundary again. It
-  /// grows with the archive. The clients repository already solved this with
-  /// its own `_patchWindow`; this is that treatment for appointments.
-  ///
-  /// A doc whose status is no longer terminal is REMOVED rather than merged —
-  /// the window query is `status whereIn terminalStatusQueryValues`, so a job
-  /// created as `pending`, or reopened, does not belong in it. That is also
-  /// what makes `addAppointments` safe to route through here.
-  ///
-  /// ORDER is preserved, not appended to: the window is `startTime` DESC and
-  /// `searchHistory` returns it unsorted, so a re-appended doc would surface
-  /// out of order in the results list.
   void _patchWindow(Map<String, Map<String, dynamic>?> changed) {
     _searchCache.clear();
     // EVERY scope's window, not just the admin one: a technician's scoped
-    // window is the same archive narrowed, so a write that changes what
-    // history holds changes it for them too.
+    // window is the same archive narrowed, so a write that changes what history
+    // holds changes it for them too.
     for (final scope in _scanWindows.keys.toList()) {
       final window = _scanWindows[scope]!;
       if (!_isFresh(window.fetchedAt)) {
         _scanWindows.remove(scope);
         continue;
       }
-      _scanWindows[scope] = _patchedWindow(window, changed, scope: scope);
+      _scanWindows[scope] = _patchedWindow(
+        window,
+        changed,
+        scope: _scopeIdOf(scope),
+      );
     }
     if (!_localWrites.isClosed) _localWrites.add(null);
   }
@@ -146,9 +123,11 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       if (next != null) docs.add((id: doc.id, data: next));
     }
     // A job the window has never seen (a create, or one that just became
-    // terminal) goes in at its own date rather than at the end.
+    // terminal) goes in at its own date rather than at the end — but ONLY when
+    // the patch is a whole document.
     for (final entry in changed.entries) {
       if (merged.contains(entry.key)) continue;
+      if (firestoreDateTime(entry.value?['startTime']) == null) continue;
       final next = _windowDoc(const {}, entry.value, scope: scope);
       if (next == null) continue;
       docs.insert(_insertIndexFor(docs, next), (id: entry.key, data: next));
@@ -157,16 +136,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   /// The window row [patch] leaves behind, or null when the doc drops out.
-  ///
-  /// `FieldValue` sentinels are stripped: they are write instructions, not
-  /// values, and storing one would make `firestoreDateTime` read the field as
-  /// absent on the next `fromMap`. The previous value stays instead, at most
-  /// [SearchResultCache.ttl] stale.
-  ///
-  /// A scoped window additionally drops a doc whose `employeeIds` no longer
-  /// names its scope — the same membership rule the status test applies, read
-  /// from the query's other constraint: an unassigned technician must not keep
-  /// finding the job in their own history.
   static Map<String, dynamic>? _windowDoc(
     Map<String, dynamic> previous,
     Map<String, dynamic>? patch, {
@@ -201,19 +170,11 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   /// Wakes `onLocalWrite` without touching the search cache or the window.
-  ///
-  /// For a write that provably changes no field `matchHistoryDocs` reads —
-  /// the photo paths, which only ever touch the `images` subcollection and the
-  /// parent's `updatedAt`. The client job-history section still has to refetch
-  /// (the card's photo indicator reads `pictureCount`), which is what the poke
-  /// is for.
   void _notifyLocalWrite() {
     if (!_localWrites.isClosed) _localWrites.add(null);
   }
 
-  /// Unlike [_patchWindow] this does NOT poke `_localWrites`. Its callers are
-  /// signing the user out, and waking every `onLocalWrite` listener on the way
-  /// would refetch against a credential that is about to be revoked.
+  /// Unlike [_patchWindow] this does NOT poke `_localWrites`.
   @override
   void clearCaches() {
     _searchCache.clear();
@@ -286,9 +247,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         // The one client write of this counter the rules allow, and the reason
         // "absent" is not a state anything downstream has to interpret: the
         // recount trigger only fires on a photo write, so a job created without
-        // it would read as count-unknown until its first photo. It backs the
-        // card's photo indicator only — never gate a subcollection read on it
-        // (see `_loadStoredPictures`).
+        // it would read as count-unknown until its first photo.
         'pictureCount': 0,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -421,20 +380,13 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   // NOT delegated to `updateAppointmentStatuses([id])`, though the bodies look
   // duplicated: this writes the document DIRECTLY while the plural commits a
-  // WriteBatch. The single write is the employee mark-done path, which the
-  // rules gate with `affectedKeys().hasOnly(['status', 'updatedAt'])` — the
-  // most security-sensitive write in the app — and it is pinned field-by-field
-  // by `firebase_appointments_repository_status_test.dart`. Collapsing the two
-  // buys ~18 lines and pays for them by routing that path through a different
-  // Firestore mechanism.
+  // WriteBatch.
   @override
   Future<void> updateFieldNotes({
     required String id,
     required String notes,
   }) async {
-    // EXACTLY the two keys the assignee rules branch allows. Anything else —
-    // including a `seriesOpId`, which every other write here mints — is
-    // refused as an opaque `permission-denied`.
+    // EXACTLY the two keys the assignee rules branch allows.
     await _appointments.doc(id).update({
       'fieldNotes': notes,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -510,10 +462,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     if (ids.isEmpty) return;
     // ONE shared op id across the batch, so `claimSeriesNotice` collapses the
     // whole run into a single push instead of one per day — the same claim
-    // `updateAppointments` and `rewriteSeries` make. Minted for a cancel only,
-    // matching `updateAppointmentStatus`: the employee mark-done rule is
-    // `affectedKeys().hasOnly(['status', 'updatedAt'])`, and an extra key there
-    // is rejected as `permission-denied`.
+    // `updateAppointments` and `rewriteSeries` make.
     final opId = _newSeriesOpId();
     final batch = _appointments.firestore.batch();
     for (final id in ids) {
@@ -590,12 +539,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   /// The terminal archive, business-wide or narrowed to one assignee.
-  ///
-  /// Shared by the paged History list and the search scan window so the two
-  /// cannot disagree about what a technician's history IS. The `arrayContains`
-  /// is also what satisfies the rules for a non-admin: a LIST query is
-  /// evaluated against its constraints, and `isAssignedEmployee` needs the
-  /// caller's own doc id in `employeeIds`.
   Query<Map<String, dynamic>> _historyQuery(String? employeeId) {
     Query<Map<String, dynamic>> query = _appointments;
     if (employeeId != null) {
@@ -642,11 +585,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     );
     // A multi-day run is ONE visit stored as one document per work day, so
     // listing every document rendered a Monday-to-Friday job as five identical
-    // rows — and burned five of the section's 50-row render bound. Day 1
-    // carries the run and is the row worth showing; the card already says
-    // "Day 1 of 5". Filtered HERE rather than in the query: only a run member
-    // stores `dayIndex`, so a server-side inequality would need a second
-    // composite AND would drop every document that predates the field.
+    // rows — and burned five of the section's 50-row render bound.
     return docs
         .map((doc) => _recordFrom(doc.id, doc.data()))
         .where((record) => record.dayIndex <= 1)
@@ -735,9 +674,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     if (candidates.isEmpty) return const [];
 
     // The busy PEOPLE are the clashing records' assignees: same query, same
-    // rule, one owner. Spelled inline here once, and the two answers drifting
-    // is exactly the bug that would leave the picker dimming someone this
-    // prompt then waves through.
+    // rule, one owner.
     final clashes = await findClashingAppointments(
       employeeIds: candidates.map((e) => e.id).toList(),
       start: start,
@@ -758,25 +695,12 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }) async {
     if (employeeIds.isEmpty) return const [];
 
-    // Deduped by doc id: a job assigned to two people in different 30-id
-    // chunks comes back from both queries.
+    // Deduped by doc id: a job assigned to two people in different 30-id chunks
+    // comes back from both queries.
     final found = <String, AppointmentRecord>{};
     // Read off the RAW map, which only this layer sees: the record substitutes
     // a placeholder instant for a time it could not parse, so by the time the
     // rule runs the two are indistinguishable.
-    //
-    // This covers an UNPARSEABLE instant, not a MISSING one, and the gap is
-    // structural rather than an oversight. `_conflictSnapshots` filters on
-    // `endTime`/`startTime`, and Firestore excludes a document that lacks the
-    // filtered field entirely, so a row with no `endTime` never reaches this
-    // loop to be classified — no bound on that field can see it. Reaching one
-    // would mean dropping both bounds and scanning every appointment for the
-    // crew, which is a real read cost for a row shape that does not exist:
-    // verified 2026-09-01 against prod, all 76 appointments carry an
-    // `endTime`. The Dart model always writes both instants, so only a
-    // console-written or pre-migration row could lack one (the case
-    // `_recordFrom`'s breadcrumb exists for, and `day_slice_utils.js` handles
-    // server-side). If such a row is ever found, this is where it hides.
     final windowUnknownIds = <String>{};
     for (final snapshot in await _conflictSnapshots(
       employeeIds: employeeIds,
@@ -806,12 +730,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   /// The chunked overlap prefilter both conflict reads run.
-  ///
-  /// `whereArrayContainsAny` caps at 30, so the ids are batched; the query is
-  /// COARSE by design — it tests the raw instants, and the daily-window rule
-  /// that turns those hits into real clashes is applied in Dart afterwards.
-  /// One spelling, so the two readers can't drift on the constraint set, the
-  /// chunk size or the cap warning.
   Future<List<QuerySnapshot<Map<String, dynamic>>>> _conflictSnapshots({
     required List<String> employeeIds,
     required DateTime start,
@@ -845,12 +763,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   /// The record as Firestore fields.
-  ///
-  /// Photos are not here and must not come back: they live in
-  /// `appointments/{id}/images`, written through [AppointmentImagesStore]. The
-  /// `includePictures` flag this used to take existed only because every write
-  /// path but the create had to suppress the array half; with the array gone
-  /// there is nothing to suppress.
   Map<String, dynamic> _toFirestoreMap(AppointmentRecord appointment) {
     final base = Map<String, dynamic>.from(appointment.toMap());
     base['startTime'] = Timestamp.fromDate(appointment.startTime);

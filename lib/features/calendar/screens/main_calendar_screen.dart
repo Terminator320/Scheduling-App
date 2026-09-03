@@ -41,21 +41,7 @@ import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 
-/// Most of the portrait pane the month grid may take before it starts
-/// clipping. Six-week months need a little over half a phone's pane, so the
-/// cap has to clear that; what is left keeps the collapse handle, the agenda
-/// header and a job or two on screen. A month taller than the cap is clipped
-/// by the never-scrolling viewport below, and the handle collapses the grid
-/// away entirely.
-///
-/// **The cap bounds the GRID, not the column.** Unlike the `Flexible` this
-/// replaced, the grid is no longer a flex child, so the agenda cannot squeeze
-/// it — which means grid + handle + header can exceed a short enough pane and
-/// overflow rather than clip. Measured: it holds at 375x667 (the smallest pane
-/// that can run the iOS 18 floor) even at 3x text, and overflows by ~5px at
-/// 320x568, which no supported device is. Raising this number, or growing the
-/// handle or the agenda header, spends that margin —
-/// `main_calendar_screen_test.dart` pins it at 2x text on the 375x667 pane.
+/// Most of the portrait pane the month grid may take before it starts clipping.
 const double _kMaxGridShare = 0.7;
 
 /// What the agenda below the grid lists: the selected day, or its whole week.
@@ -150,10 +136,6 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   }
 
   /// The fetch window for a focus/selection pair.
-  ///
-  /// In week mode it is unioned with the selected week, which is the
-  /// guarantee rather than the common path: the week almost always sits
-  /// inside the month's overscan already, so the listener key rarely changes.
   AppointmentDateRange _rangeFor(DateTime focusedDay, DateTime selectedDay) {
     final range = AppointmentDateRange.forCalendar(
       focusedDay: focusedDay,
@@ -218,9 +200,8 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   String? _filterId;
   List<AppointmentRecord> _filtered = const [];
 
-  /// [source] narrowed to [employeeId]'s jobs, applied BEFORE the day index
-  /// so the dots, the counts, the agenda and the job label all agree. Memoized
-  /// so a rebuild does not re-index the month every frame.
+  /// [source] narrowed to [employeeId]'s jobs, applied BEFORE the day index so
+  /// the dots, the counts, the agenda and the job label all agree.
   List<AppointmentRecord> _applyCrewFilter(
     List<AppointmentRecord> source,
     String? employeeId,
@@ -655,8 +636,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     );
   }
 
-  /// Icon-only day/week toggle. Fixed at 32px so the agenda header, whose
-  /// height the pane's overflow margin is pinned against, does not grow.
+  /// Icon-only day/week toggle.
   Widget _agendaModeToggle(BuildContext context) {
     final l10n = context.l10n;
     return SizedBox(
@@ -739,11 +719,7 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // The grid takes the height its month needs, capped at
-          // [_kMaxGridShare] of the pane. It must not share the flex with the
-          // agenda below: two flex-1 children split the pane evenly, and a
-          // six-week month needs more than half of a phone's, so its last week
-          // was clipped away. The viewport that is left is overflow protection
-          // at large text sizes, not user scrolling.
+          // [_kMaxGridShare] of the pane.
           if (!_collapse.isCollapsed)
             ConstrainedBox(
               constraints: BoxConstraints(

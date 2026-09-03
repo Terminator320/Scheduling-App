@@ -19,13 +19,6 @@ class PhotoUploadNotifier {
   final ValueNotifier<PhotoUploadFailure?> latestFailure = ValueNotifier(null);
 
   /// Photos still sitting in the offline queue, per appointment id.
-  ///
-  /// The store persisted batches and `drainPending()` retried them on
-  /// reconnect, but nothing EXPOSED that — only `latestFailure`, which fires
-  /// on a definitive failure. So someone who photographed a job underground
-  /// had no way to know the photos had not left the phone: the strip showed
-  /// them, and the strip is fed from the local files. A retry queue nobody can
-  /// see is indistinguishable from a silent loss.
   final ValueNotifier<Map<String, int>> pending = ValueNotifier(const {});
 
   final Map<String, PhotoUploadFailure> _failures = {};
@@ -45,10 +38,7 @@ class PhotoUploadNotifier {
     latestFailure.value = failure;
   }
 
-  /// Replaces the whole queue snapshot. The store is the source of truth, so
-  /// this is published from a full read rather than incremented per photo —
-  /// a counter maintained by hand drifts the moment a drain partially
-  /// succeeds.
+  /// Replaces the whole queue snapshot.
   void reportPending(Map<String, int> counts) {
     if (mapEquals(pending.value, counts)) return;
     pending.value = Map.unmodifiable(counts);

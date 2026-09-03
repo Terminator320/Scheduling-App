@@ -3,12 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The two assigned-employee branches added 2026-09-01 — "Start job" and the
-/// "On my way" / "Running late" signal — and the one thing they must NOT
-/// have done: widen the mark-done branch.
-///
-/// Same text-reading mechanism as `appointment_employee_update_rules_test.dart`
-/// (rules cannot be unit-tested without the emulator), and the same splitter,
-/// so the two files see the same branches.
+/// "On my way" / "Running late" signal — and the one thing they must NOT have
+/// done: widen the mark-done branch.
 void main() {
   late final rules = File('firestore.rules').readAsStringSync();
 
@@ -44,8 +40,7 @@ void main() {
     });
 
     test('no employee branch writes the time record', () {
-      // `startedAt`/`completedAt` are stamped SERVER-SIDE by the write
-      // trigger. A client that could write one could forge a start time.
+      // `startedAt`/`completedAt` are stamped SERVER-SIDE by the write trigger.
       for (final branch in employeeBranches()) {
         final body = collapsed(branch);
         expect(body, isNot(contains("'startedAt'")));
@@ -144,9 +139,9 @@ void main() {
   });
 
   group('the admin shape guard', () {
-    // `request.resource.data` on an admin edit is the MERGED document, so
-    // the server-stamped instants ride along: they must be type-checked,
-    // never banned, or every edit of a started job is refused.
+    // `request.resource.data` on an admin edit is the MERGED document, so the
+    // server-stamped instants ride along: they must be type-checked, never
+    // banned, or every edit of a started job is refused.
     late final validator = collapsed(
       rules.substring(
         rules.indexOf('function isValidAppointmentData(d)'),

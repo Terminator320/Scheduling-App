@@ -112,10 +112,7 @@ void main() {
     });
 
     // The catch path had nothing driving it, so `_migration = null` at the end
-    // of it was unpinned. Drop that line and ONE pre-first-unlock -25308 caches
-    // a "completed" future for the whole process: every key stays on the old
-    // accessibility class, and the biometric lock silently stops engaging for
-    // the rest of that session.
+    // of it was unpinned.
     group('a THROWING migration', () {
       tearDown(() {
         FlutterSecureStorage.setMockInitialValues({});
@@ -139,24 +136,26 @@ void main() {
         expect(await service.read(SecureStorageKeys.cacheDocId), 'doc-1');
       });
 
-      test('a locked keychain (-25308) is logged as DEFERRED, not as a fault',
-          () async {
-        // isKeychainLockedError classifies the pre-first-unlock window so a
-        // content-available push cold-starting a locked phone does not file a
-        // Crashlytics fault every time.
-        final platform = _FlakyStorage({})
-          ..failing = true
-          ..error = PlatformException(code: 'Unexpected', message: '-25308');
-        FlutterSecureStoragePlatform.instance = platform;
-        final logger = _RecordingLogger();
+      test(
+        'a locked keychain (-25308) is logged as DEFERRED, not as a fault',
+        () async {
+          // isKeychainLockedError classifies the pre-first-unlock window so a
+          // content-available push cold-starting a locked phone does not file a
+          // Crashlytics fault every time.
+          final platform = _FlakyStorage({})
+            ..failing = true
+            ..error = PlatformException(code: 'Unexpected', message: '-25308');
+          FlutterSecureStoragePlatform.instance = platform;
+          final logger = _RecordingLogger();
 
-        await SecureStorageService(
-          logger: logger,
-        ).read(SecureStorageKeys.cacheDocId);
+          await SecureStorageService(
+            logger: logger,
+          ).read(SecureStorageKeys.cacheDocId);
 
-        expect(logger.warnings.single, contains('deferred'));
-        expect(logger.errors, isEmpty);
-      });
+          expect(logger.warnings.single, contains('deferred'));
+          expect(logger.errors, isEmpty);
+        },
+      );
 
       test('any other failure is logged WITH the error', () async {
         final platform = _FlakyStorage({})
@@ -268,10 +267,9 @@ void main() {
     });
   });
 }
+
 /// In-memory storage whose WRITES can be made to throw, so the migration
-/// failure path is reachable. Reads keep working, which is the realistic
-/// shape: the marker read succeeds and the rewrite is what the locked
-/// keychain refuses.
+/// failure path is reachable.
 class _FlakyStorage extends TestFlutterSecureStoragePlatform {
   _FlakyStorage(super.data);
 

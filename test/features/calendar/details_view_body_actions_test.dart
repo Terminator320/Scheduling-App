@@ -61,8 +61,8 @@ Widget _wrap(Widget child, {required List<Override> overrides}) {
   );
 }
 
-/// The detail-sheet surfaces added 2026-09-01: the time record, the crew
-/// signal line, Start job and the admin's Push back.
+/// The detail-sheet surfaces added 2026-09-01: the time record, the crew signal
+/// line, Start job and the admin's Push back.
 void main() {
   late _MockAppointmentsRepo appointments;
   late _MockClientsRepo clients;
@@ -91,13 +91,14 @@ void main() {
     WidgetTester tester,
     AppointmentRecord appointment, {
     bool showActions = true,
+    VoidCallback? onClose,
   }) async {
     await tester.pumpWidget(
       _wrap(
         DetailsViewBody(
           appointment: appointment,
           showActions: showActions,
-          onClose: () {},
+          onClose: onClose ?? () {},
         ),
         overrides: overrides(),
       ),
@@ -188,6 +189,24 @@ void main() {
 
       expect(find.textContaining('Crew is on the way'), findsOneWidget);
     });
+
+    testWidgets('falls back when the sender is stored with a BLANK name', (
+      tester,
+    ) async {
+      // `mergeRetainedAssignees` legitimately writes '' into `employeeNames`
+      // for a retained assignee whose name could not be resolved.
+      await pump(
+        tester,
+        _open.copyWith(
+          employeeNames: const ['   '],
+          crewStatus: 'onMyWay',
+          crewStatusAt: DateTime(2026, 5, 10, 8, 50),
+          crewStatusBy: 'e1',
+        ),
+      );
+
+      expect(find.textContaining('Crew is on the way'), findsOneWidget);
+    });
   });
 
   group('Start job', () {
@@ -207,6 +226,23 @@ void main() {
     testWidgets('a read-only surface gets no Start', (tester) async {
       await pump(tester, _open, showActions: false);
       expect(find.text('Start job'), findsNothing);
+    });
+
+    testWidgets('starting a job does NOT dismiss the sheet', (tester) async {
+      // Mark-done and cancel close because the job is finished.
+      when(
+        () => appointments.updateAppointmentStatus(
+          id: any(named: 'id'),
+          status: any(named: 'status'),
+        ),
+      ).thenAnswer((_) async {});
+      var closed = false;
+      await pump(tester, _open, onClose: () => closed = true);
+
+      await tester.tap(find.text('Start job'));
+      await tester.pumpAndSettle();
+
+      expect(closed, isFalse, reason: 'the crew still needs this sheet');
     });
   });
 

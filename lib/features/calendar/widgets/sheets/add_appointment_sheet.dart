@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
@@ -7,9 +9,9 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_prefill.dart';
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
-import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/utils/assignee_availability_scope.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/personal_block_clash_dialog.dart';
@@ -18,7 +20,6 @@ import 'package:scheduling/features/calendar/widgets/sections/appointment_form_f
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_host.dart';
-import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -30,12 +31,13 @@ import 'package:scheduling/shared/widgets/feedback/offline_form_notice.dart';
 import 'package:scheduling/shared/widgets/sheets/form_sheet_frame.dart';
 
 class AddEventSheet extends ConsumerStatefulWidget {
-  const AddEventSheet({super.key, this.initialDate, this.initialClient});
+  const AddEventSheet({super.key, this.initialDate, this.prefill});
 
   final DateTime? initialDate;
 
-  /// Pre-seeds the client for book-job flows.
-  final ClientRecord? initialClient;
+  /// Pre-seeds the draft: a client for the book-job flows, a whole job for
+  /// "book again".
+  final AppointmentPrefill? prefill;
 
   @override
   ConsumerState<AddEventSheet> createState() => _AddEventSheetState();
@@ -78,15 +80,28 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
       _controllers.date.text = DateUtilsHelper.formatDate(initialDate);
       _controllers.endDate.text = _controllers.date.text;
     }
-    final client = widget.initialClient;
-    if (client != null) {
-      _controllers.clientSearch.text = client.displayName;
-      // Defer until the family provider is built.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _notifier.selectClient(client);
-      });
-    }
+    final prefill = widget.prefill;
+    if (prefill != null) _seedFrom(prefill);
+  }
+
+  /// Text lives in the controllers; the rest is state, applied once the family
+  /// provider exists.
+  void _seedFrom(AppointmentPrefill prefill) {
+    final client = prefill.client;
+    _controllers.title.text = prefill.title;
+    _controllers.notes.text = prefill.notes;
+    _controllers.materials.text = prefill.materialsNeeded;
+    _controllers.clientSearch.text = client?.displayName ?? '';
+    // Submit reads this field even under the client-address pill, so it has to
+    // hold the pill's address too, the way picking a client fills it.
+    _controllers.address.text = prefill.address.isNotEmpty
+        ? AddressParser.canonicalToDisplay(prefill.address)
+        : client?.fullAddress ?? '';
+    // Defer until the family provider is built.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      unawaited(_notifier.applyPrefill(prefill));
+    });
   }
 
   @override
@@ -130,11 +145,14 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     );
     if (picked == null || !mounted) return;
     _controllers.startTime.text = picked.format(context);
-    if (!stateBefore.endTimeWasPickedManually) {
-      final autoEnd = AppointmentDraftDefaults.defaultEndTime(picked);
-      _controllers.endTime.text = autoEnd.format(context);
-    }
     _notifier.selectStartTime(picked);
+    // The auto end is the controller's call (plain default or seeded length).
+    _syncEndTimeText();
+  }
+
+  void _syncEndTimeText() {
+    final end = ref.read(_provider).selectedEndTime;
+    if (end != null) _controllers.endTime.text = end.format(context);
   }
 
   Future<void> _pickEndTime() async {
@@ -148,18 +166,11 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     _notifier.selectEndTime(picked);
   }
 
-  // Applies the template title and optional duration.
+  // Applies the template title and duration.
   void _applyTemplate(JobTemplate template) {
     _controllers.title.text = jobTemplateLabel(context.l10n, template);
-    final start = ref.read(_provider).selectedStartTime;
-    if (start != null) {
-      final endMinutes = template.endMinutesOfDay(
-        start.hour * 60 + start.minute,
-      );
-      final end = TimeOfDay(hour: endMinutes ~/ 60, minute: endMinutes % 60);
-      _controllers.endTime.text = end.format(context);
-      _notifier.selectEndTime(end);
-    }
+    _notifier.setDurationMinutes(template.defaultDurationMinutes);
+    _syncEndTimeText();
   }
 
   int _spanLength(AddEventState state) =>
@@ -249,8 +260,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     final state = ref.watch(_provider);
     // Crew only; dispatchers are not assignable.
     final roster = ref.watch(assignableEmployeesProvider);
-    // An assignee is REQUIRED to save, so "still loading" and "the read
-    // failed" must not both render as "this business has no staff".
+    // An assignee is REQUIRED to save, so "still loading" and "the read failed"
+    // must not both render as "this business has no staff".
     final allEmployees = roster.asData?.value ?? const [];
     // One span length feeds both the flag and label.
     final spanLength = _spanLength(state);

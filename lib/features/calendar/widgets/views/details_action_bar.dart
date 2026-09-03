@@ -20,6 +20,7 @@ class DetailsActionBar extends StatelessWidget {
     this.showCancel = true,
     this.onEdit,
     this.onStart,
+    this.onBookAgain,
     this.isInProgress = false,
   });
 
@@ -30,18 +31,17 @@ class DetailsActionBar extends StatelessWidget {
   final VoidCallback onMarkDone;
   final VoidCallback onCancel;
 
-  /// "Start job" — offered on an open job that is not yet under way. Null on
-  /// a surface that may not start it (a read-only view, a personal block).
+  /// "Start job" — offered on an open job that is not yet under way.
   final VoidCallback? onStart;
 
-  /// The STORED status is already `in_progress`, so there is nothing to
-  /// start. Display-derived in-progress (the clock passed the start time) does
-  /// not count: the crew may still want the record to say when they arrived.
+  /// The STORED status is already `in_progress`, so there is nothing to start.
   final bool isInProgress;
 
-  /// Edit action for a job that is already done. Null on a read-only surface,
-  /// which falls back to the inert "Complete" indicator.
+  /// Edit action for a job that is already done.
   final VoidCallback? onEdit;
+
+  /// "Book again" — opens the add sheet pre-filled from this job.
+  final VoidCallback? onBookAgain;
 
   @override
   Widget build(BuildContext context) {
@@ -61,9 +61,28 @@ class DetailsActionBar extends StatelessWidget {
             context,
             compact,
           ),
+        if (onBookAgain != null) ..._bookAgainSlot(context, compact),
       ],
     );
   }
+
+  /// Last in the bar in every state: it is the one action that does not change
+  /// THIS job, so it sits below everything that does.
+  List<Widget> _bookAgainSlot(BuildContext context, bool compact) => [
+    // A cancelled job renders nothing above this.
+    if (!isCancelled) const SizedBox(height: AppSpacing.sp8),
+    OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 48),
+      ),
+      onPressed: onBookAgain,
+      child: _ActionButtonContent(
+        compact: compact,
+        icon: const Icon(Icons.event_repeat_outlined, size: 18),
+        label: context.l10n.calendar_bookAgain,
+      ),
+    ),
+  ];
 
   /// The arrival tap. Same haptic contract as mark-done below: felt on press,
   /// never awaited, so it can neither delay nor be delayed by the write.
@@ -89,13 +108,10 @@ class DetailsActionBar extends StatelessWidget {
   );
 
   /// Offered for the whole life of an open job — there is no "has it started
-  /// yet" gate (owner call, 2026-08-17). A crew that finishes early, or an
-  /// admin closing a job booked for later today, had no affordance at all
-  /// until the start time passed, while the rules have always allowed an
-  /// assignee's `status:'done'` write with no date restriction.
+  /// yet" gate (owner call, 2026-08-17).
   Widget _markDoneButton(BuildContext context, bool compact) {
-    // The design's complete action is a filled GREEN button, so it reads as
-    // the success it is rather than as the generic secondary.
+    // The design's complete action is a filled GREEN button, so it reads as the
+    // success it is rather than as the generic secondary.
     final successFill = Theme.of(context).statusColors.success;
     final onSuccessFill = contrastingForegroundFor(successFill);
     return FilledButton(
@@ -108,10 +124,7 @@ class DetailsActionBar extends StatelessWidget {
         ),
       ),
       // The one button a gloved field worker presses while glancing away, and
-      // the only confirmation it had was a notice they have to look at. The
-      // notice layer fires its own haptic per kind, but only once the write
-      // RETURNS — this one confirms the tap landed. Fired before the action so
-      // it is felt on press, and unawaited so it can never delay the write.
+      // the only confirmation it had was a notice they have to look at.
       onPressed: isSaving
           ? null
           : () {
@@ -131,9 +144,7 @@ class DetailsActionBar extends StatelessWidget {
   }
 
   /// A done job has no mark-done or cancel action left, so this slot is where
-  /// its Edit lives — the read view's top chip is hidden for it. Without an
-  /// edit callback (a read-only surface) it stays the inert "Complete"
-  /// indicator it has always been.
+  /// its Edit lives — the read view's top chip is hidden for it.
   List<Widget> _doneSlot(BuildContext context, bool compact) {
     final scheme = Theme.of(context).colorScheme;
     return [

@@ -172,14 +172,6 @@ class AppointmentFormFields extends StatelessWidget {
   final bool isRunMember;
 
   /// Whether this form may turn a one-day job into a multi-day one.
-  ///
-  /// False on the EDIT flow for a client job. A run's shape is fixed at
-  /// booking, and only the ADD path fans a span into one document per day — so
-  /// widening an end date here wrote the single WIDE document the per-day
-  /// split exists to eliminate: it renders "Day 3 of 5" through the derived
-  /// branch, indistinguishable from a real run, but marking one day complete
-  /// closes the whole week. Personal blocks and time off keep the row: they
-  /// legitimately stay one wide document.
   final bool canSpanDays;
 
   /// True when the daily window crosses midnight, so the run counts nights.
@@ -450,11 +442,9 @@ class AppointmentFormFields extends StatelessWidget {
             _dateRows(context, l10n),
             // All-day schedules show dates only.
             if (!isAllDay && !isDayOff) ...timeRows(),
-            // Repeat is hidden for personal and multi-day jobs, and for one
-            // day of a run: a run member's own window is a single day, so
+            // Repeat is hidden for personal and multi-day jobs, and for one day
+            // of a run: a run member's own window is a single day, so
             // `isMultiDay` is false for it and cannot carry this on its own.
-            // Letting the picker through would rewrite the series and delete
-            // the run's trailing days.
             if (!isPersonal && !isMultiDay && !isRunMember)
               RepeatIntervalPicker(
                 current: repeat,
