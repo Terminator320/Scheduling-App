@@ -21,14 +21,19 @@ class FirebaseClientsRepository implements ClientsRepository {
     FirebaseFunctions? functions,
     AppLogger? logger,
     DateTime Function()? clock,
+    bool? useCallableSearch,
   }) : _clients = firestore.collection('clients'),
-       _functions = functions ?? FirebaseFunctions.instance,
+       _functions = functions,
        _logger = logger ?? AppLogger(),
-       _clock = clock ?? DateTime.now;
+       _clock = clock ?? DateTime.now,
+       _useCallableSearch = useCallableSearch ?? functions != null;
 
   final CollectionReference<Map<String, dynamic>> _clients;
-  final FirebaseFunctions _functions;
+  final FirebaseFunctions? _functions;
   final AppLogger _logger;
+  final bool _useCallableSearch;
+
+  FirebaseFunctions get _callables => _functions ?? FirebaseFunctions.instance;
 
   /// Injectable time source so the search-cache TTL is testable.
   final DateTime Function() _clock;
@@ -179,7 +184,7 @@ class FirebaseClientsRepository implements ClientsRepository {
   @override
   Future<void> deleteClient(String id) async {
     try {
-      await _functions.httpsCallable('deleteClient').call<void>({
+      await _callables.httpsCallable('deleteClient').call<void>({
         'clientId': id,
       });
     } on FirebaseFunctionsException catch (e) {
@@ -269,12 +274,24 @@ class FirebaseClientsRepository implements ClientsRepository {
     final cached = _searchCache.read(cacheKey);
     if (cached != null) return cached;
 
-    final response = await _functions
-        .httpsCallable('searchClients')
-        .call<Map<String, dynamic>>({'query': q});
-    final results = _clientsFromCallable(response.data);
+    final results = _useCallableSearch
+        ? await _searchClientsCallable(q)
+        : await _searchClientsLocal(q);
     _searchCache.write(cacheKey, results);
     return results;
+  }
+
+  Future<List<ClientRecord>> _searchClientsCallable(String query) async {
+    final response = await _callables
+        .httpsCallable('searchClients')
+        .call<Map<String, dynamic>>({'query': query});
+    return _clientsFromCallable(response.data);
+  }
+
+  Future<List<ClientRecord>> _searchClientsLocal(String query) async {
+    final window = await _clientScanWindow();
+    if (window == null) return const [];
+    return matchClientDocs(ClientSearchScan(docs: window.docs, query: query));
   }
 
   Future<_CachedClientScanWindow?> _clientScanWindow() async {

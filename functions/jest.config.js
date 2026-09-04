@@ -14,6 +14,10 @@
  */
 module.exports = {
   testEnvironment: "node",
+  testPathIgnorePatterns: ["/node_modules/", "/__tests__/mocks/"],
+  moduleNameMapper: {
+    "^jose$": "<rootDir>/__tests__/mocks/jose.js",
+  },
   // `scripts/` is included on purpose: its backfills and counters produce the
   // migration numbers this project makes decisions on, and un-ignoring that
   // directory for the linter is what exposed a backfill whose `--dry-run` wrote

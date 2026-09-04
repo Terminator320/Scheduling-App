@@ -86,7 +86,11 @@ void main() {
   ProviderContainer makeContainer() => ProviderContainer(
     overrides: [
       currentUserDocProvider.overrideWith(
-        (ref) => Stream.value(const {'role': 'employee', 'status': 'active'}),
+        (ref) => Stream.value(const {
+          'role': 'employee',
+          'status': 'active',
+          'locationSharingEnabled': true,
+        }),
       ),
       employeesRepositoryProvider.overrideWithValue(employees),
       presenceRepositoryProvider.overrideWithValue(presence),
@@ -108,6 +112,7 @@ void main() {
     final controller = container.read(presenceSyncControllerProvider);
     await controller.sync();
     geolocator.emit(_position());
+    await pumpEventQueue();
     await pumpEventQueue();
     return controller;
   }

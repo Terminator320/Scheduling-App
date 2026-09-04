@@ -226,24 +226,20 @@ void main() {
 
       // Both pushes in one batch, so the toured route is never momentarily
       // on top — otherwise it gets a legitimate window to start.
-      unawaited(
-        navigatorKey.currentState!.push(
-          MaterialPageRoute<void>(
-            builder: (_) => FeatureTourHost(
-              scope: const DestinationTour(PushedDestination.settings),
-              isAdmin: true,
-              // Never attached, so a start would mark seen instead.
-              stepKeys: {TourStepId.settingsAppearance: GlobalKey()},
-              child: const Scaffold(body: Text('settings-body')),
-            ),
+      navigatorKey.currentState!.push(
+        MaterialPageRoute<void>(
+          builder: (_) => FeatureTourHost(
+            scope: const DestinationTour(PushedDestination.settings),
+            isAdmin: true,
+            // Never attached, so a start would mark seen instead.
+            stepKeys: {TourStepId.settingsAppearance: GlobalKey()},
+            child: const Scaffold(body: Text('settings-body')),
           ),
         ),
       );
-      unawaited(
-        navigatorKey.currentState!.push(
-          MaterialPageRoute<void>(
-            builder: (_) => const Scaffold(body: Text('on-top')),
-          ),
+      navigatorKey.currentState!.push(
+        MaterialPageRoute<void>(
+          builder: (_) => const Scaffold(body: Text('on-top')),
         ),
       );
       await tester.pumpAndSettle();

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
@@ -163,12 +161,10 @@ void main() {
 
       // Mirrors the settings drawer, which still pushes named hub routes.
       final context = tester.element(find.text('screen-calendar'));
-      unawaited(
-        Navigator.pushNamed(
-          context,
-          AppRoutes.clients,
-          arguments: const ClientsListArgs(isAdmin: true, employeeId: 'e1'),
-        ),
+      Navigator.pushNamed(
+        context,
+        AppRoutes.clients,
+        arguments: const ClientsListArgs(isAdmin: true, employeeId: 'e1'),
       );
       await tester.pump(); // Build the redirect route (post-frame scheduled).
       await tester.pump(); // Redirect switches the tab and removes itself.
@@ -280,20 +276,16 @@ void main() {
     expect(find.text('screen-clients'), findsOneWidget);
 
     // Stack two routes above the shell.
-    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
-    unawaited(
-      navigator.push(
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator))
+      ..push(
         MaterialPageRoute<void>(
           builder: (_) => const Scaffold(body: Text('pushed-one')),
         ),
-      ),
-    );
+      );
     await tester.pumpAndSettle();
-    unawaited(
-      navigator.push(
-        MaterialPageRoute<void>(
-          builder: (_) => const Scaffold(body: Text('pushed-two')),
-        ),
+    navigator.push(
+      MaterialPageRoute<void>(
+        builder: (_) => const Scaffold(body: Text('pushed-two')),
       ),
     );
     await tester.pumpAndSettle();

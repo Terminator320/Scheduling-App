@@ -19,7 +19,10 @@ void main() {
     );
     return [
       for (final part in parts.skip(1))
-        part.contains(');') ? part.substring(0, part.indexOf(');') + 1) : part,
+        if (part.contains(');'))
+          part.substring(0, part.indexOf(');') + 1)
+        else
+          part,
     ];
   }
 
