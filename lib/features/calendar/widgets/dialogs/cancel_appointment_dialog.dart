@@ -32,7 +32,7 @@ Future<SeriesScopeChoice?> showCancelAppointmentDialog(
     );
     return confirmed ? SeriesScopeChoice.thisOnly : null;
   }
-  return showSeriesScopeDialog(
+  return await showSeriesScopeDialog(
     context,
     title: l.calendar_cancelAppointment,
     thisOnlyLabel: l.calendar_cancelThisDayOnly,

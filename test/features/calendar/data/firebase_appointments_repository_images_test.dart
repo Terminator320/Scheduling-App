@@ -85,7 +85,12 @@ void main() {
     when(
       () => batch.set<Map<String, dynamic>>(any(), any(), any()),
     ).thenReturn(null);
-    when(() => batch.update(any(), any())).thenReturn(null);
+    when(
+      () => batch.update(
+        any<DocumentReference<Map<String, dynamic>>>(),
+        any<Map<String, dynamic>>(),
+      ),
+    ).thenReturn(null);
     when(() => batch.delete(any())).thenReturn(null);
     when(batch.commit).thenAnswer((_) async {});
   });
@@ -128,7 +133,12 @@ void main() {
       // WriteBatch.update takes Map<Object, Object?>, so read the keys off the
       // raw map rather than casting the whole thing.
       final patch =
-          verify(() => batch.update(any(), captureAny())).captured.single
+          verify(
+                () => batch.update(
+                  any<DocumentReference<Map<String, dynamic>>>(),
+                  captureAny<Map<String, dynamic>>(),
+                ),
+              ).captured.single
               as Map;
       expect(patch.keys, ['updatedAt']);
     });
@@ -154,28 +164,32 @@ void main() {
       },
     );
 
-    test('a url-only photo is SKIPPED, not written as a handle-less doc', () async {
-      // This used to keep the url, as the only thing that could render a
-      // LEGACY entry. Both that carve-out and AppointmentImageLoader's
-      // matching fallback went on 2026-08-22, once a prod count found zero
-      // such documents: the string is a permanent, rules-free, transferable
-      // download link that nothing revokes, and `firestore.rules` now rejects
-      // the field outright.
-      //
-      // Dropping the url alone was not enough, and this is the half that
-      // matters: the write would still land as `{storagePath: ''}`, a
-      // document that renders nothing AND reads as coverage to
-      // `clear-appointment-picture-arrays.js`, which would then destroy the
-      // array entry holding the only surviving pointer to those bytes. The
-      // backfill skips exactly this shape; so does `append` now.
-      const legacy = AppointmentImage(
-        url: 'https://firebasestorage.googleapis.com/v0/b/x/o/z?alt=media&t=q',
-      );
-      await repo().appendAppointmentPictures('a1', [legacy]);
-      verifyNever(
-        () => batch.set<Map<String, dynamic>>(any(), any(), any()),
-      );
-    });
+    test(
+      'a url-only photo is SKIPPED, not written as a handle-less doc',
+      () async {
+        // This used to keep the url, as the only thing that could render a
+        // LEGACY entry. Both that carve-out and AppointmentImageLoader's
+        // matching fallback went on 2026-08-22, once a prod count found zero
+        // such documents: the string is a permanent, rules-free, transferable
+        // download link that nothing revokes, and `firestore.rules` now rejects
+        // the field outright.
+        //
+        // Dropping the url alone was not enough, and this is the half that
+        // matters: the write would still land as `{storagePath: ''}`, a
+        // document that renders nothing AND reads as coverage to
+        // `clear-appointment-picture-arrays.js`, which would then destroy the
+        // array entry holding the only surviving pointer to those bytes. The
+        // backfill skips exactly this shape; so does `append` now.
+        const legacy = AppointmentImage(
+          url:
+              'https://firebasestorage.googleapis.com/v0/b/x/o/z?alt=media&t=q',
+        );
+        await repo().appendAppointmentPictures('a1', [legacy]);
+        verifyNever(
+          () => batch.set<Map<String, dynamic>>(any(), any(), any()),
+        );
+      },
+    );
 
     test('ALWAYS writes uploadedAt, as an explicit null when unknown', () async {
       // The invariant the file states and nothing asserted. `fetch` orders by
@@ -245,7 +259,12 @@ void main() {
       expect(requestedImageIds, [appointmentImageDocId(photo)]);
       verify(() => batch.delete(any())).called(1);
       final patch =
-          verify(() => batch.update(any(), captureAny())).captured.single
+          verify(
+                () => batch.update(
+                  any<DocumentReference<Map<String, dynamic>>>(),
+                  captureAny<Map<String, dynamic>>(),
+                ),
+              ).captured.single
               as Map;
       expect(patch.keys, ['updatedAt']);
       verify(batch.commit).called(1);

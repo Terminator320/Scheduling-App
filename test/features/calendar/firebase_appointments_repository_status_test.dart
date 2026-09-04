@@ -41,7 +41,12 @@ void main() {
     when(() => doc.update(any())).thenAnswer((_) async {});
     when(() => collection.firestore).thenReturn(firestore);
     when(firestore.batch).thenReturn(batch);
-    when(() => batch.update(any(), any())).thenReturn(null);
+    when(
+      () => batch.update(
+        any<DocumentReference<Map<String, dynamic>>>(),
+        any<Map<String, dynamic>>(),
+      ),
+    ).thenReturn(null);
     when(batch.commit).thenAnswer((_) async {});
   });
 
@@ -82,26 +87,28 @@ void main() {
   test('cancel stamps a fresh seriesOpId', () async {
     final repo = FirebaseAppointmentsRepository(firestore);
     await repo.updateAppointmentStatus(id: 'a1', status: 'cancelled');
-    final payload = (verify(() => doc.update(captureAny())).captured.single
-            as Map)
-        .cast<String, dynamic>();
+    final payload =
+        (verify(() => doc.update(captureAny())).captured.single as Map)
+            .cast<String, dynamic>();
     expect(payload['status'], 'cancelled');
     expect(payload['seriesOpId'], isA<String>());
     expect(payload['seriesOpId'] as String, isNotEmpty);
   });
 
-  test('mark-done writes only status + updatedAt (employee hasOnly rule)',
-      () async {
-    // The employee mark-done rule is affectedKeys().hasOnly(['status',
-    // 'updatedAt']); a seriesOpId here would be rejected with permission-denied.
-    final repo = FirebaseAppointmentsRepository(firestore);
-    await repo.updateAppointmentStatus(id: 'a1', status: 'done');
-    final payload = (verify(() => doc.update(captureAny())).captured.single
-            as Map)
-        .cast<String, dynamic>();
-    expect(payload.keys, unorderedEquals(['status', 'updatedAt']));
-    expect(payload.containsKey('seriesOpId'), isFalse);
-  });
+  test(
+    'mark-done writes only status + updatedAt (employee hasOnly rule)',
+    () async {
+      // The employee mark-done rule is affectedKeys().hasOnly(['status',
+      // 'updatedAt']); a seriesOpId here would be rejected with permission-denied.
+      final repo = FirebaseAppointmentsRepository(firestore);
+      await repo.updateAppointmentStatus(id: 'a1', status: 'done');
+      final payload =
+          (verify(() => doc.update(captureAny())).captured.single as Map)
+              .cast<String, dynamic>();
+      expect(payload.keys, unorderedEquals(['status', 'updatedAt']));
+      expect(payload.containsKey('seriesOpId'), isFalse);
+    },
+  );
 
   group('updateAppointmentStatuses', () {
     test('writes the status to every id in ONE batch', () async {
@@ -110,7 +117,12 @@ void main() {
         ids: ['d1', 'd2', 'd3'],
         status: 'cancelled',
       );
-      verify(() => batch.update(any(), any())).called(3);
+      verify(
+        () => batch.update(
+          any<DocumentReference<Map<String, dynamic>>>(),
+          any<Map<String, dynamic>>(),
+        ),
+      ).called(3);
       verify(batch.commit).called(1);
       verifyNever(() => doc.update(any()));
     });
@@ -122,7 +134,10 @@ void main() {
         status: 'cancelled',
       );
       final payloads = verify(
-        () => batch.update(any(), captureAny()),
+        () => batch.update(
+          any<DocumentReference<Map<String, dynamic>>>(),
+          captureAny<Map<String, dynamic>>(),
+        ),
       ).captured.map((p) => (p as Map).cast<String, dynamic>()).toList();
 
       expect(payloads, hasLength(3));
@@ -139,7 +154,12 @@ void main() {
         () => repo.updateAppointmentStatuses(ids: ['d1'], status: 'overdue'),
         throwsArgumentError,
       );
-      verifyNever(() => batch.update(any(), any()));
+      verifyNever(
+        () => batch.update(
+          any<DocumentReference<Map<String, dynamic>>>(),
+          any<Map<String, dynamic>>(),
+        ),
+      );
     });
 
     test('an empty id list commits nothing', () async {

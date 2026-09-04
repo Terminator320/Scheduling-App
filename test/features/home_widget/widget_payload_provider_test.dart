@@ -39,15 +39,15 @@ void main() {
     } on Object {
       // The error case under test; the provider records it either way.
     }
-    return container.read(widgetPayloadProvider);
+    return await Future.value(container.read(widgetPayloadProvider));
   }
 
   test(
     'an identity ERROR propagates as an error, not as a settled null',
     () async {
-      final payload = await payloadFor(
-        (ref) async => throw Exception('permission-denied'),
-      );
+      final payload = await payloadFor((ref) async {
+        throw Exception('permission-denied');
+      });
 
       expect(payload.hasError, isTrue);
       expect(payload.hasValue, isFalse);

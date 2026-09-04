@@ -202,7 +202,12 @@ void main() {
       final batch = _MockBatch();
       when(() => collection.doc(any())).thenReturn(_MockDoc());
       when(() => firestore.batch()).thenReturn(batch);
-      when(() => batch.update(any(), any())).thenReturn(null);
+      when(
+        () => batch.update(
+          any<DocumentReference<Map<String, dynamic>>>(),
+          any<Map<String, dynamic>>(),
+        ),
+      ).thenReturn(null);
       when(() => batch.delete(any())).thenReturn(null);
       when(
         () => batch.set<Map<String, dynamic>>(any(), any()),
@@ -220,7 +225,10 @@ void main() {
 
       final written = <String>[
         for (final m in verify(
-          () => batch.update(any(), captureAny()),
+          () => batch.update(
+            any<DocumentReference<Map<String, dynamic>>>(),
+            captureAny<Map<String, dynamic>>(),
+          ),
         ).captured)
           ((m as Map).cast<String, dynamic>()['seriesOpId'] as String),
         for (final m in verify(

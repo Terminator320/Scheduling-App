@@ -144,7 +144,7 @@ void main() {
         .setMockMethodCallHandler(_channel, (call) async {
           if (call.method == 'canLaunch') return true;
           if (call.method != 'launch') return null;
-          return launchCompleter.future;
+          return await launchCompleter.future;
         });
 
     await _run(tester, (context, ref, notices) async {

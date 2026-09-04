@@ -20,7 +20,7 @@ Future<List<File>> pickAppointmentImages(
 
   final picker = ref.read(imagePickerProvider);
   if (source == ImageSource.gallery) {
-    return picker.pickMultiImages();
+    return await picker.pickMultiImages();
   }
 
   final result = await ref.read(mediaPermissionServiceProvider).ensureCamera();

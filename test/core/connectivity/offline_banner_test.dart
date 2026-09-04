@@ -52,10 +52,9 @@ void main() {
       return c;
     }
 
-    Future<bool> offline(List<ConnectivityResult>? results) async {
+    Future<bool> offline(List<ConnectivityResult>? results) {
       final c = container(results)..listen(isOfflineProvider, (_, _) {});
-      await null; // Let the seeded stream value flow through.
-      return c.read(isOfflineProvider);
+      return Future<bool>.microtask(() => c.read(isOfflineProvider));
     }
 
     test('true only when every report is "none"', () async {

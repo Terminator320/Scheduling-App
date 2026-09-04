@@ -7,11 +7,10 @@ rolling follow-up list. The only remaining item needs GCP billing access.
 
 **Problem.** The Places proxies (`placesAutocomplete`, `placesGetDetails` — they
 live in `functions/places.js`; `index.js` only re-exports them) cost real money
-per call. `placesGetDetails` now uses the
-durable Firestore limiter, and `placesAutocomplete` keeps the per-uid in-memory
-limiter (latency-sensitive, high volume). Neither is a *spend* ceiling — the
-only true backstop is a GCP budget, and a plain budget **alert** just emails
-you; it doesn't stop spend.
+per call. Both callables now use the durable Firestore limiter, but that is
+still not a *spend* ceiling — it limits per-user abuse, not total monthly
+project spend. The only true backstop is a GCP budget, and a plain budget
+**alert** just emails you; it doesn't stop spend.
 
 **Fix — a budget that programmatically disables billing (kill switch).** This
 needs the billing-account ID and `roles/billing.admin`, so run it yourself.

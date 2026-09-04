@@ -93,8 +93,7 @@ class LiveActivityRegistrationController with ReentrantSync {
 
   AppLogger get _logger => _ref.read(loggerProvider);
 
-  static String _currentLocale() =>
-      currentServerLocale;
+  static String _currentLocale() => currentServerLocale;
 
   /// Idempotent and safe to call on every account-doc emission or language
   /// change. Concurrent calls coalesce, so whichever finishes last wins.
@@ -315,7 +314,7 @@ class LiveActivityRegistrationController with ReentrantSync {
   /// sign-out is never blocked on this.
   Future<void> unregister() async {
     invalidateSync();
-    return _teardown();
+    await _teardown();
   }
 
   /// The teardown itself, without the sync invalidation — the opt-out

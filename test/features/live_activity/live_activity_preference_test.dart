@@ -48,7 +48,7 @@ class _DelayedGetAllStore extends SharedPreferencesStorePlatform {
   @override
   Future<Map<String, Object>> getAll() async {
     await _releaseRead;
-    return _backing.getAll();
+    return await _backing.getAll();
   }
 
   @override
@@ -66,12 +66,11 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     logger = _RecordingLogger();
-    container = ProviderContainer(
-      overrides: [loggerProvider.overrideWithValue(logger)],
-    )
-      // The preference loads asynchronously from build(); an explicit listener
-      // keeps the state alive across reads.
-      ..listen(liveActivityEnabledProvider, (_, _) {});
+    container =
+        ProviderContainer(overrides: [loggerProvider.overrideWithValue(logger)])
+          // The preference loads asynchronously from build(); an explicit listener
+          // keeps the state alive across reads.
+          ..listen(liveActivityEnabledProvider, (_, _) {});
   });
 
   tearDown(() => container.dispose());
@@ -84,9 +83,7 @@ void main() {
     });
 
     test('restores a stored opt-out', () async {
-      SharedPreferences.setMockInitialValues({
-        'live_activity_enabled': false,
-      });
+      SharedPreferences.setMockInitialValues({'live_activity_enabled': false});
       final fresh = ProviderContainer()
         ..listen(liveActivityEnabledProvider, (_, _) {})
         ..read(liveActivityEnabledProvider);
@@ -121,7 +118,9 @@ void main() {
       SharedPreferencesStorePlatform.instance = _ThrowingPreferencesStore(
         originalStore,
       );
-      addTearDown(() => SharedPreferencesStorePlatform.instance = originalStore);
+      addTearDown(
+        () => SharedPreferencesStorePlatform.instance = originalStore,
+      );
 
       final notifier = container.read(liveActivityEnabledProvider.notifier);
       expect(container.read(liveActivityEnabledProvider), isTrue);
@@ -132,38 +131,44 @@ void main() {
       expect(logger.warnings.single, 'LIVE-ACT write preference failed');
     });
 
-    test('an in-flight initial load cannot overwrite a newer explicit choice', () async {
-      SharedPreferences.setMockInitialValues({
-        'live_activity_enabled': false,
-      });
-      final releaseRead = Completer<void>();
-      final originalStore = SharedPreferencesStorePlatform.instance;
-      SharedPreferencesStorePlatform.instance = _DelayedGetAllStore(
-        originalStore,
-        releaseRead.future,
-      );
-      addTearDown(() => SharedPreferencesStorePlatform.instance = originalStore);
+    test(
+      'an in-flight initial load cannot overwrite a newer explicit choice',
+      () async {
+        SharedPreferences.setMockInitialValues({
+          'live_activity_enabled': false,
+        });
+        final releaseRead = Completer<void>();
+        final originalStore = SharedPreferencesStorePlatform.instance;
+        SharedPreferencesStorePlatform.instance = _DelayedGetAllStore(
+          originalStore,
+          releaseRead.future,
+        );
+        addTearDown(
+          () => SharedPreferencesStorePlatform.instance = originalStore,
+        );
 
-      final fresh = ProviderContainer(
-        overrides: [loggerProvider.overrideWithValue(logger)],
-      )
-        ..listen(liveActivityEnabledProvider, (_, _) {})
-        ..read(liveActivityEnabledProvider);
-      addTearDown(fresh.dispose);
+        final fresh =
+            ProviderContainer(
+                overrides: [loggerProvider.overrideWithValue(logger)],
+              )
+              ..listen(liveActivityEnabledProvider, (_, _) {})
+              ..read(liveActivityEnabledProvider);
+        addTearDown(fresh.dispose);
 
-      final notifier = fresh.read(liveActivityEnabledProvider.notifier);
-      // Deliberately NOT awaited: `setEnabled` bumps the revision and sets the
-      // state synchronously, and its own `getInstance()` is queued behind the
-      // very read we are holding open - awaiting it here deadlocks the test
-      // rather than exercising the race.
-      final write = notifier.setEnabled(value: true);
-      expect(fresh.read(liveActivityEnabledProvider), isTrue);
+        final notifier = fresh.read(liveActivityEnabledProvider.notifier);
+        // Deliberately NOT awaited: `setEnabled` bumps the revision and sets the
+        // state synchronously, and its own `getInstance()` is queued behind the
+        // very read we are holding open - awaiting it here deadlocks the test
+        // rather than exercising the race.
+        final write = notifier.setEnabled(value: true);
+        expect(fresh.read(liveActivityEnabledProvider), isTrue);
 
-      releaseRead.complete();
-      await write;
-      await notifier.ready;
+        releaseRead.complete();
+        await write;
+        await notifier.ready;
 
-      expect(fresh.read(liveActivityEnabledProvider), isTrue);
-    });
+        expect(fresh.read(liveActivityEnabledProvider), isTrue);
+      },
+    );
   });
 }

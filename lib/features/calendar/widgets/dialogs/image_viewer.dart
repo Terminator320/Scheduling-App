@@ -129,7 +129,7 @@ class _ImageViewerState extends ConsumerState<ImageViewer> {
     if (provider is MemoryImage) {
       final dir = await getTemporaryDirectory();
       final file = File(_pathIn(dir.path, _photoFileName()));
-      return file.writeAsBytes(provider.bytes);
+      return await file.writeAsBytes(provider.bytes);
     }
     return null;
   }

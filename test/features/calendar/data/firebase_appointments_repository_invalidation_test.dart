@@ -186,7 +186,12 @@ void main() {
     when(
       () => batch.set<Map<String, dynamic>>(any(), any(), any()),
     ).thenReturn(null);
-    when(() => batch.update(any(), any())).thenReturn(null);
+    when(
+      () => batch.update(
+        any<DocumentReference<Map<String, dynamic>>>(),
+        any<Map<String, dynamic>>(),
+      ),
+    ).thenReturn(null);
     when(() => batch.delete(any())).thenReturn(null);
     when(batch.commit).thenAnswer((_) async {});
 

@@ -74,7 +74,7 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
     rethrow;
   }
   if (match == null) {
-    return _signOutToLogin(
+    return await _signOutToLogin(
       ref,
       logger,
       logContext: 'SPLASH signOut failed after missing employee record',
@@ -96,7 +96,7 @@ final splashDestinationProvider = FutureProvider<SplashDestination>((
     );
   }
   if (!employee.isActive) {
-    return _signOutToLogin(
+    return await _signOutToLogin(
       ref,
       logger,
       logContext: 'SPLASH signOut failed for non-active employee',

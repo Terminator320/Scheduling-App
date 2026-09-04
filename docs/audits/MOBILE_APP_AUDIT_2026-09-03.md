@@ -11,7 +11,8 @@ changes were applied on 2026-09-03; see the implementation update below.
 Verification:
 
 - `flutter analyze`: clean, no issues found.
-- Cloud Functions dependency check: only major-version updates available.
+- `flutter test`: passing after the 2026-09-04 Flutter/dependency cleanup.
+- Cloud Functions dependency audit: clean after the 2026-09-04 maintenance pass.
 
 Implementation update - 2026-09-03:
 
@@ -43,6 +44,20 @@ Post-remediation verification:
 - Targeted Flutter tests covering the changed app paths: passing.
 - Focused Cloud Functions tests: 5 suites passed, 94 tests passed.
 - `git diff --check`: clean apart from local CRLF warnings.
+
+Maintenance update - 2026-09-04:
+
+- Flutter SDK/dependency cleanup completed and revalidated.
+- `google_maps_flutter_ios_sdk9` resolved to `2.18.11`, `home_widget`
+  resolved to `0.9.4`, and `logger` resolved to `2.7.0`.
+- Cloud Functions upgraded to `firebase-admin` `^14.3.0` and
+  `firebase-functions` `^7.3.2`.
+- Added an npm `uuid` override at `11.1.1`; `npm audit` now reports zero
+  vulnerabilities.
+- Added a Jest-only CommonJS `jose` mock so Firebase Admin 14's ESM dependency
+  chain does not break the existing CommonJS Jest runner.
+- Analyzer fallout from the upgraded lint set was fixed.
+- Full `flutter test` passed after the follow-up fixes.
 
 ## Overall Assessment
 
@@ -694,7 +709,10 @@ Remediation notes:
 
 ### Flutter and Dart Dependencies
 
-Based on `flutter pub outdated --no-transitive` from the project root:
+Status: maintenance pass completed on 2026-09-04 for the safe lockfile updates
+and the analyzer/test fallout. The table below is the original 2026-09-03
+snapshot kept for history; rerun `flutter pub outdated --no-transitive` before
+planning the next dependency pass.
 
 | Package | Current | Upgradable | Resolvable | Latest | Recommendation |
 | --- | ---: | ---: | ---: | ---: | --- |
@@ -719,14 +737,17 @@ Based on `flutter pub outdated --no-transitive` from the project root:
 
 Recommended Flutter upgrade order:
 
-1. Run a safe lockfile update for `google_maps_flutter_ios_sdk9` and
+1. Done - Safe lockfile update for `google_maps_flutter_ios_sdk9` and
    `home_widget`.
-2. Upgrade the Firebase packages together as a coordinated FlutterFire bump.
-3. Run `flutter analyze` and the test suite.
-4. Handle major upgrades one at a time, especially `flutter_secure_storage`,
+2. Done - Run `flutter analyze` and the full Flutter test suite after the
+   Flutter/dependency cleanup.
+3. Later - Upgrade the FlutterFire packages together as a coordinated
+   FlutterFire bump when their constraints are intentionally moved.
+4. Later - Handle major upgrades one at a time, especially
+   `flutter_secure_storage`,
    `permission_handler`, and `freezed`.
 
-Recommended Firebase target constraints:
+Deferred Firebase target constraints from the original audit snapshot:
 
 ```yaml
 firebase_core: ^4.14.0
@@ -741,7 +762,11 @@ firebase_messaging: ^16.6.0
 
 ### Cloud Functions Dependencies
 
-Based on `npm outdated --depth=0` from `functions/`:
+Status: runtime dependency maintenance completed on 2026-09-04. The Functions
+package now uses `firebase-admin` `^14.3.0`, `firebase-functions` `^7.3.2`, and
+an npm `uuid` override at `11.1.1`; `npm audit` reports zero vulnerabilities.
+The table below is the original 2026-09-03 `npm outdated --depth=0` snapshot,
+kept for history.
 
 | Package | Current | Wanted | Latest | Priority |
 | --- | ---: | ---: | ---: | --- |
@@ -753,8 +778,8 @@ These are major-version upgrades, not urgent patch-level fixes.
 
 Recommendation:
 
-- Schedule a maintenance pass.
-- Upgrade one package at a time.
+- Done for the Firebase Functions runtime family.
+- Keep future major upgrades one package at a time.
 - Read migration notes before each major upgrade.
 - Run the full Cloud Functions test suite after each package upgrade.
 
@@ -792,4 +817,5 @@ Recommendation:
 8. Done - Add phone validation, additional-contact UI limits, and phone
    save-time normalization.
 9. Done/accepted - Review iOS deployment target and Android support posture.
-10. Open - Schedule dependency major-version upgrades.
+10. Done/ongoing - Dependency maintenance pass completed; future major-version
+    upgrades can be scheduled separately.

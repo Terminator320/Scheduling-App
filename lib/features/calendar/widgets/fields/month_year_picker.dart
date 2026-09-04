@@ -14,7 +14,7 @@ class MonthYearPicker {
     BuildContext context,
     DateTime focusedDay,
   ) async {
-    return showModalBottomSheet<DateTime>(
+    return await showModalBottomSheet<DateTime>(
       context: context,
       backgroundColor: Theme.of(context).colorScheme.surface,
       sheetAnimationStyle: AppMotion.sheetStyle,
@@ -171,9 +171,7 @@ class _MonthYearPickerContentState extends State<_MonthYearPickerContent> {
     onSelectedItemChanged: onSelected,
     children: List.generate(
       itemCount,
-      (i) => Center(
-        child: Text(labelAt(i), style: theme.textTheme.bodyLarge),
-      ),
+      (i) => Center(child: Text(labelAt(i), style: theme.textTheme.bodyLarge)),
     ),
   );
 }

@@ -24,7 +24,7 @@ Future<SeriesScopeChoice?> showDeleteAppointmentDialog(
     );
     return confirmed ? SeriesScopeChoice.thisOnly : null;
   }
-  return showSeriesScopeDialog(
+  return await showSeriesScopeDialog(
     context,
     title: l.calendar_deleteAppointment,
     thisOnlyLabel: isRun
