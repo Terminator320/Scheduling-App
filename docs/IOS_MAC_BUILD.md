@@ -45,16 +45,18 @@ AirDrop/USB/secure channel; **never commit them**:
 
 | File | Needed for |
 |---|---|
-| `dev/.env` | Firebase client config (incl. `IOS_API_KEY` / `IOS_APP_ID`) |
+| `dev/firebase.local.json` | Local `--dart-define-from-file` values; copy from `dev/firebase.local.example.json` |
 | `ios/GoogleService-Info.plist` | iOS Firebase — lives at the `ios/` **root**, not `ios/Runner/` |
 
 (There is no third file — `android/` was deleted on 2026-08-05 and iOS is the
 only platform.)
 
-- Confirm `dev/.env` contains **`IOS_API_KEY`** and **`IOS_APP_ID`** —
-  `firebase_options.dart`'s iOS block reads them. Do **not** re-run
+- Confirm the dart-define file contains **`IOS_API_KEY`**, **`IOS_APP_ID`**,
+  **`MESSAGING_SENDER_ID`**, **`PROJECT_ID`**, **`STORAGE_BUCKET`**, and
+  **`IOS_MAPS_API_KEY`**. `firebase_options.dart`'s iOS block reads the
+  Firebase keys from compile-time defines. Do **not** re-run
   `flutterfire configure` — it rewrites `firebase_options.dart` into the
-  literal-values style and breaks the env-based setup.
+  literal-values style and breaks the define-based setup.
 - If `GoogleService-Info.plist` is lost: re-download from Firebase Console → the
   iOS app above (bundle `net.vogas.scheduling`) and drop it at `ios/`.
 
@@ -138,7 +140,7 @@ Walk the **device-only checklist** (none covered by the test harness):
 - **Save-to-contacts** (`NSContactsUsageDescription`)
 - Image upload pipeline (compress → upload) and image cleanup on delete
 - **App Attest** on a **real device** in a Release build (fails on Simulator)
-- **Admin live staff map** — needs `IOS_MAPS_API_KEY` in `dev/.env` (blank key →
+- **Admin live staff map** — needs `IOS_MAPS_API_KEY` as a dart define (blank key →
   the map renders blank; see `AppDelegate.swift`)
 - **Push notifications** — assignment/reminder/overdue pushes + tap deep-link
 - **Background GPS presence** (`geolocator`) — powers the "time to leave" reminder

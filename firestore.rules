@@ -408,6 +408,9 @@ service cloud.firestore {
             || (d.employeeIds is list && d.employeeIds.size() <= 500))
         && (!('employeeNames' in d.keys())
             || (d.employeeNames is list && d.employeeNames.size() <= 500))
+        && (!('historySearchScopes' in d.keys())
+            || (d.historySearchScopes is list
+                && d.historySearchScopes.size() <= 240))
 
         && (!('dayIndex' in d.keys())
             || (d.dayIndex is int && d.dayIndex >= 1 && d.dayIndex <= 14))
@@ -557,7 +560,9 @@ service cloud.firestore {
         && (!('billingTerms' in data) || (data.billingTerms is string && data.billingTerms.size() <= 200))
         && (!('autoInvoice' in data) || data.autoInvoice is bool)
         && (!('noFixedAddress' in data) || data.noFixedAddress is bool)
-        && (!('archived' in data) || data.archived is bool);
+        && (!('archived' in data) || data.archived is bool)
+        && (!('searchTokens' in data)
+            || (data.searchTokens is list && data.searchTokens.size() <= 240));
     }
 
     match /clients/{clientId} {

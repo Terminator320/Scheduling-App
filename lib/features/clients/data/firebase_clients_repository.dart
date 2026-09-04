@@ -1,12 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/foundation.dart' show compute;
 
 import 'package:scheduling/core/data/paged_scan.dart';
 import 'package:scheduling/core/data/search_result_cache.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/search/search_tokens.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/core/validators/email_format.dart';
+import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -268,13 +269,10 @@ class FirebaseClientsRepository implements ClientsRepository {
     final cached = _searchCache.read(cacheKey);
     if (cached != null) return cached;
 
-    final window = await _clientScanWindow();
-    if (window == null) return const [];
-
-    final results = await compute(
-      matchClientDocs,
-      ClientSearchScan(docs: window.docs, query: q),
-    );
+    final response = await _functions
+        .httpsCallable('searchClients')
+        .call<Map<String, dynamic>>({'query': q});
+    final results = _clientsFromCallable(response.data);
     _searchCache.write(cacheKey, results);
     return results;
   }
@@ -311,14 +309,54 @@ class FirebaseClientsRepository implements ClientsRepository {
   Map<String, dynamic> _normalizedMap(ClientRecord client) {
     final base = Map<String, dynamic>.from(client.toMap());
     base['email'] = normalizeEmail(base['email'] as String? ?? '');
+    base['phone'] = normalizePhoneForStorage(base['phone'] as String? ?? '');
+    base['mobile'] = normalizePhoneForStorage(base['mobile'] as String? ?? '');
     final contacts = base['contacts'] as List? ?? const [];
     base['contacts'] = contacts.whereType<Map<Object?, Object?>>().map((c) {
       final m = Map<String, dynamic>.from(c);
       m['email'] = normalizeEmail(m['email'] as String? ?? '');
+      m['phone'] = normalizePhoneForStorage(m['phone'] as String? ?? '');
       return m;
     }).toList();
+    base['searchTokens'] = searchIndexTokens(
+      texts: [
+        base['name'] as String? ?? '',
+        base['businessName'] as String? ?? '',
+        base['firstName'] as String? ?? '',
+        base['lastName'] as String? ?? '',
+        base['email'] as String? ?? '',
+        base['address'] as String? ?? '',
+        base['city'] as String? ?? '',
+        base['province'] as String? ?? '',
+        base['postalCode'] as String? ?? '',
+        base['country'] as String? ?? '',
+        for (final contact in base['contacts'] as List)
+          if (contact is Map)
+            '${contact['name'] ?? ''} ${contact['email'] ?? ''}',
+      ],
+      phones: [
+        base['phone'] as String? ?? '',
+        base['mobile'] as String? ?? '',
+        for (final contact in base['contacts'] as List)
+          if (contact is Map) (contact['phone'] ?? '').toString(),
+      ],
+    );
     return base;
   }
+}
+
+List<ClientRecord> _clientsFromCallable(Object? data) {
+  final raw = data;
+  if (raw is! Map) return const [];
+  final records = raw['clients'];
+  if (records is! List) return const [];
+  return [
+    for (final entry in records.whereType<Map<Object?, Object?>>())
+      ClientRecord.fromMap(
+        (entry['id'] ?? '').toString(),
+        Map<String, dynamic>.from(entry['data'] as Map? ?? const {}),
+      ),
+  ];
 }
 
 /// Raw doc without Firestore handles, safe to cross `compute` isolate boundary.

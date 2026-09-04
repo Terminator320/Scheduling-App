@@ -23,6 +23,12 @@ String bareNumber(String phone) {
   return trimmed.startsWith('+') ? '+$digits' : digits;
 }
 
+/// Canonical value for persisted phone fields.
+///
+/// UI fields may keep a friendly mask while the user types, but Firestore keeps
+/// the searchable/dialable core so edits do not preserve arbitrary punctuation.
+String normalizePhoneForStorage(String phone) => bareNumber(phone);
+
 /// Flexible validity check for typed phone fields.
 ///
 /// Allows common punctuation and extension markers while requiring enough

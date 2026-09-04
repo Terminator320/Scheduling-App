@@ -20,6 +20,8 @@ const clientJobCount = require("./client_job_count");
 const clients = require("./clients");
 const appointmentImages = require("./appointment_images");
 const notifications = require("./notifications");
+const indexedSearch = require("./indexed_search");
+const appointmentActions = require("./appointment_actions");
 
 exports.syncUsersByUid = bridge.syncUsersByUid;
 exports.propagateClientEdits = clientPropagation.propagateClientEdits;
@@ -32,6 +34,10 @@ exports.cascadeDeleteAppointmentImages =
 exports.recountAppointmentPictures =
   appointmentImages.recountAppointmentPictures;
 exports.deleteClient = clients.deleteClient;
+exports.searchClients = indexedSearch.searchClients;
+exports.searchHistory = indexedSearch.searchHistory;
+exports.findAppointmentConflicts = indexedSearch.findAppointmentConflicts;
+exports.restoreAppointmentStatus = appointmentActions.restoreAppointmentStatus;
 exports.placesAutocomplete = places.placesAutocomplete;
 exports.placesGetDetails = places.placesGetDetails;
 exports.placesReverseGeocode = places.placesReverseGeocode;

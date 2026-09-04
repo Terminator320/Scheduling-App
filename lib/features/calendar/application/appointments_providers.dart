@@ -10,7 +10,11 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 
 final appointmentsRepositoryProvider = Provider<AppointmentsRepository>((ref) {
   final firestore = ref.watch(firestoreProvider);
-  final repository = FirebaseAppointmentsRepository(firestore);
+  final functions = ref.watch(firebaseFunctionsProvider);
+  final repository = FirebaseAppointmentsRepository(
+    firestore,
+    functions: functions,
+  );
   ref.onDispose(repository.dispose);
   return repository;
 });

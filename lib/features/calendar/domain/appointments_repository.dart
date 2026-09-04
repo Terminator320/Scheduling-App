@@ -58,6 +58,11 @@ abstract class AppointmentsRepository {
     required String status,
   });
 
+  Future<void> restoreAppointmentStatus({
+    required String id,
+    required String previousStatus,
+  });
+
   /// Writes one status across several appointments in a single batch.
   Future<void> updateAppointmentStatuses({
     required List<String> ids,
