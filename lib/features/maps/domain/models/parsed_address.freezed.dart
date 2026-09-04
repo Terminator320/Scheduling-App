@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'parsed_address.dart';
@@ -9,6 +9,7 @@ part of 'parsed_address.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
@@ -25,16 +26,21 @@ $ParsedAddressCopyWith<ParsedAddress> get copyWith => _$ParsedAddressCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ParsedAddress&&(identical(other.fullAddress, fullAddress) || other.fullAddress == fullAddress)&&(identical(other.street, street) || other.street == street)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode));
+  final _this = this as ParsedAddress;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ParsedAddress&&(identical(other.fullAddress, _this.fullAddress) || other.fullAddress == _this.fullAddress)&&(identical(other.street, _this.street) || other.street == _this.street)&&(identical(other.city, _this.city) || other.city == _this.city)&&(identical(other.province, _this.province) || other.province == _this.province)&&(identical(other.postalCode, _this.postalCode) || other.postalCode == _this.postalCode));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,fullAddress,street,city,province,postalCode);
+int get hashCode {
+  final _this = this as ParsedAddress;
+  return Object.hash(runtimeType,_this.fullAddress,_this.street,_this.city,_this.province,_this.postalCode);
+}
 
 @override
 String toString() {
-  return 'ParsedAddress(fullAddress: $fullAddress, street: $street, city: $city, province: $province, postalCode: $postalCode)';
+  final _this = this as ParsedAddress;
+  return 'ParsedAddress(fullAddress: ${_this.fullAddress}, street: ${_this.street}, city: ${_this.city}, province: ${_this.province}, postalCode: ${_this.postalCode})';
 }
 
 
@@ -63,7 +69,7 @@ class _$ParsedAddressCopyWithImpl<$Res>
 /// Create a copy of ParsedAddress
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? fullAddress = null,Object? street = null,Object? city = null,Object? province = null,Object? postalCode = null,}) {
-  return _then(_self.copyWith(
+  return _then(ParsedAddress(
 fullAddress: null == fullAddress ? _self.fullAddress : fullAddress // ignore: cast_nullable_to_non_nullable
 as String,street: null == street ? _self.street : street // ignore: cast_nullable_to_non_nullable
 as String,city: null == city ? _self.city : city // ignore: cast_nullable_to_non_nullable
@@ -229,16 +235,18 @@ _$ParsedAddressCopyWith<_ParsedAddress> get copyWith => __$ParsedAddressCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _ParsedAddress&&(identical(other.fullAddress, fullAddress) || other.fullAddress == fullAddress)&&(identical(other.street, street) || other.street == street)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ParsedAddress&&(identical(other.fullAddress, fullAddress) || other.fullAddress == fullAddress)&&(identical(other.street, street) || other.street == street)&&(identical(other.city, city) || other.city == city)&&(identical(other.province, province) || other.province == province)&&(identical(other.postalCode, postalCode) || other.postalCode == postalCode));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,fullAddress,street,city,province,postalCode);
+int get hashCode {
+    return Object.hash(runtimeType,fullAddress,street,city,province,postalCode);
+}
 
 @override
 String toString() {
-  return 'ParsedAddress(fullAddress: $fullAddress, street: $street, city: $city, province: $province, postalCode: $postalCode)';
+    return 'ParsedAddress(fullAddress: $fullAddress, street: $street, city: $city, province: $province, postalCode: $postalCode)';
 }
 
 

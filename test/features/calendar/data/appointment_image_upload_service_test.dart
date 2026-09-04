@@ -310,7 +310,7 @@ void main() {
       var calls = 0;
       when(() => storage.uploadImage(any(), any())).thenAnswer((_) async {
         calls++;
-        return gate.future;
+        return await gate.future;
       });
 
       final service = makeService();
@@ -340,7 +340,7 @@ void main() {
           final file = invocation.positionalArguments[1] as File;
           if (file.path.endsWith('a.jpg')) {
             firstUploadStarted.complete();
-            return gate.future;
+            return await gate.future;
           }
           return _img('b.jpg');
         });

@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'add_event_controller.dart';
@@ -9,6 +9,7 @@ part of 'add_event_controller.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
@@ -27,16 +28,21 @@ $AddEventStateCopyWith<AddEventState> get copyWith => _$AddEventStateCopyWithImp
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AddEventState&&(identical(other.selectedDate, selectedDate) || other.selectedDate == selectedDate)&&(identical(other.endDate, endDate) || other.endDate == endDate)&&(identical(other.endDateTouched, endDateTouched) || other.endDateTouched == endDateTouched)&&(identical(other.selectedStartTime, selectedStartTime) || other.selectedStartTime == selectedStartTime)&&(identical(other.selectedEndTime, selectedEndTime) || other.selectedEndTime == selectedEndTime)&&(identical(other.endTimeWasPickedManually, endTimeWasPickedManually) || other.endTimeWasPickedManually == endTimeWasPickedManually)&&(identical(other.durationMinutes, durationMinutes) || other.durationMinutes == durationMinutes)&&(identical(other.selectedClient, selectedClient) || other.selectedClient == selectedClient)&&const DeepCollectionEquality().equals(other.clientResults, clientResults)&&(identical(other.isSearchingClient, isSearchingClient) || other.isSearchingClient == isSearchingClient)&&(identical(other.useCustomAddress, useCustomAddress) || other.useCustomAddress == useCustomAddress)&&(identical(other.isPersonal, isPersonal) || other.isPersonal == isPersonal)&&(identical(other.isDayOff, isDayOff) || other.isDayOff == isDayOff)&&(identical(other.isAllDay, isAllDay) || other.isAllDay == isAllDay)&&const DeepCollectionEquality().equals(other.selectedEmployees, selectedEmployees)&&(identical(other.repeat, repeat) || other.repeat == repeat)&&const DeepCollectionEquality().equals(other.selectedImages, selectedImages)&&(identical(other.isSubmitting, isSubmitting) || other.isSubmitting == isSubmitting)&&const DeepCollectionEquality().equals(other.errors, errors));
+  final _this = this as AddEventState;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AddEventState&&(identical(other.selectedDate, _this.selectedDate) || other.selectedDate == _this.selectedDate)&&(identical(other.endDate, _this.endDate) || other.endDate == _this.endDate)&&(identical(other.endDateTouched, _this.endDateTouched) || other.endDateTouched == _this.endDateTouched)&&(identical(other.selectedStartTime, _this.selectedStartTime) || other.selectedStartTime == _this.selectedStartTime)&&(identical(other.selectedEndTime, _this.selectedEndTime) || other.selectedEndTime == _this.selectedEndTime)&&(identical(other.endTimeWasPickedManually, _this.endTimeWasPickedManually) || other.endTimeWasPickedManually == _this.endTimeWasPickedManually)&&(identical(other.durationMinutes, _this.durationMinutes) || other.durationMinutes == _this.durationMinutes)&&(identical(other.selectedClient, _this.selectedClient) || other.selectedClient == _this.selectedClient)&&const DeepCollectionEquality().equals(other.clientResults, _this.clientResults)&&(identical(other.isSearchingClient, _this.isSearchingClient) || other.isSearchingClient == _this.isSearchingClient)&&(identical(other.useCustomAddress, _this.useCustomAddress) || other.useCustomAddress == _this.useCustomAddress)&&(identical(other.isPersonal, _this.isPersonal) || other.isPersonal == _this.isPersonal)&&(identical(other.isDayOff, _this.isDayOff) || other.isDayOff == _this.isDayOff)&&(identical(other.isAllDay, _this.isAllDay) || other.isAllDay == _this.isAllDay)&&const DeepCollectionEquality().equals(other.selectedEmployees, _this.selectedEmployees)&&(identical(other.repeat, _this.repeat) || other.repeat == _this.repeat)&&const DeepCollectionEquality().equals(other.selectedImages, _this.selectedImages)&&(identical(other.isSubmitting, _this.isSubmitting) || other.isSubmitting == _this.isSubmitting)&&const DeepCollectionEquality().equals(other.errors, _this.errors));
 }
 
 
 @override
-int get hashCode => Object.hashAll([runtimeType,selectedDate,endDate,endDateTouched,selectedStartTime,selectedEndTime,endTimeWasPickedManually,durationMinutes,selectedClient,const DeepCollectionEquality().hash(clientResults),isSearchingClient,useCustomAddress,isPersonal,isDayOff,isAllDay,const DeepCollectionEquality().hash(selectedEmployees),repeat,const DeepCollectionEquality().hash(selectedImages),isSubmitting,const DeepCollectionEquality().hash(errors)]);
+int get hashCode {
+  final _this = this as AddEventState;
+  return Object.hashAll([runtimeType,_this.selectedDate,_this.endDate,_this.endDateTouched,_this.selectedStartTime,_this.selectedEndTime,_this.endTimeWasPickedManually,_this.durationMinutes,_this.selectedClient,const DeepCollectionEquality().hash(_this.clientResults),_this.isSearchingClient,_this.useCustomAddress,_this.isPersonal,_this.isDayOff,_this.isAllDay,const DeepCollectionEquality().hash(_this.selectedEmployees),_this.repeat,const DeepCollectionEquality().hash(_this.selectedImages),_this.isSubmitting,const DeepCollectionEquality().hash(_this.errors)]);
+}
 
 @override
 String toString() {
-  return 'AddEventState(selectedDate: $selectedDate, endDate: $endDate, endDateTouched: $endDateTouched, selectedStartTime: $selectedStartTime, selectedEndTime: $selectedEndTime, endTimeWasPickedManually: $endTimeWasPickedManually, durationMinutes: $durationMinutes, selectedClient: $selectedClient, clientResults: $clientResults, isSearchingClient: $isSearchingClient, useCustomAddress: $useCustomAddress, isPersonal: $isPersonal, isDayOff: $isDayOff, isAllDay: $isAllDay, selectedEmployees: $selectedEmployees, repeat: $repeat, selectedImages: $selectedImages, isSubmitting: $isSubmitting, errors: $errors)';
+  final _this = this as AddEventState;
+  return 'AddEventState(selectedDate: ${_this.selectedDate}, endDate: ${_this.endDate}, endDateTouched: ${_this.endDateTouched}, selectedStartTime: ${_this.selectedStartTime}, selectedEndTime: ${_this.selectedEndTime}, endTimeWasPickedManually: ${_this.endTimeWasPickedManually}, durationMinutes: ${_this.durationMinutes}, selectedClient: ${_this.selectedClient}, clientResults: ${_this.clientResults}, isSearchingClient: ${_this.isSearchingClient}, useCustomAddress: ${_this.useCustomAddress}, isPersonal: ${_this.isPersonal}, isDayOff: ${_this.isDayOff}, isAllDay: ${_this.isAllDay}, selectedEmployees: ${_this.selectedEmployees}, repeat: ${_this.repeat}, selectedImages: ${_this.selectedImages}, isSubmitting: ${_this.isSubmitting}, errors: ${_this.errors})';
 }
 
 
@@ -65,7 +71,7 @@ class _$AddEventStateCopyWithImpl<$Res>
 /// Create a copy of AddEventState
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? selectedDate = freezed,Object? endDate = freezed,Object? endDateTouched = null,Object? selectedStartTime = freezed,Object? selectedEndTime = freezed,Object? endTimeWasPickedManually = null,Object? durationMinutes = freezed,Object? selectedClient = freezed,Object? clientResults = null,Object? isSearchingClient = null,Object? useCustomAddress = null,Object? isPersonal = null,Object? isDayOff = null,Object? isAllDay = null,Object? selectedEmployees = null,Object? repeat = null,Object? selectedImages = null,Object? isSubmitting = null,Object? errors = null,}) {
-  return _then(_self.copyWith(
+  return _then(AddEventState(
 selectedDate: freezed == selectedDate ? _self.selectedDate : selectedDate // ignore: cast_nullable_to_non_nullable
 as DateTime?,endDate: freezed == endDate ? _self.endDate : endDate // ignore: cast_nullable_to_non_nullable
 as DateTime?,endDateTouched: null == endDateTouched ? _self.endDateTouched : endDateTouched // ignore: cast_nullable_to_non_nullable
@@ -238,7 +244,7 @@ return $default(_that.selectedDate,_that.endDate,_that.endDateTouched,_that.sele
 
 
 class _AddEventState implements AddEventState {
-  const _AddEventState({this.selectedDate, this.endDate, this.endDateTouched = false, this.selectedStartTime, this.selectedEndTime, this.endTimeWasPickedManually = false, this.durationMinutes, this.selectedClient, final  List<ClientRecord> clientResults = const <ClientRecord>[], this.isSearchingClient = false, this.useCustomAddress = false, this.isPersonal = false, this.isDayOff = false, this.isAllDay = false, final  List<EmployeeRecord> selectedEmployees = const <EmployeeRecord>[], this.repeat = RepeatInterval.none, final  List<File> selectedImages = const <File>[], this.isSubmitting = false, final  Map<String, AppointmentFormError> errors = const <String, AppointmentFormError>{}}): _clientResults = clientResults,_selectedEmployees = selectedEmployees,_selectedImages = selectedImages,_errors = errors;
+  const _AddEventState({this.selectedDate, this.endDate, this.endDateTouched = false, this.selectedStartTime, this.selectedEndTime, this.endTimeWasPickedManually = false, this.durationMinutes, this.selectedClient,  List<ClientRecord> clientResults = const <ClientRecord>[], this.isSearchingClient = false, this.useCustomAddress = false, this.isPersonal = false, this.isDayOff = false, this.isAllDay = false,  List<EmployeeRecord> selectedEmployees = const <EmployeeRecord>[], this.repeat = RepeatInterval.none,  List<File> selectedImages = const <File>[], this.isSubmitting = false,  Map<String, AppointmentFormError> errors = const <String, AppointmentFormError>{}}): _clientResults = clientResults,_selectedEmployees = selectedEmployees,_selectedImages = selectedImages,_errors = errors;
   
 
 @override final  DateTime? selectedDate;
@@ -297,16 +303,18 @@ _$AddEventStateCopyWith<_AddEventState> get copyWith => __$AddEventStateCopyWith
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AddEventState&&(identical(other.selectedDate, selectedDate) || other.selectedDate == selectedDate)&&(identical(other.endDate, endDate) || other.endDate == endDate)&&(identical(other.endDateTouched, endDateTouched) || other.endDateTouched == endDateTouched)&&(identical(other.selectedStartTime, selectedStartTime) || other.selectedStartTime == selectedStartTime)&&(identical(other.selectedEndTime, selectedEndTime) || other.selectedEndTime == selectedEndTime)&&(identical(other.endTimeWasPickedManually, endTimeWasPickedManually) || other.endTimeWasPickedManually == endTimeWasPickedManually)&&(identical(other.durationMinutes, durationMinutes) || other.durationMinutes == durationMinutes)&&(identical(other.selectedClient, selectedClient) || other.selectedClient == selectedClient)&&const DeepCollectionEquality().equals(other._clientResults, _clientResults)&&(identical(other.isSearchingClient, isSearchingClient) || other.isSearchingClient == isSearchingClient)&&(identical(other.useCustomAddress, useCustomAddress) || other.useCustomAddress == useCustomAddress)&&(identical(other.isPersonal, isPersonal) || other.isPersonal == isPersonal)&&(identical(other.isDayOff, isDayOff) || other.isDayOff == isDayOff)&&(identical(other.isAllDay, isAllDay) || other.isAllDay == isAllDay)&&const DeepCollectionEquality().equals(other._selectedEmployees, _selectedEmployees)&&(identical(other.repeat, repeat) || other.repeat == repeat)&&const DeepCollectionEquality().equals(other._selectedImages, _selectedImages)&&(identical(other.isSubmitting, isSubmitting) || other.isSubmitting == isSubmitting)&&const DeepCollectionEquality().equals(other._errors, _errors));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _AddEventState&&(identical(other.selectedDate, selectedDate) || other.selectedDate == selectedDate)&&(identical(other.endDate, endDate) || other.endDate == endDate)&&(identical(other.endDateTouched, endDateTouched) || other.endDateTouched == endDateTouched)&&(identical(other.selectedStartTime, selectedStartTime) || other.selectedStartTime == selectedStartTime)&&(identical(other.selectedEndTime, selectedEndTime) || other.selectedEndTime == selectedEndTime)&&(identical(other.endTimeWasPickedManually, endTimeWasPickedManually) || other.endTimeWasPickedManually == endTimeWasPickedManually)&&(identical(other.durationMinutes, durationMinutes) || other.durationMinutes == durationMinutes)&&(identical(other.selectedClient, selectedClient) || other.selectedClient == selectedClient)&&const DeepCollectionEquality().equals(other.clientResults, _clientResults)&&(identical(other.isSearchingClient, isSearchingClient) || other.isSearchingClient == isSearchingClient)&&(identical(other.useCustomAddress, useCustomAddress) || other.useCustomAddress == useCustomAddress)&&(identical(other.isPersonal, isPersonal) || other.isPersonal == isPersonal)&&(identical(other.isDayOff, isDayOff) || other.isDayOff == isDayOff)&&(identical(other.isAllDay, isAllDay) || other.isAllDay == isAllDay)&&const DeepCollectionEquality().equals(other.selectedEmployees, _selectedEmployees)&&(identical(other.repeat, repeat) || other.repeat == repeat)&&const DeepCollectionEquality().equals(other.selectedImages, _selectedImages)&&(identical(other.isSubmitting, isSubmitting) || other.isSubmitting == isSubmitting)&&const DeepCollectionEquality().equals(other.errors, _errors));
 }
 
 
 @override
-int get hashCode => Object.hashAll([runtimeType,selectedDate,endDate,endDateTouched,selectedStartTime,selectedEndTime,endTimeWasPickedManually,durationMinutes,selectedClient,const DeepCollectionEquality().hash(_clientResults),isSearchingClient,useCustomAddress,isPersonal,isDayOff,isAllDay,const DeepCollectionEquality().hash(_selectedEmployees),repeat,const DeepCollectionEquality().hash(_selectedImages),isSubmitting,const DeepCollectionEquality().hash(_errors)]);
+int get hashCode {
+    return Object.hashAll([runtimeType,selectedDate,endDate,endDateTouched,selectedStartTime,selectedEndTime,endTimeWasPickedManually,durationMinutes,selectedClient,const DeepCollectionEquality().hash(_clientResults),isSearchingClient,useCustomAddress,isPersonal,isDayOff,isAllDay,const DeepCollectionEquality().hash(_selectedEmployees),repeat,const DeepCollectionEquality().hash(_selectedImages),isSubmitting,const DeepCollectionEquality().hash(_errors)]);
+}
 
 @override
 String toString() {
-  return 'AddEventState(selectedDate: $selectedDate, endDate: $endDate, endDateTouched: $endDateTouched, selectedStartTime: $selectedStartTime, selectedEndTime: $selectedEndTime, endTimeWasPickedManually: $endTimeWasPickedManually, durationMinutes: $durationMinutes, selectedClient: $selectedClient, clientResults: $clientResults, isSearchingClient: $isSearchingClient, useCustomAddress: $useCustomAddress, isPersonal: $isPersonal, isDayOff: $isDayOff, isAllDay: $isAllDay, selectedEmployees: $selectedEmployees, repeat: $repeat, selectedImages: $selectedImages, isSubmitting: $isSubmitting, errors: $errors)';
+    return 'AddEventState(selectedDate: $selectedDate, endDate: $endDate, endDateTouched: $endDateTouched, selectedStartTime: $selectedStartTime, selectedEndTime: $selectedEndTime, endTimeWasPickedManually: $endTimeWasPickedManually, durationMinutes: $durationMinutes, selectedClient: $selectedClient, clientResults: $clientResults, isSearchingClient: $isSearchingClient, useCustomAddress: $useCustomAddress, isPersonal: $isPersonal, isDayOff: $isDayOff, isAllDay: $isAllDay, selectedEmployees: $selectedEmployees, repeat: $repeat, selectedImages: $selectedImages, isSubmitting: $isSubmitting, errors: $errors)';
 }
 
 

@@ -60,9 +60,9 @@ class AppointmentImageUploadService {
 
   static Future<Directory> _defaultStagingDir() async {
     final base = await getApplicationSupportDirectory();
-    return Directory(_pathIn(base.path, 'pending_uploads')).create(
-      recursive: true,
-    );
+    return await Directory(
+      _pathIn(base.path, 'pending_uploads'),
+    ).create(recursive: true);
   }
 
   /// Stages files and starts the background upload.
@@ -420,9 +420,7 @@ final appointmentImageUploadProvider = Provider<AppointmentImageUploadService>((
     employeeIdForUid: (uid) async {
       final match = await ref
           .read(employeesRepositoryProvider)
-          .findUserByUid(
-            uid,
-          );
+          .findUserByUid(uid);
       return match?.id;
     },
   );

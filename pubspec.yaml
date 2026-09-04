@@ -15,13 +15,14 @@ dependencies:
     sdk: flutter
 
   # Firebase
-  firebase_core: 4.11.0
-  firebase_auth: ^6.4.0
-  cloud_firestore: ^6.3.0
-  firebase_storage: ^13.3.0
-  firebase_app_check: ^0.4.3
-  firebase_crashlytics: ^5.0.0
-  cloud_functions: ^6.0.0
+  firebase_core: ^4.14.0
+  firebase_auth: ^6.6.1
+  cloud_firestore: ^6.9.0
+  firebase_storage: ^13.5.0
+  firebase_app_check: ^0.4.7
+  firebase_crashlytics: ^5.3.0
+  cloud_functions: ^6.4.0
+  firebase_messaging: ^16.6.0
 
   # Calendar / dates / i18n
   intl: ^0.20.2
@@ -56,7 +57,7 @@ dependencies:
 
   # UI
   flutter_animate: ^4.5.0
-  flex_color_picker: ^3.8.0
+  flex_color_picker: ^4.0.0
   font_awesome_flutter: ^11.0.0
   fl_chart: ^1.2.0
 
@@ -66,11 +67,11 @@ dependencies:
 
   # Native splash (preserve/remove API used in main.dart)
   flutter_native_splash: ^2.4.7
-  flutter_secure_storage: ^10.3.1
+  flutter_secure_storage: ^11.0.0
   infinite_scroll_pagination: ^5.1.1
   flutter_slidable: ^4.0.0
-  smooth_page_indicator: ^2.0.1
-  permission_handler: ^12.0.2
+  smooth_page_indicator: ^3.0.0
+  permission_handler: ^12.0.3
   local_auth: ^3.0.1
 
   # Live background GPS presence (travel-time "leave now" reminders)
@@ -93,7 +94,6 @@ dependencies:
 
   # Network reachability (app-wide offline banner)
   connectivity_plus: ^7.2.0
-  firebase_messaging: ^16.4.1
   home_widget: ^0.9.3
   share_plus: ^13.2.0
   saver_gallery: ^5.1.0
@@ -109,11 +109,11 @@ dev_dependencies:
     sdk: flutter
 
   # Lint
-  very_good_analysis: ^10.2.0
+  very_good_analysis: ^11.0.0
 
   # Codegen (freezed value classes only)
-  build_runner: ^2.4.13
-  freezed: ^3.0.6
+  build_runner: ^2.16.1
+  freezed: ^4.0.1
 
   # Testing
   mocktail: ^1.0.4

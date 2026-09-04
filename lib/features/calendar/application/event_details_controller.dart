@@ -433,7 +433,7 @@ class EventDetailsController extends Notifier<EventDetailsState>
       return EventDetailsActionFailed(StateError('appointment has no id'));
     }
     if (!includeFuture || appointment.seriesId.isEmpty) {
-      return _setStatusOnRepo(appointment, 'cancelled');
+      return await _setStatusOnRepo(appointment, 'cancelled');
     }
     if (state.isSaving) return const EventDetailsActionBusy();
     // Offline writes would wait forever for a server ack.

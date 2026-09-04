@@ -63,9 +63,7 @@ void main() {
     });
 
     test('every key in SecureStorageKeys.all survives migration', () async {
-      final seeded = {
-        for (final key in SecureStorageKeys.all) key: 'v_$key',
-      };
+      final seeded = {for (final key in SecureStorageKeys.all) key: 'v_$key'};
       FlutterSecureStorage.setMockInitialValues(seeded);
       final service = SecureStorageService();
 
@@ -283,7 +281,7 @@ class _FlakyStorage extends TestFlutterSecureStoragePlatform {
     required Map<String, String> options,
   }) async {
     if (failing) throw error;
-    return super.write(key: key, value: value, options: options);
+    await super.write(key: key, value: value, options: options);
   }
 }
 

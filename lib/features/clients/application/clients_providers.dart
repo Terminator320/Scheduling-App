@@ -45,15 +45,12 @@ final clientStreamProvider = StreamProvider.autoDispose
 /// Full client search with relevance scoring. AutoDispose frees the results once each
 /// query instance is no longer watched.
 final clientSearchProvider = FutureProvider.autoDispose
-    .family<List<ClientRecord>, String>((
-      ref,
-      query,
-    ) async {
+    .family<List<ClientRecord>, String>((ref, query) async {
       if (!ClientSearchPolicy.shouldSearch(query)) return const [];
       // Watching bump invalidates results so deleted clients don't linger.
       ref.watch(clientsRefreshProvider);
       final repo = ref.watch(clientsRepositoryProvider);
-      return repo.searchClients(query);
+      return await repo.searchClients(query);
     });
 
 /// Clients of one type, for the list's filter row. AutoDispose frees it as soon
@@ -61,14 +58,18 @@ final clientSearchProvider = FutureProvider.autoDispose
 final clientsByTypeProvider = FutureProvider.autoDispose
     .family<List<ClientRecord>, ClientType>((ref, type) async {
       ref.watch(clientsRefreshProvider);
-      return ref.watch(clientsRepositoryProvider).fetchClientsByType(type);
+      return await ref
+          .watch(clientsRepositoryProvider)
+          .fetchClientsByType(type);
     });
 
 /// Clients at one building, from the same cached window as the type filter.
 final clientsByBuildingProvider = FutureProvider.autoDispose
     .family<List<ClientRecord>, String>((ref, key) async {
       ref.watch(clientsRefreshProvider);
-      return ref.watch(clientsRepositoryProvider).fetchClientsByBuilding(key);
+      return await ref
+          .watch(clientsRepositoryProvider)
+          .fetchClientsByBuilding(key);
     });
 
 /// Every address two or more clients share — the Building menu's options.
@@ -99,7 +100,7 @@ final clientsByBuildingProvider = FutureProvider.autoDispose
 final clientBuildingsProvider =
     FutureProvider.autoDispose<List<ClientBuilding>>((ref) async {
       ref.watch(clientsRefreshProvider);
-      return ref.watch(clientsRepositoryProvider).fetchBuildings();
+      return await ref.watch(clientsRepositoryProvider).fetchBuildings();
     });
 
 /// Each client's building key by id — the row builder's half of the pill.
@@ -109,7 +110,7 @@ final clientBuildingsProvider =
 final clientBuildingKeysProvider =
     FutureProvider.autoDispose<Map<String, String?>>((ref) async {
       ref.watch(clientsRefreshProvider);
-      return ref.watch(clientsRepositoryProvider).fetchBuildingKeys();
+      return await ref.watch(clientsRepositoryProvider).fetchBuildingKeys();
     });
 
 /// How many clients sit at each building, for the per-row pill.
@@ -130,5 +131,5 @@ final archivedClientsProvider = FutureProvider.autoDispose<List<ClientRecord>>((
   ref,
 ) async {
   ref.watch(clientsRefreshProvider);
-  return ref.watch(clientsRepositoryProvider).fetchArchivedClients();
+  return await ref.watch(clientsRepositoryProvider).fetchArchivedClients();
 });

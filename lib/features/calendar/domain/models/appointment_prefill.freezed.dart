@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 // coverage:ignore-file
-// ignore_for_file: type=lint
+// ignore_for_file: type=lint, type=warning, deprecated_member_use, deprecated_member_use_from_same_package
 // ignore_for_file: unused_element, deprecated_member_use, deprecated_member_use_from_same_package, use_function_type_syntax_for_parameters, unnecessary_const, avoid_init_to_null, invalid_override_different_default_values_named, prefer_expression_function_bodies, annotate_overrides, invalid_annotation_target, unnecessary_question_mark
 
 part of 'appointment_prefill.dart';
@@ -9,6 +9,7 @@ part of 'appointment_prefill.dart';
 // FreezedGenerator
 // **************************************************************************
 
+// GENERATED CODE - DO NOT MODIFY BY HAND
 // dart format off
 T _$identity<T>(T value) => value;
 /// @nodoc
@@ -32,16 +33,21 @@ $AppointmentPrefillCopyWith<AppointmentPrefill> get copyWith => _$AppointmentPre
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppointmentPrefill&&(identical(other.client, client) || other.client == client)&&(identical(other.useCustomAddress, useCustomAddress) || other.useCustomAddress == useCustomAddress)&&(identical(other.address, address) || other.address == address)&&(identical(other.title, title) || other.title == title)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.materialsNeeded, materialsNeeded) || other.materialsNeeded == materialsNeeded)&&const DeepCollectionEquality().equals(other.employeeIds, employeeIds)&&(identical(other.durationMinutes, durationMinutes) || other.durationMinutes == durationMinutes));
+  final _this = this as AppointmentPrefill;
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is AppointmentPrefill&&(identical(other.client, _this.client) || other.client == _this.client)&&(identical(other.useCustomAddress, _this.useCustomAddress) || other.useCustomAddress == _this.useCustomAddress)&&(identical(other.address, _this.address) || other.address == _this.address)&&(identical(other.title, _this.title) || other.title == _this.title)&&(identical(other.notes, _this.notes) || other.notes == _this.notes)&&(identical(other.materialsNeeded, _this.materialsNeeded) || other.materialsNeeded == _this.materialsNeeded)&&const DeepCollectionEquality().equals(other.employeeIds, _this.employeeIds)&&(identical(other.durationMinutes, _this.durationMinutes) || other.durationMinutes == _this.durationMinutes));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,client,useCustomAddress,address,title,notes,materialsNeeded,const DeepCollectionEquality().hash(employeeIds),durationMinutes);
+int get hashCode {
+  final _this = this as AppointmentPrefill;
+  return Object.hash(runtimeType,_this.client,_this.useCustomAddress,_this.address,_this.title,_this.notes,_this.materialsNeeded,const DeepCollectionEquality().hash(_this.employeeIds),_this.durationMinutes);
+}
 
 @override
 String toString() {
-  return 'AppointmentPrefill(client: $client, useCustomAddress: $useCustomAddress, address: $address, title: $title, notes: $notes, materialsNeeded: $materialsNeeded, employeeIds: $employeeIds, durationMinutes: $durationMinutes)';
+  final _this = this as AppointmentPrefill;
+  return 'AppointmentPrefill(client: ${_this.client}, useCustomAddress: ${_this.useCustomAddress}, address: ${_this.address}, title: ${_this.title}, notes: ${_this.notes}, materialsNeeded: ${_this.materialsNeeded}, employeeIds: ${_this.employeeIds}, durationMinutes: ${_this.durationMinutes})';
 }
 
 
@@ -70,7 +76,7 @@ class _$AppointmentPrefillCopyWithImpl<$Res>
 /// Create a copy of AppointmentPrefill
 /// with the given fields replaced by the non-null parameter values.
 @pragma('vm:prefer-inline') @override $Res call({Object? client = freezed,Object? useCustomAddress = null,Object? address = null,Object? title = null,Object? notes = null,Object? materialsNeeded = null,Object? employeeIds = null,Object? durationMinutes = freezed,}) {
-  return _then(_self.copyWith(
+  return _then(AppointmentPrefill(
 client: freezed == client ? _self.client : client // ignore: cast_nullable_to_non_nullable
 as ClientRecord?,useCustomAddress: null == useCustomAddress ? _self.useCustomAddress : useCustomAddress // ignore: cast_nullable_to_non_nullable
 as bool,address: null == address ? _self.address : address // ignore: cast_nullable_to_non_nullable
@@ -232,7 +238,7 @@ return $default(_that.client,_that.useCustomAddress,_that.address,_that.title,_t
 
 
 class _AppointmentPrefill extends AppointmentPrefill {
-  const _AppointmentPrefill({this.client, this.useCustomAddress = false, this.address = '', this.title = '', this.notes = '', this.materialsNeeded = '', final  List<String> employeeIds = const <String>[], this.durationMinutes}): _employeeIds = employeeIds,super._();
+  const _AppointmentPrefill({this.client, this.useCustomAddress = false, this.address = '', this.title = '', this.notes = '', this.materialsNeeded = '',  List<String> employeeIds = const <String>[], this.durationMinutes}): _employeeIds = employeeIds,super._();
   
 
 @override final  ClientRecord? client;
@@ -269,16 +275,18 @@ _$AppointmentPrefillCopyWith<_AppointmentPrefill> get copyWith => __$Appointment
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppointmentPrefill&&(identical(other.client, client) || other.client == client)&&(identical(other.useCustomAddress, useCustomAddress) || other.useCustomAddress == useCustomAddress)&&(identical(other.address, address) || other.address == address)&&(identical(other.title, title) || other.title == title)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.materialsNeeded, materialsNeeded) || other.materialsNeeded == materialsNeeded)&&const DeepCollectionEquality().equals(other._employeeIds, _employeeIds)&&(identical(other.durationMinutes, durationMinutes) || other.durationMinutes == durationMinutes));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _AppointmentPrefill&&(identical(other.client, client) || other.client == client)&&(identical(other.useCustomAddress, useCustomAddress) || other.useCustomAddress == useCustomAddress)&&(identical(other.address, address) || other.address == address)&&(identical(other.title, title) || other.title == title)&&(identical(other.notes, notes) || other.notes == notes)&&(identical(other.materialsNeeded, materialsNeeded) || other.materialsNeeded == materialsNeeded)&&const DeepCollectionEquality().equals(other.employeeIds, _employeeIds)&&(identical(other.durationMinutes, durationMinutes) || other.durationMinutes == durationMinutes));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,client,useCustomAddress,address,title,notes,materialsNeeded,const DeepCollectionEquality().hash(_employeeIds),durationMinutes);
+int get hashCode {
+    return Object.hash(runtimeType,client,useCustomAddress,address,title,notes,materialsNeeded,const DeepCollectionEquality().hash(_employeeIds),durationMinutes);
+}
 
 @override
 String toString() {
-  return 'AppointmentPrefill(client: $client, useCustomAddress: $useCustomAddress, address: $address, title: $title, notes: $notes, materialsNeeded: $materialsNeeded, employeeIds: $employeeIds, durationMinutes: $durationMinutes)';
+    return 'AppointmentPrefill(client: $client, useCustomAddress: $useCustomAddress, address: $address, title: $title, notes: $notes, materialsNeeded: $materialsNeeded, employeeIds: $employeeIds, durationMinutes: $durationMinutes)';
 }
 
 

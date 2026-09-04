@@ -509,9 +509,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       return matches;
     }
 
-    final payload = <String, Object>{
-      'query': q,
-    };
+    final payload = <String, Object>{'query': q};
     if (employeeId != null) payload['employeeId'] = employeeId;
 
     final response = await functions
@@ -528,9 +526,10 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     AppointmentDateRange range,
   ) {
     return retryStream(
-      () => _rangeQuery(range, employeeId: employeeId).snapshots().map(
-        _mapRangeSnapshot,
-      ),
+      () => _rangeQuery(
+        range,
+        employeeId: employeeId,
+      ).snapshots().map(_mapRangeSnapshot),
     );
   }
 
@@ -567,7 +566,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
     final functions = _functions;
     if (functions == null) {
-      return _findClashingAppointmentsLocal(
+      return await _findClashingAppointmentsLocal(
         employeeIds: employeeIds,
         start: start,
         end: end,

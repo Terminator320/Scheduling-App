@@ -37,10 +37,7 @@ typedef HistorySearchKey = ({String query, String? employeeId});
 
 /// Database-backed history search across the whole window.
 final historySearchProvider = FutureProvider.autoDispose
-    .family<List<AppointmentRecord>, HistorySearchKey>((
-      ref,
-      key,
-    ) async {
+    .family<List<AppointmentRecord>, HistorySearchKey>((ref, key) async {
       final repo = ref.watch(appointmentsRepositoryProvider);
       // Resolved HERE, not inside the callback: this is autoDispose, so the
       // `Ref` is gone the moment the last listener does, and Riverpod 3's
@@ -53,7 +50,7 @@ final historySearchProvider = FutureProvider.autoDispose
             logger.warn('HIST-SEARCH invalidate error', e, st),
       );
       ref.onDispose(sub.cancel);
-      return repo.searchHistory(key.query, employeeId: key.employeeId);
+      return await repo.searchHistory(key.query, employeeId: key.employeeId);
     });
 
 /// Client appointments for the Job history section.
@@ -68,5 +65,5 @@ final clientJobHistoryProvider = FutureProvider.autoDispose
             logger.warn('HIST-LOAD invalidate error', e, st),
       );
       ref.onDispose(sub.cancel);
-      return repo.fetchClientHistory(clientId: clientId);
+      return await repo.fetchClientHistory(clientId: clientId);
     });
