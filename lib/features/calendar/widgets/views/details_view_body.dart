@@ -196,14 +196,48 @@ class DetailsViewBody extends ConsumerWidget {
     WidgetRef ref,
     EventDetailsController notifier,
   ) async {
+    final previousStatus = AppointmentStatus.storedRaw(appointment.status);
+    final l10n = context.l10n;
+    final undoLabel = l10n.common_undo;
+    final restoredMessage = l10n.common_changesSaved;
+    final undoFailedIntro = l10n.error_introUpdateAppointmentStatus;
     final outcome = await notifier.markAsDone(appointment);
     if (!context.mounted) return;
-    _onStatusOutcome(
-      context,
-      ref,
-      outcome,
-      successMessage: context.l10n.common_appointmentMarkedAsDone,
-    );
+    switch (outcome) {
+      case EventDetailsActionBusy():
+        return;
+      case EventDetailsActionFailed(:final error):
+        ref
+            .read(noticeServiceProvider)
+            .error(
+              composeErrorNotice(
+                context,
+                intro: context.l10n.error_introUpdateAppointmentStatus,
+                error: error,
+              ),
+            );
+      case EventDetailsActionOk():
+        final notices = ref.read(noticeServiceProvider);
+        notices.successWithAction(
+          l10n.common_appointmentMarkedAsDone,
+          actionLabel: undoLabel,
+          onAction: () async {
+            final undoOutcome = await notifier.restoreStatus(
+              appointment,
+              previousStatus: previousStatus,
+            );
+            switch (undoOutcome) {
+              case EventDetailsActionOk():
+                notices.success(restoredMessage);
+              case EventDetailsActionFailed(:final error):
+                notices.error('$undoFailedIntro: $error');
+              case EventDetailsActionBusy():
+                break;
+            }
+          },
+        );
+        onClose();
+    }
   }
 
   Future<void> _onStart(

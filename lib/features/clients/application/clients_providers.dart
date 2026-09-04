@@ -10,7 +10,8 @@ import 'package:scheduling/features/clients/domain/policies/client_search_policy
 
 final clientsRepositoryProvider = Provider<ClientsRepository>((ref) {
   final firestore = ref.watch(firestoreProvider);
-  return FirebaseClientsRepository(firestore);
+  final functions = ref.watch(firebaseFunctionsProvider);
+  return FirebaseClientsRepository(firestore, functions: functions);
 });
 
 /// Bumped after any client write so paginated list refreshes.

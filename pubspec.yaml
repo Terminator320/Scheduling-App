@@ -54,9 +54,6 @@ dependencies:
   # IDs
   uuid: ^4.5.1
 
-  # Config
-  flutter_dotenv: ^6.0.1
-
   # UI
   flutter_animate: ^4.5.0
   flex_color_picker: ^3.8.0
@@ -136,7 +133,6 @@ flutter:
   uses-material-design: true
 
   assets:
-    - dev/.env
     # The 512px derivative, NOT the 1254px master. `BrandMark` renders at
     # <=156 logical px and the native splash needs 468 at dpr 3, so the master
     # was ~0.85 MB of a ~1.02 MB asset shipping in the IPA unused. The master

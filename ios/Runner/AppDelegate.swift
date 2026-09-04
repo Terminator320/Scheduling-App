@@ -8,7 +8,7 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    provideGoogleMapsAPIKey()
+    registerNativeConfigChannel()
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -16,30 +16,27 @@ import UIKit
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
   }
 
-  /// Reads IOS_MAPS_API_KEY from dev/.env and activates Google Maps. This
-  /// never crashes — if the key is missing or empty, the live staff map
-  /// just stays blank.
-  private func provideGoogleMapsAPIKey() {
-    let assetKey = FlutterDartProject.lookupKey(forAsset: "dev/.env")
-    guard let path = Bundle.main.path(forResource: assetKey, ofType: nil),
-      let contents = try? String(contentsOfFile: path, encoding: .utf8)
-    else {
-      NSLog("IOS_MAPS_API_KEY missing — live map will be blank")
+  private func registerNativeConfigChannel() {
+    guard let controller = window?.rootViewController as? FlutterViewController else {
+      NSLog("Native config channel unavailable")
       return
     }
-    let prefix = "IOS_MAPS_API_KEY="
-    guard
-      let line = contents.split(separator: "\n").first(where: { $0.hasPrefix(prefix) })
-    else {
-      NSLog("IOS_MAPS_API_KEY missing — live map will be blank")
-      return
+    let channel = FlutterMethodChannel(
+      name: "net.vogas.scheduling/native_config",
+      binaryMessenger: controller.binaryMessenger
+    )
+    channel.setMethodCallHandler { call, result in
+      guard call.method == "provideGoogleMapsApiKey" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard let key = call.arguments as? String, !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        NSLog("IOS_MAPS_API_KEY missing - live map will be blank")
+        result(nil)
+        return
+      }
+      GMSServices.provideAPIKey(key)
+      result(nil)
     }
-    let rawValue = line.dropFirst(prefix.count)
-    let key = rawValue.trimmingCharacters(in: CharacterSet(charactersIn: " \"'\t"))
-    guard !key.isEmpty else {
-      NSLog("IOS_MAPS_API_KEY missing — live map will be blank")
-      return
-    }
-    GMSServices.provideAPIKey(key)
   }
 }

@@ -10,9 +10,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kDebugMode;
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -52,6 +53,25 @@ const String _emulatorHost = String.fromEnvironment(
   'EMULATOR_HOST',
   defaultValue: '127.0.0.1',
 );
+const String _iosMapsApiKey = String.fromEnvironment('IOS_MAPS_API_KEY');
+const MethodChannel _nativeConfigChannel = MethodChannel(
+  'net.vogas.scheduling/native_config',
+);
+
+Future<void> _provideIosMapsApiKey() async {
+  if (defaultTargetPlatform != TargetPlatform.iOS || _iosMapsApiKey.isEmpty) {
+    return;
+  }
+  try {
+    await _nativeConfigChannel.invokeMethod<void>(
+      'provideGoogleMapsApiKey',
+      _iosMapsApiKey,
+    );
+  } catch (error, stack) {
+    debugPrint('Failed to provide iOS Maps API key: $error');
+    debugPrintStack(stackTrace: stack);
+  }
+}
 
 Future<void> _wireFirebaseEmulator() async {
   FirebaseFirestore.instance.useFirestoreEmulator(_emulatorHost, 8080);
@@ -92,10 +112,6 @@ Future<void> main() async {
 
       final settingsFuture = SharedPrefsSettingsRepository().load();
 
-      // Load env before Firebase. The locale inits run concurrently alongside
-      // it so we're not blocked waiting.
-      await dotenv.load(fileName: 'dev/.env');
-
       await Future.wait([
         Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform,
@@ -103,6 +119,7 @@ Future<void> main() async {
         initializeDateFormatting('en_CA'),
         initializeDateFormatting('fr_CA'),
       ]);
+      await _provideIosMapsApiKey();
 
       // Pin offline cache before first Firestore read (SplashScreen).
       FirebaseFirestore.instance.settings = const Settings(

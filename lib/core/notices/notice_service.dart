@@ -13,6 +13,17 @@ class NoticeService {
 
   void success(String message) => _emit(AppNotice.success(message));
 
+  void successWithAction(
+    String message, {
+    required String actionLabel,
+    required FutureOr<void> Function() onAction,
+  }) => _emit(
+    AppNotice.success(
+      message,
+      action: NoticeAction(label: actionLabel, onPressed: onAction),
+    ),
+  );
+
   void info(String message) => _emit(AppNotice.info(message));
 
   void error(String message) => _emit(AppNotice.error(message));

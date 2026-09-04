@@ -10,6 +10,7 @@
 .history
 
 *.env
+/dev/firebase.local.json
 *google-services.json
 **/GoogleService-Info.plist
 
@@ -204,6 +205,5 @@ docs/superpowers/
 # macOS Finder metadata
 .DS_Store
 **/.DS_Store
-
 
 

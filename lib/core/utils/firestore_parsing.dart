@@ -6,6 +6,19 @@ DateTime? firestoreDateTime(dynamic value) {
   if (value is Timestamp) return value.toDate();
   if (value is DateTime) return value;
   if (value is String) return DateTime.tryParse(value);
+  if (value is Map) {
+    final seconds = value['seconds'] ?? value['_seconds'];
+    final nanos = value['nanoseconds'] ?? value['_nanoseconds'] ?? 0;
+    if (seconds is num && nanos is num) {
+      return DateTime.fromMillisecondsSinceEpoch(
+        seconds.toInt() * 1000 + (nanos.toInt() ~/ 1000000),
+      );
+    }
+    final millis = value['millisecondsSinceEpoch'];
+    if (millis is num) {
+      return DateTime.fromMillisecondsSinceEpoch(millis.toInt());
+    }
+  }
   return null;
 }
 

@@ -212,8 +212,7 @@ Remediation notes:
 
 ### Medium - Client, History, and Conflict Search Use Capped Client-Side Scans
 
-Status: Open. Deferred because this requires server-side search/indexing and
-server-side appointment conflict validation design.
+Status: Fixed in the 2026-09-03 follow-up pass.
 
 Relevant code:
 
@@ -247,6 +246,17 @@ Recommendation:
   service.
 - Add server-side conflict validation for appointment create/update.
 - Surface cap-hit warnings to admins instead of only logging them.
+
+Remediation notes:
+
+- Client and history documents now carry bounded search-token arrays populated
+  on app writes and by `functions/scripts/backfill-search-tokens.js`.
+- `searchClients` and `searchHistory` are Cloud Functions callables backed by
+  `array-contains-any` indexes, with role-scoped history access.
+- Appointment conflict reads now route through `findAppointmentConflicts`, a
+  server-side callable that authorizes the caller and checks overlap centrally.
+- Remaining hardening option: make appointment create/update themselves
+  callable-owned so direct Firestore writes cannot bypass conflict validation.
 
 ### Medium - Google Places Autocomplete Rate Limit Is Per Instance
 
@@ -287,7 +297,7 @@ Remediation notes:
 
 ### Medium - iOS Deployment Target Is Very High
 
-Status: Open. Requires product/platform support decision.
+Status: Accepted. Owner decision: keep iOS 18.
 
 Relevant code:
 
@@ -313,6 +323,12 @@ Recommendation:
 - Confirm the product requirement for iOS 18.
 - If possible, lower to the oldest iOS version compatible with the app's Live
   Activities, App Intents, Firebase, and Maps requirements.
+
+Remediation notes:
+
+- The iOS 18.0 floor is intentional because the project relies on the current
+  Live Activity/App Intents behavior documented in `ios/CLAUDE.md` and
+  `docs/IOS_MAC_BUILD.md`.
 
 ### Medium - Route Argument Force-Casts Can Red-Screen
 
@@ -353,7 +369,7 @@ Remediation notes:
 
 ### Medium - Phone and Mobile Fields Are Not Format-Validated
 
-Status: Partially fixed in the 2026-09-03 remediation pass.
+Status: Fixed in the 2026-09-03 follow-up pass.
 
 Relevant code:
 
@@ -384,7 +400,8 @@ Remediation notes:
 - Client phone, mobile, and additional-contact phone fields now validate minimum
   usable digit count and allowed characters.
 - Add/edit client sheets surface phone validation errors inline.
-- Save-time normalization remains open for a future data-shape pass.
+- Save-time normalization now stores bare digits for phone, mobile, and
+  additional-contact phone fields before Firestore writes.
 
 ### Medium - Additional Contacts Can Exceed Rule Limits Before Save
 
@@ -457,23 +474,21 @@ Remediation notes:
 
 ### Low - Bundled Config Is Named `dev/.env`
 
-Status: Open. Requires deployment/configuration decision and Google Cloud key
-restriction review.
+Status: Fixed in the 2026-09-03 follow-up pass; Google Cloud key restriction
+review remains an owner-side operational check.
 
 Relevant code:
 
-- `pubspec.yaml:138`
-- `pubspec.yaml:139`
-- `lib/main.dart:97`
-- `lib/firebase_options.dart:7`
-- `ios/Runner/AppDelegate.swift:19`
-- `ios/Runner/AppDelegate.swift:23`
-- `dev/.env:8`
+- `pubspec.yaml`
+- `lib/main.dart`
+- `lib/firebase_options.dart`
+- `ios/Runner/AppDelegate.swift`
+- `dev/firebase.local.example.json`
 
 Finding:
 
-The app bundles and reads `dev/.env` as a runtime asset. This includes Firebase
-identifiers and the iOS Maps SDK API key.
+The app used to bundle and read `dev/.env` as a runtime asset. That included
+Firebase identifiers and the iOS Maps SDK API key.
 
 Why it matters:
 
@@ -489,9 +504,16 @@ Recommendation:
   values.
 - Avoid shipping production apps with a config path named `dev`.
 
+Remediation notes:
+
+- `flutter_dotenv` and the bundled `dev/.env` asset were removed.
+- Firebase client config now comes from compile-time `--dart-define` values.
+- The iOS Maps key is provided to native Google Maps through a Flutter method
+  channel from `IOS_MAPS_API_KEY`.
+
 ### Low - Android Support Is Ambiguous
 
-Status: Open. Requires product/platform support decision.
+Status: Accepted. Owner decision: iOS-only.
 
 Relevant code:
 
@@ -515,6 +537,13 @@ Recommendation:
 
 - If iOS-only is intentional, remove or clearly guard Android support paths.
 - If Android is still supported, restore Android as a tracked, tested platform.
+
+Remediation notes:
+
+- Runtime Firebase options now explicitly throw `UnsupportedError` on Android.
+- `pubspec.yaml` already keeps Android splash/icon generation disabled.
+- The ignored local `android/` folder, if present on a workstation, is not part
+  of the tracked supported platform surface.
 
 ### Low - Destructive Client Actions Should Be Gated at the Action Builder
 
@@ -548,8 +577,7 @@ Remediation notes:
 
 ### Low - High-Impact Appointment Actions Could Use Undo
 
-Status: Open. Deferred as product/UX behavior beyond the safety fixes in this
-pass.
+Status: Fixed in the 2026-09-03 follow-up pass.
 
 Finding:
 
@@ -564,6 +592,13 @@ Recommendation:
 
 - Add undo snackbars or confirmation for high-impact transitions such as
   marking an appointment done.
+
+Remediation notes:
+
+- Mark-complete success notices now include an Undo action.
+- Undo calls `restoreAppointmentStatus`, a Cloud Function that validates the
+  active caller is an admin or assigned employee and restores the previous open
+  status while clearing `completedAt`.
 
 ## 5. Security Improvements
 
@@ -750,11 +785,11 @@ Recommendation:
 2. Done - Add explicit location-sharing consent and gate presence uploads.
 3. Done - Stop automatic notification permission prompts during startup/account
    sync.
-4. Open - Add server-side or indexed appointment conflict validation.
-5. Open - Replace capped client/history search scans with scalable search.
+4. Done - Add server-side or indexed appointment conflict validation.
+5. Done - Replace capped client/history search scans with scalable search.
 6. Done - Move Places autocomplete to durable rate limiting.
 7. Done - Add route argument validation and typed route helpers.
-8. Done/partial - Add phone validation and additional-contact UI limits; phone
-   save-time normalization remains open.
-9. Open - Review iOS deployment target and Android support posture.
+8. Done - Add phone validation, additional-contact UI limits, and phone
+   save-time normalization.
+9. Done/accepted - Review iOS deployment target and Android support posture.
 10. Open - Schedule dependency major-version upgrades.

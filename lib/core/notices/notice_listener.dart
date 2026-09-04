@@ -104,6 +104,7 @@ class _NoticeListenerState extends ConsumerState<NoticeListener> {
       builder: (_) => _TopNotice(
         dot: dot,
         message: notice.message,
+        action: notice.action,
         duration: duration,
         showClose: accessible,
         onDismiss: dismiss,
@@ -122,6 +123,7 @@ class _TopNotice extends StatefulWidget {
   const _TopNotice({
     required this.dot,
     required this.message,
+    required this.action,
     required this.duration,
     required this.showClose,
     required this.onDismiss,
@@ -129,6 +131,7 @@ class _TopNotice extends StatefulWidget {
 
   final Color dot;
   final String message;
+  final NoticeAction? action;
   final Duration duration;
 
   /// The design has no close button. It renders only under accessible
@@ -260,6 +263,32 @@ class _TopNoticeState extends State<_TopNotice>
                                 ),
                               ),
                             ),
+                            if (widget.action != null) ...[
+                              const SizedBox(width: AppSpacing.sp8),
+                              TextButton(
+                                onPressed: () {
+                                  final action = widget.action!;
+                                  _dismiss();
+                                  unawaited(
+                                    Future<void>.sync(
+                                      action.onPressed,
+                                    ),
+                                  );
+                                },
+                                style: TextButton.styleFrom(
+                                  foregroundColor: scheme.onInverseSurface,
+                                  minimumSize: const Size(48, 48),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.sp8,
+                                  ),
+                                ),
+                                child: Text(
+                                  widget.action!.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                             if (widget.showClose) ...[
                               const SizedBox(width: AppSpacing.sp4),
                               // A real IconButton for the 48px tap target plus

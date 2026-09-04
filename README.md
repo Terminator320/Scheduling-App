@@ -16,9 +16,9 @@ The application is backed by Google Firebase, giving it a secure, cloud-based fo
 
 ## Setup
 
-1. **Environment file** — copy `dev/.env.example` to `dev/.env` and fill in the Firebase client values (Firebase console → *Project settings* → *General* → *Your apps*, or the output of `flutterfire configure`). `dev/.env` is gitignored and bundled as an asset at build time; the app fails fast on startup naming any missing key.
+1. **Build config** — copy `dev/firebase.local.example.json` to `dev/firebase.local.json`, fill in the Firebase and iOS Maps client values, and pass it with `--dart-define-from-file`. Required keys are `IOS_API_KEY`, `IOS_APP_ID`, `MESSAGING_SENDER_ID`, `PROJECT_ID`, `STORAGE_BUCKET`, and `IOS_MAPS_API_KEY`. The app fails fast on startup naming any missing Firebase key.
 2. **Dependencies** — run `flutter pub get`. Localizations are generated automatically (`generate: true` in `pubspec.yaml`); run `flutter gen-l10n` manually if needed.
-3. **Run** — `flutter run`.
+3. **Run** — `flutter run --dart-define-from-file=dev/firebase.local.json`, or pass the same keys individually with repeated `--dart-define=KEY=value` arguments.
 4. **Local Firebase emulators (optional)** — start them with `firebase emulators:start`, then run the app with:
 
    ```bash

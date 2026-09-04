@@ -5,9 +5,10 @@ Loaded when working under `ios/`. Root context: `../CLAUDE.md`.
 iOS notes (Phase 0 of clean-architecture restructure):
 - iOS native build, run, and Crashlytics dSYM upload require a Mac. **Do NOT
   re-run `flutterfire configure`** — `lib/firebase_options.dart` already builds
-  the iOS options from `dev/.env` (`IOS_API_KEY`, `IOS_APP_ID`,
+  the iOS options from `--dart-define` values (`IOS_API_KEY`, `IOS_APP_ID`,
+  `MESSAGING_SENDER_ID`, `PROJECT_ID`, `STORAGE_BUCKET`,
   `iosBundleId: net.vogas.scheduling`); re-running it rewrites the file into the
-  literal-values style and breaks the env-based setup. Carry
+  literal-values style and breaks the define-based setup. Carry
   `ios/GoogleService-Info.plist` (gitignored) to the Mac out-of-band; it lives
   at the `ios/` **root**, not `ios/Runner/`.
 - **The project uses Swift Package Manager — there is no Podfile and never will
