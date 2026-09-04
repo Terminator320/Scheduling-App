@@ -16,6 +16,8 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart'
     show shouldRegisterPush;
 import 'package:scheduling/features/presence/data/presence_repository.dart';
+import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
+import 'package:scheduling/features/settings/application/my_details_providers.dart';
 
 final presenceRepositoryProvider = Provider<PresenceRepository>(
   (ref) => PresenceRepository(
@@ -28,6 +30,14 @@ final presenceSyncControllerProvider = Provider<PresenceSyncController>((ref) {
   final controller = PresenceSyncController(ref);
   ref.onDispose(controller.dispose);
   return controller;
+});
+
+final myPresenceFixProvider = StreamProvider.autoDispose<PresenceFix?>((ref) {
+  final record = ref.watch(myEmployeeRecordProvider);
+  if (record == null) return Stream.value(null);
+  return ref
+      .watch(presenceRepositoryProvider)
+      .watchLocation(userDocId: record.id);
 });
 
 /// Movement uploads at most this often — the stream's 250 m `distanceFilter`

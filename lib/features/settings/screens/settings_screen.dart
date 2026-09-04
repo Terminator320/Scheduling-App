@@ -30,6 +30,7 @@ import 'package:scheduling/features/presence/application/presence_sync_controlle
 import 'package:scheduling/features/settings/application/app_info_provider.dart';
 import 'package:scheduling/features/settings/application/app_lock_provider.dart';
 import 'package:scheduling/features/settings/application/my_details_providers.dart';
+import 'package:scheduling/features/settings/screens/location_sharing_screen.dart';
 import 'package:scheduling/features/settings/screens/text_size_screen.dart';
 import 'package:scheduling/features/settings/widgets/cards/account_settings_card.dart';
 import 'package:scheduling/features/settings/widgets/cards/appearance_settings_card.dart';
@@ -38,6 +39,7 @@ import 'package:scheduling/features/settings/widgets/cards/notifications_setting
 import 'package:scheduling/features/settings/widgets/cards/security_settings_card.dart';
 import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
 import 'package:scheduling/features/settings/widgets/views/delete_account_flow.dart';
+import 'package:scheduling/features/settings/widgets/views/location_sharing_view.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
 import 'package:scheduling/features/wave/widgets/wave_settings_section.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -46,7 +48,7 @@ import 'package:scheduling/shared/widgets/app_bars/app_header_pair.dart';
 import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 
-enum _SettingsDetail { textSize }
+enum _SettingsDetail { textSize, locationSharing }
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({
@@ -177,6 +179,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       context,
       MaterialPageRoute(
         builder: (_) => TextSizeScreen(
+          isAdmin: _isAdmin,
+          employeeId: widget.employeeId,
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _onLocationSharingTap() async {
+    if (context.isTwoPane) {
+      setState(() => _selectedDetail = _SettingsDetail.locationSharing);
+      return;
+    }
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationSharingScreen(
           isAdmin: _isAdmin,
           employeeId: widget.employeeId,
         ),
@@ -378,6 +397,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
             if (mounted) setState(() => _selectedDetail = null);
           },
         );
+      case _SettingsDetail.locationSharing:
+        return LocationSharingView(
+          key: const ValueKey('settings-location-sharing-pane'),
+          onApplied: () {
+            if (mounted) setState(() {});
+          },
+        );
       case null:
         return null;
     }
@@ -489,6 +515,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         locationSharingEnabled:
             _pendingLocationSharingValue ??
             ref.watch(myEmployeeRecordProvider)?.locationSharingEnabled,
+        onLocationSharingTap: _onLocationSharingTap,
         onToggleLocationSharing: _toggleLocationSharing,
         isTogglingLocationSharing: _pendingLocationSharingValue != null,
       ),

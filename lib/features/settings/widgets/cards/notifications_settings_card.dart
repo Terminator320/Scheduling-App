@@ -19,6 +19,7 @@ class NotificationsSettingsCard extends ConsumerWidget {
     required this.travelAlertsEnabled,
     required this.onToggleTravelAlerts,
     required this.locationSharingEnabled,
+    required this.onLocationSharingTap,
     required this.onToggleLocationSharing,
     this.isTogglingLiveActivity = false,
     this.isTogglingTravelAlerts = false,
@@ -37,6 +38,7 @@ class NotificationsSettingsCard extends ConsumerWidget {
   final void Function({required bool value}) onToggleTravelAlerts;
   final bool isTogglingTravelAlerts;
   final bool? locationSharingEnabled;
+  final VoidCallback onLocationSharingTap;
   final void Function({required bool value}) onToggleLocationSharing;
   final bool isTogglingLocationSharing;
 
@@ -138,18 +140,24 @@ class NotificationsSettingsCard extends ConsumerWidget {
               iconColor: scheme.primary,
               label: context.l10n.settings_locationSharing,
               isLast: true,
-              onTap: isTogglingLocationSharing
-                  ? null
-                  : () => onToggleLocationSharing(
-                      value: !locationSharingEnabled!,
-                    ),
-              trailing: Switch.adaptive(
-                key: const Key('locationSharingSwitch'),
-                value: locationSharingEnabled!,
-                onChanged: isTogglingLocationSharing
-                    ? null
-                    : (value) => onToggleLocationSharing(value: value),
-                activeTrackColor: scheme.primary,
+              onTap: onLocationSharingTap,
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Switch.adaptive(
+                    key: const Key('locationSharingSwitch'),
+                    value: locationSharingEnabled!,
+                    onChanged: isTogglingLocationSharing
+                        ? null
+                        : (value) => onToggleLocationSharing(value: value),
+                    activeTrackColor: scheme.primary,
+                  ),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 18,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ],
               ),
             ),
           ],
