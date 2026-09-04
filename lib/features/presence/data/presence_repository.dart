@@ -65,6 +65,23 @@ class PresenceRepository {
     }
   }
 
+  Stream<PresenceFix?> watchLocation({required String userDocId}) {
+    return _locationDoc(userDocId).snapshots().map((doc) {
+      if (!doc.exists) return null;
+      final data = doc.data();
+      if (data == null) return null;
+      final rawLat = data['lat'];
+      final rawLng = data['lng'];
+      if (rawLat is! num || rawLng is! num) return null;
+      return PresenceFix(
+        userDocId: userDocId,
+        lat: rawLat.toDouble(),
+        lng: rawLng.toDouble(),
+        updatedAt: firestoreDateTime(data['updatedAt']),
+      );
+    });
+  }
+
   /// Live feed of every staff member's last-known fix, for the admin map;
   /// unlike the write paths above, stream errors propagate to the listener.
   Stream<List<PresenceFix>> watchAllPresence() => retryStream(

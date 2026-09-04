@@ -52,6 +52,7 @@ Widget _harness({
           onToggleTravelAlerts: onToggleTravelAlerts ?? ({required value}) {},
           isTogglingTravelAlerts: isTogglingTravelAlerts,
           locationSharingEnabled: locationSharingEnabled,
+          onLocationSharingTap: () {},
           onToggleLocationSharing:
               onToggleLocationSharing ?? ({required value}) {},
           isTogglingLocationSharing: isTogglingLocationSharing,

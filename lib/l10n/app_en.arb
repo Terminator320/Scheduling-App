@@ -1992,6 +1992,34 @@
   "@settings_locationSharing": {
     "description": "Settings toggle for live location sharing used by the admin staff map and travel-time presence"
   },
+  "settings_locationSharingBlurb": "This controls live location uploads for the staff map and time-to-leave checks.",
+  "@settings_locationSharingBlurb": {
+    "description": "Short body copy on the location sharing privacy settings view"
+  },
+  "settings_locationLastUploaded": "Last uploaded",
+  "@settings_locationLastUploaded": {
+    "description": "Label for the most recent staff-map location upload timestamp"
+  },
+  "settings_clearMyLocation": "Clear and pause location",
+  "@settings_clearMyLocation": {
+    "description": "Button that removes the current location document and turns location sharing off"
+  },
+  "settings_locationCleared": "Location sharing is paused and your last location was cleared.",
+  "@settings_locationCleared": {
+    "description": "Success notice after clearing the current staff-map location"
+  },
+  "settings_locationNone": "No location uploaded",
+  "@settings_locationNone": {
+    "description": "Shown when the signed-in user has no staff-map location document"
+  },
+  "settings_locationLoading": "Checking location status...",
+  "@settings_locationLoading": {
+    "description": "Shown while loading the signed-in user's staff-map location document"
+  },
+  "settings_locationUnavailable": "Unavailable",
+  "@settings_locationUnavailable": {
+    "description": "Shown when the signed-in user's staff-map location document cannot be read"
+  },
   "error_introSaveLocationSharing": "Couldn't change your location sharing",
   "@error_introSaveLocationSharing": {
     "description": "Error intro when the staff map location sharing toggle fails to save"
