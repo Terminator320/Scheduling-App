@@ -126,6 +126,7 @@ void main() {
         functions: functions,
         clock: clock,
         logger: logger,
+        useCallableSearch: false,
       );
 
   ClientRecord client({String id = 'c1', String name = 'Test Client'}) =>

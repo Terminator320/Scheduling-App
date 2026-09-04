@@ -68,11 +68,17 @@ void main() {
   ProviderContainer makeContainer({
     LocationPermissionResult permission = LocationPermissionResult.granted,
   }) {
-    when(() => permissions.ensureLocation()).thenAnswer((_) async => permission);
+    when(
+      () => permissions.ensureLocation(),
+    ).thenAnswer((_) async => permission);
     final container = ProviderContainer(
       overrides: [
         currentUserDocProvider.overrideWith(
-          (ref) => Stream.value(const {'role': 'employee', 'status': 'active'}),
+          (ref) => Stream.value(const {
+            'role': 'employee',
+            'status': 'active',
+            'locationSharingEnabled': true,
+          }),
         ),
         employeesRepositoryProvider.overrideWithValue(employees),
         presenceRepositoryProvider.overrideWithValue(presence),
@@ -116,40 +122,50 @@ void main() {
     );
   });
 
-  test('a sync resuming mid-teardown does not re-create the presence doc', () async {
-    // `deregisterThisDevice` runs BEFORE signOut(), so the resumed body still
-    // holds a valid credential and its writes would SUCCEED - re-opening the
-    // position stream for a user who just signed out, with nothing logging it.
-    final release = Completer<UserUidMatch?>();
-    var call = 0;
-    when(() => employees.findUserByUid(any())).thenAnswer((_) {
-      call++;
-      // Only the sync is held open; the teardown's own resolve must land.
-      return call == 1
-          ? release.future
-          : Future<UserUidMatch?>.value(
-              const UserUidMatch(id: 'doc-1', data: {}),
-            );
-    });
+  test(
+    'a sync resuming mid-teardown does not re-create the presence doc',
+    () async {
+      // `deregisterThisDevice` runs BEFORE signOut(), so the resumed body still
+      // holds a valid credential and its writes would SUCCEED - re-opening the
+      // position stream for a user who just signed out, with nothing logging it.
+      final release = Completer<UserUidMatch?>();
+      final syncLookupStarted = Completer<void>();
+      var call = 0;
+      when(() => employees.findUserByUid(any())).thenAnswer((_) {
+        call++;
+        // Only the sync is held open; the teardown's own resolve must land.
+        if (call == 1) {
+          syncLookupStarted.complete();
+          return release.future;
+        }
+        return Future<UserUidMatch?>.value(
+          const UserUidMatch(id: 'doc-1', data: {}),
+        );
+      });
 
-    final container = makeContainer();
-    await pumpEventQueue();
-    final controller = container.read(presenceSyncControllerProvider);
+      final container = makeContainer();
+      await pumpEventQueue();
+      final controller = container.read(presenceSyncControllerProvider);
 
-    final inFlight = controller.sync();
-    await pumpEventQueue();
-    expect(geolocator.listens, 0, reason: 'sync is still awaiting the lookup');
+      final inFlight = controller.sync();
+      await syncLookupStarted.future;
+      expect(
+        geolocator.listens,
+        0,
+        reason: 'sync is still awaiting the lookup',
+      );
 
-    await controller.unregister();
-    release.complete(const UserUidMatch(id: 'doc-1', data: {}));
-    await inFlight;
-    await pumpEventQueue();
+      await controller.unregister();
+      release.complete(const UserUidMatch(id: 'doc-1', data: {}));
+      await inFlight;
+      await pumpEventQueue();
 
-    verify(() => presence.deleteLocation(userDocId: 'doc-1')).called(1);
-    expect(
-      geolocator.listens,
-      0,
-      reason: 'the resumed body must not re-open the position stream',
-    );
-  });
+      verify(() => presence.deleteLocation(userDocId: 'doc-1')).called(1);
+      expect(
+        geolocator.listens,
+        0,
+        reason: 'the resumed body must not re-open the position stream',
+      );
+    },
+  );
 }
