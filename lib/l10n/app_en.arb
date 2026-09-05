@@ -2926,7 +2926,7 @@
   "@tour_apptClientTitle": {
     "description": "Tour step title: appointment form client picker"
   },
-  "tour_apptClientDesc": "Search your clients by name, phone or address, or add a new one without leaving this form.",
+  "tour_apptClientDesc": "Type the client's phone number and tap the match that comes up. Switch to Name or address to search another way, or add a new client without leaving this form.",
   "@tour_apptClientDesc": {
     "description": "Tour step description: appointment form client picker"
   },
@@ -3996,10 +3996,6 @@
   "@clients_matchCount": {
     "description": "Count of clients matching the current query in the add-job picker.",
     "placeholders": { "count": { "type": "int", "example": "3" } }
-  },
-  "clients_tapToCarryOn": "tap to carry on",
-  "@clients_tapToCarryOn": {
-    "description": "Trailing hint on the collapsed match summary shown after the client field loses focus."
   },
   "clients_attach": "Attach",
   "@clients_attach": {
