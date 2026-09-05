@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
@@ -11,10 +13,12 @@ import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
+import 'package:scheduling/features/calendar/application/recent_clients_provider.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/assignee_availability_scope.dart';
+import 'package:scheduling/features/calendar/utils/client_booking_context_scope.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/delete_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/personal_block_clash_dialog.dart';
@@ -25,6 +29,7 @@ import 'package:scheduling/features/calendar/widgets/sections/appointment_form_f
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_host.dart';
+import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -83,6 +88,27 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     _clientSearchDebounce.run(() => notifier.searchClients(query));
   }
 
+  EventDetailsController get _notifier => ref.read(
+    eventDetailsControllerProvider(EventDetailsKey(widget.appointment)).notifier,
+  );
+
+  void _onClientQueryModeChanged(ClientQueryMode mode) {
+    // Swapping keyboardType on a focused field does not reliably swap the
+    // software keyboard, so drop focus and let the rebuilt field take it back.
+    FocusScope.of(context).unfocus();
+    _clientSearchDebounce.cancel();
+    widget.controllers.clientSearch.clear();
+    _notifier.setClientQueryMode(mode);
+  }
+
+  void _onRetryClientSearch() =>
+      unawaited(_notifier.searchClients(widget.controllers.clientSearch.text));
+
+  void _onPickPreviousAddress(String address) {
+    widget.controllers.address.text = address;
+    _notifier.setUseCustomAddress(value: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = eventDetailsControllerProvider(
@@ -127,6 +153,10 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     // run-length string is a plain interpolation, and a multi-day flag paired
     // with a length of 1 would render "1 days".
     final spanLength = runLengthDays(state.selectedDate, state.endDate);
+    final bookingContext = watchClientBookingContext(
+      ref,
+      client: state.selectedClient,
+    );
 
     return AppointmentFormFields(
       controllers: widget.controllers,
@@ -149,6 +179,10 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       selectedClient: state.selectedClient,
       clientResults: state.clientResults,
       isSearchingClient: state.isSearchingClient,
+      clientSearchStatus: state.clientSearchStatus,
+      recentClients: ref.watch(recentClientsProvider).value ?? const [],
+      previousAddresses: bookingContext.previousAddresses,
+      lastVisitLabel: bookingContext.lastVisitLabel,
       selectedEmployees: state.selectedEmployees,
       repeat: state.repeat,
       useCustomAddress: state.useCustomAddress,
@@ -192,6 +226,9 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     EventDetailsController notifier,
   ) => AppointmentFormCallbacks(
     onSearchClients: _onClientSearchChanged,
+    onClientQueryModeChanged: _onClientQueryModeChanged,
+    onRetryClientSearch: _onRetryClientSearch,
+    onPickPreviousAddress: _onPickPreviousAddress,
     onSelectClient: notifier.selectClient,
     onClearClient: notifier.clearClient,
     onToggleEmployee: notifier.toggleEmployee,
