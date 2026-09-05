@@ -6,7 +6,7 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 void main() {
-  final marie = ClientRecord(
+  const marie = ClientRecord(
     id: 'c1',
     name: 'Marie Tremblay',
     firstName: 'Marie',
@@ -60,7 +60,7 @@ void main() {
     await tester.pumpWidget(
       harness(
         useCustomAddress: true,
-        previousAddresses: const ['1250 boul. LaSalle', '88 rue de l\'Église'],
+        previousAddresses: const ['1250 boul. LaSalle', "88 rue de l'Église"],
       ),
     );
     expect(find.text('Marie has been here before'), findsOneWidget);
@@ -96,10 +96,43 @@ void main() {
     await tester.pumpWidget(
       harness(
         useCustomAddress: true,
-        previousAddresses: const ['1250 boul. LaSalle', '88 rue de l\'Église'],
+        previousAddresses: const ['1250 boul. LaSalle', "88 rue de l'Église"],
         textScale: 2,
       ),
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('units on one street render under a shared street header', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      harness(
+        useCustomAddress: true,
+        previousAddresses: const [
+          '1751 rue Richardson unit 404',
+          '1751 rue Richardson unit 210',
+        ],
+      ),
+    );
+    expect(find.text('Units billed to this client'), findsOneWidget);
+    expect(find.text('404'), findsOneWidget);
+    expect(find.textContaining('has been here before'), findsNothing);
+  });
+
+  testWidgets('picking a unit row reports the full address', (tester) async {
+    String? picked;
+    await tester.pumpWidget(
+      harness(
+        useCustomAddress: true,
+        previousAddresses: const [
+          '1751 rue Richardson unit 404',
+          '1751 rue Richardson unit 210',
+        ],
+        onPickPrevious: (a) => picked = a,
+      ),
+    );
+    await tester.tap(find.text('404'));
+    expect(picked, '1751 rue Richardson unit 404');
   });
 }

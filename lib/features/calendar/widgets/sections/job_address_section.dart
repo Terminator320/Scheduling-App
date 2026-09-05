@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/calendar/domain/policies/previous_address_policy.dart';
 import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -96,28 +97,50 @@ class _PreviousAddresses extends StatelessWidget {
     final name = client.firstName.trim().isNotEmpty
         ? client.firstName.trim()
         : client.displayName;
+    final grouped = groupPreviousAddresses(addresses);
+    final street = grouped.sharedStreet;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sp4),
           child: Text(
-            l10n.calendar_beenHereBefore(name),
+            street == null
+                ? l10n.calendar_beenHereBefore(name)
+                : l10n.calendar_unitsBilledToThisClient,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: theme.monoType.groupLabel,
           ),
         ),
+        if (street != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sp4),
+            child: Text(
+              street,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
         DecoratedBox(
           decoration: appCardDecoration(theme, color: theme.palette.sheetRow),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(AppRadius.r12),
             child: Column(
               children: [
-                for (final address in addresses) ...[
-                  if (address != addresses.first)
+                for (final row in grouped.rows) ...[
+                  if (row != grouped.rows.first)
                     Divider(height: 1, color: theme.colorScheme.outlineVariant),
-                  _AddressRow(label: address, onTap: () => onPick(address)),
+                  _AddressRow(
+                    // Grouped rows show the unit, but a pick always reports the
+                    // WHOLE address — the unit alone is not one.
+                    label: row.unit ?? row.full,
+                    mono: row.unit != null,
+                    onTap: () => onPick(row.full),
+                  ),
                 ],
                 Divider(height: 1, color: theme.colorScheme.outlineVariant),
                 _AddressRow(
@@ -135,10 +158,18 @@ class _PreviousAddresses extends StatelessWidget {
 }
 
 class _AddressRow extends StatelessWidget {
-  const _AddressRow({required this.label, required this.onTap, this.icon});
+  const _AddressRow({
+    required this.label,
+    required this.onTap,
+    this.icon,
+    this.mono = false,
+  });
 
   final String label;
   final IconData? icon;
+
+  /// A unit number reads as a number, not as prose.
+  final bool mono;
   final VoidCallback onTap;
 
   @override
@@ -163,9 +194,11 @@ class _AddressRow extends StatelessWidget {
                 label,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: icon == null ? scheme.onSurface : scheme.primary,
-                ),
+                style: mono
+                    ? theme.monoType.metric
+                    : theme.textTheme.bodyMedium?.copyWith(
+                        color: icon == null ? scheme.onSurface : scheme.primary,
+                      ),
               ),
             ),
           ],
