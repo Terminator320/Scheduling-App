@@ -154,10 +154,13 @@ class _ListInformationState extends State<ListInformation> {
                   activeBuildingLabel: _activeBuildingLabel,
                 ),
               ),
-              ClientsListHeader(
-                count: _visibleCount,
-                sort: _sort,
-                onSortChanged: (next) => setState(() => _sort = next),
+              _tour.stepIf(
+                TourStepId.clientsSort,
+                ClientsListHeader(
+                  count: _visibleCount,
+                  sort: _sort,
+                  onSortChanged: (next) => setState(() => _sort = next),
+                ),
               ),
               Expanded(
                 child: ListenableBuilder(

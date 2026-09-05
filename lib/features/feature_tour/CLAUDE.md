@@ -99,6 +99,21 @@ identity, so a rename replays or orphans a tour.
   three targets (search, filter, row) render for that role, so its catalog is
   NOT admin-gated and `tour_definitions_test.dart` pins the set against the
   drawer.
+  **A tour step's COPY is part of the surface it points at, so moving a control
+  means re-reading its description** (2026-09-05). Two had gone stale and
+  neither failed anything: `apptDetails` still listed "Address" after the job
+  address moved into the WHO section, and `historyFilter` said "date range"
+  where the filter has only ever offered a YEAR. Nothing can catch this
+  mechanically — the step still has a target and the string still resolves —
+  so audit the descriptions whenever a toured surface changes shape, not only
+  when a step is added or removed.
+  **A control shipped untoured is the other half of that audit.** 1.57 added
+  the clients SORT and 1.58 the job-address block, and both rendered with no
+  step at all; they are `clientsSort` and `apptJobAddress` now. Adding an id is
+  safe by construction — it is absent from `kLegacyTourSteps`, so every
+  installed device is offered it — which is exactly why the count assertions in
+  `tour_definitions_test.dart` are worth keeping: they make growing a catalog a
+  deliberate edit rather than a silent one.
   Seen flags are device-local SharedPreferences ONLY (`tour_seen_steps`);
   sign-out does not reset them — the Settings "Replay app tour" row is the
   only reset.

@@ -105,16 +105,19 @@ void main() {
         tourStepsFor(DestinationTour(d), isAdmin: true).length;
     // 7 since 1.57 added the week toggle and the crew filter.
     expect(len(HubTab.calendar), 7);
-    expect(len(HubTab.clients), 4);
+    // 5 since 1.58 toured the sort control 1.57 shipped untoured.
+    expect(len(HubTab.clients), 5);
     expect(len(HubTab.employees), 3);
     expect(len(PushedDestination.history), 3);
   });
 
-  test('the appointment walkthrough is admin-only and 6 steps in order', () {
+  test('the appointment walkthrough is admin-only and 7 steps in order', () {
     const scope = FormTour(TourForm.addAppointment);
     expect(tourStepsFor(scope, isAdmin: true), [
       TourStepId.apptTemplates,
       TourStepId.apptClient,
+      // The job address moved out of Details into WHO, under the client.
+      TourStepId.apptJobAddress,
       TourStepId.apptCrew,
       TourStepId.apptSchedule,
       TourStepId.apptDetails,
