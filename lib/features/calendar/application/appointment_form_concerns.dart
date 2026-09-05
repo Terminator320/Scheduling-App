@@ -9,7 +9,9 @@ import 'package:scheduling/features/calendar/domain/policies/appointment_form_va
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
+import 'package:scheduling/features/clients/domain/models/client_search_window.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
+import 'package:scheduling/features/clients/domain/policies/phone_query_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 /// Shared appointment-form fields read through this interface by [AppointmentFormConcerns].
@@ -81,33 +83,150 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
   /// Request id to prevent stale reads from overwriting fresh results.
   int _searchRequestId = 0;
 
+  /// The last complete answer, kept so extra digits filter it instead of
+  /// spending another round trip.
+  ClientSearchWindow _clientWindow = ClientSearchWindow.empty;
+
+  /// Which keyboard the picker is showing. The controller owns it so the query
+  /// survives the field losing focus.
+  void setClientQueryMode(ClientQueryMode mode) {
+    _searchRequestId++;
+    _clientWindow = ClientSearchWindow.empty;
+    _apply(
+      AppointmentFormUpdate(
+        clientResults: const [],
+        isSearchingClient: false,
+        clientSearchStatus: ClientSearchStatus(mode: mode),
+      ),
+    );
+  }
+
   Future<void> searchClients(String query) async {
     final trimmed = query.trim();
-    if (!ClientSearchPolicy.shouldSearch(trimmed)) {
+    final isPhone = PhoneQueryPolicy.isPhoneQuery(trimmed);
+    final digits = PhoneQueryPolicy.canonicalDigits(trimmed);
+    final mode = isPhone ? ClientQueryMode.phone : ClientQueryMode.text;
+
+    if (trimmed.isEmpty ||
+        (!isPhone && !ClientSearchPolicy.shouldSearch(trimmed))) {
       _searchRequestId++;
+      _clientWindow = ClientSearchWindow.empty;
       _apply(
-        const AppointmentFormUpdate(
-          clientResults: [],
+        AppointmentFormUpdate(
+          clientResults: const [],
           isSearchingClient: false,
+          clientSearchStatus: ClientSearchStatus(mode: mode),
         ),
       );
       return;
     }
-    final requestId = ++_searchRequestId;
-    _apply(const AppointmentFormUpdate(isSearchingClient: true));
+
+    // Too few digits to be selective: `514` matches the roster twice over and
+    // costs 200 document reads to prove it. Hold, and say so.
+    if (isPhone && digits.length < PhoneQueryPolicy.minPhoneDigits) {
+      _searchRequestId++;
+      _clientWindow = ClientSearchWindow.empty;
+      _apply(
+        AppointmentFormUpdate(
+          clientResults: const [],
+          isSearchingClient: false,
+          clientSearchStatus: ClientSearchStatus(
+            mode: mode,
+            digitsTyped: digits.length,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // The candidate set only shrinks as digits land, so a complete previous
+    // answer can be filtered instead of asked again.
+    if (isPhone && _clientWindow.canNarrowTo(digits)) {
+      _searchRequestId++;
+      _clientWindow = _clientWindow.narrowTo(digits);
+      _apply(
+        AppointmentFormUpdate(
+          clientResults: _clientWindow.results,
+          isSearchingClient: false,
+          clientSearchStatus: ClientSearchStatus(
+            mode: mode,
+            digitsTyped: digits.length,
+            answeredQuery: digits,
+            answeredRung: PhoneRung.canonical,
+          ),
+        ),
+      );
+      return;
+    }
+
     // Resolve these before the await so they survive the sheet being dismissed (Riverpod 3).
     final logger = ref.read(loggerProvider);
     final clientsRepo = ref.read(clientsRepositoryProvider);
+    final requestId = ++_searchRequestId;
+
+    // Drop the previous rows NOW. Leaving them under the spinner is the only
+    // way to attach a client from a half-typed query without noticing.
+    _apply(
+      AppointmentFormUpdate(
+        clientResults: const [],
+        isSearchingClient: true,
+        clientSearchStatus: ClientSearchStatus(
+          mode: mode,
+          digitsTyped: digits.length,
+        ),
+      ),
+    );
+
+    final rungs = isPhone
+        ? PhoneQueryPolicy.ladder(trimmed)
+        : [(rung: PhoneRung.canonical, digits: trimmed)];
+
     try {
-      final results = await clientsRepo.searchClients(trimmed);
-      if (!ref.mounted || requestId != _searchRequestId) return;
-      _apply(
-        AppointmentFormUpdate(clientResults: results, isSearchingClient: false),
-      );
+      for (final rung in rungs) {
+        final results = await clientsRepo.searchClients(rung.digits);
+        if (!ref.mounted || requestId != _searchRequestId) return;
+        if (results.isEmpty && rung != rungs.last) continue;
+
+        _clientWindow = isPhone && rung.rung == PhoneRung.canonical
+            ? ClientSearchWindow(
+                digits: digits,
+                results: results,
+                truncated:
+                    results.length >= ClientSearchPolicy.resultDisplayLimit,
+              )
+            : ClientSearchWindow.empty;
+
+        _apply(
+          AppointmentFormUpdate(
+            clientResults: results,
+            isSearchingClient: false,
+            clientSearchStatus: ClientSearchStatus(
+              mode: mode,
+              digitsTyped: digits.length,
+              answeredQuery: rung.digits,
+              answeredRung: results.isEmpty ? null : rung.rung,
+            ),
+          ),
+        );
+        if (results.isNotEmpty) return;
+      }
     } catch (e, st) {
       logger.warn('CLI-SEARCH appointment form searchClients failed', e, st);
       if (!ref.mounted || requestId != _searchRequestId) return;
-      _apply(const AppointmentFormUpdate(isSearchingClient: false));
+      _clientWindow = ClientSearchWindow.empty;
+      // A failure that renders as "no clients found" is how a duplicate gets
+      // created for a client who is already on file.
+      _apply(
+        AppointmentFormUpdate(
+          clientResults: const [],
+          isSearchingClient: false,
+          clientSearchStatus: ClientSearchStatus(
+            mode: mode,
+            digitsTyped: digits.length,
+            failed: true,
+          ),
+        ),
+      );
     }
   }
 
@@ -124,6 +243,7 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
   }
 
   void clearClient() {
+    _clientWindow = ClientSearchWindow.empty;
     _apply(
       const AppointmentFormUpdate(
         clearSelectedClient: true,
