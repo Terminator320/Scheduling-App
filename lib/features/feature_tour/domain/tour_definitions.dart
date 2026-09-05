@@ -31,6 +31,7 @@ List<TourStepId> _destinationSteps(
     if (isAdmin) ...[
       TourStepId.clientsSearch,
       TourStepId.clientsFilter,
+      TourStepId.clientsSort,
       TourStepId.clientsAdd,
       TourStepId.clientsRow,
     ],
@@ -83,6 +84,7 @@ List<TourStepId> _formSteps(TourForm form, {required bool isAdmin}) =>
         if (isAdmin) ...[
           TourStepId.apptTemplates,
           TourStepId.apptClient,
+          TourStepId.apptJobAddress,
           TourStepId.apptCrew,
           TourStepId.apptSchedule,
           TourStepId.apptDetails,

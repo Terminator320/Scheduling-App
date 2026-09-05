@@ -403,7 +403,7 @@ class AppointmentFormFields extends StatelessWidget {
       const SizedBox(height: AppSpacing.sp16),
       formLabel(context, l10n.calendar_jobAddress, required: true),
       const SizedBox(height: AppSpacing.sp4),
-      _jobAddress(),
+      _tour(TourStepId.apptJobAddress, _jobAddress()),
       const SizedBox(height: AppSpacing.sp16),
     ],
     // A personal block has no client but may still name a place. Day off has

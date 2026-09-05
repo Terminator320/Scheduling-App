@@ -34,6 +34,10 @@ import 'package:scheduling/l10n/l10n.dart';
     title: l.tour_clientsFilterTitle,
     description: l.tour_clientsFilterDesc,
   ),
+  TourStepId.clientsSort => (
+    title: l.tour_clientsSortTitle,
+    description: l.tour_clientsSortDesc,
+  ),
   TourStepId.clientsRow => (
     title: l.tour_clientsRowTitle,
     description: l.tour_clientsRowDesc,
@@ -125,6 +129,10 @@ import 'package:scheduling/l10n/l10n.dart';
   TourStepId.apptClient => (
     title: l.tour_apptClientTitle,
     description: l.tour_apptClientDesc,
+  ),
+  TourStepId.apptJobAddress => (
+    title: l.tour_apptJobAddressTitle,
+    description: l.tour_apptJobAddressDesc,
   ),
   TourStepId.apptCrew => (
     title: l.tour_apptCrewTitle,

@@ -602,7 +602,7 @@
   "tour_employeesRowTitle": "Qui travaille aujourd'hui",
   "tour_employeesRowDesc": "Chaque ligne indique le nombre de travaux de la personne aujourd'hui. Touchez pour voir son profil et son horaire.",
   "tour_historyFilterTitle": "Affiner les résultats",
-  "tour_historyFilterDesc": "Filtrez les travaux passés par employé, par statut ou par période.",
+  "tour_historyFilterDesc": "Filtrez les travaux passés par employé, par statut ou par année.",
   "tour_historyRowTitle": "Revoir un travail",
   "tour_historyRowDesc": "Touchez un travail passé pour rouvrir ses détails, ses notes et ses photos.",
   "tour_dashboardHeroTitle": "La journée en un coup d'œil",
@@ -626,11 +626,11 @@
   "tour_apptClientTitle": "Pour qui est le travail",
   "tour_apptClientDesc": "Saisissez le numéro de téléphone du client et touchez la correspondance qui apparaît. Passez à Nom ou adresse pour chercher autrement, ou ajoutez un client sans quitter ce formulaire.",
   "tour_apptCrewTitle": "Qui l'exécute",
-  "tour_apptCrewDesc": "Assignez votre équipe. Seules les personnes choisies ici verront ce travail dans leur calendrier.",
+  "tour_apptCrewDesc": "Assignez votre équipe. Seules les personnes choisies ici verront ce travail dans leur calendrier, et celles déjà occupées à ce moment sont estompées.",
   "tour_apptScheduleTitle": "Quand ça se passe",
   "tour_apptScheduleDesc": "Choisissez la date et les heures, ou activez Toute la journée. Sur un travail qui s'étend sur plusieurs jours, ces heures sont celles travaillées chacun de ces jours.",
   "tour_apptDetailsTitle": "Tout le reste",
-  "tour_apptDetailsDesc": "Adresse, notes, matériaux et photos. Tout est optionnel, et vous pouvez les ajouter plus tard.",
+  "tour_apptDetailsDesc": "Notes, matériaux et photos. Tout est optionnel, et vous pouvez les ajouter plus tard.",
   "tour_apptSaveTitle": "Réserver",
   "tour_apptSaveDesc": "Enregistre le travail et l'ajoute au calendrier de chaque personne assignée.",
   "tour_clientWhoTitle": "Nommer le client",
@@ -860,5 +860,9 @@
   "calendar_useThisAddressForTheJob": "Utiliser cette adresse pour la tâche",
   "calendar_beenHereBefore": "{name} y est déjà allé",
   "calendar_unitsBilledToThisClient": "Unités facturées à ce client",
-  "calendar_searchForAnotherAddress": "Rechercher une autre adresse…"
+  "calendar_searchForAnotherAddress": "Rechercher une autre adresse…",
+  "tour_apptJobAddressTitle": "Où se fait le travail",
+  "tour_apptJobAddressDesc": "L'adresse de la tâche, qui n'est pas forcément celle du client. S'il y est déjà allé, ces adresses vous sont proposées d'abord pour vous éviter une recherche.",
+  "tour_clientsSortTitle": "Trier la liste",
+  "tour_clientsSortDesc": "Triez par nom, par nombre de travaux ou par date d'ajout."
 }

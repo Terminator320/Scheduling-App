@@ -2838,7 +2838,7 @@
   "@tour_historyFilterTitle": {
     "description": "Tour step title: history filter bar"
   },
-  "tour_historyFilterDesc": "Filter past jobs by team member, status or date range.",
+  "tour_historyFilterDesc": "Filter past jobs by team member, status or year.",
   "@tour_historyFilterDesc": {
     "description": "Tour step description: history filter bar"
   },
@@ -2934,7 +2934,7 @@
   "@tour_apptCrewTitle": {
     "description": "Tour step title: appointment form employee picker"
   },
-  "tour_apptCrewDesc": "Assign your team. Only the people you pick here can see this job in their calendar.",
+  "tour_apptCrewDesc": "Assign your team. Only the people you pick here can see this job in their calendar, and anyone already booked at that time is dimmed.",
   "@tour_apptCrewDesc": {
     "description": "Tour step description: appointment form employee picker, which is also the visibility rule"
   },
@@ -2950,7 +2950,7 @@
   "@tour_apptDetailsTitle": {
     "description": "Tour step title: appointment form details section"
   },
-  "tour_apptDetailsDesc": "Address, notes, materials and photos. All optional, and you can add them later.",
+  "tour_apptDetailsDesc": "Notes, materials and photos. All optional, and you can add them later.",
   "@tour_apptDetailsDesc": {
     "description": "Tour step description: appointment form details section"
   },
@@ -4049,5 +4049,21 @@
   "calendar_searchForAnotherAddress": "Search for another address…",
   "@calendar_searchForAnotherAddress": {
     "description": "Row that opens the address autocomplete, below the client's previous job addresses."
+  },
+  "tour_apptJobAddressTitle": "Where the work is",
+  "@tour_apptJobAddressTitle": {
+    "description": "Title of the add-job tour step highlighting the job address, which sits under the attached client."
+  },
+  "tour_apptJobAddressDesc": "The job's own address, which need not be the client's. If they have been here before, those addresses are offered first so you don't have to search.",
+  "@tour_apptJobAddressDesc": {
+    "description": "Description of the add-job tour step highlighting the job address."
+  },
+  "tour_clientsSortTitle": "Order the list",
+  "@tour_clientsSortTitle": {
+    "description": "Title of the clients tour step highlighting the sort control above the list."
+  },
+  "tour_clientsSortDesc": "Sort by name, by who has had the most jobs, or by who was added most recently.",
+  "@tour_clientsSortDesc": {
+    "description": "Description of the clients tour step highlighting the sort control."
   }
 }

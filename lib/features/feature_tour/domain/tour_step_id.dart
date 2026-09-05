@@ -8,6 +8,7 @@ enum TourStepId {
   calendarCollapse,
   clientsSearch,
   clientsFilter,
+  clientsSort,
   clientsAdd,
   clientsRow,
   employeesSearch,
@@ -32,6 +33,7 @@ enum TourStepId {
   // The add-appointment walkthrough.
   apptTemplates,
   apptClient,
+  apptJobAddress,
   apptCrew,
   apptSchedule,
   apptDetails,

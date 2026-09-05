@@ -234,6 +234,9 @@ add-client sheet beyond what it is seeded with.
   `controllers.address` for a personal job, `_switchToCustomAddress` /
   `_useClientAddress` stay the state transitions, and `TourStepId.apptDetails`
   currently wraps the section it is leaving.
+  RESOLVED: the address block got its own step, `TourStepId.apptJobAddress`,
+  and `apptDetails`' copy dropped "Address" — moving a control means re-reading
+  the description of every step that named it.
 - **Swapping `keyboardType` on a focused field does not reliably swap the
   software keyboard.** The mode switch must unfocus and refocus (or rebuild the
   field under a new key) to force it — without losing the query or bouncing the
