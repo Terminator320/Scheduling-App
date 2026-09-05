@@ -415,7 +415,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
                   yearLabel: data.yearLabel,
                   onPickMonth: _pickMonth,
                   crewFilterButton: widget.isAdmin
-                      ? const CrewFilterButton()
+                      ? _tour.stepIf(
+                          TourStepId.calendarCrewFilter,
+                          const CrewFilterButton(),
+                        )
                       : null,
                   routeButton: _dayRouteButton(context),
                   weekStrip: _weekStrip(data.today, data.colorMap),
@@ -587,7 +590,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
           child: AgendaHeader(
             dayTitle: dayTitle,
             jobLabel: jobLabel,
-            trailing: _agendaModeToggle(context),
+            trailing: _tour.stepIf(
+              TourStepId.calendarWeekToggle,
+              _agendaModeToggle(context),
+            ),
           ),
         ),
       ],

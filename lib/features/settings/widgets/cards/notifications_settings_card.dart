@@ -24,6 +24,7 @@ class NotificationsSettingsCard extends ConsumerWidget {
     this.isTogglingLiveActivity = false,
     this.isTogglingTravelAlerts = false,
     this.isTogglingLocationSharing = false,
+    this.wrapLocationSharing,
     super.key,
   });
 
@@ -42,6 +43,10 @@ class NotificationsSettingsCard extends ConsumerWidget {
   final void Function({required bool value}) onToggleLocationSharing;
   final bool isTogglingLocationSharing;
 
+  /// Lets the Settings tour wrap the location row as its own step. Null
+  /// off-tour, so the card stays usable untoured.
+  final Widget Function(Widget)? wrapLocationSharing;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
@@ -59,6 +64,35 @@ class NotificationsSettingsCard extends ConsumerWidget {
         liveActivityReady;
     final showTravelAlerts = travelAlertsEnabled != null;
     final showLocationSharing = locationSharingEnabled != null;
+    // Held as a local so the tour's wrap can be applied to it by name.
+    final locationTile = showLocationSharing
+        ? SettingsTile(
+            iconBg: scheme.primaryContainer,
+            icon: Icons.location_on_rounded,
+            iconColor: scheme.primary,
+            label: context.l10n.settings_locationSharing,
+            isLast: true,
+            onTap: onLocationSharingTap,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Switch.adaptive(
+                  key: const Key('locationSharingSwitch'),
+                  value: locationSharingEnabled!,
+                  onChanged: isTogglingLocationSharing
+                      ? null
+                      : (value) => onToggleLocationSharing(value: value),
+                  activeTrackColor: scheme.primary,
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: scheme.onSurfaceVariant,
+                ),
+              ],
+            ),
+          )
+        : null;
     return SettingsSectionCard(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -132,34 +166,9 @@ class NotificationsSettingsCard extends ConsumerWidget {
               ),
             ),
           ],
-          if (showLocationSharing) ...[
+          if (locationTile != null) ...[
             const SettingsTileDivider(),
-            SettingsTile(
-              iconBg: scheme.primaryContainer,
-              icon: Icons.location_on_rounded,
-              iconColor: scheme.primary,
-              label: context.l10n.settings_locationSharing,
-              isLast: true,
-              onTap: onLocationSharingTap,
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Switch.adaptive(
-                    key: const Key('locationSharingSwitch'),
-                    value: locationSharingEnabled!,
-                    onChanged: isTogglingLocationSharing
-                        ? null
-                        : (value) => onToggleLocationSharing(value: value),
-                    activeTrackColor: scheme.primary,
-                  ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    size: 18,
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ],
-              ),
-            ),
+            wrapLocationSharing?.call(locationTile) ?? locationTile,
           ],
         ],
       ),
