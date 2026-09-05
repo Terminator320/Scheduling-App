@@ -8,6 +8,7 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
@@ -16,6 +17,7 @@ abstract interface class AppointmentFormFields {
   ClientRecord? get selectedClient;
   List<ClientRecord> get clientResults;
   bool get isSearchingClient;
+  ClientSearchStatus get clientSearchStatus;
   bool get useCustomAddress;
   List<EmployeeRecord> get selectedEmployees;
   Map<String, AppointmentFormError> get errors;
@@ -28,6 +30,7 @@ class AppointmentFormUpdate {
   const AppointmentFormUpdate({
     this.clientResults,
     this.isSearchingClient,
+    this.clientSearchStatus,
     this.selectedClient,
     this.clearSelectedClient = false,
     this.useCustomAddress,
@@ -38,6 +41,7 @@ class AppointmentFormUpdate {
 
   final List<ClientRecord>? clientResults;
   final bool? isSearchingClient;
+  final ClientSearchStatus? clientSearchStatus;
 
   /// Non-null when the user picked a client from the search results.
   final ClientRecord? selectedClient;
