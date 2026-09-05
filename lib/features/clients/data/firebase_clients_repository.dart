@@ -414,18 +414,6 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
     final client = ClientRecord.fromMap(doc.id, data);
 
     final contacts = firestoreList(data['contacts']);
-    final contactSearchText = contacts
-        .whereType<Map<Object?, Object?>>()
-        .map((contact) {
-          final map = Map<String, dynamic>.from(contact);
-          return [
-            map['name'],
-            map['phone'],
-            map['email'],
-          ].whereType<Object>().map((v) => v.toString()).join(' ');
-        })
-        .join(' ');
-
     final rawDisplayName = client.displayName;
     final displayName = ClientSearchPolicy.normalize(rawDisplayName);
     final personName = ClientSearchPolicy.normalize(
@@ -434,10 +422,18 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
         data['lastName'],
       ].whereType<Object>().map((v) => v.toString()).join(' '),
     );
-    final phoneDigits = ClientSearchPolicy.digitsOnly(
-      '${data['phone'] ?? ''} ${data['mobile'] ?? ''}',
-    );
-    final contactsDigits = ClientSearchPolicy.digitsOnly(contactSearchText);
+    final phoneDigits = [
+      for (final raw in [data['phone'], data['mobile']])
+        if (ClientSearchPolicy.digitsOnly('${raw ?? ''}').isNotEmpty)
+          ClientSearchPolicy.digitsOnly('${raw ?? ''}'),
+    ];
+    final contactsDigits = [
+      for (final contact in contacts.whereType<Map<Object?, Object?>>())
+        if (ClientSearchPolicy.digitsOnly(
+          '${contact['phone'] ?? ''}',
+        ).isNotEmpty)
+          ClientSearchPolicy.digitsOnly('${contact['phone'] ?? ''}'),
+    ];
 
     scoredClients.add((
       score: ClientSearchPolicy.relevanceScore(
