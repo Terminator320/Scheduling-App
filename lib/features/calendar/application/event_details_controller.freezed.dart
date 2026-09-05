@@ -16,7 +16,7 @@ T _$identity<T>(T value) => value;
 mixin _$EventDetailsState {
 
  DateTime get selectedDate; DateTime get endDate; TimeOfDay get selectedStartTime; TimeOfDay get selectedEndTime; String get editingStatus; bool get isEditing;/// Existing appointments preserve run length when the start date moves.
- bool get endDateTouched; RepeatInterval get repeat; RepeatInterval get savedRepeat; List<EmployeeRecord> get selectedEmployees; List<AppointmentImage> get existingImages; List<AppointmentImage> get removedExistingImages; List<File> get newImages; bool get isSaving; ClientRecord? get client; ClientRecord? get selectedClient; List<ClientRecord> get clientResults; bool get isSearchingClient; bool get useCustomAddress; bool get isPersonal; bool get isDayOff; bool get isAllDay; bool get clientCleared; Map<String, AppointmentFormError> get errors;
+ bool get endDateTouched; RepeatInterval get repeat; RepeatInterval get savedRepeat; List<EmployeeRecord> get selectedEmployees; List<AppointmentImage> get existingImages; List<AppointmentImage> get removedExistingImages; List<File> get newImages; bool get isSaving; ClientRecord? get client; ClientRecord? get selectedClient; List<ClientRecord> get clientResults; bool get isSearchingClient; ClientSearchStatus get clientSearchStatus; bool get useCustomAddress; bool get isPersonal; bool get isDayOff; bool get isAllDay; bool get clientCleared; Map<String, AppointmentFormError> get errors;
 /// Create a copy of EventDetailsState
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,20 +28,20 @@ $EventDetailsStateCopyWith<EventDetailsState> get copyWith => _$EventDetailsStat
 @override
 bool operator ==(Object other) {
   final _this = this as EventDetailsState;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is EventDetailsState&&(identical(other.selectedDate, _this.selectedDate) || other.selectedDate == _this.selectedDate)&&(identical(other.endDate, _this.endDate) || other.endDate == _this.endDate)&&(identical(other.selectedStartTime, _this.selectedStartTime) || other.selectedStartTime == _this.selectedStartTime)&&(identical(other.selectedEndTime, _this.selectedEndTime) || other.selectedEndTime == _this.selectedEndTime)&&(identical(other.editingStatus, _this.editingStatus) || other.editingStatus == _this.editingStatus)&&(identical(other.isEditing, _this.isEditing) || other.isEditing == _this.isEditing)&&(identical(other.endDateTouched, _this.endDateTouched) || other.endDateTouched == _this.endDateTouched)&&(identical(other.repeat, _this.repeat) || other.repeat == _this.repeat)&&(identical(other.savedRepeat, _this.savedRepeat) || other.savedRepeat == _this.savedRepeat)&&const DeepCollectionEquality().equals(other.selectedEmployees, _this.selectedEmployees)&&const DeepCollectionEquality().equals(other.existingImages, _this.existingImages)&&const DeepCollectionEquality().equals(other.removedExistingImages, _this.removedExistingImages)&&const DeepCollectionEquality().equals(other.newImages, _this.newImages)&&(identical(other.isSaving, _this.isSaving) || other.isSaving == _this.isSaving)&&(identical(other.client, _this.client) || other.client == _this.client)&&(identical(other.selectedClient, _this.selectedClient) || other.selectedClient == _this.selectedClient)&&const DeepCollectionEquality().equals(other.clientResults, _this.clientResults)&&(identical(other.isSearchingClient, _this.isSearchingClient) || other.isSearchingClient == _this.isSearchingClient)&&(identical(other.useCustomAddress, _this.useCustomAddress) || other.useCustomAddress == _this.useCustomAddress)&&(identical(other.isPersonal, _this.isPersonal) || other.isPersonal == _this.isPersonal)&&(identical(other.isDayOff, _this.isDayOff) || other.isDayOff == _this.isDayOff)&&(identical(other.isAllDay, _this.isAllDay) || other.isAllDay == _this.isAllDay)&&(identical(other.clientCleared, _this.clientCleared) || other.clientCleared == _this.clientCleared)&&const DeepCollectionEquality().equals(other.errors, _this.errors));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is EventDetailsState&&(identical(other.selectedDate, _this.selectedDate) || other.selectedDate == _this.selectedDate)&&(identical(other.endDate, _this.endDate) || other.endDate == _this.endDate)&&(identical(other.selectedStartTime, _this.selectedStartTime) || other.selectedStartTime == _this.selectedStartTime)&&(identical(other.selectedEndTime, _this.selectedEndTime) || other.selectedEndTime == _this.selectedEndTime)&&(identical(other.editingStatus, _this.editingStatus) || other.editingStatus == _this.editingStatus)&&(identical(other.isEditing, _this.isEditing) || other.isEditing == _this.isEditing)&&(identical(other.endDateTouched, _this.endDateTouched) || other.endDateTouched == _this.endDateTouched)&&(identical(other.repeat, _this.repeat) || other.repeat == _this.repeat)&&(identical(other.savedRepeat, _this.savedRepeat) || other.savedRepeat == _this.savedRepeat)&&const DeepCollectionEquality().equals(other.selectedEmployees, _this.selectedEmployees)&&const DeepCollectionEquality().equals(other.existingImages, _this.existingImages)&&const DeepCollectionEquality().equals(other.removedExistingImages, _this.removedExistingImages)&&const DeepCollectionEquality().equals(other.newImages, _this.newImages)&&(identical(other.isSaving, _this.isSaving) || other.isSaving == _this.isSaving)&&(identical(other.client, _this.client) || other.client == _this.client)&&(identical(other.selectedClient, _this.selectedClient) || other.selectedClient == _this.selectedClient)&&const DeepCollectionEquality().equals(other.clientResults, _this.clientResults)&&(identical(other.isSearchingClient, _this.isSearchingClient) || other.isSearchingClient == _this.isSearchingClient)&&(identical(other.clientSearchStatus, _this.clientSearchStatus) || other.clientSearchStatus == _this.clientSearchStatus)&&(identical(other.useCustomAddress, _this.useCustomAddress) || other.useCustomAddress == _this.useCustomAddress)&&(identical(other.isPersonal, _this.isPersonal) || other.isPersonal == _this.isPersonal)&&(identical(other.isDayOff, _this.isDayOff) || other.isDayOff == _this.isDayOff)&&(identical(other.isAllDay, _this.isAllDay) || other.isAllDay == _this.isAllDay)&&(identical(other.clientCleared, _this.clientCleared) || other.clientCleared == _this.clientCleared)&&const DeepCollectionEquality().equals(other.errors, _this.errors));
 }
 
 
 @override
 int get hashCode {
   final _this = this as EventDetailsState;
-  return Object.hashAll([runtimeType,_this.selectedDate,_this.endDate,_this.selectedStartTime,_this.selectedEndTime,_this.editingStatus,_this.isEditing,_this.endDateTouched,_this.repeat,_this.savedRepeat,const DeepCollectionEquality().hash(_this.selectedEmployees),const DeepCollectionEquality().hash(_this.existingImages),const DeepCollectionEquality().hash(_this.removedExistingImages),const DeepCollectionEquality().hash(_this.newImages),_this.isSaving,_this.client,_this.selectedClient,const DeepCollectionEquality().hash(_this.clientResults),_this.isSearchingClient,_this.useCustomAddress,_this.isPersonal,_this.isDayOff,_this.isAllDay,_this.clientCleared,const DeepCollectionEquality().hash(_this.errors)]);
+  return Object.hashAll([runtimeType,_this.selectedDate,_this.endDate,_this.selectedStartTime,_this.selectedEndTime,_this.editingStatus,_this.isEditing,_this.endDateTouched,_this.repeat,_this.savedRepeat,const DeepCollectionEquality().hash(_this.selectedEmployees),const DeepCollectionEquality().hash(_this.existingImages),const DeepCollectionEquality().hash(_this.removedExistingImages),const DeepCollectionEquality().hash(_this.newImages),_this.isSaving,_this.client,_this.selectedClient,const DeepCollectionEquality().hash(_this.clientResults),_this.isSearchingClient,_this.clientSearchStatus,_this.useCustomAddress,_this.isPersonal,_this.isDayOff,_this.isAllDay,_this.clientCleared,const DeepCollectionEquality().hash(_this.errors)]);
 }
 
 @override
 String toString() {
   final _this = this as EventDetailsState;
-  return 'EventDetailsState(selectedDate: ${_this.selectedDate}, endDate: ${_this.endDate}, selectedStartTime: ${_this.selectedStartTime}, selectedEndTime: ${_this.selectedEndTime}, editingStatus: ${_this.editingStatus}, isEditing: ${_this.isEditing}, endDateTouched: ${_this.endDateTouched}, repeat: ${_this.repeat}, savedRepeat: ${_this.savedRepeat}, selectedEmployees: ${_this.selectedEmployees}, existingImages: ${_this.existingImages}, removedExistingImages: ${_this.removedExistingImages}, newImages: ${_this.newImages}, isSaving: ${_this.isSaving}, client: ${_this.client}, selectedClient: ${_this.selectedClient}, clientResults: ${_this.clientResults}, isSearchingClient: ${_this.isSearchingClient}, useCustomAddress: ${_this.useCustomAddress}, isPersonal: ${_this.isPersonal}, isDayOff: ${_this.isDayOff}, isAllDay: ${_this.isAllDay}, clientCleared: ${_this.clientCleared}, errors: ${_this.errors})';
+  return 'EventDetailsState(selectedDate: ${_this.selectedDate}, endDate: ${_this.endDate}, selectedStartTime: ${_this.selectedStartTime}, selectedEndTime: ${_this.selectedEndTime}, editingStatus: ${_this.editingStatus}, isEditing: ${_this.isEditing}, endDateTouched: ${_this.endDateTouched}, repeat: ${_this.repeat}, savedRepeat: ${_this.savedRepeat}, selectedEmployees: ${_this.selectedEmployees}, existingImages: ${_this.existingImages}, removedExistingImages: ${_this.removedExistingImages}, newImages: ${_this.newImages}, isSaving: ${_this.isSaving}, client: ${_this.client}, selectedClient: ${_this.selectedClient}, clientResults: ${_this.clientResults}, isSearchingClient: ${_this.isSearchingClient}, clientSearchStatus: ${_this.clientSearchStatus}, useCustomAddress: ${_this.useCustomAddress}, isPersonal: ${_this.isPersonal}, isDayOff: ${_this.isDayOff}, isAllDay: ${_this.isAllDay}, clientCleared: ${_this.clientCleared}, errors: ${_this.errors})';
 }
 
 
@@ -52,11 +52,11 @@ abstract mixin class $EventDetailsStateCopyWith<$Res>  {
   factory $EventDetailsStateCopyWith(EventDetailsState value, $Res Function(EventDetailsState) _then) = _$EventDetailsStateCopyWithImpl;
 @useResult
 $Res call({
- DateTime selectedDate, DateTime endDate, TimeOfDay selectedStartTime, TimeOfDay selectedEndTime, String editingStatus, bool isEditing, bool endDateTouched, RepeatInterval repeat, RepeatInterval savedRepeat, List<EmployeeRecord> selectedEmployees, List<AppointmentImage> existingImages, List<AppointmentImage> removedExistingImages, List<File> newImages, bool isSaving, ClientRecord? client, ClientRecord? selectedClient, List<ClientRecord> clientResults, bool isSearchingClient, bool useCustomAddress, bool isPersonal, bool isDayOff, bool isAllDay, bool clientCleared, Map<String, AppointmentFormError> errors
+ DateTime selectedDate, DateTime endDate, TimeOfDay selectedStartTime, TimeOfDay selectedEndTime, String editingStatus, bool isEditing, bool endDateTouched, RepeatInterval repeat, RepeatInterval savedRepeat, List<EmployeeRecord> selectedEmployees, List<AppointmentImage> existingImages, List<AppointmentImage> removedExistingImages, List<File> newImages, bool isSaving, ClientRecord? client, ClientRecord? selectedClient, List<ClientRecord> clientResults, bool isSearchingClient, ClientSearchStatus clientSearchStatus, bool useCustomAddress, bool isPersonal, bool isDayOff, bool isAllDay, bool clientCleared, Map<String, AppointmentFormError> errors
 });
 
 
-$ClientRecordCopyWith<$Res>? get client;$ClientRecordCopyWith<$Res>? get selectedClient;
+$ClientRecordCopyWith<$Res>? get client;$ClientRecordCopyWith<$Res>? get selectedClient;$ClientSearchStatusCopyWith<$Res> get clientSearchStatus;
 
 }
 /// @nodoc
@@ -69,7 +69,7 @@ class _$EventDetailsStateCopyWithImpl<$Res>
 
 /// Create a copy of EventDetailsState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? selectedDate = null,Object? endDate = null,Object? selectedStartTime = null,Object? selectedEndTime = null,Object? editingStatus = null,Object? isEditing = null,Object? endDateTouched = null,Object? repeat = null,Object? savedRepeat = null,Object? selectedEmployees = null,Object? existingImages = null,Object? removedExistingImages = null,Object? newImages = null,Object? isSaving = null,Object? client = freezed,Object? selectedClient = freezed,Object? clientResults = null,Object? isSearchingClient = null,Object? useCustomAddress = null,Object? isPersonal = null,Object? isDayOff = null,Object? isAllDay = null,Object? clientCleared = null,Object? errors = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? selectedDate = null,Object? endDate = null,Object? selectedStartTime = null,Object? selectedEndTime = null,Object? editingStatus = null,Object? isEditing = null,Object? endDateTouched = null,Object? repeat = null,Object? savedRepeat = null,Object? selectedEmployees = null,Object? existingImages = null,Object? removedExistingImages = null,Object? newImages = null,Object? isSaving = null,Object? client = freezed,Object? selectedClient = freezed,Object? clientResults = null,Object? isSearchingClient = null,Object? clientSearchStatus = null,Object? useCustomAddress = null,Object? isPersonal = null,Object? isDayOff = null,Object? isAllDay = null,Object? clientCleared = null,Object? errors = null,}) {
   return _then(EventDetailsState(
 selectedDate: null == selectedDate ? _self.selectedDate : selectedDate // ignore: cast_nullable_to_non_nullable
 as DateTime,endDate: null == endDate ? _self.endDate : endDate // ignore: cast_nullable_to_non_nullable
@@ -89,7 +89,8 @@ as bool,client: freezed == client ? _self.client : client // ignore: cast_nullab
 as ClientRecord?,selectedClient: freezed == selectedClient ? _self.selectedClient : selectedClient // ignore: cast_nullable_to_non_nullable
 as ClientRecord?,clientResults: null == clientResults ? _self.clientResults : clientResults // ignore: cast_nullable_to_non_nullable
 as List<ClientRecord>,isSearchingClient: null == isSearchingClient ? _self.isSearchingClient : isSearchingClient // ignore: cast_nullable_to_non_nullable
-as bool,useCustomAddress: null == useCustomAddress ? _self.useCustomAddress : useCustomAddress // ignore: cast_nullable_to_non_nullable
+as bool,clientSearchStatus: null == clientSearchStatus ? _self.clientSearchStatus : clientSearchStatus // ignore: cast_nullable_to_non_nullable
+as ClientSearchStatus,useCustomAddress: null == useCustomAddress ? _self.useCustomAddress : useCustomAddress // ignore: cast_nullable_to_non_nullable
 as bool,isPersonal: null == isPersonal ? _self.isPersonal : isPersonal // ignore: cast_nullable_to_non_nullable
 as bool,isDayOff: null == isDayOff ? _self.isDayOff : isDayOff // ignore: cast_nullable_to_non_nullable
 as bool,isAllDay: null == isAllDay ? _self.isAllDay : isAllDay // ignore: cast_nullable_to_non_nullable
@@ -121,6 +122,15 @@ $ClientRecordCopyWith<$Res>? get selectedClient {
 
   return $ClientRecordCopyWith<$Res>(_self.selectedClient!, (value) {
     return _then(_self.copyWith(selectedClient: value));
+  });
+}/// Create a copy of EventDetailsState
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$ClientSearchStatusCopyWith<$Res> get clientSearchStatus {
+  
+  return $ClientSearchStatusCopyWith<$Res>(_self.clientSearchStatus, (value) {
+    return _then(_self.copyWith(clientSearchStatus: value));
   });
 }
 }
@@ -204,10 +214,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( DateTime selectedDate,  DateTime endDate,  TimeOfDay selectedStartTime,  TimeOfDay selectedEndTime,  String editingStatus,  bool isEditing,  bool endDateTouched,  RepeatInterval repeat,  RepeatInterval savedRepeat,  List<EmployeeRecord> selectedEmployees,  List<AppointmentImage> existingImages,  List<AppointmentImage> removedExistingImages,  List<File> newImages,  bool isSaving,  ClientRecord? client,  ClientRecord? selectedClient,  List<ClientRecord> clientResults,  bool isSearchingClient,  bool useCustomAddress,  bool isPersonal,  bool isDayOff,  bool isAllDay,  bool clientCleared,  Map<String, AppointmentFormError> errors)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( DateTime selectedDate,  DateTime endDate,  TimeOfDay selectedStartTime,  TimeOfDay selectedEndTime,  String editingStatus,  bool isEditing,  bool endDateTouched,  RepeatInterval repeat,  RepeatInterval savedRepeat,  List<EmployeeRecord> selectedEmployees,  List<AppointmentImage> existingImages,  List<AppointmentImage> removedExistingImages,  List<File> newImages,  bool isSaving,  ClientRecord? client,  ClientRecord? selectedClient,  List<ClientRecord> clientResults,  bool isSearchingClient,  ClientSearchStatus clientSearchStatus,  bool useCustomAddress,  bool isPersonal,  bool isDayOff,  bool isAllDay,  bool clientCleared,  Map<String, AppointmentFormError> errors)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _EventDetailsState() when $default != null:
-return $default(_that.selectedDate,_that.endDate,_that.selectedStartTime,_that.selectedEndTime,_that.editingStatus,_that.isEditing,_that.endDateTouched,_that.repeat,_that.savedRepeat,_that.selectedEmployees,_that.existingImages,_that.removedExistingImages,_that.newImages,_that.isSaving,_that.client,_that.selectedClient,_that.clientResults,_that.isSearchingClient,_that.useCustomAddress,_that.isPersonal,_that.isDayOff,_that.isAllDay,_that.clientCleared,_that.errors);case _:
+return $default(_that.selectedDate,_that.endDate,_that.selectedStartTime,_that.selectedEndTime,_that.editingStatus,_that.isEditing,_that.endDateTouched,_that.repeat,_that.savedRepeat,_that.selectedEmployees,_that.existingImages,_that.removedExistingImages,_that.newImages,_that.isSaving,_that.client,_that.selectedClient,_that.clientResults,_that.isSearchingClient,_that.clientSearchStatus,_that.useCustomAddress,_that.isPersonal,_that.isDayOff,_that.isAllDay,_that.clientCleared,_that.errors);case _:
   return orElse();
 
 }
@@ -225,10 +235,10 @@ return $default(_that.selectedDate,_that.endDate,_that.selectedStartTime,_that.s
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( DateTime selectedDate,  DateTime endDate,  TimeOfDay selectedStartTime,  TimeOfDay selectedEndTime,  String editingStatus,  bool isEditing,  bool endDateTouched,  RepeatInterval repeat,  RepeatInterval savedRepeat,  List<EmployeeRecord> selectedEmployees,  List<AppointmentImage> existingImages,  List<AppointmentImage> removedExistingImages,  List<File> newImages,  bool isSaving,  ClientRecord? client,  ClientRecord? selectedClient,  List<ClientRecord> clientResults,  bool isSearchingClient,  bool useCustomAddress,  bool isPersonal,  bool isDayOff,  bool isAllDay,  bool clientCleared,  Map<String, AppointmentFormError> errors)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( DateTime selectedDate,  DateTime endDate,  TimeOfDay selectedStartTime,  TimeOfDay selectedEndTime,  String editingStatus,  bool isEditing,  bool endDateTouched,  RepeatInterval repeat,  RepeatInterval savedRepeat,  List<EmployeeRecord> selectedEmployees,  List<AppointmentImage> existingImages,  List<AppointmentImage> removedExistingImages,  List<File> newImages,  bool isSaving,  ClientRecord? client,  ClientRecord? selectedClient,  List<ClientRecord> clientResults,  bool isSearchingClient,  ClientSearchStatus clientSearchStatus,  bool useCustomAddress,  bool isPersonal,  bool isDayOff,  bool isAllDay,  bool clientCleared,  Map<String, AppointmentFormError> errors)  $default,) {final _that = this;
 switch (_that) {
 case _EventDetailsState():
-return $default(_that.selectedDate,_that.endDate,_that.selectedStartTime,_that.selectedEndTime,_that.editingStatus,_that.isEditing,_that.endDateTouched,_that.repeat,_that.savedRepeat,_that.selectedEmployees,_that.existingImages,_that.removedExistingImages,_that.newImages,_that.isSaving,_that.client,_that.selectedClient,_that.clientResults,_that.isSearchingClient,_that.useCustomAddress,_that.isPersonal,_that.isDayOff,_that.isAllDay,_that.clientCleared,_that.errors);case _:
+return $default(_that.selectedDate,_that.endDate,_that.selectedStartTime,_that.selectedEndTime,_that.editingStatus,_that.isEditing,_that.endDateTouched,_that.repeat,_that.savedRepeat,_that.selectedEmployees,_that.existingImages,_that.removedExistingImages,_that.newImages,_that.isSaving,_that.client,_that.selectedClient,_that.clientResults,_that.isSearchingClient,_that.clientSearchStatus,_that.useCustomAddress,_that.isPersonal,_that.isDayOff,_that.isAllDay,_that.clientCleared,_that.errors);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -245,10 +255,10 @@ return $default(_that.selectedDate,_that.endDate,_that.selectedStartTime,_that.s
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( DateTime selectedDate,  DateTime endDate,  TimeOfDay selectedStartTime,  TimeOfDay selectedEndTime,  String editingStatus,  bool isEditing,  bool endDateTouched,  RepeatInterval repeat,  RepeatInterval savedRepeat,  List<EmployeeRecord> selectedEmployees,  List<AppointmentImage> existingImages,  List<AppointmentImage> removedExistingImages,  List<File> newImages,  bool isSaving,  ClientRecord? client,  ClientRecord? selectedClient,  List<ClientRecord> clientResults,  bool isSearchingClient,  bool useCustomAddress,  bool isPersonal,  bool isDayOff,  bool isAllDay,  bool clientCleared,  Map<String, AppointmentFormError> errors)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( DateTime selectedDate,  DateTime endDate,  TimeOfDay selectedStartTime,  TimeOfDay selectedEndTime,  String editingStatus,  bool isEditing,  bool endDateTouched,  RepeatInterval repeat,  RepeatInterval savedRepeat,  List<EmployeeRecord> selectedEmployees,  List<AppointmentImage> existingImages,  List<AppointmentImage> removedExistingImages,  List<File> newImages,  bool isSaving,  ClientRecord? client,  ClientRecord? selectedClient,  List<ClientRecord> clientResults,  bool isSearchingClient,  ClientSearchStatus clientSearchStatus,  bool useCustomAddress,  bool isPersonal,  bool isDayOff,  bool isAllDay,  bool clientCleared,  Map<String, AppointmentFormError> errors)?  $default,) {final _that = this;
 switch (_that) {
 case _EventDetailsState() when $default != null:
-return $default(_that.selectedDate,_that.endDate,_that.selectedStartTime,_that.selectedEndTime,_that.editingStatus,_that.isEditing,_that.endDateTouched,_that.repeat,_that.savedRepeat,_that.selectedEmployees,_that.existingImages,_that.removedExistingImages,_that.newImages,_that.isSaving,_that.client,_that.selectedClient,_that.clientResults,_that.isSearchingClient,_that.useCustomAddress,_that.isPersonal,_that.isDayOff,_that.isAllDay,_that.clientCleared,_that.errors);case _:
+return $default(_that.selectedDate,_that.endDate,_that.selectedStartTime,_that.selectedEndTime,_that.editingStatus,_that.isEditing,_that.endDateTouched,_that.repeat,_that.savedRepeat,_that.selectedEmployees,_that.existingImages,_that.removedExistingImages,_that.newImages,_that.isSaving,_that.client,_that.selectedClient,_that.clientResults,_that.isSearchingClient,_that.clientSearchStatus,_that.useCustomAddress,_that.isPersonal,_that.isDayOff,_that.isAllDay,_that.clientCleared,_that.errors);case _:
   return null;
 
 }
@@ -260,7 +270,7 @@ return $default(_that.selectedDate,_that.endDate,_that.selectedStartTime,_that.s
 
 
 class _EventDetailsState implements EventDetailsState {
-  const _EventDetailsState({required this.selectedDate, required this.endDate, required this.selectedStartTime, required this.selectedEndTime, required this.editingStatus, this.isEditing = false, this.endDateTouched = true, this.repeat = RepeatInterval.none, this.savedRepeat = RepeatInterval.none,  List<EmployeeRecord> selectedEmployees = const <EmployeeRecord>[],  List<AppointmentImage> existingImages = const <AppointmentImage>[],  List<AppointmentImage> removedExistingImages = const <AppointmentImage>[],  List<File> newImages = const <File>[], this.isSaving = false, this.client, this.selectedClient,  List<ClientRecord> clientResults = const <ClientRecord>[], this.isSearchingClient = false, this.useCustomAddress = false, this.isPersonal = false, this.isDayOff = false, this.isAllDay = false, this.clientCleared = false,  Map<String, AppointmentFormError> errors = const <String, AppointmentFormError>{}}): _selectedEmployees = selectedEmployees,_existingImages = existingImages,_removedExistingImages = removedExistingImages,_newImages = newImages,_clientResults = clientResults,_errors = errors;
+  const _EventDetailsState({required this.selectedDate, required this.endDate, required this.selectedStartTime, required this.selectedEndTime, required this.editingStatus, this.isEditing = false, this.endDateTouched = true, this.repeat = RepeatInterval.none, this.savedRepeat = RepeatInterval.none,  List<EmployeeRecord> selectedEmployees = const <EmployeeRecord>[],  List<AppointmentImage> existingImages = const <AppointmentImage>[],  List<AppointmentImage> removedExistingImages = const <AppointmentImage>[],  List<File> newImages = const <File>[], this.isSaving = false, this.client, this.selectedClient,  List<ClientRecord> clientResults = const <ClientRecord>[], this.isSearchingClient = false, this.clientSearchStatus = const ClientSearchStatus(), this.useCustomAddress = false, this.isPersonal = false, this.isDayOff = false, this.isAllDay = false, this.clientCleared = false,  Map<String, AppointmentFormError> errors = const <String, AppointmentFormError>{}}): _selectedEmployees = selectedEmployees,_existingImages = existingImages,_removedExistingImages = removedExistingImages,_newImages = newImages,_clientResults = clientResults,_errors = errors;
   
 
 @override final  DateTime selectedDate;
@@ -312,6 +322,7 @@ class _EventDetailsState implements EventDetailsState {
 }
 
 @override@JsonKey() final  bool isSearchingClient;
+@override@JsonKey() final  ClientSearchStatus clientSearchStatus;
 @override@JsonKey() final  bool useCustomAddress;
 @override@JsonKey() final  bool isPersonal;
 @override@JsonKey() final  bool isDayOff;
@@ -335,18 +346,18 @@ _$EventDetailsStateCopyWith<_EventDetailsState> get copyWith => __$EventDetailsS
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _EventDetailsState&&(identical(other.selectedDate, selectedDate) || other.selectedDate == selectedDate)&&(identical(other.endDate, endDate) || other.endDate == endDate)&&(identical(other.selectedStartTime, selectedStartTime) || other.selectedStartTime == selectedStartTime)&&(identical(other.selectedEndTime, selectedEndTime) || other.selectedEndTime == selectedEndTime)&&(identical(other.editingStatus, editingStatus) || other.editingStatus == editingStatus)&&(identical(other.isEditing, isEditing) || other.isEditing == isEditing)&&(identical(other.endDateTouched, endDateTouched) || other.endDateTouched == endDateTouched)&&(identical(other.repeat, repeat) || other.repeat == repeat)&&(identical(other.savedRepeat, savedRepeat) || other.savedRepeat == savedRepeat)&&const DeepCollectionEquality().equals(other.selectedEmployees, _selectedEmployees)&&const DeepCollectionEquality().equals(other.existingImages, _existingImages)&&const DeepCollectionEquality().equals(other.removedExistingImages, _removedExistingImages)&&const DeepCollectionEquality().equals(other.newImages, _newImages)&&(identical(other.isSaving, isSaving) || other.isSaving == isSaving)&&(identical(other.client, client) || other.client == client)&&(identical(other.selectedClient, selectedClient) || other.selectedClient == selectedClient)&&const DeepCollectionEquality().equals(other.clientResults, _clientResults)&&(identical(other.isSearchingClient, isSearchingClient) || other.isSearchingClient == isSearchingClient)&&(identical(other.useCustomAddress, useCustomAddress) || other.useCustomAddress == useCustomAddress)&&(identical(other.isPersonal, isPersonal) || other.isPersonal == isPersonal)&&(identical(other.isDayOff, isDayOff) || other.isDayOff == isDayOff)&&(identical(other.isAllDay, isAllDay) || other.isAllDay == isAllDay)&&(identical(other.clientCleared, clientCleared) || other.clientCleared == clientCleared)&&const DeepCollectionEquality().equals(other.errors, _errors));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _EventDetailsState&&(identical(other.selectedDate, selectedDate) || other.selectedDate == selectedDate)&&(identical(other.endDate, endDate) || other.endDate == endDate)&&(identical(other.selectedStartTime, selectedStartTime) || other.selectedStartTime == selectedStartTime)&&(identical(other.selectedEndTime, selectedEndTime) || other.selectedEndTime == selectedEndTime)&&(identical(other.editingStatus, editingStatus) || other.editingStatus == editingStatus)&&(identical(other.isEditing, isEditing) || other.isEditing == isEditing)&&(identical(other.endDateTouched, endDateTouched) || other.endDateTouched == endDateTouched)&&(identical(other.repeat, repeat) || other.repeat == repeat)&&(identical(other.savedRepeat, savedRepeat) || other.savedRepeat == savedRepeat)&&const DeepCollectionEquality().equals(other.selectedEmployees, _selectedEmployees)&&const DeepCollectionEquality().equals(other.existingImages, _existingImages)&&const DeepCollectionEquality().equals(other.removedExistingImages, _removedExistingImages)&&const DeepCollectionEquality().equals(other.newImages, _newImages)&&(identical(other.isSaving, isSaving) || other.isSaving == isSaving)&&(identical(other.client, client) || other.client == client)&&(identical(other.selectedClient, selectedClient) || other.selectedClient == selectedClient)&&const DeepCollectionEquality().equals(other.clientResults, _clientResults)&&(identical(other.isSearchingClient, isSearchingClient) || other.isSearchingClient == isSearchingClient)&&(identical(other.clientSearchStatus, clientSearchStatus) || other.clientSearchStatus == clientSearchStatus)&&(identical(other.useCustomAddress, useCustomAddress) || other.useCustomAddress == useCustomAddress)&&(identical(other.isPersonal, isPersonal) || other.isPersonal == isPersonal)&&(identical(other.isDayOff, isDayOff) || other.isDayOff == isDayOff)&&(identical(other.isAllDay, isAllDay) || other.isAllDay == isAllDay)&&(identical(other.clientCleared, clientCleared) || other.clientCleared == clientCleared)&&const DeepCollectionEquality().equals(other.errors, _errors));
 }
 
 
 @override
 int get hashCode {
-    return Object.hashAll([runtimeType,selectedDate,endDate,selectedStartTime,selectedEndTime,editingStatus,isEditing,endDateTouched,repeat,savedRepeat,const DeepCollectionEquality().hash(_selectedEmployees),const DeepCollectionEquality().hash(_existingImages),const DeepCollectionEquality().hash(_removedExistingImages),const DeepCollectionEquality().hash(_newImages),isSaving,client,selectedClient,const DeepCollectionEquality().hash(_clientResults),isSearchingClient,useCustomAddress,isPersonal,isDayOff,isAllDay,clientCleared,const DeepCollectionEquality().hash(_errors)]);
+    return Object.hashAll([runtimeType,selectedDate,endDate,selectedStartTime,selectedEndTime,editingStatus,isEditing,endDateTouched,repeat,savedRepeat,const DeepCollectionEquality().hash(_selectedEmployees),const DeepCollectionEquality().hash(_existingImages),const DeepCollectionEquality().hash(_removedExistingImages),const DeepCollectionEquality().hash(_newImages),isSaving,client,selectedClient,const DeepCollectionEquality().hash(_clientResults),isSearchingClient,clientSearchStatus,useCustomAddress,isPersonal,isDayOff,isAllDay,clientCleared,const DeepCollectionEquality().hash(_errors)]);
 }
 
 @override
 String toString() {
-    return 'EventDetailsState(selectedDate: $selectedDate, endDate: $endDate, selectedStartTime: $selectedStartTime, selectedEndTime: $selectedEndTime, editingStatus: $editingStatus, isEditing: $isEditing, endDateTouched: $endDateTouched, repeat: $repeat, savedRepeat: $savedRepeat, selectedEmployees: $selectedEmployees, existingImages: $existingImages, removedExistingImages: $removedExistingImages, newImages: $newImages, isSaving: $isSaving, client: $client, selectedClient: $selectedClient, clientResults: $clientResults, isSearchingClient: $isSearchingClient, useCustomAddress: $useCustomAddress, isPersonal: $isPersonal, isDayOff: $isDayOff, isAllDay: $isAllDay, clientCleared: $clientCleared, errors: $errors)';
+    return 'EventDetailsState(selectedDate: $selectedDate, endDate: $endDate, selectedStartTime: $selectedStartTime, selectedEndTime: $selectedEndTime, editingStatus: $editingStatus, isEditing: $isEditing, endDateTouched: $endDateTouched, repeat: $repeat, savedRepeat: $savedRepeat, selectedEmployees: $selectedEmployees, existingImages: $existingImages, removedExistingImages: $removedExistingImages, newImages: $newImages, isSaving: $isSaving, client: $client, selectedClient: $selectedClient, clientResults: $clientResults, isSearchingClient: $isSearchingClient, clientSearchStatus: $clientSearchStatus, useCustomAddress: $useCustomAddress, isPersonal: $isPersonal, isDayOff: $isDayOff, isAllDay: $isAllDay, clientCleared: $clientCleared, errors: $errors)';
 }
 
 
@@ -357,11 +368,11 @@ abstract mixin class _$EventDetailsStateCopyWith<$Res> implements $EventDetailsS
   factory _$EventDetailsStateCopyWith(_EventDetailsState value, $Res Function(_EventDetailsState) _then) = __$EventDetailsStateCopyWithImpl;
 @override @useResult
 $Res call({
- DateTime selectedDate, DateTime endDate, TimeOfDay selectedStartTime, TimeOfDay selectedEndTime, String editingStatus, bool isEditing, bool endDateTouched, RepeatInterval repeat, RepeatInterval savedRepeat, List<EmployeeRecord> selectedEmployees, List<AppointmentImage> existingImages, List<AppointmentImage> removedExistingImages, List<File> newImages, bool isSaving, ClientRecord? client, ClientRecord? selectedClient, List<ClientRecord> clientResults, bool isSearchingClient, bool useCustomAddress, bool isPersonal, bool isDayOff, bool isAllDay, bool clientCleared, Map<String, AppointmentFormError> errors
+ DateTime selectedDate, DateTime endDate, TimeOfDay selectedStartTime, TimeOfDay selectedEndTime, String editingStatus, bool isEditing, bool endDateTouched, RepeatInterval repeat, RepeatInterval savedRepeat, List<EmployeeRecord> selectedEmployees, List<AppointmentImage> existingImages, List<AppointmentImage> removedExistingImages, List<File> newImages, bool isSaving, ClientRecord? client, ClientRecord? selectedClient, List<ClientRecord> clientResults, bool isSearchingClient, ClientSearchStatus clientSearchStatus, bool useCustomAddress, bool isPersonal, bool isDayOff, bool isAllDay, bool clientCleared, Map<String, AppointmentFormError> errors
 });
 
 
-@override $ClientRecordCopyWith<$Res>? get client;@override $ClientRecordCopyWith<$Res>? get selectedClient;
+@override $ClientRecordCopyWith<$Res>? get client;@override $ClientRecordCopyWith<$Res>? get selectedClient;@override $ClientSearchStatusCopyWith<$Res> get clientSearchStatus;
 
 }
 /// @nodoc
@@ -374,7 +385,7 @@ class __$EventDetailsStateCopyWithImpl<$Res>
 
 /// Create a copy of EventDetailsState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? selectedDate = null,Object? endDate = null,Object? selectedStartTime = null,Object? selectedEndTime = null,Object? editingStatus = null,Object? isEditing = null,Object? endDateTouched = null,Object? repeat = null,Object? savedRepeat = null,Object? selectedEmployees = null,Object? existingImages = null,Object? removedExistingImages = null,Object? newImages = null,Object? isSaving = null,Object? client = freezed,Object? selectedClient = freezed,Object? clientResults = null,Object? isSearchingClient = null,Object? useCustomAddress = null,Object? isPersonal = null,Object? isDayOff = null,Object? isAllDay = null,Object? clientCleared = null,Object? errors = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? selectedDate = null,Object? endDate = null,Object? selectedStartTime = null,Object? selectedEndTime = null,Object? editingStatus = null,Object? isEditing = null,Object? endDateTouched = null,Object? repeat = null,Object? savedRepeat = null,Object? selectedEmployees = null,Object? existingImages = null,Object? removedExistingImages = null,Object? newImages = null,Object? isSaving = null,Object? client = freezed,Object? selectedClient = freezed,Object? clientResults = null,Object? isSearchingClient = null,Object? clientSearchStatus = null,Object? useCustomAddress = null,Object? isPersonal = null,Object? isDayOff = null,Object? isAllDay = null,Object? clientCleared = null,Object? errors = null,}) {
   return _then(_EventDetailsState(
 selectedDate: null == selectedDate ? _self.selectedDate : selectedDate // ignore: cast_nullable_to_non_nullable
 as DateTime,endDate: null == endDate ? _self.endDate : endDate // ignore: cast_nullable_to_non_nullable
@@ -394,7 +405,8 @@ as bool,client: freezed == client ? _self.client : client // ignore: cast_nullab
 as ClientRecord?,selectedClient: freezed == selectedClient ? _self.selectedClient : selectedClient // ignore: cast_nullable_to_non_nullable
 as ClientRecord?,clientResults: null == clientResults ? _self._clientResults : clientResults // ignore: cast_nullable_to_non_nullable
 as List<ClientRecord>,isSearchingClient: null == isSearchingClient ? _self.isSearchingClient : isSearchingClient // ignore: cast_nullable_to_non_nullable
-as bool,useCustomAddress: null == useCustomAddress ? _self.useCustomAddress : useCustomAddress // ignore: cast_nullable_to_non_nullable
+as bool,clientSearchStatus: null == clientSearchStatus ? _self.clientSearchStatus : clientSearchStatus // ignore: cast_nullable_to_non_nullable
+as ClientSearchStatus,useCustomAddress: null == useCustomAddress ? _self.useCustomAddress : useCustomAddress // ignore: cast_nullable_to_non_nullable
 as bool,isPersonal: null == isPersonal ? _self.isPersonal : isPersonal // ignore: cast_nullable_to_non_nullable
 as bool,isDayOff: null == isDayOff ? _self.isDayOff : isDayOff // ignore: cast_nullable_to_non_nullable
 as bool,isAllDay: null == isAllDay ? _self.isAllDay : isAllDay // ignore: cast_nullable_to_non_nullable
@@ -427,6 +439,15 @@ $ClientRecordCopyWith<$Res>? get selectedClient {
 
   return $ClientRecordCopyWith<$Res>(_self.selectedClient!, (value) {
     return _then(_self.copyWith(selectedClient: value));
+  });
+}/// Create a copy of EventDetailsState
+/// with the given fields replaced by the non-null parameter values.
+@override
+@pragma('vm:prefer-inline')
+$ClientSearchStatusCopyWith<$Res> get clientSearchStatus {
+  
+  return $ClientSearchStatusCopyWith<$Res>(_self.clientSearchStatus, (value) {
+    return _then(_self.copyWith(clientSearchStatus: value));
   });
 }
 }

@@ -28,6 +28,7 @@ import 'package:scheduling/features/calendar/domain/policies/appointment_form_va
 import 'package:scheduling/features/calendar/domain/policies/custom_address_policy.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
@@ -63,6 +64,7 @@ abstract class EventDetailsState
     ClientRecord? selectedClient,
     @Default(<ClientRecord>[]) List<ClientRecord> clientResults,
     @Default(false) bool isSearchingClient,
+    @Default(ClientSearchStatus()) ClientSearchStatus clientSearchStatus,
     @Default(false) bool useCustomAddress,
     @Default(false) bool isPersonal,
     @Default(false) bool isDayOff,
@@ -294,6 +296,8 @@ class EventDetailsController extends Notifier<EventDetailsState>
     var next = current.copyWith(
       clientResults: update.clientResults ?? current.clientResults,
       isSearchingClient: update.isSearchingClient ?? current.isSearchingClient,
+      clientSearchStatus:
+          update.clientSearchStatus ?? current.clientSearchStatus,
       useCustomAddress: update.useCustomAddress ?? current.useCustomAddress,
       selectedEmployees: update.selectedEmployees ?? current.selectedEmployees,
       errors: update.errors ?? current.errors,
