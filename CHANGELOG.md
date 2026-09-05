@@ -29,6 +29,9 @@ rather than something that happens.
 - **Undo on "mark complete".** Closing a job by accident used to mean an admin
   reopening it. The confirmation now carries an Undo for as long as it is on
   screen, and it puts the job back exactly where it was.
+- **Sorting on the clients list.** Alongside the alphabetical order it has
+  always had, the list can now show the busiest clients first or the most
+  recently added.
 - **The app tour covers the new features.** The walkthrough now points out the
   week view and the crew filter on the calendar, the location-sharing control
   in Settings, and — on the job itself — Start, the notes and photos the crew
@@ -37,6 +40,18 @@ rather than something that happens.
   in place, rather than sitting through the whole thing again.
 
 ### Changed
+- **The clients screen leads with search, and its filters moved into one
+  sheet.** The row of five controls that used to sit above the list scrolled
+  sideways, so on a small phone or at large text something was always
+  off-screen when you arrived. There is now a single Filter button that cannot
+  scroll away, and whatever it is set to shows as one chip beside it. The
+  search box also says what it actually searches — name, phone, address and
+  email, not just name or phone. Rows are calmer too: a client's type and the
+  "Building" marker have moved to the filter sheet and the client's own page,
+  leaving the name, where the job is, and how many jobs they have had.
+- **Opening the Clients tab is much cheaper.** It used to read the whole client
+  roster on arrival, purely to work out which addresses were shared. That read
+  now happens only if you open the filter sheet.
 - **Client and job-history search now runs against the whole database.** Both
   searches previously scanned a capped window of records held on the phone —
   the first 5,000 clients by name, the most recent 5,000 settled jobs — and

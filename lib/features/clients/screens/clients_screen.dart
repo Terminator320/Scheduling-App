@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
-import 'package:scheduling/features/clients/widgets/sections/client_type_filter_bar.dart';
+import 'package:scheduling/features/clients/domain/models/clients_sort.dart';
+import 'package:scheduling/features/clients/widgets/sections/clients_filter_bar.dart';
+import 'package:scheduling/features/clients/widgets/sections/clients_list_header.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_flow.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
+import 'package:scheduling/features/clients/widgets/sheets/clients_filter_sheet.dart';
 import 'package:scheduling/features/clients/widgets/views/client_detail_view.dart';
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
@@ -42,6 +43,12 @@ class _ListInformationState extends State<ListInformation> {
   final TextEditingController _searchController = TextEditingController();
   ClientRecord? _selectedClient;
   ClientsFilter _filter = const ClientsFilterAll();
+  ClientsSort _sort = ClientsSort.name;
+  int? _visibleCount;
+
+  /// Street of the active building filter, remembered when it is picked so the
+  /// chip can name it without this screen watching the scan.
+  String? _activeBuildingLabel;
 
   /// Whether the list's first page has settled — gates the feature tour.
   bool _listSettled = false;
@@ -55,6 +62,15 @@ class _ListInformationState extends State<ListInformation> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _openFilterSheet() async {
+    final picked = await showClientsFilterSheet(context, selected: _filter);
+    if (picked == null || !mounted) return;
+    setState(() {
+      _filter = picked.filter;
+      _activeBuildingLabel = picked.buildingLabel;
+    });
   }
 
   void _onListSettled() {
@@ -88,15 +104,14 @@ class _ListInformationState extends State<ListInformation> {
     final searchBar = AppSearchBar(
       textScaler: MediaQuery.textScalerOf(context),
       controller: _searchController,
-      hintText: context.l10n.clients_searchByNameOrPhone,
+      hintText: context.l10n.clients_searchAllFields,
     );
     return FeatureTourHost(
       scope: _tour.scope,
       isAdmin: widget.isAdmin,
       stepKeys: _tour.keys,
-      // The client-row step has no target while the list is still its skeleton,
-      // and a tour started then drops it and marks the WHOLE scope seen — the
-      // row step would never be shown again.
+      // The client-row step has no target while the list is still its
+      // skeleton, so an ungated tour would open on nothing.
       ready: _listSettled,
       child: Scaffold(
         appBar: AppTopBar(
@@ -129,14 +144,20 @@ class _ListInformationState extends State<ListInformation> {
             children: [
               _tour.stepIf(
                 TourStepId.clientsFilter,
-                Consumer(
-                  builder: (context, ref, _) => ClientTypeFilterBar(
-                    selected: _filter,
-                    onChanged: (next) => setState(() => _filter = next),
-                    buildings:
-                        ref.watch(clientBuildingsProvider).value ?? const [],
-                  ),
+                ClientsFilterBar(
+                  selected: _filter,
+                  onOpen: _openFilterSheet,
+                  onChanged: (next) => setState(() {
+                    _filter = next;
+                    _activeBuildingLabel = null;
+                  }),
+                  activeBuildingLabel: _activeBuildingLabel,
                 ),
+              ),
+              ClientsListHeader(
+                count: _visibleCount,
+                sort: _sort,
+                onSortChanged: (next) => setState(() => _sort = next),
               ),
               Expanded(
                 child: ListenableBuilder(
@@ -153,6 +174,11 @@ class _ListInformationState extends State<ListInformation> {
                     firstRowTourWrap: (child) =>
                         _tour.stepIf(TourStepId.clientsRow, child),
                     onFirstPageSettled: _onListSettled,
+                    sort: _sort,
+                    onCountChanged: (count) {
+                      if (_visibleCount == count) return;
+                      setState(() => _visibleCount = count);
+                    },
                   ),
                 ),
               ),

@@ -88,7 +88,7 @@ class FirebaseClientsRepository implements ClientsRepository {
   }
 
   /// The raw stored value of each page's LAST document's sort field, keyed by
-  /// "<sort name>:<doc id>".
+  /// `"<sort name>:<doc id>"`.
   ///
   /// Keyed by sort as well as id because the cursor tuple follows the sort: a
   /// boundary captured under `name` resumes a `jobCount` query from a string

@@ -4,14 +4,12 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
-import 'package:scheduling/core/navigation/app_destination.dart';
-import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
-import 'package:scheduling/features/clients/domain/policies/client_building.dart';
+import 'package:scheduling/features/clients/domain/models/clients_sort.dart';
 import 'package:scheduling/features/clients/domain/policies/client_delete_policy.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
@@ -34,6 +32,8 @@ class ClientsListView extends ConsumerStatefulWidget {
     this.selectedClientId,
     this.firstRowTourWrap,
     this.onFirstPageSettled,
+    this.sort = ClientsSort.name,
+    this.onCountChanged,
   });
 
   final String searchQuery;
@@ -51,6 +51,15 @@ class ClientsListView extends ConsumerStatefulWidget {
   /// failure, since either way the skeleton is gone and no further row will
   /// appear on its own.
   final VoidCallback? onFirstPageSettled;
+
+  /// Order for the unfiltered paginated list. Ignored by the filter and search
+  /// paths, which are bounded in-memory lists ordered by the query behind them.
+  final ClientsSort sort;
+
+  /// Fires with however many rows are currently rendered, so the screen's
+  /// header can show a count without this view owning any chrome — it is also
+  /// the booking flow's client picker, which must stay chrome-free.
+  final void Function(int count)? onCountChanged;
 
   @override
   ConsumerState<ClientsListView> createState() => _ClientsListViewState();
@@ -94,7 +103,11 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
       final after = (pageKey == 1 || items == null || items.isEmpty)
           ? null
           : items.last;
-      return await repository.fetchClientsPage(after: after, limit: _pageSize);
+      return await repository.fetchClientsPage(
+        after: after,
+        limit: _pageSize,
+        sort: widget.sort,
+      );
     } catch (e, st) {
       logger.warn('CLI-LIST clients page fetch error', e, st);
       rethrow;
@@ -104,9 +117,25 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
   }
 
   @override
+  void didUpdateWidget(ClientsListView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sort != widget.sort) _pagingController.refresh();
+  }
+
+  @override
   void dispose() {
     _pagingController.dispose();
     super.dispose();
+  }
+
+  // Post-frame: this runs during build, and the header it feeds is a sibling
+  // in the same tree.
+  void _reportCount(int count) {
+    final report = widget.onCountChanged;
+    if (report == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) report(count);
+    });
   }
 
   Future<void> _openClient(ClientRecord client) async {
@@ -140,9 +169,6 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
       client: client,
       selected: widget.selectedClientId == client.id,
       onOpen: () => _openClient(client),
-      // Both halves are read once per build off the SAME cached window, not a
-      // provider watch and not a key derivation per row.
-      buildingCount: _buildingCounts[_buildingKeyOf(client)],
     );
     // The swipe offers what only an admin may do, so a technician gets the
     // bare tile rather than actions the rules would refuse.
@@ -400,39 +426,20 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
         : context.l10n.common_tryADifferentSearchTerm,
   );
 
-  Widget _resultsList(List<ClientRecord> items) => ListView.separated(
-    padding: const EdgeInsets.only(bottom: AppSpacing.sp16),
-    itemCount: items.length,
-    separatorBuilder: (context, index) => const Divider(height: 1, indent: 64),
-    itemBuilder: (context, index) => _clientTile(items[index], index),
-  );
-
-  /// Set once per build in [build] so the row builder can read it without
-  /// touching `ref` — a `PagedListView` item builder runs outside the
-  /// consumer's own build.
-  Map<String, int> _buildingCounts = const {};
-
-  /// The window's per-client building keys, from the same source and for the
-  /// same reason.
-  Map<String, String?> _buildingKeys = const {};
-
-  /// This client's building key, derived only for a row the scan window never
-  /// saw — an archived client, which [buildingKeysIn] omits.
-  String? _buildingKeyOf(ClientRecord client) =>
-      _buildingKeys.containsKey(client.id)
-      ? _buildingKeys[client.id]
-      : buildingKeyFor(client);
+  Widget _resultsList(List<ClientRecord> items) {
+    _reportCount(items.length);
+    return ListView.separated(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sp16),
+      itemCount: items.length,
+      separatorBuilder: (context, index) =>
+          const Divider(height: 1, indent: 64),
+      itemBuilder: (context, index) => _clientTile(items[index], index),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     ref.listen(clientsRefreshProvider, (_, _) => _pagingController.refresh());
-
-    // Only while this tab is the visible one.
-    final tab = HubShellScope.currentOf(context);
-    if (tab == null || tab == HubTab.clients) {
-      _buildingCounts = ref.watch(clientBuildingCountsProvider);
-      _buildingKeys = ref.watch(clientBuildingKeysProvider).value ?? const {};
-    }
 
     switch (widget.filter) {
       case ClientsFilterArchived():
@@ -464,24 +471,26 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
       onRefresh: () async => _pagingController.refresh(),
       child: PagingListener<int, ClientRecord>(
         controller: _pagingController,
-        builder: (context, state, fetchNextPage) =>
-            PagedListView<int, ClientRecord>.separated(
-              state: state,
-              fetchNextPage: fetchNextPage,
-              padding: const EdgeInsets.only(bottom: AppSpacing.sp16),
-              separatorBuilder: (context, index) =>
-                  const Divider(height: 1, indent: 64),
-              builderDelegate: PagedChildBuilderDelegate<ClientRecord>(
-                itemBuilder: (context, client, index) =>
-                    _clientTile(client, index),
-                firstPageProgressIndicatorBuilder: (_) => _skeleton(),
-                firstPageErrorIndicatorBuilder: (_) => _errorState(
-                  state.error ?? Exception('clients page load failed'),
-                  onRetry: _pagingController.refresh,
-                ),
-                noItemsFoundIndicatorBuilder: (_) => _emptyState(query: ''),
+        builder: (context, state, fetchNextPage) {
+          _reportCount(state.items?.length ?? 0);
+          return PagedListView<int, ClientRecord>.separated(
+            state: state,
+            fetchNextPage: fetchNextPage,
+            padding: const EdgeInsets.only(bottom: AppSpacing.sp16),
+            separatorBuilder: (context, index) =>
+                const Divider(height: 1, indent: 64),
+            builderDelegate: PagedChildBuilderDelegate<ClientRecord>(
+              itemBuilder: (context, client, index) =>
+                  _clientTile(client, index),
+              firstPageProgressIndicatorBuilder: (_) => _skeleton(),
+              firstPageErrorIndicatorBuilder: (_) => _errorState(
+                state.error ?? Exception('clients page load failed'),
+                onRetry: _pagingController.refresh,
               ),
+              noItemsFoundIndicatorBuilder: (_) => _emptyState(query: ''),
             ),
+          );
+        },
       ),
     );
   }

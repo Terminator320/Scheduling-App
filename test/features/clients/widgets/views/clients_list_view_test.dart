@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -12,6 +13,8 @@ import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
+import 'package:scheduling/features/clients/domain/models/clients_sort.dart';
+import 'package:scheduling/features/clients/domain/policies/client_building.dart';
 import 'package:scheduling/features/clients/widgets/views/clients_list_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/feedback/skeleton_loader.dart';
@@ -30,14 +33,22 @@ Widget _wrap(
   String searchQuery = '',
   ClientsFilter filter = const ClientsFilterAll(),
   double? height,
+  ClientsSort sort = ClientsSort.name,
+  void Function(int count)? onCountChanged,
+  List<Override> extraOverrides = const [],
 }) {
   final view = ClientsListView(
     searchQuery: searchQuery,
     isAdmin: true,
     filter: filter,
+    sort: sort,
+    onCountChanged: onCountChanged,
   );
   return ProviderScope(
-    overrides: [clientsRepositoryProvider.overrideWithValue(repo)],
+    overrides: [
+      clientsRepositoryProvider.overrideWithValue(repo),
+      ...extraOverrides,
+    ],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
       toggleTheme: () {},
@@ -67,7 +78,10 @@ void main() {
   late _MockClientsRepo repo;
 
   // mocktail needs a concrete instance before any(<ClientType>) is usable.
-  setUpAll(() => registerFallbackValue(ClientType.unset));
+  setUpAll(() {
+    registerFallbackValue(ClientType.unset);
+    registerFallbackValue(ClientsSort.name);
+  });
 
   setUp(() {
     repo = _MockClientsRepo();
@@ -108,35 +122,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'committed search results refresh after a clientsRefresh bump '
-    '(deleted client disappears)',
-    (tester) async {
-      when(
-        () => repo.searchClients(any()),
-      ).thenAnswer((_) async => const [_sophie]);
+  testWidgets('committed search results refresh after a clientsRefresh bump '
+      '(deleted client disappears)', (tester) async {
+    when(
+      () => repo.searchClients(any()),
+    ).thenAnswer((_) async => const [_sophie]);
 
-      await tester.pumpWidget(_wrap(repo));
-      await tester.pumpAndSettle();
-      await tester.pumpWidget(_wrap(repo, searchQuery: 'sophie'));
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(_wrap(repo, searchQuery: 'sophie'));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpAndSettle();
 
-      expect(find.textContaining('Sophie'), findsWidgets);
+    expect(find.textContaining('Sophie'), findsWidgets);
 
-      // Simulate a delete flow: the repository stops returning the client and
-      // the write path bumps clientsRefreshProvider.
-      when(() => repo.searchClients(any())).thenAnswer((_) async => const []);
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(ClientsListView)),
-      );
-      container.read(clientsRefreshProvider.notifier).bump();
-      await tester.pumpAndSettle();
+    // Simulate a delete flow: the repository stops returning the client and
+    // the write path bumps clientsRefreshProvider.
+    when(() => repo.searchClients(any())).thenAnswer((_) async => const []);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ClientsListView)),
+    );
+    container.read(clientsRefreshProvider.notifier).bump();
+    await tester.pumpAndSettle();
 
-      expect(find.textContaining('Sophie'), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    expect(find.textContaining('Sophie'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('the type filter renders only that type of client', (
     tester,
@@ -186,9 +197,7 @@ void main() {
       (_) async => const [ClientRecord(id: 'a1', name: 'Retired Co')],
     );
 
-    await tester.pumpWidget(
-      _wrap(repo, filter: const ClientsFilterArchived()),
-    );
+    await tester.pumpWidget(_wrap(repo, filter: const ClientsFilterArchived()));
     await tester.pumpAndSettle();
 
     expect(find.text('Retired Co'), findsOneWidget);
@@ -208,9 +217,7 @@ void main() {
   ) async {
     when(() => repo.fetchArchivedClients()).thenAnswer((_) async => const []);
 
-    await tester.pumpWidget(
-      _wrap(repo, filter: const ClientsFilterArchived()),
-    );
+    await tester.pumpWidget(_wrap(repo, filter: const ClientsFilterArchived()));
     await tester.pumpAndSettle();
 
     expect(find.text('No archived clients'), findsOneWidget);
@@ -258,9 +265,7 @@ void main() {
 
     await tester.pumpWidget(_wrap(repo, height: 257.2));
     await tester.pumpAndSettle();
-    await tester.pumpWidget(
-      _wrap(repo, searchQuery: 'sophie', height: 257.2),
-    );
+    await tester.pumpWidget(_wrap(repo, searchQuery: 'sophie', height: 257.2));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump();
 
@@ -279,5 +284,73 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('No Commercial clients'), findsOneWidget);
+  });
+
+  // The read-amplification fix: opening the tab must not touch the ~700-doc
+  // building scan. It is the filter sheet's to watch now.
+  testWidgets('never reads the building providers', (tester) async {
+    var buildingReads = 0;
+    when(
+      () => repo.fetchClientsPage(
+        after: any(named: 'after'),
+        limit: any(named: 'limit'),
+        sort: any(named: 'sort'),
+      ),
+    ).thenAnswer((_) async => const [_sophie]);
+
+    await tester.pumpWidget(
+      _wrap(
+        repo,
+        extraOverrides: [
+          clientBuildingsProvider.overrideWith((ref) async {
+            buildingReads += 1;
+            return const <ClientBuilding>[];
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sophie Tremblay'), findsOneWidget);
+    expect(buildingReads, 0);
+  });
+
+  testWidgets('passes the sort through to the repository', (tester) async {
+    when(
+      () => repo.fetchClientsPage(
+        after: any(named: 'after'),
+        limit: any(named: 'limit'),
+        sort: any(named: 'sort'),
+      ),
+    ).thenAnswer((_) async => const [_sophie]);
+
+    await tester.pumpWidget(_wrap(repo, sort: ClientsSort.mostJobs));
+    await tester.pumpAndSettle();
+
+    verify(
+      () => repo.fetchClientsPage(
+        after: any(named: 'after'),
+        limit: any(named: 'limit'),
+        sort: ClientsSort.mostJobs,
+      ),
+    ).called(greaterThan(0));
+  });
+
+  testWidgets('reports the loaded row count to its host', (tester) async {
+    int? reported;
+    when(
+      () => repo.fetchClientsPage(
+        after: any(named: 'after'),
+        limit: any(named: 'limit'),
+        sort: any(named: 'sort'),
+      ),
+    ).thenAnswer((_) async => const [_sophie]);
+
+    await tester.pumpWidget(
+      _wrap(repo, onCountChanged: (count) => reported = count),
+    );
+    await tester.pumpAndSettle();
+
+    expect(reported, 1);
   });
 }
