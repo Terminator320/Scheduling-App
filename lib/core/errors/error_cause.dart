@@ -65,8 +65,19 @@ String composeErrorNotice(
   BuildContext context, {
   required String intro,
   required Object error,
+}) => composeErrorNoticeFor(context.l10n, intro: intro, error: error);
+
+/// [composeErrorNotice] for a call site that has no live `BuildContext`.
+///
+/// An `AppLocalizations` is a plain object with no element behind it, so a
+/// caller that must outlive its widget — a notice ACTION, which by definition
+/// runs after the surface that raised it may have gone — resolves one up front
+/// and keeps it. Reaching for `context.l10n` there is a use-after-unmount.
+String composeErrorNoticeFor(
+  AppLocalizations l10n, {
+  required String intro,
+  required Object error,
 }) {
-  final l10n = context.l10n;
   final cause = switch (_classifyError(error)) {
     _ErrorCause.offline => l10n.error_causeOffline,
     _ErrorCause.permissionDenied => l10n.error_causePermissionDenied,

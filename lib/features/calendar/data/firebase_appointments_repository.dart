@@ -16,6 +16,7 @@ import 'package:scheduling/features/calendar/domain/assignee_availability.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
+import 'package:scheduling/features/calendar/domain/policies/history_search_policy.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:uuid/uuid.dart';
@@ -74,15 +75,18 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   /// Clears callable search results after local appointment writes.
   void _patchWindow(Map<String, Map<String, dynamic>?> changes) {
     _searchCache.clear();
-    if (_historyWindows.isNotEmpty) {
-      for (final entry in _historyWindows.entries) {
-        final window = entry.value;
-        if (!_searchCache.isFresh(window.fetchedAt)) continue;
-        _historyWindows[entry.key] = window.patched(
-          _patchHistoryDocs(window.docs, changes, scope: entry.key),
-          at: _clock(),
-        );
+    // EVERY scope's window: a technician's is the same archive narrowed, so a
+    // write that changes what history holds changes it for them too.
+    for (final scope in _historyWindows.keys.toList()) {
+      final window = _historyWindows[scope]!;
+      if (!_searchCache.isFresh(window.fetchedAt)) {
+        _historyWindows.remove(scope);
+        continue;
       }
+      _historyWindows[scope] = _CachedHistoryScanWindow(
+        _patchHistoryDocs(window.docs, changes, scope: scope),
+        _clock(),
+      );
     }
     if (!_localWrites.isClosed) _localWrites.add(null);
   }
@@ -504,7 +508,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     final functions = _functions;
     if (functions == null) {
       final window = await _historyScanWindow(employeeId, scope: scope);
-      final matches = _matchHistoryWindow(window.docs, q);
+      final matches = matchHistoryDocs(
+        HistorySearchScan(docs: window.docs, query: q),
+      );
       _searchCache.write(cacheKey, matches);
       return matches;
     }
@@ -600,20 +606,24 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     return base;
   }
 
+  /// Hand-mirrored by `appointmentHistoryScopes` in
+  /// `functions/search_tokens.js`; change both together.
   List<String> _historySearchScopes(Map<String, dynamic> map) {
     final employeeIds = firestoreStringList(map['employeeIds']);
+    // The field carries every token once per scope, so the per-scope budget is
+    // the field cap divided by the scope count — NOT the query-side limit.
     final scopeCount = 1 + employeeIds.length;
-    final perScopeLimit = (kSearchTokenFieldLimit / scopeCount).floor().clamp(
-      1,
-      kSearchTokenQueryLimit,
-    );
     final tokens = searchIndexTokens(
       texts: [
         (map['clientName'] ?? '').toString(),
         for (final name in firestoreStringList(map['employeeNames'])) name,
       ],
       phones: [(map['clientPhone'] ?? '').toString()],
-    ).take(perScopeLimit);
+      limit: (kSearchTokenFieldLimit / scopeCount).floor().clamp(
+        1,
+        kSearchTokenFieldLimit,
+      ),
+    );
     return [
       for (final token in tokens) 'all:$token',
       for (final employeeId in employeeIds)
@@ -676,70 +686,58 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     return window;
   }
 
-  List<AppointmentRecord> _matchHistoryWindow(
-    List<RawAppointmentDoc> docs,
-    String query,
-  ) {
-    final queryText = ClientSearchPolicy.normalize(query);
-    final queryDigits = ClientSearchPolicy.digitsOnly(query);
-    return [
-      for (final doc in docs)
-        if (_appointmentRawMatches(
-          doc.data,
-          queryText: queryText,
-          queryDigits: queryDigits,
-        ))
-          _recordFrom(doc.id, doc.data),
-    ];
-  }
-
-  bool _appointmentRawMatches(
-    Map<String, dynamic> data, {
-    required String queryText,
-    required String queryDigits,
-  }) {
-    if (queryText.isEmpty && queryDigits.isEmpty) return false;
-    if (queryText.isNotEmpty) {
-      final text = ClientSearchPolicy.normalize(
-        [
-          data['title'] ?? '',
-          data['clientName'] ?? '',
-          for (final name in firestoreStringList(data['employeeNames'])) name,
-        ].join(' '),
-      );
-      if (text.contains(queryText)) return true;
-    }
-    if (queryDigits.isNotEmpty) {
-      final phoneDigits = ClientSearchPolicy.digitsOnly(
-        (data['clientPhone'] ?? '').toString(),
-      );
-      if (phoneDigits.contains(queryDigits)) return true;
-    }
-    return false;
-  }
-
-  List<RawAppointmentDoc> _patchHistoryDocs(
-    List<RawAppointmentDoc> docs,
+  /// One pass over the window: every change is merged in place, and a doc the
+  /// window has not seen is inserted at its `startTime` position rather than
+  /// appended, because the window is `startTime` DESC.
+  List<RawHistoryDoc> _patchHistoryDocs(
+    List<RawHistoryDoc> docs,
     Map<String, Map<String, dynamic>?> changes, {
     required String scope,
   }) {
-    var next = docs;
+    final merged = <String, Map<String, dynamic>?>{};
+    final next = <RawHistoryDoc>[];
+    for (final doc in docs) {
+      if (!changes.containsKey(doc.id)) {
+        next.add(doc);
+        continue;
+      }
+      final patch = changes[doc.id];
+      final data = patch == null
+          ? null
+          : {
+              ...doc.data,
+              for (final e in patch.entries)
+                if (e.value is! FieldValue) e.key: e.value,
+            };
+      merged[doc.id] = data;
+      if (data != null && _belongsInHistoryScope(data, scope)) {
+        next.add((id: doc.id, data: data));
+      }
+    }
     for (final entry in changes.entries) {
-      final id = entry.key;
-      final previous = next.where((doc) => doc.id == id).firstOrNull?.data;
-      final patch = entry.value;
-      final merged = patch == null ? null : {...?previous, ...patch};
-      final replacement =
-          merged != null && _belongsInHistoryScope(merged, scope)
-          ? (id: id, data: merged)
-          : null;
-      next = [
-        for (final doc in next)
-          if (doc.id == id) ?replacement else doc,
-        if (previous == null) ?replacement,
-      ];
+      if (merged.containsKey(entry.key)) continue;
+      final data = entry.value;
+      // Only a whole document can be placed: a field patch has no date.
+      if (data == null || firestoreDateTime(data['startTime']) == null) {
+        continue;
+      }
+      if (!_belongsInHistoryScope(data, scope)) continue;
+      next.insert(_insertIndexFor(next, data), (id: entry.key, data: data));
     }
     return next;
+  }
+
+  /// Where [doc] belongs in a `startTime` DESC window.
+  static int _insertIndexFor(
+    List<RawHistoryDoc> docs,
+    Map<String, dynamic> doc,
+  ) {
+    final at = firestoreDateTime(doc['startTime'])!;
+    for (var i = 0; i < docs.length; i++) {
+      final other = firestoreDateTime(docs[i].data['startTime']);
+      if (other == null || other.isBefore(at)) return i;
+    }
+    return docs.length;
   }
 
   bool _belongsInHistoryScope(Map<String, dynamic> data, String scope) {
@@ -758,14 +756,16 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }) async {
     final byId = <String, AppointmentRecord>{};
     final windowUnknownIds = <String>{};
-    for (var i = 0; i < employeeIds.length; i += 30) {
-      final chunk = employeeIds.skip(i).take(30).toList();
-      final snapshot = await _appointments
-          .where('employeeIds', arrayContainsAny: chunk)
-          .where('startTime', isLessThan: Timestamp.fromDate(end))
-          .where('endTime', isGreaterThan: Timestamp.fromDate(start))
-          .limit(_conflictScanLimit)
-          .get();
+    final snapshots = await Future.wait([
+      for (var i = 0; i < employeeIds.length; i += 30)
+        _appointments
+            .where('employeeIds', arrayContainsAny: employeeIds.skip(i).take(30).toList())
+            .where('startTime', isLessThan: Timestamp.fromDate(end))
+            .where('endTime', isGreaterThan: Timestamp.fromDate(start))
+            .limit(_conflictScanLimit)
+            .get(),
+    ]);
+    for (final snapshot in snapshots) {
       if (snapshot.docs.length >= _conflictScanLimit) {
         _logger.warn(
           'APPT-BUSY conflict query hit the $_conflictScanLimit-doc cap - '
@@ -806,16 +806,9 @@ List<AppointmentRecord> _appointmentsFromCallable(Object? data) {
   ];
 }
 
-typedef RawAppointmentDoc = ({String id, Map<String, dynamic> data});
-
 class _CachedHistoryScanWindow {
   const _CachedHistoryScanWindow(this.docs, this.fetchedAt);
 
-  final List<RawAppointmentDoc> docs;
+  final List<RawHistoryDoc> docs;
   final DateTime fetchedAt;
-
-  _CachedHistoryScanWindow patched(
-    List<RawAppointmentDoc> docs, {
-    required DateTime at,
-  }) => _CachedHistoryScanWindow(docs, at);
 }

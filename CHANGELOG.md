@@ -10,6 +10,69 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.57.0+86] - 2026-09-04
+
+Search stops being a guess. Finding a client or a past job no longer depends on
+how much of the business fits in the app's memory — the search runs against the
+whole database, so the answer is the same on the thousandth client as it was on
+the fiftieth. Alongside that, marking a job complete by mistake is undoable,
+and sharing your location with the staff map is now something you turn on
+rather than something that happens.
+
+### Added
+- **Location sharing is a choice, with its own screen.** A new "Staff map
+  location" control says plainly what is uploaded and what it is for, shows
+  when your position was last sent, and offers a single action that stops
+  sharing and erases the position already stored. Until now the phone started
+  reporting its location as soon as you signed in, with nothing in Settings
+  that said so and no way to stop it short of revoking the OS permission.
+- **Undo on "mark complete".** Closing a job by accident used to mean an admin
+  reopening it. The confirmation now carries an Undo for as long as it is on
+  screen, and it puts the job back exactly where it was.
+
+### Changed
+- **Client and job-history search now runs against the whole database.** Both
+  searches previously scanned a capped window of records held on the phone —
+  the first 5,000 clients by name, the most recent 5,000 settled jobs — and
+  anything past that point was invisible to search, to the type filters and to
+  the Archived chip at once, with nothing to say so. Growing past the cap is
+  the kind of failure nobody reports, because the app looks like it is working.
+- **Checking who is free is done server-side too**, so a booking conflict is
+  found against every job on the calendar rather than the first thousand in the
+  window.
+- **Notifications are now turned on deliberately, from Settings.** The app no
+  longer springs the phone's permission prompt during sign-in or a background
+  sync, where it arrives with no explanation and is usually refused. The
+  trade-off is worth stating plainly: until someone taps the notification row
+  in Settings and allows it, that phone receives nothing — no job assignment,
+  no "time to leave", no daily digest.
+- **A photo waiting to upload belongs to the person who took it.** Queued
+  photos now carry their owner, are only sent while that person is signed in,
+  and are cleared with everything else when an account signs out — a shared or
+  handed-over phone can no longer finish somebody else's upload.
+- **Phone numbers are checked as you type and stored in one form.** A number
+  too short to dial is caught on the form instead of being saved, and saved
+  numbers keep a consistent shape rather than whatever punctuation was typed.
+  An extension is kept as an extension — `514-555-1234 poste 2` stays dialable
+  and reads the same way back, in either language.
+- **The additional-contacts list says where its limit is** instead of letting
+  you fill in a contact the server would refuse on save.
+
+### Fixed
+- **A bad link opens a screen you can leave.** Opening the app at a screen
+  whose details are missing or malformed used to red-screen; it now says the
+  link can't be opened and offers a way back.
+- **Employees no longer see swipe actions they are not allowed to use.**
+  Archive and Delete were offered on client rows to everyone, and the server
+  refused them.
+- **The address field's rate limit now holds across the whole backend**, not
+  just within one server instance, so a burst of typing is throttled the way
+  it was meant to be.
+- **Turning location sharing off says what actually happened.** The screen used
+  to report your stored position as erased whether or not the erase succeeded.
+- **A queued photo belongs to whoever took it.** Photos still waiting to upload
+  are no longer sent by the next person to sign in on that phone.
+
 ## [1.56.0+85] - 2026-09-02
 
 The release the field crew gets something out of. Until now a technician could
@@ -26,9 +89,6 @@ app also opens in French on a French phone, which it never did.
   when booking, so neither can overwrite the other. Previously the only thing a
   technician could write to a job was "complete", and everything else travelled
   by phone call.
-- **"On my way" and "Running late".** One tap from the job tells the office
-  which it is, and the admins who are not on that job are notified with the
-  time. The job itself shows the signal and who sent it.
 - **Start job, and a real time record.** Pressing Start stamps the arrival and
   marking it complete stamps the finish, both recorded server-side rather than
   taken on trust, so the job shows when it actually started, when it finished

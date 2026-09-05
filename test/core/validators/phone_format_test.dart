@@ -105,4 +105,26 @@ void main() {
       expect(bareNumber(''), '');
     });
   });
+
+  group('extensions survive storage and validation', () {
+    test('an extension is kept as its own token, not folded into the number', () {
+      // `bareNumber` alone produced 51455512342 — a number nobody can dial,
+      // written silently on an ordinary save.
+      expect(
+        normalizePhoneForStorage('514-555-1234 poste 2'),
+        '5145551234 poste 2',
+      );
+      expect(normalizePhoneForStorage('(514) 555-1234 ext 12'),
+          '5145551234 ext 12');
+      expect(normalizePhoneForStorage('(514) 555-1234'), '5145551234');
+    });
+
+    test('both languages validate, and a word is still not a number', () {
+      expect(isUsablePhoneNumber('514-555-1234 poste 2'), isTrue);
+      expect(isUsablePhoneNumber('5145551234 x5'), isTrue);
+      expect(isUsablePhoneNumber('text'), isFalse);
+      expect(isUsablePhoneNumber('12345'), isFalse);
+      expect(isUsablePhoneNumber(''), isTrue);
+    });
+  });
 }

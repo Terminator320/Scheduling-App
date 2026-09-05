@@ -16,10 +16,13 @@ and brought `android/local.properties` with it, which carries a live
 `MAPS_API_KEY` — a committed secret. `flutter` regenerates that directory on any
 Android-touching command, so ignoring it is the only thing that stops a second
 resurrection; deleting the files alone does not. Don't remove the entry to
-"restore" an Android build. Two Android remnants survive **deliberately** and are
-not dead code to clean up: `DefaultFirebaseOptions.android` (the Android
-Firebase app still exists in the console, and the shared `dev/.env` keys feed
-it) and the `platform: 'ios' | 'android'` field on `fcmTokens` docs, which the
+"restore" an Android build. **`DefaultFirebaseOptions.android` is GONE**
+(2026-09-04, with the `dev/.env` retirement below): the shared `FIREBASE_API_KEY`
+/`APP_ID` pair that fed it was the only reason it survived, and
+`currentPlatform` now throws `UnsupportedError` on Android rather than handing
+back options nothing builds. Don't restore it. ONE Android remnant survives
+**deliberately** and is not dead code to clean up:
+the `platform: 'ios' | 'android'` field on `fcmTokens` docs, which the
 CURRENT build still writes — `push_registration_controller.dart` stamps
 `Platform.isIOS ? 'ios' : 'android'`, so on an iOS-only fleet the value is
 always `'ios'` but the write is live code, not a legacy row. (An earlier note
@@ -39,8 +42,8 @@ Since P4b a real `app_links` dispatcher exists (`lib/core/deep_links/`), but the
 `homeWidget` param and the `home_widget` tap channel are **both still live** and
 retire together — the dispatcher skips those URIs rather than replacing them.
 **Do NOT re-run `flutterfire configure`** — `lib/firebase_options.dart` already
-builds the iOS options from `dev/.env`; re-running it rewrites the file into the
-literal-values style and breaks the env-based setup.
+builds the iOS options from `--dart-define` values; re-running it rewrites the
+file into the literal-values style and breaks the define-based setup.
 
 ## Commands
 
@@ -50,17 +53,39 @@ flutter analyze   # baseline is `No issues found!` — any lint you see is yours
 
 ## Required environment
 
-`dev/.env` (gitignored, bundled as asset). 8 keys: `FIREBASE_API_KEY`,
-`APP_ID`, `MESSAGING_SENDER_ID`, `PROJECT_ID`, `STORAGE_BUCKET`, plus the iOS
-pair `IOS_API_KEY`, `IOS_APP_ID` (read in `lib/firebase_options.dart` to build
-the iOS `FirebaseOptions`), plus `IOS_MAPS_API_KEY` (iOS client Google Maps
-key, parsed natively by `AppDelegate.swift`). The first five are still required
-even though only iOS ships: three of them are platform-neutral, and
-`FIREBASE_API_KEY`/`APP_ID` still back `DefaultFirebaseOptions.android`.
+**Build-time `--dart-define` values, NOT a bundled file** (changed 2026-09-04).
+Copy `dev/firebase.local.example.json` to `dev/firebase.local.json` (gitignored)
+and pass it with `--dart-define-from-file=dev/firebase.local.json`, or spell the
+keys out with repeated `--dart-define=KEY=value`. 6 required keys:
+`IOS_API_KEY`, `IOS_APP_ID`, `MESSAGING_SENDER_ID`, `PROJECT_ID`,
+`STORAGE_BUCKET` (read in `lib/firebase_options.dart`, which fails fast naming
+any missing one) plus `IOS_MAPS_API_KEY`. `USE_FIREBASE_EMULATOR` and
+`EMULATOR_HOST` are the optional pair `main()` reads.
 `IOS_MAPS_API_KEY` is a RESTRICTED CLIENT key — distinct from the server-side
 Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
 
-- **`dev/.env` holds Firebase client config plus RESTRICTED client keys (e.g. `IOS_MAPS_API_KEY`) only.** It's an asset bundled into the IPA, so anything in it ships in the binary — restrict those keys app-side (bundle ID / package + API restrictions) in the Google Cloud Console. Server-side or unrestricted keys (Stripe, OpenAI, admin tokens, `GOOGLE_MAP_API_KEY`) must live in Google Secret Manager and be read from a Cloud Function — never in `dev/.env`.
+- **`String.fromEnvironment` is a CONST expression, so a define cannot be read
+  by a runtime string.** `_requireDefine` therefore holds a `const` map of the
+  five Firebase keys and looks up in that; adding a key means adding the literal
+  there too, not just to the JSON. A key read only through the map's argument
+  resolves to `''` and fails fast at startup, which is the intended shape —
+  don't "fix" it by building the name dynamically, which silently yields empty.
+- **The iOS Maps key crosses a MethodChannel, it is no longer parsed natively.**
+  `main()` sends `IOS_MAPS_API_KEY` over `net.vogas.scheduling/native_config`
+  and `AppDelegate.registerNativeConfigChannel` answers by calling
+  `GMSServices.provideAPIKey`. It is awaited before `runApp` on purpose, so the
+  key is installed before any map widget can be constructed; a missing or blank
+  key leaves the live map blank rather than crashing. `AppDelegate` no longer
+  reads any asset — don't reintroduce one.
+- **`dev/.env` and `flutter_dotenv` are RETIRED, and the asset entry with them.**
+  The file shipped inside the IPA as a readable asset, so every key in it was
+  extractable from the binary with no tooling; a define is compiled in instead.
+  A restricted client key is still recoverable from a binary by someone who
+  tries, so the app-side restriction (bundle ID + API restrictions in the Google
+  Cloud Console) is still what makes it safe — the change removes the trivially
+  greppable copy, not the need to restrict. Server-side or unrestricted keys
+  (Stripe, OpenAI, admin tokens, `GOOGLE_MAP_API_KEY`) must live in Google
+  Secret Manager and be read from a Cloud Function — never in a define.
 
 ## Critical invariants
 
@@ -159,6 +184,14 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
 - **Role cache:** Never read `isAdmin`/role from SharedPreferences — always Firestore.
 - **Routing:** `AppRoutes.onGenerateRoute` is the single source of truth.
   Pass typed arg classes via `Navigator.pushNamed(..., arguments: ...)`.
+  **An arg-required route TYPE-CHECKS its arguments and degrades to
+  `InvalidRouteScreen`** — `_args<T>(settings)` returns null rather than
+  force-casting, and `_invalidRoute` renders a screen the user can leave. The
+  seven `settings.arguments! as T` casts red-screened the app on a malformed or
+  argless push, which a deep link can produce. The HOME route keeps its own,
+  DIFFERENT answer — least-privilege defaults rather than a recovery screen,
+  because it is reached from every cold start and back stack; that asymmetry is
+  deliberate and documented at the site.
 - **Firestore query rules vs. get rules:** For list/query operations, security rules are
   evaluated against query *constraints*, not document data. If a rule checks
   `resource.data.status == 'active'`, queries must also `.where('status', isEqualTo: 'active')`
@@ -230,8 +263,78 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   sheet variant unmounts there, so the guard covers both.
 - All Firestore writes via service classes (never direct `FirebaseFirestore.instance` in UI).
   Always set `createdAt`/`updatedAt` server timestamps.
-- Entity search matches in Dart (Firestore has no full-text search) — don't
-  "fix" it into a server query. Clients/history search read a bounded window
+- **Entity search runs SERVER-SIDE now** (2026-09-04). Client search, appointment
+  history search and the booking conflict check go through the callables
+  `searchClients` / `searchHistory` / `findAppointmentConflicts`
+  (`functions/indexed_search.js`), because the old capped client-side scan
+  windows went silently incomplete as the business grew: the clients window is
+  `orderBy('name')`, so at its cap it was the alphabetically FIRST N clients and
+  everything past that point vanished from search, the type-filter chips and the
+  Archived chip at once, with no error anywhere. **This replaces the old rule
+  that said to keep matching in Dart and never "fix" it into a server query** —
+  that rule was written when there was no index to query.
+  - **The index is a TOKEN ARRAY the CLIENT writes on every entity write**:
+    `clients.searchTokens` and `appointments.historySearchScopes`, both built by
+    `searchIndexTokens` (`core/search/search_tokens.dart`), both capped at 240
+    entries by `firestore.rules`. A doc written before 2026-09-04 carries
+    neither until `functions/scripts/backfill-search-tokens.js` has run against
+    it — **that backfill is a prerequisite for the release, not a follow-up**,
+    or search returns nothing for every existing client and closed job.
+  - **`searchIndexTokens` is hand-mirrored by `functions/search_tokens.js`** —
+    the app writes the tokens and the server queries them, so a divergence is a
+    search that silently returns nothing. `test/core/search/search_tokens_test.dart`
+    and `functions/__tests__/search_tokens.test.js` share their worked examples
+    value-for-value; change both sides in one commit and keep the examples equal.
+  - **Two ordering rules inside it are load-bearing.** Each word emits its WHOLE
+    token before any of its prefixes, so an exact-word query survives
+    truncation; and the text and phone runs are INTERLEAVED, so a long client
+    name can never push the phone tokens past the cap. Appending phones after
+    texts is what made appointment search-by-phone index nothing at all —
+    the per-scope budget is ~10 tokens and a two-word client name fills it.
+  - **The per-scope budget is the FIELD cap divided by the scope count, not the
+    QUERY limit.** `historySearchScopes` carries every token once per scope
+    (`all:` plus `emp:<id>:` per assignee), so the divide is what keeps it under
+    240; clamping to `kSearchTokenQueryLimit` (10) instead — the number a
+    QUERY may send — starves everything after the client's first name.
+  - **A token hit is a PREFILTER, never the answer.** Both callables re-verify
+    with `recordMatchesQuery` over the full stored document before returning,
+    because a prefix token matches more than the query does.
+  - **`normalize` is hand-mirrored as an explicit fold TABLE on both sides, not
+    NFD.** The app writes the index with `ClientSearchPolicy._foldAccent` and
+    the server tokenizes the typed query with `functions/search_tokens.js`; NFD
+    folds strictly more (all of Latin Extended-A), so a JS side using it made
+    "Muñoz" storable as `t:mu`/`t:oz` and queryable as `t:munoz` — a client
+    nobody can find. Add a letter to both tables or to neither, and keep the
+    shared accent examples in the two suites equal.
+  - **The read cap is a KNOWN bound and it warns.** A phone query tokenizes to
+    every 3-12 digit substring, so `514` matches most of the roster; the
+    callable reads 200 `orderBy('name')` and returns 25, which means the answer
+    to a very broad query is the alphabetically first slice. It logs at the cap
+    so the truncation is visible rather than silent — never remove that warn,
+    and don't raise the cap without also giving the result a real relevance
+    order (the client-side path it replaced had `relevanceScore`; the server
+    does not).
+  - **A SERVER write path must maintain the index too.** The tokens are written
+    by the app on save, so a document created or edited server-side keeps stale
+    tokens or none at all — and the admin then searches for a client they can
+    SEE in the list and gets nothing, with nothing logged. Two sites already do
+    it and any new one must: the Wave import (`wave/customers_import.js` sets
+    `searchTokens`) and client propagation (`buildAppointmentPatch` rebuilds
+    `historySearchScopes` whenever it moves `clientName`/`clientPhone`).
+  - **The conflict rule has a server twin now.** `findAppointmentConflicts`
+    filters through `dailyWindowsOverlap` in `functions/day_slice_utils.js`,
+    hand-mirrored from `appointment_day_slice.dart` — a DAILY-window overlap,
+    not a raw instant test. It shipped as a raw instant test and reported a
+    9-5 run across a week as clashing with a 7 pm job inside it; pinned now by
+    `functions/__tests__/indexed_search_conflicts.test.js`. It also keeps the
+    fail-closed half: a doc whose stored times don't parse clashes
+    unconditionally.
+  - **The old local scan windows are STILL THERE as the injected-`FirebaseFunctions`-
+    absent fallback**, which in practice means tests only — `firebaseFunctionsProvider`
+    is non-nullable, so production always takes the callable path. Everything
+    below about those windows still describes the fallback; don't delete it, and
+    don't add a THIRD matcher rather than routing through the two named pairs.
+  Clients/history search read a bounded window
   (`_historySearchScanLimit` 5000 / `_clientScanLimit` 5000) via `clientSearchProvider` /
   `historySearchProvider` (`autoDispose.family` keyed by query) and match across
   all fields in Dart; the loaded-page filter fills the gap until the debounced
@@ -242,15 +345,20 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `matchesClient` is a convenience wrapper over the first pair with NO
   production caller: the split exists FOR performance, since `index` is hoisted
   to run once per data change while `matchesClient` rebuilds the projection per
-  candidate per keystroke. This line used to call it "the single client-side
-  fallback matcher — route new client matching through it", which pointed an
-  author straight at the function the hot paths were refactored to avoid.
-  **The appointment side has the same pair now**: `historyEntryOf` +
-  `historyEntryMatches` (`calendar/domain/policies/history_search_policy.dart`),
+  candidate per keystroke.
+  **`ClientSearchPolicy.rawTexts` / `rawPhones` are the ONE owner of the raw-map
+  field list**, read by `rawMatches` AND by the `searchTokens` builder in
+  `firebase_clients_repository`: what is INDEXED and what MATCHES cannot be
+  allowed to drift, and they were two hand-written copies of the same ten
+  fields. `index()` keeps its own `ClientRecord`-shaped copy on purpose.
+  **The appointment side has the same pair**:
+  `historyEntryOf` + `historyEntryMatches` (`calendar/domain/policies/history_search_policy.dart`),
   which `matchHistoryDocs` and `appointment_history_view.dart`'s loaded-page
   filter BOTH route through — they are the same search at two layers, and a
   field added to one used to change results visibly when the debounce settled,
-  with nothing logged.
+  with nothing logged. The repository's fallback calls `matchHistoryDocs`; it
+  briefly carried a third hand-written matcher that also read `title`, which
+  neither twin does.
   **A matcher that reads the RAW map to skip building a record must parse list
   fields through `firestoreStringList`** (`core/utils/firestore_parsing.dart`,
   beside `firestoreDateTime`/`firestoreInt`), never a private copy: the history
@@ -450,6 +558,20 @@ app build, because `assertPayloadShape` rejects unknown keys), the
 old-build-compatibility check, rollback, and the deploy log recording what
 production actually runs. Read it before any deploy that touches a callable
 payload or a rules cap.
+
+**Four callables were ADDED 2026-09-04** — `searchClients`, `searchHistory`,
+`findAppointmentConflicts` (`indexed_search.js`) and `restoreAppointmentStatus`
+(`appointment_actions.js`), taking the export list 25 → 29. The first three need
+their composite indexes deployed FIRST and READY, and the `searchTokens` /
+`historySearchScopes` backfill run, before the app build that calls them ships.
+
+**A self-service callable opens with `assertActiveCall(req, allowedKeys)`**
+(`functions/security.js`), the twin of `assertAdminCall`: auth → payload shape →
+the `usersByUid/{uid}` bridge row, refusing anyone not `active`, returning the
+profile because every site needs `role`/`docId` next to scope what it may reach.
+It exists for the same reason the admin one does — a guard nobody has looked at
+is the one that silently loses a clause, and this one was already written twice,
+having drifted on its logging in the first week.
 
 Deploy: `firebase deploy --only functions,firestore:rules,firestore:indexes,storage`
 (clear `AI_AGENT`/`CLAUDECODE`/`CLAUDE_CODE` in the shell first, or the CLI

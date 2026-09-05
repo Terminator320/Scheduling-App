@@ -809,5 +809,7 @@
   "calendar_pushBackTitle": "Décaler de",
   "calendar_pushBackBy": "+{minutes} min",
   "calendar_pushedBack": "Décalé de {minutes} min",
-  "calendar_bookAgain": "Réserver à nouveau"
+  "calendar_bookAgain": "Réserver à nouveau",
+  "nav_invalidLink": "Ce lien ne peut pas être ouvert.",
+  "settings_locationPaused": "Le partage de position est en pause. Votre dernière position n'a pas pu être effacée — réessayez dans un moment."
 }

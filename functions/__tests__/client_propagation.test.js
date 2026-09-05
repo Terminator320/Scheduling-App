@@ -185,9 +185,29 @@ describe("relevantClientChange", () => {
 describe("buildAppointmentPatch", () => {
   test("patches clientName only when it differs", () => {
     const change = {clientName: "Bea"};
-    expect(buildAppointmentPatch(change, {clientName: "Ada"}))
-        .toEqual({clientName: "Bea"});
+    const patch = buildAppointmentPatch(change, {clientName: "Ada"});
+    expect(patch.clientName).toBe("Bea");
     expect(buildAppointmentPatch(change, {clientName: "Bea"})).toBeNull();
+  });
+
+  test("rebuilds the history tokens when the name or phone moves", () => {
+    // Otherwise the job stays findable under the OLD name and vanishes under
+    // the corrected one, with nothing rewriting it before it closes.
+    const patch = buildAppointmentPatch(
+        {clientName: "Bea"},
+        {clientName: "Ada", employeeIds: ["emp1"]},
+    );
+    expect(patch.historySearchScopes).toContain("all:t:bea");
+    expect(patch.historySearchScopes).toContain("emp:emp1:t:bea");
+    expect(patch.historySearchScopes).not.toContain("all:t:ada");
+  });
+
+  test("leaves the tokens alone for an address-only patch", () => {
+    const patch = buildAppointmentPatch(
+        {address: {from: "1 Old St", to: "2 New Rd"}},
+        {address: "1 Old St", clientName: "Ada"},
+    );
+    expect(patch.historySearchScopes).toBeUndefined();
   });
 
   test("follows the client address when the stored one matches from", () => {

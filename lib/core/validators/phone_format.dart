@@ -1,7 +1,20 @@
 import 'package:flutter/services.dart';
 
 final RegExp _nonDigit = RegExp(r'\D');
-final RegExp _allowedPhoneChars = RegExp(r'^[0-9()+.\-\s#extEXT]+$');
+final RegExp _allowedPhoneChars = RegExp(r'^[0-9()+.\-\s#]+$');
+
+/// A trailing extension, in either language: `ext 12`, `x5`, `poste 2`, `p. 7`.
+///
+/// It is matched rather than tolerated because the two things that used to
+/// happen to it were both wrong: `[…extEXT]` in the character class accepted
+/// any arrangement of those letters (`text` passed) while rejecting `poste` on
+/// a bilingual product, and `bareNumber` folded the extension's digits onto the
+/// number itself, so `514-555-1234 poste 2` was STORED as `51455512342` — a
+/// number nobody can dial, written silently on an ordinary save.
+final RegExp _extensionSuffix = RegExp(
+  r'(?:ext|poste|post|x|p)\.?\s*\d+\s*$',
+  caseSensitive: false,
+);
 
 /// Digits of [value], with every separator dropped.
 String phoneDigits(String value) => value.replaceAll(_nonDigit, '');
@@ -27,7 +40,15 @@ String bareNumber(String phone) {
 ///
 /// UI fields may keep a friendly mask while the user types, but Firestore keeps
 /// the searchable/dialable core so edits do not preserve arbitrary punctuation.
-String normalizePhoneForStorage(String phone) => bareNumber(phone);
+/// An extension survives as its own trailing token — see [_extensionSuffix].
+String normalizePhoneForStorage(String phone) {
+  final trimmed = phone.trim();
+  final match = _extensionSuffix.firstMatch(trimmed);
+  if (match == null) return bareNumber(trimmed);
+  final core = bareNumber(trimmed.substring(0, match.start).trim());
+  final extension = trimmed.substring(match.start).trim();
+  return core.isEmpty ? extension : '$core $extension';
+}
 
 /// Flexible validity check for typed phone fields.
 ///
@@ -36,8 +57,8 @@ String normalizePhoneForStorage(String phone) => bareNumber(phone);
 bool isUsablePhoneNumber(String phone) {
   final trimmed = phone.trim();
   if (trimmed.isEmpty) return true;
-  return _allowedPhoneChars.hasMatch(trimmed) &&
-      phoneDigits(trimmed).length >= 7;
+  final core = trimmed.replaceFirst(_extensionSuffix, '').trim();
+  return _allowedPhoneChars.hasMatch(core) && phoneDigits(core).length >= 7;
 }
 
 /// Renders a North-American number as `(514) 555-1234`, formatting

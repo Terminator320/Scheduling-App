@@ -56,6 +56,7 @@
 
 const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const {adminFirestore} = require("./admin_firestore");
+const {appointmentHistoryScopes} = require("./search_tokens");
 const {MAX_APPOINTMENT_SPAN_MS, hasWorkLeft} = require("./time_utils");
 const {clientDisplayName} = require("./client_name_utils");
 const {composeFullAddress} = require("./client_address_utils");
@@ -144,7 +145,15 @@ function buildAppointmentPatch(change, apptData) {
     }
   }
 
-  return Object.keys(patch).length > 0 ? patch : null;
+  if (Object.keys(patch).length === 0) return null;
+  // The history search index is built from `clientName`/`clientPhone`, so a
+  // patch that changes either and leaves the tokens alone means the job stays
+  // findable under the OLD name and vanishes under the corrected one — and
+  // nothing rewrites it again before the job closes.
+  if (patch.clientName !== undefined || patch.clientPhone !== undefined) {
+    patch.historySearchScopes = appointmentHistoryScopes({...d, ...patch});
+  }
+  return patch;
 }
 
 /**

@@ -18,7 +18,10 @@ const MAX_PAYLOAD_BYTES = 4 * 1024;
  * @return {string}
  */
 function shortHash(value) {
-  return crypto.createHash("sha256").update(value)
+  // Coerced, not assumed: every caller here is a LOGGING site, and
+  // `createHash().update()` throws on a non-string — a guard whose log line
+  // throws turns its intended `permission-denied` into an opaque `internal`.
+  return crypto.createHash("sha256").update(String(value == null ? "" : value))
       .digest("hex").slice(0, 12);
 }
 
@@ -246,6 +249,35 @@ async function assertAdminCall(req, allowedKeys) {
 }
 
 /**
+ * The self-service twin of `assertAdminCall`: auth -> payload shape -> the
+ * `usersByUid/{uid}` bridge row, refusing anyone whose account is not active.
+ *
+ * Composed for the same reason the admin one is — a guard nobody has looked at
+ * is the one that silently loses a clause. Returns the caller's profile,
+ * because every site needs `role`/`docId` next to scope what it may reach.
+ * @param {!Object} req The callable request.
+ * @param {!Set<string>} allowedKeys The only keys this endpoint accepts.
+ * @return {!Promise<!Object>}
+ */
+async function assertActiveCall(req, allowedKeys) {
+  if (!req.auth || !req.auth.uid) {
+    throw new HttpsError("unauthenticated", "auth-required");
+  }
+  assertPayloadShape(req.data, allowedKeys);
+  const snap = await getFirestore()
+      .collection("usersByUid").doc(req.auth.uid).get();
+  const data = snap.exists ? snap.data() : null;
+  if (!data || data.status !== "active") {
+    logger.warn("assertActiveCall: caller is not active", {
+      uidHash: shortHash(req.auth.uid),
+      status: data ? data.status : null,
+    });
+    throw new HttpsError("permission-denied", "inactive-user");
+  }
+  return {uid: req.auth.uid, ...data};
+}
+
+/**
  * Throws HttpsError("permission-denied", "wave/not-admin") unless the
  * `usersByUid/{uid}` bridge (kept in sync by syncUsersByUid) shows an active
  * admin.
@@ -319,6 +351,7 @@ module.exports = {
   enforceDurableRateLimit,
   assertAdmin,
   assertAdminCall,
+  assertActiveCall,
   isReauthStale,
   assertFreshReauth,
 };

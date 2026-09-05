@@ -19,6 +19,8 @@ void main() {
       appointmentId: 'a1',
       paths: ['/x/1.jpg', '/x/2.jpg'],
       enqueuedAtMs: 1000,
+      ownerUid: 'uid-1',
+      ownerEmployeeId: 'doc-1',
     );
     await store.add(entry);
     final loaded = await store.load();
@@ -48,6 +50,8 @@ void main() {
               uploadedAt: uploadedAt,
             ),
           ],
+          ownerUid: 'uid-1',
+          ownerEmployeeId: 'doc-1',
         ),
       );
       final loaded = await store.load();
@@ -79,6 +83,8 @@ void main() {
             uploadedAt: DateTime.utc(2026, 7, 26, 13, 45, 12),
           ),
         ],
+        ownerUid: 'uid-1',
+        ownerEmployeeId: 'doc-1',
       ),
     );
     final loaded = await store.load();
@@ -94,6 +100,8 @@ void main() {
           appointmentId: 'a1',
           paths: ['/x/1.jpg'],
           enqueuedAtMs: 1,
+          ownerUid: 'uid-1',
+          ownerEmployeeId: 'doc-1',
         ),
       );
       expect((await store.load()).single.uploaded, isEmpty);
@@ -107,6 +115,8 @@ void main() {
         appointmentId: 'a1',
         paths: ['/x/1.jpg'],
         enqueuedAtMs: 1,
+        ownerUid: 'uid-1',
+        ownerEmployeeId: 'doc-1',
       ),
     );
     await store.add(
@@ -114,6 +124,8 @@ void main() {
         appointmentId: 'a1',
         paths: ['/x/2.jpg'],
         enqueuedAtMs: 2,
+        ownerUid: 'uid-1',
+        ownerEmployeeId: 'doc-1',
       ),
     );
     await store.remove('a1_1');
@@ -128,6 +140,8 @@ void main() {
         appointmentId: 'a1',
         paths: ['/x/1.jpg', '/x/2.jpg'],
         enqueuedAtMs: 1,
+        ownerUid: 'uid-1',
+        ownerEmployeeId: 'doc-1',
       ),
     );
     await store.add(
@@ -135,6 +149,8 @@ void main() {
         appointmentId: 'a2',
         paths: ['/x/3.jpg'],
         enqueuedAtMs: 2,
+        ownerUid: 'uid-1',
+        ownerEmployeeId: 'doc-1',
       ),
     );
 
@@ -144,6 +160,8 @@ void main() {
         appointmentId: 'a1',
         paths: ['/x/2.jpg'],
         enqueuedAtMs: 1,
+        ownerUid: 'uid-1',
+        ownerEmployeeId: 'doc-1',
       ),
     );
 
@@ -161,6 +179,8 @@ void main() {
       appointmentId: 'a1',
       paths: ['/x/1.jpg', '/x/2.jpg'],
       enqueuedAtMs: 1000,
+      ownerUid: 'uid-1',
+      ownerEmployeeId: 'doc-1',
     );
     await store.add(first);
 
@@ -170,6 +190,8 @@ void main() {
         appointmentId: 'a1',
         paths: ['/x/2.jpg'],
         enqueuedAtMs: 1000,
+        ownerUid: 'uid-1',
+        ownerEmployeeId: 'doc-1',
       ),
     );
     final adding = store.add(
@@ -177,16 +199,15 @@ void main() {
         appointmentId: 'a2',
         paths: ['/x/3.jpg'],
         enqueuedAtMs: 2000,
+        ownerUid: 'uid-1',
+        ownerEmployeeId: 'doc-1',
       ),
     );
     await Future.wait([replacing, adding]);
 
     final loaded = await store.load();
     expect(loaded.map((e) => e.id).toSet(), {'a1_1000', 'a2_2000'});
-    expect(
-      loaded.firstWhere((e) => e.id == 'a1_1000').paths,
-      ['/x/2.jpg'],
-    );
+    expect(loaded.firstWhere((e) => e.id == 'a1_1000').paths, ['/x/2.jpg']);
   });
 
   test('prune removes entries older than maxAge and returns them', () async {
@@ -195,11 +216,15 @@ void main() {
       appointmentId: 'old',
       paths: ['/x/o.jpg'],
       enqueuedAtMs: 0,
+      ownerUid: 'uid-1',
+      ownerEmployeeId: 'doc-1',
     );
     final fresh = PendingUpload(
       appointmentId: 'new',
       paths: const ['/x/n.jpg'],
       enqueuedAtMs: DateTime.utc(2026, 7, 13).millisecondsSinceEpoch,
+      ownerUid: 'uid-1',
+      ownerEmployeeId: 'doc-1',
     );
     await store.add(old);
     await store.add(fresh);
@@ -216,16 +241,26 @@ void main() {
     expect(await store.load(), isEmpty);
   });
 
-  test('ownerless legacy entries are dropped on load', () async {
-    SharedPreferences.setMockInitialValues({
-      'pending_photo_uploads':
-          '[{"appointmentId":"a1","paths":["/x/1.jpg"],"enqueuedAtMs":1}]',
-    });
+  test(
+    'a pre-upgrade entry loads without an owner, so prune can reach it',
+    () async {
+      // It used to be DROPPED here, which stranded its staged files on disk with
+      // nothing left pointing at them. It must not be adopted either: on a shared
+      // or handed-over phone the next account would finish somebody else's
+      // upload, which is the whole reason the queue gained an owner.
+      SharedPreferences.setMockInitialValues({
+        'pending_photo_uploads':
+            '[{"appointmentId":"a1","paths":["/x/1.jpg"],"enqueuedAtMs":1}]',
+      });
 
-    final store = PendingUploadStore();
+      final store = PendingUploadStore();
+      final loaded = await store.load();
 
-    expect(await store.load(), isEmpty);
-  });
+      expect(loaded, hasLength(1));
+      expect(loaded.single.hasOwner, isFalse);
+      expect(loaded.single.paths, ['/x/1.jpg']);
+    },
+  );
 
   test('clearAll returns existing entries and removes the queue', () async {
     final store = PendingUploadStore();
@@ -233,6 +268,8 @@ void main() {
       appointmentId: 'a1',
       paths: ['/x/1.jpg'],
       enqueuedAtMs: 1,
+      ownerUid: 'uid-1',
+      ownerEmployeeId: 'doc-1',
     );
     await store.add(entry);
 
@@ -255,11 +292,15 @@ void main() {
       appointmentId: 'a1',
       paths: ['/x/1.jpg'],
       enqueuedAtMs: 1000,
+      ownerUid: 'uid-1',
+      ownerEmployeeId: 'doc-1',
     );
     const second = PendingUpload(
       appointmentId: 'a2',
       paths: ['/x/2.jpg'],
       enqueuedAtMs: 2000,
+      ownerUid: 'uid-1',
+      ownerEmployeeId: 'doc-1',
     );
     await store.add(first);
 

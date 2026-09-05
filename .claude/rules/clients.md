@@ -224,6 +224,29 @@ Root context: `../../CLAUDE.md`.
   never resurrected as a count-only stub. Backfill is lazy: a client's count
   self-heals on its next appointment write, and a row renders nothing (never
   `0`) until the field exists.
+- **Stored phone fields are NORMALIZED on the way in, and validated on the
+  form** (2026-09-04). `_normalizedMap` runs every `phone`/`mobile` — the
+  client's and each additional contact's — through `normalizePhoneForStorage`
+  (`core/validators/phone_format.dart`), the same owner `dialableUri` and
+  `ClientNamePolicy.composeStored` already use, so a number is stored as its
+  bare dialable core rather than whatever punctuation was typed. That matters
+  beyond tidiness: `clients.name` IS the phone for a person, so a mask-typed
+  `phone` and a bare `name` were two spellings of one number. On the form,
+  `isUsablePhoneNumber` refuses anything under seven digits
+  (`validation_enterAValidPhone`) — empty still passes, because a client
+  without a number is legitimate and always has been.
+  **An EXTENSION is a first-class part of both halves.** `_extensionSuffix`
+  (`ext`/`poste`/`post`/`x`/`p` + digits, either language) is matched, not
+  tolerated: `bareNumber` alone folded its digits onto the number, so
+  `514-555-1234 poste 2` was STORED as `51455512342` — a number nobody can dial,
+  written silently on an ordinary save — and the old character class accepted
+  any arrangement of `e`,`x`,`t` (`text` passed) while rejecting `poste` on a
+  bilingual product. Storage keeps the extension as its own trailing token and
+  validation checks only the part before it.
+- **The additional-contacts list surfaces its own cap.** `firestore.rules`
+  bounds the array, and the section now shows the count against the limit and
+  stops offering Add at it, instead of letting an admin fill in a contact the
+  server refuses on save with a `permission-denied` that names nothing.
 - **`mobile` is no longer editable and self-heals into `phone`.** The edit sheet
   dropped the second phone field (owner change 5), so `EditClientSheet._save`
   promotes a stored `mobile` into `phone` when `phone` is empty and clears

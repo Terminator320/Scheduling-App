@@ -185,9 +185,7 @@ void main() {
               'https://firebasestorage.googleapis.com/v0/b/x/o/z?alt=media&t=q',
         );
         await repo().appendAppointmentPictures('a1', [legacy]);
-        verifyNever(
-          () => batch.set<Map<String, dynamic>>(any(), any(), any()),
-        );
+        verifyNever(() => batch.set<Map<String, dynamic>>(any(), any(), any()));
       },
     );
 

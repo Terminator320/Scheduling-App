@@ -80,7 +80,7 @@ void main() {
     ).thenAnswer((_) async => const UserUidMatch(id: 'doc-1', data: {}));
     when(
       () => presence.deleteLocation(userDocId: any(named: 'userDocId')),
-    ).thenAnswer((_) async {});
+    ).thenAnswer((_) async => true);
   });
 
   ProviderContainer makeContainer() => ProviderContainer(

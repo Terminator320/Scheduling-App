@@ -46,6 +46,14 @@ alwaysApply: true
   post-await path needs (`noticeServiceProvider`, a repository) — read it up
   front. `ref.read` inside a `catch` is mechanically greppable; treat a new one
   as a bug.
+- **A callback that OUTLIVES its widget composes through `composeErrorNoticeFor(l10n, ...)`,
+  resolving the `AppLocalizations` up front.** `composeErrorNotice` takes a
+  `BuildContext` only to reach `context.l10n`, and a notice ACTION runs by
+  definition after the surface that raised it may be gone — the mark-complete
+  Undo fires from a timer callback with the sheet already popped. Same rule as
+  the logger and the repository: read what you need BEFORE the await, and never
+  touch `context` or `ref` on the far side. An `AppLocalizations` is a plain
+  object with no element behind it, so it is safe to keep.
 - Typed-Failure branches stay first; the composer is the generic fallback only.
 - New operation ⇒ new log tag + an `error_intro*` key in both ARBs. **The intro
   is the first sentence of `error_noticeWithCause` (`"{intro}. {cause}"`), so it
@@ -156,7 +164,10 @@ alwaysApply: true
   - Presence / map: `LIVEMAP-MARKERS`, `PRESENCE`
   - Images: `IMG-DEL`, `IMG-DISK`, `IMG-LOAD`, `IMG-PICK`, `IMG-SAVE`,
     `IMG-SHARE`, `IMG-UPLOAD`
-  - Address / launchers: `ADDR-AUTO`, `ADDR-DETAILS`, `ADDR-PLACES`,
+  - Address / launchers / maps: `ADDR-AUTO`, `ADDR-DETAILS`, `ADDR-PLACES`,
+    `MAPS-KEY` (`main.dart`'s `_provideIosMapsApiKey`, which is one of the very
+    few sites that logs through a bare `AppLogger()` rather than
+    `loggerProvider` — it runs before `runApp`, so there is no container yet),
     `LAUNCH-TEL`, `LAUNCH-EMAIL`, `LAUNCH-MAPS`, `LAUNCH-URL`
   - Devices / delivery: `FCM`, `PUSH`, `PUSH-TAP`, `LIVE-ACT`, `WIDGET`,
     `WIDGET-TAP`, `SIRI`
@@ -212,6 +223,20 @@ The common tell is an unawaited or discarded future: it has no caller left to
 catch anything, so its `try` is the only thing between a routine failure and a
 fatal. Treat `unawaited(...)`, `Future.microtask(...)` and a fire-and-forget
 `sync()` as requiring the whole body inside the guard.
+
+## Notices that carry an action
+
+- **A success notice may carry ONE action, through
+  `noticeServiceProvider.successWithAction(message, actionLabel:, onAction:)`**
+  (`core/notices/notice_service.dart`). It renders as a button inside the
+  notice and DISMISSES it before running, so the action can push a notice of
+  its own. `AppNotice.info`/`.error` deliberately take none — an error already
+  says what to do next in its cause sentence, and an action on a notice that
+  auto-dismisses is a race the user loses.
+- **Only an undo belongs there.** The one caller is mark-complete, whose Undo
+  calls `restoreAppointmentStatus`. A notice is not a menu: anything the user
+  might want to do deliberately belongs on the screen, not on a banner that
+  disappears.
 
 ## Action outcomes vs. errors
 

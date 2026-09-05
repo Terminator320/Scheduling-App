@@ -666,6 +666,33 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   legacy `confirmed`/unknown value would otherwise be written back verbatim
   and rejected by the rules as an opaque `permission-denied` on an
   ordinary-looking swap.
+- **The conflict check runs SERVER-SIDE now** (2026-09-04), through the
+  `findAppointmentConflicts` callable — the client query was capped at 1000 docs
+  per 30-id chunk and silently reported no clash past it. The server applies the
+  SAME rule, and that is not free: `dailyWindowsOverlap` in
+  `functions/day_slice_utils.js` is a hand-mirror of the Dart original, added
+  because the callable shipped with a raw instant test and immediately
+  reproduced the phantom clash below — a 9-5 run across a week blocking a 7 pm
+  job inside it. Pinned by `functions/__tests__/indexed_search_conflicts.test.js`
+  with the same worked examples; change either side and the other in one commit.
+  The server also keeps the fail-closed half (a doc whose stored times don't
+  parse clashes unconditionally) and narrows a non-admin caller's `employeeIds`
+  to their own doc id, so a technician cannot probe the roster's calendar.
+  The Dart path below is now the injected-`FirebaseFunctions`-absent fallback,
+  which in practice is tests only — it still describes the rule, and both sides
+  must move together.
+- **Mark-complete is UNDOABLE, through the `restoreAppointmentStatus`
+  callable** (2026-09-04). The success notice carries an Undo for as long as it
+  is on screen; it restores the status the job held before, captured at the
+  call site through `AppointmentStatus.storedRaw` like every other such write.
+  **It is a callable rather than a rules grant on purpose**: reopening a closed
+  job is the one status move the employee `allow update` disjuncts deliberately
+  exclude (they all require the current status NOT be terminal), and widening
+  them would let an assignee reopen anything they are on, at any age. The
+  callable re-checks that the doc is currently COMPLETED, that the caller is an
+  admin or assigned, and that the target is `pending`/`in_progress` — never a
+  terminal status — and clears `completedAt`, which is server-owned, so an undo
+  cannot leave a finish time on an open job.
 - **`findClashingAppointments` is the ONE owner of "what stands in the way",
   and the clash rule under it is the pure `clashingAppointments`**
   (`calendar/domain/assignee_availability.dart`). It answers with the clashing

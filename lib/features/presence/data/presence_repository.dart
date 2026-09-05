@@ -57,29 +57,40 @@ class PresenceRepository {
 
   /// Best-effort delete on sign-out — privacy: no stale coordinates left
   /// behind after leaving.
-  Future<void> deleteLocation({required String userDocId}) async {
+  /// Returns whether the stored fix is actually gone.
+  ///
+  /// The teardown paths ignore the result — a failed delete there is logged and
+  /// nothing more. The Location sharing screen does NOT: it tells the person
+  /// their position was erased, and saying that when the delete was refused is
+  /// a false statement on the one screen that exists to be trusted.
+  Future<bool> deleteLocation({required String userDocId}) async {
     try {
       await _locationDoc(userDocId).delete();
+      return true;
     } catch (e, st) {
       _logger.warn('PRESENCE deleteLocation failed', e, st);
+      return false;
     }
   }
 
-  Stream<PresenceFix?> watchLocation({required String userDocId}) {
-    return _locationDoc(userDocId).snapshots().map((doc) {
-      if (!doc.exists) return null;
-      final data = doc.data();
-      if (data == null) return null;
-      final rawLat = data['lat'];
-      final rawLng = data['lng'];
-      if (rawLat is! num || rawLng is! num) return null;
-      return PresenceFix(
-        userDocId: userDocId,
-        lat: rawLat.toDouble(),
-        lng: rawLng.toDouble(),
-        updatedAt: firestoreDateTime(data['updatedAt']),
-      );
-    });
+  Stream<PresenceFix?> watchLocation({required String userDocId}) =>
+      _locationDoc(
+        userDocId,
+      ).snapshots().map((doc) => _fixFrom(userDocId, doc.data()));
+
+  /// The one owner of "what a stored presence doc means"; null when the doc is
+  /// missing or carries no usable pair.
+  static PresenceFix? _fixFrom(String userDocId, Map<String, dynamic>? data) {
+    if (data == null) return null;
+    final rawLat = data['lat'];
+    final rawLng = data['lng'];
+    if (rawLat is! num || rawLng is! num) return null;
+    return PresenceFix(
+      userDocId: userDocId,
+      lat: rawLat.toDouble(),
+      lng: rawLng.toDouble(),
+      updatedAt: firestoreDateTime(data['updatedAt']),
+    );
   }
 
   /// Live feed of every staff member's last-known fix, for the admin map;
@@ -115,20 +126,8 @@ class PresenceRepository {
     for (final doc in snapshot.docs) {
       final userDocId = doc.reference.parent.parent?.id;
       if (userDocId == null) continue;
-      final data = doc.data();
-      final rawLat = data['lat'];
-      final rawLng = data['lng'];
-      if (rawLat is! num || rawLng is! num) continue;
-      final lat = rawLat.toDouble();
-      final lng = rawLng.toDouble();
-      fixes.add(
-        PresenceFix(
-          userDocId: userDocId,
-          lat: lat,
-          lng: lng,
-          updatedAt: firestoreDateTime(data['updatedAt']),
-        ),
-      );
+      final fix = _fixFrom(userDocId, doc.data());
+      if (fix != null) fixes.add(fix);
     }
     return fixes;
   }

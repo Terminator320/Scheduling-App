@@ -43,6 +43,7 @@ void main() {
     });
     when(presence.unregister).thenAnswer((_) async {
       calls.add('presence');
+      return true;
     });
     when(liveActivity.unregister).thenAnswer((_) async {
       calls.add('liveActivity');

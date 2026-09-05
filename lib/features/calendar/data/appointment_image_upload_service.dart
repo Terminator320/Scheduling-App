@@ -205,7 +205,7 @@ class AppointmentImageUploadService {
     if (!await _matchesCurrentOwner(entry)) {
       _logger.warn(
         'IMG-UPLOAD skipped queue entry for ${entry.appointmentId}: '
-        'owner mismatch',
+        '${entry.hasOwner ? 'owner mismatch' : 'no owner (pre-upgrade entry)'}',
       );
       return;
     }
@@ -273,6 +273,8 @@ class AppointmentImageUploadService {
     try {
       do {
         _pendingDrain = false;
+        _drainOwner = await _currentOwnerOrNull();
+        _drainOwnerResolved = true;
         try {
           final expired = await _store.prune(now: DateTime.now());
           for (final e in expired) {
@@ -294,6 +296,8 @@ class AppointmentImageUploadService {
         }
       } while (_pendingDrain);
     } finally {
+      _drainOwnerResolved = false;
+      _drainOwner = null;
       _draining = false;
     }
   }
@@ -319,7 +323,15 @@ class AppointmentImageUploadService {
     return (uid: uid, employeeId: employeeId);
   }
 
+  /// Memoised for the length of one drain: `_employeeIdForUid` is a Firestore
+  /// read, and the signed-in identity cannot change mid-pass, so re-resolving
+  /// it per queue entry AND per republish cost 2N+1 reads to answer one
+  /// question.
+  ({String uid, String employeeId})? _drainOwner;
+  bool _drainOwnerResolved = false;
+
   Future<({String uid, String employeeId})?> _currentOwnerOrNull() async {
+    if (_drainOwnerResolved) return _drainOwner;
     try {
       return await _currentOwner();
     } catch (_) {
@@ -328,10 +340,11 @@ class AppointmentImageUploadService {
   }
 
   Future<bool> _matchesCurrentOwner(PendingUpload entry) async {
-    final uid = _auth.currentUser?.uid;
-    if (uid == null || uid != entry.ownerUid) return false;
-    final employeeId = await _employeeIdForUid?.call(uid);
-    return employeeId == entry.ownerEmployeeId;
+    if (!entry.hasOwner) return false;
+    final owner = await _currentOwnerOrNull();
+    return owner != null &&
+        owner.uid == entry.ownerUid &&
+        owner.employeeId == entry.ownerEmployeeId;
   }
 
   /// Republishes the queue depth per appointment from the store itself.
@@ -341,6 +354,7 @@ class AppointmentImageUploadService {
       final owner = await _currentOwnerOrNull();
       for (final entry in await _store.load()) {
         if (owner == null ||
+            !entry.hasOwner ||
             entry.ownerUid != owner.uid ||
             entry.ownerEmployeeId != owner.employeeId) {
           continue;

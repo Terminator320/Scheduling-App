@@ -27,11 +27,12 @@ lib/
 │   ├── layout/                      Responsive shell — MasterDetailScaffold, PrimaryScrollScope (per-pane PrimaryScrollController so simultaneously-alive primary scrollables don't share one — the app-wide Scrollbar needs one ScrollPosition per controller), breakpoints (context.isWide / isLandscape / isSplitLayout for the calendar Split; isTwoPane (shortestSide ≥ 600) for the list master-detail; isCompact / isNarrowWidth for small-phone & large-text row folding)
 │   ├── navigation/                  Sealed AppDestination = HubTab (4 IndexedStack panes) + PushedDestination (plain routes); destinationRoute, navigateToDestination, goHomeToCalendar, HubShellScope; top_route_observer.dart (TopRouteObserver on MaterialApp.navigatorObservers — records the navigator's current top route name; its one caller, the deep-link dispatcher's awaitLoginRoute, went with P4c's invite branch, so it has no in-app caller now and is retained deliberately; its didRemove override (added 2026-08-19) tests `identical` on the Route, never the name — pushNamedAndRemoveUntil pushes BEFORE it removes, so a name test would let a lower route sharing the pushed route's name overwrite the current one; the override earns its place because hub_shell.dart's redirect shim calls removeRoute(this) on ITSELF)
 │   ├── logging/                     AppLogger (wraps `logger`, integrates with Crashlytics) — `warn` records a non-fatal, `breadcrumb` only leaves a trail; `unhandled_error_severity.dart` gates the `fatal:` flag on main.dart's two global handlers so an unhandled `permission-denied` (auth teardown racing a live listener) is recorded, not filed as a crash
-│   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget)
+│   ├── notices/                     In-app toast system: AppNotice types, NoticeService (stream), NoticeListener (widget). A SUCCESS notice may carry one NoticeAction (`successWithAction`) — it renders as a button and dismisses the notice before running, so the action can push a notice of its own; info/error take none. Its one caller is the mark-complete Undo
 │   ├── notifications/               fcm_background_handler.dart — the top-level @pragma('vm:entry-point') isolate that rewrites the iOS widget from a content-available push while the app is closed; must stay dependency-light (no Firebase/Riverpod in that isolate)
 │   ├── platform/                    ios_platform.dart — `defaultIsIosPlatform`, the injectable `bool Function()` behind every iOS CAPABILITY gate that guards real logic (push / presence / Live Activity registration, widget sync). A bare `Platform.isIOS` returns first on the host, so `flutter test` can never reach past it — on the only platform that ships. It lives here, not beside a caller, because AppSyncListeners and LiveActivityRegistrationController already import each other. Platform LOOK stays `context.isCupertino`
 │   ├── permissions/                 MediaPermissionService — camera permission gate (permission_handler); LocationPermissionService — location gate for presence tracking (geolocator; whileInUse/always both → granted)
 │   ├── providers/                   firebase_providers.dart — Riverpod providers for Auth/Firestore/Storage instances
+│   ├── search/                      search_tokens.dart (searchQueryTokens / searchIndexTokens — the prefix-and-substring token vocabulary the app WRITES into `clients.searchTokens` and `appointments.historySearchScopes` and the server QUERIES; hand-mirrored by `functions/search_tokens.js`, with worked examples shared value-for-value between `test/core/search/search_tokens_test.dart` and `functions/__tests__/search_tokens.test.js`, because a divergence is a search that silently returns nothing. Two ordering rules are load-bearing under the 240-token cap: each word emits its WHOLE token before any prefix, and the text and phone runs are interleaved so a long name cannot starve the phone out)
 │   ├── security/                    BiometricAuthService (local_auth) + AppLock app-wide biometric gate
 │   ├── storage/                     SecureStorageService + SecureStorageKeys — encrypted local storage (flutter_secure_storage)
 │   ├── theme/                       Design tokens (AppColors, AppSpacing, AppRadius), button_styles (destructiveOutlinedButtonStyle, accentPillButtonStyle — the tinted Edit pill shared by the client and team detail headers), ThemeData, ThemeNotifier
@@ -72,7 +73,7 @@ lib/
     ├── notifications/               FCM push client — PushRegistrationController (token upsert for active employees/admins, resync-coalesced), FcmTokenRepository, push_notification_service, notificationAuthStatusProvider (Settings recovery row); core/notifications/fcm_background_handler rewrites the widget from a push while the app is closed
     ├── presence/                    Live-location tracking + admin live staff map — PresenceSyncController owns a foreground-only geolocator stream (250 m / 2-min throttle + 10-min heartbeat, throttle clock rolls back on a failed write) for active employees/admins — the `location` UIBackgroundModes entry was removed 2026-07-27 after an App Store 2.5.4 rejection, so iOS suspends the stream on background; never re-add it, PresenceRepository writes users/{docId}/presence/location (self-only); OS permission is the only switch. Admin-only live_map_screen joins collectionGroup('presence') to watchAllUsers() via LiveMapAggregator (pure reducers, presenceStaleAfter == PRESENCE_STALE_MINUTES) → google_maps_flutter markers built by domain/staff_marker_assembly.dart (assembleStaffMarkers + staffMarkerSignature — lifted out of the live_map_screen State 2026-08-19, since marker assembly is an engine and was untestable buried in a widget); staff_roster_sheet lists everyone sharing location nearest-first (LiveMapAggregator.sortedByProximity/distanceMeters/cityFromAddress — all pure)
     ├── onboarding/                  First-launch intro carousel (OnboardingGate = app home) + onboardingSeen gate
-    ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle, notification-permission recovery row, Live job card switch (iOS-only, hidden where unsupported), LegalSettingsCard (Privacy Policy + Terms of Service rows — the durable route to the terms, since the setup screen's consent link is shown once and only to a new employee), and my_details_screen — the ONLY self-service edit surface. Since P5 (2026-08-10) it covers the person's own phone, emergency contact + emergency phone, full availability (working days, hours, on-call), `travelAlertsEnabled`, and — through `SelfEmailService`, which re-authenticates first and calls `changeEmployeeEmail` rather than writing the doc — their own sign-in email. It carries TWO save behaviours on purpose: identity fields sit behind a dirty-gated Save/Discard bar (a half-typed phone auto-committing is a bad write with no undo), while availability applies immediately and optimistically, rolling back on failure. Still admin-owned on both branches and NOT reachable here: `maxJobsPerDay` (admin-only section, hidden for a technician), `role`, `jobTitle`, `colorValue`, `status`
+    ├── settings/                    Theme, text scale, language, app version, biometric app-lock toggle, notification-permission recovery row, Live job card switch (iOS-only, hidden where unsupported), LegalSettingsCard (Privacy Policy + Terms of Service rows — the durable route to the terms, since the setup screen's consent link is shown once and only to a new employee), and my_details_screen — the ONLY self-service edit surface. Since P5 (2026-08-10) it covers the person's own phone, emergency contact + emergency phone, full availability (working days, hours, on-call), `travelAlertsEnabled`, `locationSharingEnabled` (which also has its own screen, `location_sharing_screen.dart` / `LocationSharingView` — what is uploaded, when it was last sent, and one action that stops sharing AND erases the stored position; `applyLocationSharing` is the one owner of the field-plus-presence flip both surfaces call), and — through `SelfEmailService`, which re-authenticates first and calls `changeEmployeeEmail` rather than writing the doc — their own sign-in email. It carries TWO save behaviours on purpose: identity fields sit behind a dirty-gated Save/Discard bar (a half-typed phone auto-committing is a bad write with no undo), while availability applies immediately and optimistically, rolling back on failure. Still admin-owned on both branches and NOT reachable here: `maxJobsPerDay` (admin-only section, hidden for a technician), `role`, `jobTitle`, `colorValue`, `status`
     ├── siri/                        Siri App Intents snapshot — ScheduleSnapshotService writes a today+7d payload under the App Group key `schedule_snapshot` (nothing renders it); buildScheduleSnapshot is hand-mirrored with ios/SiriIntents/ScheduleSnapshot.swift (schema **v3** — bump scheduleSnapshotVersion and supportedVersion together; v2 added isAllDay + title, v3 the multi-day dayIndex/dayCount); payload is field-limited because the App Group reads while locked
     ├── splash/                      Auth resolution on cold start (screen + routing logic)
     └── wave/                        Wave Accounting integration — read-only connection status + per-client sync badge + auto-import cadence picker + the two-way "Sync with Wave" action (all writes are Cloud-Function-owned). `domain/wave_sync_notice.dart` composes the result notice from a `WaveSyncSummary`: one clause per direction, zero-valued clauses dropped, and clauses for still-queued / dead-lettered / push-failed so an all-zero run can't be reported as success
@@ -201,6 +202,45 @@ Two stores, split by sensitivity:
 ### Clients Pagination
 
 The clients list uses `infinite_scroll_pagination` (v5): `ClientsRepository.fetchClientsPage` pages alphabetically — `orderBy('name')` then `orderBy(FieldPath.documentId)` — via a **value** cursor (`startAfter([name, id])`), so no `after` doc is re-fetched and Firestore types stay out of the domain layer. It does **not** stream — `clientsRefreshProvider` is bumped by every add/update/delete and the list listens to it to refresh. Committed search is a bounded 5000-doc Firestore read through `clientSearchProvider`, matched in Dart; filtering the already-loaded pages is only the instant fallback until that read settles. Appointment photos display through `AppointmentImageCarousel` (`smooth_page_indicator`) in read-only mode; editing keeps the `PhotoPickerSection` thumbnail strip. New images are chosen via `pickAppointmentImages` (Camera gated by `MediaPermissionService`, Gallery via the OS photo picker).
+
+### Entity search (server-side since 2026-09-04)
+
+Client search, appointment-history search and the pre-save conflict check run
+through the callables `searchClients`, `searchHistory` and
+`findAppointmentConflicts` (`functions/indexed_search.js`). They replaced capped
+client-side scan windows that went **silently incomplete** as the business grew:
+the clients window is `orderBy('name')`, so at its 5,000-doc cap it held the
+alphabetically first N clients and everything past that point disappeared from
+search, the type-filter chips and the Archived chip at once, with no error
+anywhere — a failure that arrives gradually and that nobody reports.
+
+The index is a token array the **client** writes on every entity write —
+`clients.searchTokens` and `appointments.historySearchScopes`, both built by
+`core/search/search_tokens.dart` and both bounded at 240 entries in
+`firestore.rules`. A token hit is only a prefilter: both callables re-verify
+with `recordMatchesQuery` against the full stored document before returning, so
+a prefix token can never widen the answer.
+
+Scoping happens **in the query**, not after it. `searchClients` is admin-only
+(clients are PII). `searchHistory` resolves the caller through
+`assertActiveCall` and picks a token prefix from their role — `all:` for an
+admin, `emp:<their own doc id>:` for a technician, and an employee asking for
+someone else's scope is refused. `findAppointmentConflicts` narrows a
+non-admin's `employeeIds` to their own doc id for the same reason, and filters
+its results through `dailyWindowsOverlap` (`functions/day_slice_utils.js`), the
+hand-mirror of the Dart daily-window rule — it shipped with a raw instant test
+and immediately reproduced the phantom clash that rule exists to prevent.
+
+The old Dart scan windows survive as the fallback taken when no
+`FirebaseFunctions` is injected, which — `firebaseFunctionsProvider` being
+non-nullable — means tests only. Two consequences worth knowing: the shipped
+app never runs them, and a repository test asserting search behaviour is
+asserting the fallback's, not production's.
+
+**Deploy order matters.** The two composite indexes must be `READY` and
+`functions/scripts/backfill-search-tokens.js` must have run before the app build
+that calls these ships; until a document carries its tokens it is invisible to
+the search that replaced the scan.
 
 ### Detail Views
 
@@ -782,7 +822,7 @@ and `AppBackButton` render their Cupertino variants on iOS.
 
 ### Routing
 
-`AppRoutes.onGenerateRoute` is the single routing entry point. Pass typed argument classes via `Navigator.pushNamed(..., arguments: MyArgs(...))`. Screens do not navigate themselves — they receive args and call back via `Navigator.pop(context, result)`.
+`AppRoutes.onGenerateRoute` is the single routing entry point. Pass typed argument classes via `Navigator.pushNamed(..., arguments: MyArgs(...))`. **Arguments are TYPE-CHECKED, not force-cast** (2026-09-04): the seven arg-required routes read through `_args<T>(settings)`, which returns null rather than throwing, and fall back to `_invalidRoute` → `InvalidRouteScreen` — an ordinary screen saying the link can't be opened, with a way back. The `settings.arguments! as T` casts they replaced red-screened the app on a malformed or argless push, which a deep link can produce from outside the app entirely. The HOME route keeps a DIFFERENT answer on purpose — least-privilege defaults (`isAdmin: false`) rather than a recovery screen — because it is reached from every cold start and back stack, where a recovery screen would cost the session; the asymmetry is documented at the site and neither shape is the general rule. Screens do not navigate themselves — they receive args and call back via `Navigator.pop(context, result)`.
 
 Cross-destination navigation has a second SSOT in `lib/core/navigation/`. `AppDestination` is a **sealed** family split into `HubTab` (`calendar`, `clients`, `employees`, `liveMap` — the four `IndexedStack` panes) and `PushedDestination` (`dayRoute`, `history`, `dashboard`, `settings` — plain routes above the shell). The split makes "select a non-tab" a compile error instead of an `IndexedStack` range crash; `implements Enum` keeps `.name`/`.values` working on the union type, which matters because a destination's `.name` is what `TourScope.storageKey` resolves to — so it is also the persisted tour-seen key and the showcase scope name, and renaming a member replays or orphans that tour.
 
@@ -903,6 +943,14 @@ These must not be broken:
 ## Auth and Account Disable — Data Flow
 
 ### Cold Start
+
+`main()` reads its Firebase config from `--dart-define` values, not from a
+bundled file — `dev/.env` and `flutter_dotenv` were retired 2026-09-04, so
+there is no asset load before `Firebase.initializeApp` and nothing readable
+from inside the IPA. `_provideIosMapsApiKey()` hands `IOS_MAPS_API_KEY` to
+`AppDelegate` over the `net.vogas.scheduling/native_config` MethodChannel and is
+awaited before `runApp`, so `GMSServices` is keyed before any map widget can be
+built; a missing key leaves the live map blank rather than failing the launch.
 
 `main()` shows `home: const OnboardingGate()`. On first launch the gate shows the
 onboarding carousel once (encrypted `onboardingSeen` flag), then renders
@@ -1158,6 +1206,11 @@ users/{docId}
                        what someone DOES; `role` remains the access flag
   workingDays: bool[7] Sunday-indexed; workStartMinutes / workEndMinutes
   maxJobsPerDay: int   0 = no cap · onCall: bool
+  travelAlertsEnabled: bool   self-service; ABSENT reads as ON
+  locationSharingEnabled: bool   self-service; ABSENT reads as OFF — the only
+                       switch that stops presence uploads, so it is on the self
+                       allowlist and defaults the safe way, opposite to the line
+                       above it
   ── NO emergencyContact/emergencyPhone: they moved to private/emergency below.
      updateEmployee sends FieldValue.delete() for both on every save, scrubbing
      any value a pre-move build left here (still peer-readable until it goes).
@@ -1271,6 +1324,12 @@ appointments/{docId}
                        100-entry cap (isValidAppointmentData) for exactly those
                        documents — a cap, never a ban, or an edit of one would
                        be refused.
+  historySearchScopes: string[]   CLIENT-written search index, <=240 entries
+                       (rules-bounded). `all:<token>` plus `emp:<id>:<token>`
+                       per assignee, so `searchHistory` can scope a technician
+                       to their own jobs in the query rather than after it.
+                       Built by `_historySearchScopes`; a doc written before
+                       2026-09-04 has none until the backfill runs.
   pictureCount: int    FUNCTION-OWNED denormalized counter (recountAppointmentPictures,
                        an absolute count() aggregate) — and the ONLY thing left
                        that knows whether a job has photos. AppointmentCard
@@ -1333,7 +1392,14 @@ appointments/{docId}/images/{imageId}
 clients/{docId}
   name                         only a name is required; everything else optional
   firstName, lastName          structured name parts (Wave-aligned model)
-  email, phone, mobile         (a typed email is still format-checked)
+  email, phone, mobile         (a typed email is still format-checked; both
+                       numbers are stored bare via normalizePhoneForStorage, and
+                       a value under 7 digits is refused on the form)
+  searchTokens: string[]       CLIENT-written search index, <=240 entries
+                       (rules-bounded), built from ClientSearchPolicy.rawTexts /
+                       rawPhones so what is INDEXED and what MATCHES share one
+                       field list. `searchClients` queries it; a doc written
+                       before 2026-09-04 has none until the backfill runs
   address, apt, city, province, country, postalCode   (structured address).
                        `address` is the STREET LINE only as of 2026-08-28 — it
                        used to hold the whole picked string while the four
@@ -1570,9 +1636,9 @@ not default it off.
   `core/platform/`) rather than a bare `Platform.isIOS`, which on the host
   returns before anything injectable and writes the branch off as device-only.
 
-Run: `flutter test` (3247 passing as of 2026-09-02 — that is the runner's count;
-`grep`ing for `test(`/`testWidgets(` gives fewer (3144), since some cases are
-generated inside loops; `functions` adds 1747 jest tests across 80 suites in
+Run: `flutter test` (3255 passing as of 2026-09-04 — that is the runner's count;
+`grep`ing for `test(`/`testWidgets(` gives fewer (3154), since some cases are
+generated inside loops; `functions` adds 1747 jest tests across 81 suites in
 `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). **The runner's count is the only one that settles whether the
 branch is green**, and a recorded green is a claim, not a fact: on 2026-09-02

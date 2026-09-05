@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
+import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/screens/account_setup_screen.dart';
 import 'package:scheduling/features/auth/screens/forgot_password_screen.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
@@ -8,6 +9,7 @@ import 'package:scheduling/features/clients/screens/history_screen.dart';
 import 'package:scheduling/features/dashboard/screens/dashboard_screen.dart';
 import 'package:scheduling/features/settings/screens/my_details_screen.dart';
 import 'package:scheduling/features/settings/screens/settings_screen.dart';
+import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/hub_shell.dart';
 
 class AppRoutes {
@@ -29,10 +31,7 @@ class AppRoutes {
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
       case login:
-        return AppPageRoute(
-          settings: settings,
-          builder: (_) => const Login(),
-        );
+        return AppPageRoute(settings: settings, builder: (_) => const Login());
 
       case forgotPassword:
         final args = settings.arguments as ForgotPasswordArgs?;
@@ -95,10 +94,8 @@ class AppRoutes {
         if (args == null) return _invalidRoute(settings);
         return AppPageRoute(
           settings: settings,
-          builder: (_) => HubShell(
-            isAdmin: args.isAdmin,
-            employeeId: args.employeeId,
-          ),
+          builder: (_) =>
+              HubShell(isAdmin: args.isAdmin, employeeId: args.employeeId),
         );
 
       case employees:
@@ -126,10 +123,8 @@ class AppRoutes {
         if (args == null) return _invalidRoute(settings);
         return AppPageRoute(
           settings: settings,
-          builder: (_) => HistoryScreen(
-            isAdmin: args.isAdmin,
-            employeeId: args.employeeId,
-          ),
+          builder: (_) =>
+              HistoryScreen(isAdmin: args.isAdmin, employeeId: args.employeeId),
         );
 
       case liveMap:
@@ -222,21 +217,31 @@ class InvalidRouteScreen extends StatelessWidget {
       appBar: AppBar(),
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppSpacing.sp24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(Icons.link_off_rounded, size: 40, color: scheme.error),
-              const SizedBox(height: 12),
+              const SizedBox(height: AppSpacing.sp12),
               Text(
-                "This link can't be opened.",
+                context.l10n.nav_invalidLink,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: AppSpacing.sp16),
               FilledButton(
-                onPressed: () => Navigator.maybePop(context),
-                child: const Text('Back'),
+                // `mainCalendar` and `settings` are reached by
+                // pushReplacement, so this screen can BE the whole stack and a
+                // pop is a no-op — which would leave the one affordance dead
+                // on exactly the routes most likely to land here.
+                onPressed: () => Navigator.canPop(context)
+                    ? Navigator.pop(context)
+                    : Navigator.pushNamedAndRemoveUntil(
+                        context,
+                        AppRoutes.login,
+                        (_) => false,
+                      ),
+                child: Text(context.l10n.common_back),
               ),
             ],
           ),

@@ -2,6 +2,11 @@
 
 **Date:** 2026-08-29
 **Status:** BUILT 2026-08-29 (chip + panel). Search field deferred — see below.
+**SUPERSEDED 2026-09-04** by `docs/plans/2026-09-04-clients-page-search-first.md`,
+which deletes this chip-menu entirely and moves shared addresses into a filter
+sheet. The deferred search field below is now never built. Everything here still
+describes what SHIPPED, so it remains the reference for the current code — just
+not for the next change.
 **Mockup:** https://claude.ai/code/artifact/ed5abdf5-ded2-491d-9a31-7ed4569bf813
 **File:** `lib/features/clients/widgets/sections/client_address_filter_menu.dart`
 

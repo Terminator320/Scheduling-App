@@ -250,6 +250,50 @@ reverting the cap.
 
 ---
 
+## TODO 1.57.0+86: the indexed-search deploy — ORDERING IS THE WHOLE THING
+
+This release adds four callables (25 → 29) and moves client search, appointment
+history search and the pre-save conflict check off capped client-side scans onto
+indexed queries. It is a CREATE-only export change, so **neither known abort
+fires** — no deletion prompt, no failure-policy prompt. What it does have is a
+hard ordering requirement, and getting it wrong ships a search that finds
+nothing rather than one that errors.
+
+### The order
+
+1. **`firestore:indexes` FIRST, alone**, and wait for both new composites to
+   report `READY`: `clients (searchTokens CONTAINS, name ASC)` and
+   `appointments (historySearchScopes CONTAINS, status ASC, startTime DESC)`.
+   A query against a `CREATING` index fails `FAILED_PRECONDITION`.
+2. **`firestore:rules`** — they bound the two new list fields at 240 entries and
+   admit `locationSharingEnabled` on `/users`. **Rules before functions and
+   before the app**: an app writing `searchTokens` against rules that don't
+   allow it gets `permission-denied` on every client save.
+3. **`functions`** — the four new callables.
+4. **`node functions/scripts/backfill-search-tokens.js --dry-run`, then for
+   real.** Every client and every terminal-status appointment written before
+   this release carries no tokens, and a document with no tokens is invisible to
+   the search that replaced the scan. **This is a prerequisite, not a
+   follow-up** — the app build must not ship before it completes.
+5. **Only then the app build.**
+
+### Why rollback is awkward here
+
+The app build is what calls the callables, so rolling BACK the functions after
+the app ships breaks search outright (the old scan path is unreachable in a
+shipped build — `firebaseFunctionsProvider` is non-nullable, so production never
+takes the fallback). Roll back the app, not the backend. Deploying the backend
+early is safe: 1.56.0 and earlier never call the new callables, and the token
+fields they don't write are simply absent.
+
+### Two things to verify after, not assume
+
+- `functions_list_functions` returns **29**, matching `functions/index.js`.
+- Run one real search from a signed-in admin build and one from a technician
+  build. The technician case is the one worth doing by hand: their scope is
+  baked into the token prefix, so a wrong scope shows as an empty result set
+  rather than an error.
+
 ## DONE 2026-08-21: the simplified-auth deploy
 
 > **This deploy has RUN** — see the `903161e1` row in the deploy log below.

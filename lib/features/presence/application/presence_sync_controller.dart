@@ -13,6 +13,7 @@ import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/utils/reentrant_sync.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart'
     show shouldRegisterPush;
 import 'package:scheduling/features/presence/data/presence_repository.dart';
@@ -39,6 +40,27 @@ final myPresenceFixProvider = StreamProvider.autoDispose<PresenceFix?>((ref) {
       .watch(presenceRepositoryProvider)
       .watchLocation(userDocId: record.id);
 });
+
+/// Writes the location-sharing choice and starts or stops presence tracking.
+///
+/// The ONE owner of that pair: the Settings row and the Location sharing
+/// screen both flip the same field, and a write that skipped the presence half
+/// would leave a technician's phone uploading fixes after they turned it off.
+Future<void> applyLocationSharing(
+  WidgetRef ref,
+  EmployeeRecord record, {
+  required bool enabled,
+}) async {
+  await ref
+      .read(employeesRepositoryProvider)
+      .updateSelfDetails(record.copyWith(locationSharingEnabled: enabled));
+  final presence = ref.read(presenceSyncControllerProvider);
+  if (enabled) {
+    await presence.sync();
+  } else {
+    await presence.unregister();
+  }
+}
 
 /// Movement uploads at most this often — the stream's 250 m `distanceFilter`
 /// handles granularity; this guards Firestore write volume on a highway.
@@ -319,7 +341,9 @@ class PresenceSyncController with ReentrantSync {
 
   /// Best-effort teardown for sign-out or account deletion — stops the stream
   /// and deletes the presence doc. Never throws, since sign-out must not be blocked.
-  Future<void> unregister() async {
+  /// Returns whether the stored fix is provably gone — see
+  /// `PresenceRepository.deleteLocation`.
+  Future<bool> unregister() async {
     invalidateSync();
     final knownDocId = _docId;
     _stop();
@@ -332,12 +356,13 @@ class PresenceSyncController with ReentrantSync {
       // user, never on freshness), and the privacy policy promises sign-out
       // clears it. Same fix as `LiveActivityRegistrationController.unregister`.
       final docId = knownDocId ?? await _resolveUserDocId();
-      if (docId == null) return;
-      await _ref
+      if (docId == null) return false;
+      return await _ref
           .read(presenceRepositoryProvider)
           .deleteLocation(userDocId: docId);
     } catch (e, st) {
       _logger.warn('PRESENCE unregister failed', e, st);
+      return false;
     }
   }
 
