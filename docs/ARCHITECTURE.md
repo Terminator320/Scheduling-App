@@ -718,8 +718,8 @@ client doc was deleted or hasn't loaded yet). The `clientCleared` state flag
 an explicit removal so `AppointmentFormValidator` fires `clientRequired`
 exactly like the add flow.
 
-**Inline add-client.** When the client search finds no match, `ClientSearchField`
-offers an **Add "&lt;name&gt;" as a new client** action (its `onAddNew` callback).
+**Inline add-client.** When the client search finds no match, `ClientPicker`
+offers a **None of these &mdash; new client** row (its `onAddNew` callback).
 `AppointmentFormFields.onRequestAddClient` opens the standard `AddClientSheet`
 via `showAddClientSheet` (`clients/widgets/sheets/`) — prefilled with the typed
 name and passed `settleFocus: true` for the sheet-from-search settle — and

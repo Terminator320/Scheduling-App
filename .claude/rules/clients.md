@@ -557,6 +557,48 @@ Root context: `../../CLAUDE.md`.
   segment, which is right for the Wave push and wrong for a write), and it
   never writes an empty address. Wave gets nothing: `mappedFieldsHash` hashes
   `toWaveCustomerInput`'s OUTPUT, which already ran `streetFromAddress`.
+- **The add-job picker sends a SLICE of the typed number, not the string.**
+  `PhoneQueryPolicy` drops a leading `1`, holds anything under 7 digits (a bare
+  area code matches the roster twice over and costs 200 reads to prove it), and
+  on a miss at 10+ digits retries the **first seven** then the **last seven**.
+  First seven, not last four: a typo lands in the tail, so the head is the slice
+  that survives it — `5145628233` against a stored `5145628332` misses on
+  last-7 and last-4 and hits on first-7. Results from a fallback rung are
+  "closest numbers on file", never matches.
+- **A complete answer is narrowed locally; a truncated one is re-queried.**
+  Phone matching is a substring test, so the candidate set only shrinks as
+  digits land — `ClientSearchWindow.canNarrowTo` is the one owner of that, and
+  it refuses when the previous answer hit `resultDisplayLimit`, because at the
+  cap the client being looked for may never have come back.
+- **`ClientSearchEntry.phoneDigits` is ONE ENTRY PER NUMBER.** Joining `phone`,
+  `mobile` and contact phones let a query straddle the seam and match a number
+  nobody has, and made `relevanceScore`'s exact tier unreachable for anyone with
+  two numbers. Three sites had the blob — `ClientSearchPolicy.index`, the
+  repository's relevance call site, and `recordMatchesQuery` in
+  `functions/search_tokens.js`. Keep all three split.
+- **The callable's answer is RE-RANKED in the repository.** `searchClients`
+  ends `orderBy("name")` server-side, so without `ClientSearchPolicy.scoreRecord`
+  the closest number on a fallback rung lands wherever the alphabet puts it.
+  Sorting in the repository rather than the controller is what keeps the
+  callable path and the local fallback behaving the same; the server's 200-doc
+  READ cap is still alphabetical and is out of scope.
+- **A failed client search must not render as an empty one.**
+  `ClientSearchStatus.failed` exists because "No clients found" on the booking
+  path reads as "new customer", and that is how a duplicate gets created for a
+  client already on file — carrying a number that can then never be searched.
+- **Recents are free or they are nothing.** `recentClientsProvider` builds them
+  from appointments' denormalized `clientId`/`clientName`/`clientPhone`, so
+  showing them costs no client reads. It returns empty for a non-admin: the
+  query carries no `employeeIds` constraint and adding one would need a new
+  composite index. Job creation is admin-only today (`_addAppointmentFab`), so
+  that costs nothing — it is recorded so a future decision to let employees
+  book does not quietly ship a permanently empty recents list.
+- **The COLLAPSED match summary is NOT built.** `ClientPicker` is stateless and
+  always renders its list; the design doc names a focus-collapsed summary, and
+  it was left out deliberately because a focus-driven collapse can rebuild
+  under a tap that is already in flight, and no widget test can catch that.
+  `clients_tapToCarryOn` was removed from both ARBs with it — re-add the key
+  with the state, not before.
 - **Inline add-client while booking:** `ClientsRepository.addClient` returns the
   created `ClientRecord` with its generated Firestore doc id (NOT `void`) — the
   appointment form's "Add new client" flow links the appointment to that id.
@@ -564,7 +606,7 @@ Root context: `../../CLAUDE.md`.
   `showAddClientSheet` (`clients/widgets/sheets/add_client_sheet.dart`), which
   pops the created client and gates its result on `context.mounted`; pass
   `settleFocus: true` when opening from a search field (the appointment client
-  picker). The affordance lives in the shared `ClientSearchField` (`onAddNew`
+  picker). The affordance lives in the shared `ClientPicker` (`onAddNew`
   callback, injected null when unused) and is admin-only only because the
   appointment forms are admin-only surfaces — gate it explicitly if it's ever
   reused somewhere non-admin. Both appointment hosts guard the open via the
