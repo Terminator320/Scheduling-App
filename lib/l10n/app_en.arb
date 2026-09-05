@@ -2730,7 +2730,7 @@
   "@tour_clientsSearchTitle": {
     "description": "Tour step title: clients search bar"
   },
-  "tour_clientsSearchDesc": "Search by name, phone, or address — results update as you type.",
+  "tour_clientsSearchDesc": "Search every client by name, phone or address — the whole list, not just the ones on screen.",
   "@tour_clientsSearchDesc": {
     "description": "Tour step description: clients search bar"
   },
@@ -2762,7 +2762,7 @@
   "@tour_historySearchTitle": {
     "description": "Tour step title: history search bar"
   },
-  "tour_historySearchDesc": "Completed and cancelled visits live here — search by client or employee, and filter by year.",
+  "tour_historySearchDesc": "Completed and cancelled visits live here. Search covers the whole archive, and you can filter by year.",
   "@tour_historySearchDesc": {
     "description": "Tour step description: history search bar"
   },
@@ -2794,7 +2794,7 @@
   "@tour_settingsNotificationsTitle": {
     "description": "Tour step title: settings notifications card"
   },
-  "tour_settingsNotificationsDesc": "Check push permission and the on-the-road Live Activity card here.",
+  "tour_settingsNotificationsDesc": "Notifications are off until you turn them on here — job assignments, \"time to leave\" and the daily digest all come through this row.",
   "@tour_settingsNotificationsDesc": {
     "description": "Tour step description: settings notifications card"
   },

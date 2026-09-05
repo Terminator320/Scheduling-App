@@ -22,6 +22,9 @@ class DetailsActionBar extends StatelessWidget {
     this.onStart,
     this.onBookAgain,
     this.isInProgress = false,
+    this.wrapStart,
+    this.wrapMarkDone,
+    this.wrapBookAgain,
   });
 
   final bool isDone;
@@ -43,6 +46,14 @@ class DetailsActionBar extends StatelessWidget {
   /// "Book again" — opens the add sheet pre-filled from this job.
   final VoidCallback? onBookAgain;
 
+  /// Tour wraps, null off-tour so the bar stays usable untoured.
+  final Widget Function(Widget)? wrapStart;
+  final Widget Function(Widget)? wrapMarkDone;
+  final Widget Function(Widget)? wrapBookAgain;
+
+  static Widget _wrap(Widget Function(Widget)? wrap, Widget child) =>
+      wrap?.call(child) ?? child;
+
   @override
   Widget build(BuildContext context) {
     final compact = context.isCompact;
@@ -51,16 +62,14 @@ class DetailsActionBar extends StatelessWidget {
       children: [
         const SizedBox(height: AppSpacing.sp24),
         if (onStart != null && !isDone && !isCancelled && !isInProgress) ...[
-          _startButton(context, compact),
+          _wrap(wrapStart, _startButton(context, compact)),
           const SizedBox(height: AppSpacing.sp8),
         ],
-        if (!isDone && !isCancelled) _markDoneButton(context, compact),
+        if (!isDone && !isCancelled)
+          _wrap(wrapMarkDone, _markDoneButton(context, compact)),
         if (isDone) ..._doneSlot(context, compact),
         if (showCancel && !isCancelled && !isDone)
-          ..._cancelSlot(
-            context,
-            compact,
-          ),
+          ..._cancelSlot(context, compact),
         if (onBookAgain != null) ..._bookAgainSlot(context, compact),
       ],
     );
@@ -71,15 +80,18 @@ class DetailsActionBar extends StatelessWidget {
   List<Widget> _bookAgainSlot(BuildContext context, bool compact) => [
     // A cancelled job renders nothing above this.
     if (!isCancelled) const SizedBox(height: AppSpacing.sp8),
-    OutlinedButton(
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(double.infinity, 48),
-      ),
-      onPressed: onBookAgain,
-      child: _ActionButtonContent(
-        compact: compact,
-        icon: const Icon(Icons.event_repeat_outlined, size: 18),
-        label: context.l10n.calendar_bookAgain,
+    _wrap(
+      wrapBookAgain,
+      OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(double.infinity, 48),
+        ),
+        onPressed: onBookAgain,
+        child: _ActionButtonContent(
+          compact: compact,
+          icon: const Icon(Icons.event_repeat_outlined, size: 18),
+          label: context.l10n.calendar_bookAgain,
+        ),
       ),
     ),
   ];
