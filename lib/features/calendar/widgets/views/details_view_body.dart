@@ -39,6 +39,11 @@ class DetailsViewBody extends ConsumerWidget {
     required this.onClose,
     super.key,
     this.onBookAgain,
+    this.wrapPushBack,
+    this.wrapFieldRecord,
+    this.wrapStart,
+    this.wrapMarkDone,
+    this.wrapBookAgain,
   });
 
   final AppointmentRecord appointment;
@@ -48,6 +53,18 @@ class DetailsViewBody extends ConsumerWidget {
   /// Hands a "book again" draft to the host, which closes this view and opens
   /// the add sheet with it.
   final ValueChanged<AppointmentPrefill>? onBookAgain;
+
+  /// Tour wraps, null off-tour so the view stays usable untoured. They live
+  /// here rather than in a State because this is a ConsumerWidget — the
+  /// TourSteps that builds them belongs to EventDetailsView.
+  final Widget Function(Widget)? wrapPushBack;
+  final Widget Function(Widget)? wrapFieldRecord;
+  final Widget Function(Widget)? wrapStart;
+  final Widget Function(Widget)? wrapMarkDone;
+  final Widget Function(Widget)? wrapBookAgain;
+
+  static Widget _wrap(Widget Function(Widget)? wrap, Widget child) =>
+      wrap?.call(child) ?? child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -145,6 +162,7 @@ class DetailsViewBody extends ConsumerWidget {
           onCall: onCall,
           onDirections: onDirections,
           onPushBack: onPushBack,
+          wrapPushBack: wrapPushBack,
         ),
         ClientContactsCards(contacts: data.extraContacts, collapsible: true),
         if (data.materials.isNotEmpty) ...[
@@ -161,7 +179,10 @@ class DetailsViewBody extends ConsumerWidget {
         // branches of `firestore.rules` admit, so the surface and the rule
         // cannot disagree about who may write.
         if (canRecordFieldWork)
-          DetailsFieldRecordView(appointment: appointment),
+          _wrap(
+            wrapFieldRecord,
+            DetailsFieldRecordView(appointment: appointment),
+          ),
         DetailsActionBar(
           isDone: data.isDone,
           isCancelled: data.isCancelled,
@@ -178,6 +199,9 @@ class DetailsViewBody extends ConsumerWidget {
           onMarkDone: () => _onMarkDone(context, ref, notifier),
           onCancel: () => _onCancel(context, ref, notifier),
           onBookAgain: bookAgain,
+          wrapStart: wrapStart,
+          wrapMarkDone: wrapMarkDone,
+          wrapBookAgain: wrapBookAgain,
         ),
       ],
     );
@@ -410,10 +434,7 @@ class _DayOffBody extends StatelessWidget {
       hasSubject: names.isNotEmpty,
       placeholders: personalTitlePlaceholders,
     );
-    final days = runLengthDays(
-      appointment.startTime,
-      appointment.endTime,
-    );
+    final days = runLengthDays(appointment.startTime, appointment.endTime);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -550,6 +571,7 @@ class _ClientSection extends StatelessWidget {
     required this.onCall,
     required this.onDirections,
     required this.onPushBack,
+    this.wrapPushBack,
   });
 
   /// A personal job has no client, so the client row names it as personal
@@ -564,6 +586,8 @@ class _ClientSection extends StatelessWidget {
 
   /// Admin-only, on an open timed job — see the gate in the parent's build.
   final VoidCallback? onPushBack;
+
+  final Widget Function(Widget)? wrapPushBack;
 
   @override
   Widget build(BuildContext context) {
@@ -586,10 +610,13 @@ class _ClientSection extends StatelessWidget {
                   onTap: onDirections!,
                 ),
               if (onPushBack != null)
-                QuickActionButton(
-                  icon: Icons.update_rounded,
-                  label: context.l10n.calendar_pushBack,
-                  onTap: onPushBack!,
+                DetailsViewBody._wrap(
+                  wrapPushBack,
+                  QuickActionButton(
+                    icon: Icons.update_rounded,
+                    label: context.l10n.calendar_pushBack,
+                    onTap: onPushBack!,
+                  ),
                 ),
             ],
           ),
