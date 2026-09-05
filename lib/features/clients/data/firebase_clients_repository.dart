@@ -305,7 +305,28 @@ class FirebaseClientsRepository implements ClientsRepository {
     final response = await _callables
         .httpsCallable('searchClients')
         .call<Map<String, dynamic>>({'query': query});
-    return _clientsFromCallable(response.data);
+    final records = _clientsFromCallable(response.data);
+    // The callable ends `orderBy("name")`, so without this the closest number
+    // on a fallback rung can land third. This re-ranks the 25 it chose; WHICH
+    // 25 come back is still the server's alphabetical read cap.
+    final queryText = ClientSearchPolicy.normalize(query);
+    final queryDigits = ClientSearchPolicy.digitsOnly(query);
+    records.sort((a, b) {
+      final byScore = ClientSearchPolicy.scoreRecord(
+        a,
+        queryText: queryText,
+        queryDigits: queryDigits,
+      ).compareTo(
+        ClientSearchPolicy.scoreRecord(
+          b,
+          queryText: queryText,
+          queryDigits: queryDigits,
+        ),
+      );
+      if (byScore != 0) return byScore;
+      return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+    });
+    return records;
   }
 
   Future<List<ClientRecord>> _searchClientsLocal(String query) async {

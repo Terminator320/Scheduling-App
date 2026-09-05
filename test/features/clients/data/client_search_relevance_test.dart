@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/features/clients/data/firebase_clients_repository.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 
 /// The six-tier relevance ladder `matchClientDocs` sorts by.
@@ -158,5 +159,28 @@ void main() {
     ];
 
     expect(rank(docs, 'Tremblay').first, 'exact');
+  });
+
+  group('scoreRecord', () {
+    const exact = ClientRecord(id: 'a', name: 'Zed Ltd', phone: '5145628332');
+    const prefix = ClientRecord(id: 'b', name: 'Abe Inc', phone: '5145628901');
+    const contains = ClientRecord(id: 'c', name: 'Bee Co', phone: '4385145628');
+
+    int score(ClientRecord c, String query) => ClientSearchPolicy.scoreRecord(
+      c,
+      queryText: ClientSearchPolicy.normalize(query),
+      queryDigits: ClientSearchPolicy.digitsOnly(query),
+    );
+
+    test('an exact phone beats a prefix, which beats a substring', () {
+      expect(score(exact, '5145628332'), lessThan(score(prefix, '5145628332')));
+      expect(score(prefix, '5145628'), lessThan(score(contains, '5145628')));
+    });
+
+    test('sorting by it puts the exact number first despite the name', () {
+      final sorted = [prefix, contains, exact]
+        ..sort((a, b) => score(a, '5145628332').compareTo(score(b, '5145628332')));
+      expect(sorted.first.id, 'a');
+    });
   });
 }
