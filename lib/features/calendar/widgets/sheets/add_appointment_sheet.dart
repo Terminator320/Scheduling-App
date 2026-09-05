@@ -9,10 +9,12 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
+import 'package:scheduling/features/calendar/application/recent_clients_provider.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_prefill.dart';
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/assignee_availability_scope.dart';
+import 'package:scheduling/features/calendar/utils/client_booking_context_scope.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/personal_block_clash_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
@@ -20,6 +22,7 @@ import 'package:scheduling/features/calendar/widgets/sections/appointment_form_f
 import 'package:scheduling/features/calendar/widgets/sections/photo_picker_section.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/inline_add_client_host.dart';
+import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
@@ -118,6 +121,23 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
       return;
     }
     _clientSearchDebounce.run(() => _notifier.searchClients(query));
+  }
+
+  void _onClientQueryModeChanged(ClientQueryMode mode) {
+    // Swapping keyboardType on a focused field does not reliably swap the
+    // software keyboard, so drop focus and let the rebuilt field take it back.
+    FocusScope.of(context).unfocus();
+    _clientSearchDebounce.cancel();
+    _controllers.clientSearch.clear();
+    _notifier.setClientQueryMode(mode);
+  }
+
+  void _onRetryClientSearch() =>
+      unawaited(_notifier.searchClients(_controllers.clientSearch.text));
+
+  void _onPickPreviousAddress(String address) {
+    _controllers.address.text = address;
+    _notifier.setUseCustomAddress(value: true);
   }
 
   /// Handles already-picked inline calendar dates.
@@ -265,6 +285,10 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     final allEmployees = roster.asData?.value ?? const [];
     // One span length feeds both the flag and label.
     final spanLength = _spanLength(state);
+    final bookingContext = watchClientBookingContext(
+      ref,
+      client: state.selectedClient,
+    );
 
     return FeatureTourHost(
       scope: _tour.scope,
@@ -306,6 +330,10 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
             selectedClient: state.selectedClient,
             clientResults: state.clientResults,
             isSearchingClient: state.isSearchingClient,
+            clientSearchStatus: state.clientSearchStatus,
+            recentClients: ref.watch(recentClientsProvider).value ?? const [],
+            previousAddresses: bookingContext.previousAddresses,
+            lastVisitLabel: bookingContext.lastVisitLabel,
             selectedEmployees: state.selectedEmployees,
             repeat: state.repeat,
             useCustomAddress: state.useCustomAddress,
@@ -326,6 +354,9 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
             spanLength: spanLength,
             callbacks: AppointmentFormCallbacks(
               onSearchClients: _onClientSearchChanged,
+              onClientQueryModeChanged: _onClientQueryModeChanged,
+              onRetryClientSearch: _onRetryClientSearch,
+              onPickPreviousAddress: _onPickPreviousAddress,
               onSelectClient: _notifier.selectClient,
               onClearClient: _notifier.clearClient,
               onToggleEmployee: _notifier.toggleEmployee,

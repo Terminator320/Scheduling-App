@@ -10,6 +10,7 @@ import 'package:scheduling/features/calendar/widgets/fields/appointment_address_
 import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
 import 'package:scheduling/features/calendar/widgets/sections/appointment_form_fields.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 import 'package:scheduling/shared/widgets/fields/sheet_field_row.dart';
@@ -42,6 +43,7 @@ void main() {
     DateTime? endDate,
     ValueChanged<DateTime>? onSelectStartDate,
     ValueChanged<DateTime>? onSelectEndDate,
+    ClientSearchStatus clientSearchStatus = const ClientSearchStatus(),
   }) async {
     tester.view.physicalSize = Size(width, 740);
     tester.view.devicePixelRatio = 1.0;
@@ -82,6 +84,7 @@ void main() {
                 selectedClient: selectedClient,
                 clientResults: clientResults,
                 isSearchingClient: false,
+                clientSearchStatus: clientSearchStatus,
                 selectedEmployees: const [],
                 repeat: RepeatInterval.none,
                 useCustomAddress: useCustomAddress,
@@ -105,6 +108,9 @@ void main() {
                 photosSection: const SizedBox.shrink(),
                 callbacks: AppointmentFormCallbacks(
                   onSearchClients: (_) {},
+                  onClientQueryModeChanged: (_) {},
+                  onRetryClientSearch: () {},
+                  onPickPreviousAddress: (_) {},
                   onSelectClient: onSelectClient ?? (_) {},
                   onClearClient: () {},
                   onToggleEmployee: (_) {},

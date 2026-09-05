@@ -5,17 +5,20 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/calendar/domain/assignee_availability.dart';
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
+import 'package:scheduling/features/calendar/domain/models/recent_client.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
 import 'package:scheduling/features/calendar/utils/appointment_form_error_text.dart';
-import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
 import 'package:scheduling/features/calendar/widgets/fields/appointment_date_rows.dart';
 import 'package:scheduling/features/calendar/widgets/fields/appointment_status_picker.dart';
 import 'package:scheduling/features/calendar/widgets/fields/employee_picker.dart';
 import 'package:scheduling/features/calendar/widgets/fields/repeat_interval_picker.dart';
+import 'package:scheduling/features/calendar/widgets/sections/job_address_section.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/widgets/fields/client_search_field.dart';
+import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
+import 'package:scheduling/features/clients/widgets/cards/selected_client_card.dart';
+import 'package:scheduling/features/clients/widgets/fields/client_picker.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -68,6 +71,9 @@ class AppointmentFormControllers {
 class AppointmentFormCallbacks {
   const AppointmentFormCallbacks({
     required this.onSearchClients,
+    required this.onClientQueryModeChanged,
+    required this.onRetryClientSearch,
+    required this.onPickPreviousAddress,
     required this.onSelectClient,
     required this.onClearClient,
     required this.onToggleEmployee,
@@ -86,6 +92,9 @@ class AppointmentFormCallbacks {
   final ValueChanged<bool> onAllDayChanged;
 
   final ValueChanged<String> onSearchClients;
+  final ValueChanged<ClientQueryMode> onClientQueryModeChanged;
+  final VoidCallback onRetryClientSearch;
+  final ValueChanged<String> onPickPreviousAddress;
   final ValueChanged<ClientRecord> onSelectClient;
   final VoidCallback onClearClient;
   final ValueChanged<EmployeeRecord> onToggleEmployee;
@@ -108,6 +117,7 @@ class AppointmentFormFields extends StatelessWidget {
     required this.selectedClient,
     required this.clientResults,
     required this.isSearchingClient,
+    required this.clientSearchStatus,
     required this.selectedEmployees,
     required this.repeat,
     required this.useCustomAddress,
@@ -137,6 +147,9 @@ class AppointmentFormFields extends StatelessWidget {
     this.onPersonalChanged,
     this.tourWrap,
     this.assigneeAvailability = AssigneeAvailability.none,
+    this.recentClients = const [],
+    this.previousAddresses = const [],
+    this.lastVisitLabel,
   });
 
   final AppointmentFormControllers controllers;
@@ -148,6 +161,16 @@ class AppointmentFormFields extends StatelessWidget {
   final ClientRecord? selectedClient;
   final List<ClientRecord> clientResults;
   final bool isSearchingClient;
+  final ClientSearchStatus clientSearchStatus;
+
+  /// Clients this admin booked recently, offered before a query is selective.
+  final List<RecentClient> recentClients;
+
+  /// Where the attached client's earlier jobs were, newest-first.
+  final List<String> previousAddresses;
+
+  /// When the attached client was last visited, already formatted.
+  final String? lastVisitLabel;
   final List<EmployeeRecord> selectedEmployees;
   final RepeatInterval repeat;
   final bool useCustomAddress;
@@ -258,6 +281,17 @@ class AppointmentFormFields extends StatelessWidget {
     callbacks.onUseCustomAddress(false);
   }
 
+  Widget _jobAddress() => JobAddressSection(
+    selectedClient: selectedClient,
+    useCustomAddress: useCustomAddress,
+    addressController: controllers.address,
+    previousAddresses: previousAddresses,
+    optional: isPersonal,
+    onPickPrevious: callbacks.onPickPreviousAddress,
+    onSwitchToCustom: _switchToCustomAddress,
+    onUseClientAddress: _useClientAddress,
+  );
+
   /// Wraps [child] as [id]'s tour step when injected.
   Widget _tour(TourStepId id, Widget child) =>
       tourWrap?.call(id, child) ?? child;
@@ -340,20 +374,44 @@ class AppointmentFormFields extends StatelessWidget {
       formLabel(context, l10n.calendar_client, required: true),
       _tour(
         TourStepId.apptClient,
-        SheetFocusScroll(
-          child: ClientSearchField(
-            controller: controllers.clientSearch,
-            selectedClient: selectedClient,
-            results: clientResults,
-            isSearching: isSearchingClient,
-            onChanged: callbacks.onSearchClients,
-            onSelect: _selectClient,
-            onClear: _clearClient,
-            errorText: _err(context, 'client'),
-            onAddNew: onRequestAddClient == null ? null : _addNewClient,
-          ),
-        ),
+        selectedClient == null
+            ? SheetFocusScroll(
+                child: ClientPicker(
+                  controller: controllers.clientSearch,
+                  results: clientResults,
+                  status: clientSearchStatus,
+                  recentClients: recentClients,
+                  isSearching: isSearchingClient,
+                  onChanged: callbacks.onSearchClients,
+                  onModeChanged: callbacks.onClientQueryModeChanged,
+                  onSelect: _selectClient,
+                  onRetry: callbacks.onRetryClientSearch,
+                  errorText: _err(context, 'client'),
+                  onAddNew: onRequestAddClient == null ? null : _addNewClient,
+                ),
+              )
+            : SelectedClientCard(
+                client: selectedClient!,
+                useClientAddress: !useCustomAddress,
+                lastVisitLabel: lastVisitLabel,
+                onChange: _clearClient,
+                onRemove: _clearClient,
+                onUseClientAddressChanged: (useIt) =>
+                    useIt ? _useClientAddress() : _switchToCustomAddress(),
+              ),
       ),
+      const SizedBox(height: AppSpacing.sp16),
+      formLabel(context, l10n.calendar_jobAddress, required: true),
+      const SizedBox(height: AppSpacing.sp4),
+      _jobAddress(),
+      const SizedBox(height: AppSpacing.sp16),
+    ],
+    // A personal block has no client but may still name a place. Day off has
+    // neither.
+    if (isPersonal && !isDayOff) ...[
+      formLabel(context, l10n.calendar_jobAddress, optional: true),
+      const SizedBox(height: AppSpacing.sp4),
+      _jobAddress(),
       const SizedBox(height: AppSpacing.sp16),
     ],
     // --- Employees ---
