@@ -67,10 +67,7 @@ void main() {
     'every toured destination has an admin tour and no catalog has duplicates',
     () {
       for (final destination in allDestinations) {
-        final steps = tourStepsFor(
-          DestinationTour(destination),
-          isAdmin: true,
-        );
+        final steps = tourStepsFor(DestinationTour(destination), isAdmin: true);
         if (toured.contains(destination)) {
           expect(
             steps,
@@ -106,7 +103,8 @@ void main() {
   test('the gap-filled catalogs grew to their new lengths', () {
     int len(AppDestination d) =>
         tourStepsFor(DestinationTour(d), isAdmin: true).length;
-    expect(len(HubTab.calendar), 5);
+    // 7 since 1.57 added the week toggle and the crew filter.
+    expect(len(HubTab.calendar), 7);
     expect(len(HubTab.clients), 4);
     expect(len(HubTab.employees), 3);
     expect(len(PushedDestination.history), 3);
@@ -155,5 +153,78 @@ void main() {
         reason: '${scope.storageKey} catalog has duplicate steps',
       );
     }
+  });
+
+  test('the job details sheet has a tour for both roles', () {
+    const scope = FormTour(TourForm.jobDetails);
+    expect(tourStepsFor(scope, isAdmin: true), isNotEmpty);
+    expect(tourStepsFor(scope, isAdmin: false), isNotEmpty);
+  });
+
+  test('the job details tour splits by what each role may do', () {
+    const scope = FormTour(TourForm.jobDetails);
+    final admin = tourStepsFor(scope, isAdmin: true);
+    final crew = tourStepsFor(scope, isAdmin: false);
+    // Push back and book again are the admin's.
+    expect(admin, contains(TourStepId.jobPushBack));
+    expect(admin, contains(TourStepId.jobBookAgain));
+    expect(crew, isNot(contains(TourStepId.jobPushBack)));
+    expect(crew, isNot(contains(TourStepId.jobBookAgain)));
+    // The field record is offered to a non-admin assignee only.
+    expect(crew, contains(TourStepId.jobFieldRecord));
+    expect(admin, isNot(contains(TourStepId.jobFieldRecord)));
+    // Starting and closing a job belong to both.
+    expect(admin, contains(TourStepId.jobStart));
+    expect(crew, contains(TourStepId.jobStart));
+    expect(admin, contains(TourStepId.jobMarkDone));
+    expect(crew, contains(TourStepId.jobMarkDone));
+  });
+
+  test('the three create-flow sheets stay admin-only', () {
+    const createFlows = [
+      TourForm.addAppointment,
+      TourForm.addClient,
+      TourForm.invitePerson,
+    ];
+    for (final form in createFlows) {
+      expect(
+        tourStepsFor(FormTour(form), isAdmin: false),
+        isEmpty,
+        reason: '$form is admin-only',
+      );
+    }
+  });
+
+  test('the calendar week toggle is offered to both roles', () {
+    expect(
+      tourStepsFor(const DestinationTour(HubTab.calendar), isAdmin: false),
+      contains(TourStepId.calendarWeekToggle),
+    );
+    expect(
+      tourStepsFor(const DestinationTour(HubTab.calendar), isAdmin: true),
+      contains(TourStepId.calendarWeekToggle),
+    );
+  });
+
+  test('the crew filter is admin-only', () {
+    expect(
+      tourStepsFor(const DestinationTour(HubTab.calendar), isAdmin: false),
+      isNot(contains(TourStepId.calendarCrewFilter)),
+    );
+  });
+
+  test('every step id belongs to some catalog', () {
+    final owned = <TourStepId>{};
+    for (final scope in allTourScopes) {
+      for (final isAdmin in [true, false]) {
+        owned.addAll(tourStepsFor(scope, isAdmin: isAdmin));
+      }
+    }
+    // A step in no catalog is copy nobody can ever see.
+    expect(
+      TourStepId.values.where((id) => !owned.contains(id)),
+      isEmpty,
+      reason: 'these ids are in no catalog',
+    );
   });
 }

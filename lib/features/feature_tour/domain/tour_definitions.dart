@@ -19,9 +19,11 @@ List<TourStepId> _destinationSteps(
   HubTab.calendar => [
     TourStepId.calendarGrid,
     TourStepId.calendarDayList,
+    TourStepId.calendarWeekToggle,
     // Portrait only — the handle doesn't exist in the split layout, so
     // isTargetRendered drops this step there.
     TourStepId.calendarCollapse,
+    if (isAdmin) TourStepId.calendarCrewFilter,
     if (isAdmin) TourStepId.calendarAddAppointment,
     TourStepId.calendarDayRoute,
   ],
@@ -53,6 +55,7 @@ List<TourStepId> _destinationSteps(
   PushedDestination.settings => [
     TourStepId.settingsAppearance,
     TourStepId.settingsNotifications,
+    TourStepId.settingsLocationSharing,
     TourStepId.settingsReplay,
   ],
   // Employees reach the day route too, so this catalog isn't admin-gated — only
@@ -73,29 +76,44 @@ List<TourStepId> _destinationSteps(
   ],
 };
 
-/// The create-flow walkthroughs.
-List<TourStepId> _formSteps(TourForm form, {required bool isAdmin}) {
-  if (!isAdmin) return const [];
-  return switch (form) {
-    TourForm.addAppointment => [
-      TourStepId.apptTemplates,
-      TourStepId.apptClient,
-      TourStepId.apptCrew,
-      TourStepId.apptSchedule,
-      TourStepId.apptDetails,
-      TourStepId.apptSave,
-    ],
-    TourForm.addClient => [
-      TourStepId.clientWho,
-      TourStepId.clientReach,
-      TourStepId.clientSite,
-      TourStepId.clientSave,
-    ],
-    TourForm.invitePerson => [
-      TourStepId.personDetails,
-      TourStepId.personJobTitle,
-      TourStepId.personColour,
-      TourStepId.personCreate,
-    ],
-  };
-}
+/// The sheet walkthroughs.
+List<TourStepId> _formSteps(TourForm form, {required bool isAdmin}) =>
+    switch (form) {
+      TourForm.addAppointment => [
+        if (isAdmin) ...[
+          TourStepId.apptTemplates,
+          TourStepId.apptClient,
+          TourStepId.apptCrew,
+          TourStepId.apptSchedule,
+          TourStepId.apptDetails,
+          TourStepId.apptSave,
+        ],
+      ],
+      TourForm.addClient => [
+        if (isAdmin) ...[
+          TourStepId.clientWho,
+          TourStepId.clientReach,
+          TourStepId.clientSite,
+          TourStepId.clientSave,
+        ],
+      ],
+      TourForm.invitePerson => [
+        if (isAdmin) ...[
+          TourStepId.personDetails,
+          TourStepId.personJobTitle,
+          TourStepId.personColour,
+          TourStepId.personCreate,
+        ],
+      ],
+      // The sheet's own visual order: push back sits in the client block, the
+      // field record above the action bar, the bar's buttons last. The field
+      // record goes to a non-admin ASSIGNEE only — exactly the set the crew
+      // branches of firestore.rules admit.
+      TourForm.jobDetails => [
+        if (isAdmin) TourStepId.jobPushBack,
+        if (!isAdmin) TourStepId.jobFieldRecord,
+        TourStepId.jobStart,
+        TourStepId.jobMarkDone,
+        if (isAdmin) TourStepId.jobBookAgain,
+      ],
+    };
