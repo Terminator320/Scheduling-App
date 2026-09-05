@@ -33,8 +33,8 @@ class DestinationTour extends TourScope {
   String get storageKey => destination.name;
 }
 
-/// A create-flow modal sheet. The `sheet_` prefix namespaces it away from
-/// destination keys, which are bare names.
+/// A modal sheet that carries a walkthrough. The `sheet_` prefix namespaces it
+/// away from destination keys, which are bare names.
 class FormTour extends TourScope {
   const FormTour(this.form);
 
@@ -44,9 +44,10 @@ class FormTour extends TourScope {
   String get storageKey => 'sheet_${form.name}';
 }
 
-/// The create flows that carry a walkthrough. `.name` is persisted, so
-/// renaming a member replays or orphans that tour.
-enum TourForm { addAppointment, addClient, invitePerson }
+/// The sheets that carry a walkthrough — the three create flows, plus the
+/// job-details sheet. `.name` is persisted, so renaming a member replays or
+/// orphans that tour.
+enum TourForm { addAppointment, addClient, invitePerson, jobDetails }
 
 /// Not `const` — a collection-`for` isn't a constant expression, even over
 /// the const `allDestinations`.
