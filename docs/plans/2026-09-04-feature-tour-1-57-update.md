@@ -1,6 +1,8 @@
 # Feature tour update for the 1.56/1.57 features
 
-Status: design approved 2026-09-04. Not yet implemented.
+Status: design approved 2026-09-04. **IMPLEMENTED 2026-09-05** — all 10 tasks
+of `2026-09-04-feature-tour-1-57-update-implementation.md`, commits `00e063df`
+→ `2685d5ec` on `redesgin`.
 
 ## Problem
 
