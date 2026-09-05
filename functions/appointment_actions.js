@@ -11,7 +11,8 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 
 const {
   APP_CHECK,
-  assertPayloadShape,
+  assertActiveCall,
+  enforceDurableRateLimit,
   optionalString,
   shortHash,
 } = require("./security");
@@ -22,24 +23,8 @@ const {
 
 const DOC_ID_MAX = 128;
 const RESTORABLE_STATUSES = new Set(["pending", "in_progress"]);
-
-/**
- * Reads the active caller profile.
- * @param {!Object} db Firestore instance.
- * @param {!Object} req Callable request.
- * @return {!Promise<!Object>}
- */
-async function activeCaller(db, req) {
-  if (!req.auth || !req.auth.uid) {
-    throw new HttpsError("unauthenticated", "auth-required");
-  }
-  const snap = await db.collection("usersByUid").doc(req.auth.uid).get();
-  const data = snap.exists ? snap.data() : null;
-  if (!data || data.status !== "active") {
-    throw new HttpsError("permission-denied", "inactive-user");
-  }
-  return {uid: req.auth.uid, ...data};
-}
+const RESTORE_RATE_MAX = 30;
+const RESTORE_RATE_WINDOW_MS = 60 * 60 * 1000;
 
 /**
  * True when caller may operate on this appointment.
@@ -61,9 +46,9 @@ function mayRestore(caller, appointment) {
  * Undo for the mobile "mark complete" action.
  */
 const restoreAppointmentStatus = onCall(APP_CHECK, async (req) => {
+  const caller = await assertActiveCall(
+      req, new Set(["appointmentId", "previousStatus"]));
   const db = getFirestore();
-  const caller = await activeCaller(db, req);
-  assertPayloadShape(req.data, new Set(["appointmentId", "previousStatus"]));
   const appointmentId = optionalString(req.data, "appointmentId", DOC_ID_MAX);
   const previousStatus = optionalString(
       req.data, "previousStatus", DOC_ID_MAX);
@@ -73,6 +58,9 @@ const restoreAppointmentStatus = onCall(APP_CHECK, async (req) => {
   if (!RESTORABLE_STATUSES.has(previousStatus)) {
     throw new HttpsError("invalid-argument", "invalid-previousStatus");
   }
+  await enforceDurableRateLimit(
+      "restoreAppointmentStatus", caller.uid,
+      RESTORE_RATE_MAX, RESTORE_RATE_WINDOW_MS);
 
   const ref = db.collection("appointments").doc(appointmentId);
   await db.runTransaction(async (tx) => {

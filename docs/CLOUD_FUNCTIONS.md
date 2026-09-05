@@ -2,7 +2,23 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-09-02 (release 1.56.0+85 — **the export list is unchanged at 25
+refreshed 2026-09-04 (release 1.57.0+86 — **the export list GREW 25 -> 29**,
+the first change since 2026-08-13. Four callables were added: `searchClients`,
+`searchHistory` and `findAppointmentConflicts` (`indexed_search.js`), which move
+client search, appointment-history search and the pre-save conflict check off
+capped client-side scans onto indexed queries; and `restoreAppointmentStatus`
+(`appointment_actions.js`), the Undo behind the mobile "mark complete". Two new
+composite indexes serve them (`clients` searchTokens+name, `appointments`
+historySearchScopes+status+startTime) and **both must be READY, and
+`functions/scripts/backfill-search-tokens.js` must have run, before the app
+build that calls them ships** — an unbackfilled document is invisible to the
+search that replaced the scan. Also here: `placesAutocomplete` moved from the
+in-memory limiter to `enforceDurableRateLimit`, and a self-service composed
+guard `assertActiveCall` joined `assertAdminCall` in `security.js`. Rules gained
+bounded `searchTokens` / `historySearchScopes` list fields and a
+`locationSharingEnabled` bool on `/users`; the crew-signal rules removed on
+2026-09-03 stay removed.)
+Previously refreshed 2026-09-02 (release 1.56.0+85 — **the export list is unchanged at 25
 and no row below moved**. The security-relevant change is that every ADMIN-ONLY
 callable now opens with the composed `assertAdminCall(req, allowedKeys)`
 (`security.js`) instead of re-deciding auth → `assertAdmin` →
@@ -93,7 +109,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   domain modules. Shared callable guards (`assertPayloadShape`, `requireString`,
   `optionalString`, `requireDocId`, `requireNumberInRange`, `readSessionToken`,
   `enforceDurableRateLimit`, `assertAdmin`, `assertAdminCall`,
-  `assertFreshReauth`) live in
+  `assertActiveCall`, `assertFreshReauth`, `shortHash`) live in
   `security.js` — put a new
   one there, never back in a feature module (`optionalString` was a private copy
   in the retired `invites.js` and was carried verbatim into
@@ -115,7 +131,14 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   value Wave syncs verbatim as its customer name), and `image_magic.js`
   (↔ `hasValidImageMagic`; these two had drifted 3 bytes vs 4, so a file the
   client accepted was deleted server-side). `day_slice_utils.js` is a fourth,
-  documented with the multi-day work below. Change either side of a pair and
+  documented with the multi-day work below — and as of 2026-09-04 it also
+  mirrors `dailyWindowsOverlap`, the conflict rule `findAppointmentConflicts`
+  applies (the callable shipped with a raw instant test and reproduced the
+  phantom clash that rule exists to prevent; pinned by
+  `__tests__/indexed_search_conflicts.test.js`). `search_tokens.js` is a fifth,
+  mirroring `lib/core/search/search_tokens.dart`: the app WRITES the tokens and
+  this side QUERIES them, so a divergence is a search that silently returns
+  nothing, and the two suites share their worked examples value-for-value. Change either side of a pair and
   the other in the same commit.
 - **Deploy:** `firebase deploy --only functions,firestore:rules,firestore:indexes,storage`
   (run `cd functions && npm run lint` first).
@@ -210,7 +233,13 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   *count* never moved (25 throughout, `index.js` untouched), so a count check
   looked clean for three days while prod ran older bodies — check the deploy
   log, not the count.
-- **25 functions defined** in code and **25 deployed**, verified against
+- **29 functions defined** in code as of 2026-09-04 (25 -> 29: `searchClients`,
+  `searchHistory`, `findAppointmentConflicts`, `restoreAppointmentStatus`).
+  **NOT YET DEPLOYED** — prod still runs 25. This deploy CREATES functions, so
+  it prompts on neither of the two known aborts (deletion, failure-policy
+  change), but it does need `firestore:indexes` deployed FIRST and verified
+  READY, and the `searchTokens`/`historySearchScopes` backfill run, before the
+  app build ships. Previously **25 defined and 25 deployed**, verified against
   `functions_list_functions` on 2026-08-22 (the CONTRACT deploy reported 25
   updates, 0 creates, 0 deletions) — an exact match, no orphans and no
   extras. **DRIFT OPEN as of 2026-08-25 (1.52.0+81): eight deployable modules
@@ -308,7 +337,7 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 
 | Function | Type | Trigger / event | Module | Called by / fired on | Secret | Guard |
 |---|---|---|---|---|---|---|
-| `placesAutocomplete` | callable | `onCall` | `places.js` | `google_places_repository.dart` (address field typing) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · in-mem 20/min·uid |
+| `placesAutocomplete` | callable | `onCall` | `places.js` | `google_places_repository.dart` (address field typing) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · durable 20/min·uid |
 | `placesGetDetails` | callable | `onCall` | `places.js` | `google_places_repository.dart` (address selected) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · durable 40/15min |
 | `placesReverseGeocode` | callable | `onCall` | `places.js` | live staff-location map (admin) | `GOOGLE_MAP_API_KEY` | App Check ✓ · admin · durable 120/hr |
 | `deleteAccount` | callable | `onCall` | `account.js` | `account_deletion_service.dart` | — | App Check ✓ · reauth ≤5min · durable 5/15min |
@@ -320,6 +349,10 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
 | `waveGetConnection` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings mount) | — | App Check ✓ · admin · durable 60/hr |
 | `waveSetImportSchedule` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (Settings cadence picker) | — | App Check ✓ · admin · durable 20/hr |
 | `waveImportCustomers` | callable | `onCall` | `wave/callables.js` | `wave_service.dart` (`syncCustomers`, Settings "Sync with Wave") | `WAVE_FULL_ACCESS_TOKEN` | App Check ✓ · admin · durable 5/hr · 300s |
+| `searchClients` | callable | `onCall` | `indexed_search.js` | `firebase_clients_repository.dart` (`searchClients`, the debounced clients/history search bar) | — | App Check ✓ · `assertAdminCall` (clients are PII) |
+| `searchHistory` | callable | `onCall` | `indexed_search.js` | `firebase_appointments_repository.dart` (`searchHistory`, History screen + the technician's own History) | — | App Check ✓ · `assertActiveCall` · scope from role: `all:` for admin, own doc id for an employee |
+| `findAppointmentConflicts` | callable | `onCall` | `indexed_search.js` | `firebase_appointments_repository.dart` (`findClashingAppointments`/`findBusyEmployees`, pre-save clash check + assignee picker) | — | App Check ✓ · `assertActiveCall` · a non-admin is narrowed to their own doc id |
+| `restoreAppointmentStatus` | callable | `onCall` | `appointment_actions.js` | `firebase_appointments_repository.dart` (`restoreAppointmentStatus`, the mark-complete Undo) | — | App Check ✓ · `assertActiveCall` · admin **or assigned** · target must be `pending`/`in_progress` |
 | `deleteClient` | callable | `onCall` | `clients.js` | `firebase_clients_repository.dart` | — | App Check ✓ · admin · durable 20/hr |
 | `syncUsersByUid` | trigger | `onDocumentWritten users/{id}` | `bridge.js` | any `users` doc write | — | `retry: true` |
 | `propagateClientEdits` | trigger | `onDocumentUpdated clients/{id}` | `client_propagation.js` | any `clients` doc edit | — | `retry: true` |
@@ -622,6 +655,50 @@ stops signing them in, so the admin should still tell them directly.
 
 ## Maps / Places proxies
 
+### `searchClients` — `indexed_search.js`
+Server-side client search, replacing a capped client-side scan. Queries
+`clients.searchTokens` with `array-contains-any` over at most 10 query tokens,
+reads 50, re-verifies each hit with `recordMatchesQuery` against the full stored
+document, sorts by display name and returns 25. **Admin-only** via
+`assertAdminCall`: clients are PII, and the old scan was already admin-gated by
+the rules it read through. The prefilter/verify split is load-bearing — a prefix
+token matches strictly more than the query does, so returning the raw token hits
+would widen the answer.
+
+### `searchHistory` — `indexed_search.js`
+The same shape for terminal-status appointments, but **scoped by role in the
+query rather than after it**. `assertActiveCall` resolves the caller;
+`historyScope` picks a token prefix — `all:` for an admin (optionally narrowed
+to a named employee), `emp:<their own doc id>:` for an employee — and refuses an
+employee who asks for someone else's scope. That is why
+`appointments.historySearchScopes` stores every token once per scope instead of
+storing plain tokens plus an `employeeIds` filter: the scope is baked into the
+token, so the query itself cannot return another person's jobs.
+
+### `findAppointmentConflicts` — `indexed_search.js`
+The pre-save clash check and the assignee picker's dimming. Chunks
+`employeeIds` at 30 (the `array-contains-any` limit), runs the chunks through
+`Promise.all`, caps each at 500 docs and warns at the cap. **The clash rule is
+`dailyWindowsOverlap` from `day_slice_utils.js`, not a raw instant test** — an
+appointment's two stored times describe a DAILY window, so a 9-5 run across a
+week must not block a 7 pm job inside it. It shipped with the instant test and
+reproduced exactly that phantom clash; `__tests__/indexed_search_conflicts.test.js`
+pins it now. It keeps the fail-closed half too: a document whose stored times do
+not parse blocks unconditionally, so a legacy or console-written row can never
+quietly vanish from a booking check. A non-admin caller's `employeeIds` are
+narrowed to their own doc id, so a technician cannot probe the roster's diary.
+
+### `restoreAppointmentStatus` — `appointment_actions.js`
+Undo for the mobile "mark complete". Runs in a transaction: the document must
+currently be COMPLETED, the caller must be an admin or assigned (`mayRestore`),
+and `previousStatus` must be `pending` or `in_progress` — never a terminal
+value. It clears the server-owned `completedAt` with the status write, so an
+undo cannot leave a finish time on a reopened job. **It is a callable rather
+than a rules grant on purpose**: every employee `allow update` disjunct requires
+the current status NOT be terminal, so reopening is precisely what the rules
+exclude, and widening them would let an assignee reopen any job they are on at
+any age.
+
 ### `placesAutocomplete` — `places.js`
 Proxies Google Places API (New) autocomplete so the billing-sensitive
 `GOOGLE_MAP_API_KEY` (Secret Manager) never ships in the app binary. App Check +
@@ -629,9 +706,14 @@ auth + **`assertAdmin`** required — the address field is only surfaced on the
 admin-only appointment form, so gating on admin stops a non-admin (or
 invited-but-inactive) principal from scripting the billable API. Fires on
 address-field typing, so it's the **highest-volume, highest-cost** function —
-the Places API bills separately per request. Rate-limited in-memory 20/min per
-uid (per-instance, resets on cold start, multiplies by `maxInstances` — set a
-GCP Maps Platform billing alert; this is not a hard cap).
+the Places API bills separately per request. Rate-limited **durably** at 20/min per uid
+(`enforceDurableRateLimit`, 2026-09-04). It used the in-memory limiter until
+then, chosen to keep a Firestore round-trip off a keystroke-debounced path — but
+an in-memory bucket is per function INSTANCE, so with `maxInstances: 10` the
+documented 20/min was really up to 200/min for one caller, and the cap on the
+highest-cost function in the project was not a cap. The trade is one Firestore
+transaction per lookup where there were none; keep the GCP Maps Platform billing
+alert regardless.
 
 ### `placesGetDetails` — `places.js`
 Proxies Places details for a selected address (one billable call per address the

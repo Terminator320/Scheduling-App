@@ -3,6 +3,7 @@ import 'package:scheduling/features/clients/domain/policies/client_search_policy
 const int kSearchTokenQueryLimit = 10;
 const int kSearchTokenFieldLimit = 240;
 
+/// Hand-mirrored by `functions/search_tokens.js`; change both together.
 List<String> searchQueryTokens(String query) {
   final text = ClientSearchPolicy.normalize(query);
   final digits = ClientSearchPolicy.digitsOnly(query);
@@ -15,31 +16,48 @@ List<String> searchQueryTokens(String query) {
   return tokens.take(kSearchTokenQueryLimit).toList();
 }
 
+/// Two ordering rules carry the whole design, because [limit] really does
+/// bite: each word emits its WHOLE token before any of its prefixes, so an
+/// exact-word query survives truncation; and the text and phone runs are
+/// INTERLEAVED, so a long client name can never push the phone tokens past the
+/// cap.
 List<String> searchIndexTokens({
   required Iterable<String> texts,
   required Iterable<String> phones,
+  int limit = kSearchTokenFieldLimit,
 }) {
-  final tokens = <String>{};
+  final textTokens = <String>{};
   for (final value in texts) {
     for (final word in ClientSearchPolicy.normalize(value).split(' ')) {
       if (word.isEmpty) continue;
       final max = word.length.clamp(1, 24);
-      for (var i = 1; i <= max; i++) {
-        tokens.add('t:${word.substring(0, i)}');
+      textTokens.add('t:${word.substring(0, max)}');
+      for (var i = 1; i < max; i++) {
+        textTokens.add('t:${word.substring(0, i)}');
       }
     }
   }
+  final phoneTokens = <String>{};
   for (final phone in phones) {
     final digits = ClientSearchPolicy.digitsOnly(phone);
-    if (digits.isEmpty) continue;
+    if (digits.length < 3) continue;
+    phoneTokens.add('p:${digits.substring(0, digits.length.clamp(3, 12))}');
     for (var start = 0; start < digits.length; start++) {
       final remaining = digits.length - start;
       if (remaining < 3) break;
       final max = remaining.clamp(3, 12);
       for (var len = 3; len <= max; len++) {
-        tokens.add('p:${digits.substring(start, start + len)}');
+        phoneTokens.add('p:${digits.substring(start, start + len)}');
       }
     }
   }
-  return tokens.take(kSearchTokenFieldLimit).toList();
+  final text = textTokens.toList();
+  final phone = phoneTokens.toList();
+  final out = <String>[];
+  for (var i = 0; i < text.length || i < phone.length; i++) {
+    if (out.length >= limit) break;
+    if (i < text.length) out.add(text[i]);
+    if (out.length < limit && i < phone.length) out.add(phone[i]);
+  }
+  return out;
 }

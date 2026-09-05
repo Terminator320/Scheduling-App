@@ -108,6 +108,8 @@ void main() {
       appointmentId: appointmentId,
       paths: paths,
       enqueuedAtMs: enqueuedAtMs,
+      ownerUid: 'uid-1',
+      ownerEmployeeId: 'doc-1',
     );
     await store.add(entry);
     return entry;
@@ -184,6 +186,8 @@ void main() {
           paths: const [],
           enqueuedAtMs: DateTime.now().millisecondsSinceEpoch,
           uploaded: [_img('1.jpg')],
+          ownerUid: 'uid-1',
+          ownerEmployeeId: 'doc-1',
         ),
       );
 
@@ -210,6 +214,8 @@ void main() {
           paths: const [],
           enqueuedAtMs: DateTime.now().millisecondsSinceEpoch,
           uploaded: [_img('1.jpg')],
+          ownerUid: 'uid-1',
+          ownerEmployeeId: 'doc-1',
         ),
       );
 
@@ -369,6 +375,8 @@ void main() {
           appointmentId: 'a1',
           paths: ['${stagingDir.path}/vanished.jpg'],
           enqueuedAtMs: DateTime.now().millisecondsSinceEpoch,
+          ownerUid: 'uid-1',
+          ownerEmployeeId: 'doc-1',
         ),
       );
 

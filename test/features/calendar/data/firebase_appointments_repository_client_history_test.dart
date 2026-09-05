@@ -131,9 +131,7 @@ void main() {
 
     final secondSnapshot = _MockQuerySnapshot();
     when(() => secondSnapshot.docs).thenReturn(secondPage);
-    when(
-      () => query.startAfterDocument(firstPage.last),
-    ).thenReturn(query);
+    when(() => query.startAfterDocument(firstPage.last)).thenReturn(query);
     var call = 0;
     when(() => query.get()).thenAnswer((_) async {
       call++;

@@ -335,28 +335,11 @@ class FirebaseClientsRepository implements ClientsRepository {
       m['phone'] = normalizePhoneForStorage(m['phone'] as String? ?? '');
       return m;
     }).toList();
+    // Same field list the client-side matcher reads, so what is INDEXED and
+    // what MATCHES can never drift apart.
     base['searchTokens'] = searchIndexTokens(
-      texts: [
-        base['name'] as String? ?? '',
-        base['businessName'] as String? ?? '',
-        base['firstName'] as String? ?? '',
-        base['lastName'] as String? ?? '',
-        base['email'] as String? ?? '',
-        base['address'] as String? ?? '',
-        base['city'] as String? ?? '',
-        base['province'] as String? ?? '',
-        base['postalCode'] as String? ?? '',
-        base['country'] as String? ?? '',
-        for (final contact in base['contacts'] as List)
-          if (contact is Map)
-            '${contact['name'] ?? ''} ${contact['email'] ?? ''}',
-      ],
-      phones: [
-        base['phone'] as String? ?? '',
-        base['mobile'] as String? ?? '',
-        for (final contact in base['contacts'] as List)
-          if (contact is Map) (contact['phone'] ?? '').toString(),
-      ],
+      texts: ClientSearchPolicy.rawTexts(base),
+      phones: ClientSearchPolicy.rawPhones(base),
     );
     return base;
   }

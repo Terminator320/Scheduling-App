@@ -11,16 +11,24 @@ class PendingUpload {
     required this.appointmentId,
     required this.paths,
     required this.enqueuedAtMs,
-    this.ownerUid = 'uid-1',
-    this.ownerEmployeeId = 'doc-1',
+    required this.ownerUid,
+    required this.ownerEmployeeId,
     this.uploaded = const [],
   });
 
   final String appointmentId;
   final List<String> paths;
   final int enqueuedAtMs;
+  /// Who staged this batch. Empty on a LEGACY entry — one written by a build
+  /// from before the queue carried an owner. Such an entry is never uploaded
+  /// (an empty id matches nobody, which is the point: on a shared or
+  /// handed-over phone the next account must not finish somebody else's
+  /// upload) but it is still PARSED, so `prune` reaches it and deletes its
+  /// staged files. Dropping it at parse time stranded those files forever.
   final String ownerUid;
   final String ownerEmployeeId;
+
+  bool get hasOwner => ownerUid.isNotEmpty && ownerEmployeeId.isNotEmpty;
 
   /// Already-uploaded images waiting for an append-only retry.
   final List<AppointmentImage> uploaded;
@@ -44,11 +52,7 @@ class PendingUpload {
     final paths = map['paths'];
     final ownerUid = (map['ownerUid'] ?? '').toString();
     final ownerEmployeeId = (map['ownerEmployeeId'] ?? '').toString();
-    if (appointmentId.isEmpty ||
-        enqueuedAtMs is! int ||
-        paths is! List ||
-        ownerUid.isEmpty ||
-        ownerEmployeeId.isEmpty) {
+    if (appointmentId.isEmpty || enqueuedAtMs is! int || paths is! List) {
       return null;
     }
     final rawUploaded = map['uploaded'];

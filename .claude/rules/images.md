@@ -292,6 +292,27 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   does not already cover every array entry, and refuses one holding an entry
   with no identity at all (no `storagePath`, no url) — unrenderable and
   uncopyable, so clearing it would destroy the only record it existed.
+- **A queue entry is OWNED, and drains only for its owner** (2026-09-04). Every
+  `PendingUpload` carries the Firebase `uid` and the employee doc id that staged
+  it, `_attempt` skips an entry whose owner is not the person currently signed
+  in, and `deregisterThisDevice` clears the queue AND its staged files with the
+  rest of the caches. A queue keyed on nothing survived sign-out with the staged
+  JPEGs still on disk, and the NEXT account to sign in on that phone drained it
+  — someone else's photos, published under their name, onto a job they may not
+  even be on. Shared and handed-over devices are the normal case here, not the
+  edge one. **The owner is resolved ONCE per drain and memoised** (`_drainOwner`,
+  cleared in the `finally`): `_employeeIdForUid` is a Firestore read and both
+  `_attempt` and `_publishPending` ask, so a queue of N entries otherwise spent
+  2N+1 reads answering a question that cannot change mid-pass.
+  **A PRE-UPGRADE entry — one written before the queue carried an owner — is
+  PARSED, not dropped.** `PendingUpload.hasOwner` is false for it, so
+  `_attempt` and `_publishPending` both skip it and it can never upload under
+  the wrong account; but it stays in the queue, which is the only thing that
+  lets `prune` reach it and delete its staged files. Rejecting it in
+  `fromJson` looked like the safe reading and was the opposite: it stranded
+  those JPEGs on disk with nothing left pointing at them. Adopting it for
+  whoever is signed in is the other wrong answer, and is exactly the incident
+  the owner field exists to prevent.
 - **Offline photo-upload queue:** a failed/incomplete photo batch is persisted
   by `PendingUploadStore` (one JSON list under the SharedPreferences key
   `pending_photo_uploads`, entries pruned after 7 days) so uploads survive

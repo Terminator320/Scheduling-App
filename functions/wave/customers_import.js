@@ -20,6 +20,7 @@
  */
 
 const {mappedFieldsHash, fromWaveCustomer} = require("./mappers");
+const {clientSearchTokens} = require("../search_tokens");
 const {adminFirestore} = require("../admin_firestore");
 const {
   readBusinessId, LIST_CUSTOMERS, LIST_CUSTOMERS_SINCE,
@@ -55,6 +56,12 @@ function importOneCustomer(node, ctx) {
   const hash = mappedFieldsHash(fields);
   const docFields = {
     ...fields,
+    // The search index is normally written by the app on save, so a
+    // server-created client would be absent from `searchClients` entirely and
+    // a server-updated one would keep tokens built from its OLD name and
+    // phone. Either way the admin searches for a client they can see in the
+    // list and gets nothing back, with nothing logged.
+    searchTokens: clientSearchTokens(fields),
     wave: {
       syncState: "synced",
       syncError: null,

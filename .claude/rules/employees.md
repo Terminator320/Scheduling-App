@@ -669,8 +669,14 @@ self-service settings. Root context: `../../CLAUDE.md`.
   back and fails the build if the two drift — Dart and CEL cannot share a
   constant, so that test is the only thing enforcing it. Add a key to the RULES
   first, then to the Dart set; the reverse order ships a silent
-  `permission-denied`. `travelAlertsEnabled` is on the list deliberately — a
-  per-person notification preference is exactly the category it exists for.
+  `permission-denied`. `travelAlertsEnabled` and `locationSharingEnabled` are on the list
+  deliberately — a per-person notification or privacy preference is exactly the
+  category it exists for, and the second one is the ONLY thing that stops the
+  phone uploading a position, so an admin-only field would make consent
+  something the person cannot withdraw. Note the two default OPPOSITE ways:
+  absent `travelAlertsEnabled` reads as ON, absent `locationSharingEnabled` as
+  OFF. Both are also on `isAvailabilityOnlyChange`'s `hasOnly` set, so the
+  Settings toggle and the availability form can each write theirs alone.
   **`email` must never join it** — it is a sign-in
   identity, and Auth and Firestore move together through `changeEmployeeEmail`
   or not at all. Neither may `maxJobsPerDay`, `role`, `jobTitle`, `colorValue`

@@ -46,6 +46,15 @@ class ClientSearchPolicy {
 
   /// The lowercased, accent-folded `a-z0-9` code unit for [unit], or null when
   /// it is not alphanumeric at all.
+  ///
+  /// **Hand-mirrored by `normalize` in `functions/search_tokens.js`, which
+  /// spells the SAME table rather than using NFD.** The two are the index and
+  /// the query sides of one search: the app writes tokens with this fold and
+  /// the server tokenizes the typed query with that one, so a character they
+  /// disagree about is a client nobody can find. NFD folds strictly more (every
+  /// decomposable letter, so all of Latin Extended-A), which is why the JS side
+  /// cannot simply use it. A letter with no entry here is a SEPARATOR on both
+  /// sides — æ, ø and ł have no decomposition either, so they already agree.
   static int? _foldAccent(int unit) {
     // ASCII fast path: digits, then upper- and lower-case letters.
     if (unit >= 0x30 && unit <= 0x39) return unit;
@@ -65,6 +74,8 @@ class ClientSearchPolicy {
       >= 0x00F2 && <= 0x00F6 => 0x6F, // ò-ö
       >= 0x00D9 && <= 0x00DC => 0x75, // Ù-Ü
       >= 0x00F9 && <= 0x00FC => 0x75, // ù-ü
+      0x00D1 || 0x00F1 => 0x6E, // Ñ ñ
+      0x00DD || 0x00FD || 0x00FF => 0x79, // Ý ý ÿ
       _ => null,
     };
   }
@@ -108,6 +119,40 @@ class ClientSearchPolicy {
     ),
   );
 
+  /// The searchable TEXT fields of a raw Firestore client map.
+  ///
+  /// The one owner of that field list on the raw-map side: [rawMatches] reads
+  /// it and so does the `searchTokens` builder that decides what the server can
+  /// find at all, so a field added to only one of them is a search that
+  /// silently stops matching.
+  static List<String> rawTexts(Map<String, dynamic> data) => [
+    (data['name'] ?? '').toString(),
+    // Legacy pre-Wave-reshape docs kept the business under its own field.
+    (data['businessName'] ?? '').toString(),
+    (data['firstName'] ?? '').toString(),
+    (data['lastName'] ?? '').toString(),
+    (data['email'] ?? '').toString(),
+    (data['address'] ?? '').toString(),
+    (data['city'] ?? '').toString(),
+    (data['province'] ?? '').toString(),
+    (data['postalCode'] ?? '').toString(),
+    (data['country'] ?? '').toString(),
+    for (final c in firestoreList(
+      data['contacts'],
+    ).whereType<Map<Object?, Object?>>())
+      '${c['name'] ?? ''} ${c['email'] ?? ''}',
+  ];
+
+  /// The searchable PHONE fields of a raw Firestore client map.
+  static List<String> rawPhones(Map<String, dynamic> data) => [
+    (data['phone'] ?? '').toString(),
+    (data['mobile'] ?? '').toString(),
+    for (final c in firestoreList(
+      data['contacts'],
+    ).whereType<Map<Object?, Object?>>())
+      (c['phone'] ?? '').toString(),
+  ];
+
   /// [entryMatches] against a RAW Firestore map, without building a
   /// [ClientRecord] first.
   static bool rawMatches(
@@ -116,41 +161,12 @@ class ClientSearchPolicy {
     required String queryDigits,
   }) {
     if (queryText.isEmpty && queryDigits.isEmpty) return false;
-    final contacts = firestoreList(data['contacts']);
-
-    if (queryText.isNotEmpty) {
-      final text = normalize(
-        [
-          data['name'] ?? '',
-          data['businessName'] ?? '',
-          data['firstName'] ?? '',
-          data['lastName'] ?? '',
-          data['email'] ?? '',
-          data['address'] ?? '',
-          data['city'] ?? '',
-          data['province'] ?? '',
-          data['postalCode'] ?? '',
-          data['country'] ?? '',
-          for (final c in contacts.whereType<Map<Object?, Object?>>())
-            '${c['name'] ?? ''} ${c['email'] ?? ''}',
-        ].join(' '),
-      );
-      if (text.contains(queryText)) return true;
+    if (queryText.isNotEmpty &&
+        normalize(rawTexts(data).join(' ')).contains(queryText)) {
+      return true;
     }
-
-    if (queryDigits.isNotEmpty) {
-      final phoneDigits = digitsOnly(
-        [
-          data['phone'] ?? '',
-          data['mobile'] ?? '',
-          for (final c in contacts.whereType<Map<Object?, Object?>>())
-            c['phone'] ?? '',
-        ].join(' '),
-      );
-      if (phoneDigits.contains(queryDigits)) return true;
-    }
-
-    return false;
+    return queryDigits.isNotEmpty &&
+        digitsOnly(rawPhones(data).join(' ')).contains(queryDigits);
   }
 
   /// How well a client matches a query — LOWER is better, 0 is exact.

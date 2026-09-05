@@ -68,8 +68,11 @@ Future<void> _provideIosMapsApiKey() async {
       _iosMapsApiKey,
     );
   } catch (error, stack) {
-    debugPrint('Failed to provide iOS Maps API key: $error');
-    debugPrintStack(stackTrace: stack);
+    // `debugPrint` is a no-op in release, so this failed silently in the only
+    // build that matters: the channel handler returns early when the root view
+    // controller is not a FlutterViewController yet, and the live map is then
+    // permanently blank with nothing in Crashlytics.
+    AppLogger().warn('MAPS-KEY provideGoogleMapsApiKey failed', error, stack);
   }
 }
 

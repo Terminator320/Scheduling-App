@@ -4,10 +4,12 @@ import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
 import 'package:scheduling/features/calendar/domain/day_off_reason.dart';
@@ -197,10 +199,16 @@ class DetailsViewBody extends ConsumerWidget {
     EventDetailsController notifier,
   ) async {
     final previousStatus = AppointmentStatus.storedRaw(appointment.status);
+    // Everything the Undo needs, resolved BEFORE the sheet closes. The action
+    // runs after `onClose()` has dropped the last listener on the autoDispose
+    // controller, so touching `notifier`, `ref` or `context` in there is a
+    // use-after-dispose — and it runs from a timer callback with no caller
+    // left to catch the StateError.
     final l10n = context.l10n;
-    final undoLabel = l10n.common_undo;
-    final restoredMessage = l10n.common_changesSaved;
-    final undoFailedIntro = l10n.error_introUpdateAppointmentStatus;
+    final id = appointment.id;
+    final notices = ref.read(noticeServiceProvider);
+    final repository = ref.read(appointmentsRepositoryProvider);
+    final logger = ref.read(loggerProvider);
     final outcome = await notifier.markAsDone(appointment);
     if (!context.mounted) return;
     switch (outcome) {
@@ -217,22 +225,26 @@ class DetailsViewBody extends ConsumerWidget {
               ),
             );
       case EventDetailsActionOk():
-        final notices = ref.read(noticeServiceProvider);
         notices.successWithAction(
           l10n.common_appointmentMarkedAsDone,
-          actionLabel: undoLabel,
+          actionLabel: l10n.common_undo,
           onAction: () async {
-            final undoOutcome = await notifier.restoreStatus(
-              appointment,
-              previousStatus: previousStatus,
-            );
-            switch (undoOutcome) {
-              case EventDetailsActionOk():
-                notices.success(restoredMessage);
-              case EventDetailsActionFailed(:final error):
-                notices.error('$undoFailedIntro: $error');
-              case EventDetailsActionBusy():
-                break;
+            if (id == null) return;
+            try {
+              await repository.restoreAppointmentStatus(
+                id: id,
+                previousStatus: previousStatus,
+              );
+              notices.success(l10n.common_changesSaved);
+            } catch (e, st) {
+              logger.warn('APPT-STATUS undo mark-complete failed', e, st);
+              notices.error(
+                composeErrorNoticeFor(
+                  l10n,
+                  intro: l10n.error_introUpdateAppointmentStatus,
+                  error: e,
+                ),
+              );
             }
           },
         );

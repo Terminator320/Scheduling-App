@@ -135,64 +135,63 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
     return index == 0 && wrap != null ? wrap(tile) : tile;
   }
 
-  Widget _slidableTile(ClientRecord client, int index) => FadeInItem(
-    key: ValueKey(client.id),
-    index: index,
-    child: widget.isAdmin
-        ? Slidable(
-            key: ValueKey('slide-${client.id}'),
-            endActionPane: ActionPane(
-              motion: const DrawerMotion(),
-              extentRatio: canDeleteClient(client) ? 0.5 : 0.28,
-              // Full swipe commits Archive ONLY.
-              dismissible: DismissiblePane(
-                confirmDismiss: () => archiveClient(client),
-                onDismissed: () {},
-              ),
-              children: [
-                // Advisory: the callable re-checks with a live count(), so this only
-                // keeps the swipe from offering what the server would refuse.
-                if (canDeleteClient(client))
-                  SlidableAction(
-                    onPressed: (_) => confirmDeleteClient(client),
-                    backgroundColor: Theme.of(context).palette.dangerFill,
-                    foregroundColor: Theme.of(context).palette.onDangerFill,
-                    icon: Icons.delete_outline,
-                    label: context.l10n.common_delete,
-                  ),
-                SlidableAction(
-                  onPressed: (_) => archiveClient(client),
-                  backgroundColor: Theme.of(
-                    context,
-                  ).colorScheme.secondaryContainer,
-                  foregroundColor: Theme.of(
-                    context,
-                  ).colorScheme.onSecondaryContainer,
-                  icon: client.archived
-                      ? Icons.unarchive_outlined
-                      : Icons.archive_outlined,
-                  label: client.archived
-                      ? context.l10n.clients_unarchive
-                      : context.l10n.clients_archive,
-                ),
-              ],
-            ),
-            child: ClientTile(
-              client: client,
-              selected: widget.selectedClientId == client.id,
-              onOpen: () => _openClient(client),
-              // Both halves are read once per build off the SAME cached window, not a
-              // provider watch and not a key derivation per row.
-              buildingCount: _buildingCounts[_buildingKeyOf(client)],
-            ),
-          )
-        : ClientTile(
-            client: client,
-            selected: widget.selectedClientId == client.id,
-            onOpen: () => _openClient(client),
-            buildingCount: _buildingCounts[_buildingKeyOf(client)],
+  Widget _slidableTile(ClientRecord client, int index) {
+    final tile = ClientTile(
+      client: client,
+      selected: widget.selectedClientId == client.id,
+      onOpen: () => _openClient(client),
+      // Both halves are read once per build off the SAME cached window, not a
+      // provider watch and not a key derivation per row.
+      buildingCount: _buildingCounts[_buildingKeyOf(client)],
+    );
+    // The swipe offers what only an admin may do, so a technician gets the
+    // bare tile rather than actions the rules would refuse.
+    if (!widget.isAdmin) {
+      return FadeInItem(key: ValueKey(client.id), index: index, child: tile);
+    }
+    return FadeInItem(
+      key: ValueKey(client.id),
+      index: index,
+      child: Slidable(
+        key: ValueKey('slide-${client.id}'),
+        endActionPane: ActionPane(
+          motion: const DrawerMotion(),
+          extentRatio: canDeleteClient(client) ? 0.5 : 0.28,
+          // Full swipe commits Archive ONLY.
+          dismissible: DismissiblePane(
+            confirmDismiss: () => archiveClient(client),
+            onDismissed: () {},
           ),
-  );
+          children: [
+            // Advisory: the callable re-checks with a live count(), so this
+            // only keeps the swipe from offering what the server would refuse.
+            if (canDeleteClient(client))
+              SlidableAction(
+                onPressed: (_) => confirmDeleteClient(client),
+                backgroundColor: Theme.of(context).palette.dangerFill,
+                foregroundColor: Theme.of(context).palette.onDangerFill,
+                icon: Icons.delete_outline,
+                label: context.l10n.common_delete,
+              ),
+            SlidableAction(
+              onPressed: (_) => archiveClient(client),
+              backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+              foregroundColor: Theme.of(
+                context,
+              ).colorScheme.onSecondaryContainer,
+              icon: client.archived
+                  ? Icons.unarchive_outlined
+                  : Icons.archive_outlined,
+              label: client.archived
+                  ? context.l10n.clients_unarchive
+                  : context.l10n.clients_archive,
+            ),
+          ],
+        ),
+        child: tile,
+      ),
+    );
+  }
 
   Widget _emptyState({required String query}) {
     return AppEmptyState(

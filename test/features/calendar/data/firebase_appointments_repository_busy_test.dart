@@ -316,10 +316,7 @@ void main() {
     });
 
     test('a doc returned by two chunks is deduped by id', () async {
-      final shared = doc(
-        jobData(employeeIds: const ['e0', 'e30']),
-        id: 'a1',
-      );
+      final shared = doc(jobData(employeeIds: const ['e0', 'e30']), id: 'a1');
       when(() => snapshot.docs).thenReturn([shared]);
 
       final result = await repo().findClashingAppointments(

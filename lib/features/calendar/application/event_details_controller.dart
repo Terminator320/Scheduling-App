@@ -338,35 +338,6 @@ class EventDetailsController extends Notifier<EventDetailsState>
     return _setStatusOnRepo(appointment, 'done');
   }
 
-  Future<EventDetailsActionOutcome> restoreStatus(
-    AppointmentRecord appointment, {
-    required String previousStatus,
-  }) async {
-    final id = appointment.id;
-    if (id == null) {
-      return EventDetailsActionFailed(StateError('appointment has no id'));
-    }
-    if (state.isSaving) return const EventDetailsActionBusy();
-    if (ref.read(isOfflineProvider)) {
-      return const EventDetailsActionFailed(SocketException('offline'));
-    }
-    state = state.copyWith(isSaving: true);
-    final repo = ref.read(appointmentsRepositoryProvider);
-    final logger = ref.read(loggerProvider);
-    try {
-      await repo.restoreAppointmentStatus(
-        id: id,
-        previousStatus: previousStatus,
-      );
-      if (ref.mounted) state = state.copyWith(isSaving: false);
-      return const EventDetailsActionOk();
-    } catch (e, st) {
-      logger.warn('APPT-STATUS restoreAppointmentStatus failed', e, st);
-      if (ref.mounted) state = state.copyWith(isSaving: false);
-      return EventDetailsActionFailed(e);
-    }
-  }
-
   /// Moves an open job into `in_progress`.
   Future<EventDetailsActionOutcome> startJob(AppointmentRecord appointment) {
     return _setStatusOnRepo(appointment, 'in_progress');

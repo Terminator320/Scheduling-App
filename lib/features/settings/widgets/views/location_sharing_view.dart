@@ -7,7 +7,6 @@ import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/presence/application/presence_sync_controller.dart';
 import 'package:scheduling/features/settings/application/my_details_providers.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -43,14 +42,7 @@ class _LocationSharingViewState extends ConsumerState<LocationSharingView> {
 
     setState(() => _pendingValue = value);
     try {
-      await ref
-          .read(employeesRepositoryProvider)
-          .updateSelfDetails(record.copyWith(locationSharingEnabled: value));
-      if (value) {
-        await ref.read(presenceSyncControllerProvider).sync();
-      } else {
-        await ref.read(presenceSyncControllerProvider).unregister();
-      }
+      await applyLocationSharing(ref, record, enabled: value);
       widget.onApplied?.call();
     } catch (error, stackTrace) {
       logger.warn('ME-SAVE location sharing failed', error, stackTrace);
@@ -86,18 +78,20 @@ class _LocationSharingViewState extends ConsumerState<LocationSharingView> {
     setState(() => _pendingValue = false);
     try {
       if (record.locationSharingEnabled) {
-        await ref
-            .read(employeesRepositoryProvider)
-            .updateSelfDetails(
-              record.copyWith(locationSharingEnabled: false),
-            );
+        await applyLocationSharing(ref, record, enabled: false);
       }
-      await ref.read(presenceSyncControllerProvider).unregister();
+      final cleared = await ref
+          .read(presenceSyncControllerProvider)
+          .unregister();
       if (!mounted) return;
-      notices.success(l10n.settings_locationCleared);
+      // Sharing is off either way; only the ERASED half can fail, and this
+      // screen must not claim it when it did not happen.
+      notices.success(
+        cleared ? l10n.settings_locationCleared : l10n.settings_locationPaused,
+      );
       widget.onApplied?.call();
     } catch (error, stackTrace) {
-      logger.warn('ME-CLEAR location sharing failed', error, stackTrace);
+      logger.warn('ME-SAVE clear location failed', error, stackTrace);
       if (!mounted) return;
       notices.error(
         composeErrorNotice(

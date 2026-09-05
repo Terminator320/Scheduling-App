@@ -26,6 +26,7 @@ const {
 } = require("../search_tokens");
 
 const BATCH_SIZE = 400;
+const PAGE_SIZE = 500;
 const EXACT_FLAGS = ["--dry-run"];
 
 /**
@@ -70,18 +71,34 @@ function patchFor(data, next, field) {
  * @return {!Promise<{scanned: number, patched: number}>}
  */
 async function backfillCollection(db, collection, field, tokensFor, dryRun) {
-  const snap = await db.collection(collection).get();
+  // Paged, never one `.get()` of the whole collection: this is the run most
+  // likely to exceed the gRPC deadline or the heap part-way through, and a
+  // HALF-tokenized collection is indistinguishable, from the app's side, from
+  // one that was never backfilled at all.
   const writer = commitInBatches(db, {dryRun, batchSize: BATCH_SIZE});
+  let scanned = 0;
   let patched = 0;
-  for (const doc of snap.docs) {
-    const data = doc.data() || {};
-    const patch = patchFor(data, tokensFor(data), field);
-    if (!patch) continue;
-    patched += 1;
-    await writer.stage(doc.ref, patch);
+  let cursor = null;
+  for (;;) {
+    let query = db.collection(collection)
+        .orderBy("__name__")
+        .limit(PAGE_SIZE);
+    if (cursor) query = query.startAfter(cursor);
+    const snap = await query.get();
+    if (snap.empty) break;
+    for (const doc of snap.docs) {
+      scanned += 1;
+      const data = doc.data() || {};
+      const patch = patchFor(data, tokensFor(data), field);
+      if (!patch) continue;
+      patched += 1;
+      await writer.stage(doc.ref, patch);
+    }
+    if (snap.size < PAGE_SIZE) break;
+    cursor = snap.docs[snap.docs.length - 1];
   }
   await writer.flush();
-  return {scanned: snap.size, patched};
+  return {scanned, patched};
 }
 
 /**

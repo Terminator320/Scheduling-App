@@ -223,7 +223,7 @@ void main() {
 
       when(auth.signOut).thenAnswer((_) => signOutCompleter.future);
       when(push.unregisterCurrentDevice).thenAnswer((_) async {});
-      when(presence.unregister).thenAnswer((_) async {});
+      when(presence.unregister).thenAnswer((_) async => true);
       when(liveActivity.unregister).thenAnswer((_) async {});
       when(push.sync).thenAnswer((_) async {});
       when(presence.sync).thenAnswer((_) async {});
@@ -339,7 +339,7 @@ void main() {
     final presence = _MockPresence();
     final liveActivity = _MockLiveActivity();
     when(push.unregisterCurrentDevice).thenAnswer((_) async {});
-    when(presence.unregister).thenAnswer((_) async {});
+    when(presence.unregister).thenAnswer((_) async => true);
     when(liveActivity.unregister).thenAnswer((_) async {});
     when(push.sync).thenAnswer((_) async {});
     when(presence.sync).thenAnswer((_) async {});
@@ -410,7 +410,7 @@ void main() {
 
       when(auth.signOut).thenAnswer(waitForSignOut);
       when(push.unregisterCurrentDevice).thenAnswer((_) async {});
-      when(presence.unregister).thenAnswer((_) async {});
+      when(presence.unregister).thenAnswer((_) async => true);
       when(liveActivity.unregister).thenAnswer((_) async {});
 
       final container = ProviderContainer(

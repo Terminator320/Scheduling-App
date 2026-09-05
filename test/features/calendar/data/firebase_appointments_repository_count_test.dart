@@ -102,9 +102,7 @@ void main() {
       final captured = verify(
         () => query.where(
           'endTime',
-          isGreaterThanOrEqualTo: captureAny(
-            named: 'isGreaterThanOrEqualTo',
-          ),
+          isGreaterThanOrEqualTo: captureAny(named: 'isGreaterThanOrEqualTo'),
         ),
       ).captured.single;
 
@@ -114,23 +112,25 @@ void main() {
       expect(floor.difference(now).abs(), lessThan(const Duration(minutes: 1)));
     });
 
-    test('adds no startTime floor, so the read is proportional to the answer',
-        () async {
-      await repo().countFutureAssignments('e1');
+    test(
+      'adds no startTime floor, so the read is proportional to the answer',
+      () async {
+        await repo().countFutureAssignments('e1');
 
-      verifyNever(
-        () => query.where(
-          'startTime',
-          isGreaterThanOrEqualTo: any(named: 'isGreaterThanOrEqualTo'),
-        ),
-      );
-      verifyNever(
-        () => collection.where(
-          'startTime',
-          isGreaterThanOrEqualTo: any(named: 'isGreaterThanOrEqualTo'),
-        ),
-      );
-    });
+        verifyNever(
+          () => query.where(
+            'startTime',
+            isGreaterThanOrEqualTo: any(named: 'isGreaterThanOrEqualTo'),
+          ),
+        );
+        verifyNever(
+          () => collection.where(
+            'startTime',
+            isGreaterThanOrEqualTo: any(named: 'isGreaterThanOrEqualTo'),
+          ),
+        );
+      },
+    );
 
     test('caps the read, so the repeat horizon cannot set its size', () async {
       // `endTime >= now` has no upper bound, and a repeat series pre-books up

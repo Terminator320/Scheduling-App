@@ -250,12 +250,59 @@ function sliceForDay(r, dayMs) {
   };
 }
 
+/**
+ * The concrete local-time windows a run occupies, one per work day.
+ *
+ * Mirrors the Dart `expandRunWindows`: the windows a run is BOOKED with and
+ * the windows it is CHECKED against for clashes must be the same arithmetic.
+ * @param {!{startMs: number, endMs: number, overnight: boolean}} w
+ * @return {!Array<!{startMs: number, endMs: number}>}
+ */
+function expandRunWindows(w) {
+  const count = Math.min(dayCountOfWindow(w), MAX_APPOINTMENT_SPAN_DAYS);
+  const days = count < 1 ? 1 : count;
+  const startMinutes = businessMinutesOfDay(w.startMs);
+  const endMinutes = businessMinutesOfDay(w.endMs);
+  const out = [];
+  for (let i = 0; i < days; i++) {
+    const dayMs = addDaysMs(w.startMs, i);
+    out.push({
+      startMs: businessWallInstantMs(dayMs, startMinutes),
+      endMs: businessWallInstantMs(
+          w.overnight ? addDaysMs(dayMs, 1) : dayMs, endMinutes),
+    });
+  }
+  return out;
+}
+
+/**
+ * True when two daily windows overlap on any day they both run.
+ *
+ * A conflict check is a DAILY-window overlap, not an instant overlap: testing
+ * the raw instants reports a 9-5 run across a week as clashing with a 7 pm job
+ * inside it. All window pairs are compared rather than matching day indices,
+ * because an overnight window runs into the following calendar day.
+ * @param {?{startMs: number, endMs: number, overnight: boolean}} a
+ * @param {?{startMs: number, endMs: number, overnight: boolean}} b
+ * @return {boolean}
+ */
+function dailyWindowsOverlap(a, b) {
+  if (a == null || b == null) return false;
+  const aWindows = dayCountOfWindow(a) < 1 ? [] : expandRunWindows(a);
+  const bWindows = dayCountOfWindow(b) < 1 ? [] : expandRunWindows(b);
+  return aWindows.some((x) =>
+    bWindows.some((y) => x.startMs < y.endMs && y.startMs < x.endMs));
+}
+
 module.exports = {
   // Re-exported rather than restated: `time_utils` already owns the JS copy of
   // the Dart `maxAppointmentSpanDays`, and a second copy here would be a third
   // owner of a constant this module exists to keep in lockstep.
   MAX_APPOINTMENT_SPAN_DAYS,
   calendarDaysBetween,
+  resolveWindow,
+  expandRunWindows,
+  dailyWindowsOverlap,
   lastWorkDayMs,
   clampedLastWorkDayMs,
   dayCountOf,

@@ -178,10 +178,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     await Navigator.push<void>(
       context,
       MaterialPageRoute(
-        builder: (_) => TextSizeScreen(
-          isAdmin: _isAdmin,
-          employeeId: widget.employeeId,
-        ),
+        builder: (_) =>
+            TextSizeScreen(isAdmin: _isAdmin, employeeId: widget.employeeId),
       ),
     );
     if (mounted) setState(() {});
@@ -314,13 +312,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
     setState(() => _pendingLocationSharingValue = value);
     try {
-      final next = record.copyWith(locationSharingEnabled: value);
-      await ref.read(employeesRepositoryProvider).updateSelfDetails(next);
-      if (value) {
-        await ref.read(presenceSyncControllerProvider).sync();
-      } else {
-        await ref.read(presenceSyncControllerProvider).unregister();
-      }
+      await applyLocationSharing(ref, record, enabled: value);
     } catch (error, stackTrace) {
       logger.warn('ME-SAVE location sharing failed', error, stackTrace);
       if (!mounted) return;
@@ -464,9 +456,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       child: AppearanceSettingsCard(onTextSizeTap: _onTextSizeTap),
     ),
     const SizedBox(height: AppSpacing.sp24),
-    SettingsSectionHeader(
-      label: context.l10n.settings_account.toUpperCase(),
-    ),
+    SettingsSectionHeader(label: context.l10n.settings_account.toUpperCase()),
     SettingsSectionCard(
       child: SettingsTile(
         iconBg: scheme.primaryContainer,
@@ -484,9 +474,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       onDeleteAccount: confirmDeleteAccount,
     ),
     const SizedBox(height: AppSpacing.sp24),
-    SettingsSectionHeader(
-      label: context.l10n.settings_security.toUpperCase(),
-    ),
+    SettingsSectionHeader(label: context.l10n.settings_security.toUpperCase()),
     SecuritySettingsCard(
       enabled: _pendingAppLockValue ?? ref.watch(appLockEnabledProvider),
       isBusy: _pendingAppLockValue != null,
@@ -536,14 +524,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   ];
 
   List<Widget> _legalAndHelpCards(ColorScheme scheme) => [
-    SettingsSectionHeader(
-      label: context.l10n.settings_legal.toUpperCase(),
-    ),
+    SettingsSectionHeader(label: context.l10n.settings_legal.toUpperCase()),
     const LegalSettingsCard(),
     const SizedBox(height: AppSpacing.sp24),
-    SettingsSectionHeader(
-      label: context.l10n.settings_help.toUpperCase(),
-    ),
+    SettingsSectionHeader(label: context.l10n.settings_help.toUpperCase()),
     _helpCard(scheme),
     const SizedBox(height: AppSpacing.sp24),
   ];
