@@ -1,5 +1,6 @@
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/models/clients_sort.dart';
 import 'package:scheduling/features/clients/domain/policies/client_building.dart';
 
 abstract class ClientsRepository {
@@ -47,11 +48,15 @@ abstract class ClientsRepository {
 
   Future<List<ClientRecord>> searchClients(String query);
 
-  /// Fetches the next page of clients, newest first. Pass the previous page's last item
-  /// as [after], or null for the first page.
+  /// One page of non-archived clients in [sort] order.
+  ///
+  /// [after] is the last record of the previous page; the cursor tuple is
+  /// (sort field, doc id), so a page fetched under one sort can never be used
+  /// to resume another.
   Future<List<ClientRecord>> fetchClientsPage({
     required int limit,
     ClientRecord? after,
+    ClientsSort sort = ClientsSort.name,
   });
 
   /// One-shot fetch of clients created since [since], used for dashboard
