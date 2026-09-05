@@ -29,6 +29,12 @@ rather than something that happens.
 - **Undo on "mark complete".** Closing a job by accident used to mean an admin
   reopening it. The confirmation now carries an Undo for as long as it is on
   screen, and it puts the job back exactly where it was.
+- **The app tour covers the new features.** The walkthrough now points out the
+  week view and the crew filter on the calendar, the location-sharing control
+  in Settings, and — on the job itself — Start, the notes and photos the crew
+  writes, the Undo on a job closed by mistake, Push back and Book again.
+  Anyone who has already been through the tour sees only what is new to them,
+  in place, rather than sitting through the whole thing again.
 
 ### Changed
 - **Client and job-history search now runs against the whole database.** Both

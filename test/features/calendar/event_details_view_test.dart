@@ -18,6 +18,8 @@ import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
+import '../../support/tour_test_support.dart';
+
 class _MockAppointmentsRepo extends Mock implements AppointmentsRepository {}
 
 class _MockClientsRepo extends Mock implements ClientsRepository {}
@@ -64,6 +66,9 @@ void main() {
   late PhotoUploadNotifier uploadNotifier;
 
   setUp(() {
+    // The details sheet carries a tour now; without this its showcase
+    // animation repeats forever and pumpAndSettle times out.
+    markFormToursSeen();
     appointments = _MockAppointmentsRepo();
     clients = _MockClientsRepo();
     employees = _MockEmployeesRepo();
