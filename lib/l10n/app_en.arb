@@ -3955,5 +3955,103 @@
         "type": "int"
       }
     }
+  },
+  "clients_modePhone": "Phone",
+  "@clients_modePhone": {
+    "description": "Segment of the client picker's mode switch that opens the phone keypad."
+  },
+  "clients_modeNameOrAddress": "Name or address",
+  "@clients_modeNameOrAddress": {
+    "description": "Segment of the client picker's mode switch that opens the text keyboard and searches names, addresses, emails and contacts."
+  },
+  "clients_tapPhoneToStart": "Tap Phone to start",
+  "@clients_tapPhoneToStart": {
+    "description": "Placeholder in the add-job client field before it has focus."
+  },
+  "clients_digitsTyped": "{typed} of {total}",
+  "@clients_digitsTyped": {
+    "description": "Digit counter beside the client picker's number field.",
+    "placeholders": {
+      "typed": { "type": "int", "example": "8" },
+      "total": { "type": "int", "example": "10" }
+    }
+  },
+  "clients_keepGoing": "Keep going",
+  "@clients_keepGoing": {
+    "description": "Shown beside the digit pips while the typed number is still too short to search."
+  },
+  "clients_recentClients": "Recent",
+  "@clients_recentClients": {
+    "description": "Header above the recently booked clients shown before a search runs."
+  },
+  "clients_exactMatch": "Exact match",
+  "@clients_exactMatch": {
+    "description": "Header above a client result that matched the full phone number."
+  },
+  "clients_closestNumbers": "Closest numbers on file",
+  "@clients_closestNumbers": {
+    "description": "Header above near-miss results, shown when no client has the exact number typed."
+  },
+  "clients_matchCount": "{count, plural, =0{No matches} =1{1 match} other{{count} matches}}",
+  "@clients_matchCount": {
+    "description": "Count of clients matching the current query in the add-job picker.",
+    "placeholders": { "count": { "type": "int", "example": "3" } }
+  },
+  "clients_tapToCarryOn": "tap to carry on",
+  "@clients_tapToCarryOn": {
+    "description": "Trailing hint on the collapsed match summary shown after the client field loses focus."
+  },
+  "clients_attach": "Attach",
+  "@clients_attach": {
+    "description": "Button on a client result row that attaches that client to the job."
+  },
+  "clients_searchFailed": "Couldn't check that number",
+  "@clients_searchFailed": {
+    "description": "Shown in the client picker when the search itself failed, so an empty result is not mistaken for a new customer."
+  },
+  "clients_retrySearch": "Try again",
+  "@clients_retrySearch": {
+    "description": "Action beside the client picker's failed-search message."
+  },
+  "clients_noneOfTheseNewClient": "None of these — new client",
+  "@clients_noneOfTheseNewClient": {
+    "description": "Last row of the client picker when near misses were offered, creating a client from the typed number."
+  },
+  "clients_changeClient": "Change",
+  "@clients_changeClient": {
+    "description": "Action on the attached-client card that reopens the picker."
+  },
+  "clients_removeClient": "Remove",
+  "@clients_removeClient": {
+    "description": "Destructive action on the attached-client card that detaches the client from the job."
+  },
+  "clients_jobsAndLastVisit": "{jobs, plural, =1{1 job} other{{jobs} jobs}} · last {date}",
+  "@clients_jobsAndLastVisit": {
+    "description": "Second line of the attached-client card: how many jobs this client has had and when the last one was.",
+    "placeholders": {
+      "jobs": { "type": "int", "example": "12" },
+      "date": { "type": "String", "example": "14 Aug" }
+    }
+  },
+  "calendar_jobAddress": "Job address",
+  "@calendar_jobAddress": {
+    "description": "Label of the address field in the add-job sheet's WHO section, under the attached client."
+  },
+  "calendar_useThisAddressForTheJob": "Use this address for the job",
+  "@calendar_useThisAddressForTheJob": {
+    "description": "Switch on the attached-client card that copies the client's own address into the job."
+  },
+  "calendar_beenHereBefore": "{name} has been here before",
+  "@calendar_beenHereBefore": {
+    "description": "Header above previous job addresses for the attached client, offered before a billed address lookup.",
+    "placeholders": { "name": { "type": "String", "example": "Marie" } }
+  },
+  "calendar_unitsBilledToThisClient": "Units billed to this client",
+  "@calendar_unitsBilledToThisClient": {
+    "description": "Header above previous job addresses when they share a street and differ only by unit."
+  },
+  "calendar_searchForAnotherAddress": "Search for another address…",
+  "@calendar_searchForAnotherAddress": {
+    "description": "Row that opens the address autocomplete, below the client's previous job addresses."
   }
 }
