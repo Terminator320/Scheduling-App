@@ -811,5 +811,21 @@
   "calendar_pushedBack": "Décalé de {minutes} min",
   "calendar_bookAgain": "Réserver à nouveau",
   "nav_invalidLink": "Ce lien ne peut pas être ouvert.",
-  "settings_locationPaused": "Le partage de position est en pause. Votre dernière position n'a pas pu être effacée — réessayez dans un moment."
+  "settings_locationPaused": "Le partage de position est en pause. Votre dernière position n'a pas pu être effacée — réessayez dans un moment.",
+  "tour_calendarWeekToggleTitle": "Un jour, ou toute la semaine",
+  "tour_calendarWeekToggleDesc": "Basculez l'agenda entre le jour choisi et la semaine complète, chaque jour sous sa propre barre avec son nombre de travaux.",
+  "tour_calendarCrewFilterTitle": "Suivre une personne",
+  "tour_calendarCrewFilterDesc": "Limitez tout le calendrier à un membre de l'équipe. Une bannière indique qui, et Effacer les affiche tous de nouveau.",
+  "tour_settingsLocationSharingTitle": "Le partage de votre position",
+  "tour_settingsLocationSharingDesc": "Votre position n'atteint la carte de l'équipe que lorsque ceci est activé. La désactiver efface aussi la position déjà enregistrée.",
+  "tour_jobPushBackTitle": "En retard",
+  "tour_jobPushBackDesc": "Reportez ce travail d'une durée déterminée sans ouvrir le formulaire de modification.",
+  "tour_jobFieldRecordTitle": "Ce que vous avez constaté",
+  "tour_jobFieldRecordDesc": "Vos propres notes et photos pour ce travail, distinctes des consignes rédigées au bureau : aucune ne peut écraser l'autre.",
+  "tour_jobStartTitle": "Signaler votre arrivée",
+  "tour_jobStartDesc": "Démarrer enregistre votre arrivée et lance le chronomètre : le travail indique son début, sa fin et sa durée.",
+  "tour_jobMarkDoneTitle": "Clore le travail",
+  "tour_jobMarkDoneDesc": "Marque le travail terminé et enregistre l'heure. Une erreur ? La confirmation offre Annuler tant qu'elle est affichée.",
+  "tour_jobBookAgainTitle": "Réserver de nouveau",
+  "tour_jobBookAgainDesc": "Ouvre un nouveau rendez-vous contenant déjà le client, l'adresse, l'équipe et les consignes — vous ne choisissez que la date et l'heure."
 }

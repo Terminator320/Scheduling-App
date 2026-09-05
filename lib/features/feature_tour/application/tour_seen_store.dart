@@ -2,21 +2,35 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
-import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
+import 'package:scheduling/features/feature_tour/domain/legacy_tour_steps.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// SharedPreferences key: storage keys of the tours this device has seen.
-/// The entry name predates form tours and is deliberately unchanged — the
-/// destination keys inside it are still bare destination names.
+/// SharedPreferences key: the step ids this device has already been shown.
+const _keyTourSeenSteps = 'tour_seen_steps';
+
+/// The old key, one entry per SCOPE. Read exactly once, by the migration.
 const _keyTourSeenTabs = 'tour_seen_tabs';
 
-/// Tracks which tours this device has already seen. Await `ready` before
-/// reading it, or a cold start can replay a tour that was already seen.
-class TourSeenController extends Notifier<Set<TourScope>> {
+TourStepId? _stepByName(String name) {
+  for (final id in TourStepId.values) {
+    if (id.name == name) return id;
+  }
+  return null;
+}
+
+/// Tracks which tour STEPS this device has already seen. Await `ready` before
+/// reading it, or a cold start can replay steps that were already shown.
+///
+/// Per STEP, not per screen: a release that adds a step to a screen someone
+/// already toured has to be able to show them that one step. The scope flag
+/// this replaced could not, and a tour that dropped a step because its target
+/// hadn't rendered still marked the whole scope seen, losing it for good.
+class TourSeenController extends Notifier<Set<TourStepId>> {
   late final Future<void> ready = _load();
 
   @override
-  Set<TourScope> build() {
+  Set<TourStepId> build() {
     unawaited(ready);
     return const {};
   }
@@ -25,10 +39,19 @@ class TourSeenController extends Notifier<Set<TourScope>> {
     final logger = ref.read(loggerProvider);
     try {
       final prefs = await SharedPreferences.getInstance();
-      final keys = prefs.getStringList(_keyTourSeenTabs) ?? const [];
-      // Lookup-based, so a key that no longer maps to a scope is dropped
-      // rather than resurrecting a dead tour.
-      state = {for (final key in keys) ?tourScopeByKey(key)};
+      final stored = prefs.getStringList(_keyTourSeenSteps);
+      if (stored != null) {
+        // Lookup-based, so a name that no longer maps to a step is dropped
+        // rather than resurrecting a dead one.
+        state = {for (final name in stored) ?_stepByName(name)};
+        return;
+      }
+      // First run on this build: seed from the per-scope flags. The ABSENCE of
+      // the step key is the marker, so a resetAll writing an empty list can
+      // never re-trigger this.
+      final legacy = prefs.getStringList(_keyTourSeenTabs) ?? const <String>[];
+      state = {for (final key in legacy) ...?kLegacyTourSteps[key]};
+      await _save();
     } catch (e, st) {
       // This is unawaited from build(), so on failure we just fall back to
       // treating the device like a fresh install.
@@ -36,8 +59,12 @@ class TourSeenController extends Notifier<Set<TourScope>> {
     }
   }
 
-  Future<void> markSeen(TourScope scope) async {
-    state = {...state, scope};
+  /// Marks the steps that actually ran — never a whole scope. A step whose
+  /// target wasn't rendered has not been seen and must be offered again.
+  Future<void> markSteps(Iterable<TourStepId> ids) async {
+    final next = {...state, ...ids};
+    if (next.length == state.length) return;
+    state = next;
     await _save();
   }
 
@@ -51,8 +78,8 @@ class TourSeenController extends Notifier<Set<TourScope>> {
     final logger = ref.read(loggerProvider);
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(_keyTourSeenTabs, [
-        for (final scope in state) scope.storageKey,
+      await prefs.setStringList(_keyTourSeenSteps, [
+        for (final id in state) id.name,
       ]);
     } catch (e, st) {
       logger.warn('TOUR write seen flags failed', e, st);
@@ -60,6 +87,6 @@ class TourSeenController extends Notifier<Set<TourScope>> {
   }
 }
 
-final tourSeenProvider = NotifierProvider<TourSeenController, Set<TourScope>>(
+final tourSeenProvider = NotifierProvider<TourSeenController, Set<TourStepId>>(
   TourSeenController.new,
 );
