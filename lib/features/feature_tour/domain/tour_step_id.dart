@@ -46,4 +46,14 @@ enum TourStepId {
   personJobTitle,
   personColour,
   personCreate,
+  // The 1.56/1.57 features.
+  calendarWeekToggle,
+  calendarCrewFilter,
+  settingsLocationSharing,
+  // The job-details sheet walkthrough.
+  jobPushBack,
+  jobFieldRecord,
+  jobStart,
+  jobMarkDone,
+  jobBookAgain,
 }

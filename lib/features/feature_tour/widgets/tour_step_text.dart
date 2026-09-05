@@ -174,4 +174,36 @@ import 'package:scheduling/l10n/l10n.dart';
     title: l.tour_personCreateTitle,
     description: l.tour_personCreateDesc,
   ),
+  TourStepId.calendarWeekToggle => (
+    title: l.tour_calendarWeekToggleTitle,
+    description: l.tour_calendarWeekToggleDesc,
+  ),
+  TourStepId.calendarCrewFilter => (
+    title: l.tour_calendarCrewFilterTitle,
+    description: l.tour_calendarCrewFilterDesc,
+  ),
+  TourStepId.settingsLocationSharing => (
+    title: l.tour_settingsLocationSharingTitle,
+    description: l.tour_settingsLocationSharingDesc,
+  ),
+  TourStepId.jobPushBack => (
+    title: l.tour_jobPushBackTitle,
+    description: l.tour_jobPushBackDesc,
+  ),
+  TourStepId.jobFieldRecord => (
+    title: l.tour_jobFieldRecordTitle,
+    description: l.tour_jobFieldRecordDesc,
+  ),
+  TourStepId.jobStart => (
+    title: l.tour_jobStartTitle,
+    description: l.tour_jobStartDesc,
+  ),
+  TourStepId.jobMarkDone => (
+    title: l.tour_jobMarkDoneTitle,
+    description: l.tour_jobMarkDoneDesc,
+  ),
+  TourStepId.jobBookAgain => (
+    title: l.tour_jobBookAgainTitle,
+    description: l.tour_jobBookAgainDesc,
+  ),
 };

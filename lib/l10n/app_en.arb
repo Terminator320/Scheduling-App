@@ -3833,5 +3833,69 @@
   "settings_locationPaused": "Location sharing is paused. Your last location could not be cleared — try again in a moment.",
   "@settings_locationPaused": {
     "description": "Shown when location sharing is turned off but the stored position could not be deleted."
+  },
+  "tour_calendarWeekToggleTitle": "One day, or the whole week",
+  "@tour_calendarWeekToggleTitle": {
+    "description": "Tour step title: calendar day/week agenda toggle"
+  },
+  "tour_calendarWeekToggleDesc": "Switch the agenda between the selected day and the whole week, each day under its own bar with its job count.",
+  "@tour_calendarWeekToggleDesc": {
+    "description": "Tour step description: calendar day/week agenda toggle"
+  },
+  "tour_calendarCrewFilterTitle": "Follow one person",
+  "@tour_calendarCrewFilterTitle": {
+    "description": "Tour step title: calendar crew filter button"
+  },
+  "tour_calendarCrewFilterDesc": "Narrow the whole calendar to one crew member. A banner names who, and Clear brings everyone back.",
+  "@tour_calendarCrewFilterDesc": {
+    "description": "Tour step description: calendar crew filter button"
+  },
+  "tour_settingsLocationSharingTitle": "Sharing your location",
+  "@tour_settingsLocationSharingTitle": {
+    "description": "Tour step title: settings location sharing row"
+  },
+  "tour_settingsLocationSharingDesc": "Your position reaches the staff map only while this is on. Turning it off also erases the position already stored.",
+  "@tour_settingsLocationSharingDesc": {
+    "description": "Tour step description: settings location sharing row"
+  },
+  "tour_jobPushBackTitle": "Running late",
+  "@tour_jobPushBackTitle": {
+    "description": "Tour step title: job details push back action"
+  },
+  "tour_jobPushBackDesc": "Move this job later by a set amount without opening the edit form.",
+  "@tour_jobPushBackDesc": {
+    "description": "Tour step description: job details push back action"
+  },
+  "tour_jobFieldRecordTitle": "What you found",
+  "@tour_jobFieldRecordTitle": {
+    "description": "Tour step title: job details crew field record"
+  },
+  "tour_jobFieldRecordDesc": "Your own notes and photos for this job, kept separate from the brief the office wrote so neither can overwrite the other.",
+  "@tour_jobFieldRecordDesc": {
+    "description": "Tour step description: job details crew field record"
+  },
+  "tour_jobStartTitle": "Say you have arrived",
+  "@tour_jobStartTitle": {
+    "description": "Tour step title: job details start button"
+  },
+  "tour_jobStartDesc": "Start stamps your arrival and begins the clock, so the job shows when it started, when it finished and how long it took.",
+  "@tour_jobStartDesc": {
+    "description": "Tour step description: job details start button"
+  },
+  "tour_jobMarkDoneTitle": "Closing the job",
+  "@tour_jobMarkDoneTitle": {
+    "description": "Tour step title: job details mark complete button"
+  },
+  "tour_jobMarkDoneDesc": "Marks the job finished and records the time. Closed one by mistake? The confirmation carries an Undo for as long as it is on screen.",
+  "@tour_jobMarkDoneDesc": {
+    "description": "Tour step description: job details mark complete button"
+  },
+  "tour_jobBookAgainTitle": "Book it again",
+  "@tour_jobBookAgainTitle": {
+    "description": "Tour step title: job details book again action"
+  },
+  "tour_jobBookAgainDesc": "Opens a new appointment already carrying the client, address, crew and brief — you only pick the date and time.",
+  "@tour_jobBookAgainDesc": {
+    "description": "Tour step description: job details book again action"
   }
 }
