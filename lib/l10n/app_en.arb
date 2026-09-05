@@ -1206,10 +1206,6 @@
   "@error_errorLoadingEmployees": {
     "description": "Error loading employees"
   },
-  "clients_searchByNameOrPhone": "Search by name or phone...",
-  "@clients_searchByNameOrPhone": {
-    "description": "Search by name or phone..."
-  },
   "clients_searchByClientOrEmployee": "Search by client, phone, or employee...",
   "@clients_searchByClientOrEmployee": {
     "description": "History search field hint — matches client name, client phone, or employee name"
@@ -2814,11 +2810,11 @@
   "@tour_calendarCollapseDesc": {
     "description": "Tour step description: calendar collapse handle"
   },
-  "tour_clientsFilterTitle": "Filter by type",
+  "tour_clientsFilterTitle": "Narrow the list",
   "@tour_clientsFilterTitle": {
     "description": "Tour step title: clients type filter chips"
   },
-  "tour_clientsFilterDesc": "Show only residential, commercial or archived clients. Search still looks everywhere.",
+  "tour_clientsFilterDesc": "Open Filter to show one type, one shared address, or your archived clients. Search still looks everywhere.",
   "@tour_clientsFilterDesc": {
     "description": "Tour step description: clients type filter chips"
   },
@@ -3897,5 +3893,67 @@
   "tour_jobBookAgainDesc": "Opens a new appointment already carrying the client, address, crew and brief — you only pick the date and time.",
   "@tour_jobBookAgainDesc": {
     "description": "Tour step description: job details book again action"
+  },
+  "clients_filter": "Filter",
+  "@clients_filter": {
+    "description": "Label of the button that opens the clients filter sheet."
+  },
+  "clients_filterTitle": "Filter clients",
+  "@clients_filterTitle": {
+    "description": "Title of the clients filter sheet."
+  },
+  "clients_filterSectionType": "Type",
+  "@clients_filterSectionType": {
+    "description": "Heading of the type section inside the clients filter sheet."
+  },
+  "clients_filterSectionAddress": "Shared address",
+  "@clients_filterSectionAddress": {
+    "description": "Heading of the shared-address section inside the clients filter sheet."
+  },
+  "clients_filterAll": "All clients",
+  "@clients_filterAll": {
+    "description": "The option that clears every clients filter."
+  },
+  "clients_clearFilter": "Clear filter",
+  "@clients_clearFilter": {
+    "description": "Semantic label of the dismiss control on the active filter chip."
+  },
+  "clients_searchAllFields": "Name, phone, address, email…",
+  "@clients_searchAllFields": {
+    "description": "Hint of the clients search field, naming what the search matches."
+  },
+  "clients_countLabel": "{count, plural, =0{No clients} =1{1 client} other{{count} clients}}",
+  "@clients_countLabel": {
+    "description": "How many clients the list is currently showing.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clients_sort": "Sort",
+  "@clients_sort": {
+    "description": "Label of the control that changes the clients list order."
+  },
+  "clients_sortByName": "Name",
+  "@clients_sortByName": {
+    "description": "Sort the clients list alphabetically by name."
+  },
+  "clients_sortMostJobs": "Most jobs",
+  "@clients_sortMostJobs": {
+    "description": "Sort the clients list by job count, highest first."
+  },
+  "clients_sortRecentlyAdded": "Recently added",
+  "@clients_sortRecentlyAdded": {
+    "description": "Sort the clients list by creation date, newest first."
+  },
+  "clients_sharedAddressCount": "{count, plural, =1{1 other client at this address} other{{count} other clients at this address}}",
+  "@clients_sharedAddressCount": {
+    "description": "How many other clients share this client's street address.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   }
 }

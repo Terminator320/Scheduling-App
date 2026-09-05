@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/widgets/sheets/client_detail_sheet.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/list_item_tile.dart';
@@ -14,16 +13,11 @@ class ClientTile extends StatelessWidget {
     super.key,
     this.onOpen,
     this.selected = false,
-    this.buildingCount,
   });
 
   final ClientRecord client;
   final Future<void> Function()? onOpen;
   final bool selected;
-
-  /// How many clients share this one's street address, when that is more than
-  /// one.
-  final int? buildingCount;
 
   Future<void> _open(BuildContext context) async {
     if (onOpen != null) {
@@ -46,17 +40,11 @@ class ClientTile extends StatelessWidget {
         ? client.fullAddress
         : client.phone;
     final count = client.jobCount;
-    final hasType = client.type != ClientType.unset;
     // Archived clients drop out of the list but stay in search results, so the
-    // row is the only place that can say why one looks "missing".
-    final isShared = (buildingCount ?? 0) > 1;
-    final badges = <Widget>[
-      if (client.archived) const _ArchivedPill(),
-      if (hasType) _TypeChip(type: client.type),
-      // Skipped when the type chip beside it already reads "Building" — the two
-      // pills carry the same word and would render as a duplicate.
-      if (isShared && client.type != ClientType.building) const _BuildingPill(),
-    ];
+    // row is the only place that can say why one looks "missing". It is the ONE
+    // badge left: type moved to the filter sheet and the shared-address count
+    // to the client detail, because four signals competed under one name.
+    final badges = <Widget>[if (client.archived) const _ArchivedPill()];
 
     // Resolved once: `displayName` is an uncached getter that runs `stripPhone`
     // (two regex passes), and this rebuilds per row on the paginated list and
@@ -94,41 +82,6 @@ class _ArchivedPill extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return StatusPill(
       label: context.l10n.clients_filterArchived,
-      background: scheme.surfaceContainerHighest,
-      foreground: scheme.onSurfaceVariant,
-      radius: AppRadius.r8,
-    );
-  }
-}
-
-/// The client's type, as a tinted pill under the address.
-class _TypeChip extends StatelessWidget {
-  const _TypeChip({required this.type});
-
-  final ClientType type;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).palette.primaryAccent;
-    return StatusPill(
-      label: clientTypeLabel(context.l10n, type),
-      background: color.withValues(alpha: 0.10),
-      foreground: color,
-      radius: AppRadius.r8,
-    );
-  }
-}
-
-/// "Building", as a neutral pill under the address — this client's address is
-/// shared with others.
-class _BuildingPill extends StatelessWidget {
-  const _BuildingPill();
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return StatusPill(
-      label: context.l10n.clients_typeBuilding,
       background: scheme.surfaceContainerHighest,
       foreground: scheme.onSurfaceVariant,
       radius: AppRadius.r8,

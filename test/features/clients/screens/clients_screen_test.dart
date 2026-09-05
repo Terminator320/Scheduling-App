@@ -8,6 +8,8 @@ import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/models/clients_sort.dart';
 import 'package:scheduling/features/clients/screens/clients_screen.dart';
 import 'package:scheduling/features/clients/widgets/sheets/edit_client_sheet.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -70,6 +72,8 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(const ClientRecord(id: ''));
+    registerFallbackValue(ClientsSort.name);
+    registerFallbackValue(ClientType.unset);
   });
 
   setUp(() {
@@ -103,7 +107,10 @@ void main() {
     await tester.pumpWidget(_wrap(repo));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('No clients'), findsOneWidget);
+    // Exact, not textContaining: the list header legitimately renders its own
+    // "No clients" count beside the empty state's "No clients yet".
+    expect(find.text('No clients yet'), findsOneWidget);
+    expect(find.text('No clients'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -149,52 +156,111 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'split-layout detail pane keeps showing an in-pane edit after the '
-    'post-save list refresh (no stale snapshot)',
-    (tester) async {
-      // Wide viewport so the master-detail split renders its detail pane;
-      // tall so every edit field is laid out.
-      tester.view.physicalSize = const Size(1200, 2600);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.reset);
-      // The edit-save flow consults the contact-link store (SharedPreferences);
-      // with no link present the phone-contact sync is a no-op.
-      SharedPreferences.setMockInitialValues({});
+  testWidgets('split-layout detail pane keeps showing an in-pane edit after the '
+      'post-save list refresh (no stale snapshot)', (tester) async {
+    // Wide viewport so the master-detail split renders its detail pane;
+    // tall so every edit field is laid out.
+    tester.view.physicalSize = const Size(1200, 2600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    // The edit-save flow consults the contact-link store (SharedPreferences);
+    // with no link present the phone-contact sync is a no-op.
+    SharedPreferences.setMockInitialValues({});
 
-      // The list still serves the pre-edit record after the save-driven refresh —
-      // the detail pane must keep showing the edit, not re-seed from the stale snapshot.
-      when(
-        () => repo.fetchClientsPage(
-          after: any(named: 'after'),
-          limit: any(named: 'limit'),
-        ),
-      ).thenAnswer((_) async => const [_alice]);
-      when(() => repo.updateClient(any())).thenAnswer((_) async {});
+    // The list still serves the pre-edit record after the save-driven refresh —
+    // the detail pane must keep showing the edit, not re-seed from the stale snapshot.
+    when(
+      () => repo.fetchClientsPage(
+        after: any(named: 'after'),
+        limit: any(named: 'limit'),
+      ),
+    ).thenAnswer((_) async => const [_alice]);
+    when(() => repo.updateClient(any())).thenAnswer((_) async {});
 
-      await tester.pumpWidget(_wrap(repo));
-      await tester.pumpAndSettle();
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
 
-      // Select Alice into the split-layout detail pane, then edit her phone.
-      await tester.tap(find.text('Alice Brown'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Edit'));
-      await tester.pumpAndSettle();
+    // Select Alice into the split-layout detail pane, then edit her phone.
+    await tester.tap(find.text('Alice Brown'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
 
-      await tester.enterText(_phoneEditField().first, '5145559999');
-      // Let SheetFocusScroll's 280 ms focus-scroll timer fire.
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.tap(_sheetSave());
-      await tester.pumpAndSettle();
+    await tester.enterText(_phoneEditField().first, '5145559999');
+    // Let SheetFocusScroll's 280 ms focus-scroll timer fire.
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(_sheetSave());
+    await tester.pumpAndSettle();
 
-      // Back in view mode with the new phone — not the stale '555-0101'.
-      expect(find.byType(EditClientSheet), findsNothing);
-      expect(find.text('(514) 555-9999'), findsWidgets);
-      final saved =
-          verify(() => repo.updateClient(captureAny())).captured.single
-              as ClientRecord;
-      expect(saved.phone, '(514) 555-9999');
-      expect(tester.takeException(), isNull);
-    },
-  );
+    // Back in view mode with the new phone — not the stale '555-0101'.
+    expect(find.byType(EditClientSheet), findsNothing);
+    expect(find.text('(514) 555-9999'), findsWidgets);
+    final saved =
+        verify(() => repo.updateClient(captureAny())).captured.single
+            as ClientRecord;
+    expect(saved.phone, '(514) 555-9999');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('shows the pinned Filter button, not the old chip row', (
+    tester,
+  ) async {
+    when(
+      () => repo.fetchClientsPage(
+        after: any(named: 'after'),
+        limit: any(named: 'limit'),
+        sort: any(named: 'sort'),
+      ),
+    ).thenAnswer((_) async => const []);
+
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Filter'), findsOneWidget);
+    // The type chips are gone from the screen — they live in the sheet now.
+    expect(find.text('Residential'), findsNothing);
+    expect(find.text('Commercial'), findsNothing);
+  });
+
+  testWidgets('the search hint names every matched field', (tester) async {
+    when(
+      () => repo.fetchClientsPage(
+        after: any(named: 'after'),
+        limit: any(named: 'limit'),
+        sort: any(named: 'sort'),
+      ),
+    ).thenAnswer((_) async => const []);
+
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Name, phone, address, email…'), findsOneWidget);
+  });
+
+  testWidgets('picking a type in the sheet shows one dismissible chip', (
+    tester,
+  ) async {
+    when(
+      () => repo.fetchClientsPage(
+        after: any(named: 'after'),
+        limit: any(named: 'limit'),
+        sort: any(named: 'sort'),
+      ),
+    ).thenAnswer((_) async => const []);
+    when(
+      () => repo.fetchClientsByType(any()),
+    ).thenAnswer((_) async => const []);
+
+    await tester.pumpWidget(_wrap(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Filter'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Residential'));
+    await tester.pumpAndSettle();
+
+    // Back on the list: exactly one chip, naming the active filter.
+    expect(find.byType(InputChip), findsOneWidget);
+    expect(find.text('Residential'), findsOneWidget);
+  });
 }

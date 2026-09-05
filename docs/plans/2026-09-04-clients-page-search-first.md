@@ -1,8 +1,11 @@
 # Clients page — "Search first"
 
 **Date:** 2026-09-04
-**Status:** DESIGN APPROVED. Not built, not scheduled. Approving the mockup was
-not approval to build — the go-ahead is separate.
+**Status:** DESIGN APPROVED; build authorized by the owner 2026-09-05.
+**Implementation plan:** `docs/plans/2026-09-04-clients-page-search-first-implementation.md`
+— read its three findings (nullable sort fields, the name-bound paging cursor,
+and the missing third client type) before starting; each changes what a task
+has to do.
 **Mockup:** https://claude.ai/code/artifact/baeb4b51-f338-4fc1-840e-4c0fd0ac4724
 (five states: at rest, filter sheet, filtered, searching, nothing found)
 **Supersedes:** `docs/plans/2026-08-29-clients-address-filter.md` — the address

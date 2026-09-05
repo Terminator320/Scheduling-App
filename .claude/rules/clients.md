@@ -91,14 +91,56 @@ Root context: `../../CLAUDE.md`.
   CLI-ARCH/CLI-DEL tags and the confirm copy can't drift; its two hooks are
   separate because the detail view must STAY OPEN after archiving (to offer
   Unarchive) and dismiss after deleting.
+- **The clients filter is ONE SHEET, and the Filter button is pinned outside
+  any scroller** (2026-09-04). The five-control 48px horizontal chip row it
+  replaced put something off-screen on arrival at large text scale.
+  `ClientsFilter` stays a sealed one-of, so the sheet is a SINGLE radio group
+  across its two labelled sections — picking an address clears a type. That
+  reads as a bug and is not one; it is the constraint the chip row hid.
+  Reopening multi-select means changing the sealed model, how the type and
+  address queries compose, and the `firestore.rules` read clauses.
+  **`ClientsFilterSheet` is the ONLY watcher of `clientBuildingsProvider`.**
+  `ClientsListView` used to watch it and `clientBuildingKeysProvider` before
+  the filter switch, so opening the tab paid the paged `orderBy('name')` scan
+  (~700 docs) on top of the paginated first 50 — roughly 14x read
+  amplification on first open. Moving the watch onto the sheet takes it off the
+  path everyone walks onto one almost nobody opens; it does NOT remove the
+  scan, which still needs the server-maintained `buildings` aggregate. Don't
+  watch either provider from a list row or from `ClientsListView` again.
+  **`ClientsListView` carries no chrome.** The Filter button, the active chip
+  and the list header live in `clients_screen.dart`, because that view is ALSO
+  the booking flow's client picker — keeping the chrome in the screen is what
+  makes it suppressible for free rather than by a flag. The header's count
+  arrives through `onCountChanged`, the same shape as `onFirstPageSettled`.
+  **The bar renders under BOTH bounded and UNBOUNDED width** — the feature tour
+  wraps it in a showcase that hands its child unbounded constraints, where any
+  non-zero flex throws — so it branches on `constraints.maxWidth.isFinite`.
+  Its Filter button also overrides the app theme's
+  `minimumSize: Size(infinity, 48)`, which is right for a stacked action bar
+  and makes a button in a Row infinitely wide. A widget test for anything in a
+  Row must use `lightTheme()`, not the Material default, or it misses this.
+- **`ClientsSort.mostJobs` and `.recentlyAdded` order by NULLABLE fields.**
+  Firestore's `orderBy` returns only documents that HAVE the ordered field, so
+  a client whose `jobCount` the recount trigger never stamped, or a
+  pre-`createdAt` import, silently disappears from those two sorts while still
+  appearing under Name. `functions/scripts/backfill-client-sort-fields.js` is
+  the prerequisite that closes it — a release prerequisite, not a follow-up,
+  the same posture `searchTokens` took — and it stamps a FIXED pre-app date
+  rather than `serverTimestamp()`, or the whole legacy roster would read as the
+  newest. `ClientsSort.requiresBackfill` is what a reader greps when a client
+  goes missing from one sort only. Both sorts need their
+  `(archived, <field> DESC, __name__)` composite deployed and READY first.
+  **`fetchClientsPage`'s cursor tuple follows the sort**, and its boundary
+  cache is keyed `"<sort>:<docId>"` — a boundary captured under `name` would
+  resume a `jobCount` query from a string. Don't collapse it back to one map.
 - **The clients type filter is a SEPARATE bounded read, never a filter over the
   paginated list.** `fetchClientsByType` scans the same cached 5000-doc window
-  `searchClients` uses, so the chip row and its results cost no extra Firestore
+  `searchClients` uses, so the filter and its results cost no extra Firestore
   read inside the 2-minute TTL and need no composite index. `fetchArchivedClients`
-  (the Archived chip) is the same shape over the same window, and the chips are
-  ONE sealed `ClientsFilter` — "archived AND commercial" is unexpressible, not
-  merely unhandled. The type filter **excludes archived clients** (the Archived
-  chip is where they live); `searchClients` deliberately does **not** — archived
+  (the Archived option) is the same shape over the same window, and the options
+  are ONE sealed `ClientsFilter` — "archived AND commercial" is unexpressible,
+  not merely unhandled. The type filter **excludes archived clients** (the
+  Archived option is where they live); `searchClients` deliberately does **not** — archived
   clients stay findable and bookable, which is why the row badges them.
   Routing it through `fetchClientsPage` instead would filter a server page in
   Dart, shortening a page the server actually filled — which is exactly what
@@ -146,31 +188,23 @@ Root context: `../../CLAUDE.md`.
   buildings with the most history. `noFixedAddress` and a blank address answer
   null — a client with nowhere to go is not a building of one.
   **The floor is TWO clients.** An entry per address is the client list under
-  another name, and the menu has to stay readable.
-  **It is a MENU, not a chip** (`ClientAddressFilterMenu`), and that is the one
-  place the clients filter bar departs from its own rule: the type options are
-  the fixed `ClientType.pickable` set with no vocabulary to discover, while
-  addresses are discovered from the data and there can be dozens, which a
-  horizontally-scrolling chip row cannot hold. It is still a peer — one sealed
-  `ClientsFilterBuilding(key)`, so selecting one clears whichever chip was on,
-  and picking the selected one clears back to `ClientsFilterAll`. It renders
-  NOTHING when no address is shared; an empty menu is a control that looks
-  broken, and on a small roster that is the normal state.
-  **The per-row pill reads "Building", not a unit count** (owner call
-  2026-08-29) — the row says WHAT the site is; the count belongs to the Address
-  menu, where it ranks one building against another. It is skipped when the
-  type chip beside it already says Building, or the row carries the word twice.
-  It is still ONE reduction the list shares
-  (`clientBuildingCountsProvider`), passed into `ClientTile` as
-  `buildingCount` — never a provider watch per row, the same rule
-  `employeeJobsTodayProvider` keeps. It is deliberately NOT tappable: the whole
-  row is one `InkWell`, so a tappable pill inside it is a nested gesture on a
-  48px target, and the menu is where filtering belongs. `ClientTile` is reused
-  by the booking flow's client picker, which passes nothing and shows no pill.
+  another name, and the sheet's address section has to stay readable.
+  **Addresses live in the FILTER SHEET's own section** (2026-09-04, replacing
+  `ClientAddressFilterMenu`): the type options are the fixed
+  `ClientType.pickable` set with no vocabulary to discover, while addresses are
+  discovered from the data and there can be dozens. They are still a peer — one
+  sealed `ClientsFilterBuilding(key)`, so selecting one clears whichever type
+  was on. The section renders NOTHING when no address is shared; an empty
+  control looks broken, and on a small roster that is the normal state.
+  **The per-row Building pill is GONE** (2026-09-04) — the shared-address count
+  moved to the CLIENT DETAIL, where it is one document read against the same
+  cached window rather than a signal every row had to be fed. The row now
+  carries ONE badge, Archived: it previously showed archived, type, Building
+  and the job count all competing under one name.
   **`fetchClientsByBuilding` / `fetchBuildings` read the SAME bounded cached
   window as the type filter**, so the whole feature costs no extra Firestore
   read inside the TTL and needs no index. It inherits that window's bound: past
-  the cap the menu sees a prefix of the roster. Archived clients are excluded,
+  the cap the sheet sees a prefix of the roster. Archived clients are excluded,
   the same rule the type filter keeps.
 - **The Wave sync badge needs a LIVE doc read, and `ClientDetailView` is the one
   surface that has one** (2026-08-07). Every other client surface is a one-shot
