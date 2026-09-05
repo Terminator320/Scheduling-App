@@ -99,6 +99,11 @@ abstract class AppointmentsRepository {
     int limit,
   });
 
+  /// The most recent bookings across all clients, newest-first, for the
+  /// picker's recents list. Admin-only: the query carries no `employeeIds`
+  /// constraint, so an employee's rules evaluation rejects it.
+  Future<List<AppointmentRecord>> fetchRecentClientBookings({int limit});
+
   /// Fires after local writes so search providers invalidate stale results immediately.
   Stream<void> get onLocalWrite;
 
