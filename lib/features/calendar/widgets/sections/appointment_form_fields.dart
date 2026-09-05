@@ -502,18 +502,6 @@ class AppointmentFormFields extends StatelessWidget {
   ];
 
   List<Widget> _detailsBody(BuildContext context, AppLocalizations l10n) => [
-    // Day off hides address; other personal blocks may still need one.
-    if (!isDayOff) ...[
-      AppointmentAddressField(
-        selectedClient: selectedClient,
-        useCustomAddress: useCustomAddress,
-        addressController: controllers.address,
-        optional: isPersonal,
-        onSwitchToCustom: _switchToCustomAddress,
-        onUseClientAddress: _useClientAddress,
-      ),
-      const SizedBox(height: AppSpacing.sp16),
-    ],
     // --- Notes ---
     SheetFocusScroll(
       child: LabeledTextField(
