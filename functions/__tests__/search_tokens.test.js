@@ -158,3 +158,31 @@ describe("normalize", () => {
     expect(normalize("Šarko")).toBe("arko");
   });
 });
+
+describe("recordMatchesQuery phone seam", () => {
+  const client = {
+    name: "Marie Tremblay",
+    phone: "5145628332",
+    mobile: "4385551212",
+    contacts: [{name: "Ana", phone: "5145550110"}],
+  };
+
+  it("does not match a query straddling two numbers", () => {
+    // The old blob was '514562833243855512125145550110'.
+    expect(recordMatchesQuery(client, "83324385")).toBe(false);
+  });
+
+  it("matches each number on its own", () => {
+    expect(recordMatchesQuery(client, "5145628332")).toBe(true);
+    expect(recordMatchesQuery(client, "4385551212")).toBe(true);
+    expect(recordMatchesQuery(client, "5145550110")).toBe(true);
+  });
+
+  it("still matches a substring inside one number", () => {
+    expect(recordMatchesQuery(client, "5628332")).toBe(true);
+  });
+
+  it("still matches text", () => {
+    expect(recordMatchesQuery(client, "tremblay")).toBe(true);
+  });
+});

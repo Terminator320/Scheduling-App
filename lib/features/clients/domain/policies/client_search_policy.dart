@@ -2,10 +2,15 @@ import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 
 /// A pre-normalized searchable projection of a client.
+///
+/// `phoneDigits` is ONE ENTRY PER NUMBER, never a concatenation. Joining them
+/// let a query straddle the seam between two numbers and match a number nobody
+/// has, and it made the exact-match tier unreachable for any client with both a
+/// phone and a mobile.
 typedef ClientSearchEntry = ({
   ClientRecord client,
   String text,
-  String phoneDigits,
+  List<String> phoneDigits,
 });
 
 class ClientSearchPolicy {
@@ -110,13 +115,14 @@ class ClientSearchPolicy {
         for (final c in client.contacts) '${c.name} ${c.email}',
       ].join(' '),
     ),
-    phoneDigits: digitsOnly(
-      [
+    phoneDigits: [
+      for (final raw in [
         client.phone,
         client.mobile,
         for (final c in client.contacts) c.phone,
-      ].join(' '),
-    ),
+      ])
+        if (digitsOnly(raw).isNotEmpty) digitsOnly(raw),
+    ],
   );
 
   /// The searchable TEXT fields of a raw Firestore client map.
@@ -173,22 +179,31 @@ class ClientSearchPolicy {
   static int relevanceScore({
     required String displayName,
     required String personName,
-    required String phoneDigits,
-    required String contactsDigits,
+    required List<String> phoneDigits,
+    required List<String> contactsDigits,
     required String queryText,
     required String queryDigits,
   }) {
-    if (displayName == queryText || phoneDigits == queryDigits) return 0;
+    final hasDigits = queryDigits.isNotEmpty;
+    if (displayName == queryText ||
+        (hasDigits && phoneDigits.contains(queryDigits))) {
+      return 0;
+    }
     if (displayName.startsWith(queryText) || personName.startsWith(queryText)) {
       return 1;
     }
-    if (queryDigits.isNotEmpty && phoneDigits.startsWith(queryDigits)) return 2;
+    if (hasDigits &&
+        phoneDigits.any((number) => number.startsWith(queryDigits))) {
+      return 2;
+    }
     if (displayName.contains(queryText) || personName.contains(queryText)) {
       return 3;
     }
-    if (queryDigits.isNotEmpty &&
-        (phoneDigits.contains(queryDigits) ||
-            contactsDigits.contains(queryDigits))) {
+    if (hasDigits &&
+        [
+          ...phoneDigits,
+          ...contactsDigits,
+        ].any((number) => number.contains(queryDigits))) {
       return 4;
     }
     return 5;
@@ -203,7 +218,8 @@ class ClientSearchPolicy {
   }) {
     final matchesText = queryText.isNotEmpty && entry.text.contains(queryText);
     final matchesPhone =
-        queryDigits.isNotEmpty && entry.phoneDigits.contains(queryDigits);
+        queryDigits.isNotEmpty &&
+        entry.phoneDigits.any((number) => number.contains(queryDigits));
     return matchesText || matchesPhone;
   }
 }

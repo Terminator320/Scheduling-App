@@ -196,14 +196,14 @@ function recordMatchesQuery(data, query) {
     ...(Array.isArray(d.employeeNames) ? d.employeeNames : []),
     ...contacts.map(contactText),
   ].join(" "));
-  const digits = digitsOnly([
+  const phones = [
     d.phone,
     d.mobile,
     d.clientPhone,
     ...contacts.map((c) => c && c.phone),
-  ].join(" "));
+  ].map(digitsOnly).filter((n) => n.length > 0);
   return Boolean((q && text.includes(q)) ||
-      (qDigits && digits.includes(qDigits)));
+      (qDigits && phones.some((n) => n.includes(qDigits))));
 }
 
 module.exports = {
