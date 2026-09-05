@@ -11,6 +11,7 @@ import 'package:scheduling/features/clients/data/firebase_clients_repository.dar
 import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/models/clients_sort.dart';
 
 class _RecordingLogger extends AppLogger {
   final warnings = <String>[];
@@ -181,9 +182,7 @@ void main() {
     test('a contact with no email normalizes to empty, not null', () async {
       // `normalizeEmail` is fed `??
       await repo().addClient(
-        client().copyWith(
-          contacts: const [ClientContact(name: 'Site')],
-        ),
+        client().copyWith(contacts: const [ClientContact(name: 'Site')]),
       );
 
       final captured =
@@ -255,29 +254,91 @@ void main() {
       },
     );
 
-    test(
-      'legacy business-only boundary doc: cursor uses the stored (empty) '
-      'name, not the businessName display fallback',
-      () async {
-        final r = repo();
-        final docs = [
-          doc('c9', {'name': '', 'businessName': 'Zebra Corp'}),
-        ];
-        when(() => snapshot.docs).thenReturn(docs);
-        final page1 = await r.fetchClientsPage(limit: 1);
-        // The record's display name falls back to the business name…
-        expect(page1.last.name, 'Zebra Corp');
+    test('legacy business-only boundary doc: cursor uses the stored (empty) '
+        'name, not the businessName display fallback', () async {
+      final r = repo();
+      final docs = [
+        doc('c9', {'name': '', 'businessName': 'Zebra Corp'}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+      final page1 = await r.fetchClientsPage(limit: 1);
+      // The record's display name falls back to the business name…
+      expect(page1.last.name, 'Zebra Corp');
 
-        await r.fetchClientsPage(limit: 1, after: page1.last);
+      await r.fetchClientsPage(limit: 1, after: page1.last);
 
-        // …but the cursor must match the stored orderBy value or Firestore
-        // would skip every doc sorted between '' and 'Zebra Corp'.
-        final captured = verify(
-          () => query.startAfter(captureAny()),
-        ).captured.single;
-        expect(captured, ['', 'c9']);
-      },
-    );
+      // …but the cursor must match the stored orderBy value or Firestore
+      // would skip every doc sorted between '' and 'Zebra Corp'.
+      final captured = verify(
+        () => query.startAfter(captureAny()),
+      ).captured.single;
+      expect(captured, ['', 'c9']);
+    });
+
+    test('mostJobs orders by jobCount descending', () async {
+      await repo().fetchClientsPage(limit: 50, sort: ClientsSort.mostJobs);
+
+      verify(() => query.orderBy('jobCount', descending: true)).called(1);
+      verify(() => query.orderBy(FieldPath.documentId)).called(1);
+    });
+
+    test('recentlyAdded orders by createdAt descending', () async {
+      await repo().fetchClientsPage(limit: 50, sort: ClientsSort.recentlyAdded);
+
+      verify(() => query.orderBy('createdAt', descending: true)).called(1);
+    });
+
+    test('archived is filtered out under every sort', () async {
+      await repo().fetchClientsPage(limit: 50, sort: ClientsSort.mostJobs);
+
+      verify(() => collection.where('archived', isEqualTo: false)).called(1);
+    });
+
+    test('the cursor tuple follows the sort, not the name', () async {
+      final r = repo();
+      final docs = [
+        doc('c1', {'name': 'Test Client', 'jobCount': 7}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+      final page1 = await r.fetchClientsPage(
+        limit: 1,
+        sort: ClientsSort.mostJobs,
+      );
+
+      await r.fetchClientsPage(
+        limit: 1,
+        after: page1.last,
+        sort: ClientsSort.mostJobs,
+      );
+
+      final captured = verify(
+        () => query.startAfter(captureAny()),
+      ).captured.single;
+      expect(captured, [7, 'c1']);
+    });
+
+    test('a boundary captured under one sort never resumes another', () async {
+      final r = repo();
+      final docs = [
+        doc('c1', {'name': 'Test Client', 'jobCount': 7}),
+      ];
+      when(() => snapshot.docs).thenReturn(docs);
+      // Page 1 under NAME caches 'Test Client' against c1...
+      final page1 = await r.fetchClientsPage(limit: 1);
+
+      // ...and resuming under jobCount must not reach for it, or Firestore
+      // compares a string against a number and returns the wrong slice.
+      await r.fetchClientsPage(
+        limit: 1,
+        after: page1.last,
+        sort: ClientsSort.mostJobs,
+      );
+
+      final captured = verify(
+        () => query.startAfter(captureAny()),
+      ).captured.single;
+      expect(captured, [7, 'c1']);
+    });
   });
 
   group('the client scan window warns at its cap', () {
@@ -800,9 +861,7 @@ void main() {
       ];
       when(() => snapshot.docs).thenReturn(docs);
 
-      final typed = await repo().fetchClientsByType(
-        ClientType.building,
-      );
+      final typed = await repo().fetchClientsByType(ClientType.building);
 
       expect(typed.single.name, 'Gestion');
     });

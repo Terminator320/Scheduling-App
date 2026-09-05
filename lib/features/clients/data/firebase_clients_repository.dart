@@ -12,6 +12,7 @@ import 'package:scheduling/features/clients/domain/clients_failure.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
+import 'package:scheduling/features/clients/domain/models/clients_sort.dart';
 import 'package:scheduling/features/clients/domain/policies/client_building.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 
@@ -86,8 +87,14 @@ class FirebaseClientsRepository implements ClientsRepository {
     _searchCache.clear();
   }
 
-  // Page-boundary doc names keyed by id.
-  final Map<String, String> _pageBoundaryNames = {};
+  /// The raw stored value of each page's LAST document's sort field, keyed by
+  /// "<sort name>:<doc id>".
+  ///
+  /// Keyed by sort as well as id because the cursor tuple follows the sort: a
+  /// boundary captured under `name` resumes a `jobCount` query from a string
+  /// and returns the wrong slice. `ClientRecord.name` is composed and need not
+  /// equal the stored field, which is why the raw value is cached at all.
+  final Map<String, Object?> _pageBoundaryValues = {};
 
   /// Page boundaries retained — ~`_clientsPageSize` × this many clients deep.
   static const _pageBoundaryMax = 200;
@@ -96,21 +103,23 @@ class FirebaseClientsRepository implements ClientsRepository {
   void clearCaches() {
     _searchCache.clear();
     _scanWindow = null;
-    _pageBoundaryNames.clear();
+    _pageBoundaryValues.clear();
   }
 
   @override
   Future<List<ClientRecord>> fetchClientsPage({
     required int limit,
     ClientRecord? after,
+    ClientsSort sort = ClientsSort.name,
   }) async {
     var query = _clients
         .where('archived', isEqualTo: false)
-        .orderBy('name')
+        .orderBy(sort.field, descending: sort.descending)
         .orderBy(FieldPath.documentId);
     if (after != null) {
       query = query.startAfter([
-        _pageBoundaryNames[after.id] ?? after.name,
+        _pageBoundaryValues['${sort.name}:${after.id}'] ??
+            _fallbackCursorValue(after, sort),
         after.id,
       ]);
     }
@@ -118,14 +127,25 @@ class FirebaseClientsRepository implements ClientsRepository {
     final docs = snapshot.docs;
     if (docs.isNotEmpty) {
       final last = docs.last;
-      _pageBoundaryNames.remove(last.id);
-      if (_pageBoundaryNames.length >= _pageBoundaryMax) {
-        _pageBoundaryNames.remove(_pageBoundaryNames.keys.first);
+      final cacheKey = '${sort.name}:${last.id}';
+      _pageBoundaryValues.remove(cacheKey);
+      if (_pageBoundaryValues.length >= _pageBoundaryMax) {
+        _pageBoundaryValues.remove(_pageBoundaryValues.keys.first);
       }
-      _pageBoundaryNames[last.id] = (last.data()['name'] ?? '').toString();
+      _pageBoundaryValues[cacheKey] = last.data()[sort.field];
     }
     return docs.map((doc) => ClientRecord.fromMap(doc.id, doc.data())).toList();
   }
+
+  // Only reached when the boundary cache has evicted the entry — the record's
+  // own value is a good enough cursor for every sort except `name`, which is
+  // composed rather than stored.
+  Object? _fallbackCursorValue(ClientRecord after, ClientsSort sort) =>
+      switch (sort) {
+        ClientsSort.name => after.name,
+        ClientsSort.mostJobs => after.jobCount,
+        ClientsSort.recentlyAdded => after.createdAt,
+      };
 
   @override
   Future<ClientRecord?> getClientById(String id) async {
