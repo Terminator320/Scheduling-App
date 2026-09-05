@@ -11,6 +11,11 @@ class ClientNamePolicy {
 
   /// Loose phone candidate; [_matchPhone] validates the digits.
   static final _candidate = RegExp(r'\+?\d[\d\s().\-]{7,}\d');
+  // Anything outside a digit or a phone separator — a letter, a '+', a '#' —
+  // means the field is not a bare number.
+  static final _nonPhoneChar = RegExp(r'[^\d\s().\-]');
+  static const int _minDialableDigits = 7;
+  static const int _maxDialableDigits = 15;
 
   /// Trailing phone candidate matched against the doc's own number.
   static final _trailingPhone = RegExp(
@@ -243,6 +248,23 @@ class ClientNamePolicy {
   }
 
   static ({int start, int end, String formatted})? _matchPhone(String text) {
+    // The whole field is one number: seed-from-query. Anything dialable counts,
+    // because leaving it in the name is what produced clients with nothing to
+    // dial. formatPhoneNumber handles both ends — it formats progressively
+    // under ten digits and appends anything past the tenth verbatim.
+    final whole = text.trim();
+    final wholeDigits = _digits(whole);
+    if (!_nonPhoneChar.hasMatch(whole) &&
+        wholeDigits.length >= _minDialableDigits &&
+        wholeDigits.length <= _maxDialableDigits) {
+      final start = text.indexOf(whole);
+      return (
+        start: start,
+        end: start + whole.length,
+        formatted: formatPhoneNumber(wholeDigits),
+      );
+    }
+    // A number embedded in a longer name still needs the full ten digits.
     for (final match in _candidate.allMatches(text)) {
       final candidate = match.group(0)!;
       // International numbers stay in the name.

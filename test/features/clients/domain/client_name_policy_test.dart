@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
+import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 
 /// The worked examples here are DELIBERATELY shared with
 /// `functions/__tests__/client_name_utils.test.js`, which hand-mirrors this
@@ -696,6 +697,57 @@ void main() {
       expect(second.name, '5145551234');
       expect(second.firstName, 'Marc');
       expect(second.lastName, 'Tremblay');
+    });
+  });
+
+  group('liftPhoneFromName at other digit counts', () {
+    test('a ten-digit number still lifts and formats', () {
+      final lifted = ClientNamePolicy.liftPhoneFromName(
+        name: '5145628332',
+        phone: '',
+      );
+      expect(lifted!.phone, '(514) 562-8332');
+    });
+
+    test('a seven-digit number lifts rather than being left in the name', () {
+      final lifted = ClientNamePolicy.liftPhoneFromName(
+        name: '5628332',
+        phone: '',
+      );
+      expect(lifted, isNotNull);
+      expect(ClientSearchPolicy.digitsOnly(lifted!.phone), '5628332');
+    });
+
+    test('an eleven-digit typo still lifts', () {
+      final lifted = ClientNamePolicy.liftPhoneFromName(
+        name: '51456283322',
+        phone: '',
+      );
+      expect(lifted, isNotNull);
+      expect(ClientSearchPolicy.digitsOnly(lifted!.phone), '51456283322');
+    });
+
+    test('an international number still stays in the name', () {
+      expect(
+        ClientNamePolicy.liftPhoneFromName(name: '+33 6 12 34 56 78', phone: ''),
+        isNull,
+      );
+    });
+
+    test('too few digits to dial is not a phone', () {
+      expect(
+        ClientNamePolicy.liftPhoneFromName(name: '4820', phone: ''),
+        isNull,
+      );
+    });
+
+    test('a name with a number in it keeps the name', () {
+      final lifted = ClientNamePolicy.liftPhoneFromName(
+        name: 'Marie Tremblay 5145628332',
+        phone: '',
+      );
+      expect(lifted!.name, 'Marie Tremblay');
+      expect(lifted.phone, '(514) 562-8332');
     });
   });
 }
