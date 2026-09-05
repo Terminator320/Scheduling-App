@@ -1,7 +1,11 @@
 # Clients page — "Search first"
 
 **Date:** 2026-09-04
-**Status:** DESIGN APPROVED; build authorized by the owner 2026-09-05.
+**Status:** DESIGN APPROVED; build authorized by the owner 2026-09-05 and
+**IMPLEMENTED the same day** — commits `68ae7d37` + `d84cae53` on `redesgin`.
+NOT deployed: the two new `clients` composites must be READY and
+`backfill-client-sort-fields.js` must have run before a build using the
+Most jobs / Recently added sorts ships.
 **Implementation plan:** `docs/plans/2026-09-04-clients-page-search-first-implementation.md`
 — read its three findings (nullable sort fields, the name-bound paging cursor,
 and the missing third client type) before starting; each changes what a task
