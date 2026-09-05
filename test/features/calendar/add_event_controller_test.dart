@@ -19,6 +19,8 @@ import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart'
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
+import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
+import 'package:scheduling/features/clients/domain/policies/phone_query_policy.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/employees/domain/employees_repository.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
@@ -195,6 +197,13 @@ void main() {
   });
 
   group('searchClients', () {
+    const marie = ClientRecord(
+      id: 'c1',
+      name: 'Marie Tremblay',
+      phone: '5145628332',
+    );
+    const jp = ClientRecord(id: 'c2', name: 'J-P Gagnon', phone: '5145628901');
+
     test('clears results without hitting the repo on empty query', () async {
       final c = readNotifier();
       await c.searchClients('');
@@ -236,6 +245,99 @@ void main() {
       await first;
       expect(readState().clientResults, [bClient]);
       expect(readState().isSearchingClient, isFalse);
+    });
+
+    test('a digits-only query under seven digits never hits the repository', () async {
+      await readNotifier().searchClients('514');
+      await readNotifier().searchClients('514562');
+      verifyNever(() => clients.searchClients(any()));
+      expect(readState().clientSearchStatus.isHolding, isTrue);
+      expect(readState().clientSearchStatus.digitsTyped, 6);
+    });
+
+    test('a text query still searches from the first character', () async {
+      when(() => clients.searchClients(any())).thenAnswer((_) async => []);
+      await readNotifier().searchClients('t');
+      verify(() => clients.searchClients('t')).called(1);
+      expect(readState().clientSearchStatus.mode, ClientQueryMode.text);
+    });
+
+    test('seven digits sends the canonical query once', () async {
+      when(() => clients.searchClients(any())).thenAnswer((_) async => [marie]);
+      await readNotifier().searchClients('(514) 562-8');
+      verify(() => clients.searchClients('5145628')).called(1);
+      expect(readState().clientResults, [marie]);
+      expect(readState().clientSearchStatus.answeredRung, PhoneRung.canonical);
+    });
+
+    test('a leading 1 is dropped before the query is sent', () async {
+      when(() => clients.searchClients(any())).thenAnswer((_) async => [marie]);
+      await readNotifier().searchClients('1 514 562 8332');
+      verify(() => clients.searchClients('5145628332')).called(1);
+    });
+
+    test('extra digits narrow the previous answer with no second call', () async {
+      when(() => clients.searchClients('5145628'))
+          .thenAnswer((_) async => [marie, jp]);
+      await readNotifier().searchClients('5145628');
+      await readNotifier().searchClients('5145628332');
+      verify(() => clients.searchClients('5145628')).called(1);
+      verifyNever(() => clients.searchClients('5145628332'));
+      expect(readState().clientResults, [marie]);
+    });
+
+    // F5
+    test('a truncated answer is re-queried rather than narrowed', () async {
+      final full = List.generate(
+        25,
+        (i) => ClientRecord(id: 'c$i', name: '514562$i', phone: '514562$i'),
+      );
+      when(() => clients.searchClients('5145628')).thenAnswer((_) async => full);
+      when(() => clients.searchClients('5145628332'))
+          .thenAnswer((_) async => [marie]);
+      await readNotifier().searchClients('5145628');
+      await readNotifier().searchClients('5145628332');
+      verify(() => clients.searchClients('5145628332')).called(1);
+    });
+
+    test('a miss at ten digits falls back to the first seven', () async {
+      when(() => clients.searchClients('5145628233')).thenAnswer((_) async => []);
+      when(() => clients.searchClients('5145628')).thenAnswer((_) async => [marie]);
+      await readNotifier().searchClients('5145628233');
+      expect(readState().clientResults, [marie]);
+      expect(readState().clientSearchStatus.answeredRung, PhoneRung.firstSeven);
+      expect(readState().clientSearchStatus.isFallback, isTrue);
+    });
+
+    test('a miss on both seven-digit rungs leaves an honest empty', () async {
+      when(() => clients.searchClients(any())).thenAnswer((_) async => []);
+      await readNotifier().searchClients('5145628233');
+      expect(readState().clientResults, isEmpty);
+      expect(readState().clientSearchStatus.failed, isFalse);
+      expect(readState().clientSearchStatus.answeredRung, isNull);
+    });
+
+    test('a thrown search is flagged as failed, not as empty', () async {
+      when(() => clients.searchClients(any())).thenThrow(Exception('boom'));
+      await readNotifier().searchClients('5145628332');
+      expect(readState().clientSearchStatus.failed, isTrue);
+      expect(readState().isSearchingClient, isFalse);
+    });
+
+    test('starting a new search clears the previous rows immediately', () async {
+      when(() => clients.searchClients('5145628')).thenAnswer((_) async => [marie]);
+      await readNotifier().searchClients('5145628');
+      expect(readState().clientResults, isNotEmpty);
+
+      final gate = Completer<List<ClientRecord>>();
+      when(() => clients.searchClients('4385551')).thenAnswer((_) => gate.future);
+      final pending = readNotifier().searchClients('4385551');
+      expect(readState().clientResults, isEmpty,
+          reason: 'stale rows must not stay tappable behind the spinner');
+      expect(readState().isSearchingClient, isTrue);
+      gate.complete([jp]);
+      await pending;
+      expect(readState().clientResults, [jp]);
     });
   });
 
