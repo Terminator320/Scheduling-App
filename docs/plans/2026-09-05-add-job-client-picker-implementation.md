@@ -163,7 +163,7 @@ verifies this rather than assuming it.
 - Create: `lib/features/clients/domain/policies/phone_query_policy.dart`
 - Test: `test/features/clients/domain/phone_query_policy_test.dart`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/features/clients/domain/phone_query_policy_test.dart`:
 
@@ -292,12 +292,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run it and confirm it fails**
+- [x] **Step 2: Run it and confirm it fails**
 
 Run: `flutter test test/features/clients/domain/phone_query_policy_test.dart`
 Expected: compile failure — `Target of URI doesn't exist: '.../phone_query_policy.dart'`.
 
-- [ ] **Step 3: Write the policy**
+- [x] **Step 3: Write the policy**
 
 Create `lib/features/clients/domain/policies/phone_query_policy.dart`:
 
@@ -364,12 +364,12 @@ abstract final class PhoneQueryPolicy {
 }
 ```
 
-- [ ] **Step 4: Run the test and confirm it passes**
+- [x] **Step 4: Run the test and confirm it passes**
 
 Run: `flutter test test/features/clients/domain/phone_query_policy_test.dart`
 Expected: `All tests passed!`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/features/clients/domain/policies/phone_query_policy.dart test/features/clients/domain/phone_query_policy_test.dart
@@ -386,7 +386,7 @@ git commit -m "Add PhoneQueryPolicy: canonical digits and the three-rung query l
 - Modify: `functions/search_tokens.js:179-207`
 - Test: `test/features/clients/client_search_policy_test.dart`, `test/features/clients/data/client_search_relevance_test.dart`, `functions/__tests__/search_tokens.test.js`
 
-- [ ] **Step 1: Write the failing Dart tests**
+- [x] **Step 1: Write the failing Dart tests**
 
 Append to `test/features/clients/client_search_policy_test.dart`, inside `main()`:
 
@@ -489,13 +489,13 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 > read `lib/features/clients/domain/models/client_record.dart` and use the real
 > one — do not change the assertions.
 
-- [ ] **Step 2: Run them and confirm they fail**
+- [x] **Step 2: Run them and confirm they fail**
 
 Run: `flutter test test/features/clients/client_search_policy_test.dart`
 Expected: compile failure on `entry.phoneDigits` being compared to a `List`, and
 on `relevanceScore(phoneDigits: const [...])` — the parameter is still `String`.
 
-- [ ] **Step 3: Change the typedef and the three readers**
+- [x] **Step 3: Change the typedef and the three readers**
 
 In `lib/features/clients/domain/policies/client_search_policy.dart`, change the
 typedef:
@@ -578,7 +578,7 @@ Replace `relevanceScore` (was L173-195):
   }
 ```
 
-- [ ] **Step 4: Fix the repository call site**
+- [x] **Step 4: Fix the repository call site**
 
 In `lib/features/clients/data/firebase_clients_repository.dart`, replace the two
 blob builders (was L437-441) with per-number lists. The `contactSearchText`
@@ -603,13 +603,13 @@ join above them stays as it is — that one is text, not digits.
 > be named differently in this scope. Use whatever the existing
 > `contactSearchText` loop iterates.
 
-- [ ] **Step 5: Run the Dart tests**
+- [x] **Step 5: Run the Dart tests**
 
 Run: `flutter test test/features/clients/client_search_policy_test.dart test/features/clients/data/client_search_relevance_test.dart`
 Expected: `All tests passed!` If a pre-existing relevance test asserted the old
 concatenated behaviour, update the assertion — the old behaviour was the bug.
 
-- [ ] **Step 6: Write the failing Jest test for the server twin**
+- [x] **Step 6: Write the failing Jest test for the server twin**
 
 Append to `functions/__tests__/search_tokens.test.js`:
 
@@ -643,13 +643,13 @@ describe("recordMatchesQuery phone seam", () => {
 });
 ```
 
-- [ ] **Step 7: Run it and confirm the straddle case fails**
+- [x] **Step 7: Run it and confirm the straddle case fails**
 
 Run: `npm --prefix functions test -- search_tokens`
 Expected: the "does not match a query straddling two numbers" case FAILS
 (receives `true`).
 
-- [ ] **Step 8: Split the server side**
+- [x] **Step 8: Split the server side**
 
 In `functions/search_tokens.js`, replace the `digits` block inside
 `recordMatchesQuery` (was L199-204) and its return (L205-206):
@@ -665,12 +665,12 @@ In `functions/search_tokens.js`, replace the `digits` block inside
       (qDigits && phones.some((n) => n.includes(qDigits))));
 ```
 
-- [ ] **Step 9: Run both suites**
+- [x] **Step 9: Run both suites**
 
 Run: `npm --prefix functions run lint && npm --prefix functions test -- search_tokens`
 Expected: eslint clean, all cases pass.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add lib/features/clients/domain/policies/client_search_policy.dart lib/features/clients/data/firebase_clients_repository.dart functions/search_tokens.js test/features/clients/client_search_policy_test.dart test/features/clients/data/client_search_relevance_test.dart functions/__tests__/search_tokens.test.js
@@ -685,7 +685,7 @@ git commit -m "Score and match each client phone separately, in Dart and on the 
 - Create: `lib/features/clients/domain/models/client_search_window.dart`
 - Test: `test/features/clients/domain/client_search_window_test.dart`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/features/clients/domain/client_search_window_test.dart`:
 
@@ -772,12 +772,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run it and confirm it fails**
+- [x] **Step 2: Run it and confirm it fails**
 
 Run: `flutter test test/features/clients/domain/client_search_window_test.dart`
 Expected: compile failure — `client_search_window.dart` does not exist.
 
-- [ ] **Step 3: Write the window**
+- [x] **Step 3: Write the window**
 
 Create `lib/features/clients/domain/models/client_search_window.dart`:
 
@@ -834,12 +834,12 @@ class ClientSearchWindow {
 }
 ```
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `flutter test test/features/clients/domain/client_search_window_test.dart`
 Expected: `All tests passed!`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/features/clients/domain/models/client_search_window.dart test/features/clients/domain/client_search_window_test.dart
@@ -857,7 +857,7 @@ git commit -m "Add ClientSearchWindow: narrow a complete answer locally instead 
 - Modify: `lib/features/calendar/data/firebase_appointments_repository.dart`
 - Test: `test/features/calendar/recent_clients_provider_test.dart`
 
-- [ ] **Step 1: Confirm no index is needed**
+- [x] **Step 1: Confirm no index is needed**
 
 Run:
 
@@ -876,7 +876,7 @@ Expected: a list **without** `createdAt`, and without `*`. That means
 override before continuing — a missing one fails the query at runtime, not at
 deploy.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `test/features/calendar/recent_clients_provider_test.dart`:
 
@@ -974,12 +974,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 3: Run it and confirm it fails**
+- [x] **Step 3: Run it and confirm it fails**
 
 Run: `flutter test test/features/calendar/recent_clients_provider_test.dart`
 Expected: compile failure — `recent_client.dart` does not exist.
 
-- [ ] **Step 4: Write the model and its two pure functions**
+- [x] **Step 4: Write the model and its two pure functions**
 
 Create `lib/features/calendar/domain/models/recent_client.dart`:
 
@@ -1025,12 +1025,12 @@ bool matchesDigits(RecentClient recent, String digits) {
 }
 ```
 
-- [ ] **Step 5: Run the test**
+- [x] **Step 5: Run the test**
 
 Run: `flutter test test/features/calendar/recent_clients_provider_test.dart`
 Expected: `All tests passed!`
 
-- [ ] **Step 6: Add the repository method**
+- [x] **Step 6: Add the repository method**
 
 In `lib/features/calendar/domain/appointments_repository.dart`, beside
 `fetchClientHistory` (L96-100):
@@ -1066,7 +1066,7 @@ In `lib/features/calendar/data/firebase_appointments_repository.dart`, beside
 > There is no paging and no cap warn here on purpose: the limit IS the answer,
 > not a truncation of one.
 
-- [ ] **Step 7: Write the provider**
+- [x] **Step 7: Write the provider**
 
 Create `lib/features/calendar/application/recent_clients_provider.dart`:
 
@@ -1106,7 +1106,7 @@ final recentClientsProvider = FutureProvider<List<RecentClient>>((ref) async {
 > and `lib/core/` for the admin/role provider, and import the real ones. Do not
 > read the role from SharedPreferences (root `CLAUDE.md`).
 
-- [ ] **Step 8: Analyzer and commit**
+- [x] **Step 8: Analyzer and commit**
 
 Run: `flutter analyze lib/features/calendar/application/recent_clients_provider.dart lib/features/calendar/domain/models/recent_client.dart`
 Expected: `No issues found!`
@@ -1126,7 +1126,7 @@ git commit -m "Add recent clients, derived from appointments the app already rea
 - Modify: `lib/features/calendar/application/add_event_controller.dart:26-56,113-132`
 - Modify: `lib/features/calendar/application/event_details_controller.dart:40-75,290-315`
 
-- [ ] **Step 1: Write the status object**
+- [x] **Step 1: Write the status object**
 
 Create `lib/features/clients/domain/models/client_search_status.dart`:
 
@@ -1167,12 +1167,12 @@ abstract class ClientSearchStatus with _$ClientSearchStatus {
 }
 ```
 
-- [ ] **Step 2: Generate Freezed**
+- [x] **Step 2: Generate Freezed**
 
 Run: `dart run build_runner build --delete-conflicting-outputs`
 Expected: `client_search_status.freezed.dart` written, no errors.
 
-- [ ] **Step 3: Add it to the state interface and the update object**
+- [x] **Step 3: Add it to the state interface and the update object**
 
 In `lib/features/calendar/application/appointment_form_concerns.dart`, add to
 `abstract interface class AppointmentFormFields` (L15-22):
@@ -1188,7 +1188,7 @@ matching the existing style of the other nullable members:
   final ClientSearchStatus? clientSearchStatus;
 ```
 
-- [ ] **Step 4: Add it to both states**
+- [x] **Step 4: Add it to both states**
 
 `add_event_controller.dart`, in `AddEventState` beside `isSearchingClient`
 (L44):
@@ -1208,12 +1208,12 @@ the neighbouring fields:
       clientSearchStatus: update.clientSearchStatus ?? current.clientSearchStatus,
 ```
 
-- [ ] **Step 5: Regenerate and check the analyzer**
+- [x] **Step 5: Regenerate and check the analyzer**
 
 Run: `dart run build_runner build --delete-conflicting-outputs && flutter analyze`
 Expected: `No issues found!`
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add lib/features/clients/domain/models/client_search_status.dart lib/features/calendar/application/
@@ -1231,7 +1231,7 @@ git commit -m "Carry client search status on the appointment form state"
 This is the task that removes the wasted reads, the stale rows and the
 indistinguishable failure.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `test/features/calendar/add_event_controller_test.dart`, inside the
 existing `group('searchClients')`. Use the same mock repository setup the
@@ -1341,13 +1341,13 @@ group's existing fixtures:
   final jp = ClientRecord(id: 'c2', name: 'J-P Gagnon', phone: '5145628901');
 ```
 
-- [ ] **Step 2: Run and confirm they fail**
+- [x] **Step 2: Run and confirm they fail**
 
 Run: `flutter test test/features/calendar/add_event_controller_test.dart`
 Expected: the new cases fail — the repository is called for `514`, no
 `clientSearchStatus` is written, stale rows persist.
 
-- [ ] **Step 3: Rewrite `searchClients`**
+- [x] **Step 3: Rewrite `searchClients`**
 
 Replace `searchClients` in
 `lib/features/calendar/application/appointment_form_concerns.dart` (was
@@ -1475,13 +1475,13 @@ from the last one:
     _clientWindow = ClientSearchWindow.empty;
 ```
 
-- [ ] **Step 4: Run the controller tests**
+- [x] **Step 4: Run the controller tests**
 
 Run: `flutter test test/features/calendar/add_event_controller_test.dart`
 Expected: `All tests passed!`, including the pre-existing stale-response guard
 test at L224-231.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/features/calendar/application/appointment_form_concerns.dart test/features/calendar/add_event_controller_test.dart
@@ -1507,7 +1507,7 @@ number must not be third.
 Sorting in the repository, not the controller, is what keeps the callable path
 and the local path behaving the same.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `test/features/clients/data/client_search_relevance_test.dart`:
 
@@ -1536,12 +1536,12 @@ Append to `test/features/clients/data/client_search_relevance_test.dart`:
   });
 ```
 
-- [ ] **Step 2: Run and confirm it fails**
+- [x] **Step 2: Run and confirm it fails**
 
 Run: `flutter test test/features/clients/data/client_search_relevance_test.dart`
 Expected: `scoreRecord` is not defined.
 
-- [ ] **Step 3: Add the record-shaped scorer**
+- [x] **Step 3: Add the record-shaped scorer**
 
 In `client_search_policy.dart`, beside `relevanceScore`:
 
@@ -1569,7 +1569,7 @@ In `client_search_policy.dart`, beside `relevanceScore`:
   }
 ```
 
-- [ ] **Step 4: Sort the callable's answer**
+- [x] **Step 4: Sort the callable's answer**
 
 In `firebase_clients_repository.dart`, in `_searchClientsCallable`, sort before
 returning. Keep display name as the tie-break so the order is stable:
@@ -1598,7 +1598,7 @@ returning. Keep display name as the tie-break so the order is stable:
 > a very broad query is still answered from the alphabetically first slice. That
 > bound is documented in the root `CLAUDE.md` and is out of scope here.
 
-- [ ] **Step 5: Run and commit**
+- [x] **Step 5: Run and commit**
 
 Run: `flutter test test/features/clients/`
 Expected: `All tests passed!`
@@ -1621,7 +1621,7 @@ sheet from a seven- or eleven-digit query saves a client whose name is a number
 and whose phone field is empty — the one record guaranteed never to be found
 again.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `test/features/clients/client_name_policy_test.dart`:
 
@@ -1678,12 +1678,12 @@ Append to `test/features/clients/client_name_policy_test.dart`:
   });
 ```
 
-- [ ] **Step 2: Run and confirm the seven- and eleven-digit cases fail**
+- [x] **Step 2: Run and confirm the seven- and eleven-digit cases fail**
 
 Run: `flutter test test/features/clients/client_name_policy_test.dart`
 Expected: those two return null.
 
-- [ ] **Step 3: Widen the digit gate**
+- [x] **Step 3: Widen the digit gate**
 
 **Scope the widening to the whole-field case only.** `_candidate` feeds
 `_matchPhone`, which feeds `liftPhoneFromName`, which the add-client name field
@@ -1730,13 +1730,13 @@ Add the two helper patterns beside the existing ones:
   static final _nonPhoneChar = RegExp(r'[^\d\s().\-]');
 ```
 
-- [ ] **Step 4: Run the whole name-policy and add-client suites**
+- [x] **Step 4: Run the whole name-policy and add-client suites**
 
 Run: `flutter test test/features/clients/client_name_policy_test.dart test/features/clients/widgets/`
 Expected: `All tests passed!` — `stripPhone` and `displayFor` share
 `_candidate`, so a regression there shows up here.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add lib/features/clients/domain/policies/client_name_policy.dart test/features/clients/client_name_policy_test.dart
@@ -1750,7 +1750,7 @@ git commit -m "Lift a 7-15 digit number into the phone field when creating a cli
 **Files:**
 - Modify: `lib/l10n/app_en.arb`, `lib/l10n/app_fr.arb`
 
-- [ ] **Step 1: Add the EN keys with their metadata blocks**
+- [x] **Step 1: Add the EN keys with their metadata blocks**
 
 Add to `lib/l10n/app_en.arb`, keeping the `feature_keyName` convention and the
 existing bucket prefixes (`calendar_`, `clients_`, `validation_`):
@@ -1856,7 +1856,7 @@ existing bucket prefixes (`calendar_`, `clients_`, `validation_`):
   }
 ```
 
-- [ ] **Step 2: Add the FR translations in lockstep**
+- [x] **Step 2: Add the FR translations in lockstep**
 
 Add the same keys to `lib/l10n/app_fr.arb` (values only — `@key` blocks live in
 the template):
@@ -1886,7 +1886,7 @@ the template):
   "calendar_searchForAnotherAddress": "Rechercher une autre adresse…"
 ```
 
-- [ ] **Step 3: Regenerate and check for drift**
+- [x] **Step 3: Regenerate and check for drift**
 
 The repo has a hook that runs `flutter gen-l10n` on ARB edits — do not run it
 manually. Confirm the result:
@@ -1894,7 +1894,7 @@ manually. Confirm the result:
 Run: `cat lib/l10n/.gen/untranslated.json`
 Expected: `{}`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add lib/l10n/app_en.arb lib/l10n/app_fr.arb
@@ -1915,7 +1915,7 @@ The mode switch and the result row are **private widgets in this file**, not
 their own files: each has exactly one caller, and the repo's rule is that three
 similar lines beat a helper used once.
 
-- [ ] **Step 1: Write the failing widget test**
+- [x] **Step 1: Write the failing widget test**
 
 Create `test/features/clients/widgets/client_picker_test.dart`. Each test file
 owns its local `_harness`; there is no shared `_scaledHarness`.
@@ -2088,12 +2088,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run and confirm it fails**
+- [x] **Step 2: Run and confirm it fails**
 
 Run: `flutter test test/features/clients/widgets/client_picker_test.dart`
 Expected: compile failure — `client_picker.dart` does not exist.
 
-- [ ] **Step 3: Write the picker**
+- [x] **Step 3: Write the picker**
 
 Create `lib/features/clients/widgets/fields/client_picker.dart`. Points the
 implementation must hold, each pinned by a test above:
@@ -2164,12 +2164,12 @@ class ClientPicker extends StatelessWidget {
 > and the existing `AppSearchBar` / `SheetPanel` idioms. Do not add a state the
 > tests do not name.
 
-- [ ] **Step 4: Run the picker tests**
+- [x] **Step 4: Run the picker tests**
 
 Run: `flutter test test/features/clients/widgets/client_picker_test.dart`
 Expected: `All tests passed!`
 
-- [ ] **Step 5: Delete the old field and its test**
+- [x] **Step 5: Delete the old field and its test**
 
 ```bash
 git rm lib/features/clients/widgets/fields/client_search_field.dart test/features/clients/widgets/client_search_field_test.dart
@@ -2180,7 +2180,7 @@ Expected: one error per remaining `ClientSearchField` reference — there should
 be exactly one, in `appointment_form_fields.dart`. Task 12 fixes it. If the
 analyzer reports more, stop and list them.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add lib/features/clients/widgets/fields/client_picker.dart test/features/clients/widgets/client_picker_test.dart
@@ -2195,7 +2195,7 @@ git commit -m "Replace ClientSearchField with ClientPicker: mode switch, tally, 
 - Create: `lib/features/clients/widgets/cards/selected_client_card.dart`
 - Test: `test/features/clients/widgets/selected_client_card_test.dart`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/features/clients/widgets/selected_client_card_test.dart`:
 
@@ -2299,12 +2299,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run and confirm it fails**
+- [x] **Step 2: Run and confirm it fails**
 
 Run: `flutter test test/features/clients/widgets/selected_client_card_test.dart`
 Expected: compile failure — the card does not exist.
 
-- [ ] **Step 3: Write the card**
+- [x] **Step 3: Write the card**
 
 Create `lib/features/clients/widgets/cards/selected_client_card.dart`. Build it
 on `appCardDecoration(theme)` and `theme.monoType` for the number; the actions
@@ -2340,7 +2340,7 @@ class SelectedClientCard extends StatelessWidget {
 > `client.address` is blank — read-only detail bodies omit empty sections rather
 > than showing "None".
 
-- [ ] **Step 4: Run the test and commit**
+- [x] **Step 4: Run the test and commit**
 
 Run: `flutter test test/features/clients/widgets/selected_client_card_test.dart`
 Expected: `All tests passed!`
@@ -2364,7 +2364,7 @@ separately. `AppointmentAddressField` is **not** deleted — it keeps the pill a
 autocomplete branch, and `JobAddressSection` wraps it with the
 previous-addresses panel.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/features/calendar/widgets/sections/job_address_section_test.dart`:
 
@@ -2462,12 +2462,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run and confirm it fails**
+- [x] **Step 2: Run and confirm it fails**
 
 Run: `flutter test test/features/calendar/widgets/sections/job_address_section_test.dart`
 Expected: compile failure.
 
-- [ ] **Step 3: Write the section**
+- [x] **Step 3: Write the section**
 
 Create `lib/features/calendar/widgets/sections/job_address_section.dart`,
 wrapping `AppointmentAddressField` and adding the previous-address panel above
@@ -2476,7 +2476,7 @@ it against the five tests. Unit grouping is **not** in this task — a previous
 address renders in full; forcing a unit column when the street part does not
 group cleanly is the failure mode the design doc names.
 
-- [ ] **Step 4: Remove the address from the details section**
+- [x] **Step 4: Remove the address from the details section**
 
 In `lib/features/calendar/widgets/sections/appointment_form_fields.dart`,
 delete the `AppointmentAddressField(...)` block and its trailing
@@ -2484,14 +2484,14 @@ delete the `AppointmentAddressField(...)` block and its trailing
 `_switchToCustomAddress` and `_useClientAddress` where they are — Task 12
 passes them to the new section.
 
-- [ ] **Step 5: Run the tests**
+- [x] **Step 5: Run the tests**
 
 Run: `flutter test test/features/calendar/widgets/sections/`
 Expected: `job_address_section_test.dart` passes.
 `appointment_form_fields_test.dart` will FAIL — it has an address-in-details
 expectation and the file does not compile yet. That is Task 12.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add lib/features/calendar/widgets/sections/job_address_section.dart test/features/calendar/widgets/sections/job_address_section_test.dart lib/features/calendar/widgets/sections/appointment_form_fields.dart
@@ -2513,7 +2513,7 @@ already parses this — `splitApt(String) -> AptAddress?` with `.apt` and
 parsing is needed. **The whole risk is mis-grouping**, so the policy groups only
 when it is sure and falls back to full rows otherwise.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `test/features/calendar/domain/previous_address_policy_test.dart`:
 
@@ -2601,12 +2601,12 @@ void main() {
 }
 ```
 
-- [ ] **Step 2: Run and confirm it fails**
+- [x] **Step 2: Run and confirm it fails**
 
 Run: `flutter test test/features/calendar/domain/previous_address_policy_test.dart`
 Expected: the policy file does not exist.
 
-- [ ] **Step 3: Write the policy**
+- [x] **Step 3: Write the policy**
 
 Create `lib/features/calendar/domain/policies/previous_address_policy.dart`:
 
@@ -2669,7 +2669,7 @@ PreviousAddressList groupPreviousAddresses(List<String> addresses) {
 }
 ```
 
-- [ ] **Step 4: Run the policy test**
+- [x] **Step 4: Run the policy test**
 
 Run: `flutter test test/features/calendar/domain/previous_address_policy_test.dart`
 Expected: `All tests passed!`
@@ -2678,7 +2678,7 @@ Expected: `All tests passed!`
 > fix the **test data** to the real forms `splitApt` accepts (read its four
 > regexes) — do not weaken the guard assertions.
 
-- [ ] **Step 5: Render the grouped form**
+- [x] **Step 5: Render the grouped form**
 
 In `job_address_section.dart`, run `previousAddresses` through
 `groupPreviousAddresses`. When `sharedStreet` is non-null, the panel header is
@@ -2687,7 +2687,7 @@ leading column with the street once in the header; otherwise the header stays
 `calendar_beenHereBefore` and rows render `full`. `onPickPrevious` always
 reports the **full** address, never the unit alone.
 
-- [ ] **Step 6: Extend the section test**
+- [x] **Step 6: Extend the section test**
 
 Add to `test/features/calendar/widgets/sections/job_address_section_test.dart`:
 
@@ -2721,7 +2721,7 @@ Add to `test/features/calendar/widgets/sections/job_address_section_test.dart`:
   });
 ```
 
-- [ ] **Step 7: Run and commit**
+- [x] **Step 7: Run and commit**
 
 Run: `flutter test test/features/calendar/`
 Expected: `All tests passed!`
@@ -2741,7 +2741,7 @@ git commit -m "Group a client's previous job addresses by unit when they share a
 - Modify: `lib/features/calendar/widgets/views/details_edit_body.dart:72-84,189-206`
 - Test: `test/features/calendar/widgets/sections/appointment_form_fields_test.dart`, `test/features/calendar/widgets/add_appointment_sheet_seed_test.dart`
 
-- [ ] **Step 1: Extend the widget's parameters**
+- [x] **Step 1: Extend the widget's parameters**
 
 In `appointment_form_fields.dart`, add beside the existing client params (L148-153):
 
@@ -2760,7 +2760,7 @@ Add to `AppointmentFormCallbacks` (L68-101), beside `onSearchClients` (L88):
   final ValueChanged<String> onPickPreviousAddress;
 ```
 
-- [ ] **Step 2: Rewrite the client block in `_whoSection`**
+- [x] **Step 2: Rewrite the client block in `_whoSection`**
 
 Replace the `ClientSearchField` block (L339-358) with a branch: the card when a
 client is attached, the picker when not. Both stay inside the existing
@@ -2824,7 +2824,7 @@ Also note: a **personal** job has no client but may still have an address. The
 `if (isPersonal && !isDayOff)` block rendering `JobAddressSection` with a null
 client and `optional: true`, matching what `_detailsBody` did before.
 
-- [ ] **Step 3: Wire `add_appointment_sheet.dart`**
+- [x] **Step 3: Wire `add_appointment_sheet.dart`**
 
 Replace `_onClientSearchChanged` (L114-121) so an empty query still cancels, and
 add the two new handlers:
@@ -2858,13 +2858,13 @@ watch the recents:
     final recents = ref.watch(recentClientsProvider).value ?? const [];
 ```
 
-- [ ] **Step 4: Wire `details_edit_body.dart` identically**
+- [x] **Step 4: Wire `details_edit_body.dart` identically**
 
 Same three handlers, resolving the notifier per call as the existing handler
 does (L73-77). This file has **no test of its own** — that is the known coverage
 gap, so read the add-sheet version and mirror it exactly rather than improvising.
 
-- [ ] **Step 5: Update the existing widget tests**
+- [x] **Step 5: Update the existing widget tests**
 
 `appointment_form_fields_test.dart` has an address-in-details expectation and a
 client-picker expectation. Update both to the new structure; keep every other
@@ -2876,12 +2876,12 @@ validation-error case.
 the address pill. With a prefilled client the WHO section now renders
 `SelectedClientCard`, so the assertions move from the text field to the card.
 
-- [ ] **Step 6: Run the calendar suites**
+- [x] **Step 6: Run the calendar suites**
 
 Run: `flutter test test/features/calendar/`
 Expected: `All tests passed!`
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add lib/features/calendar/ test/features/calendar/
@@ -2897,7 +2897,7 @@ git commit -m "Render the client picker, card and job address in the WHO section
 - Modify: `docs/plans/2026-09-05-add-job-client-picker.md`
 - Modify: `.claude/rules/clients.md`
 
-- [ ] **Step 1: Confirm the design doc already carries the corrected ladder**
+- [x] **Step 1: Confirm the design doc already carries the corrected ladder**
 
 `docs/plans/2026-09-05-add-job-client-picker.md` was corrected on 2026-09-05
 when this plan was written — its "On a miss" section names first-seven then
@@ -2905,14 +2905,14 @@ last-seven and records why. Read it and confirm; if it still says "last four",
 fix it to match Task 1 before continuing. An `AppDestination`/`TourForm` member
 name IS a tour storage key, so do not rename anything while editing copy.
 
-- [ ] **Step 2: Update the tour step description**
+- [x] **Step 2: Update the tour step description**
 
 `TourStepId.apptClient` points at the client field. Its ARB description
 describes a search box that no longer exists. Rewrite the EN value and its FR
 twin to describe entering a phone number and tapping a match, and regenerate
 (the ARB hook runs `gen-l10n`).
 
-- [ ] **Step 3: Record the new rules**
+- [x] **Step 3: Record the new rules**
 
 Add to `.claude/rules/clients.md`, in the client-search area:
 
@@ -2947,7 +2947,7 @@ Add to `.claude/rules/clients.md`, in the client-search area:
   composite index.
 ```
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add docs/plans/ .claude/rules/clients.md lib/l10n/
@@ -2958,7 +2958,7 @@ git commit -m "Record the picker rules and correct the fallback ladder in the de
 
 ### Task 14: Full verification
 
-- [ ] **Step 1: BOM scan**
+- [x] **Step 1: BOM scan**
 
 ```bash
 git diff --name-only HEAD~15 -- '*.dart' | while read -r f; do
@@ -2968,34 +2968,34 @@ done
 
 Expected: no output.
 
-- [ ] **Step 2: Analyzer**
+- [x] **Step 2: Analyzer**
 
 Run: `flutter analyze`
 Expected: `No issues found!` — that is this repo's baseline, so any lint is from
 this work.
 
-- [ ] **Step 3: Dead references to the deleted field**
+- [x] **Step 3: Dead references to the deleted field**
 
 Run: `grep -rn "ClientSearchField" lib test`
 Expected: no output.
 
-- [ ] **Step 4: l10n drift**
+- [x] **Step 4: l10n drift**
 
 Run: `cat lib/l10n/.gen/untranslated.json`
 Expected: `{}`.
 
-- [ ] **Step 5: Full Flutter suite**
+- [x] **Step 5: Full Flutter suite**
 
 Run: `flutter test`
 Expected: `All tests passed!`, at a count at or above the 3288 recorded on
 2026-09-05.
 
-- [ ] **Step 6: Functions**
+- [x] **Step 6: Functions**
 
 Run: `npm --prefix functions run lint && npm --prefix functions test`
 Expected: eslint clean; all suites pass, at or above 1754.
 
-- [ ] **Step 7: Report the deploy prerequisites, do NOT deploy**
+- [x] **Step 7: Report the deploy prerequisites, do NOT deploy**
 
 Report, do not run:
 
@@ -3013,7 +3013,8 @@ Report, do not run:
 4. Never pass `--force` to a Firestore deploy — it deletes TTL policies missing
    from `firestore.indexes.json` (all five went once, 2026-07-21).
 
-- [ ] **Step 8: Device pass the two things a widget test cannot prove**
+- [ ] **Step 8: Device pass the two things a widget test cannot prove** (NOT
+  RUN — Mac/device gated; both remain open)
 
 Neither is coverable in `flutter test`; both are named risks in the design doc:
 
