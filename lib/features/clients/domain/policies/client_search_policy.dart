@@ -175,6 +175,28 @@ class ClientSearchPolicy {
         digitsOnly(rawPhones(data).join(' ')).contains(queryDigits);
   }
 
+  /// [relevanceScore] for a built record. The raw-map call site in the
+  /// repository keeps its own projection; this is the one for callers that
+  /// already hold a [ClientRecord], so neither has to re-spell the field list.
+  static int scoreRecord(
+    ClientRecord client, {
+    required String queryText,
+    required String queryDigits,
+  }) {
+    final entry = index(client);
+    return relevanceScore(
+      displayName: normalize(client.displayName),
+      personName: normalize('${client.firstName} ${client.lastName}'),
+      phoneDigits: entry.phoneDigits,
+      contactsDigits: [
+        for (final c in client.contacts)
+          if (digitsOnly(c.phone).isNotEmpty) digitsOnly(c.phone),
+      ],
+      queryText: queryText,
+      queryDigits: queryDigits,
+    );
+  }
+
   /// How well a client matches a query — LOWER is better, 0 is exact.
   static int relevanceScore({
     required String displayName,
