@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$ClientSearchStatus {
 
- ClientQueryMode get mode; int get digitsTyped; bool get failed; String get answeredQuery; PhoneRung? get answeredRung;
+ ClientQueryMode get mode; int get digitsTyped; bool get failed; PhoneRung? get answeredRung;
 /// Create a copy of ClientSearchStatus
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -27,20 +27,20 @@ $ClientSearchStatusCopyWith<ClientSearchStatus> get copyWith => _$ClientSearchSt
 @override
 bool operator ==(Object other) {
   final _this = this as ClientSearchStatus;
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClientSearchStatus&&(identical(other.mode, _this.mode) || other.mode == _this.mode)&&(identical(other.digitsTyped, _this.digitsTyped) || other.digitsTyped == _this.digitsTyped)&&(identical(other.failed, _this.failed) || other.failed == _this.failed)&&(identical(other.answeredQuery, _this.answeredQuery) || other.answeredQuery == _this.answeredQuery)&&(identical(other.answeredRung, _this.answeredRung) || other.answeredRung == _this.answeredRung));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is ClientSearchStatus&&(identical(other.mode, _this.mode) || other.mode == _this.mode)&&(identical(other.digitsTyped, _this.digitsTyped) || other.digitsTyped == _this.digitsTyped)&&(identical(other.failed, _this.failed) || other.failed == _this.failed)&&(identical(other.answeredRung, _this.answeredRung) || other.answeredRung == _this.answeredRung));
 }
 
 
 @override
 int get hashCode {
   final _this = this as ClientSearchStatus;
-  return Object.hash(runtimeType,_this.mode,_this.digitsTyped,_this.failed,_this.answeredQuery,_this.answeredRung);
+  return Object.hash(runtimeType,_this.mode,_this.digitsTyped,_this.failed,_this.answeredRung);
 }
 
 @override
 String toString() {
   final _this = this as ClientSearchStatus;
-  return 'ClientSearchStatus(mode: ${_this.mode}, digitsTyped: ${_this.digitsTyped}, failed: ${_this.failed}, answeredQuery: ${_this.answeredQuery}, answeredRung: ${_this.answeredRung})';
+  return 'ClientSearchStatus(mode: ${_this.mode}, digitsTyped: ${_this.digitsTyped}, failed: ${_this.failed}, answeredRung: ${_this.answeredRung})';
 }
 
 
@@ -51,7 +51,7 @@ abstract mixin class $ClientSearchStatusCopyWith<$Res>  {
   factory $ClientSearchStatusCopyWith(ClientSearchStatus value, $Res Function(ClientSearchStatus) _then) = _$ClientSearchStatusCopyWithImpl;
 @useResult
 $Res call({
- ClientQueryMode mode, int digitsTyped, bool failed, String answeredQuery, PhoneRung? answeredRung
+ ClientQueryMode mode, int digitsTyped, bool failed, PhoneRung? answeredRung
 });
 
 
@@ -68,13 +68,12 @@ class _$ClientSearchStatusCopyWithImpl<$Res>
 
 /// Create a copy of ClientSearchStatus
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? mode = null,Object? digitsTyped = null,Object? failed = null,Object? answeredQuery = null,Object? answeredRung = freezed,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? mode = null,Object? digitsTyped = null,Object? failed = null,Object? answeredRung = freezed,}) {
   return _then(ClientSearchStatus(
 mode: null == mode ? _self.mode : mode // ignore: cast_nullable_to_non_nullable
 as ClientQueryMode,digitsTyped: null == digitsTyped ? _self.digitsTyped : digitsTyped // ignore: cast_nullable_to_non_nullable
 as int,failed: null == failed ? _self.failed : failed // ignore: cast_nullable_to_non_nullable
-as bool,answeredQuery: null == answeredQuery ? _self.answeredQuery : answeredQuery // ignore: cast_nullable_to_non_nullable
-as String,answeredRung: freezed == answeredRung ? _self.answeredRung : answeredRung // ignore: cast_nullable_to_non_nullable
+as bool,answeredRung: freezed == answeredRung ? _self.answeredRung : answeredRung // ignore: cast_nullable_to_non_nullable
 as PhoneRung?,
   ));
 }
@@ -160,10 +159,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( ClientQueryMode mode,  int digitsTyped,  bool failed,  String answeredQuery,  PhoneRung? answeredRung)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( ClientQueryMode mode,  int digitsTyped,  bool failed,  PhoneRung? answeredRung)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _ClientSearchStatus() when $default != null:
-return $default(_that.mode,_that.digitsTyped,_that.failed,_that.answeredQuery,_that.answeredRung);case _:
+return $default(_that.mode,_that.digitsTyped,_that.failed,_that.answeredRung);case _:
   return orElse();
 
 }
@@ -181,10 +180,10 @@ return $default(_that.mode,_that.digitsTyped,_that.failed,_that.answeredQuery,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( ClientQueryMode mode,  int digitsTyped,  bool failed,  String answeredQuery,  PhoneRung? answeredRung)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( ClientQueryMode mode,  int digitsTyped,  bool failed,  PhoneRung? answeredRung)  $default,) {final _that = this;
 switch (_that) {
 case _ClientSearchStatus():
-return $default(_that.mode,_that.digitsTyped,_that.failed,_that.answeredQuery,_that.answeredRung);case _:
+return $default(_that.mode,_that.digitsTyped,_that.failed,_that.answeredRung);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -201,10 +200,10 @@ return $default(_that.mode,_that.digitsTyped,_that.failed,_that.answeredQuery,_t
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( ClientQueryMode mode,  int digitsTyped,  bool failed,  String answeredQuery,  PhoneRung? answeredRung)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( ClientQueryMode mode,  int digitsTyped,  bool failed,  PhoneRung? answeredRung)?  $default,) {final _that = this;
 switch (_that) {
 case _ClientSearchStatus() when $default != null:
-return $default(_that.mode,_that.digitsTyped,_that.failed,_that.answeredQuery,_that.answeredRung);case _:
+return $default(_that.mode,_that.digitsTyped,_that.failed,_that.answeredRung);case _:
   return null;
 
 }
@@ -216,13 +215,12 @@ return $default(_that.mode,_that.digitsTyped,_that.failed,_that.answeredQuery,_t
 
 
 class _ClientSearchStatus extends ClientSearchStatus {
-  const _ClientSearchStatus({this.mode = ClientQueryMode.phone, this.digitsTyped = 0, this.failed = false, this.answeredQuery = '', this.answeredRung}): super._();
+  const _ClientSearchStatus({this.mode = ClientQueryMode.phone, this.digitsTyped = 0, this.failed = false, this.answeredRung}): super._();
   
 
 @override@JsonKey() final  ClientQueryMode mode;
 @override@JsonKey() final  int digitsTyped;
 @override@JsonKey() final  bool failed;
-@override@JsonKey() final  String answeredQuery;
 @override final  PhoneRung? answeredRung;
 
 /// Create a copy of ClientSearchStatus
@@ -235,18 +233,18 @@ _$ClientSearchStatusCopyWith<_ClientSearchStatus> get copyWith => __$ClientSearc
 
 @override
 bool operator ==(Object other) {
-    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClientSearchStatus&&(identical(other.mode, mode) || other.mode == mode)&&(identical(other.digitsTyped, digitsTyped) || other.digitsTyped == digitsTyped)&&(identical(other.failed, failed) || other.failed == failed)&&(identical(other.answeredQuery, answeredQuery) || other.answeredQuery == answeredQuery)&&(identical(other.answeredRung, answeredRung) || other.answeredRung == answeredRung));
+    return identical(this, other) || (other.runtimeType == runtimeType&&other is _ClientSearchStatus&&(identical(other.mode, mode) || other.mode == mode)&&(identical(other.digitsTyped, digitsTyped) || other.digitsTyped == digitsTyped)&&(identical(other.failed, failed) || other.failed == failed)&&(identical(other.answeredRung, answeredRung) || other.answeredRung == answeredRung));
 }
 
 
 @override
 int get hashCode {
-    return Object.hash(runtimeType,mode,digitsTyped,failed,answeredQuery,answeredRung);
+    return Object.hash(runtimeType,mode,digitsTyped,failed,answeredRung);
 }
 
 @override
 String toString() {
-    return 'ClientSearchStatus(mode: $mode, digitsTyped: $digitsTyped, failed: $failed, answeredQuery: $answeredQuery, answeredRung: $answeredRung)';
+    return 'ClientSearchStatus(mode: $mode, digitsTyped: $digitsTyped, failed: $failed, answeredRung: $answeredRung)';
 }
 
 
@@ -257,7 +255,7 @@ abstract mixin class _$ClientSearchStatusCopyWith<$Res> implements $ClientSearch
   factory _$ClientSearchStatusCopyWith(_ClientSearchStatus value, $Res Function(_ClientSearchStatus) _then) = __$ClientSearchStatusCopyWithImpl;
 @override @useResult
 $Res call({
- ClientQueryMode mode, int digitsTyped, bool failed, String answeredQuery, PhoneRung? answeredRung
+ ClientQueryMode mode, int digitsTyped, bool failed, PhoneRung? answeredRung
 });
 
 
@@ -274,13 +272,12 @@ class __$ClientSearchStatusCopyWithImpl<$Res>
 
 /// Create a copy of ClientSearchStatus
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? mode = null,Object? digitsTyped = null,Object? failed = null,Object? answeredQuery = null,Object? answeredRung = freezed,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? mode = null,Object? digitsTyped = null,Object? failed = null,Object? answeredRung = freezed,}) {
   return _then(_ClientSearchStatus(
 mode: null == mode ? _self.mode : mode // ignore: cast_nullable_to_non_nullable
 as ClientQueryMode,digitsTyped: null == digitsTyped ? _self.digitsTyped : digitsTyped // ignore: cast_nullable_to_non_nullable
 as int,failed: null == failed ? _self.failed : failed // ignore: cast_nullable_to_non_nullable
-as bool,answeredQuery: null == answeredQuery ? _self.answeredQuery : answeredQuery // ignore: cast_nullable_to_non_nullable
-as String,answeredRung: freezed == answeredRung ? _self.answeredRung : answeredRung // ignore: cast_nullable_to_non_nullable
+as bool,answeredRung: freezed == answeredRung ? _self.answeredRung : answeredRung // ignore: cast_nullable_to_non_nullable
 as PhoneRung?,
   ));
 }

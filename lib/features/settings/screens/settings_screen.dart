@@ -506,8 +506,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         onLocationSharingTap: _onLocationSharingTap,
         onToggleLocationSharing: _toggleLocationSharing,
         isTogglingLocationSharing: _pendingLocationSharingValue != null,
-        wrapLocationSharing: (child) =>
-            _tour.stepIf(TourStepId.settingsLocationSharing, child),
+        tourWrap: _tour.stepIf,
       ),
     ),
     if (_isAdmin) ...[

@@ -10,6 +10,73 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.58.0+87] - 2026-09-05
+
+Booking a job while the client reads their number down the phone is what this
+release is built around. The client step is now a phone pad with the matching
+list live above it, narrowing as each digit lands, and the job address offers
+the places this client has actually been before it offers to search for a new
+one.
+
+### Added
+- **The add-job client step is phone-first.** Tapping Phone opens the number
+  pad with a running "8 of 10" tally, and the match list stays on screen and
+  narrows as you type — so a client is confirmed at digit eight, mid-sentence,
+  rather than after the tenth. A Name-or-address switch sits above the field
+  for the times a number is not what you have; it searches name, address, city
+  and postal code.
+- **Clients you booked recently are offered before you type anything.** They
+  come from jobs the app has already loaded, so they cost nothing and appear
+  the moment the field is focused.
+- **A typo in a number now finds the client anyway.** When a full number
+  matches nobody, the search retries on the first seven digits and then the
+  last seven, and presents what it finds as "closest numbers on file" — never
+  as a match. Creating a new client is offered last, and names the number it
+  would use.
+- **The attached client is confirmed on a card.** The number leads it, with the
+  name, job count and last visit beneath, and the client's address carried on a
+  switch you can turn off — so a job at a different address no longer means
+  silently overwriting the one that was filled in for you.
+- **The job address offers this client's previous jobs first.** Their past job
+  addresses are listed newest-first, one tap each and no billed lookup; for a
+  building client the rows collapse to unit numbers under the one street.
+  Searching for a new address is still there, as the fallback rather than the
+  first thing offered.
+- **The tour covers the new client picker and job address**, and the clients
+  sort it had not caught up with.
+
+### Changed
+- **Search results are ordered by how well they match**, not alphabetically, so
+  the closest number is the first row rather than wherever the alphabet put it.
+- **A number typed into a client's Name field moves to the phone field.** It
+  already did for a clean ten digits; it now also handles a seven-digit local
+  number and the eleven-digit shape with a country code — the ways a client
+  arrives from Wave named by their own number, with nothing to dial.
+- **Attaching a client no longer reads that client's whole job history.**
+  Booking read up to a thousand past jobs to render two lines, and re-read them
+  on every background photo upload while the form was open.
+
+### Fixed
+- **Picking a previous job address now visibly does something.** The tap set
+  the address but left the same list on screen, so it read as having done
+  nothing — and tapping a second one to check silently saved that one instead.
+- **"Exact match" is no longer shown above a list of partial matches.** Typing
+  three letters of a name returned twelve results under a header claiming an
+  exact match, which on the booking path invites attaching the wrong client.
+- **A failed client search says so, and offers to retry**, instead of rendering
+  as "no clients found" — which reads as "new customer" and is how a duplicate
+  gets created for a client already on file.
+- **Picking a client from the recents list now fills in their address**, the
+  same as picking them from search did.
+- **"Last visit" no longer names a booking that hasn't happened yet.**
+- **A client imported from Wave whose name is their phone number is dialable
+  again.** Seven-digit and eleven-digit numbers were lifted in the app but not
+  on import, so those clients arrived with an empty phone field.
+- **Searching a client's numbers no longer matches a number nobody has.** Two
+  numbers on one client were being checked as if joined end to end, so a query
+  straddling the join appeared to match.
+- **Saving an appointment can no longer leave the Save button stuck.**
+
 ## [1.57.0+86] - 2026-09-04
 
 Search stops being a guess. Finding a client or a past job no longer depends on

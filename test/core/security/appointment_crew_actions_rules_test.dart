@@ -92,8 +92,8 @@ void main() {
 
   group('the admin shape guard', () {
     // `request.resource.data` on an admin edit is the MERGED document, so the
-    // server-stamped instants ride along: they must be type-checked, never
-    // banned, or every edit of a started job is refused.
+    // server-stamped instants ride along and must stay absent-or-valid here;
+    // the WRITE ban is a `diff().affectedKeys()` test at the rule itself.
     late final validator = collapsed(
       rules.substring(
         rules.indexOf('function isValidAppointmentData(d)'),
@@ -108,6 +108,32 @@ void main() {
           contains("(!('$field' in d.keys()) || d.$field is timestamp)"),
         );
       }
+    });
+  });
+
+  group('no CLIENT writes the job time record, admins included', () {
+    late final appointments = collapsed(
+      rules.substring(rules.indexOf('match /appointments/{appointmentId}')),
+    );
+
+    test('create refuses either instant outright', () {
+      expect(
+        appointments,
+        contains(
+          '!request.resource.data.keys()'
+          ".hasAny(['startedAt', 'completedAt'])",
+        ),
+      );
+    });
+
+    test('the admin update bans a diff that touches either instant', () {
+      expect(
+        appointments,
+        contains(
+          '!request.resource.data.diff(resource.data) .affectedKeys()'
+          " .hasAny(['pictureCount', 'startedAt', 'completedAt'])",
+        ),
+      );
     });
   });
 }

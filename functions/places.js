@@ -7,6 +7,7 @@ const {
   readSessionToken,
   enforceDurableRateLimit,
   assertAdminCall,
+  shortHash,
 } = require("./security");
 const {GOOGLE_MAP_API_KEY} = require("./params");
 
@@ -90,7 +91,7 @@ async function _fetchPlacesJson(url, options, {label, uid}, controller) {
     // `timedOut` is what separates "the upstream is slow" from "the network
     // broke" in Cloud Logging; both surface as a transport error otherwise.
     logger.error(`${label}: transport error`, {
-      uid,
+      uidHash: shortHash(uid),
       err: err.message,
       timedOut: controller.signal.aborted,
     });

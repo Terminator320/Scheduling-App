@@ -25,6 +25,7 @@ import 'package:scheduling/features/calendar/widgets/views/details_field_record_
 import 'package:scheduling/features/calendar/widgets/views/details_view_leaf_widgets.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_contacts_cards.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/maps/address_map_launcher.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -39,11 +40,7 @@ class DetailsViewBody extends ConsumerWidget {
     required this.onClose,
     super.key,
     this.onBookAgain,
-    this.wrapPushBack,
-    this.wrapFieldRecord,
-    this.wrapStart,
-    this.wrapMarkDone,
-    this.wrapBookAgain,
+    this.tourWrap,
   });
 
   final AppointmentRecord appointment;
@@ -57,14 +54,13 @@ class DetailsViewBody extends ConsumerWidget {
   /// Tour wraps, null off-tour so the view stays usable untoured. They live
   /// here rather than in a State because this is a ConsumerWidget — the
   /// TourSteps that builds them belongs to EventDetailsView.
-  final Widget Function(Widget)? wrapPushBack;
-  final Widget Function(Widget)? wrapFieldRecord;
-  final Widget Function(Widget)? wrapStart;
-  final Widget Function(Widget)? wrapMarkDone;
-  final Widget Function(Widget)? wrapBookAgain;
+  /// Wraps a step's target as that step's showcase when injected — the same
+  /// one-parameter shape as `AppointmentFormFields.tourWrap`, so a new step
+  /// costs a call rather than a parameter threaded through three widgets.
+  final Widget Function(TourStepId, Widget)? tourWrap;
 
-  static Widget _wrap(Widget Function(Widget)? wrap, Widget child) =>
-      wrap?.call(child) ?? child;
+  Widget _tour(TourStepId id, Widget child) =>
+      tourWrap?.call(id, child) ?? child;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -162,7 +158,7 @@ class DetailsViewBody extends ConsumerWidget {
           onCall: onCall,
           onDirections: onDirections,
           onPushBack: onPushBack,
-          wrapPushBack: wrapPushBack,
+          tourWrap: tourWrap,
         ),
         ClientContactsCards(contacts: data.extraContacts, collapsible: true),
         if (data.materials.isNotEmpty) ...[
@@ -179,8 +175,8 @@ class DetailsViewBody extends ConsumerWidget {
         // branches of `firestore.rules` admit, so the surface and the rule
         // cannot disagree about who may write.
         if (canRecordFieldWork)
-          _wrap(
-            wrapFieldRecord,
+          _tour(
+            TourStepId.jobFieldRecord,
             DetailsFieldRecordView(appointment: appointment),
           ),
         DetailsActionBar(
@@ -199,9 +195,7 @@ class DetailsViewBody extends ConsumerWidget {
           onMarkDone: () => _onMarkDone(context, ref, notifier),
           onCancel: () => _onCancel(context, ref, notifier),
           onBookAgain: bookAgain,
-          wrapStart: wrapStart,
-          wrapMarkDone: wrapMarkDone,
-          wrapBookAgain: wrapBookAgain,
+          tourWrap: tourWrap,
         ),
       ],
     );
@@ -571,7 +565,7 @@ class _ClientSection extends StatelessWidget {
     required this.onCall,
     required this.onDirections,
     required this.onPushBack,
-    this.wrapPushBack,
+    this.tourWrap,
   });
 
   /// A personal job has no client, so the client row names it as personal
@@ -587,7 +581,10 @@ class _ClientSection extends StatelessWidget {
   /// Admin-only, on an open timed job — see the gate in the parent's build.
   final VoidCallback? onPushBack;
 
-  final Widget Function(Widget)? wrapPushBack;
+  final Widget Function(TourStepId, Widget)? tourWrap;
+
+  Widget _tour(TourStepId id, Widget child) =>
+      tourWrap?.call(id, child) ?? child;
 
   @override
   Widget build(BuildContext context) {
@@ -610,8 +607,8 @@ class _ClientSection extends StatelessWidget {
                   onTap: onDirections!,
                 ),
               if (onPushBack != null)
-                DetailsViewBody._wrap(
-                  wrapPushBack,
+                _tour(
+                  TourStepId.jobPushBack,
                   QuickActionButton(
                     icon: Icons.update_rounded,
                     label: context.l10n.calendar_pushBack,

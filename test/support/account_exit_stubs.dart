@@ -9,10 +9,10 @@ import 'package:scheduling/features/calendar/domain/appointments_repository.dart
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
 
-/// The three overrides every widget test reaching an account exit needs.
+/// The four overrides every widget test reaching an account exit needs.
 ///
 /// `deregisterThisDevice` forgets everything the session cached locally, and
-/// each of the three fails a DIFFERENT way without an override. The image
+/// each of the four fails a DIFFERENT way without an override. The image
 /// loader resolves the platform cache directory through `path_provider`, and a
 /// method channel never completes under `testWidgets`' fake clock — so the real
 /// one makes the test HANG until its timeout rather than fail, with no error

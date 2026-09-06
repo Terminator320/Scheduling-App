@@ -181,28 +181,33 @@ function recordMatchesQuery(data, query) {
   const qDigits = digitsOnly(query);
   const d = data || {};
   const contacts = Array.isArray(d.contacts) ? d.contacts : [];
-  const text = normalize([
-    d.name,
-    d.businessName,
-    d.firstName,
-    d.lastName,
-    d.email,
-    d.address,
-    d.city,
-    d.province,
-    d.postalCode,
-    d.country,
-    d.clientName,
-    ...(Array.isArray(d.employeeNames) ? d.employeeNames : []),
-    ...contacts.map(contactText),
-  ].join(" "));
+  // The client fields join into one blob (`ClientSearchPolicy.index` does the
+  // same); the appointment seam stays per-field, as `historyEntryMatches` does.
+  const texts = [
+    normalize([
+      d.name,
+      d.businessName,
+      d.firstName,
+      d.lastName,
+      d.email,
+      d.address,
+      d.city,
+      d.province,
+      d.postalCode,
+      d.country,
+      ...contacts.map(contactText),
+    ].join(" ")),
+    normalize(d.clientName),
+    ...(Array.isArray(d.employeeNames) ? d.employeeNames : [])
+        .map((name) => normalize(name)),
+  ];
   const phones = [
     d.phone,
     d.mobile,
     d.clientPhone,
     ...contacts.map((c) => c && c.phone),
   ].map(digitsOnly).filter((n) => n.length > 0);
-  return Boolean((q && text.includes(q)) ||
+  return Boolean((q && texts.some((t) => t.includes(q))) ||
       (qDigits && phones.some((n) => n.includes(qDigits))));
 }
 

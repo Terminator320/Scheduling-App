@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/primitives/busy_button_icon.dart';
 
@@ -22,9 +23,7 @@ class DetailsActionBar extends StatelessWidget {
     this.onStart,
     this.onBookAgain,
     this.isInProgress = false,
-    this.wrapStart,
-    this.wrapMarkDone,
-    this.wrapBookAgain,
+    this.tourWrap,
   });
 
   final bool isDone;
@@ -46,13 +45,12 @@ class DetailsActionBar extends StatelessWidget {
   /// "Book again" — opens the add sheet pre-filled from this job.
   final VoidCallback? onBookAgain;
 
-  /// Tour wraps, null off-tour so the bar stays usable untoured.
-  final Widget Function(Widget)? wrapStart;
-  final Widget Function(Widget)? wrapMarkDone;
-  final Widget Function(Widget)? wrapBookAgain;
+  /// Wraps a button as its tour step; null off-tour, so the bar stays usable
+  /// untoured. One parameter, not one per button.
+  final Widget Function(TourStepId, Widget)? tourWrap;
 
-  static Widget _wrap(Widget Function(Widget)? wrap, Widget child) =>
-      wrap?.call(child) ?? child;
+  Widget _tour(TourStepId id, Widget child) =>
+      tourWrap?.call(id, child) ?? child;
 
   @override
   Widget build(BuildContext context) {
@@ -62,11 +60,11 @@ class DetailsActionBar extends StatelessWidget {
       children: [
         const SizedBox(height: AppSpacing.sp24),
         if (onStart != null && !isDone && !isCancelled && !isInProgress) ...[
-          _wrap(wrapStart, _startButton(context, compact)),
+          _tour(TourStepId.jobStart, _startButton(context, compact)),
           const SizedBox(height: AppSpacing.sp8),
         ],
         if (!isDone && !isCancelled)
-          _wrap(wrapMarkDone, _markDoneButton(context, compact)),
+          _tour(TourStepId.jobMarkDone, _markDoneButton(context, compact)),
         if (isDone) ..._doneSlot(context, compact),
         if (showCancel && !isCancelled && !isDone)
           ..._cancelSlot(context, compact),
@@ -80,8 +78,8 @@ class DetailsActionBar extends StatelessWidget {
   List<Widget> _bookAgainSlot(BuildContext context, bool compact) => [
     // A cancelled job renders nothing above this.
     if (!isCancelled) const SizedBox(height: AppSpacing.sp8),
-    _wrap(
-      wrapBookAgain,
+    _tour(
+      TourStepId.jobBookAgain,
       OutlinedButton(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(double.infinity, 48),

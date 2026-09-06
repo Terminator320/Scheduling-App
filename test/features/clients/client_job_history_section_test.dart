@@ -24,6 +24,7 @@ class _FakeAppointmentsRepository extends Fake
   Future<List<AppointmentRecord>> fetchClientHistory({
     required String clientId,
     int limit = 50,
+    int? cap,
   }) async => _records;
 }
 

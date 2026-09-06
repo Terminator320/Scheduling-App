@@ -115,15 +115,39 @@ class ClientSearchPolicy {
         for (final c in client.contacts) '${c.name} ${c.email}',
       ].join(' '),
     ),
-    phoneDigits: [
-      for (final raw in [
-        client.phone,
-        client.mobile,
-        for (final c in client.contacts) c.phone,
-      ])
-        if (digitsOnly(raw).isNotEmpty) digitsOnly(raw),
-    ],
+    phoneDigits: [...ownPhoneDigits(client), ...contactPhoneDigits(client)],
   );
+
+  /// A client's OWN numbers, one entry per number.
+  ///
+  /// Split from the contacts' because the relevance tiers treat them
+  /// differently — only these may score an exact or prefix hit — and because
+  /// joining them let a query straddle the seam and match a number nobody has.
+  static List<String> ownPhoneDigits(ClientRecord client) =>
+      _digitsEach([client.phone, client.mobile]);
+
+  /// The additional contacts' numbers, one entry per number.
+  static List<String> contactPhoneDigits(ClientRecord client) =>
+      _digitsEach([for (final c in client.contacts) c.phone]);
+
+  /// [ownPhoneDigits] against a RAW Firestore map.
+  static List<String> rawOwnPhoneDigits(Map<String, dynamic> data) =>
+      _digitsEach([data['phone'], data['mobile']]);
+
+  /// [contactPhoneDigits] against a RAW Firestore map.
+  static List<String> rawContactPhoneDigits(Map<String, dynamic> data) =>
+      _digitsEach([
+        for (final c in firestoreList(
+          data['contacts'],
+        ).whereType<Map<Object?, Object?>>())
+          c['phone'],
+      ]);
+
+  static List<String> _digitsEach(List<Object?> raw) => [
+    for (final value in raw)
+      if (digitsOnly('${value ?? ''}') case final digits when digits.isNotEmpty)
+        digits,
+  ];
 
   /// The searchable TEXT fields of a raw Firestore client map.
   ///
@@ -149,14 +173,11 @@ class ClientSearchPolicy {
       '${c['name'] ?? ''} ${c['email'] ?? ''}',
   ];
 
-  /// The searchable PHONE fields of a raw Firestore client map.
+  /// Every searchable phone number of a raw Firestore client map, already
+  /// reduced to digits — the client's own and its contacts'.
   static List<String> rawPhones(Map<String, dynamic> data) => [
-    (data['phone'] ?? '').toString(),
-    (data['mobile'] ?? '').toString(),
-    for (final c in firestoreList(
-      data['contacts'],
-    ).whereType<Map<Object?, Object?>>())
-      (c['phone'] ?? '').toString(),
+    ...rawOwnPhoneDigits(data),
+    ...rawContactPhoneDigits(data),
   ];
 
   /// [entryMatches] against a RAW Firestore map, without building a
@@ -172,7 +193,7 @@ class ClientSearchPolicy {
       return true;
     }
     return queryDigits.isNotEmpty &&
-        digitsOnly(rawPhones(data).join(' ')).contains(queryDigits);
+        rawPhones(data).any((n) => n.contains(queryDigits));
   }
 
   /// [relevanceScore] for a built record. The raw-map call site in the
@@ -183,15 +204,11 @@ class ClientSearchPolicy {
     required String queryText,
     required String queryDigits,
   }) {
-    final entry = index(client);
     return relevanceScore(
       displayName: normalize(client.displayName),
       personName: normalize('${client.firstName} ${client.lastName}'),
-      phoneDigits: entry.phoneDigits,
-      contactsDigits: [
-        for (final c in client.contacts)
-          if (digitsOnly(c.phone).isNotEmpty) digitsOnly(c.phone),
-      ],
+      phoneDigits: ownPhoneDigits(client),
+      contactsDigits: contactPhoneDigits(client),
       queryText: queryText,
       queryDigits: queryDigits,
     );

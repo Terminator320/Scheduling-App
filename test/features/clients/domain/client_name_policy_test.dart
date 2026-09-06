@@ -749,5 +749,16 @@ void main() {
       expect(lifted!.name, 'Marie Tremblay');
       expect(lifted.phone, '(514) 562-8332');
     });
+
+    test('eight and nine digits are no NANP shape, so nothing lifts', () {
+      expect(
+        ClientNamePolicy.liftPhoneFromName(name: '3101-5696', phone: ''),
+        isNull,
+      );
+      expect(
+        ClientNamePolicy.liftPhoneFromName(name: '310 156 969', phone: ''),
+        isNull,
+      );
+    });
   });
 }

@@ -14,8 +14,16 @@ class ClientNamePolicy {
   // Anything outside a digit or a phone separator — a letter, a '+', a '#' —
   // means the field is not a bare number.
   static final _nonPhoneChar = RegExp(r'[^\d\s().\-]');
-  static const int _minDialableDigits = 7;
+  static const int _localDigits = 7;
+  static const int _nanpDigits = 10;
   static const int _maxDialableDigits = 15;
+
+  /// Digit counts the whole-field branch accepts: a 7-digit local number, or a
+  /// full 10 up to the international ceiling. 8 and 9 are neither, which is
+  /// where a business named `3101-5696` lands.
+  static bool _isDialableDigitCount(int count) =>
+      count == _localDigits ||
+      (count >= _nanpDigits && count <= _maxDialableDigits);
 
   /// Trailing phone candidate matched against the doc's own number.
   static final _trailingPhone = RegExp(
@@ -255,8 +263,7 @@ class ClientNamePolicy {
     final whole = text.trim();
     final wholeDigits = _digits(whole);
     if (!_nonPhoneChar.hasMatch(whole) &&
-        wholeDigits.length >= _minDialableDigits &&
-        wholeDigits.length <= _maxDialableDigits) {
+        _isDialableDigitCount(wholeDigits.length)) {
       final start = text.indexOf(whole);
       return (
         start: start,

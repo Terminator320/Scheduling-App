@@ -76,7 +76,7 @@ class AuthService {
     } catch (e, st) {
       final failure = _mapSetupError(e);
       _logger.authFailure(
-        'completeAccountSetup: updatePassword failed',
+        'AUTH-SETUP completeAccountSetup: updatePassword failed',
         failure,
         e,
         st,
@@ -96,7 +96,7 @@ class AuthService {
       final failure = _mapSetupError(e);
       // Keep the chosen password even if activation fails.
       _logger.authFailure(
-        'completeAccountSetup: completeEmployeeSetup failed',
+        'AUTH-SETUP completeAccountSetup: completeEmployeeSetup failed',
         failure,
         e,
         st,
@@ -120,7 +120,7 @@ class AuthService {
       if (_isWrongPasswordCode(e.code)) return;
       final failure = _mapSetupError(e);
       _logger.authFailure(
-        'completeAccountSetup: starting-password check failed',
+        'AUTH-SETUP completeAccountSetup: starting-password check failed',
         failure,
         e,
         StackTrace.current,
@@ -130,7 +130,7 @@ class AuthService {
     // Reauth SUCCEEDED, so the password is unchanged.
     const failure = AuthFailureStartingPasswordReused();
     _logger.breadcrumb(
-      'completeAccountSetup: refused the starting password '
+      'AUTH-SETUP completeAccountSetup: refused the starting password '
       '(${failure.runtimeType})',
     );
     throw failure;

@@ -78,44 +78,42 @@ List<TourStepId> _destinationSteps(
 };
 
 /// The sheet walkthroughs.
-List<TourStepId> _formSteps(TourForm form, {required bool isAdmin}) =>
-    switch (form) {
-      TourForm.addAppointment => [
-        if (isAdmin) ...[
-          TourStepId.apptTemplates,
-          TourStepId.apptClient,
-          TourStepId.apptJobAddress,
-          TourStepId.apptCrew,
-          TourStepId.apptSchedule,
-          TourStepId.apptDetails,
-          TourStepId.apptSave,
-        ],
-      ],
-      TourForm.addClient => [
-        if (isAdmin) ...[
-          TourStepId.clientWho,
-          TourStepId.clientReach,
-          TourStepId.clientSite,
-          TourStepId.clientSave,
-        ],
-      ],
-      TourForm.invitePerson => [
-        if (isAdmin) ...[
-          TourStepId.personDetails,
-          TourStepId.personJobTitle,
-          TourStepId.personColour,
-          TourStepId.personCreate,
-        ],
-      ],
-      // The sheet's own visual order: push back sits in the client block, the
-      // field record above the action bar, the bar's buttons last. The field
-      // record goes to a non-admin ASSIGNEE only — exactly the set the crew
-      // branches of firestore.rules admit.
-      TourForm.jobDetails => [
-        if (isAdmin) TourStepId.jobPushBack,
-        if (!isAdmin) TourStepId.jobFieldRecord,
-        TourStepId.jobStart,
-        TourStepId.jobMarkDone,
-        if (isAdmin) TourStepId.jobBookAgain,
-      ],
-    };
+List<TourStepId> _formSteps(TourForm form, {required bool isAdmin}) {
+  // Every sheet but the job details is admin-only, and that one has its own
+  // per-step gating below.
+  if (!isAdmin && form != TourForm.jobDetails) return const [];
+  return switch (form) {
+    TourForm.addAppointment => [
+      TourStepId.apptTemplates,
+      TourStepId.apptClient,
+      TourStepId.apptJobAddress,
+      TourStepId.apptCrew,
+      TourStepId.apptSchedule,
+      TourStepId.apptDetails,
+      TourStepId.apptSave,
+    ],
+    TourForm.addClient => [
+      TourStepId.clientWho,
+      TourStepId.clientReach,
+      TourStepId.clientSite,
+      TourStepId.clientSave,
+    ],
+    TourForm.invitePerson => [
+      TourStepId.personDetails,
+      TourStepId.personJobTitle,
+      TourStepId.personColour,
+      TourStepId.personCreate,
+    ],
+    // The sheet's own visual order: push back sits in the client block, the
+    // field record above the action bar, the bar's buttons last. The field
+    // record goes to a non-admin ASSIGNEE only — exactly the set the crew
+    // branches of firestore.rules admit.
+    TourForm.jobDetails => [
+      if (isAdmin) TourStepId.jobPushBack,
+      if (!isAdmin) TourStepId.jobFieldRecord,
+      TourStepId.jobStart,
+      TourStepId.jobMarkDone,
+      if (isAdmin) TourStepId.jobBookAgain,
+    ],
+  };
+}

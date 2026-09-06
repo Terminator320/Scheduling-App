@@ -7,8 +7,10 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_tile.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
-Widget _harness(ClientRecord client) => ThemeNotifier(
+Widget _harness(ClientRecord client, {Future<void> Function()? onOpen}) =>
+    ThemeNotifier(
   themeMode: ThemeMode.light,
   toggleTheme: () {},
   textScale: 1,
@@ -19,7 +21,7 @@ Widget _harness(ClientRecord client) => ThemeNotifier(
     supportedLocales: AppLocalizations.supportedLocales,
     theme: lightTheme(),
     home: Scaffold(
-      body: ClientTile(client: client),
+      body: ClientTile(client: client, onOpen: onOpen),
     ),
   ),
 );
@@ -48,6 +50,31 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('514-555-0101'), findsOneWidget);
+  });
+
+  testWidgets('renders an avatar for the client', (tester) async {
+    await tester.pumpWidget(
+      _harness(const ClientRecord(id: 'c1', name: 'Acme')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppAvatar), findsOneWidget);
+  });
+
+  testWidgets('tapping the row opens the client', (tester) async {
+    var tapped = false;
+    await tester.pumpWidget(
+      _harness(
+        const ClientRecord(id: 'c1', name: 'Acme'),
+        onOpen: () async => tapped = true,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(ClientTile));
+    await tester.pump();
+
+    expect(tapped, isTrue);
   });
 
   testWidgets('an archived client shows the Archived pill', (tester) async {

@@ -15,7 +15,6 @@ abstract class ClientSearchStatus with _$ClientSearchStatus {
     @Default(ClientQueryMode.phone) ClientQueryMode mode,
     @Default(0) int digitsTyped,
     @Default(false) bool failed,
-    @Default('') String answeredQuery,
     PhoneRung? answeredRung,
   }) = _ClientSearchStatus;
 

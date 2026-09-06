@@ -5,7 +5,10 @@ import 'package:scheduling/features/maps/domain/address_parser.dart';
 typedef PreviousAddressRow = ({String full, String? unit});
 
 /// The rows to render, and the street they all share when they do.
-typedef PreviousAddressList = ({String? sharedStreet, List<PreviousAddressRow> rows});
+typedef PreviousAddressList = ({
+  String? sharedStreet,
+  List<PreviousAddressRow> rows,
+});
 
 /// Groups a client's previous job addresses by street, but ONLY when every
 /// entry shares one street AND every entry names a unit.
@@ -19,31 +22,16 @@ PreviousAddressList groupPreviousAddresses(List<String> addresses) {
     for (final raw in addresses)
       if (raw.trim().isNotEmpty && seen.add(raw.trim())) raw.trim(),
   ];
-  if (cleaned.length < 2) {
-    return (
-      sharedStreet: null,
-      rows: [for (final a in cleaned) (full: a, unit: null)],
-    );
-  }
+  PreviousAddressList ungrouped() => (
+    sharedStreet: null,
+    rows: [for (final a in cleaned) (full: a, unit: null)],
+  );
+  if (cleaned.length < 2) return ungrouped();
 
   final splits = [for (final a in cleaned) AddressParser.splitApt(a)];
-  final streets = <String>{};
-  for (var i = 0; i < cleaned.length; i++) {
-    final split = splits[i];
-    if (split == null || split.apt.isEmpty) {
-      return (
-        sharedStreet: null,
-        rows: [for (final a in cleaned) (full: a, unit: null)],
-      );
-    }
-    streets.add(split.street.toLowerCase());
-  }
-  if (streets.length != 1) {
-    return (
-      sharedStreet: null,
-      rows: [for (final a in cleaned) (full: a, unit: null)],
-    );
-  }
+  if (splits.any((s) => s == null || s.apt.isEmpty)) return ungrouped();
+  final streets = {for (final s in splits) s!.street.toLowerCase()};
+  if (streets.length != 1) return ungrouped();
 
   final unitSeen = <String>{};
   final rows = <PreviousAddressRow>[];

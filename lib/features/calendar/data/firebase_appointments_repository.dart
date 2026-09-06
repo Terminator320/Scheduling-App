@@ -465,18 +465,30 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   Future<List<AppointmentRecord>> fetchClientHistory({
     required String clientId,
     int limit = _clientHistoryPageSize,
+    int? cap,
   }) async {
     if (clientId.isEmpty) return const [];
+    final scanCap = cap ?? _clientHistoryScanLimit;
+    // The warn belongs to the DEFAULT cap, which is a silent truncation of a
+    // list meant to be complete. An explicit cap is a deliberate window — the
+    // booking form asks for the newest 20 — and reaching it is the normal case
+    // for exactly the repeat clients it serves, so warning there files a
+    // Crashlytics non-fatal on every form open and buries the real one.
     final docs = await pageToCap(
       _appointments
           .where('clientId', isEqualTo: clientId)
           .orderBy('startTime', descending: true),
       pageSize: limit,
-      cap: _clientHistoryScanLimit,
-      onCapReached: () => _logger.warn(
-        'APPT-LOAD client history hit the $_clientHistoryScanLimit-doc cap - '
-        'older visits are not listed',
-      ),
+      cap: scanCap,
+      onCapReached: () {
+        const message =
+            'APPT-LOAD client history hit the cap - older visits are not listed';
+        if (cap != null) {
+          _logger.breadcrumb('$message (deliberate $scanCap-visit window)');
+          return;
+        }
+        _logger.warn('$message ($scanCap)');
+      },
     );
     // A multi-day run is ONE visit stored as one document per work day, so
     // listing every document rendered a Monday-to-Friday job as five identical

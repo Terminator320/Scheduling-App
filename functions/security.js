@@ -274,7 +274,7 @@ async function assertActiveCall(req, allowedKeys) {
     });
     throw new HttpsError("permission-denied", "inactive-user");
   }
-  return {uid: req.auth.uid, ...data};
+  return {...data, uid: req.auth.uid};
 }
 
 /**

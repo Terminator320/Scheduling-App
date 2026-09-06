@@ -602,19 +602,6 @@
   "@clients_filterByAddress": {
     "description": "Label on the clients list menu that filters to one shared street address"
   },
-  "clients_filterAllAddresses": "All addresses",
-  "@clients_filterAllAddresses": {
-    "description": "Menu row on the clients list that clears the shared-address filter"
-  },
-  "clients_buildingUnits": "{count, plural, =1{1 unit} other{{count} units}}",
-  "@clients_buildingUnits": {
-    "description": "How many clients share one street address - a pill on the client row, and the screen-reader label on the count beside each address in the filter menu",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "clients_noClientsAtAddress": "No clients at this address.",
   "@clients_noClientsAtAddress": {
     "description": "Empty state when the address filter matches nothing"
@@ -1517,23 +1504,9 @@
   "@common_search": {
     "description": "Generic search field placeholder (default AppSearchBar hint)"
   },
-  "clients_searchByNameBusinessPhoneEmailAddress": "Search by name, phone, email, address...",
-  "@clients_searchByNameBusinessPhoneEmailAddress": {
-    "description": "Hint text for the client list search field"
-  },
   "clients_noClientsFound": "No clients found",
   "@clients_noClientsFound": {
     "description": "No clients found"
-  },
-  "clients_addNamedClient": "Add \"{name}\" as a new client",
-  "@clients_addNamedClient": {
-    "description": "Action in the appointment client picker that creates a new client from the typed search text (which prefills the new client's name).",
-    "placeholders": {
-      "name": {
-        "type": "String",
-        "example": "John Smith"
-      }
-    }
   },
   "common_employeeRoleValue": "Employee",
   "@common_employeeRoleValue": {
@@ -3180,10 +3153,6 @@
       }
     }
   },
-  "clients_filterByType": "Filter clients by type",
-  "@clients_filterByType": {
-    "description": "Accessibility label for the type filter chip row above the clients list"
-  },
   "clients_noClientsOfType": "No {type} clients",
   "@clients_noClientsOfType": {
     "description": "Empty state title when a client-type filter matches nobody",
@@ -3987,6 +3956,10 @@
   "clients_exactMatch": "Exact match",
   "@clients_exactMatch": {
     "description": "Header above a client result that matched the full phone number."
+  },
+  "clients_searchResults": "Search results",
+  "@clients_searchResults": {
+    "description": "Header above client search results that are substring or multiple matches rather than one exact hit."
   },
   "clients_closestNumbers": "Closest numbers on file",
   "@clients_closestNumbers": {

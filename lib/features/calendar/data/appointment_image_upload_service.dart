@@ -128,6 +128,32 @@ class AppointmentImageUploadService {
     }
   }
 
+  /// The read path chunks at 4; nothing about a write wants a smaller bound.
+  static const int _maxConcurrentUploads = 4;
+
+  /// One file's upload, classified. Never throws — the classification IS the
+  /// result, so a chunk's `Future.wait` cannot lose its siblings to one throw.
+  Future<_UploadOneResult> _uploadOne(PendingUpload entry, File file) async {
+    try {
+      final image = await _storage.uploadImage(entry.appointmentId, file);
+      await _deleteQuietly(file);
+      return _UploadedOne(image);
+    } on ImageUploadFailure catch (e, st) {
+      _logger.warn('IMG-UPLOAD rejected file for ${entry.appointmentId}', e, st);
+      await _deleteQuietly(file);
+      return _RejectedOne(
+        e is ImageUploadFailureTooLarge ? _fileName(file) : null,
+      );
+    } catch (e, st) {
+      _logger.warn(
+        'IMG-UPLOAD transient failure for ${entry.appointmentId}',
+        e,
+        st,
+      );
+      return _TransientOne(file.path);
+    }
+  }
+
   /// Upload result for one pass over a batch's local files.
   Future<_UploadFilesResult> _uploadFiles(
     PendingUpload entry,
@@ -141,29 +167,27 @@ class AppointmentImageUploadService {
     // Previously uploaded images are retried append-only.
     final uploaded = <AppointmentImage>[...entry.uploaded];
 
-    for (final file in files) {
-      try {
-        uploaded.add(await _storage.uploadImage(entry.appointmentId, file));
-        await _deleteQuietly(file);
-      } on ImageUploadFailure catch (e, st) {
-        permanentFailures++;
-        if (e is ImageUploadFailureTooLarge) {
-          tooLargeNames.add(_fileName(file));
+    // Chunked at the same bound the read path uses: a 10-photo batch on field
+    // LTE was ten sequential PUTs, and it drains in the background where iOS
+    // suspends a slow pass and re-queues it. Collected per chunk so `uploaded`
+    // keeps list order, and the per-file try/catch stays INSIDE the mapped
+    // function so the survivors/failures classification is unchanged.
+    for (var i = 0; i < files.length; i += _maxConcurrentUploads) {
+      final chunk = files.skip(i).take(_maxConcurrentUploads);
+      final results = await Future.wait([
+        for (final file in chunk) _uploadOne(entry, file),
+      ]);
+      for (final result in results) {
+        switch (result) {
+          case _UploadedOne(:final image):
+            uploaded.add(image);
+          case _RejectedOne(:final tooLargeName):
+            permanentFailures++;
+            if (tooLargeName != null) tooLargeNames.add(tooLargeName);
+          case _TransientOne(:final path):
+            transientFailure = true;
+            survivors.add(path);
         }
-        _logger.warn(
-          'IMG-UPLOAD rejected file for ${entry.appointmentId}',
-          e,
-          st,
-        );
-        await _deleteQuietly(file);
-      } catch (e, st) {
-        transientFailure = true;
-        survivors.add(file.path);
-        _logger.warn(
-          'IMG-UPLOAD transient failure for ${entry.appointmentId}',
-          e,
-          st,
-        );
       }
     }
 
@@ -439,3 +463,27 @@ final appointmentImageUploadProvider = Provider<AppointmentImageUploadService>((
     },
   );
 });
+
+/// One file's outcome inside a chunk.
+sealed class _UploadOneResult {
+  const _UploadOneResult();
+}
+
+class _UploadedOne extends _UploadOneResult {
+  const _UploadedOne(this.image);
+
+  final AppointmentImage image;
+}
+
+class _RejectedOne extends _UploadOneResult {
+  const _RejectedOne(this.tooLargeName);
+
+  /// Non-null only when the file was refused for size.
+  final String? tooLargeName;
+}
+
+class _TransientOne extends _UploadOneResult {
+  const _TransientOne(this.path);
+
+  final String path;
+}

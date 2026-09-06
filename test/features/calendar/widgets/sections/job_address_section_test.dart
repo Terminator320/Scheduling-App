@@ -81,6 +81,22 @@ void main() {
     expect(picked, '1250 boul. LaSalle');
   });
 
+  testWidgets('after a pick the list gives way to the address field', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      harness(
+        useCustomAddress: true,
+        previousAddresses: const ['1250 boul. LaSalle', '1260 boul. LaSalle'],
+      ),
+    );
+    expect(find.text('Search for another address…'), findsOneWidget);
+    await tester.tap(find.text('1250 boul. LaSalle'));
+    await tester.pumpAndSettle();
+    expect(find.text('Search for another address…'), findsNothing);
+    expect(find.text('1260 boul. LaSalle'), findsNothing);
+  });
+
   testWidgets('with no history the autocomplete is the whole section', (
     tester,
   ) async {

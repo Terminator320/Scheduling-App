@@ -10,8 +10,11 @@ Loaded when working under `lib/core/navigation/`. Root context: `../../../CLAUDE
   error** instead of an `IndexedStack` range crash; that is the whole point —
   never collapse it back to one enum plus a list or an `isHubTab` flag.
   `implements Enum` keeps `.name`/`.values` on the union type, and `.name` is
-  load-bearing: it is the persisted `tour_seen_tabs` key AND the showcase scope
-  name, so **renaming a member silently replays or orphans a tour** (that is
+  load-bearing: it is the showcase scope name AND the key the FROZEN
+  `kLegacyTourSteps` migration snapshot is written in (seen flags moved from
+  per-scope `tour_seen_tabs` to per-STEP `tour_seen_steps` on 2026-09-04, and
+  `tour_seen_tabs` is now read exactly once, by that migration), so
+  **renaming a member silently replays or orphans a tour** (that is
   why the member stayed `employees` while its label became "Team" via
   `nav_team`). `navigateToDestination` is the one nav action; a hub tab reached
   from a pushed route goes through `selectAndReveal` (collapse, then switch) —

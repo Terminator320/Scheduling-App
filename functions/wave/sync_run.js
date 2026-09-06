@@ -27,6 +27,7 @@ const {importCustomers} = require("./customers");
 const {drainQueue, countQueuedJobs} = require("./worker");
 const {resolveImportWindow, watermarkPatch} = require("./import_schedule");
 const {toMillis} = require("../time_utils");
+const {shortHash} = require("../security");
 
 /**
  * Reads the connected Wave `businessId` from the `wave/connection` doc.
@@ -219,7 +220,8 @@ async function drainForSync({businessId, uid}) {
     // "everything was already up to date" — a broken push and a quiet queue
     // produce identical counters, and only one of them is good news.
     result.incomplete = true;
-    logger.warn("WAVE-CUST sync push failed", {uid, error: String(e)});
+    logger.warn("WAVE-CUST sync push failed",
+        {uidHash: shortHash(uid), error: String(e)});
   }
 
   // Counted AFTER the drain, so the number is what the admin still has to
@@ -229,7 +231,8 @@ async function drainForSync({businessId, uid}) {
     result.pending = await countQueuedJobs();
   } catch (e) {
     result.incomplete = true;
-    logger.warn("WAVE-CUST sync pending count failed", {uid, error: String(e)});
+    logger.warn("WAVE-CUST sync pending count failed",
+        {uidHash: shortHash(uid), error: String(e)});
   }
   return result;
 }

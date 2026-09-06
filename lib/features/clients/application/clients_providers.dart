@@ -76,7 +76,7 @@ final clientsByBuildingProvider = FutureProvider.autoDispose
 ///
 /// **This is EAGER on Clients-tab open, and that is a decision rather than an
 /// oversight** (owner call, 2026-09-01). `ClientsListView.build` watches this
-/// and [clientBuildingKeysProvider] before the filter switch, so opening the
+/// before the filter switch, so opening the
 /// tab pays the paged `orderBy('name')` scan window (capped at
 /// `_clientScanLimit`, ~700 clients today) on top of the paginated list's
 /// first 50 — roughly 14× read amplification on the first open per session,
@@ -101,16 +101,6 @@ final clientBuildingsProvider =
     FutureProvider.autoDispose<List<ClientBuilding>>((ref) async {
       ref.watch(clientsRefreshProvider);
       return await ref.watch(clientsRepositoryProvider).fetchBuildings();
-    });
-
-/// Each client's building key by id — the row builder's half of the pill.
-///
-/// Reads the SAME cached window as [clientBuildingsProvider], so pairing the
-/// two costs no extra Firestore read and cannot disagree with the counts.
-final clientBuildingKeysProvider =
-    FutureProvider.autoDispose<Map<String, String?>>((ref) async {
-      ref.watch(clientsRefreshProvider);
-      return await ref.watch(clientsRepositoryProvider).fetchBuildingKeys();
     });
 
 /// How many clients sit at each building, for the per-row pill.

@@ -5,6 +5,7 @@ import 'package:scheduling/features/calendar/domain/policies/previous_address_po
 import 'package:scheduling/features/calendar/widgets/fields/appointment_address_field.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 
 /// The job address in its WHO home: the client's own previous job addresses
 /// first, and the billed autocomplete only once none of them is the answer.
@@ -46,6 +47,21 @@ class _JobAddressSectionState extends State<JobAddressSection> {
   late bool _searching = widget.addressController.text.trim().isNotEmpty;
 
   @override
+  void didUpdateWidget(JobAddressSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // This State is kept across client changes (the section has no key and
+    // sits in a fixed slot), so without this the latch set by one pick hid the
+    // previous-address list for the rest of the sheet — including for a
+    // different client, whose addresses had never been offered at all.
+    final clientChanged =
+        widget.selectedClient?.id != oldWidget.selectedClient?.id;
+    final addressCleared = widget.addressController.text.trim().isEmpty;
+    if (_searching && (clientChanged || addressCleared)) {
+      setState(() => _searching = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final client = widget.selectedClient;
     final showPrevious =
@@ -54,17 +70,20 @@ class _JobAddressSectionState extends State<JobAddressSection> {
         widget.previousAddresses.isNotEmpty &&
         !_searching;
     if (!showPrevious) return _field();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _PreviousAddresses(
-          client: client,
-          addresses: widget.previousAddresses,
-          onPick: widget.onPickPrevious,
-          onSearch: () => setState(() => _searching = true),
-        ),
-      ],
+    return _PreviousAddresses(
+      client: client,
+      addresses: widget.previousAddresses,
+      onPick: _onPickPrevious,
+      onSearch: () => setState(() => _searching = true),
     );
+  }
+
+  // The list is what the pick REPLACES, so it has to give way to the field
+  // holding the chosen address — otherwise the rebuilt widget is identical to
+  // the pre-tap one and the tap reads as having done nothing.
+  void _onPickPrevious(String address) {
+    widget.onPickPrevious(address);
+    setState(() => _searching = true);
   }
 
   Widget _field() => AppointmentAddressField(
@@ -125,32 +144,22 @@ class _PreviousAddresses extends StatelessWidget {
               ),
             ),
           ),
-        DecoratedBox(
-          decoration: appCardDecoration(theme, color: theme.palette.sheetRow),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.r12),
-            child: Column(
-              children: [
-                for (final row in grouped.rows) ...[
-                  if (row != grouped.rows.first)
-                    Divider(height: 1, color: theme.colorScheme.outlineVariant),
-                  _AddressRow(
-                    // Grouped rows show the unit, but a pick always reports the
-                    // WHOLE address — the unit alone is not one.
-                    label: row.unit ?? row.full,
-                    mono: row.unit != null,
-                    onTap: () => onPick(row.full),
-                  ),
-                ],
-                Divider(height: 1, color: theme.colorScheme.outlineVariant),
-                _AddressRow(
-                  label: l10n.calendar_searchForAnotherAddress,
-                  icon: Icons.search,
-                  onTap: onSearch,
-                ),
-              ],
+        SheetPanel(
+          children: [
+            for (final row in grouped.rows)
+              _AddressRow(
+                // Grouped rows show the unit, but a pick always reports the
+                // WHOLE address — the unit alone is not one.
+                label: row.unit ?? row.full,
+                mono: row.unit != null,
+                onTap: () => onPick(row.full),
+              ),
+            _AddressRow(
+              label: l10n.calendar_searchForAnotherAddress,
+              icon: Icons.search,
+              onTap: onSearch,
             ),
-          ),
+          ],
         ),
       ],
     );

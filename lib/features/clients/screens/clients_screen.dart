@@ -147,8 +147,8 @@ class _ListInformationState extends State<ListInformation> {
                 ClientsFilterBar(
                   selected: _filter,
                   onOpen: _openFilterSheet,
-                  onChanged: (next) => setState(() {
-                    _filter = next;
+                  onClear: () => setState(() {
+                    _filter = const ClientsFilterAll();
                     _activeBuildingLabel = null;
                   }),
                   activeBuildingLabel: _activeBuildingLabel,

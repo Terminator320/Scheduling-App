@@ -94,9 +94,14 @@ abstract class AppointmentsRepository {
   });
 
   /// This client's appointments in any status, newest-first.
+  ///
+  /// [limit] is the PAGE size; [cap] is how far the scan will page in total.
+  /// A caller that only needs a recent slice passes both, so it doesn't buy
+  /// the whole archive to render two lines.
   Future<List<AppointmentRecord>> fetchClientHistory({
     required String clientId,
     int limit,
+    int? cap,
   });
 
   /// The most recent bookings across all clients, newest-first, for the

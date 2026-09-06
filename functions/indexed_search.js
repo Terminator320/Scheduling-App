@@ -140,6 +140,28 @@ function historyScope(profile, requestedEmployeeId) {
 }
 
 /**
+ * Whether this caller may see one history document.
+ *
+ * `historySearchScopes` is a denormalized mirror of `employeeIds` written by
+ * the CLIENT app, so a doc whose scopes drift from `employeeIds` would be
+ * readable by a technician `firestore.rules` would refuse. The module already
+ * treats a token hit as a PREFILTER rather than the answer; this applies the
+ * same rule to the scope. Deliberately NOT `mayRestore` from
+ * `appointment_actions.js`: that one additionally requires `role === employee`
+ * because it authorizes a WRITE. Reading your own job is assignment alone.
+ * @param {!Object} profile usersByUid row.
+ * @param {!Object} data Stored appointment.
+ * @return {boolean}
+ */
+function mayReadHistoryDoc(profile, data) {
+  if (profile.role === "admin") return true;
+  const callerDocId = String(profile.docId || "");
+  if (!callerDocId) return false;
+  const assigned = Array.isArray(data.employeeIds) ? data.employeeIds : [];
+  return assigned.map(String).includes(callerDocId);
+}
+
+/**
  * Server-side terminal-appointment search, scoped by caller role.
  */
 const searchHistory = onCall(APP_CHECK, async (req) => {
@@ -157,6 +179,7 @@ const searchHistory = onCall(APP_CHECK, async (req) => {
   const snap = await getFirestore()
       .collection("appointments")
       .where("historySearchScopes", "array-contains-any", scoped)
+      // 10 tokens x 3 statuses = Firestore's 30-disjunction ceiling exactly.
       .where("status", "in", ["done", "completed", "cancelled"])
       .orderBy("startTime", "desc")
       .limit(SEARCH_READ_LIMIT)
@@ -168,7 +191,11 @@ const searchHistory = onCall(APP_CHECK, async (req) => {
     });
   }
   const appointments = snap.docs
-      .filter((doc) => recordMatchesQuery(doc.data() || {}, query))
+      .filter((doc) => {
+        const data = doc.data() || {};
+        return mayReadHistoryDoc(profile, data) &&
+            recordMatchesQuery(data, query);
+      })
       .slice(0, SEARCH_RESULT_LIMIT)
       .map(callableRecord);
   return {appointments};
@@ -300,6 +327,7 @@ module.exports = {
   searchHistory,
   findAppointmentConflicts,
   historyScope,
+  mayReadHistoryDoc,
   blocksProposedWindow,
   serializeValue,
 };

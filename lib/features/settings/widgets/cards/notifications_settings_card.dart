@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:scheduling/core/notifications/push_notification_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_preference.dart';
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
@@ -24,7 +25,7 @@ class NotificationsSettingsCard extends ConsumerWidget {
     this.isTogglingLiveActivity = false,
     this.isTogglingTravelAlerts = false,
     this.isTogglingLocationSharing = false,
-    this.wrapLocationSharing,
+    this.tourWrap,
     super.key,
   });
 
@@ -43,9 +44,10 @@ class NotificationsSettingsCard extends ConsumerWidget {
   final void Function({required bool value}) onToggleLocationSharing;
   final bool isTogglingLocationSharing;
 
-  /// Lets the Settings tour wrap the location row as its own step. Null
-  /// off-tour, so the card stays usable untoured.
-  final Widget Function(Widget)? wrapLocationSharing;
+  /// Lets the Settings tour wrap a row as its own step. Null off-tour, so the
+  /// card stays usable untoured. Keyed by step id rather than named per row,
+  /// so a second toured row here costs a call, not a parameter.
+  final Widget Function(TourStepId, Widget)? tourWrap;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -168,7 +170,11 @@ class NotificationsSettingsCard extends ConsumerWidget {
           ],
           if (locationTile != null) ...[
             const SettingsTileDivider(),
-            wrapLocationSharing?.call(locationTile) ?? locationTile,
+            tourWrap?.call(
+                  TourStepId.settingsLocationSharing,
+                  locationTile,
+                ) ??
+                locationTile,
           ],
         ],
       ),

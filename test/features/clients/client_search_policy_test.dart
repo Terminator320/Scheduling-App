@@ -232,6 +232,30 @@ void main() {
       final entry = ClientSearchPolicy.index(clientWith(phone: '5145628332'));
       expect(entry.phoneDigits, ['5145628332']);
     });
+
+    test('rawMatches honours the same seam as index/entryMatches', () {
+      final data = <String, dynamic>{
+        'name': 'Marie Tremblay',
+        'phone': '5145628332',
+        'mobile': '4385551212',
+      };
+      expect(
+        ClientSearchPolicy.rawMatches(
+          data,
+          queryText: '',
+          queryDigits: '83324385',
+        ),
+        isFalse,
+      );
+      expect(
+        ClientSearchPolicy.rawMatches(
+          data,
+          queryText: '',
+          queryDigits: '4385551212',
+        ),
+        isTrue,
+      );
+    });
   });
 
   group('relevance exact tier with two numbers (F2)', () {

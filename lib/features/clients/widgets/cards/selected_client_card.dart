@@ -4,6 +4,7 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 /// The attached client, confirmed. The NUMBER is the headline because it is
@@ -31,30 +32,19 @@ class SelectedClientCard extends StatelessWidget {
     final theme = Theme.of(context);
     final l10n = context.l10n;
     final address = client.fullAddress.trim();
-    return DecoratedBox(
-      decoration: appCardDecoration(
-        theme,
-        radius: AppRadius.r16,
-        color: theme.palette.sheetRow,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return SheetPanel(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.sp12),
+          child: _identity(theme, l10n),
+        ),
+        if (address.isNotEmpty)
           Padding(
             padding: const EdgeInsets.all(AppSpacing.sp12),
-            child: _identity(theme, l10n),
+            child: _address(theme, l10n, address),
           ),
-          if (address.isNotEmpty) ...[
-            Divider(height: 1, color: theme.colorScheme.outlineVariant),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.sp12),
-              child: _address(theme, l10n, address),
-            ),
-          ],
-          Divider(height: 1, color: theme.colorScheme.outlineVariant),
-          _actions(theme, l10n),
-        ],
-      ),
+        _actions(theme, l10n),
+      ],
     );
   }
 

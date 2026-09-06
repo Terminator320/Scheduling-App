@@ -544,15 +544,16 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   `whereIn` over the open statuses would need a third index field and would
   silently drop any status the allowlist doesn't name, and this caption must
   err towards telling the admin to reassign.
-  **A dedicated `(employeeIds CONTAINS, endTime ASC)` index existed for it and
-  was DELETED 2026-08-28** — a strict prefix of the three-field composite
-  above, which Firestore serves for the same query, so it only ever cost index
-  storage and per-write latency. One caveat that came with it: that composite
-  is `SPARSE_ALL`, so it omits any document with no `startTime`, where the
-  two-field index did not. The Dart model always writes one, so only a legacy
-  or console-written row could go missing from this count — and this is the
-  caption that must err towards over-reporting, so if such rows ever turn up,
-  restore the two-field index rather than reasoning about it again.
+  **The dedicated `(employeeIds CONTAINS, endTime ASC)` index is LIVE, and it
+  must stay that way.** It was deleted on 2026-08-28 as a "redundant prefix" of
+  the three-field composite above and RESTORED on 2026-08-31 (`3eebcc93`,
+  literally *"restore the endTime composite the last audit deleted"*) after the
+  deletion broke the travel sweep for two days, invisibly — that path is
+  best-effort, so nothing surfaced but the Cloud Functions log. A Firestore
+  index prefix is NOT redundant: `__name__` lands at the END of a composite, so
+  the three-field index does not serve this two-field query. The three-field
+  one is additionally `SPARSE_ALL`, so it omits any document with no
+  `startTime`, where this one does not. Do not delete it as a prefix again.
   **It is also `.limit`ed** (`_futureAssignmentScanLimit`, 200, added
   2026-08-13) — `endTime >= now` still has no upper bound of its own, and a
   repeat series pre-books up to `RepeatInterval.maxOccurrences` (120)

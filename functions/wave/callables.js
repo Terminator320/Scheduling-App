@@ -29,6 +29,7 @@ const {
   assertPayloadShape,
   assertAdmin,
   enforceDurableRateLimit,
+  shortHash,
 } = require("../security");
 
 // Accepted automatic-import cadences (mirrors the app's WaveImportSchedule
@@ -122,7 +123,7 @@ const waveBootstrap = onCall(
           existing.data().businessId) {
         const d = existing.data();
         logger.info("WAVE-BOOT already connected", {
-          uid: req.auth.uid,
+          uidHash: shortHash(req.auth.uid),
           businessId: d.businessId,
         });
         return {businessId: d.businessId, businessName: d.businessName || ""};
@@ -152,7 +153,8 @@ const waveBootstrap = onCall(
       } catch (e) {
         if (e instanceof HttpsError) throw e;
         const {code, message} = classifyWaveError(e);
-        logger.warn("WAVE-BOOT failed", {uid: req.auth.uid, code, message});
+        logger.warn("WAVE-BOOT failed",
+            {uidHash: shortHash(req.auth.uid), code, message});
         throw new HttpsError(code, message);
       }
 
@@ -175,7 +177,7 @@ const waveBootstrap = onCall(
       });
 
       logger.info("WAVE-BOOT connected", {
-        uid: req.auth.uid,
+        uidHash: shortHash(req.auth.uid),
         businessId: result.businessId,
       });
       return result;
@@ -287,7 +289,7 @@ const waveRetryFailedJobs = onCall(
 
       const {requeued, scanned} = await requeueDeadJobs();
       logger.info("WAVE-RETRY requeued dead jobs",
-          {uid: req.auth.uid, requeued, scanned});
+          {uidHash: shortHash(req.auth.uid), requeued, scanned});
 
       // Push them now so the admin sees the result of the press rather than
       // waiting for their next client edit or the daily sweep. Best-effort:
@@ -315,7 +317,7 @@ const waveRetryFailedJobs = onCall(
           failed = drained.dead;
         } catch (e) {
           logger.warn("WAVE-RETRY drain after requeue failed",
-              {uid: req.auth.uid, error: String(e)});
+              {uidHash: shortHash(req.auth.uid), error: String(e)});
         }
       }
 
@@ -356,7 +358,8 @@ const waveSetImportSchedule = onCall(
       }
 
       await ref.update({importSchedule: schedule});
-      logger.info("WAVE-SCHED set", {uid: req.auth.uid, schedule});
+      logger.info("WAVE-SCHED set",
+          {uidHash: shortHash(req.auth.uid), schedule});
       return {schedule};
     },
 );
@@ -405,7 +408,8 @@ const waveImportCustomers = onCall(
       // while this run was in flight, so it has to come from the start.
       const startedAtMs = Date.now();
 
-      logger.info("WAVE-CUST sync starting", {uid: req.auth.uid, businessId});
+      logger.info("WAVE-CUST sync starting",
+          {uidHash: shortHash(req.auth.uid), businessId});
 
       // Push BEFORE pulling. Local edits are the newer truth here — the
       // outbox holds writes the app already accepted — so importing first
@@ -424,8 +428,8 @@ const waveImportCustomers = onCall(
         skipClientIds = await listOutstandingClientIds();
       } catch (e) {
         logger.error("WAVE-CUST outstanding-job read failed — import may " +
-          "overwrite un-pushed client edits", {uid: req.auth.uid,
-          error: String(e)});
+          "overwrite un-pushed client edits",
+        {uidHash: shortHash(req.auth.uid), error: String(e)});
       }
 
       let summary;
@@ -441,7 +445,7 @@ const waveImportCustomers = onCall(
       } catch (e) {
         const {code, message} = classifyWaveError(e);
         logger.warn("WAVE-CUST import failed", {
-          uid: req.auth.uid,
+          uidHash: shortHash(req.auth.uid),
           code,
           message,
         });
@@ -450,7 +454,7 @@ const waveImportCustomers = onCall(
 
       logger.info("WAVE-CUST sync done", {
         window: window.reason,
-        uid: req.auth.uid,
+        uidHash: shortHash(req.auth.uid),
         totalCount: summary.totalCount,
         imported: summary.imported,
         updated: summary.updated,

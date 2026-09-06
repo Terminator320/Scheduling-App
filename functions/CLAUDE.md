@@ -3,8 +3,11 @@
 Loaded when working under `functions/`. Root context: `../CLAUDE.md`.
 
 Functions live in `functions/` (project `schedulingapp-88727`, region
-`us-central1`). `index.js` is now a thin wiring surface that re-exports all 25
-functions under their original names — the implementations are split into
+`us-central1`). `index.js` is now a thin wiring surface that re-exports all 29
+functions under their original names (25 until 2026-09-04, when
+`indexed_search.js` and `appointment_actions.js` added four —
+`docs/DEPLOYMENT.md` uses this count as a deploy abort check, so it is
+operational rather than cosmetic) — the implementations are split into
 domain modules: `security.js` (shared callable guards — `assertPayloadShape`,
 `requireString`, `optionalString` (same trim/length/control-char checks but
 allows absent-or-empty; it lived as a private copy in `invites.js` and was
@@ -20,9 +23,19 @@ on one and would reach the caller as an opaque `internal`. It throws
 FILTERS a list rather than throwing, and the policy module must stay free of
 firebase-functions/admin),
 `readSessionToken`, `enforceDurableRateLimit`, `assertAdmin`, `hasControlChar`,
-`isReauthStale` and **`assertFreshReauth`** — the last being the guard
+`isReauthStale`, **`assertFreshReauth`** — the guard
 `.claude/rules/security.md` holds up as *the shape to copy* for failing closed
-on missing input, and all three were missing from this list),
+on missing input, and all three were missing from this list — plus the two
+COMPOSED openings every new callable is required to use:
+**`assertAdminCall(req, allowedKeys)`** (auth -> `assertAdmin` ->
+`assertPayloadShape`, returning the uid the rate limiter needs) and
+**`assertActiveCall(req, allowedKeys)`** (auth -> `assertPayloadShape` -> the
+`usersByUid/{uid}` bridge row, refusing anyone not `active` and returning the
+profile, because every self-service site needs `role`/`docId` next to scope
+what it may reach). They exist because a hand-written gate silently loses a
+clause; `assertActiveCall` proves the caller is a LIVE ACCOUNT and never that
+they may touch a particular document, so per-doc scoping stays at the call
+site),
 `bridge.js` (`syncUsersByUid`), `client_address_utils.js` (pure, no trigger —
 `streetFromAddress` / `composeFullAddress`, the JS half of a pair hand-mirrored
 as `AddressParser.streetOnly` / `composeFull`. `clients/{id}.address` is the
@@ -174,6 +187,20 @@ new pure rules to the policy module and re-export, rather than growing the
 orchestration file back), the Live Activity stack (`apns_client.js`,
 `live_activity_utils.js`, `live_activity_registry.js`,
 `live_activity_dispatch.js` — see the Live Activities bullet below), and
+`indexed_search.js` (the three server-side search callables added 2026-09-04 —
+`searchClients`, `searchHistory` and `findAppointmentConflicts`; the token hit
+is a PREFILTER and `recordMatchesQuery` re-verifies, `mayReadHistoryDoc`
+re-verifies a non-admin against `employeeIds` rather than trusting the
+client-written scope, and `blocksProposedWindow` applies the DAILY-window
+overlap rule), `appointment_actions.js` (`restoreAppointmentStatus`, the
+mark-complete Undo — a callable rather than a rules grant because reopening a
+closed job is the one status move the employee disjuncts deliberately
+exclude), `search_tokens.js` (pure, no trigger — the HAND-MIRROR of
+`lib/core/search/search_tokens.dart`: the app writes `clients.searchTokens`
+and `appointments.historySearchScopes`, the server tokenizes the typed query
+and queries them, so a divergence is a search that silently returns nothing.
+Its `normalize` fold table and the two suites' worked examples are shared
+value-for-value), and
 the Wave stack — `wave/callables.js` (the admin callables only),
 `wave/triggers.js` (`waveUpsertCustomer` + the `runWaveDaily` rider — neither
 is a callable, which is why they no longer sit in the file named for them),
@@ -297,6 +324,15 @@ in `argv`, so `dryRun` is structurally false for it and it needs no special
 case. `scripts/backfill.js` deliberately does NOT use it — it branches on
 `FIRESTORE_EMULATOR_HOST` and hard-fails on missing credentials, a different
 preamble rather than this one with a flag.
+
+**The document-id paging loop is the fourth such owner: `scanByName`
+(`scripts/_scan.js`).** It was hand-written six times before it was extracted,
+and `backfill-client-sort-fields.js` immediately wrote a seventh copy
+(2026-09-04, folded back 2026-09-05) — a script that already imported
+`_flags`, `_batch` and `_project` and missed this one. Every chance to omit
+the cursor advance (re-scanning page one forever) or the short-page break is
+worth removing, because these scripts produce the numbers this project makes
+decisions on. `for await (const doc of scanByName(collection, {pageSize}))`.
 
 **A script that is also a module must guard `main()` behind
 `require.main === module`.** `audit-wave-contract.js` fired its whole audit at
