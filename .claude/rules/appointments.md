@@ -202,7 +202,7 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   above a panel listing a "Day off" card, because a count answers *how much
   work* and a card list answers *what is on this person's day*.
   **A day off is NOT a card and NOT a lifecycle** (owner call, 2026-08-24,
-  designed in `docs/plans/2026-08-24-day-off-card.md`). `AppointmentCard`
+  designed in `docs/archive/2026-08-24-day-off-card.md`). `AppointmentCard`
   returns `_DayOffStrip` for one — a low tinted strip, no fill and no shadow.
   Rendering it inside the card rather than at the call sites is what gives
   every appointment surface the same treatment for free. The detail sheet has
@@ -413,7 +413,7 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   because an overnight window runs into the following calendar day.
 - **A multi-day JOB is N appointments, one per day; a multi-day PERSONAL block
   is still ONE wide document.** (2026-08-27, designed in
-  `docs/plans/2026-08-27-per-day-appointments.md`.) One document carries one
+  `docs/archive/2026-08-27-per-day-appointments.md`.) One document carries one
   `status`, so a wide job closed entirely the moment the crew marked day 1
   complete. The days of a run share `seriesId` — day 1's doc id, the SAME field
   a repeat uses — and each carries a stored `dayIndex`/`dayCount`. That overload
@@ -637,7 +637,7 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   save no longer returns the busy outcome.
 - **The time-off clash alert is ADVISORY and always AFTER the save**
   (`calendar/widgets/dialogs/personal_block_clash_dialog.dart`, designed in
-  `docs/plans/2026-08-24-timeoff-clash-alert.md`). Closing it leaves the block
+  `docs/archive/2026-08-24-timeoff-clash-alert.md`). Closing it leaves the block
   saved and the jobs untouched — time off is a fact about a person and the
   schedule does not get to veto it — so its dismiss button is **"Leave them",
   never "Cancel"**, which would read as cancelling the time off. Each swap

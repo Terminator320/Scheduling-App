@@ -7,7 +7,7 @@
 /// covered, the calendar would stop marking holidays the year after with no
 /// error and no bug report.
 ///
-/// Design decisions live in `docs/plans/2026-08-29-calendar-holidays.md`.
+/// Design decisions live in `docs/archive/2026-08-29-calendar-holidays.md`.
 library;
 
 import 'package:scheduling/core/utils/date_utils_helper.dart';
