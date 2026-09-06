@@ -1,7 +1,12 @@
 # Wave sync: the validated contract
 
-**State: DESIGN APPROVED 2026-08-30. Not started.** Owner-approved through three
-review sections. The implementation plan is a separate document.
+**State: PHASE 1 BUILT AND DEPLOYED 2026-08-30 (`485c88cb`, report-only);
+Phases 2-4 not started and deliberately unwritten.** Owner-approved through
+three review sections. Phase 1 is `functions/wave/customer_contract.js`,
+recording `wave.problems` without changing what enqueues; the next phase waits
+on the production replay (`functions/scripts/audit-wave-contract.js`), which
+has never been run — this box has no ADC, so it needs a machine that does. The
+implementation plan is a separate document.
 
 Rearchitects the Wave customer sync around a single module that owns *"what
 Wave will accept"*. Motivated by two owner complaints — **it keeps breaking**

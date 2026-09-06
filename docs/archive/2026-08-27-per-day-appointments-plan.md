@@ -2,6 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** SHIPPED — implemented 2026-08-27, released 1.53.0+82, rules
+deployed 2026-08-29 (`d5aa3a21`). Design doc:
+`docs/plans/2026-08-27-per-day-appointments.md`.
+
 **Goal:** A multi-day job books as one appointment per day, so marking day 1 complete no longer closes days 2–5.
 
 **Architecture:** Each day becomes its own Firestore document, linked by `seriesId` (day 1's doc id) and carrying a stored `dayIndex`/`dayCount`. `AppointmentDaySlice` keeps owning day-scoping — the stored pair substitutes only the *label* it reports, never the runs-on test. Time off and personal blocks keep saving as one wide document. There is no migration: production holds zero open multi-day jobs.

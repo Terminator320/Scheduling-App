@@ -12,7 +12,7 @@ and the missing third client type) before starting; each changes what a task
 has to do.
 **Mockup:** https://claude.ai/code/artifact/baeb4b51-f338-4fc1-840e-4c0fd0ac4724
 (five states: at rest, filter sheet, filtered, searching, nothing found)
-**Supersedes:** `docs/plans/2026-08-29-clients-address-filter.md` — the address
+**Supersedes:** `docs/archive/2026-08-29-clients-address-filter.md` — the address
 chip-menu it specifies is deleted by this direction, and the in-panel search
 field it deferred is never built.
 
@@ -110,5 +110,5 @@ sheet beyond receiving the shared-address count.
   suppressible there rather than assumed.
 - `tour_clientsFilterDesc` describes the chip row this deletes, and
   `TourStepId.clientsFilter` targets it. Both need rewriting against the new
-  control — see `docs/plans/2026-09-04-feature-tour-1-57-update-implementation.md`,
+  control — see `docs/archive/2026-09-04-feature-tour-1-57-update-implementation.md`,
   which is unstarted and touches the same copy.

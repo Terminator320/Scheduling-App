@@ -438,7 +438,7 @@ ordering already recorded in your notes, restated because it gates the build:
   `clients_filterByType` have zero member-access and zero string-literal
   references across `lib/` and `test/`. Orphaned by `d84cae53` (clients rebuild)
   and `eb200e68` (ClientPicker replaced ClientSearchField).
-  `docs/plans/2026-08-29-clients-address-filter.md` still describes
+  `docs/archive/2026-08-29-clients-address-filter.md` still describes
   `clients_buildingUnits` as live.
 - **Suggested improvement:** a deliberate l10n pass — delete from **both** ARBs
   plus the EN `@` block in one commit, then `flutter gen-l10n`. Not part of a

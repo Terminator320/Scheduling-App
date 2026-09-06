@@ -2,6 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** SHIPPED — all tasks implemented 2026-08-21 and deployed the same
+day (`903161e1`, then `d99b6673`), released as 1.48.0+77. The unticked boxes
+below are the execution record, not outstanding work. Design doc:
+`docs/plans/2026-08-21-simplified-auth-design.md`.
+
 **Goal:** Remove the email-verification step from employee account setup and the
 admin toggle from account creation, replacing the shared starting password
 `Welcome123!` with a random per-account one.

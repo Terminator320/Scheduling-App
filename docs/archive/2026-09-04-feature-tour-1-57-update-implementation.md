@@ -2,6 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** SHIPPED — all 10 tasks implemented 2026-09-05 (`00e063df` ->
+`2685d5ec`), released in 1.58.0+87. App-side only; nothing to deploy. The tour
+now runs 52 steps across 12 scopes with per-STEP seen flags (`tour_seen_steps`).
+Design doc: `docs/plans/2026-09-04-feature-tour-1-57-update.md`.
+
 **Goal:** Cover the 1.56/1.57 features in the in-app tour, and change tour "seen" tracking from per-screen to per-step so devices that already toured a screen are shown only the newly-added steps.
 
 **Architecture:** `TourSeenController` moves from `Set<TourScope>` in `tour_seen_tabs` to `Set<TourStepId>` in a new `tour_seen_steps` key, seeded once from the old key through a const legacy snapshot. `FeatureTourHost` filters a scope's catalog to unseen ids before the existing `isTargetRendered` pass, and marks seen only the ids that actually ran. Eight new steps are added across the calendar, Settings, and a new `sheet_jobDetails` scope on the appointment details sheet.

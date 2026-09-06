@@ -2,8 +2,14 @@
 
 **Date:** 2026-09-05
 **Status:** DESIGN APPROVED (owner, 2026-09-05), with the four open questions
-answered the same day (see **Owner decisions** below). **Build NOT authorized**
-— no code written.
+answered the same day (see **Owner decisions** below). **BUILT AND RELEASED the
+same day** as 1.58.0+87 (`d7e8294f`); the implementation plan's boxes were
+ticked in `f884e120`. In the code: `PhoneQueryPolicy`
+(`lib/features/clients/domain/policies/phone_query_policy.dart`), `ClientPicker`
+and `SelectedClientCard`. **NOT usable in production yet** — the picker calls
+the `searchClients` callable, which is part of the undeployed 1.57/1.58 backend
+(prod still runs 25 functions; see the deploy log in `docs/DEPLOYMENT.md`).
+**Implementation plan:** `docs/plans/2026-09-05-add-job-client-picker-implementation.md`
 **Mockup:** https://claude.ai/code/artifact/aeedb5fe-92a8-455e-9c22-6741a4252b50
 (narrowing list + compact keypad, the confirmation card, the address switch off,
 and the near-miss state)

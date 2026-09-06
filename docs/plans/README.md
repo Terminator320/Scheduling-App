@@ -1,11 +1,15 @@
 # Active plans — index and outstanding work
 
-Swept 2026-08-11; **re-swept 2026-08-15** against what the code and the deploy
-log actually say. Everything left in this directory is either **live work** or a
-reference a live plan depends on; ten documents whose work has shipped moved to
-`docs/archive/` in the first sweep (see its README for what and why). Dated audit
-snapshots live in `docs/audits/` until they are superseded, then they move to
-the archive too.
+Swept 2026-08-11, re-swept 2026-08-15, **re-swept 2026-09-06** against what the
+code, `git log` and the deploy log actually say. The 2026-09-06 pass moved
+fourteen documents to `docs/archive/` (the simplified-auth pair, four August
+calendar/day-off designs, the per-day appointments pair, client-building
+grouping, calendar holidays, the superseded clients address filter, the
+feature-tour 1.57 pair and the 2026-09-03 mobile audit) and rebuilt the index
+below, which had gone **21 files behind** — every plan written after 2026-08-15
+was missing from it. Everything left in this directory is either **live work**
+or a reference a live plan depends on. Dated audit snapshots live in
+`docs/audits/` until they are superseded, then they move to the archive too.
 
 **Current state of the code is `CLAUDE.md`, `docs/ARCHITECTURE.md` and
 `docs/CLOUD_FUNCTIONS.md` — never a plan doc.** A plan records how something was
@@ -25,25 +29,45 @@ at the top of each file, not its boxes.
 | `2026-07-10-siri-app-intents-design.md` | Design, 6 phases. Phases 5–6 unscoped. |
 | `2026-07-19-siri-app-intents-implementation.md` | Phases 1–3 built; **no device pass ever run**. |
 | `2026-07-20-siri-phase4-write-actions.md` | **NOT STARTED.** Mac + Apple-portal session. |
+| `2026-08-28-address-street-locality-split.md` | **Shipped and deployed; the prod backfill's LIVE run is the one thing open.** `backfill-client-address-street.js` has only dry-run against prod (2026-08-28: 714 scanned, 114 reduced). Cleanup, not a defect — the app renders both stored shapes. |
+| `2026-08-30-wave-validated-contract-design.md` | **Phase 1 built and deployed 2026-08-30** (`485c88cb`, report-only). Phases 2–4 deliberately unwritten until the prod replay lands. |
+| `2026-08-30-wave-validated-contract-implementation.md` | Phase 1's task list. Its last step — `functions/scripts/audit-wave-contract.js` against prod — **has never run**; this box has no ADC. |
+| `2026-09-04-carplay-driving-task.md` | **PLAN, not started.** Written 2026-09-04, awaiting owner review. |
+| `2026-09-04-clients-page-search-first.md` | **Implemented 2026-09-05** (`68ae7d37` + `d84cae53`), released 1.58.0+87. **Backend undeployed** — two `clients` composites must be READY and `backfill-client-sort-fields.js` must run before the sorts work. Supersedes the archived address-filter doc. |
+| `2026-09-04-clients-page-search-first-implementation.md` | Its task list. Same deploy gate. |
+| `2026-09-05-add-job-client-picker.md` | **Built and released the same day** as 1.58.0+87 (`d7e8294f`). Its banner claimed "no code written" until this sweep. **Not usable in prod** until `searchClients` deploys. |
+| `2026-09-05-add-job-client-picker-implementation.md` | Its task list, boxes ticked in `f884e120`. Same deploy gate. |
 | `APP_STORE_SUBMISSION.md` | **The live release runbook**, now for updates rather than a launch — the app shipped. Its unticked boxes have never been reconciled against four shipped submissions, so read one as *unknown*, not *outstanding* (§7). |
 
 ---
 
 ## What has not been done
 
-### 1. ~~The backend deploy~~ — DONE, and five more have gone out since
+### 1. The backend deploy — a THREE-RELEASE DEBT is open again
 
 The P5/multi-day deploy this section was written for landed 2026-08-11 at
 `70579d22` (release 1.45.0+72), which unblocked the P5 device block in §4 and
 shipping an app build carrying the P5 UI — the ordering hazard was that the
 rules clause had to be live first, or every self save fails `permission-denied`.
 
-**Nothing about deploy state should be read from this file.** Five further
-deploys have gone out since (`78d89478`, then `d3e22377` on 2026-08-14, then
-`6d41dd3c`, `e84a66fd` and `6b3fcf7c` on 2026-08-15), carrying the three-deletion
-scheduler swap, the photo subcollection's phase 1, the 2026-08-15 audit and two
-Wave fixes. **`docs/DEPLOYMENT.md` is the only reliable record of what
-production runs** — read its log rather than any paragraph here.
+**Nothing about deploy state should be read from this file** —
+**`docs/DEPLOYMENT.md` is the only reliable record of what production runs**;
+read its log rather than any paragraph here. As of the 2026-09-06 sweep that
+log's last row is **2026-09-03**, and prod is running **25 functions while the
+repo declares 29**. So the debt spans 1.56/1.57/1.58, and its ordering matters:
+
+- The three `indexed_search.js` callables (`searchClients`, `searchHistory`,
+  `findAppointmentConflicts`) plus `restoreAppointmentStatus` are undeployed.
+- Their composite indexes must be READY **and**
+  `functions/scripts/backfill-search-tokens.js` must have run before the app
+  build that calls them ships — an unbackfilled document is invisible to the
+  search that replaced the client-side scan.
+- The search-first clients work adds two more `clients` composites and
+  `backfill-client-sort-fields.js` on top of that.
+- Until this deploys, Wave clients keep arriving with an empty phone field, and
+  the 1.58 phone-first client picker cannot work at all.
+
+`docs/DEPLOYMENT.md` §"TODO 1.57.0+86" holds the ordering runbook.
 
 ### 2. Redesign — P6 and P7b remain
 
@@ -137,8 +161,19 @@ card? a countdown to today's window end?) is an unanswered design question.
 
 ### 6. Data and ops
 
-**Every backfill named here has now RUN against prod. None of them is a work
-item; each is listed so nobody re-runs one.**
+**The backfills in the bullet list below have all RUN against prod; each is
+listed so nobody re-runs one. THREE OTHERS HAVE NOT RUN and are real work
+items** (corrected 2026-09-06 — this heading said "every backfill named here"
+and read as though nothing was outstanding):
+
+- `backfill-search-tokens.js` — **a prerequisite for the 1.57/1.58 release, not
+  a follow-up.** Until it runs, `searchClients` / `searchHistory` return nothing
+  for every client and closed job written before 2026-09-04.
+- `backfill-client-sort-fields.js` — gates the search-first clients screen's
+  Most jobs / Recently added sorts.
+- `backfill-client-address-street.js` — the live run. Only ever dry-run against
+  prod (2026-08-28: 714 scanned, 114 reduced, 600 left alone). Optional cleanup:
+  the app renders both stored address shapes correctly.
 
 - **The client name/phone rewrite — ran, reversed, re-ran, and destroyed data on
   the way through.** `backfill-client-phone-from-name.js` ran 2026-08-08: it
@@ -237,7 +272,14 @@ history from being deleted.
 lint` clean.
 
 **The jest suite cannot catch this class of regression** — it mocks
-firebase-admin, so it passed on the broken versions too. Note also that
-`firebase-admin ^14` is a known break against firebase-functions 7.x; do not
-"fix" a future audit warning by bumping to it. After any dependency change
-here, check the installed versions directly rather than trusting green tests.
+firebase-admin, so it passed on the broken versions too. After any dependency
+change here, check the installed versions directly rather than trusting green
+tests.
+
+**The "do not bump to `firebase-admin ^14`" warning this section used to carry
+is RETIRED (corrected 2026-09-06).** It is in, and has been since the 2026-09-04
+maintenance pass: `functions/package.json` declares `^14.3.0` against
+`firebase-functions ^7.3.2`, and that is what is installed. The blocker was
+never the SDK pairing — it was jest/ESM, and a CommonJS `jose` mock unblocked
+it. `npm audit` is clean. See the archived
+`docs/archive/MOBILE_APP_AUDIT_2026-09-03.md` for the upgrade record.
