@@ -1,12 +1,16 @@
 # Navigation redesign — program design
 
-**Date:** 2026-07-29 · **Branch:** `redesgin` · **Status:** **P1–P5 and P7 are
-SHIPPED** (P4b withdrawn, replaced by P4c). What this spec still owes is **P6
-Time off** — deferred by owner call 2026-08-10 and skippable — and **P7b**, the
-Wave invoice read path, which is what unblocks P7's six money sections and the
-dashboard's dropped Year period. Its original status line read "approved design,
-pre-implementation" until 2026-08-15; the build record for each project is in
-`redesign-subdocs/`, and the current behaviour is `CLAUDE.md`, never this file.
+**Date:** 2026-07-29 · **Branch:** `redesgin` · **Status:** **COMPLETE.**
+P1–P5 and P7 SHIPPED (P4b withdrawn, replaced by P4c); **P6 Time off and P7b
+Wave invoice read path are CANCELLED — owner call 2026-09-06, neither will be
+needed.** This spec owes nothing further. Two consequences are now PERMANENT
+rather than deferred, and are documented as such at their sites: the dashboard's
+six money sections stay omitted, and its **Year** period stays absent (it needs
+an aggregate read path that nothing is now scheduled to build — see
+`dashboard_period.dart`, and do not "add Year back" by widening `fetchInRange`).
+Its original status line read "approved design, pre-implementation" until
+2026-08-15; the build record for each project is in `redesign-subdocs/`, and the
+current behaviour is `CLAUDE.md`, never this file.
 
 Source handoff: `C:\Users\GeorgeVogas\Downloads\Scheduling app navigation redesign\design_handoff_scheduling_app\`
 (docs `01`–`11`, clickable prototype `design/Scheduling App.dc.html`, screenshots partially stale —
@@ -607,7 +611,13 @@ The two "only an admin can write" rule comments become wrong and must be updated
 auto-unassigned: availability changes notify (inline warning + P7 dashboard flag), a human moves
 the jobs.
 
-## P6 — Time off (new feature) — NOT STARTED · SKIPPABLE
+## P6 — Time off (new feature) — CANCELLED
+
+> **Owner call, 2026-09-06: P6 is CANCELLED and will not be built.** It had been
+> deferred since 2026-08-10; this closes it. Nothing below is live work — the
+> design is kept only as the record of what was decided and why. The personal
+> block / day-off stopgap described under "what P6 would have bought" is now the
+> permanent answer, not a placeholder. Everything from the deferral still holds:
 
 > **Owner call, 2026-08-10: P6 is deferred and may be skipped entirely.** Nothing has been
 > built — no `timeOff` collection, no rules, no surfaces; the only trace in the code is two
@@ -762,7 +772,13 @@ stays the existing bounded Dart-side search (`historySearchProvider`); no new se
 > `AppointmentCard`. Don't "unify" it here; the agenda sinks closed work because it answers
 > *what's left today*, and History is a record where everything is closed.
 
-## P7b — Wave invoice read path (independent project)
+## P7b — Wave invoice read path (independent project) — CANCELLED
+
+> **Owner call, 2026-09-06: P7b is CANCELLED and will not be built.** The six
+> dashboard money sections therefore stay permanently omitted (empty-omitted
+> rule, not stubbed), and the dashboard's **Year** period stays absent — this
+> was the aggregate read path that would have served it. The design below is
+> kept as a record only.
 
 Unblocks the six dashboard money sections. Server-side only: scheduled function queries Wave
 (GraphQL, `WAVE_FULL_ACCESS_TOKEN` from Secret Manager) for invoices; projects the minimal fields

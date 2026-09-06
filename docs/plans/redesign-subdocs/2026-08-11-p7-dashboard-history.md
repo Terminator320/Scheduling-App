@@ -37,11 +37,14 @@ window the current read path can serve without lying (~420 docs at 14/day, a
 comfortable margin). Dropping the option is strictly better than shipping one
 that reports partial numbers as if they were totals.
 
-**Year is not abandoned, it is blocked on an aggregate read path.** P7b already
-needs one (its whole shape is "project the minimal fields into a rules-locked
-collection, read via a callable"), and a `count()`-per-bucket path would serve
-Year exactly. Revisit it there, not here. Do not "add Year back" by widening
-`fetchInRange`.
+**Year is blocked on an aggregate read path, and as of 2026-09-06 nothing is
+scheduled to build one.** P7b was to have needed one — its whole shape was
+"project the minimal fields into a rules-locked collection, read via a
+callable", and a `count()`-per-bucket path would have served Year exactly — but
+**P7b was CANCELLED by owner call 2026-09-06**, so Year's absence is now
+permanent rather than pending. Do not "add Year back" by widening
+`fetchInRange`: that reports a prefix as a total, which is the exact failure
+this decision leaves standing.
 
 ### 2. What is omitted, not stubbed
 

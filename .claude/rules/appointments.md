@@ -231,11 +231,12 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   so `purgeExpiredHistory` never purges a day off — accepted, at a handful per
   person per year.
   **`findBusyEmployees` is deliberately NOT filtered** — booking time off is
-  exactly how someone is made to read as unavailable, which is the most
-  valuable thing the P6 stopgap buys (see
-  `docs/plans/2026-07-29-redesign-program.md`; this flag closes that stopgap's
-  "counts as a job in the dashboard" limitation, and nothing more — it is not
-  P6). No rules change was needed: the appointment validator is a per-key
+  exactly how someone is made to read as unavailable, which was the most
+  valuable thing the P6 stopgap bought. **It is now the PERMANENT answer, not a
+  stopgap: P6 was CANCELLED by owner call 2026-09-06** (see
+  `docs/plans/2026-07-29-redesign-program.md`), so there will never be a
+  `timeOff` collection, a request/approve flow or an allowance. This flag closes
+  the old stopgap's "counts as a job in the dashboard" limitation. No rules change was needed: the appointment validator is a per-key
   bounded check, not a `hasOnly` allowlist, and it type-checks neither
   `isPersonal` nor `isAllDay`. The off-screen mirrors (push text, widget, Siri,
   Live Activities) are UNCHANGED and still treat a day off as any other

@@ -137,8 +137,11 @@ editing their own roster row as an opaque `stale-auth`.
 caller IS the target independent of role, so an admin editing their own row is a
 self change. A self edit pushes the ACTIVE ADMINS instead
 (`notifyAdminsOfSelfEmailChange` → **`sendToActiveAdmins`**, the shared fan-out
-beside `sendToEmployee` that P6's time-off requests will reuse — build a new
-admin fan-out on it rather than inlining the role/status query. It is bounded
+beside `sendToEmployee` — build a new admin fan-out on it rather than inlining
+the role/status query. (It was justified here as the fan-out P6's time-off
+requests would reuse; **P6 was cancelled 2026-09-06**, so it has one caller
+today. The rule stands on its own — a second inlined role/status query is the
+thing to avoid, not the absent second caller.) It is bounded
 by `ADMIN_FANOUT_MAX` (100) with the warn-at-cap posture the sweep ceilings
 use — it was the last unbounded collection query in the push stack — and it
 seeds `sendToEmployee`'s recipient `cache` from the docs it just read, so
