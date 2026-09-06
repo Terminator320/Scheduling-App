@@ -19,14 +19,21 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           # Pinned so a new "latest stable" release can't break CI on an
-          # unrelated push. Bump deliberately; keep >= pubspec's flutter floor.
-          flutter-version: 3.44.1
+          # unrelated push. Keep this equal to the SDK the work is actually
+          # verified on locally — a pin the developer never runs means a green
+          # CI proves nothing about the tree they tested, and a red one can't
+          # be reproduced. Bump deliberately, together; keep >= pubspec's floor.
+          flutter-version: 3.47.2
           channel: stable
           cache: true
 
-      - name: Bootstrap dev/.env from template
-        run: cp dev/.env.example dev/.env
-
+      # No config bootstrap step. `dev/.env` and `flutter_dotenv` were retired
+      # on 2026-09-04 (the file shipped as a readable IPA asset); the build now
+      # takes `--dart-define-from-file=dev/firebase.local.json`. Neither
+      # `analyze` nor `test` reads a define — `String.fromEnvironment` resolves
+      # to '' and only `main()` fails fast on that — so there is nothing to
+      # supply here. The step this replaced copied `dev/.env.example`, deleted
+      # in that same retirement, and failed EVERY run from then on.
       - name: Install dependencies
         run: flutter pub get
 
@@ -35,6 +42,8 @@ jobs:
       - name: Generate localizations
         run: flutter gen-l10n
 
+      # The repo's baseline is `No issues found!` — this is an exact gate, not
+      # a filtered one. Any lint that appears here is new.
       - name: Analyze
         run: flutter analyze
 
