@@ -1688,7 +1688,7 @@ not default it off.
 
 Run: `flutter test` (3387 passing as of 2026-09-06 — that is the runner's count;
 `grep`ing for `test(`/`testWidgets(` gives fewer (3282), since some cases are
-generated inside loops; `functions` adds 1785 jest tests across 84 suites in
+generated inside loops; `functions` adds 1838 jest tests across 86 suites in
 `functions/__tests__/` — the parallel `functions/test/` directory was
 merged away). **The runner's count is the only one that settles whether the
 branch is green**, and a recorded green is a claim, not a fact: on 2026-09-02
