@@ -13,13 +13,33 @@ description: >-
 
 Project `schedulingapp-88727`, region `us-central1`. Functions live in
 `functions/` and are all re-exported from `functions/index.js` — that export
-list is the source of truth for what should exist in prod.
+list (**29 exports**) is the source of truth for what should exist in prod.
+
+## 0. Establish the ordering before touching anything
+
+A deploy here is one step of a four-step release, and the steps are ordered
+because each one breaks the app if it lands late:
+
+1. **`firestore:indexes`**, alone, and wait for every new composite to reach
+   `READY`. A query against a `CREATING` index fails exactly like a missing one.
+2. **Prod backfills**, if the new code reads a field the existing documents do
+   not carry (`backfill-search-tokens.js`, `backfill-client-sort-fields.js`).
+   A backfill is a **prerequisite for the release, not a follow-up** — skip it
+   and search returns nothing for every pre-existing document, silently.
+3. **`functions` + rules** — the backend must accept the new payload shape
+   before a build that sends it exists, because `assertPayloadShape` rejects
+   an unknown key outright.
+4. **The app build**, last.
+
+State which of the four this run is, and what still stands after it. This repo
+has carried undeployed backend work across three releases at once; saying
+"deployed" when only step 3 ran is how that happens.
 
 ## 1. Pre-flight (never skip)
 
 ```bash
 cd functions && npm run lint   # Google ESLint, 80-char limit
-cd functions && npm test       # jest — all suites must pass
+cd functions && npx jest       # all suites must pass
 ```
 
 Fix failures before deploying — a broken deploy leaves prod half-updated.
@@ -28,12 +48,25 @@ Fix failures before deploying — a broken deploy leaves prod half-updated.
 
 Clear the AI-agent env vars first, or the CLI stamps `agent-name/claude_code`
 into the Cloud Audit Log (see `docs/DEPLOYMENT.md` §5 — the entry is immutable
-once written). Export once; the rollback and `functions:delete` paths need it too.
+once written). Clear them once in the shell that will run the deploy; the
+rollback and `functions:delete` paths need it too.
+
+**The owner's shell is PowerShell**, where `export` is not a command. Give the
+PowerShell form first and only mention the bash one if they are in the Bash
+tool:
+
+```powershell
+Remove-Item Env:AI_AGENT, Env:CLAUDECODE, Env:CLAUDE_CODE -ErrorAction SilentlyContinue
+firebase deploy --only functions,firestore:rules,storage
+```
 
 ```bash
 export AI_AGENT= CLAUDECODE= CLAUDE_CODE=
 firebase deploy --only functions,firestore:rules,storage
 ```
+
+Both clear the variables for **that shell only** — a new terminal needs it
+again. Confirm with `$env:AI_AGENT` (PowerShell) before deploying.
 
 - `storage` is the target name, **not** `storage:rules` (invalid target).
 - One function only: `--only functions:<name>`.
@@ -91,9 +124,17 @@ firebase deploy --only functions,firestore:rules,storage
 
 - List deployed functions (Firebase MCP `functions_list_functions`, or
   `firebase functions:list`) and diff against the exports in
-  `functions/index.js` — every export deployed, no orphans.
+  `functions/index.js` — all 29 deployed, no orphans. **An unchanged count is
+  not a verification**: the set changed by six at an unchanged count of 25
+  once, and the drift went unnoticed for three days. Diff the names.
+- If new composites went out in step 0.1, re-read `firestore_list_indexes` and
+  confirm `READY`, not `CREATING`.
 - For a function you just changed, spot-check its recent logs
   (MCP `functions_get_logs`) for startup errors.
+- Record the deploy in `docs/DEPLOYMENT.md`'s log — the commit actually running
+  in prod. That log is the only answer to "is the backend behind the app?", and
+  every stale-deploy incident here started with a run that was not recorded.
 
-Report what was deployed, the verification result, and anything skipped or
-answered at a prompt — the user should be able to audit every choice made.
+Report what was deployed, the verification result, anything skipped or answered
+at a prompt, and — explicitly — **which of the four ordering steps still
+stand**. The user should be able to audit every choice made.
