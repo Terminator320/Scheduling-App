@@ -132,6 +132,13 @@ performance opportunities) and optional code-quality suggestions. Save it to
 user a tight inline summary — counts per severity and the top 3 things to look
 at first. Never paste secrets, tokens, or PII into the report.
 
+**Save it to a DATED file, `docs/audits/CODEBASE_AUDIT_<YYYY-MM-DD>.md`**, and
+give every finding a stable id (`S1`, `B3`, `I12`) in a heading. The
+`/audit-do` command finds the newest file by that name and works the ids, and
+the user routinely comes back days later asking what is still open — a report
+that overwrote its predecessor cannot answer that. Leave the id in place when
+a finding is closed and mark it, rather than deleting the row.
+
 **Don't let "do not touch" become "stay silent."** Items you correctly leave
 un-removed because they're load-bearing or intentional — `TODO(pre-ship)`
 scaffolding (especially anything destructive, like a real delete wired into the
@@ -141,23 +148,29 @@ ones (a live destructive action behind a `TODO(pre-ship)`) in a dedicated
 **Pre-ship checklist** section near the top, not buried in a footnote. Reporting
 ≠ whispering; the user needs to see the thing they have to act on before launch.
 
-### 4b. Offer (or run) the "everything but pre-ship" implement pass
-After every past audit, the user's next message has been some form of
-**"do everything but the pre-ship"** — implement all reported findings except
-the items in the Pre-ship checklist (App Check flips, destructive
-`TODO(pre-ship)` scaffolding, anything that only matters at launch). So:
+### 4b. Offer (or run) the implement pass
+After **every** past audit — seventeen times across the transcript history —
+the user's next message has been some form of **"do all the items from the
+audit"**: "do everything in the audit", "start all items, use sub agents",
+"finish the remaining audit items". Assume it is coming.
 
-- If the invocation already asked for it (args mention "implement",
-  "do everything", or "but pre-ship"), roll straight from the report into
-  implementing every non-pre-ship finding, then re-verify per step 5.
-- Otherwise, end the report by offering exactly that: "Say 'do everything but
-  the pre-ship' and I'll implement all of it." Pre-ship items are never
-  auto-implemented — they're deliberate launch-time switches.
+- If the invocation already asked for it (args mention "implement", "do all",
+  "do everything"), roll straight from the report into `/audit-do` rather than
+  stopping to present findings the user has pre-approved.
+- Otherwise end the report with exactly that offer, and name the two escape
+  hatches so a blanket "do all" is still safe: **pre-ship items** (App Check
+  flips, destructive `TODO(pre-ship)` scaffolding, launch-time switches) and
+  **anything needing a prod deploy or backfill** are never auto-implemented.
+- Findings the user should decide on individually go in a short **Decide
+  first** list at the top of the report, so "do all" has an unambiguous
+  meaning and the user is not asked to re-read everything to find the choices.
 
 ### 5. Verify before you claim done
-Re-run `flutter analyze` (no NEW errors/warnings vs. baseline) and the relevant
-`flutter test` targets — full suite for a broad sweep, the touched test files
-for a scoped one. For Functions changes, `cd functions && npm run lint`. If a
+Re-run `flutter analyze` — the baseline is **`No issues found!`**, so any line
+it prints is yours — and the relevant `flutter test` targets: full suite for a
+broad sweep, the touched test files for a scoped one. For Functions changes,
+`cd functions && npm run lint && npx jest`. These are the same four commands CI
+runs on push, so a green pass here is also what keeps the push green. If a
 fix broke something, revert that fix and move it to the report rather than
 leaving the tree red. State the actual results — don't assert green you didn't
 observe.

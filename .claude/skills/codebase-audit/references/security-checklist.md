@@ -10,8 +10,10 @@ actually enforce, not just client code.
 - No secrets, API keys, tokens, or passwords in source, logs, or the report.
   Server-side keys (Stripe, OpenAI, Wave full-access token, admin tokens) must
   live in Google Secret Manager and be read in a Cloud Function — never in
-  `dev/.env` (that file is an asset bundled into the APK, client-config only).
-- `dev/.env` and `google-services.json` are gitignored — flag any commit,
+  a `--dart-define` (those are compiled into the binary, client-config only —
+  `dev/.env` and `flutter_dotenv` were retired 2026-09-04 because the file
+  shipped as a readable IPA asset).
+- `dev/firebase.local.json` and `ios/GoogleService-Info.plist` are gitignored — flag any commit,
   read-into-code, or log of them. The Wave token (`WAVE_FULL_ACCESS_TOKEN`),
   `GOOGLE_MAP_API_KEY` belong in Secret Manager only.
 - Grep for hardcoded URLs, bearer tokens, private keys, `password =`, base64
@@ -65,11 +67,13 @@ actually enforce, not just client code.
 - All user input validated at the boundary; never trust UI data directly.
 - Firebase callable responses cast loosely first:
   `(value as Map?)?.cast<String, dynamic>()` — a direct
-  `as Map<String, dynamic>` throws on Android (it's a runtime safety issue, and
-  also a crash bug worth flagging).
+  `as Map<String, dynamic>` depends on the plugin's choice of map type. The
+  loose cast is the convention here regardless of platform.
 - Raw Firebase error codes / stack traces never surfaced in UI text.
-- Emails normalized (`.trim().toLowerCase()`) before any Firestore read/write
-  used in a security decision.
+- Emails normalized through `normalizeEmail()`
+  (`core/validators/email_format.dart`) before any Firestore read/write used in
+  a security decision — a hand-spelled `.trim().toLowerCase()` is itself a
+  finding.
 
 ## General vuln classes to scan for
 - Injection where a query/command is built from user input (low risk here —

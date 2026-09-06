@@ -16,11 +16,10 @@ if [ ! -f pubspec.yaml ]; then
   exit 1
 fi
 
-hr "flutter analyze (errors + warnings only; ~1000 info lints filtered out)"
+hr "flutter analyze (full output; the repo baseline is: No issues found!)"
 if command -v flutter >/dev/null 2>&1; then
   # Don't let a non-zero analyze exit kill the script.
-  flutter analyze 2>&1 | grep -E "error -|warning -" || \
-    echo "(no errors or warnings — only info-level lints remain)"
+  flutter analyze 2>&1 | tail -40
 else
   echo "flutter not on PATH — skipped."
 fi
