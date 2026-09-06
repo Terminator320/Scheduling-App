@@ -2,6 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** IMPLEMENTED 2026-09-05 — commits `68ae7d37` + `d84cae53` on
+`redesgin`, released in 1.58.0+87. **NOT deployed:** the two new `clients`
+composite indexes must be READY and
+`functions/scripts/backfill-client-sort-fields.js` must have run before the
+Most jobs / Recently added sorts work in production. Design doc:
+`docs/plans/2026-09-04-clients-page-search-first.md`.
+
 **Goal:** Replace the clients tab's five-control scrolling chip row with one search field, one pinned Filter button and a filter sheet, add a sort control, and stop the tab open from paying the ~700-doc building scan.
 
 **Architecture:** The new chrome (Filter button, active-filter chip, list header, sort) lives in `ListInformation` (`clients_screen.dart`), NOT in `ClientsListView` — that view is also the booking flow's client picker, so keeping the chrome in the screen is what makes it suppressible for free. `ClientsListView` stops watching `clientBuildingsProvider`/`clientBuildingKeysProvider`; the filter sheet watches them instead, so the scan moves off the path everyone walks onto one almost nobody opens. `ClientsFilter` stays a sealed one-of (single-select); sort is a separate `ClientsSort` enum applied only to the unfiltered paginated list.
@@ -9,7 +16,7 @@
 **Tech Stack:** Flutter/Dart 3.10, Riverpod 3 (`FutureProvider.autoDispose.family`), `infinite_scroll_pagination` 5.x, Firestore composite indexes, `gen_l10n` ARB localization.
 
 **Design doc:** `docs/plans/2026-09-04-clients-page-search-first.md`
-**Supersedes:** `docs/plans/2026-08-29-clients-address-filter.md`
+**Supersedes:** `docs/archive/2026-08-29-clients-address-filter.md`
 
 ---
 

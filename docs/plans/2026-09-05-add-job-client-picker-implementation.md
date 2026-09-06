@@ -2,6 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** IMPLEMENTED 2026-09-05, released as 1.58.0+87 (`d7e8294f`); boxes
+ticked in `f884e120`. Blocked from being usable in production only by the
+undeployed 1.57/1.58 backend that owns `searchClients`. Design doc:
+`docs/plans/2026-09-05-add-job-client-picker.md`.
+
 **Goal:** Rebuild the add-job client step for an admin who is on the phone with the client and types a full ten-digit number: the match list narrows live above the OS phone pad on one network round trip, a tap attaches the client as a confirmation card, and the job address moves next to that card.
 
 **Architecture:** Three pure policy objects carry the decisions — `PhoneQueryPolicy` (is this a phone query, and what should we actually send), `ClientSearchWindow` (may we narrow the last answer locally instead of re-querying), and the existing `ClientSearchPolicy` with its phone seam fixed. The controller mixin `AppointmentFormConcerns.searchClients` becomes the one orchestrator; the widget stays dumb and renders state. `ClientSearchField` is replaced by `ClientPicker`, which owns the mode switch, the tally, the list and every focus state. `AppointmentAddressField` moves out of the details section into the WHO section under the new `SelectedClientCard`.

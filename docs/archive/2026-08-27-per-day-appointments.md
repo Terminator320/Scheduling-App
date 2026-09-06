@@ -1,8 +1,9 @@
 # Multi-day jobs book as one appointment per day
 
 **Date:** 2026-08-27
-**Status:** implemented 2026-08-27; rules NOT yet deployed, app NOT yet shipped
-(cut as 1.53.0+82 on 2026-08-28)
+**Status:** SHIPPED. Implemented 2026-08-27, cut as 1.53.0+82 on 2026-08-28,
+and the rules half **deployed 2026-08-29** at `d5aa3a21` (`firestore:indexes`
+first, then functions, rules, storage). Nothing here is outstanding.
 
 ## Release-review gaps, CLOSED in 1.53.0+82
 

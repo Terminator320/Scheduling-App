@@ -1,7 +1,9 @@
 # Day off — card and detail design
 
 **Date:** 2026-08-24
-**Status:** BUILT 2026-08-24 (ships in 1.50.0+79, uncommitted)
+**Status:** SHIPPED — built 2026-08-24 and released in 1.50.0+79. App-side
+only; nothing to deploy. `_DayOffStrip` in
+`lib/features/calendar/widgets/cards/appointment_card.dart` is what landed.
 **Mockup:** https://claude.ai/code/artifact/b9d91b97-d78e-46ea-9090-f3241cf90ca3
 
 Design for how a day off (`isDayOff` on a personal block — see

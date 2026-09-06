@@ -1,7 +1,13 @@
 # Address street/locality split
 
 **Date:** 2026-08-28
-**Status:** IMPLEMENTED 2026-08-28 — app, backend and backfill script. Script NOT yet run against prod.
+**Status:** IMPLEMENTED 2026-08-28 — app, backend and backfill script, all
+shipped and deployed. **The one thing still open is the backfill's LIVE run:**
+`functions/scripts/backfill-client-address-street.js` has only ever run against
+prod as `--dry-run` (2026-08-28: 714 scanned, 114 reduced, 600 left alone — see
+"What the first prod dry run caught" below). Until it runs for real, the 114
+duplicated addresses stay duplicated; the app renders both stored shapes
+correctly, so this is cleanup, not a defect.
 **Mockup:** https://claude.ai/code/artifact/af063304-88e8-4ab5-818c-0568a67e172c
 **Chosen option:** A — one composed line on the detail view
 

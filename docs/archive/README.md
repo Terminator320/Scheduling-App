@@ -2,7 +2,13 @@
 
 Completed plans/specs and superseded audit snapshots — kept for history, not
 maintained against the current code. Started 2026-07-10; last updated
-**2026-08-15**, when the docs sweep added the three audit snapshots this index
+**2026-09-06**, when the docs sweep moved in fourteen documents whose work had
+shipped (the simplified-auth pair, the four August calendar/day-off designs, the
+per-day appointments pair, client-building grouping, the calendar holidays, the
+superseded clients address filter, the feature-tour 1.57 pair and the 2026-09-03
+mobile audit) and indexed eleven that were already on disk but unlisted —
+companion `-design` / `-PLAN` / `-implementation` files whose sibling was
+indexed and they were not. Before that, **2026-08-15**, when the sweep added the three audit snapshots this index
 had been missing — the 2026-08-11 second pass (on disk but unlisted) and the two
 2026-08-14 passes, which had been **overwritten in place** by the next sweep and
 were restored from git history. The 2026-08-11 sweep before it moved thirteen
@@ -131,6 +137,70 @@ this one".
   `docs/plans/redesign-subdocs/2026-08-11-p7-dashboard-history.md`, which stays
   active-adjacent with the rest of the redesign sub-docs.
 
+### Added by the 2026-09-06 sweep
+
+- `2026-08-21-simplified-auth-design.md` / `-implementation.md` — removed the
+  email-verification step from employee setup and the admin toggle from account
+  creation, replacing the shared `Welcome123!` with a random per-account
+  starting password. Shipped 1.48.0+77, backend deployed 2026-08-21
+  (`903161e1`, then `d99b6673` restoring account creation the first deploy
+  broke). Backend rollback is unsafe — the dependent build is on the App Store.
+- `2026-08-24-assignee-availability.md` — the assignee picker dims crew who
+  can't take the job on the chosen date rather than hiding them. Built
+  2026-08-24, shipped 1.51.0+80. Shares `findClashingAppointments` with the
+  sibling below; the invariants live in `.claude/rules/appointments.md`.
+- `2026-08-24-timeoff-clash-alert.md` — the same clash from the other
+  direction: booking a personal block over existing jobs lists them and offers
+  to swap the crew. Built with its sibling in one pass, shipped 1.51.0+80.
+  `personal_block_clash_dialog.dart`.
+- `2026-08-24-day-off-card.md` — the day-off strip's appearance (option B, "day
+  banner", no side colour). Shipped 1.50.0+79; `_DayOffStrip` in
+  `appointment_card.dart`. Its banner said "uncommitted" until this sweep.
+- `2026-08-25-day-off-strip-title.md` — the strip renders a typed title instead
+  of throwing it away, plus the light-mode container fix. Shipped 1.52.0+81.
+- `2026-08-27-per-day-appointments.md` / `-plan.md` — a multi-day job books as
+  one document per day, linked by `seriesId` with a stored `dayIndex`/`dayCount`,
+  so marking day 1 complete no longer closes days 2–5. Implemented 2026-08-27,
+  shipped 1.53.0+82, rules deployed 2026-08-29 (`d5aa3a21`).
+- `2026-08-28-client-building-grouping.md` — grouping clients by building, made
+  the case by the address backfill's prod dry run (32 clients across 7 Prom.
+  Paton buildings). Shipped; `client_building.dart` and the filter sheet. Its
+  dependency, `2026-08-28-address-street-locality-split.md`, is **still in
+  `docs/plans/`** — that doc's live prod backfill has never been run — so the
+  bare-filename link in here does not resolve inside this folder.
+- `2026-08-29-calendar-holidays.md` — display-only Québec statutory, Greek
+  Orthodox and CCQ construction holiday markers, computed in Dart with no I/O.
+  Built 2026-08-29, shipped 1.54.0+83; `calendar/domain/holidays.dart`.
+- `2026-08-29-clients-address-filter.md` — the clients address chip menu.
+  **Superseded 2026-09-04** by the search-first direction, which deleted
+  `client_address_filter_menu.dart` outright and moved shared addresses into a
+  filter sheet. Archived as the record of what shipped in between.
+- `2026-09-04-feature-tour-1-57-update.md` / `-implementation.md` — eight new
+  tour steps for the 1.56/1.57 features and the move from per-screen to
+  per-STEP seen flags (`tour_seen_steps`, seeded once from `tour_seen_tabs`).
+  Implemented 2026-09-05, shipped 1.58.0+87; app-side only, nothing to deploy.
+  The tour now runs 52 steps across 12 scopes.
+
+### Indexed by the 2026-09-06 sweep (already on disk, never listed)
+
+These were moved in by earlier sweeps alongside a sibling that got the index
+row; each is the companion design or task-list half of a document listed above.
+
+- `INVITED_SIGNUP_REDESIGN_PLAN.md` — the implementation checklist half.
+- `2026-06-06-error-animation-design.md` — the design half.
+- `2026-07-01-ios-adaptive-feel-design.md` — the design half.
+- `2026-07-11-wave-auto-import-schedule-plan.md` — the task-list half.
+- `2026-07-19-ios-live-activities-implementation.md` — the implementation half.
+- `2026-07-22-feature-tour-implementation.md` — the 67k task list behind the
+  original showcaseview tour.
+- `2026-08-02-multi-day-appointments-PLAN-1-app.md` — Plan 1 (app) of the
+  multi-day trio; Plan 2 (mirrors) was already indexed.
+- `2026-08-03-client-archive-and-delete-plan.md` — the task-list half.
+- `2026-08-04-drawer-icons-and-tour-expansion-PLAN.md` — the task-list half.
+- `CLOUD_FUNCTIONS_refresh_history.md` — six "Previously refreshed" entries
+  (2026-08-19 → 2026-08-29) trimmed out of `docs/CLOUD_FUNCTIONS.md`'s header on
+  2026-09-06, where the stack had reached nine.
+
 ## Superseded session snapshots
 - `2026-07-20-session-handoff.md` — a point-in-time "resume here" snapshot; its
   live next-action (the Siri Phase 4 write-actions runbook) lives in the active
@@ -155,6 +225,16 @@ full historical snapshot. `docs/audits/` also keeps
 Maps budget cap), plus two read-only repair-audit scripts for the client-rename
 damage (`audit-renamed-client-names.js` and the earlier
 `audit-client-phone-backfill-damage.js`).
+- `CODEBASE_AUDIT_2026-09-03-rolling.md` — the outgoing rolling file, copied
+  here 2026-09-05 before the 2026-09-05 audit overwrote it. Its still-open
+  items (the Maps billing cap, the Crashlytics re-check needing a shipped
+  build, the Wave "Retry failed" press, the Xcode `InfoPlist.strings`
+  confirmation) are NOT repeated in the current rolling file and are still open.
+- `MOBILE_APP_AUDIT_2026-09-03.md` — a mobile-focused pass over the Flutter app,
+  rules, functions, iOS platform code and dependencies. All findings were
+  implemented on 2026-09-03/09-04; it also records the `firebase-admin`
+  13.10.0 → 14.3.0 upgrade. Moved here 2026-09-06, superseded by the rolling
+  audit.
 - `CODEBASE_AUDIT_2026-06-26.md`
 - `CODEBASE_AUDIT_2026-07-01.md`
 - `CODEBASE_AUDIT_2026-07-04.md`

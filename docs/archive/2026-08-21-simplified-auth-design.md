@@ -1,7 +1,13 @@
 # Simplified sign-in and account setup
 
 **Date:** 2026-08-21
-**Status:** Approved, not yet implemented
+**Status:** SHIPPED. Implemented 2026-08-21 (release 1.48.0+77), backend
+deployed the same day at `903161e1` — plus `d99b6673` hours later, which
+restored account creation that deploy had broken. Evidence in the code:
+`AuthFailureStartingPasswordReused` in `lib/features/auth/domain/auth_failure.dart`,
+the random starting password in `functions/employee_accounts.js`, and no
+`email_verified` guard left on `completeEmployeeSetup`. **Backend rollback is
+unsafe** — the app build that depends on it is on the App Store.
 **Supersedes parts of:** `docs/plans/redesign-subdocs/2026-08-02-p4c-HANDOFF.md`
 (the P4c invite/setup flow), and the `email_verified` guard added 2026-08-08.
 
