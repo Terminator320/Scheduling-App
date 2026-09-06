@@ -4,7 +4,8 @@
 built — kept for rationale and task history, not as a description of the current
 screens. For that read `CLAUDE.md`, which carries every invariant they
 established. The program spec is `../2026-07-29-redesign-program.md`; the only
-projects it still owes are **P6** (deferred and skippable) and **P7b**.
+program is COMPLETE: **P6 and P7b were cancelled by owner call 2026-09-06**,
+so it owes nothing further.
 
 Left here rather than moved to `docs/archive/` because `CLAUDE.md`,
 `docs/CLOUD_FUNCTIONS.md` and the dated audit snapshots cite these paths.

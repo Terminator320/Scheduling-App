@@ -23,8 +23,8 @@ at the top of each file, not its boxes.
 
 | Doc | State |
 |---|---|
-| `2026-07-29-redesign-program.md` | **P1–P5 and P7 shipped.** What it still owes is **P6** (deferred, skippable) and **P7b**. The binding spec for both. |
-| `redesign-subdocs/` | The build record for P1 through P7 — see the README in there. P4b is **withdrawn**. |
+| `2026-07-29-redesign-program.md` | **COMPLETE.** P1–P5 and P7 shipped; **P6 and P7b CANCELLED by owner call 2026-09-06.** Owes nothing further — kept as the program record. |
+| `redesign-subdocs/` | The build record for P1 through P7 — see the README in there. P4b is **withdrawn**; P6 and P7b are **cancelled**. |
 | `redesign-subdocs/2026-07-30-p1-p2-DEVICE-TEST.md` | **§0–§10 closed 2026-08-11**, owner-reported passing. The **P5 block (18 checks) is still unrun** — no longer blocked (the deploy landed 2026-08-11), but it needs a technician account. |
 | `2026-07-10-siri-app-intents-design.md` | Design, 6 phases. Phases 5–6 unscoped. |
 | `2026-07-19-siri-app-intents-implementation.md` | Phases 1–3 built; **no device pass ever run**. |
@@ -69,7 +69,7 @@ repo declares 29**. So the debt spans 1.56/1.57/1.58, and its ordering matters:
 
 `docs/DEPLOYMENT.md` §"TODO 1.57.0+86" holds the ordering runbook.
 
-### 2. Redesign — P6 and P7b remain
+### 2. Redesign — COMPLETE. P6 and P7b were CANCELLED 2026-09-06
 
 - **P5 — SHIPPED AND DEPLOYED 2026-08-11**
   (`redesign-subdocs/2026-08-10-p5-my-details.md`). All three phases built and
@@ -84,31 +84,24 @@ repo declares 29**. So the debt spans 1.56/1.57/1.58, and its ordering matters:
   owns it), no duplicate profile card, SCHEDULING scoped to `maxJobsPerDay`, and
   the identity fields explicitly saved behind a Save/Discard bar (owner call)
   while availability keeps apply-immediately.
-- **P6 Time off — NOT STARTED, and DEFERRED (owner call 2026-08-10). Skippable.**
-  No `timeOff` collection, no rules, no surfaces; the only trace in the code is
-  two comments reserving the `PushedDestination.timeOff` slot. It was never a
-  prerequisite for P7, and P7 shipped without it — the three places P7 reaches
-  into P6 (the Time off card, the drawer pending count, the pending-time-off
-  Attention entry) are **omitted, not stubbed**, per the spec's own
-  empty-omitted rule. The design is kept intact in the program spec for whenever
-  it is picked up; its four backend requirements were re-verified 2026-08-10 and
-  all still hold (an active-admins fan-out query, the EN+FR `_MESSAGES` rows, a
-  `kind`-aware `_handlePushTap`, and a new ledger + TTL). The fan-out is no
-  longer new work — P5 built and shipped `sendToActiveAdmins`.
-- **P7 — BUILT 2026-08-11, both halves**
-  (`redesign-subdocs/2026-08-11-p7-dashboard-history.md`, phases A–D). App-side
-  only; nothing to deploy. Dashboard: the period control ships as **Today ·
-  Week · Month; Year is dropped** — `fetchInRange` caps at 1000 docs and a year
-  is ~1,825 jobs even at 5/day, so Year could only have reported a silent
-  prefix, and it needs P7b's aggregate read path first. Also
-  jobs-booked-per-day with an over-capacity line, New clients as tappable rows
-  (archived now excluded — a behaviour change), and two new Attention flags
-  (accounts never set up, booked-outside-availability). History: the date rail
-  under a sticky month bar, which cost mostly the re-owned pagination a sticky
-  header cannot share with `PagedListView`. **Not device-verified.**
-- **P7b Wave invoice read path — not started.** It is what unblocks P7's six
-  money sections, which the spec deliberately omits until then, and the
-  dashboard's dropped **Year** period.
+- **P6 Time off — CANCELLED (owner call 2026-09-06).** It had been deferred
+  since 2026-08-10; this closes it and it will not be built. Nothing was ever
+  built for it — no `timeOff` collection, no rules, no surfaces — and the last
+  trace in the code, a comment reserving the `PushedDestination.timeOff` slot in
+  `drawer_catalog.dart`, was deleted with the cancellation. **What stands in its
+  place is permanent, not a stopgap:** a personal block / day off makes someone
+  read as unavailable because `findBusyEmployees` deliberately does not filter
+  it. There is no request/approve flow, no allowance, and there will not be one.
+  The design is kept intact in the program spec as the record of what was
+  decided.
+- **P7b Wave invoice read path — CANCELLED (owner call 2026-09-06).** Never
+  started, and will not be. Two consequences are now permanent rather than
+  pending, and are documented at their sites: P7's **six money sections** stay
+  omitted (empty-omitted rule, not stubbed), and the dashboard's **Year** period
+  stays absent — P7b was the aggregate read path that would have served it. Do
+  not "add Year back" by widening `fetchInRange`; a year is ~1,825 jobs even at
+  5/day against a 1000-doc cap, so it would report a prefix as a total. See
+  `lib/features/dashboard/domain/dashboard_period.dart`.
 
 ### 3. Siri
 

@@ -24,7 +24,6 @@ List<DrawerGroup> drawerGroups({required bool isAdmin}) => [
   if (isAdmin)
     (
       title: (l10n) => l10n.nav_groupPeople,
-      // PushedDestination.timeOff joins here in P6.
       rows: [HubTab.employees, HubTab.clients],
     ),
   if (isAdmin)

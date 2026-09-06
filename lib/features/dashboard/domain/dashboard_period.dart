@@ -10,8 +10,9 @@ import 'package:scheduling/features/dashboard/domain/dashboard_aggregator.dart';
 /// docs; a year is ~5,100 jobs at 14/day and ~1,825 even at 5/day, so a Year
 /// option would silently compute every figure over a PREFIX. That is the exact
 /// failure the 2026-08-08 window split was built to end. Year needs an
-/// aggregate read path (P7b's shape) before it can be offered — do not add it
-/// back by widening the fetch.
+/// aggregate read path, and P7b — the project that would have built one — was
+/// CANCELLED by owner call 2026-09-06, so its absence is permanent rather than
+/// pending. Do not add it back by widening the fetch.
 ///
 /// Every member here fits INSIDE the window the dashboard already fetches, so
 /// selecting one costs no query at all — see [windowFor].
