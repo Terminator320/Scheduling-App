@@ -89,7 +89,7 @@ class _ForgotPasswordState extends ConsumerState<ForgotPasswordScreen> {
     } catch (error, st) {
       final failure = AuthErrorMapper.map(error);
       _logger.authFailure(
-        'auth.forgot_password reset failed',
+        'AUTH-RESET reset failed',
         failure,
         error,
         st,

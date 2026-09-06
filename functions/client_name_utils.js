@@ -379,12 +379,66 @@ function formatNanpNumber(value) {
  */
 const PHONE_CANDIDATE = /\+?\d[\d\s().-]{7,}\d/g;
 
+// The whole-field branch's shapes: a 7-digit local number, or a full 10 up to
+// the international ceiling. 8 and 9 are neither, which is where a business
+// named `3101-5696` lands.
+const LOCAL_DIGITS = 7;
+const NANP_DIGITS = 10;
+const MAX_DIALABLE_DIGITS = 15;
+
+/** Anything the whole-field branch will not treat as a phone number. */
+const NON_PHONE_CHAR = /[^\d\s().-]/;
+
+/**
+ * Whether a digit count is one the whole-field branch dials.
+ * @param {number} count Digit count.
+ * @return {boolean}
+ */
+function isDialableDigitCount(count) {
+  return count === LOCAL_DIGITS ||
+      (count >= NANP_DIGITS && count <= MAX_DIALABLE_DIGITS);
+}
+
+/**
+ * HAND-MIRROR of `formatPhoneNumber` (`lib/core/validators/phone_format.dart`)
+ * for the whole-field branch only — it formats progressively under ten digits
+ * and appends anything past the tenth verbatim, which is exactly what the Dart
+ * side stores for those shapes. [formatNanpNumber] stays the narrow one.
+ * @param {string} digits Digits only.
+ * @return {string}
+ */
+function formatProgressive(digits) {
+  if (!digits) return "";
+  let out = `(${digits.slice(0, 3)}`;
+  if (digits.length < 4) return out;
+  out += `) ${digits.slice(3, 6)}`;
+  if (digits.length < 7) return out;
+  out += `-${digits.slice(6, 10)}`;
+  if (digits.length > 10) out += ` ${digits.slice(10)}`;
+  return out;
+}
+
 /**
  * The first run in [text] that is really a phone number, located and rendered.
  * @param {string} text Any name.
  * @return {?{start: number, end: number, formatted: string}}
  */
 function matchPhoneInName(text) {
+  // The whole field is one number: seed-from-query. Anything dialable counts,
+  // because leaving it in the name is what produced clients with nothing to
+  // dial.
+  const whole = text.trim();
+  const wholeDigits = digitsOf(whole);
+  if (whole && !NON_PHONE_CHAR.test(whole) &&
+      isDialableDigitCount(wholeDigits.length)) {
+    const start = text.indexOf(whole);
+    return {
+      start,
+      end: start + whole.length,
+      formatted: formatProgressive(wholeDigits),
+    };
+  }
+  // A number embedded in a longer name still needs the full ten digits.
   for (const match of text.matchAll(PHONE_CANDIDATE)) {
     const candidate = match[0];
     // An international number has no fixed shape, so bracketing its first

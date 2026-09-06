@@ -26,17 +26,21 @@ paths:
   `FlutterSecureStorage.setMockInitialValues({})` in `setUp`. `SettingsScreen`
   additionally needs `PackageInfo.setMockInitialValues(...)` and a `ProviderScope`
   (it watches `appInfoProvider` + `appLockEnabledProvider` during build).
-- **Any widget test reaching an account exit must override THREE providers:
-  `appointmentImageLoaderProvider`, `clientsRepositoryProvider` and
-  `appointmentsRepositoryProvider`.** `deregisterThisDevice` forgets everything
-  the session cached locally, and each of the three fails a different way
+- **Any widget test reaching an account exit must override FOUR providers:
+  `appointmentImageLoaderProvider`, `appointmentImageUploadProvider`,
+  `clientsRepositoryProvider` and `appointmentsRepositoryProvider`** — count
+  them off `accountExitStubOverrides` rather than off this sentence, which said
+  THREE until 2026-09-05 while the helper returned four, so following it as
+  written still hung. `deregisterThisDevice` forgets everything
+  the session cached locally, and each of them fails a different way
   without an override. The image loader resolves the platform cache directory
   through `path_provider`, and a method channel never completes under
   `testWidgets`' fake clock, so the real one makes the test **HANG until its
   timeout rather than fail**, with no error naming the cause. The two
   repositories resolve `FirebaseFirestore.instance` when their providers are
   READ — which `DeviceDeregistrationDeps.from` now does — so they fail
-  `[core/no-app]` on construction, before any teardown step runs.
+  `[core/no-app]` on construction, before any teardown step runs. The upload
+  service is the fourth for the same reason as the repositories.
   **Spread `accountExitStubOverrides()`
   (`test/support/account_exit_stubs.dart`) rather than re-declaring them** —
   pass `calls:` to record the teardown ORDER, omit it for silent stubs, which

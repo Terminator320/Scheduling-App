@@ -73,8 +73,8 @@ class AppointmentFormCallbacks {
     required this.onSearchClients,
     required this.onClientQueryModeChanged,
     required this.onRetryClientSearch,
-    required this.onPickPreviousAddress,
     required this.onSelectClient,
+    required this.onResolveRecentClient,
     required this.onClearClient,
     required this.onToggleEmployee,
     required this.onSelectStartDate,
@@ -94,8 +94,12 @@ class AppointmentFormCallbacks {
   final ValueChanged<String> onSearchClients;
   final ValueChanged<ClientQueryMode> onClientQueryModeChanged;
   final VoidCallback onRetryClientSearch;
-  final ValueChanged<String> onPickPreviousAddress;
   final ValueChanged<ClientRecord> onSelectClient;
+
+  /// Reads the real client behind a recents row. A [RecentClient] carries only
+  /// what an appointment denormalizes, so attaching one as-is produced a draft
+  /// with no address where the same client picked from SEARCH pre-fills one.
+  final Future<ClientRecord?> Function(RecentClient) onResolveRecentClient;
   final VoidCallback onClearClient;
   final ValueChanged<EmployeeRecord> onToggleEmployee;
 
@@ -236,6 +240,24 @@ class AppointmentFormFields extends StatelessWidget {
     return key == null ? null : appointmentFormErrorText(context, key);
   }
 
+  /// Resolving a recent is a Firestore round trip, and the tap that starts it
+  /// discards the future — so the post-await controller writes must not run
+  /// against a sheet that has since been dismissed, or "used after being
+  /// disposed" reaches the zone handler as an app-level FATAL from a row tap
+  /// that merely failed to prefill a name.
+  Future<void> _selectRecent(BuildContext context, RecentClient recent) async {
+    final resolved = await callbacks.onResolveRecentClient(recent);
+    if (!context.mounted) return;
+    _selectClient(
+      resolved ??
+          ClientRecord(
+            id: recent.clientId,
+            name: recent.name,
+            phone: recent.phone,
+          ),
+    );
+  }
+
   void _selectClient(ClientRecord client) {
     controllers.clientSearch.text = client.displayName;
     // AppointmentRecord.address is the full directions string.
@@ -281,13 +303,20 @@ class AppointmentFormFields extends StatelessWidget {
     callbacks.onUseCustomAddress(false);
   }
 
+  /// Same shape as [_switchToCustomAddress], with the address already chosen —
+  /// so it belongs here rather than once per form host.
+  void _pickPreviousAddress(String address) {
+    controllers.address.text = address;
+    callbacks.onUseCustomAddress(true);
+  }
+
   Widget _jobAddress() => JobAddressSection(
     selectedClient: selectedClient,
     useCustomAddress: useCustomAddress,
     addressController: controllers.address,
     previousAddresses: previousAddresses,
     optional: isPersonal,
-    onPickPrevious: callbacks.onPickPreviousAddress,
+    onPickPrevious: _pickPreviousAddress,
     onSwitchToCustom: _switchToCustomAddress,
     onUseClientAddress: _useClientAddress,
   );
@@ -385,6 +414,8 @@ class AppointmentFormFields extends StatelessWidget {
                   onChanged: callbacks.onSearchClients,
                   onModeChanged: callbacks.onClientQueryModeChanged,
                   onSelect: _selectClient,
+                  onSelectRecent: (recent) =>
+                      _selectRecent(context, recent),
                   onRetry: callbacks.onRetryClientSearch,
                   errorText: _err(context, 'client'),
                   onAddNew: onRequestAddClient == null ? null : _addNewClient,

@@ -12,12 +12,6 @@ const _keyTourSeenSteps = 'tour_seen_steps';
 /// The old key, one entry per SCOPE. Read exactly once, by the migration.
 const _keyTourSeenTabs = 'tour_seen_tabs';
 
-TourStepId? _stepByName(String name) {
-  for (final id in TourStepId.values) {
-    if (id.name == name) return id;
-  }
-  return null;
-}
 
 /// Tracks which tour STEPS this device has already seen. Await `ready` before
 /// reading it, or a cold start can replay steps that were already shown.
@@ -43,7 +37,8 @@ class TourSeenController extends Notifier<Set<TourStepId>> {
       if (stored != null) {
         // Lookup-based, so a name that no longer maps to a step is dropped
         // rather than resurrecting a dead one.
-        state = {for (final name in stored) ?_stepByName(name)};
+        final byName = TourStepId.values.asNameMap();
+        state = {for (final name in stored) ?byName[name]};
         return;
       }
       // First run on this build: seed from the per-scope flags. The ABSENCE of

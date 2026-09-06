@@ -10,7 +10,6 @@ import 'package:scheduling/features/calendar/widgets/sections/appointment_form_f
 import 'package:scheduling/features/calendar/widgets/views/details_edit_body.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_body.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_scope.dart';
-import 'package:scheduling/features/feature_tour/domain/tour_step_id.dart';
 import 'package:scheduling/features/feature_tour/domain/tour_steps.dart';
 import 'package:scheduling/features/feature_tour/widgets/feature_tour_host.dart';
 import 'package:scheduling/features/maps/domain/address_parser.dart';
@@ -142,11 +141,7 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
             onClose: _handleClose,
             // Closes with the draft; `showEventDetails` opens the add sheet.
             onBookAgain: _handleClose,
-            wrapPushBack: (c) => _tour.stepIf(TourStepId.jobPushBack, c),
-            wrapFieldRecord: (c) => _tour.stepIf(TourStepId.jobFieldRecord, c),
-            wrapStart: (c) => _tour.stepIf(TourStepId.jobStart, c),
-            wrapMarkDone: (c) => _tour.stepIf(TourStepId.jobMarkDone, c),
-            wrapBookAgain: (c) => _tour.stepIf(TourStepId.jobBookAgain, c),
+            tourWrap: _tour.stepIf,
           ),
         ],
       ),

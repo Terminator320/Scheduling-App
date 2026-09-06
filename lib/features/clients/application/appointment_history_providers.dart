@@ -53,6 +53,30 @@ final historySearchProvider = FutureProvider.autoDispose
       return await repo.searchHistory(key.query, employeeId: key.employeeId);
     });
 
+/// How far back the booking form looks for a client's previous addresses and
+/// last visit. The form renders two lines off this, so it must not buy the
+/// whole archive [clientJobHistoryProvider] pages through.
+const int kClientBookingHistoryVisits = 20;
+
+/// The newest [kClientBookingHistoryVisits] visits for the booking form.
+///
+/// Deliberately NOT self-invalidating on `onLocalWrite` the way the Job
+/// history section does: this backs hints on an open form, and re-reading on
+/// every local write re-fired the whole scan while the photo-upload queue
+/// drained.
+final clientBookingHistoryProvider = FutureProvider.autoDispose
+    .family<List<AppointmentRecord>, String>((ref, clientId) async {
+      final repo = ref.watch(appointmentsRepositoryProvider);
+      // Page one past the cap: `pageToCap` asks for `cap + 1 - fetched`, so a
+      // page size equal to the cap costs a second round trip to learn there
+      // are more — on the form-open path, for the repeat clients this serves.
+      return await repo.fetchClientHistory(
+        clientId: clientId,
+        limit: kClientBookingHistoryVisits + 1,
+        cap: kClientBookingHistoryVisits,
+      );
+    });
+
 /// Client appointments for the Job history section.
 final clientJobHistoryProvider = FutureProvider.autoDispose
     .family<List<AppointmentRecord>, String>((ref, clientId) async {

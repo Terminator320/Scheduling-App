@@ -8,6 +8,7 @@ import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 /// The add-job client step: a mode switch, one field, and whatever the current
@@ -25,6 +26,7 @@ class ClientPicker extends StatelessWidget {
     required this.onChanged,
     required this.onModeChanged,
     required this.onSelect,
+    required this.onSelectRecent,
     required this.onRetry,
     super.key,
     this.errorText,
@@ -39,6 +41,10 @@ class ClientPicker extends StatelessWidget {
   final ValueChanged<String> onChanged;
   final ValueChanged<ClientQueryMode> onModeChanged;
   final ValueChanged<ClientRecord> onSelect;
+
+  /// A recents row hands back the RECENT, not a record built from it — the
+  /// host resolves the real client so both paths produce the same draft.
+  final ValueChanged<RecentClient> onSelectRecent;
   final VoidCallback onRetry;
   final String? errorText;
 
@@ -127,14 +133,10 @@ class ClientPicker extends StatelessWidget {
             detail: recent.name,
             // A recent is a whole client the admin already booked, so the row
             // itself is the affordance — no second confirm step.
-            onTap: () => _attach(
-              context,
-              ClientRecord(
-                id: recent.clientId,
-                name: recent.name,
-                phone: recent.phone,
-              ),
-            ),
+            onTap: () {
+              FocusScope.of(context).unfocus();
+              onSelectRecent(recent);
+            },
           ),
       ],
     );
@@ -148,11 +150,7 @@ class ClientPicker extends StatelessWidget {
       );
     }
     return _Panel(
-      // A fallback rung answered a query he did not type, so these are near
-      // misses and must never read as matches.
-      header: status.isFallback
-          ? l10n.clients_closestNumbers
-          : l10n.clients_exactMatch,
+      header: _header(l10n),
       count: results.isEmpty ? null : l10n.clients_matchCount(results.length),
       rows: [
         for (final client in results)
@@ -175,6 +173,19 @@ class ClientPicker extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  /// A fallback rung answered a query he did not type, so those are near misses
+  /// and must never read as matches. "Exact match" is reserved for the one case
+  /// that IS one — a canonical phone rung with a single hit; a text query is a
+  /// substring test server-side, so several results under that header
+  /// contradict themselves and invite attaching the wrong client.
+  String _header(AppLocalizations l10n) {
+    if (status.isFallback) return l10n.clients_closestNumbers;
+    if (status.mode == ClientQueryMode.phone && results.length == 1) {
+      return l10n.clients_exactMatch;
+    }
+    return l10n.clients_searchResults;
   }
 
   /// The ONE place allowed to drop the keyboard.
@@ -334,21 +345,7 @@ class _Panel extends StatelessWidget {
             ],
           ),
         ),
-        DecoratedBox(
-          decoration: appCardDecoration(theme, color: theme.palette.sheetRow),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.r12),
-            child: Column(
-              children: [
-                for (var i = 0; i < rows.length; i++) ...[
-                  if (i > 0)
-                    Divider(height: 1, color: theme.colorScheme.outlineVariant),
-                  rows[i],
-                ],
-              ],
-            ),
-          ),
-        ),
+        SheetPanel(children: rows),
       ],
     );
   }

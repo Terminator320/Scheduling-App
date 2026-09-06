@@ -5,7 +5,6 @@ import 'package:scheduling/core/data/paged_scan.dart';
 import 'package:scheduling/core/data/search_result_cache.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/search/search_tokens.dart';
-import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/core/validators/email_format.dart';
 import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/features/clients/domain/clients_failure.dart';
@@ -264,10 +263,6 @@ class FirebaseClientsRepository implements ClientsRepository {
   }
 
   @override
-  Future<Map<String, String?>> fetchBuildingKeys() async =>
-      (await _clientScanWindow())?.buildingKeys ?? const {};
-
-  @override
   Future<List<ClientBuilding>> fetchBuildings() async =>
       (await _clientScanWindow())?.buildings ?? const [];
 
@@ -311,22 +306,24 @@ class FirebaseClientsRepository implements ClientsRepository {
     // 25 come back is still the server's alphabetical read cap.
     final queryText = ClientSearchPolicy.normalize(query);
     final queryDigits = ClientSearchPolicy.digitsOnly(query);
-    records.sort((a, b) {
-      final byScore = ClientSearchPolicy.scoreRecord(
-        a,
-        queryText: queryText,
-        queryDigits: queryDigits,
-      ).compareTo(
-        ClientSearchPolicy.scoreRecord(
-          b,
-          queryText: queryText,
-          queryDigits: queryDigits,
+    // Decorate-sort-undecorate, like `_byDisplayName` above: scoring inside the
+    // comparator re-normalizes both operands on every comparison.
+    final ranked = [
+      for (final record in records)
+        (
+          score: ClientSearchPolicy.scoreRecord(
+            record,
+            queryText: queryText,
+            queryDigits: queryDigits,
+          ),
+          sortKey: record.displayName.toLowerCase(),
+          record: record,
         ),
-      );
-      if (byScore != 0) return byScore;
-      return a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase());
+    ]..sort((a, b) {
+      final byScore = a.score.compareTo(b.score);
+      return byScore != 0 ? byScore : a.sortKey.compareTo(b.sortKey);
     });
-    return records;
+    return [for (final entry in ranked) entry.record];
   }
 
   Future<List<ClientRecord>> _searchClientsLocal(String query) async {
@@ -434,7 +431,6 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
 
     final client = ClientRecord.fromMap(doc.id, data);
 
-    final contacts = firestoreList(data['contacts']);
     final rawDisplayName = client.displayName;
     final displayName = ClientSearchPolicy.normalize(rawDisplayName);
     final personName = ClientSearchPolicy.normalize(
@@ -443,25 +439,12 @@ List<ClientRecord> matchClientDocs(ClientSearchScan scan) {
         data['lastName'],
       ].whereType<Object>().map((v) => v.toString()).join(' '),
     );
-    final phoneDigits = [
-      for (final raw in [data['phone'], data['mobile']])
-        if (ClientSearchPolicy.digitsOnly('${raw ?? ''}').isNotEmpty)
-          ClientSearchPolicy.digitsOnly('${raw ?? ''}'),
-    ];
-    final contactsDigits = [
-      for (final contact in contacts.whereType<Map<Object?, Object?>>())
-        if (ClientSearchPolicy.digitsOnly(
-          '${contact['phone'] ?? ''}',
-        ).isNotEmpty)
-          ClientSearchPolicy.digitsOnly('${contact['phone'] ?? ''}'),
-    ];
-
     scoredClients.add((
       score: ClientSearchPolicy.relevanceScore(
         displayName: displayName,
         personName: personName,
-        phoneDigits: phoneDigits,
-        contactsDigits: contactsDigits,
+        phoneDigits: ClientSearchPolicy.rawOwnPhoneDigits(data),
+        contactsDigits: ClientSearchPolicy.rawContactPhoneDigits(data),
         queryText: normalizedQuery,
         queryDigits: queryDigits,
       ),

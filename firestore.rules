@@ -383,11 +383,7 @@ service cloud.firestore {
         && (!('address' in d.keys()) || isBoundedString(d.address, 500))
         && (!('notes' in d.keys()) || isBoundedString(d.notes, 4000))
         && (!('fieldNotes' in d.keys()) || isBoundedString(d.fieldNotes, 4000))
-        // The job time record. Both instants are stamped SERVER-SIDE by
-        // `lifecycleStamps` in the write trigger, and an admin edit's
-        // `request.resource.data` is the MERGED document, so they are present
-        // on most updates: they are type-checked here, never banned, or every
-        // edit of a started job would be refused.
+        // Type checks only; the write ban lives at the create/update rules.
         && (!('startedAt' in d.keys()) || d.startedAt is timestamp)
         && (!('completedAt' in d.keys()) || d.completedAt is timestamp)
         && (!('materialsNeeded' in d.keys())
@@ -425,6 +421,7 @@ service cloud.firestore {
       allow create: if isAdmin()
         && (!('pictureCount' in request.resource.data.keys())
             || request.resource.data.pictureCount == 0)
+        && !request.resource.data.keys().hasAny(['startedAt', 'completedAt'])
         && isValidAppointmentStatus(request.resource.data.status)
         && isValidAppointmentData(request.resource.data)
         // No existing doc to strand, so the span bound and the per-instant
@@ -434,7 +431,8 @@ service cloud.firestore {
 
       allow update: if (isAdmin()
             && !request.resource.data.diff(resource.data)
-                 .affectedKeys().hasAny(['pictureCount'])
+                 .affectedKeys()
+                 .hasAny(['pictureCount', 'startedAt', 'completedAt'])
             && isValidAppointmentStatus(request.resource.data.status)
             && isValidAppointmentData(request.resource.data)
             && (isValidAppointmentSpan(request.resource.data)

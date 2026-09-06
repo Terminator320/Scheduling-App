@@ -142,6 +142,8 @@ if (require.main === module) {
 
 module.exports = {
   assertKnownFlags,
+  backfillCollection,
   patchFor,
   sameArray,
+  PAGE_SIZE,
 };

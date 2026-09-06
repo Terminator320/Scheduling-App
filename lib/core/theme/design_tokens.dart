@@ -98,6 +98,23 @@ abstract final class AppColors {
     Color(0xFF7A8F1F), // olive
   ];
 
+  /// The decorative hue ring on the "custom colour" swatch.
+  ///
+  /// DELIBERATELY theme-independent — it is a spectrum, not a semantic colour,
+  /// so it has no light/dark counterpart and belongs to no [ThemeExtension].
+  /// It lives here rather than as raw hex in the widget so `lib/` keeps its
+  /// "no literal colours outside `core/theme/`" property; the last stop
+  /// repeats the first so the sweep closes seamlessly.
+  static const List<Color> decorativeHueRing = [
+    Color(0xFFEF4444), // red
+    Color(0xFFF59E0B), // amber
+    Color(0xFF10B981), // emerald
+    Color(0xFF06B6D4), // cyan
+    Color(0xFF6366F1), // indigo
+    Color(0xFFEC4899), // pink
+    Color(0xFFEF4444), // back to red
+  ];
+
   /// What an employee with no stored `colorValue` renders as. It must stay a
   /// [crewPalette] member: a hue outside the pool is also outside the
   /// dark-theme override map, so it takes the generic HSL lift instead of its

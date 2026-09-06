@@ -135,11 +135,6 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   void _onRetryClientSearch() =>
       unawaited(_notifier.searchClients(_controllers.clientSearch.text));
 
-  void _onPickPreviousAddress(String address) {
-    _controllers.address.text = address;
-    _notifier.setUseCustomAddress(value: true);
-  }
-
   /// Handles already-picked inline calendar dates.
   void _onStartDateSelected(DateTime picked) {
     // selectDate emits the rebuild after controller updates.
@@ -356,8 +351,9 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
               onSearchClients: _onClientSearchChanged,
               onClientQueryModeChanged: _onClientQueryModeChanged,
               onRetryClientSearch: _onRetryClientSearch,
-              onPickPreviousAddress: _onPickPreviousAddress,
               onSelectClient: _notifier.selectClient,
+              onResolveRecentClient: (recent) =>
+                  resolveRecentClient(ref, recent),
               onClearClient: _notifier.clearClient,
               onToggleEmployee: _notifier.toggleEmployee,
               onSelectStartDate: _onStartDateSelected,

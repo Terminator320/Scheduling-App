@@ -525,11 +525,21 @@ class EventDetailsController extends Notifier<EventDetailsState>
         ? null
         : ref.read(appointmentImageUploadProvider);
 
-    final invalid = await _settleAndValidate(
-      appointment,
-      title: title,
-      isAllDay: isAllDay,
-    );
+    // Guarded because `isSaving` is already true: the seed settle awaits a
+    // `Future.microtask` that throws when the notifier is disposed under it,
+    // and an un-caught throw here leaves Save disabled for the sheet's life.
+    final EventDetailsSaveOutcome? invalid;
+    try {
+      invalid = await _settleAndValidate(
+        appointment,
+        title: title,
+        isAllDay: isAllDay,
+      );
+    } on Object catch (e, st) {
+      logger.warn('APPT-SAVE validation failed', e, st);
+      if (ref.mounted) state = state.copyWith(isSaving: false);
+      return EventDetailsFailed(e);
+    }
     if (invalid != null) return invalid;
 
     final id = appointment.id;

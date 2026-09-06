@@ -4,6 +4,8 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/recent_client.dart';
+import 'package:scheduling/features/clients/application/clients_providers.dart';
+import 'package:scheduling/features/clients/domain/models/client_record.dart';
 
 /// Clients this admin booked recently, resolved once per session.
 ///
@@ -15,8 +17,15 @@ import 'package:scheduling/features/calendar/domain/models/recent_client.dart';
 /// would need a new composite index for no real gain, since an employee's
 /// workflow here is to type the number anyway.
 final recentClientsProvider = FutureProvider<List<RecentClient>>((ref) async {
-  final doc = await ref.watch(currentUserDocProvider.future);
-  if ((doc['role'] ?? '').toString().trim() != 'admin') return const [];
+  // Projected down to the role STRING, as `employeesProvider` does: a `Map`
+  // compares by identity, so watching the raw doc re-ran the 60-doc query on
+  // any own-doc write.
+  final role = await ref.watch(
+    currentUserDocProvider.selectAsync(
+      (doc) => (doc['role'] ?? '').toString().trim(),
+    ),
+  );
+  if (role != 'admin') return const [];
   final logger = ref.read(loggerProvider);
   final repo = ref.read(appointmentsRepositoryProvider);
   try {
@@ -28,3 +37,21 @@ final recentClientsProvider = FutureProvider<List<RecentClient>>((ref) async {
     return const [];
   }
 });
+
+/// The real client behind a recents row.
+///
+/// A [RecentClient] carries only what an appointment denormalizes, so
+/// attaching one as-is gave the booking form a client with no address — where
+/// the SAME client picked from search pre-fills one and offers the switch.
+/// Answers null on any failure; the caller falls back to the denormalized
+/// fields, which is still better than refusing the tap.
+Future<ClientRecord?> resolveRecentClient(WidgetRef ref, RecentClient recent) {
+  final logger = ref.read(loggerProvider);
+  return ref
+      .read(clientsRepositoryProvider)
+      .getClientById(recent.clientId)
+      .catchError((Object e, StackTrace st) {
+        logger.warn('CLI-RECENT resolve failed', e, st);
+        return null;
+      });
+}

@@ -1,3 +1,4 @@
+import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
@@ -12,98 +13,105 @@ class _RecordingLogger extends AppLogger {
   }
 }
 
+/// Every test here drives a `Timer` through `fake_async` rather than a real
+/// wall clock: a 40 ms window with an 80 ms sleep left a 40 ms margin that
+/// full-suite CPU contention exceeded, so the file went red roughly one run
+/// in ten with nothing wrong.
+const _window = Duration(milliseconds: 40);
+const _past = Duration(milliseconds: 80);
+
 void main() {
-  test('runs the action once after the quiet period', () async {
-    final debouncer = Debouncer(
-      const Duration(milliseconds: 40),
-      onError: (_, _) {},
-    );
-    var runs = 0;
-    debouncer.run(() => runs++);
-    expect(runs, 0); // not yet
-    await Future<void>.delayed(const Duration(milliseconds: 80));
-    expect(runs, 1);
+  test('runs the action once after the quiet period', () {
+    fakeAsync((async) {
+      final debouncer = Debouncer(_window, onError: (_, _) {});
+      var runs = 0;
+      debouncer.run(() => runs++);
+      expect(runs, 0); // not yet
+      async.elapse(_past);
+      expect(runs, 1);
+    });
   });
 
-  test('only the last rapid action within the window runs', () async {
-    final debouncer = Debouncer(
-      const Duration(milliseconds: 40),
-      onError: (_, _) {},
-    );
-    final calls = <int>[];
-    debouncer.run(() => calls.add(1));
-    await Future<void>.delayed(const Duration(milliseconds: 15));
-    debouncer.run(() => calls.add(2));
-    await Future<void>.delayed(const Duration(milliseconds: 80));
-    expect(calls, [2]);
+  test('only the last rapid action within the window runs', () {
+    fakeAsync((async) {
+      final debouncer = Debouncer(_window, onError: (_, _) {});
+      final calls = <int>[];
+      debouncer.run(() => calls.add(1));
+      async.elapse(const Duration(milliseconds: 15));
+      debouncer.run(() => calls.add(2));
+      async.elapse(_past);
+      expect(calls, [2]);
+    });
   });
 
-  test('cancel drops a pending action', () async {
-    final debouncer = Debouncer(
-      const Duration(milliseconds: 40),
-      onError: (_, _) {},
-    );
-    var ran = false;
-    debouncer
-      ..run(() => ran = true)
-      ..cancel();
-    await Future<void>.delayed(const Duration(milliseconds: 80));
-    expect(ran, isFalse);
+  test('cancel drops a pending action', () {
+    fakeAsync((async) {
+      final debouncer = Debouncer(_window, onError: (_, _) {});
+      var ran = false;
+      debouncer
+        ..run(() => ran = true)
+        ..cancel();
+      async.elapse(_past);
+      expect(ran, isFalse);
+    });
   });
 
-  test('dispose drops a pending action', () async {
-    final debouncer = Debouncer(
-      const Duration(milliseconds: 40),
-      onError: (_, _) {},
-    );
-    var ran = false;
-    debouncer
-      ..run(() => ran = true)
-      ..dispose();
-    await Future<void>.delayed(const Duration(milliseconds: 80));
-    expect(ran, isFalse);
+  test('dispose drops a pending action', () {
+    fakeAsync((async) {
+      final debouncer = Debouncer(_window, onError: (_, _) {});
+      var ran = false;
+      debouncer
+        ..run(() => ran = true)
+        ..dispose();
+      async.elapse(_past);
+      expect(ran, isFalse);
+    });
   });
 
-  test('forwards async action failures to onError', () async {
-    Object? capturedError;
-    StackTrace? capturedStack;
-    final debouncer = Debouncer(
-      const Duration(milliseconds: 40),
-      onError: (error, stackTrace) {
-        capturedError = error;
-        capturedStack = stackTrace;
-      },
-    );
+  test('forwards async action failures to onError', () {
+    fakeAsync((async) {
+      Object? capturedError;
+      StackTrace? capturedStack;
+      final debouncer = Debouncer(
+        _window,
+        onError: (error, stackTrace) {
+          capturedError = error;
+          capturedStack = stackTrace;
+        },
+      );
 
-    expect(
-      () => debouncer.run(() async {
-        throw StateError('boom');
-      }),
-      returnsNormally,
-    );
+      expect(
+        () => debouncer.run(() async {
+          throw StateError('boom');
+        }),
+        returnsNormally,
+      );
 
-    await Future<void>.delayed(const Duration(milliseconds: 80));
+      async.elapse(_past);
 
-    expect(capturedError, isA<StateError>());
-    expect(capturedStack, isNotNull);
+      expect(capturedError, isA<StateError>());
+      expect(capturedStack, isNotNull);
+    });
   });
 
-  test('a synchronous throw is reported, never swallowed', () async {
+  test('a synchronous throw is reported, never swallowed', () {
     // B2: `onError` used to be optional and five of six call sites omitted it,
     // so a failed debounced search vanished with nothing logged anywhere.
-    Object? capturedError;
-    final debouncer = Debouncer(
-      const Duration(milliseconds: 40),
-      onError: (error, _) => capturedError = error,
-    );
+    fakeAsync((async) {
+      Object? capturedError;
+      final debouncer = Debouncer(
+        _window,
+        onError: (error, _) => capturedError = error,
+      );
 
-    expect(
-      () => debouncer.run(() => throw StateError('sync boom')),
-      returnsNormally,
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 80));
+      expect(
+        () => debouncer.run(() => throw StateError('sync boom')),
+        returnsNormally,
+      );
+      async.elapse(_past);
 
-    expect(capturedError, isA<StateError>());
+      expect(capturedError, isA<StateError>());
+    });
   });
 
   group('Debouncer.tagged', () {
@@ -113,68 +121,76 @@ void main() {
     // so a lazy handler reading `ref` from inside the callback cannot be
     // written through this door. The one site that deviated shipped a FATAL,
     // and until now nothing exercised the factory at all.
-    test('routes a failed action into the logger under its tag', () async {
-      final logger = _RecordingLogger();
-      Debouncer.tagged(
-        const Duration(milliseconds: 40),
-        logger: logger,
-        tag: 'CLI-SEARCH debounced client search failed',
-      ).run(() => throw StateError('boom'));
+    test('routes a failed action into the logger under its tag', () {
+      fakeAsync((async) {
+        final logger = _RecordingLogger();
+        Debouncer.tagged(
+          _window,
+          logger: logger,
+          tag: 'CLI-SEARCH debounced client search failed',
+        ).run(() => throw StateError('boom'));
 
-      await Future<void>.delayed(const Duration(milliseconds: 80));
+        async.elapse(_past);
 
-      expect(logger.calls, hasLength(1));
-      expect(
-        logger.calls.single.message,
-        'CLI-SEARCH debounced client search failed',
-      );
-      expect(logger.calls.single.error, isA<StateError>());
+        expect(logger.calls, hasLength(1));
+        expect(
+          logger.calls.single.message,
+          'CLI-SEARCH debounced client search failed',
+        );
+        expect(logger.calls.single.error, isA<StateError>());
+      });
     });
 
-    test('an ASYNC rejection is logged too, not just a sync throw', () async {
+    test('an ASYNC rejection is logged too, not just a sync throw', () {
       // The action runs from a Timer callback, so there is no caller left to
       // catch either shape.
-      final logger = _RecordingLogger();
-      Debouncer.tagged(
-        const Duration(milliseconds: 40),
-        logger: logger,
-        tag: 'HIST-SEARCH failed',
-      ).run(() async => throw StateError('async boom'));
+      fakeAsync((async) {
+        final logger = _RecordingLogger();
+        Debouncer.tagged(
+          _window,
+          logger: logger,
+          tag: 'HIST-SEARCH failed',
+        ).run(() async => throw StateError('async boom'));
 
-      await Future<void>.delayed(const Duration(milliseconds: 80));
+        async.elapse(_past);
 
-      expect(logger.calls.single.error, isA<StateError>());
+        expect(logger.calls.single.error, isA<StateError>());
+      });
     });
 
-    test('a successful action logs nothing', () async {
-      final logger = _RecordingLogger();
-      final debouncer = Debouncer.tagged(
-        const Duration(milliseconds: 40),
-        logger: logger,
-        tag: 'CLI-SEARCH debounced client search failed',
-      );
+    test('a successful action logs nothing', () {
+      fakeAsync((async) {
+        final logger = _RecordingLogger();
+        final debouncer = Debouncer.tagged(
+          _window,
+          logger: logger,
+          tag: 'CLI-SEARCH debounced client search failed',
+        );
 
-      var runs = 0;
-      debouncer.run(() => runs++);
-      await Future<void>.delayed(const Duration(milliseconds: 80));
+        var runs = 0;
+        debouncer.run(() => runs++);
+        async.elapse(_past);
 
-      expect(runs, 1);
-      expect(logger.calls, isEmpty);
+        expect(runs, 1);
+        expect(logger.calls, isEmpty);
+      });
     });
 
-    test('a cancelled action never runs and never logs', () async {
-      final logger = _RecordingLogger();
-      Debouncer.tagged(
-        const Duration(milliseconds: 40),
-        logger: logger,
-        tag: 'CLI-SEARCH debounced client search failed',
-      )
-        ..run(() => throw StateError('should not run'))
-        ..cancel();
+    test('a cancelled action never runs and never logs', () {
+      fakeAsync((async) {
+        final logger = _RecordingLogger();
+        Debouncer.tagged(
+          _window,
+          logger: logger,
+          tag: 'CLI-SEARCH debounced client search failed',
+        )
+          ..run(() => throw StateError('should not run'))
+          ..cancel();
 
-      await Future<void>.delayed(const Duration(milliseconds: 80));
+        async.elapse(_past);
 
-      expect(logger.calls, isEmpty);
+        expect(logger.calls, isEmpty);
+      });
     });
   });
 }

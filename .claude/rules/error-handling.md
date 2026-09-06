@@ -78,8 +78,11 @@ alwaysApply: true
 
   - a named `tag:` parameter on a helper that logs for you —
     `launchExternalUri` (`LAUNCH-TEL`, `LAUNCH-MAPS`, `LAUNCH-URL`,
-    `LAUNCH-EMAIL`), the three device-registration controllers (`PUSH`,
-    `LIVE-ACT`, `PRESENCE`), and every `Debouncer.tagged` call site. **A
+    `LAUNCH-EMAIL`), the shared `resolveUserDocId`
+    (`core/app/device_deregistration.dart`), which the three device-registration
+    controllers pass `PUSH` / `LIVE-ACT` / `PRESENCE` into and which then
+    INTERPOLATES it (`'$tag resolve users doc failed'`), so the tag hides from
+    the grep twice over, and every `Debouncer.tagged` call site. **A
     `tag:` parameter earns its keep only where the helper has more than one
     caller** — the save pipeline's photo cleanup took one, lost its second
     caller when the whole-job delete moved server-side, and the parameter then
@@ -128,7 +131,7 @@ alwaysApply: true
   | `EMP-CREATE` | `error_introSaveEmployee` |
   | `EMP-STATUS` | `error_introChangeEmployeeStatus` |
   | `EMP-DELETE` | `error_introRemoveAccount` |
-  | `ME-SAVE` | `error_introSaveMyDetails` · `error_introSaveAvailability` · `error_introSaveTravelAlerts` |
+  | `ME-SAVE` | `error_introSaveMyDetails` · `error_introSaveAvailability` · `error_introSaveTravelAlerts` · `error_introSaveLocationSharing` |
   | `ME-EMAIL` | `error_introChangeEmail` |
   | `ACCT-DEL` | `error_introDeleteAccount` |
   | `APPLOCK` | `error_introSaveAppLock` |
@@ -151,15 +154,21 @@ alwaysApply: true
 
   - App shell / lifecycle: `ACCOUNT-EXIT`, `APP-SYNC`, `DEEP-LINK`, `NOTICE`,
     `SETTINGS`, `SPLASH`, `TOUR`, `ONBOARD-GATE`
-  - Auth / account: `AUTH-SETUP`, `AUTH-SIGNIN`, `AUTH-PREFILL`
-    (the last two added 2026-08-25, replacing six `login.*` dotted-lowercase
-    tags that were in no registry at all — the whole sign-in path was
-    invisible to a Crashlytics search by tag. `AUTH-SETUP` also now covers
-    `resumeAfterSignUp`, which is named for the sign-up flow P4c deleted and
-    actually serves account SETUP.)
+  - Auth / account: `AUTH-SETUP`, `AUTH-SIGNIN`, `AUTH-PREFILL`, `AUTH-RESET`
+    (`AUTH-SIGNIN`/`AUTH-PREFILL` added 2026-08-25, replacing six `login.*`
+    dotted-lowercase tags that were in no registry at all — the whole sign-in
+    path was invisible to a Crashlytics search by tag. That sweep MISSED
+    `auth.forgot_password`, the seventh, which survived until 2026-09-05 and is
+    `AUTH-RESET` now. `AUTH-SETUP` also covers `resumeAfterSignUp`, which is
+    named for the sign-up flow P4c deleted and actually serves account SETUP,
+    and — since the same pass — the four `auth_service.dart`
+    `completeAccountSetup:` labels, which carried NO tag at all; one of them is
+    the breadcrumb for `AuthFailureStartingPasswordReused`, the load-bearing
+    guard.)
   - Appointments: `APPT-BUSY`, `APPT-COUNT`, `APPT-IMG`, `APPT-RANGE`
   - Clients / history: `CLI-SEARCH`, `CLI-CONTACT-SAVE`, `CLI-CONTACT-SYNC`,
-    `HIST-SEARCH`
+    `CLI-RECENT` (`recent_clients_provider.dart` — both the recents lookup and
+    the resolve behind a recents row), `HIST-SEARCH`
   - Employees / self: `EMP-EMERGENCY`, `EMP-LOAD`, `EMP-TODAY`, `MYDET`
   - Presence / map: `LIVEMAP-MARKERS`, `PRESENCE`
   - Images: `IMG-DEL`, `IMG-DISK`, `IMG-LOAD`, `IMG-PICK`, `IMG-SAVE`,
@@ -218,6 +227,15 @@ and did not cover the throw (2026-08-31). Each shape is worth recognising:
   true today and is not a guarantee: an OOM decoding a large batch, or one
   refactor there, and an unawaited future takes the app down from a gallery
   that merely failed to render.
+
+- **A `ValueChanged` wired to an `async` method discards its future**, so the
+  work after the await has no caller left and no `mounted` to check. The
+  recents row is the worked example: `onSelectRecent` is `void`, the handler
+  awaits a Firestore read, and the controller writes on the far side would
+  throw "used after being disposed" into the zone as a FATAL if the sheet was
+  dismissed meanwhile. In a `StatelessWidget` there is no `mounted` — take the
+  `BuildContext` from the build that wired the callback and gate on
+  `context.mounted` after the await.
 
 The common tell is an unawaited or discarded future: it has no caller left to
 catch anything, so its `try` is the only thing between a routine failure and a

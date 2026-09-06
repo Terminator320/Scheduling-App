@@ -653,7 +653,11 @@ self-service settings. Root context: `../../CLAUDE.md`.
 - **`allow update` on `/users` has TWO branches as of P5 (2026-08-10), and the
   brackets around them are load-bearing.** It reads
   `(isAdmin() || (isSelf() && isAvailabilityOnlyChange())) && <denylist> &&
-  <emergency guards> && isValidUserData(...)`. Without the outer parentheses the
+  emailMovesThroughAuth() && <emergency guards> && isValidUserData(...)`.
+  **`emailMovesThroughAuth()` is part of that conjunction and this quote
+  dropped it until 2026-09-05** — a reader reconstructing the rule from the
+  doc loses the guard that forces every email change through
+  `changeEmployeeEmail`, so the Firestore row and the Auth account can diverge. Without the outer parentheses the
   denylist and the validator bind to the self branch alone and an admin write
   skips both. `isSelf()` gates on `isActiveUser()` as well as
   `resource.data.uid == request.auth.uid`: a **disabled** account keeps its Auth

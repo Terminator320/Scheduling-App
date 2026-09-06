@@ -2,7 +2,13 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-09-04 (release 1.57.0+86 — **the export list GREW 25 -> 29**,
+refreshed 2026-09-05 (release 1.58.0+87 — **the export list is unchanged at 29**;
+this pass hardened three guards rather than adding any. `assertActiveCall` now
+resolves the caller's uid so a bridge-row field cannot shadow it,
+`matchPhoneInName` gained the whole-field branch its Dart twin already had (a
+Wave customer named by a 7- or 11-digit number was importing undialable), and
+the callables that log a caller now log `shortHash(uid)` rather than the raw
+Auth uid. Previously refreshed 2026-09-04 (release 1.57.0+86 — **the export list GREW 25 -> 29**,
 the first change since 2026-08-13. Four callables were added: `searchClients`,
 `searchHistory` and `findAppointmentConflicts` (`indexed_search.js`), which move
 client search, appointment-history search and the pre-save conflict check off
@@ -111,7 +117,13 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   `enforceDurableRateLimit`, `assertAdmin`, `assertAdminCall`,
   `assertActiveCall`, `assertFreshReauth`, `shortHash`) live in
   `security.js` — put a new
-  one there, never back in a feature module (`optionalString` was a private copy
+  one there, never back in a feature module. **`assertActiveCall` spreads the
+  bridge row FIRST and the authenticated uid LAST** (`{...data, uid:
+  req.auth.uid}`, 2026-09-05): built the other way round, a `uid` field on the
+  `usersByUid` row shadowed the uid the platform verified, so every caller that
+  scopes on `profile.uid` — the rate limiter included — would key on a
+  Firestore-writable value. Latent rather than exploitable (nothing writes that
+  field), which is exactly why the ORDER has to be the thing that guarantees it (`optionalString` was a private copy
   in the retired `invites.js` and was carried verbatim into
   `employee_accounts.js` before being hoisted). The Wave stack is split four
   ways as of 2026-08-15: `wave/callables.js` (the admin callables only),
@@ -658,8 +670,9 @@ stops signing them in, so the admin should still tell them directly.
 ### `searchClients` — `indexed_search.js`
 Server-side client search, replacing a capped client-side scan. Queries
 `clients.searchTokens` with `array-contains-any` over at most 10 query tokens,
-reads 50, re-verifies each hit with `recordMatchesQuery` against the full stored
-document, sorts by display name and returns 25. **Admin-only** via
+reads `SEARCH_READ_LIMIT` (**200**, `orderBy("name")`) and warns at the cap,
+re-verifies each hit with `recordMatchesQuery` against the full stored
+document, ranks and returns 25. **Admin-only** via
 `assertAdminCall`: clients are PII, and the old scan was already admin-gated by
 the rules it read through. The prefilter/verify split is load-bearing — a prefix
 token matches strictly more than the query does, so returning the raw token hits
@@ -952,16 +965,17 @@ cadence, is what guarantees at-most-once delivery. It takes `liveDeps()`, not
 secrets.
 
 The "job finished?" nudge: pushes assignees of a job
-whose `endTime` passed within the last 24 h while its status is still open
+whose `endTime` passed within the last 2 h (`OVERDUE_LOOKBACK_MS`,
+`notification_policy.js`) while its status is still open
 (`pending`/`in_progress`/legacy `confirmed` — server mirror of the app's
 display-only `overdue` state; nothing is ever stored). Queries `endTime ∈
-(now−24 h, now]` — the eligibility rule itself, so the scan is its width and
+(now−2 h, now]` — the eligibility rule itself, so the scan is its width and
 not a superset — **ordered `endTime` DESC** on the `(status, endTime DESC)`
 composite index (**added 2026-08-13; deploy `firestore:indexes` with it or the
 sweep fails `FAILED_PRECONDITION` and prompts nobody**) so the
 `OVERDUE_SWEEP_MAX` cap keeps the newest-overdue jobs rather than the ones
 closest to aging out. It queried `startTime` until then, which needed a floor
-of 24 h **plus the longest bookable span** — ~15 days, since a job that started
+of the lookback **plus the longest bookable span** — ~15 days, since a job that started
 a fortnight ago can still have just ended — and so re-read every open job of
 the past two weeks on each of the 96 daily runs to prompt the handful that had
 actually ended. A doc with no `endTime` is now excluded by the filter rather
@@ -1078,8 +1092,10 @@ retried event would double-count. Fires only when `clientId` actually changes
 reads; personal jobs carry no `clientId` and are skipped. Writes with `update()`
 rather than `set({merge: true})` so a client removed out-of-band is never
 resurrected as a count-only stub, and swallows Firestore `NOT_FOUND` for the same
-case. The pure `clientsToRecount(before, after)` is exported for jest. Served by
-the automatic single-field index on `clientId` — no composite index needed.
+case. The pure `clientsToRecount(before, after)` is exported for jest. Served by the
+`(clientId ASC, dayIndex ASC)` composite — the run subtraction is a second
+`count()` over `dayIndex > 1`, which the automatic single-field index on
+`clientId` cannot serve. That index is deployed and LIVE; do not delete it.
 **Deployed 2026-08-01** (`d916b16`).
 
 A booking batch can land up to 16 writes carrying one `clientId` at once (a

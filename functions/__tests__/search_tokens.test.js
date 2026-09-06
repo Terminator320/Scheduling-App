@@ -146,6 +146,26 @@ describe("recordMatchesQuery", () => {
   });
 });
 
+describe("recordMatchesQuery client/employee seam", () => {
+  // Shared value-for-value with the Dart twin's `historyEntryMatches` seam
+  // test: the two sides must not disagree about whether a query may span the
+  // join between the client name and a crew name.
+  const appointment = {
+    clientName: "Marie Tremblay",
+    employeeNames: ["Marc Dubois"],
+    clientPhone: "5145554321",
+  };
+
+  test("does not match across the client/employee seam", () => {
+    expect(recordMatchesQuery(appointment, "tremblay marc")).toBe(false);
+  });
+
+  test("still matches within either field", () => {
+    expect(recordMatchesQuery(appointment, "marie tremblay")).toBe(true);
+    expect(recordMatchesQuery(appointment, "marc dubois")).toBe(true);
+  });
+});
+
 describe("normalize", () => {
   // The shared worked examples; the Dart twin asserts the same four.
   test("folds the Latin-1 letters the Dart mirror folds", () => {

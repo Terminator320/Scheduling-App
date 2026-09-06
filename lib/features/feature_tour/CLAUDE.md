@@ -20,9 +20,12 @@ identity, so a rename replays or orphans a tour.
   `sheet_addAppointment`, `sheet_addClient`, `sheet_invitePerson`,
   `sheet_jobDetails`) — which is the only reason a walkthrough of
   "how do I create an appointment" is expressible at all. **`storageKey` is
-  BOTH the showcase scope name and the SharedPreferences entry, and a
-  destination's key is its bare `.name`** — do not prefix it, or every
-  installed device replays every tour it has already seen. Form keys are
+  BOTH the showcase scope name and the key the FROZEN `kLegacyTourSteps`
+  migration snapshot is written in, and a destination's key is its bare
+  `.name`** — do not prefix it, or every installed device replays every tour it
+  has already seen. (The live seen flags are per STEP in `tour_seen_steps` as
+  of 2026-09-04; `tour_seen_tabs` survives only as that migration's input —
+  see the per-step bullet below.) Form keys are
   namespaced `sheet_*` so they cannot collide. `.name` stays load-bearing:
   renaming a `HubTab`, `PushedDestination` or `TourForm` member replays or
   orphans that tour.
@@ -51,6 +54,15 @@ identity, so a rename replays or orphans a tour.
   (the `GlobalKey` must stay unique), injected as a wrap callback so the widget
   stays reusable untoured — `ClientsListView` is also the booking flow's client
   picker.
+  **A widget that hosts more than one step takes ONE
+  `Widget Function(TourStepId, Widget)? tourWrap`, never a parameter per step.**
+  `AppointmentFormFields` had the shape first; `DetailsViewBody`,
+  `DetailsActionBar` and `NotificationsSettingsCard` grew twelve
+  `wrap<StepName>` parameters and two copies of the same `?? child` helper
+  between them before converging on it (2026-09-05). Wire it as
+  `tourWrap: _tour.stepIf` — a tear-off of the `TourSteps` method, so a new
+  step on that surface costs a call at the target, not a parameter threaded
+  through two or three widgets and their tests.
   Route mode also awaits `_routeTransitionSettled()` so showcase measures a
   page that has finished sliding in. It
   awaits `tourSeenProvider.ready` before acting (the optimistic empty default

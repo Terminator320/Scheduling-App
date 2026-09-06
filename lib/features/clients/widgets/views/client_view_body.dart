@@ -193,9 +193,9 @@ class ClientDetailViewBody extends ConsumerWidget {
         emphasize: true,
         semanticLabel: '$displayAddress, ${context.l10n.maps_openAddressWith}',
       ),
-    // Replaces the row's old "Building" pill: here it is ONE document read
-    // rather than a scan of the whole roster, and it says how many rather
-    // than only that the address is shared.
+    // Replaces the row's old "Building" pill, and says how many rather than
+    // only that the address is shared. It reads the same TTL'd roster window
+    // the filter sheet and search already page — not a per-row lookup.
     if (sharedAddressCount > 0)
       KeyValueRow(
         label: context.l10n.clients_filterSectionAddress,

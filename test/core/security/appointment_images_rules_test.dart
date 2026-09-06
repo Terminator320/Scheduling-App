@@ -124,10 +124,18 @@ void main() {
       // The trigger's own value is present in request.resource.data on every
       // partial update, so a flat ban would reject every ordinary edit of a job
       // that has photos — the same asymmetry as emergencyFieldNotSet.
+      // It shares the ban with the server-owned job time record, which is why
+      // this reads the whole key list rather than `pictureCount` alone.
       final update = rules.substring(
-        rules.indexOf('allow update: if (isAdmin()'),
+        rules.indexOf('match /appointments/{appointmentId}'),
       );
-      expect(update, contains("affectedKeys().hasAny(['pictureCount'])"));
+      expect(
+        update.replaceAll(RegExp(r'\s+'), ' '),
+        contains(
+          'affectedKeys() '
+          ".hasAny(['pictureCount', 'startedAt', 'completedAt'])",
+        ),
+      );
     });
   });
 

@@ -363,6 +363,46 @@ describe("liftPhoneFromName", () => {
   });
 });
 
+// Worked examples shared value-for-value with the Dart suite's
+// "liftPhoneFromName at other digit counts" group.
+describe("liftPhoneFromName at other digit counts", () => {
+  test("a ten-digit number still lifts and formats", () => {
+    expect(liftPhoneFromName({name: "5145628332", phone: ""}).phone)
+        .toBe("(514) 562-8332");
+  });
+
+  test("a seven-digit number lifts rather than being left in the name", () => {
+    const lifted = liftPhoneFromName({name: "5628332", phone: ""});
+    expect(lifted).not.toBeNull();
+    expect(lifted.phone.replace(/\D/g, "")).toBe("5628332");
+  });
+
+  test("an eleven-digit typo still lifts", () => {
+    const lifted = liftPhoneFromName({name: "51456283322", phone: ""});
+    expect(lifted).not.toBeNull();
+    expect(lifted.phone.replace(/\D/g, "")).toBe("51456283322");
+  });
+
+  test("an international number still stays in the name", () => {
+    expect(liftPhoneFromName({name: "+33 6 12 34 56 78", phone: ""}))
+        .toBeNull();
+  });
+
+  test("too few digits to dial is not a phone", () => {
+    expect(liftPhoneFromName({name: "4820", phone: ""})).toBeNull();
+  });
+
+  test("a name with a number in it keeps the name", () => {
+    expect(liftPhoneFromName({name: "Marie Tremblay 5145628332", phone: ""}))
+        .toEqual({name: "Marie Tremblay", phone: "(514) 562-8332"});
+  });
+
+  test("eight and nine digits are no NANP shape, so nothing lifts", () => {
+    expect(liftPhoneFromName({name: "3101-5696", phone: ""})).toBeNull();
+    expect(liftPhoneFromName({name: "310 156 969", phone: ""})).toBeNull();
+  });
+});
+
 describe("looksLikeBusinessName word boundary", () => {
   // The NEGATIVES are the point. If this boundary ever degrades to a bare
   // substring test, every Prince/Vince keeps a typed name instead of their

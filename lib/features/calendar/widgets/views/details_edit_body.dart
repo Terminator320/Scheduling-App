@@ -89,7 +89,9 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
   }
 
   EventDetailsController get _notifier => ref.read(
-    eventDetailsControllerProvider(EventDetailsKey(widget.appointment)).notifier,
+    eventDetailsControllerProvider(
+      EventDetailsKey(widget.appointment),
+    ).notifier,
   );
 
   void _onClientQueryModeChanged(ClientQueryMode mode) {
@@ -103,11 +105,6 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
 
   void _onRetryClientSearch() =>
       unawaited(_notifier.searchClients(widget.controllers.clientSearch.text));
-
-  void _onPickPreviousAddress(String address) {
-    widget.controllers.address.text = address;
-    _notifier.setUseCustomAddress(value: true);
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,7 +177,14 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       clientResults: state.clientResults,
       isSearchingClient: state.isSearchingClient,
       clientSearchStatus: state.clientSearchStatus,
-      recentClients: ref.watch(recentClientsProvider).value ?? const [],
+      // Only the picker renders recents, and it is built only with no client
+      // attached — on an edit, the rare path. Not free: `_loadClientIfNeeded`
+      // resolves asynchronously, so an ordinary client job is briefly null here
+      // and does still fire the query. It stops the CLEARED-client and personal
+      // cases paying for rows they never show.
+      recentClients: state.selectedClient == null
+          ? ref.watch(recentClientsProvider).value ?? const []
+          : const [],
       previousAddresses: bookingContext.previousAddresses,
       lastVisitLabel: bookingContext.lastVisitLabel,
       selectedEmployees: state.selectedEmployees,
@@ -228,8 +232,8 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     onSearchClients: _onClientSearchChanged,
     onClientQueryModeChanged: _onClientQueryModeChanged,
     onRetryClientSearch: _onRetryClientSearch,
-    onPickPreviousAddress: _onPickPreviousAddress,
     onSelectClient: notifier.selectClient,
+    onResolveRecentClient: (recent) => resolveRecentClient(ref, recent),
     onClearClient: notifier.clearClient,
     onToggleEmployee: notifier.toggleEmployee,
     onSelectStartDate: (picked) => _onStartDateSelected(notifier, picked),

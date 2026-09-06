@@ -25,6 +25,7 @@ void main() {
     List<RecentClient> recentClients = recents,
     bool isSearching = false,
     ValueChanged<ClientRecord>? onSelect,
+    ValueChanged<RecentClient>? onSelectRecent,
     VoidCallback? onRetry,
     VoidCallback? onAddNew,
     double textScale = 1,
@@ -44,6 +45,7 @@ void main() {
           onChanged: (_) {},
           onModeChanged: (_) {},
           onSelect: onSelect ?? (_) {},
+          onSelectRecent: onSelectRecent ?? (_) {},
           onRetry: onRetry ?? () {},
           onAddNew: onAddNew,
         ),
@@ -86,7 +88,6 @@ void main() {
       results: [marie],
       status: const ClientSearchStatus(
         digitsTyped: 10,
-        answeredQuery: '5145628332',
         answeredRung: PhoneRung.canonical,
       ),
     ));
@@ -112,6 +113,48 @@ void main() {
     expect(attached, marie);
   });
 
+  testWidgets('several results are not an "exact match"', (tester) async {
+    await tester.pumpWidget(harness(
+      controller: TextEditingController(text: 'mar'),
+      results: [marie, jp],
+      status: const ClientSearchStatus(
+        mode: ClientQueryMode.text,
+        answeredRung: PhoneRung.canonical,
+      ),
+    ));
+    expect(find.text('Exact match'), findsNothing);
+    expect(find.text('Search results'), findsOneWidget);
+  });
+
+  testWidgets('a text search is a substring test, never an exact match',
+      (tester) async {
+    await tester.pumpWidget(harness(
+      controller: TextEditingController(text: 'marie'),
+      results: [marie],
+      status: const ClientSearchStatus(
+        mode: ClientQueryMode.text,
+        answeredRung: PhoneRung.canonical,
+      ),
+    ));
+    expect(find.text('Exact match'), findsNothing);
+    expect(find.text('Search results'), findsOneWidget);
+  });
+
+  testWidgets('a recents row hands back the RECENT, not a record built from it',
+      (tester) async {
+    RecentClient? picked;
+    ClientRecord? attached;
+    await tester.pumpWidget(harness(
+      controller: TextEditingController(),
+      onSelect: (c) => attached = c,
+      onSelectRecent: (r) => picked = r,
+    ));
+    await tester.tap(find.text(recents.first.name));
+    await tester.pump();
+    expect(picked, recents.first);
+    expect(attached, isNull, reason: 'the host resolves the real client');
+  });
+
   testWidgets('a fallback answer is labelled as closest, not as matches',
       (tester) async {
     await tester.pumpWidget(harness(
@@ -119,7 +162,6 @@ void main() {
       results: [marie, jp],
       status: const ClientSearchStatus(
         digitsTyped: 10,
-        answeredQuery: '5145628',
         answeredRung: PhoneRung.firstSeven,
       ),
       onAddNew: () {},

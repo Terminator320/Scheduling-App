@@ -666,38 +666,35 @@ void main() {
       expect(await repo().fetchClientsByBuilding(''), isEmpty);
     });
 
-    test(
-      'fetchBuildingKeys answers for every live client, null included',
-      () async {
-        // The row builder's half of the pill.
-        final docs = [
-          ...paton(),
-          doc('c4', {'name': 'Nowhere'}),
-        ];
-        when(() => snapshot.docs).thenReturn(docs);
-        final r = repo();
-
-        final keys = await r.fetchBuildingKeys();
-
-        expect(keys.keys, containsAll(['c1', 'c2', 'c3', 'c4']));
-        expect(keys['c1'], keys['c2']); // two units of one building
-        expect(keys['c3'], isNot(keys['c1']));
-        expect(keys.containsKey('c4'), isTrue);
-        expect(keys['c4'], isNull); // no address at all
-      },
-    );
-
-    test('the keys agree with the buildings the menu offers', () async {
-      // They come off one cached window and one derivation; a disagreement
-      // between them would show a pill on a row the filter cannot select.
-      final docs = paton();
+    test('a client with no address at all forms no building', () async {
+      final docs = [
+        ...paton(),
+        doc('c4', {'name': 'Nowhere'}),
+      ];
       when(() => snapshot.docs).thenReturn(docs);
       final r = repo();
 
       final key = (await r.fetchBuildings()).single.key;
-      final keys = await r.fetchBuildingKeys();
 
-      expect(keys.values.where((k) => k == key), hasLength(2));
+      expect(
+        (await r.fetchClientsByBuilding(key)).map((c) => c.id),
+        unorderedEquals(['c1', 'c2']),
+      );
+    });
+
+    test('the selection agrees with the count the menu offers', () async {
+      // They come off one cached window and one derivation; a disagreement
+      // between them would show a building the filter cannot fill.
+      final docs = paton();
+      when(() => snapshot.docs).thenReturn(docs);
+      final r = repo();
+
+      final building = (await r.fetchBuildings()).single;
+
+      expect(
+        await r.fetchClientsByBuilding(building.key),
+        hasLength(building.clientCount),
+      );
     });
 
     // `_patchWindow` carries the already-materialized records and building keys
@@ -731,16 +728,17 @@ void main() {
 
           final buildings = await r.fetchBuildings();
           expect(buildings.single.clientCount, 3);
-          final keys = await r.fetchBuildingKeys();
-          expect(keys['c3'], buildings.single.key);
-          // The two clients that did not change keep their key.
-          expect(keys['c1'], buildings.single.key);
-          expect(keys['c2'], buildings.single.key);
+          // The two clients that did not change stay in the building.
+          expect(
+            (await r.fetchClientsByBuilding(buildings.single.key))
+                .map((c) => c.id),
+            containsAll(['c1', 'c2', 'c3']),
+          );
         },
       );
 
       test(
-        'an edit that moves a client OUT drops it from the key map',
+        'an edit that moves a client OUT drops it from the building',
         () async {
           final docs = paton();
           when(() => snapshot.docs).thenReturn(docs);
@@ -751,9 +749,10 @@ void main() {
           // only dissolve Paton rather than form a second building with c3.
           await r.updateClient(patonClient('c1', 'Zeta', '12 Rue Unique'));
 
-          final keys = await r.fetchBuildingKeys();
-          expect(keys['c1'], isNot(key));
-          expect(keys['c2'], key);
+          expect(
+            (await r.fetchClientsByBuilding(key)).map((c) => c.id),
+            ['c2'],
+          );
           // One client left at Paton is below the 2-client minimum.
           expect(await r.fetchBuildings(), isEmpty);
         },
@@ -788,9 +787,8 @@ void main() {
 
         await r.setClientArchived('c1', archived: true);
 
-        // Archived clients are excluded from `records`, so the key map must
-        // lose the entry rather than keep a stale one.
-        expect(await r.fetchBuildingKeys(), isNot(contains('c1')));
+        // Archived clients are excluded from `records`, so the derived maps
+        // must lose the entry rather than keep a stale one.
         expect(await r.fetchBuildings(), isEmpty);
       });
 
@@ -802,7 +800,6 @@ void main() {
 
         await r.deleteClient('c1');
 
-        expect(await r.fetchBuildingKeys(), isNot(contains('c1')));
         expect(await r.fetchBuildings(), isEmpty);
       });
     });

@@ -351,6 +351,16 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   `firebase_clients_repository`: what is INDEXED and what MATCHES cannot be
   allowed to drift, and they were two hand-written copies of the same ten
   fields. `index()` keeps its own `ClientRecord`-shaped copy on purpose.
+  **A client's OWN numbers and its CONTACTS' are separate owners**
+  (`ownPhoneDigits`/`contactPhoneDigits` and their `raw*` twins, 2026-09-05),
+  because `relevanceScore` treats them differently — only the client's own may
+  score an exact or prefix hit — and `rawPhones` is now just their
+  concatenation, already reduced to digits. Spelled at the call site instead,
+  it drifted immediately: `scoreRecord` passed the contacts in BOTH lists (so a
+  contact's number could score exact, and every contact was compared twice at
+  the weakest tier) while the repository's local-fallback matcher kept them out
+  of the own list, which is two answers to one question. Note `searchIndexTokens`
+  runs `digitsOnly` itself, so handing it digits changes no token.
   **The appointment side has the same pair**:
   `historyEntryOf` + `historyEntryMatches` (`calendar/domain/policies/history_search_policy.dart`),
   which `matchHistoryDocs` and `appointment_history_view.dart`'s loaded-page
@@ -413,7 +423,17 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   user-visible consequence); only the loop is shared. **Page size is NOT the
   display bound** — `fetchClientHistory` used its `limit` (50) as both against
   a 1000 cap, so one client-detail open cost up to 20 sequential round-trips;
-  it pages at 500 like the other two windows.
+  it pages at 500 like the other two windows. **Nor may page size EQUAL the
+  cap**: `pageToCap` asks for `cap + 1 - fetched`, so a full first page always
+  costs a second round trip whose only job is to decide whether to warn. A
+  caller wanting the newest N passes `limit: N + 1, cap: N`
+  (`clientBookingHistoryProvider`), which answers "is there more than N" in the
+  one query. **Such a caller BREADCRUMBS at the cap rather than warning.** The
+  warn exists for a SILENT truncation of a list meant to be complete; a
+  deliberate window reaches its bound as the normal case — for the booking
+  form, on exactly the repeat clients it is for — so warning there files a
+  Crashlytics non-fatal per form open and buries the real one.
+  `fetchClientHistory` keys that on whether an explicit `cap` was passed.
 - **Every widget-layer offline write guard goes through `guardedOffline`**
   (`core/errors/error_cause.dart`, beside `composeErrorNotice`) — it reads
   `isOfflineProvider`, pushes the standard offline notice and returns true so
@@ -470,7 +490,8 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   Crashlytics. Requiring it is what makes that omission impossible at a NEW
   call site.
   **Build one through `Debouncer.tagged(duration, logger:, tag:)`, not the raw
-  constructor** (2026-08-22). All six sites use it. Requiring `onError` closed
+  constructor** (2026-08-22). All five sites use it (six until
+  `DebouncedPagedSearch` merged two). Requiring `onError` closed
   the omission case; what it could not close is *where the logger is resolved*
   — the handler can fire after dispose, and Riverpod 3 `ref.read` on an
   unmounted consumer throws (see `.claude/rules/error-handling.md`), so the

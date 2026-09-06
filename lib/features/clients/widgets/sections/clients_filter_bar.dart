@@ -21,14 +21,15 @@ class ClientsFilterBar extends StatelessWidget {
   const ClientsFilterBar({
     required this.selected,
     required this.onOpen,
-    required this.onChanged,
+    required this.onClear,
     this.activeBuildingLabel,
     super.key,
   });
 
   final ClientsFilter selected;
   final VoidCallback onOpen;
-  final ValueChanged<ClientsFilter> onChanged;
+  /// Clears the active filter. Picking one is the sheet's job.
+  final VoidCallback onClear;
 
   /// Street of the active [ClientsFilterBuilding], remembered by the caller
   /// when it was picked — this bar never watches the building scan.
@@ -80,7 +81,7 @@ class ClientsFilterBar extends StatelessWidget {
     ),
     deleteIcon: const Icon(Icons.close, size: 18),
     deleteButtonTooltipMessage: l10n.clients_clearFilter,
-    onDeleted: () => onChanged(const ClientsFilterAll()),
+    onDeleted: onClear,
     onPressed: onOpen,
   );
 
@@ -108,26 +109,15 @@ class ClientsFilterBar extends StatelessWidget {
       // unbounded shrink-wraps instead.
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final button = _button(context, l10n, label != null);
+          final bounded = constraints.maxWidth.isFinite;
           final chip = label == null ? null : _chip(l10n, label);
-          if (!constraints.maxWidth.isFinite) {
-            return Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                button,
-                if (chip != null) ...[
-                  const SizedBox(width: AppSpacing.sp8),
-                  chip,
-                ],
-              ],
-            );
-          }
           return Row(
+            mainAxisSize: bounded ? MainAxisSize.max : MainAxisSize.min,
             children: [
-              button,
+              _button(context, l10n, label != null),
               if (chip != null) ...[
                 const SizedBox(width: AppSpacing.sp8),
-                Flexible(child: chip),
+                if (bounded) Flexible(child: chip) else chip,
               ],
             ],
           );

@@ -292,6 +292,13 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   does not already cover every array entry, and refuses one holding an entry
   with no identity at all (no `storagePath`, no url) — unrenderable and
   uncopyable, so clearing it would destroy the only record it existed.
+- **`_currentOwner` throws a bare `StateError`, and that is deliberate**
+  (owner call, 2026-09-05). `ImageUploadFailure` is the typed family for
+  everything a USER sees; these two ("signed out", "no users doc for uid") are
+  internal preconditions on a background drain with no surface to fail on —
+  the drain catches them, logs under `IMG-UPLOAD` and re-queues. Wrapping them
+  in a `Failure` would put two members in the sealed family that no
+  `toLocalizedMessage` branch can ever be reached for. Don't file it as drift.
 - **A queue entry is OWNED, and drains only for its owner** (2026-09-04). Every
   `PendingUpload` carries the Firebase `uid` and the employee doc id that staged
   it, `_attempt` skips an entry whose owner is not the person currently signed

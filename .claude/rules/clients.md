@@ -576,6 +576,14 @@ Root context: `../../CLAUDE.md`.
   two numbers. Three sites had the blob — `ClientSearchPolicy.index`, the
   repository's relevance call site, and `recordMatchesQuery` in
   `functions/search_tokens.js`. Keep all three split.
+  **`index()`'s `phoneDigits` holds BOTH the client's own numbers and its
+  contacts', because MATCHING should find either; SCORING must not treat them
+  alike.** So `scoreRecord` builds its two lists from `ownPhoneDigits` /
+  `contactPhoneDigits` rather than reusing `entry.phoneDigits` — reusing it put
+  every contact number in both `phoneDigits` and `contactsDigits`, which let a
+  contact's number score an exact hit and compared each of them twice at
+  tier 4. The raw-map twins (`rawOwnPhoneDigits`/`rawContactPhoneDigits`) are
+  what `matchClientDocs` reads for the same reason.
 - **The callable's answer is RE-RANKED in the repository.** `searchClients`
   ends `orderBy("name")` server-side, so without `ClientSearchPolicy.scoreRecord`
   the closest number on a fallback rung lands wherever the alphabet puts it.
@@ -588,7 +596,13 @@ Root context: `../../CLAUDE.md`.
   client already on file — carrying a number that can then never be searched.
 - **Recents are free or they are nothing.** `recentClientsProvider` builds them
   from appointments' denormalized `clientId`/`clientName`/`clientPhone`, so
-  showing them costs no client reads. It returns empty for a non-admin: the
+  showing them costs no client reads. Two halves of that, both easy to lose:
+  it projects `currentUserDocProvider` down to the ROLE STRING via
+  `selectAsync` (a `Map` compares by identity, so watching the raw doc re-ran
+  the 60-doc query on any own-doc write), and a host watches it only when
+  `selectedClient == null` — the picker is the sole renderer of recents and is
+  built only then, so the EDIT sheet was buying 60 appointment reads for pixels
+  that never existed. It returns empty for a non-admin: the
   query carries no `employeeIds` constraint and adding one would need a new
   composite index. Job creation is admin-only today (`_addAppointmentFab`), so
   that costs nothing — it is recorded so a future decision to let employees

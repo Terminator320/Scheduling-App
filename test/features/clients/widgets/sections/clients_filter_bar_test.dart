@@ -12,7 +12,7 @@ AppLocalizations _l10n(WidgetTester tester) =>
 Widget _harness({
   required ClientsFilter selected,
   VoidCallback? onOpen,
-  ValueChanged<ClientsFilter>? onChanged,
+  VoidCallback? onClear,
   String? buildingLabel,
   double textScale = 1,
   // The tour wraps this bar in a showcase, which hands its child UNBOUNDED
@@ -22,7 +22,7 @@ Widget _harness({
   final bar = ClientsFilterBar(
     selected: selected,
     onOpen: onOpen ?? () {},
-    onChanged: onChanged ?? (_) {},
+    onClear: onClear ?? () {},
     activeBuildingLabel: buildingLabel,
   );
   return MaterialApp(
@@ -65,11 +65,11 @@ void main() {
   });
 
   testWidgets('dismissing the chip clears back to All', (tester) async {
-    ClientsFilter? emitted;
+    var cleared = false;
     await tester.pumpWidget(
       _harness(
         selected: const ClientsFilterArchived(),
-        onChanged: (next) => emitted = next,
+        onClear: () => cleared = true,
       ),
     );
     await tester.pumpAndSettle();
@@ -77,7 +77,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.close));
     await tester.pumpAndSettle();
 
-    expect(emitted, const ClientsFilterAll());
+    expect(cleared, isTrue);
   });
 
   testWidgets('an active building chip uses the label it is given', (

@@ -89,14 +89,27 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
 
   /// Which keyboard the picker is showing. The controller owns it so the query
   /// survives the field losing focus.
-  void setClientQueryMode(ClientQueryMode mode) {
+  void setClientQueryMode(ClientQueryMode mode) => _resetSearch(mode);
+
+  /// Clear the results and the narrowing window together. Both halves are the
+  /// invariant: a reset that bumps the request id without dropping the window
+  /// lets a stale in-flight answer be narrowed onto the new query.
+  void _resetSearch(
+    ClientQueryMode mode, {
+    int digitsTyped = 0,
+    bool failed = false,
+  }) {
     _searchRequestId++;
     _clientWindow = ClientSearchWindow.empty;
     _apply(
       AppointmentFormUpdate(
         clientResults: const [],
         isSearchingClient: false,
-        clientSearchStatus: ClientSearchStatus(mode: mode),
+        clientSearchStatus: ClientSearchStatus(
+          mode: mode,
+          digitsTyped: digitsTyped,
+          failed: failed,
+        ),
       ),
     );
   }
@@ -109,33 +122,14 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
 
     if (trimmed.isEmpty ||
         (!isPhone && !ClientSearchPolicy.shouldSearch(trimmed))) {
-      _searchRequestId++;
-      _clientWindow = ClientSearchWindow.empty;
-      _apply(
-        AppointmentFormUpdate(
-          clientResults: const [],
-          isSearchingClient: false,
-          clientSearchStatus: ClientSearchStatus(mode: mode),
-        ),
-      );
+      _resetSearch(mode);
       return;
     }
 
     // Too few digits to be selective: `514` matches the roster twice over and
     // costs 200 document reads to prove it. Hold, and say so.
     if (isPhone && digits.length < PhoneQueryPolicy.minPhoneDigits) {
-      _searchRequestId++;
-      _clientWindow = ClientSearchWindow.empty;
-      _apply(
-        AppointmentFormUpdate(
-          clientResults: const [],
-          isSearchingClient: false,
-          clientSearchStatus: ClientSearchStatus(
-            mode: mode,
-            digitsTyped: digits.length,
-          ),
-        ),
-      );
+      _resetSearch(mode, digitsTyped: digits.length);
       return;
     }
 
@@ -151,7 +145,6 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
           clientSearchStatus: ClientSearchStatus(
             mode: mode,
             digitsTyped: digits.length,
-            answeredQuery: digits,
             answeredRung: PhoneRung.canonical,
           ),
         ),
@@ -203,7 +196,6 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
             clientSearchStatus: ClientSearchStatus(
               mode: mode,
               digitsTyped: digits.length,
-              answeredQuery: rung.digits,
               answeredRung: results.isEmpty ? null : rung.rung,
             ),
           ),
@@ -213,20 +205,9 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
     } catch (e, st) {
       logger.warn('CLI-SEARCH appointment form searchClients failed', e, st);
       if (!ref.mounted || requestId != _searchRequestId) return;
-      _clientWindow = ClientSearchWindow.empty;
       // A failure that renders as "no clients found" is how a duplicate gets
       // created for a client who is already on file.
-      _apply(
-        AppointmentFormUpdate(
-          clientResults: const [],
-          isSearchingClient: false,
-          clientSearchStatus: ClientSearchStatus(
-            mode: mode,
-            digitsTyped: digits.length,
-            failed: true,
-          ),
-        ),
-      );
+      _resetSearch(mode, digitsTyped: digits.length, failed: true);
     }
   }
 
