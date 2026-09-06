@@ -291,7 +291,7 @@ STAYS in the root `CLAUDE.md`, because those are reachable from
   ordinary child). Put a new "this day is not work" row on the same four.
 - **Holidays are COMPUTED and DISPLAY-ONLY, and the marker is a rule UNDER the
   day number** (2026-08-29, designed in
-  `docs/plans/2026-08-29-calendar-holidays.md`). `domain/holidays.dart` derives
+  `docs/archive/2026-08-29-calendar-holidays.md`). `domain/holidays.dart` derives
   Québec's statutory days, the Greek Orthodox Easter trio and the CCQ
   construction shutdown from pure arithmetic — no dataset, no network call, no
   yearly maintenance. A bundled table was rejected deliberately: whatever range
