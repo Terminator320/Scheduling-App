@@ -41,6 +41,37 @@ Future<List<File>> pickAppointmentImages(
   return file == null ? const [] : [file];
 }
 
+/// Picks photos and hands them to [addImages], saying so when the per-job cap
+/// dropped any.
+///
+/// The pick is the longest await in the app — an OS action sheet and then the
+/// camera or Photos picker — so the form can be gone by the time it returns.
+/// Both form hosts spelled this out, and had already drifted on which
+/// `mounted` they checked.
+Future<void> pickAndAddAppointmentImages(
+  BuildContext context,
+  WidgetRef ref, {
+  required int Function(List<File>) addImages,
+  required int Function() remainingSlots,
+}) async {
+  final notices = ref.read(noticeServiceProvider);
+  final l10n = context.l10n;
+  final picked = await pickAppointmentImages(context, ref);
+  if (!context.mounted || picked.isEmpty) return;
+  // Read AFTER the pick, and it is the room LEFT, never the total cap: the
+  // notice only fires when the job is at or near its limit, which is exactly
+  // when "only 10 more can be added" is the wrong sentence.
+  final room = remainingSlots();
+  final dropped = addImages(picked);
+  if (dropped > 0) {
+    notices.info(
+      room == 0
+          ? l10n.calendar_photosLimitFull
+          : l10n.calendar_photosLimitReached(room),
+    );
+  }
+}
+
 Future<ImageSource?> _showSourceSheet(BuildContext context) {
   final l = context.l10n;
   return showAdaptiveActionSheet<ImageSource>(

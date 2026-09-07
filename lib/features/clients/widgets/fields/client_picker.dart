@@ -6,6 +6,7 @@ import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/fields/attached_dropdown.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 /// The add-job client step: a mode switch, one field, and whatever the current
@@ -268,10 +269,8 @@ class _Tally extends StatelessWidget {
   }
 }
 
-
-/// The attached autocomplete list, drawn exactly like
-/// `AddressAutocompleteField`'s — same border, radius and `sp4` gap — so the
-/// client picker and the address picker behave identically.
+/// The client results, in the same attached list the address picker uses, so
+/// the two fields behave identically.
 class _Dropdown extends StatelessWidget {
   const _Dropdown({required this.children, this.caption});
 
@@ -282,13 +281,7 @@ class _Dropdown extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    return Container(
-      margin: const EdgeInsets.only(top: AppSpacing.sp4),
-      decoration: BoxDecoration(
-        border: Border.all(color: scheme.outlineVariant),
-        borderRadius: BorderRadius.circular(AppRadius.r12),
-      ),
-      clipBehavior: Clip.antiAlias,
+    return AttachedDropdown(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -343,6 +336,19 @@ class _DropdownRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final TextStyle? headlineStyle;
+    if (icon != null) {
+      headlineStyle = theme.textTheme.bodyMedium?.copyWith(
+        color: scheme.primary,
+        fontWeight: FontWeight.w600,
+      );
+    } else if (mono) {
+      headlineStyle = theme.monoType.metric;
+    } else {
+      headlineStyle = theme.textTheme.bodyMedium?.copyWith(
+        fontWeight: FontWeight.w600,
+      );
+    }
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -364,16 +370,7 @@ class _DropdownRow extends StatelessWidget {
                     headline,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: icon != null
-                        ? theme.textTheme.bodyMedium?.copyWith(
-                            color: scheme.primary,
-                            fontWeight: FontWeight.w600,
-                          )
-                        : (mono
-                              ? theme.monoType.metric
-                              : theme.textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                )),
+                    style: headlineStyle,
                   ),
                   if (detail != null && detail!.trim().isNotEmpty)
                     Text(

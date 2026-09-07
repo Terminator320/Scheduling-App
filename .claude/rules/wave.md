@@ -192,9 +192,27 @@ the sync badge, `clients/{id}.name` as Wave's customer name — are in
   net"). Don't reintroduce a polling worker to "fix" a sync latency
   complaint — check the trigger's drain and the daily sweep first.
   `importCustomers` still only re-runs when the configured cadence is due.
+  **`wave/connection` is READ through ONE owner: `readWaveConnection` /
+  `connectionFieldsOf`** (`wave/sync_run.js`, 2026-09-07). The doc-get and the
+  field coercion were spelled out at eight sites across the callables, the
+  daily rider and `sync_run.js` itself, and `importSchedule` was coerced twice
+  with only ONE copy applying the unknown-value fallback — so the same stored
+  value read as `off` in one place and as itself in another.
+  `readWaveConnection` returns the `ref` beside the coerced fields because most
+  callers need it next (to update the cadence, or to hand `importWithWatermark`
+  the document it advances); `connectionFieldsOf` is the same coercion over a
+  snapshot already in hand, which is what the bootstrap transaction needs.
+  `readWaveBusinessId` is now a projection of it, not a second read.
+  **All five Wave callables open with `assertAdminCall`** (2026-09-07), like
+  every other admin callable — the hand-spelled auth/`assertAdmin`/payload
+  opening is gone. It changes the opening and not one allowlist key, so it
+  breaks no build in the fleet; see `.claude/rules/security.md` for why the
+  composed guard exists.
   **Auto-import cadence:** `importSchedule` on `wave/connection` is one of
   `off`/`weekly`/`monthly` (`WaveImportSchedule` enum client-side; `SCHEDULE_VALUES`
-  server-side). The `isImportDue` helper (`wave/import_schedule.js`, pure/jest-testable)
+  server-side, with `SCHEDULE_SET` its membership form — owned beside it in
+  `import_schedule.js`, because two `new Set(SCHEDULE_VALUES)` are two chances
+  for the validator and the coercion to disagree). The `isImportDue` helper (`wave/import_schedule.js`, pure/jest-testable)
   treats **off or any unknown value as never-run**; a due import stamps
   `lastAutoImportAt` and a failed one leaves it unchanged (retried next day). The full-access
   Wave token lives in Secret Manager (`WAVE_FULL_ACCESS_TOKEN`) only — **no

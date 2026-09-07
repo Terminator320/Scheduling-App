@@ -10,6 +10,68 @@ All notable changes to this project are documented here.
 The `+N` build number after the version (e.g. `1.1.0+5`) is the store version
 code; it increments by one on every store upload regardless of the semver part.
 
+## [1.59.0+88] - 2026-09-07
+
+What happened on a job is now something the office can read. The crew's notes
+are a signed, dated thread instead of a single box only the technician could
+see, the photos an employee takes stay on screen while they upload, and the
+screens meant for an admin check the account rather than the tap that opened
+them.
+
+### Added
+- **Crew notes are a signed thread the office can read.** Each note carries the
+  name of the person who wrote it and the time they wrote it, oldest first, and
+  an admin sees the whole thread on the job. Notes are added, never edited or
+  overwritten — where a second technician on the same job used to replace the
+  first one's notes, both now stand. Anything written under the old single-box
+  notes still shows at the top of the thread.
+- **The client search drops down under the field as you type.** Results attach
+  to the field the way the address picker's do, and the spinner moved into the
+  field itself, so the list no longer blanks and jumps on every keystroke — the
+  previous matches stay put while the next ones load. Closest-number results
+  are still labelled as such, never as matches.
+
+### Changed
+- **History is an admin screen now.** A technician's copy of it never had a
+  single filter control, and a finished job is still one tap away on the
+  calendar, where closed jobs sink to the bottom of the day. The screen was
+  removed rather than half-built.
+- **Recent clients is gone from the add-job form.** Search is the one way to a
+  client, and it now starts on the first digit.
+- **The job address is hidden while the client's own address is in use.** Turn
+  the switch off and the field comes back; a client with no address on file
+  keeps it on screen, so a job can always be given one.
+- **The client filter sheet has a back button.** Leaving it keeps the filter you
+  had, the address you were on and your place in the list.
+- **The photo limit applies to the crew's photos too**, and says so when a pick
+  is trimmed. Photos added on site used to bypass it entirely, which then made
+  the admin's own Add photos button a silent no-op on that job.
+- **The client detail no longer counts who else is at the same address.** That
+  question belongs to the filter sheet, which still answers it; on the page
+  about one client it was a line nobody had asked for.
+
+### Fixed
+- **An employee's first photo on a job no longer disappears while it uploads.**
+  The whole photos section stayed invisible for the length of the upload, then
+  blinked out again at the moment it succeeded.
+- **A crew photo that fails keeps its error message on screen.** A batch that
+  failed outright used to erase its own error tile, and the Retry beside it
+  could not do anything except destroy the only record of the loss.
+- **A long thread of crew notes keeps the newest ones.** Past two hundred notes
+  it kept the oldest and silently dropped everything written since; it now
+  keeps the recent ones and says on screen that older ones aren't shown.
+- **A note can no longer be posted under a colleague's name** — it is signed
+  from the account that wrote it, not from what was submitted with it.
+- **A crew member with a long name can post a note at all.** Anyone whose name
+  ran past two hundred characters had every attempt refused with a generic
+  error and no field to correct.
+- **Admin-only screens re-check the account, not the tap that opened them.**
+  Settings, the navigation drawer, the Day Route crew selector and History all
+  read the current role from the account, so a stale back stack or a link can
+  no longer show an admin-shaped screen that then fails on every action.
+- **The crew notes and photos on a job say when they could not be loaded**
+  instead of rendering as an empty record.
+
 ## [1.58.0+87] - 2026-09-05
 
 Booking a job while the client reads their number down the phone is what this

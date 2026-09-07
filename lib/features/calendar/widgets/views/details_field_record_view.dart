@@ -127,10 +127,35 @@ class _DetailsFieldRecordViewState
     final notices = ref.read(noticeServiceProvider);
     final l10n = context.l10n;
     final uploader = ref.read(appointmentImageUploadProvider);
+    try {
+      final files = await pickAppointmentImages(context, ref);
+      if (files.isEmpty) return;
+      // Measured AFTER the pick — that await is the longest in the app, and a
+      // background upload landing inside it would otherwise go uncounted and
+      // let the job overshoot.
+      final allowed = _roomForPhotos(id);
+      final accepted = files.take(allowed).toList();
+      if (accepted.length < files.length) {
+        notices.info(
+          allowed == 0
+              ? l10n.calendar_photosLimitFull
+              : l10n.calendar_photosLimitReached(allowed),
+        );
+      }
+      if (accepted.isEmpty) return;
+      uploader.uploadInBackground(appointmentId: id, newImages: accepted);
+    } catch (e, st) {
+      logger.warn('APPT-FIELDNOTE photo pick failed', e, st);
+    }
+  }
+
+  /// How many more photos this job will take.
+  ///
+  /// Two bounds, both real: one pick may not exceed what the admin form allows,
+  /// and a job may not accumulate more than one subcollection read returns —
+  /// past that the sheet caps while the Storage bytes keep growing.
+  int _roomForPhotos(String id) {
     final photos = ref.read(photoUploadNotifierProvider);
-    // Two bounds, both real: one pick may not exceed what the admin form
-    // allows, and a job may not accumulate more than one subcollection read
-    // returns — past that the sheet caps while the Storage bytes keep growing.
     final state = ref.read(
       eventDetailsControllerProvider(EventDetailsKey(widget.appointment)),
     );
@@ -139,21 +164,9 @@ class _DetailsFieldRecordViewState
       0,
       AppointmentImagesStore.scanLimit,
     );
-    final allowed = room < AppointmentFormConcerns.maxImagesPerAppointment
+    return room < AppointmentFormConcerns.maxImagesPerAppointment
         ? room
         : AppointmentFormConcerns.maxImagesPerAppointment;
-    try {
-      final files = await pickAppointmentImages(context, ref);
-      if (files.isEmpty) return;
-      final accepted = files.take(allowed).toList();
-      if (accepted.length < files.length) {
-        notices.info(l10n.calendar_photosLimitReached(allowed));
-      }
-      if (accepted.isEmpty) return;
-      uploader.uploadInBackground(appointmentId: id, newImages: accepted);
-    } catch (e, st) {
-      logger.warn('APPT-FIELDNOTE photo pick failed', e, st);
-    }
   }
 
   @override

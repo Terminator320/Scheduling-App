@@ -129,7 +129,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   /// Live gate for the admin-only surfaces — the route argument is a snapshot,
   /// so this asks Firestore. Fails CLOSED while the user doc is unsettled.
-  bool get _isAdmin => _isAdminArg && ref.watch(isActiveAdminProvider);
+  ///
+  /// Resolved ONCE per build into a field, never read as `ref.watch` from a
+  /// getter: `isAdminAccount` and the two detail pushes read it from callbacks,
+  /// and a `ref` touched outside `build` on an unmounted consumer throws.
+  bool _isAdmin = false;
   bool? _pendingAppLockValue;
   bool? _pendingLiveActivityValue;
   bool? _pendingTravelAlertsValue;
@@ -393,6 +397,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   @override
   Widget build(BuildContext context) {
+    _isAdmin = _isAdminArg && ref.watch(isActiveAdminProvider);
     return FeatureTourHost(
       scope: _tour.scope,
       isAdmin: _isAdminArg,

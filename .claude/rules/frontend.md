@@ -58,6 +58,14 @@ Material Design 3 (Flat / Elevation). Use `ColorScheme`, `TextTheme`, and `Theme
 - `AppointmentCard`, `StatusChip`, `AppAvatar`, `SkeletonLoader`, `SkeletonList` (N stacked `SkeletonListTile`s — the standard list loading state; deliberately NOT scrollable, since two of its callers sit inside `infinite_scroll_pagination`'s `SliverFillRemaining`, which asks its child for intrinsics and throws on a nested `ListView`. It was hand-built at each call site and had already drifted on the row gap), `AppEmptyState`, `AppSearchBar` (the one search-field style — Clients/History/Employees all use it), `EmployeeColorGrid`, `SectionLabel` (uppercase mini-header), `showConfirmDialog` (Cancel/confirm dialog; `destructive:` toggles the error-filled confirm), `AppDialogFrame` (`shared/widgets/dialogs/` — the bare dialog SHELL: title, scrollable body, action row, and the one inset value with no token behind it. It is the frame under a dialog that is NOT a Cancel/confirm question, so it does not replace `showConfirmDialog` and deliberately does not wrap it; the three call sites that had the same twelve lines each are the booking-conflict, series-scope and time-off clash dialogs) — use these before creating new ones.
 - `EmployeeColorGrid` **hides** colors taken by another employee (never grey/disable them; the current selection always stays visible), and its custom dialog is a tap-a-swatch palette + shades only — don't reintroduce the color wheel or hex-code field.
 - `ClearTextButton` (`shared/widgets/fields/`) is the one clear-"x" suffix — `LabeledTextField` adds it to every editable field automatically (a custom `suffixIcon` or `readOnly` picker field opts out); its `onCleared` must keep host state/validation in sync, and the optional `placeholder` renders while the field is empty. Never hand-roll a suffix clear button.
+- `AttachedDropdown` (`shared/widgets/fields/`) is the bordered suggestion list
+  that attaches under a text field — margin, border, radius and clip in one
+  place. `AddressAutocompleteField` and `ClientPicker` both build on it; they
+  were two hand-written copies of the same shape, the second carrying a comment
+  asserting it matched the first, which is the drift `SheetPanel` already
+  exists to stop. It owns the CHROME only: each caller still builds its own
+  rows, so the address field's plain list and the client picker's
+  divider-indexed one with its fallback caption stay different on purpose.
 - `BusyButtonIcon` (`shared/widgets/primitives/`) is the leading slot for a `*.icon` button that swaps to a spinner while busy — use it instead of hand-rolling `isBusy ? SizedBox(CircularProgressIndicator) : Icon(...)` (the button keeps its own styling and disables itself). `AnimatedLoadingButton` (`core/animations/`) remains the primary/submit button (whole label↔spinner swap). For a destructive (delete/cancel) `OutlinedButton`, style it with `destructiveOutlinedButtonStyle(context, {minimumSize})` (`core/theme/button_styles.dart`) rather than repeating the `scheme.error` foreground + border.
 - **Platform adaptivity is one seam: `context.isCupertino`** (`core/adaptive/adaptive.dart`;
   reads `Theme.of(context).platform`, NOT `defaultTargetPlatform`, so tests force the look via
@@ -84,6 +92,17 @@ Material Design 3 (Flat / Elevation). Use `ColorScheme`, `TextTheme`, and `Theme
   through 26 Jan") and an action sheet cannot render one. That is a single exception, not a policy
   change — don't use it to justify dropping other Cupertino branches.
 - **Sheet chrome added by P2** — `FormSheetFrame` (`shared/widgets/sheets/`) is the add/edit form shell: a fixed-height sheet whose white bar carries **Cancel · title · primary verb**, no grabber. It **is** a sheet, so never nest it inside another `DraggableScrollableSheet` — switch chrome above it, the way `EventDetailsSheet` picks the frame by `isEditing`. Destructive actions go in the scroll footer, never the bar. `SheetPanel` (`shared/widgets/cards/`) is the white divided-row container inside a form sheet — **build one through it, never by hand**: three private copies appeared in one release (the selected-client card, the picker's result panel, the previous-job-address list) and had already drifted on corner radius, two falling through to `appCardDecoration`'s `r12` beside an `r16` sibling in the same section, while a fourth widget in the same diff called `SheetPanel` correctly. It also indexes its dividers, where a hand-built copy compared record VALUES against `rows.first` and would drop a divider between two equal rows; `SheetFieldRow` (`shared/widgets/fields/`) is the label-over-value picker row used for dates and times — free-text fields keep `LabeledTextField`, which owns the error shake and the clear button. `SheetPanelRow` (`shared/widgets/cards/`) is the third row shape: label-over-**child** (a chip strip) or label-beside-**trailing** (a switch), for a row that has no picked *value* — a `SheetFieldRow` with an empty value renders a blank second line where the value belongs. It was private to `edit_person_sheet.dart` until the AVAILABILITY panel appeared on My details too (P5, 2026-08-10); both screens must render that panel identically. **Never use a `ListTile` family widget inside a `SheetPanel`** — the panel paints its own decoration, and `ListTile` asserts ("background color or ink splashes may be invisible") when its background sits inside a `DecoratedBox`. `KeyValuePanel` (`shared/widgets/cards/`) is the read-only detail sheet's 70px mono key column. **`FormSheetFrame` is the ONLY form-sheet chrome** — the older `FormSheetScaffold` was retired once P3/P4 migrated the last client and employee sheets, and `EntityFormHeader` went with the edit forms that used it. Both have zero declarations and zero call sites; the only survivor is the tombstone comment in `form_sheet_frame.dart:16` (the stale `add_client_sheet_test.dart` comment this used to name was fixed, and reads `FormSheetFrame` now). This bullet said "**`FormSheetScaffold` survives**" long after it did not, while the Forms & sheets section below told you to build new sheets on it — so build on `FormSheetFrame`, and treat a mention of either retired class as documentation to correct rather than an API to find. `InfoCard` IS live and untouched.
+- `SettingsSwitchTile` (`settings/widgets/cards/settings_tile.dart`) is the
+  Settings row whose control is a switch, and the WHOLE ROW toggles it — a
+  shrink-wrapped `Switch.adaptive` is about 31pt, under both tap minimums, on
+  the row whose label is what you are aiming at. Four hand-built tile+switch
+  pairs had already drifted on that property, leaving two halves of one screen
+  at different row heights. `onTap` overrides the row toggle for a row that
+  also navigates (location sharing opens a screen; only its switch flips
+  sharing). **A settings card indexes its dividers off its row LIST**, the way
+  `SheetPanel` does — the `isLast` flag it replaced made every row's divider
+  depend on whether some LATER row was visible, so adding one meant editing
+  every earlier row's condition, and the flag was already dead at four sites.
 - `DetailSheetListView` (`shared/widgets/sheets/`) is the standard scrollable shell for a detail view shown in a bottom sheet (`showHandle: true`) or a master-detail pane — standard padding, optional drag handle, keyboard-inset-aware bottom gap (`handleGap` tunes the post-handle spacing). Use it for new detail views instead of a bare `ListView`.
 - Detail-view building blocks are shared by the client and appointment view
   bodies: `QuickActionsRow` + `QuickActionButton` (`shared/widgets/primitives/`,
@@ -141,7 +160,16 @@ Material Design 3 (Flat / Elevation). Use `ColorScheme`, `TextTheme`, and `Theme
 - `AppointmentStatus.fromRaw` (status_chip.dart) is the only string→status mapper — never add a per-widget switch.
 - **Image picking goes through `pickAppointmentImages(context, ref)`**
   (`calendar/widgets/sheets/image_source_picker.dart`) — never call
-  `ImagePickerService` / `image_picker` directly from UI. It offers Camera /
+  `ImagePickerService` / `image_picker` directly from UI. **A FORM adds them
+  through `pickAndAddAppointmentImages` beside it**, which owns the pick, the
+  post-await `context.mounted` re-check and the notice naming what the per-job
+  cap dropped. The pick is the longest await in the app — an OS action sheet
+  and then the camera or Photos picker — so the form can be gone when it
+  returns; the two hosts spelled that out separately and had already drifted on
+  which `mounted` they checked. The CREW path
+  (`DetailsFieldRecordView._addPhotos`) deliberately does not use it: it
+  clamps against the job's stored count as well as the per-pick cap and
+  uploads in the background rather than staging into form state. It offers Camera /
   Gallery; camera is gated by `MediaPermissionService` (`permission_handler`),
   gallery uses the OS photo picker (no permission needed). Read-only appointment
   photos render as an `AppointmentImageCarousel` (`smooth_page_indicator`);

@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
-import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/contact_export_launcher.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
-import 'package:scheduling/features/clients/domain/policies/client_building.dart';
 import 'package:scheduling/features/clients/email_compose_launcher.dart';
 import 'package:scheduling/features/clients/widgets/cards/client_contacts_cards.dart';
 import 'package:scheduling/features/clients/widgets/sections/client_job_history_section.dart';
@@ -40,20 +38,10 @@ class ClientDetailViewBody extends ConsumerWidget {
       if (client.autoInvoice) context.l10n.clients_autoInvoice,
     ].where((v) => v.trim().isNotEmpty).join(' · ');
 
-    // How many OTHER clients sit at this street. Loading or a failed scan
-    // renders nothing — this is supplementary, and a spinner in a detail row
-    // reads as a fault.
-    final buildingKey = buildingKeyFor(client);
-    final sharedAddressCount = buildingKey == null
-        ? 0
-        : ((ref.watch(clientBuildingCountsProvider)[buildingKey] ?? 0) - 1)
-              .clamp(0, 1 << 30);
-
     final infoRows = _infoRows(
       context,
       displayAddress: displayAddress,
       billingLine: billingLine,
-      sharedAddressCount: sharedAddressCount,
       onCall: actions.onCall,
       onEmail: actions.onEmail,
       onDirections: actions.onDirections,
@@ -166,7 +154,6 @@ class ClientDetailViewBody extends ConsumerWidget {
     BuildContext context, {
     required String displayAddress,
     required String billingLine,
-    required int sharedAddressCount,
     VoidCallback? onCall,
     VoidCallback? onEmail,
     VoidCallback? onDirections,
@@ -192,14 +179,6 @@ class ClientDetailViewBody extends ConsumerWidget {
         onTap: onDirections,
         emphasize: true,
         semanticLabel: '$displayAddress, ${context.l10n.maps_openAddressWith}',
-      ),
-    // Replaces the row's old "Building" pill, and says how many rather than
-    // only that the address is shared. It reads the same TTL'd roster window
-    // the filter sheet and search already page — not a per-row lookup.
-    if (sharedAddressCount > 0)
-      KeyValueRow(
-        label: context.l10n.clients_filterSectionAddress,
-        value: context.l10n.clients_sharedAddressCount(sharedAddressCount),
       ),
     if (client.onSiteManager.trim().isNotEmpty)
       KeyValueRow(

@@ -103,18 +103,6 @@ final clientBuildingsProvider =
       return await ref.watch(clientsRepositoryProvider).fetchBuildings();
     });
 
-/// How many clients sit at each building, for the per-row pill.
-///
-/// ONE reduction the whole list shares, never a lookup per row — the same
-/// shape as `employeeJobsTodayProvider`. An empty map while the window is
-/// still loading simply means no row shows a pill yet.
-final clientBuildingCountsProvider = Provider.autoDispose<Map<String, int>>((
-  ref,
-) {
-  final buildings = ref.watch(clientBuildingsProvider).value ?? const [];
-  return {for (final b in buildings) b.key: b.clientCount};
-});
-
 /// Archived clients, read from the same bounded cached window as search and
 /// the type filter — so the Archived chip costs no extra read inside the TTL.
 final archivedClientsProvider = FutureProvider.autoDispose<List<ClientRecord>>((

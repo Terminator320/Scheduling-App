@@ -9,8 +9,6 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
-import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart'
-    show AppointmentFormConcerns;
 import 'package:scheduling/features/calendar/domain/models/appointment_prefill.dart';
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
@@ -199,22 +197,12 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     return isOvernightWindow(start, end);
   }
 
-  Future<void> _pickImages() async {
-    final notices = ref.read(noticeServiceProvider);
-    final l10n = context.l10n;
-    final picked = await pickAppointmentImages(context, ref);
-    // The picker can outlive this sheet.
-    if (!mounted) return;
-    if (picked.isEmpty) return;
-    final dropped = _notifier.addImages(picked);
-    if (dropped > 0) {
-      notices.info(
-        l10n.calendar_photosLimitReached(
-          AppointmentFormConcerns.maxImagesPerAppointment,
-        ),
-      );
-    }
-  }
+  Future<void> _pickImages() => pickAndAddAppointmentImages(
+    context,
+    ref,
+    addImages: _notifier.addImages,
+    remainingSlots: () => _notifier.remainingImageSlots,
+  );
 
   Future<void> _submit() async {
     // Blank personal titles save as "Personal".
