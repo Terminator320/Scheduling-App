@@ -281,6 +281,17 @@ class AppointmentFormFields extends StatelessWidget {
     callbacks.onUseCustomAddress(true);
   }
 
+  /// True exactly when `SelectedClientCard` is showing its "use this address"
+  /// toggle AND it is on — so the Job Address block below would only repeat
+  /// the address already on screen.
+  ///
+  /// The non-empty test is load-bearing: a client with NO address on file also
+  /// sits at `useCustomAddress == false` and shows no toggle, so hiding on the
+  /// flag alone leaves that job with no way to get an address at all.
+  bool get _clientAddressInUse =>
+      !useCustomAddress &&
+      (selectedClient?.fullAddress.trim().isNotEmpty ?? false);
+
   Widget _jobAddress() => JobAddressSection(
     selectedClient: selectedClient,
     useCustomAddress: useCustomAddress,
@@ -400,10 +411,12 @@ class AppointmentFormFields extends StatelessWidget {
               ),
       ),
       const SizedBox(height: AppSpacing.sp16),
-      formLabel(context, l10n.calendar_jobAddress, required: true),
-      const SizedBox(height: AppSpacing.sp4),
-      _tour(TourStepId.apptJobAddress, _jobAddress()),
-      const SizedBox(height: AppSpacing.sp16),
+      if (!_clientAddressInUse) ...[
+        formLabel(context, l10n.calendar_jobAddress, required: true),
+        const SizedBox(height: AppSpacing.sp4),
+        _tour(TourStepId.apptJobAddress, _jobAddress()),
+        const SizedBox(height: AppSpacing.sp16),
+      ],
     ],
     // A personal block has no client but may still name a place. Day off has
     // neither.
