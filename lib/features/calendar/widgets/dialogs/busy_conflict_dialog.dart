@@ -8,6 +8,38 @@ import 'package:scheduling/shared/widgets/dialogs/app_dialog_frame.dart';
 import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
+/// The busy-employee fields an outcome carries, whatever its sealed family.
+typedef BusyConflict = ({
+  List<EmployeeRecord> busyEmployees,
+  DateTime start,
+  DateTime end,
+});
+
+/// Runs [attempt]; on a busy-employee outcome asks, then re-runs forcing.
+///
+/// Returns null when the caller must simply return — unmounted, or declined.
+/// The mounted check after BOTH awaits is the point: it was re-derived at
+/// three call sites and they had already drifted on which one they used.
+Future<T?> retryPastBusyConflict<T>(
+  BuildContext context, {
+  required Future<T> Function({bool forceBusy}) attempt,
+  required BusyConflict? Function(T outcome) busyOf,
+}) async {
+  final first = await attempt(forceBusy: false);
+  if (!context.mounted) return null;
+  final busy = busyOf(first);
+  if (busy == null) return first;
+  final confirmed = await showBusyConflictDialog(
+    context,
+    busyEmployees: busy.busyEmployees,
+    start: busy.start,
+    end: busy.end,
+  );
+  if (!confirmed || !context.mounted) return null;
+  final second = await attempt(forceBusy: true);
+  return context.mounted ? second : null;
+}
+
 Future<bool> showBusyConflictDialog(
   BuildContext context, {
   required List<EmployeeRecord> busyEmployees,

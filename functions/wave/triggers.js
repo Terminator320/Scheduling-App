@@ -34,7 +34,11 @@ const {mappedFieldsHash} = require("./mappers");
 const {problemsPatch} = require("./customer_contract");
 const {classifyWaveError} = require("./errors");
 const {isImportDue} = require("./import_schedule");
-const {importWithWatermark, readWaveBusinessIdCached} = require("./sync_run");
+const {
+  importWithWatermark,
+  readWaveBusinessIdCached,
+  readWaveConnection,
+} = require("./sync_run");
 const {toMillis} = require("../time_utils");
 
 // waveUpsertCustomer — enqueues a Wave write-back when a client doc's mapped
@@ -247,23 +251,18 @@ async function runWaveDaily() {
   // `unavailable` on it rejected out of a rider whose host had already done
   // its real work. The caller's catch is belt-and-braces and stays; a
   // contract stated in a docstring should hold on its own terms.
-  const ref = getFirestore().collection("wave").doc("connection");
-  let data = null;
+  let connection;
   try {
-    const snap = await ref.get();
-    data = snap.exists ? snap.data() : null;
+    connection = await readWaveConnection();
   } catch (err) {
     logger.warn("WAVE-BOOT runWaveDaily: connection read failed", {err});
     return;
   }
-  const businessId = data && typeof data.businessId === "string" ?
-    data.businessId : "";
+  const {ref, data, businessId, importSchedule: schedule} = connection;
   if (!businessId) {
     logger.debug("runWaveDaily: not connected — nothing to do");
     return;
   }
-  const schedule = data && typeof data.importSchedule === "string" ?
-    data.importSchedule : "off";
   // One clock instant for the due check AND the watermark — two Date.now()
   // calls would let them disagree about when this run started.
   const startedAtMs = Date.now();

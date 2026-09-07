@@ -17,6 +17,9 @@ import 'package:scheduling/features/auth/application/sign_in_controller.dart';
 import 'package:scheduling/features/auth/domain/auth_failure.dart';
 import 'package:scheduling/features/auth/screens/account_setup_screen.dart';
 import 'package:scheduling/features/auth/services/auth_service.dart';
+import 'package:scheduling/features/auth/widgets/auth_banner.dart';
+import 'package:scheduling/features/auth/widgets/auth_fields.dart';
+import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/routes/app_routes.dart';
 
@@ -62,8 +65,7 @@ Widget _harness({
         supportedLocales: AppLocalizations.supportedLocales,
         theme: lightTheme(),
         routes: {
-          AppRoutes.login: (_) =>
-              const Scaffold(body: Text('login screen')),
+          AppRoutes.login: (_) => const Scaffold(body: Text('login screen')),
           AppRoutes.mainCalendar: (_) =>
               const Scaffold(body: Text('main calendar')),
         },
@@ -74,10 +76,7 @@ Widget _harness({
 }
 
 /// Fills the four required fields. Leaves consent untouched.
-Future<void> _fillForm(
-  WidgetTester tester, {
-  String password = _chosen,
-}) async {
+Future<void> _fillForm(WidgetTester tester, {String password = _chosen}) async {
   final fields = find.byType(TextField);
   await tester.enterText(fields.at(0), 'Alex');
   await tester.enterText(fields.at(1), 'Tremblay');
@@ -311,7 +310,10 @@ void main() {
       await tester.tap(find.text('Log out'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Something went wrong, please try again'), findsOneWidget);
+      expect(
+        find.text('Something went wrong, please try again'),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     });
   });
@@ -321,10 +323,7 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        _harness(
-          auth: auth,
-          resumeOutcome: const SignInProfilePending(),
-        ),
+        _harness(auth: auth, resumeOutcome: const SignInProfilePending()),
       );
       await tester.pumpAndSettle();
       await _fillForm(tester);
@@ -355,9 +354,99 @@ void main() {
           find.text('Something went wrong, please try again'),
           findsOneWidget,
         );
-        final button = tester.widget<FilledButton>(find.byType(FilledButton).last);
+        final button = tester.widget<FilledButton>(
+          find.byType(FilledButton).last,
+        );
         expect(button.onPressed, isNotNull);
       },
     );
+  });
+
+  group('the two special-cased setup failures', () {
+    // Both grep as covered because `auth_service_test.dart` asserts the THROW;
+    // what is unpinned is the screen that has to branch on them.
+
+    testWidgets('an already-complete account is walked INTO the app', (
+      tester,
+    ) async {
+      // The password change precedes activation, so this person's new password
+      // DID land. A banner here strands an invited employee on a dead-end
+      // screen holding the one session that could have got them out.
+      when(
+        () => auth.completeAccountSetup(
+          newPassword: any(named: 'newPassword'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          phone: any(named: 'phone'),
+          termsAccepted: any(named: 'termsAccepted'),
+          locationConsent: any(named: 'locationConsent'),
+        ),
+      ).thenThrow(const AuthFailureSetupAlreadyComplete());
+
+      await tester.pumpWidget(
+        _harness(
+          auth: auth,
+          resumeOutcome: const SignInSuccess(
+            EmployeeRecord(id: 'e1', name: 'Alex Tremblay'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _fillForm(tester);
+      await _consent(tester);
+
+      await _submit(tester);
+      await tester.pumpAndSettle();
+
+      expect(find.text('main calendar'), findsOneWidget);
+      expect(
+        find.textContaining('already set up'),
+        findsNothing,
+        reason: 'the generic banner would be the failure this branch prevents',
+      );
+    });
+
+    testWidgets('retyping the starting password is a FIELD error', (
+      tester,
+    ) async {
+      // One field's problem: a banner names the failure without pointing at
+      // the box to fix, and the CTA has to come back so they can retype.
+      when(
+        () => auth.completeAccountSetup(
+          newPassword: any(named: 'newPassword'),
+          firstName: any(named: 'firstName'),
+          lastName: any(named: 'lastName'),
+          phone: any(named: 'phone'),
+          termsAccepted: any(named: 'termsAccepted'),
+          locationConsent: any(named: 'locationConsent'),
+        ),
+      ).thenThrow(const AuthFailureStartingPasswordReused());
+
+      await tester.pumpWidget(_harness(auth: auth));
+      await tester.pumpAndSettle();
+      await _fillForm(tester);
+      await _consent(tester);
+
+      await _submit(tester);
+
+      // The sentence alone proves nothing: the generic banner renders the same
+      // string for this failure, so the assertion has to be about WHERE it is.
+      final password = tester
+          .widgetList<AuthPasswordField>(find.byType(AuthPasswordField))
+          .first;
+      expect(
+        password.errorText,
+        'Choose a different password from the one you were given',
+      );
+      expect(
+        tester.widget<AuthBanner>(find.byType(AuthBanner)).message,
+        isNull,
+        reason: 'a banner names the failure without pointing at the box',
+      );
+      final button = tester.widget<FilledButton>(
+        find.byType(FilledButton).last,
+      );
+      expect(button.onPressed, isNotNull);
+    });
   });
 }

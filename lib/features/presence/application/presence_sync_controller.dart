@@ -7,7 +7,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'package:scheduling/core/app/device_deregistration.dart';
+import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
+import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/permissions/location_permission_service.dart';
 import 'package:scheduling/core/providers/firebase_providers.dart';
 import 'package:scheduling/core/utils/reentrant_sync.dart';
@@ -19,6 +21,7 @@ import 'package:scheduling/features/notifications/application/push_registration_
 import 'package:scheduling/features/presence/data/presence_repository.dart';
 import 'package:scheduling/features/presence/domain/models/presence_fix.dart';
 import 'package:scheduling/features/settings/application/my_details_providers.dart';
+import 'package:scheduling/l10n/l10n.dart';
 
 final presenceRepositoryProvider = Provider<PresenceRepository>(
   (ref) => PresenceRepository(
@@ -59,6 +62,47 @@ Future<void> applyLocationSharing(
     await presence.sync();
   } else {
     await presence.unregister();
+  }
+}
+
+/// [applyLocationSharing] behind the offline guard, log tag and error notice
+/// the two toggles share.
+///
+/// The Settings row and the Location sharing screen are the same operation, so
+/// the `ME-SAVE location sharing failed` tag — the only place Crashlytics can
+/// find it since notices stopped carrying support codes — lives here rather
+/// than at each site. Returns whether the write committed; the caller keeps
+/// its own busy-flag bracketing.
+Future<bool> saveLocationSharing(
+  BuildContext context,
+  WidgetRef ref,
+  EmployeeRecord record, {
+  required bool enabled,
+}) async {
+  final l10n = context.l10n;
+  final notices = ref.read(noticeServiceProvider);
+  final logger = ref.read(loggerProvider);
+  if (guardedOffline(
+    context,
+    ref,
+    intro: l10n.error_introSaveLocationSharing,
+  )) {
+    return false;
+  }
+  try {
+    await applyLocationSharing(ref, record, enabled: enabled);
+    return true;
+  } catch (error, stackTrace) {
+    logger.warn('ME-SAVE location sharing failed', error, stackTrace);
+    if (!context.mounted) return false;
+    notices.error(
+      composeErrorNoticeFor(
+        l10n,
+        intro: l10n.error_introSaveLocationSharing,
+        error: error,
+      ),
+    );
+    return false;
   }
 }
 

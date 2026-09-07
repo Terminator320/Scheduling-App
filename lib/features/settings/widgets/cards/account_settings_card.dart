@@ -38,7 +38,6 @@ class AccountSettingsCard extends StatelessWidget {
             iconColor: scheme.error,
             label: context.l10n.settings_deleteAccount,
             labelColor: scheme.error,
-            isLast: true,
             onTap: isBusy ? null : onDeleteAccount,
           ),
         ],

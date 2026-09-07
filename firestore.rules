@@ -519,7 +519,7 @@ service cloud.firestore {
           && isBoundedString(request.resource.data.text, 4000)
           && request.resource.data.text.size() > 0
           && request.resource.data.authorId == myDocId()
-          && isBoundedString(request.resource.data.authorName, 200)
+          && isBoundedString(request.resource.data.authorName, 250)
           && request.resource.data.createdAt == request.time;
 
         allow update: if isAdmin();

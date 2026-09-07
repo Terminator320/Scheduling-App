@@ -5,31 +5,49 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/confirm_dialog.dart';
 
-Widget _host(TargetPlatform platform) => MaterialApp(
-  theme: ThemeData(platform: platform),
-  localizationsDelegates: const [
-    AppLocalizations.delegate,
-    GlobalMaterialLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-    GlobalCupertinoLocalizations.delegate,
-  ],
-  supportedLocales: AppLocalizations.supportedLocales,
-  home: Builder(
-    builder: (context) => Scaffold(
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () => showConfirmDialog(
-            context,
-            title: 'Delete?',
-            confirmLabel: 'Delete',
-            message: 'Are you sure?',
+Widget _host(TargetPlatform platform, {ValueChanged<bool>? onResult}) =>
+    MaterialApp(
+      theme: ThemeData(platform: platform),
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: ElevatedButton(
+              // Awaited, not discarded: the RESULT is what every caller acts
+              // on, and iOS is the only branch that ships.
+              onPressed: () async {
+                final confirmed = await showConfirmDialog(
+                  context,
+                  title: 'Delete?',
+                  confirmLabel: 'Delete',
+                  message: 'Are you sure?',
+                );
+                onResult?.call(confirmed);
+              },
+              child: const Text('open'),
+            ),
           ),
-          child: const Text('open'),
         ),
       ),
-    ),
-  ),
-);
+    );
+
+Future<bool?> _openAndTap(WidgetTester tester, String action) async {
+  bool? result;
+  await tester.pumpWidget(
+    _host(TargetPlatform.iOS, onResult: (v) => result = v),
+  );
+  await tester.tap(find.text('open'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.widgetWithText(CupertinoDialogAction, action));
+  await tester.pumpAndSettle();
+  return result;
+}
 
 void main() {
   testWidgets('shows CupertinoAlertDialog on iOS', (tester) async {
@@ -48,5 +66,15 @@ void main() {
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(find.byType(CupertinoAlertDialog), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Cancel on the iOS dialog returns false', (tester) async {
+    expect(await _openAndTap(tester, 'Cancel'), isFalse);
+  });
+
+  testWidgets('the confirm action on the iOS dialog returns true', (
+    tester,
+  ) async {
+    expect(await _openAndTap(tester, 'Delete'), isTrue);
   });
 }

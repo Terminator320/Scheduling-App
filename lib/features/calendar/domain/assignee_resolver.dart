@@ -1,3 +1,5 @@
+import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 /// Returns active staff the picker may offer, including active stored assignees.
@@ -38,6 +40,38 @@ String? assigneeNameAt(List<String> employeeNames, int index) =>
     ids: [...selectedIds, ...retainedIds],
     names: [...selectedNames, ...retainedNames],
   );
+}
+
+/// [job] with [removeId] swapped out for [addId]/[addName].
+///
+/// Takes the replacement as an id and a name rather than an `EmployeeRecord`
+/// because the time-off clash alert runs it BACKWARDS for Undo — putting the
+/// person who is off back in place of whoever took the job — and that dialog
+/// only ever holds the person's name, never a roster record for them.
+///
+/// `employeeIds` and `employeeNames` are paired POSITIONALLY, so both lists are
+/// rebuilt in one pass — writing the id and appending the name would silently
+/// re-pair every assignee after the one replaced.
+AppointmentRecord replaceAssignee(
+  AppointmentRecord job, {
+  required String removeId,
+  required String addId,
+  required String addName,
+}) {
+  // This re-serializes the WHOLE record, so a legacy `confirmed`/unknown
+  // status would be written back verbatim and rejected by the rules as an
+  // opaque permission-denied on an ordinary-looking swap.
+  final status = AppointmentStatus.storedRaw(job.status);
+  final ids = <String>[];
+  final names = <String>[];
+  for (var i = 0; i < job.employeeIds.length; i++) {
+    final isTarget = job.employeeIds[i] == removeId;
+    ids.add(isTarget ? addId : job.employeeIds[i]);
+    names.add(
+      isTarget ? addName : (assigneeNameAt(job.employeeNames, i) ?? ''),
+    );
+  }
+  return job.copyWith(employeeIds: ids, employeeNames: names, status: status);
 }
 
 /// How the picker must treat one offered assignee on the chosen date.

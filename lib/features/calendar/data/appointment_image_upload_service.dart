@@ -79,7 +79,11 @@ class AppointmentImageUploadService {
     var staged = <File>[];
     try {
       final dir = await _stagingDirProvider();
+      // Arm the drain memo here: staging, the publish below and the drain all
+      // ask the same question, and each miss is a billed `users` read.
       final owner = await _currentOwner();
+      _drainOwner = owner;
+      _drainOwnerResolved = true;
       final enqueuedAtMs = DateTime.now().millisecondsSinceEpoch;
       for (var i = 0; i < images.length; i++) {
         staged.add(await _stage(images[i], dir, i, enqueuedAtMs));
@@ -105,6 +109,11 @@ class AppointmentImageUploadService {
       }
       _notifier.reportFailure(appointmentId, failedCount: images.length);
       _logger.warn('IMG-UPLOAD staging failed for $appointmentId', e, st);
+    } finally {
+      // Scoped to this call. Leaving it armed past a throw would let a LATER
+      // drain match queue entries against a stale identity.
+      _drainOwnerResolved = false;
+      _drainOwner = null;
     }
   }
 
@@ -358,7 +367,10 @@ class AppointmentImageUploadService {
     if (_drainOwnerResolved) return _drainOwner;
     try {
       return await _currentOwner();
-    } catch (_) {
+    } catch (e, st) {
+      // Without this the caller reports "owner mismatch", so a signed-out or
+      // failed resolve reads as another ACCOUNT having staged the photos.
+      _logger.warn('IMG-UPLOAD could not resolve the queue owner', e, st);
       return null;
     }
   }

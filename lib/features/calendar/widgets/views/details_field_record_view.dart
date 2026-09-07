@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -8,9 +7,13 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
+import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/application/field_notes_provider.dart';
+import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
+import 'package:scheduling/features/calendar/data/appointment_images_store.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -121,11 +124,33 @@ class _DetailsFieldRecordViewState
     // queue and drain on reconnect, which is the one asymmetry this codebase
     // draws between entity writes and photos.
     final logger = ref.read(loggerProvider);
+    final notices = ref.read(noticeServiceProvider);
+    final l10n = context.l10n;
     final uploader = ref.read(appointmentImageUploadProvider);
+    final photos = ref.read(photoUploadNotifierProvider);
+    // Two bounds, both real: one pick may not exceed what the admin form
+    // allows, and a job may not accumulate more than one subcollection read
+    // returns — past that the sheet caps while the Storage bytes keep growing.
+    final state = ref.read(
+      eventDetailsControllerProvider(EventDetailsKey(widget.appointment)),
+    );
+    final onJob = state.existingImages.length + photos.pendingFor(id);
+    final room = (AppointmentImagesStore.scanLimit - onJob).clamp(
+      0,
+      AppointmentImagesStore.scanLimit,
+    );
+    final allowed = room < AppointmentFormConcerns.maxImagesPerAppointment
+        ? room
+        : AppointmentFormConcerns.maxImagesPerAppointment;
     try {
       final files = await pickAppointmentImages(context, ref);
       if (files.isEmpty) return;
-      uploader.uploadInBackground(appointmentId: id, newImages: files);
+      final accepted = files.take(allowed).toList();
+      if (accepted.length < files.length) {
+        notices.info(l10n.calendar_photosLimitReached(allowed));
+      }
+      if (accepted.isEmpty) return;
+      uploader.uploadInBackground(appointmentId: id, newImages: accepted);
     } catch (e, st) {
       logger.warn('APPT-FIELDNOTE photo pick failed', e, st);
     }

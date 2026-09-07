@@ -38,3 +38,6 @@ abstract class FieldNote with _$FieldNote {
 
   bool get hasAuthor => authorName.trim().isNotEmpty;
 }
+
+/// One job's notes plus whether the read hit its cap and dropped older ones.
+typedef FieldNoteThread = ({List<FieldNote> notes, bool truncated});

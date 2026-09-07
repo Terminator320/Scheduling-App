@@ -10,6 +10,8 @@ import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
+import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart'
+    show AppointmentFormConcerns;
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
@@ -344,19 +346,16 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
           forceBusy: forceBusy,
         );
 
-    var outcome = await attempt();
-    if (!context.mounted) return;
-    if (outcome is EventDetailsBusyEmployees) {
-      final confirmed = await showBusyConflictDialog(
-        context,
-        busyEmployees: outcome.busyEmployees,
-        start: outcome.start,
-        end: outcome.end,
-      );
-      if (!confirmed || !context.mounted) return;
-      outcome = await attempt(forceBusy: true);
-      if (!context.mounted) return;
-    }
+    final outcome = await retryPastBusyConflict(
+      context,
+      attempt: attempt,
+      busyOf: (o) => o is EventDetailsBusyEmployees
+          ? (busyEmployees: o.busyEmployees, start: o.start, end: o.end)
+          : null,
+    );
+    // The helper already returned null if unmounted; repeated so the
+    // analyzer can still see the guard across the await.
+    if (outcome == null || !context.mounted) return;
     // Editing a day off's DATES re-runs the check on the days that were added —
     // extending Mon–Tue to Friday is the common case — because the span this
     // reads is the saved record's, not the one it had before.
@@ -569,11 +568,21 @@ class _EditPhotosSection extends ConsumerWidget {
       newImages: newImages,
       isEditing: true,
       onPickImages: () async {
+        final notices = ref.read(noticeServiceProvider);
+        final l10n = context.l10n;
         final picked = await pickAppointmentImages(context, ref);
         // The longest await in the app — an OS action sheet and then the
         // camera/Photos picker.
         if (!context.mounted) return;
-        if (picked.isNotEmpty) notifier.addImages(picked);
+        if (picked.isEmpty) return;
+        final dropped = notifier.addImages(picked);
+        if (dropped > 0) {
+          notices.info(
+            l10n.calendar_photosLimitReached(
+              AppointmentFormConcerns.maxImagesPerAppointment,
+            ),
+          );
+        }
       },
       onRemoveExisting: notifier.removeExistingImage,
       onRemoveNew: notifier.removeNewImage,

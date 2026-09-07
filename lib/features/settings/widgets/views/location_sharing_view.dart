@@ -29,31 +29,11 @@ class _LocationSharingViewState extends ConsumerState<LocationSharingView> {
     final record = ref.read(myEmployeeRecordProvider);
     if (record == null) return;
 
-    final l10n = context.l10n;
-    final notices = ref.read(noticeServiceProvider);
-    final logger = ref.read(loggerProvider);
-    if (guardedOffline(
-      context,
-      ref,
-      intro: l10n.error_introSaveLocationSharing,
-    )) {
-      return;
-    }
-
     setState(() => _pendingValue = value);
     try {
-      await applyLocationSharing(ref, record, enabled: value);
-      widget.onApplied?.call();
-    } catch (error, stackTrace) {
-      logger.warn('ME-SAVE location sharing failed', error, stackTrace);
-      if (!mounted) return;
-      notices.error(
-        composeErrorNotice(
-          context,
-          intro: l10n.error_introSaveLocationSharing,
-          error: error,
-        ),
-      );
+      if (await saveLocationSharing(context, ref, record, enabled: value)) {
+        widget.onApplied?.call();
+      }
     } finally {
       if (mounted) setState(() => _pendingValue = null);
     }

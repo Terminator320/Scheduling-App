@@ -272,6 +272,24 @@ void main() {
       await repo().removeAppointmentPictures('a1', const []);
       verifyNever(batch.commit);
     });
+
+    test(
+      'skips an entry with no identity rather than failing the batch',
+      () async {
+        // The twin of `append`'s guard, which was the tested one: an empty doc
+        // id throws inside `doc()` and takes the real deletions with it, so a
+        // legacy url-only entry in the removal list would leave every other
+        // photo the user just deleted still on the job.
+        await repo().removeAppointmentPictures('a1', [
+          const AppointmentImage(),
+          photo,
+        ]);
+
+        expect(requestedImageIds, [appointmentImageDocId(photo)]);
+        verify(() => batch.delete(any())).called(1);
+        verify(batch.commit).called(1);
+      },
+    );
   });
 
   group('fetchAppointmentPictures', () {

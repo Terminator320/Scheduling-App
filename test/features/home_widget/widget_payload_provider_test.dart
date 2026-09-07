@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
+import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/home_widget/application/widget_sync_service.dart';
 
 /// The tri-state `widgetPayloadProvider` hands `AppSyncListeners`.
@@ -80,5 +82,58 @@ void main() {
     final payload = container.read(widgetPayloadProvider);
     expect(payload.isLoading, isTrue);
     expect(payload.hasError, isFalse);
+  });
+
+  group('an admin payload is scoped to the admin own crew', () {
+    // The admin branch reads the business-wide range stream, so the
+    // `employeeIds.contains` filter is the only thing keeping a colleague's
+    // client name and address off the admin's iOS home and lock screen.
+    AppointmentRecord job({required String id, required List<String> crew}) {
+      final now = DateTime.now();
+      final tomorrow = DateTime(now.year, now.month, now.day + 1, 9);
+      return AppointmentRecord(
+        id: id,
+        title: id,
+        clientName: 'Client $id',
+        address: '$id Elm St',
+        startTime: tomorrow,
+        endTime: tomorrow.add(const Duration(hours: 1)),
+        employeeIds: crew,
+      );
+    }
+
+    Future<AsyncValue<Map<String, dynamic>?>> adminPayloadFor(
+      List<AppointmentRecord> businessWide,
+    ) async {
+      final container = ProviderContainer(
+        retry: (retryCount, error) => null,
+        overrides: [
+          activeUserIdentityProvider.overrideWith(
+            (ref) async => (role: 'admin', docId: 'admin-1'),
+          ),
+          appointmentsInRangeProvider.overrideWith(
+            (_, _) => Stream.value(businessWide),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      container
+        ..listen(activeUserIdentityProvider, (_, _) {})
+        ..listen(widgetPayloadProvider, (_, _) {});
+      await container.read(activeUserIdentityProvider.future);
+      await pumpEventQueue();
+      return await Future.value(container.read(widgetPayloadProvider));
+    }
+
+    test('a colleague job is absent from the payload', () async {
+      final payload = await adminPayloadFor([
+        job(id: 'mine', crew: const ['admin-1']),
+        job(id: 'theirs', crew: const ['someone-else']),
+      ]);
+
+      final tomorrow = (payload.value!['tomorrowJobs']! as List)
+          .cast<Map<String, dynamic>>();
+      expect(tomorrow.map((j) => j['id']), ['mine']);
+    });
   });
 }

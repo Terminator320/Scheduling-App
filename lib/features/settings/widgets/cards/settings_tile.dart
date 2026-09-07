@@ -12,7 +12,6 @@ class SettingsTile extends StatelessWidget {
     this.labelColor,
     this.trailing,
     this.onTap,
-    this.isLast = false,
     super.key,
   });
 
@@ -23,7 +22,6 @@ class SettingsTile extends StatelessWidget {
   final Color? labelColor;
   final Widget? trailing;
   final VoidCallback? onTap;
-  final bool isLast;
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +94,63 @@ class SettingsTile extends StatelessWidget {
                 ],
               ),
       ),
+    );
+  }
+}
+
+/// A [SettingsTile] whose control is a switch and whose whole row toggles it.
+///
+/// The switch is shrink-wrapped: a bare `Switch.adaptive` row is about 31pt,
+/// under both tap minimums, so the ROW is the target. Spelling that per site
+/// is what left two halves of one Settings screen at different row heights.
+class SettingsSwitchTile extends StatelessWidget {
+  const SettingsSwitchTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.switchKey,
+    this.isBusy = false,
+    this.onTap,
+    this.trailing,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool value;
+  final void Function({required bool value}) onChanged;
+  final Key? switchKey;
+  final bool isBusy;
+
+  /// Replaces the default whole-row toggle — the location row opens a screen.
+  final VoidCallback? onTap;
+
+  /// Rendered after the switch, for a row that also navigates.
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final control = Switch.adaptive(
+      key: switchKey,
+      value: value,
+      onChanged: isBusy ? null : (next) => onChanged(value: next),
+      activeTrackColor: scheme.primary,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+    return SettingsTile(
+      iconBg: scheme.primaryContainer,
+      icon: icon,
+      iconColor: scheme.primary,
+      label: label,
+      onTap: onTap ?? (isBusy ? null : () => onChanged(value: !value)),
+      trailing: trailing == null
+          ? control
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [control, trailing!],
+            ),
     );
   }
 }

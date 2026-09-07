@@ -167,8 +167,7 @@ alwaysApply: true
     guard.)
   - Appointments: `APPT-BUSY`, `APPT-COUNT`, `APPT-IMG`, `APPT-RANGE`
   - Clients / history: `CLI-SEARCH`, `CLI-CONTACT-SAVE`, `CLI-CONTACT-SYNC`,
-    `CLI-RECENT` (`recent_clients_provider.dart` — both the recents lookup and
-    the resolve behind a recents row), `HIST-SEARCH`
+    `HIST-SEARCH`
   - Employees / self: `EMP-EMERGENCY`, `EMP-LOAD`, `EMP-TODAY`, `MYDET`
   - Presence / map: `LIVEMAP-MARKERS`, `PRESENCE`
   - Images: `IMG-DEL`, `IMG-DISK`, `IMG-LOAD`, `IMG-PICK`, `IMG-SAVE`,

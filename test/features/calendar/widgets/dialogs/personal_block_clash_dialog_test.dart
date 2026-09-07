@@ -271,9 +271,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final written =
-          verify(
-                () => repository.updateAppointment(captureAny()),
-              ).captured.last
+          verify(() => repository.updateAppointment(captureAny())).captured.last
               as AppointmentRecord;
       expect(
         written.employeeIds,
@@ -341,9 +339,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final written =
-          verify(
-                () => repository.updateAppointment(captureAny()),
-              ).captured.last
+          verify(() => repository.updateAppointment(captureAny())).captured.last
               as AppointmentRecord;
       expect(
         written.employeeIds,
@@ -420,6 +416,32 @@ void main() {
       expect(writes.last.employeeIds, ['e1']);
       expect(writes.last.employeeNames, ['Marc Tremblay']);
       expect(find.text('Swap'), findsOneWidget, reason: 'back to idle');
+    });
+
+    testWidgets('a failed swap puts the row back exactly where it was', (
+      tester,
+    ) async {
+      // Each swap writes immediately, so a refused write has to leave the row
+      // offering the same replacement rather than claiming it took the job.
+      when(
+        () => repository.updateAppointment(any()),
+      ).thenThrow(Exception('permission-denied'));
+
+      await pumpAndOpen(tester, roster: [_marc, _nadia]);
+      await tester.tap(find.text('Swap'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Nadia'));
+      await tester.pumpAndSettle();
+
+      verify(() => repository.updateAppointment(any())).called(1);
+      expect(find.text('Nadia Berger takes this one'), findsNothing);
+      expect(
+        find.text('Nadia'),
+        findsOneWidget,
+        reason: 'the open swap strip is the state the row was in',
+      );
+      expect(find.text('Undo'), findsNothing);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('a job nobody else can cover says so and hands off', (

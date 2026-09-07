@@ -47,18 +47,28 @@ class AppointmentFieldNotesStore {
     });
   }
 
-  Future<List<FieldNote>> fetch(String appointmentId) async {
+  /// Reads the NEWEST [scanLimit] notes and returns them oldest-first.
+  ///
+  /// Descending is load-bearing: ascending made the cap drop the newest notes,
+  /// so past [scanLimit] nothing anyone wrote — the admin included — was
+  /// visible, and an assignee could bury the record by filing cheap notes.
+  Future<FieldNoteThread> fetch(String appointmentId) async {
     final snapshot = await _notesOf(
       appointmentId,
-    ).orderBy('createdAt').limit(scanLimit).get();
-    if (snapshot.docs.length >= scanLimit) {
+    ).orderBy('createdAt', descending: true).limit(scanLimit).get();
+    final truncated = snapshot.docs.length >= scanLimit;
+    if (truncated) {
       _logger.warn(
         'APPT-FIELDNOTE subcollection read for $appointmentId hit the '
-        '$scanLimit-doc cap - notes beyond it were not loaded',
+        '$scanLimit-doc cap - older notes were not loaded',
       );
     }
-    return [
-      for (final doc in snapshot.docs) FieldNote.fromMap(doc.id, doc.data()),
-    ];
+    return (
+      notes: [
+        for (final doc in snapshot.docs.reversed)
+          FieldNote.fromMap(doc.id, doc.data()),
+      ],
+      truncated: truncated,
+    );
   }
 }

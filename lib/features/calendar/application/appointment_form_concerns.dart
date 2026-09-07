@@ -256,13 +256,16 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
     );
   }
 
-  void addImages(List<File> files) {
+  /// Adds what fits and returns how many were DROPPED, so the caller can say
+  /// so. Returning nothing made a full job's Add-photos button a silent no-op.
+  int addImages(List<File> files) {
     final remaining = maxImagesPerAppointment - usedImageCount;
-    if (remaining <= 0) return;
+    if (remaining <= 0) return files.length;
     final accepted = files.take(remaining).toList();
     _apply(
       AppointmentFormUpdate(pendingImages: [...pendingImages, ...accepted]),
     );
+    return files.length - accepted.length;
   }
 
   /// Drops the pending photo at [index] (exposed as removeImage/removeNewImage).

@@ -57,6 +57,11 @@ abstract class EventDetailsState
     @Default(RepeatInterval.none) RepeatInterval savedRepeat,
     @Default(<EmployeeRecord>[]) List<EmployeeRecord> selectedEmployees,
     @Default(<AppointmentImage>[]) List<AppointmentImage> existingImages,
+
+    /// A subcollection re-read is in flight. Without it the photos section
+    /// unmounted between a successful upload dropping the pending count and
+    /// the re-read landing, so the crew watched their photo blink away.
+    @Default(false) bool isLoadingPictures,
     @Default(<AppointmentImage>[]) List<AppointmentImage> removedExistingImages,
     @Default(<File>[]) List<File> newImages,
     @Default(false) bool isSaving,
@@ -134,12 +139,15 @@ class EventDetailsController extends Notifier<EventDetailsState>
     final repo = ref.read(appointmentsRepositoryProvider);
     // Read the logger before this notifier can be disposed.
     final logger = ref.read(loggerProvider);
+    if (ref.mounted) state = state.copyWith(isLoadingPictures: true);
     List<AppointmentImage> stored;
     try {
       stored = await repo.fetchAppointmentPictures(id);
     } catch (e, st) {
       logger.warn('APPT-IMG subcollection read failed', e, st);
       return;
+    } finally {
+      if (ref.mounted) state = state.copyWith(isLoadingPictures: false);
     }
     if (stored.isEmpty || !ref.mounted) return;
     // Adopt only if the user has not edited the photo list.
@@ -399,18 +407,15 @@ class EventDetailsController extends Notifier<EventDetailsState>
           bookings: [updated],
           excludeOwnBookingIds: true,
         );
-        if (conflict != null) {
-          if (ref.mounted) state = state.copyWith(isSaving: false);
-          return _busyEmployees(conflict);
-        }
+        if (conflict != null) return _busyEmployees(conflict);
       }
       await repo.updateAppointment(updated);
-      if (ref.mounted) state = state.copyWith(isSaving: false);
       return EventDetailsSaved(updated);
     } catch (e, st) {
       logger.warn('APPT-SAVE delayAppointment failed', e, st);
-      if (ref.mounted) state = state.copyWith(isSaving: false);
       return EventDetailsFailed(e);
+    } finally {
+      if (ref.mounted) state = state.copyWith(isSaving: false);
     }
   }
 
@@ -446,12 +451,14 @@ class EventDetailsController extends Notifier<EventDetailsState>
         ids: [id, ...futureIds],
         status: 'cancelled',
       );
-      if (ref.mounted) state = state.copyWith(isSaving: false);
       return const EventDetailsActionOk();
     } catch (e, st) {
       logger.warn('APPT-STATUS cancel run tail failed', e, st);
-      if (ref.mounted) state = state.copyWith(isSaving: false);
       return EventDetailsActionFailed(e);
+    } finally {
+      // One owner for the flag: an early return added to the try body used to
+      // leak it and disable this sheet's actions for good.
+      if (ref.mounted) state = state.copyWith(isSaving: false);
     }
   }
 
@@ -477,12 +484,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
     try {
       await repo.updateAppointmentStatus(id: id, status: status);
       // Live activity cleanup is server-owned.
-      if (ref.mounted) state = state.copyWith(isSaving: false);
       return const EventDetailsActionOk();
     } catch (e, st) {
       logger.warn('APPT-STATUS updateAppointmentStatus($status) failed', e, st);
-      if (ref.mounted) state = state.copyWith(isSaving: false);
       return EventDetailsActionFailed(e);
+    } finally {
+      if (ref.mounted) state = state.copyWith(isSaving: false);
     }
   }
 
@@ -804,12 +811,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
         await repo.deleteAppointment(id);
       }
 
-      if (ref.mounted) state = state.copyWith(isSaving: false);
       return const EventDetailsActionOk();
     } catch (e, st) {
       logger.warn('APPT-DEL deleteAppointment failed', e, st);
-      if (ref.mounted) state = state.copyWith(isSaving: false);
       return EventDetailsActionFailed(e);
+    } finally {
+      if (ref.mounted) state = state.copyWith(isSaving: false);
     }
   }
 }

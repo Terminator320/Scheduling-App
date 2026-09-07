@@ -8,8 +8,10 @@ import 'package:scheduling/features/calendar/domain/models/field_note.dart';
 /// autoDispose and keyed by appointment id: the thread is read when a detail
 /// sheet opens and is not worth holding once it closes.
 final appointmentFieldNotesProvider = FutureProvider.autoDispose
-    .family<List<FieldNote>, String>((ref, appointmentId) async {
-      if (appointmentId.isEmpty) return const [];
+    .family<FieldNoteThread, String>((ref, appointmentId) async {
+      if (appointmentId.isEmpty) {
+        return (notes: const <FieldNote>[], truncated: false);
+      }
       return await ref
           .watch(appointmentsRepositoryProvider)
           .fetchFieldNotes(appointmentId);

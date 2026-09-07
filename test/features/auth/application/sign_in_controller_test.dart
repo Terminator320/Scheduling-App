@@ -240,9 +240,7 @@ void main() {
 
     test('routes an invited account to setup and KEEPS the session', () async {
       stubSignedIn();
-      when(
-        () => repo.findUserByUid('u1'),
-      ).thenAnswer((_) async => _invitedDoc);
+      when(() => repo.findUserByUid('u1')).thenAnswer((_) async => _invitedDoc);
 
       final outcome = await notifier().signIn(
         email: 'user@test.com',
@@ -258,9 +256,7 @@ void main() {
 
     test('carries the stored name halves into the setup outcome', () async {
       stubSignedIn();
-      when(
-        () => repo.findUserByUid('u1'),
-      ).thenAnswer((_) async => _invitedDoc);
+      when(() => repo.findUserByUid('u1')).thenAnswer((_) async => _invitedDoc);
 
       final outcome = await notifier().signIn(
         email: 'user@test.com',
@@ -369,10 +365,7 @@ void main() {
       when(() => auth.currentUser).thenReturn(user);
       when(() => repo.findUserByUid('u1')).thenAnswer((_) async => null);
 
-      expect(
-        await notifier().resumeAfterSignUp(),
-        isA<SignInProfilePending>(),
-      );
+      expect(await notifier().resumeAfterSignUp(), isA<SignInProfilePending>());
     });
 
     test('resolves the signed-in employee, retrying on '
@@ -400,20 +393,46 @@ void main() {
       verify(() => cache.save(any())).called(1);
     });
 
-    test('tolerates a failing identity-cache save after setup resume', () async {
-      final user = _MockUser();
-      when(() => user.uid).thenReturn('u1');
-      when(() => auth.currentUser).thenReturn(user);
-      when(() => repo.findUserByUid('u1')).thenAnswer((_) async => _activeDoc);
-      when(
-        () => cache.save(any()),
-      ).thenAnswer((_) async => throw Exception('keystore flake'));
+    test(
+      'a still-invited doc reports a pending profile, never success',
+      () async {
+        // Mirrors signIn's gate. A stale read (offline persistence, or the
+        // permission-denied retry served from cache) would otherwise walk an
+        // invited person into the hub, where every rules gate denies them.
+        final user = _MockUser();
+        when(() => user.uid).thenReturn('u1');
+        when(() => auth.currentUser).thenReturn(user);
+        when(
+          () => repo.findUserByUid('u1'),
+        ).thenAnswer((_) async => _invitedDoc);
 
-      final outcome = await notifier().resumeAfterSignUp();
+        expect(
+          await notifier().resumeAfterSignUp(),
+          isA<SignInProfilePending>(),
+        );
+        verifyNever(() => cache.save(any()));
+      },
+    );
 
-      expect(outcome, isA<SignInSuccess>());
-      await Future<void>.delayed(Duration.zero);
-    });
+    test(
+      'tolerates a failing identity-cache save after setup resume',
+      () async {
+        final user = _MockUser();
+        when(() => user.uid).thenReturn('u1');
+        when(() => auth.currentUser).thenReturn(user);
+        when(
+          () => repo.findUserByUid('u1'),
+        ).thenAnswer((_) async => _activeDoc);
+        when(
+          () => cache.save(any()),
+        ).thenAnswer((_) async => throw Exception('keystore flake'));
+
+        final outcome = await notifier().resumeAfterSignUp();
+
+        expect(outcome, isA<SignInSuccess>());
+        await Future<void>.delayed(Duration.zero);
+      },
+    );
 
     test('maps a throwing profile read to a pending profile instead of '
         'escaping to the zone handler', () async {
@@ -427,10 +446,7 @@ void main() {
         FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied'),
       );
 
-      expect(
-        await notifier().resumeAfterSignUp(),
-        isA<SignInProfilePending>(),
-      );
+      expect(await notifier().resumeAfterSignUp(), isA<SignInProfilePending>());
     });
   });
 }

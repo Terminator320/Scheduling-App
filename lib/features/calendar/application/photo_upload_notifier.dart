@@ -21,7 +21,12 @@ class PhotoUploadNotifier {
   /// Photos still sitting in the offline queue, per appointment id.
   final ValueNotifier<Map<String, int>> pending = ValueNotifier(const {});
 
-  final Map<String, PhotoUploadFailure> _failures = {};
+  /// Per-appointment failures. A ValueNotifier, not a bare Map: the photos
+  /// section gates on `failedCount`, so a batch that failed with nothing
+  /// uploaded left the section - and its own error tile - unrendered.
+  final ValueNotifier<Map<String, PhotoUploadFailure>> failures = ValueNotifier(
+    const {},
+  );
 
   void reportFailure(
     String appointmentId, {
@@ -34,7 +39,7 @@ class PhotoUploadNotifier {
       failedCount: failedCount,
       tooLargeFileNames: List.unmodifiable(tooLargeFileNames),
     );
-    _failures[appointmentId] = failure;
+    failures.value = {...failures.value, appointmentId: failure};
     latestFailure.value = failure;
   }
 
@@ -45,18 +50,20 @@ class PhotoUploadNotifier {
   }
 
   PhotoUploadFailure? failureFor(String appointmentId) =>
-      _failures[appointmentId];
+      failures.value[appointmentId];
 
   /// How many photos are still queued for [appointmentId].
   int pendingFor(String appointmentId) => pending.value[appointmentId] ?? 0;
 
   void clearFailure(String appointmentId) {
-    _failures.remove(appointmentId);
+    if (!failures.value.containsKey(appointmentId)) return;
+    failures.value = {...failures.value}..remove(appointmentId);
   }
 
   void dispose() {
     latestFailure.dispose();
     pending.dispose();
+    failures.dispose();
   }
 }
 

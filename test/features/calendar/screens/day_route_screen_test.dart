@@ -51,12 +51,19 @@ AppointmentRecord _job({
 
 Widget _wrap({
   required List<AppointmentRecord> jobs,
+  List<AppointmentRecord>? businessWide,
   List<EmployeeRecord> employees = const [_jane],
   double textScale = 1,
 }) {
   return ProviderScope(
     overrides: [
       myAppointmentsProvider.overrideWith((_, _) => Stream.value(jobs)),
+      // Left unoverridden by default; a case that passes its own list is what
+      // tells the two streams apart.
+      if (businessWide != null)
+        appointmentsInRangeProvider.overrideWith(
+          (_, _) => Stream.value(businessWide),
+        ),
       employeeColorMapProvider.overrideWithValue({
         for (final e in employees) e.id: e.color,
       }),
@@ -164,6 +171,26 @@ void main() {
     expect(y1, lessThan(y2));
     expect(y2, lessThan(y3));
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an employee day route reads the employee-scoped stream', (
+    tester,
+  ) async {
+    // Employees see only appointments whose `employeeIds` hold their doc id,
+    // and the role ternary is the client half of that invariant — so the two
+    // streams carry DIFFERENT lists here.
+    await _pump(
+      tester,
+      _wrap(
+        jobs: [_job(id: 1, hour: 9, status: 'pending', address: '1 A St')],
+        businessWide: [
+          _job(id: 2, hour: 11, status: 'pending', address: '2 B St'),
+        ],
+      ),
+    );
+
+    expect(find.text('Appt 1'), findsOneWidget);
+    expect(find.text('Appt 2'), findsNothing);
   });
 
   testWidgets('a job from a previous day is not a stop today', (tester) async {

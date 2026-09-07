@@ -25,18 +25,60 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {graphql} = require("./client");
 const {importCustomers} = require("./customers");
 const {drainQueue, countQueuedJobs} = require("./worker");
-const {resolveImportWindow, watermarkPatch} = require("./import_schedule");
+const {
+  resolveImportWindow,
+  watermarkPatch,
+  SCHEDULE_SET,
+} = require("./import_schedule");
 const {toMillis} = require("../time_utils");
 const {shortHash} = require("../security");
+
+/**
+ * Coerces a `wave/connection` snapshot into the fields its read sites need.
+ *
+ * The one owner of that coercion: it was spelled out at eight sites across
+ * the callables, the daily rider and here, and `importSchedule` was coerced
+ * twice with only one copy applying the `SCHEDULE_SET` fallback.
+ *
+ * @param {?Object} snap The connection document snapshot, or null.
+ * @return {{data: ?Object, businessId: string, businessName: string,
+ *   importSchedule: string}} The stored document beside its coerced fields;
+ *   `businessId` is "" when not connected.
+ */
+function connectionFieldsOf(snap) {
+  const data = snap && snap.exists ? snap.data() : null;
+  const raw = data && typeof data.importSchedule === "string" ?
+    data.importSchedule : "off";
+  return {
+    data,
+    businessId: data && typeof data.businessId === "string" ?
+      data.businessId : "",
+    businessName: data && typeof data.businessName === "string" ?
+      data.businessName : "",
+    importSchedule: SCHEDULE_SET.has(raw) ? raw : "off",
+  };
+}
+
+/**
+ * Reads `wave/connection` once, returning its ref beside the coerced fields.
+ *
+ * The ref comes back because most callers need it next — to update the
+ * cadence, or to hand `importWithWatermark` the document it advances.
+ *
+ * @return {!Promise<{ref: !Object, data: ?Object, businessId: string,
+ *   businessName: string, importSchedule: string}>} The connection.
+ */
+async function readWaveConnection() {
+  const ref = getFirestore().collection("wave").doc("connection");
+  return {ref, ...connectionFieldsOf(await ref.get())};
+}
 
 /**
  * Reads the connected Wave `businessId` from the `wave/connection` doc.
  * @return {!Promise<string>} The business id, or "" if not connected.
  */
 async function readWaveBusinessId() {
-  const snap = await getFirestore().collection("wave").doc("connection").get();
-  const data = snap.exists ? snap.data() : null;
-  return data && typeof data.businessId === "string" ? data.businessId : "";
+  return (await readWaveConnection()).businessId;
 }
 
 // Per-instance cache for the drain's connection gate. A found businessId
@@ -238,6 +280,8 @@ async function drainForSync({businessId, uid}) {
 }
 
 module.exports = {
+  connectionFieldsOf,
+  readWaveConnection,
   readWaveBusinessId,
   readWaveBusinessIdCached,
   importWithWatermark,

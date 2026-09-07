@@ -276,7 +276,10 @@ class DetailsPhotosView extends ConsumerWidget {
 
   final AppointmentRecord appointment;
   final bool isCancelled;
-  final VoidCallback onRetry;
+
+  /// Null when the viewer has no action that could retry — a dead Retry that
+  /// only cleared the failure record is worse than none.
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -285,12 +288,9 @@ class DetailsPhotosView extends ConsumerWidget {
     );
     final existingImages = ref.watch(provider.select((s) => s.existingImages));
     final newImages = ref.watch(provider.select((s) => s.newImages));
+    final loading = ref.watch(provider.select((s) => s.isLoadingPictures));
     final notifier = ref.watch(photoUploadNotifierProvider);
     final appointmentId = appointment.id;
-    final failure = appointmentId != null
-        ? notifier.failureFor(appointmentId)
-        : null;
-    final failedCount = failure?.failedCount ?? 0;
     // The GATE itself must watch the queue, not just read it once: a
     // background upload can be started from view mode
     // (DetailsFieldRecordView.uploadInBackground) with no remount of this
@@ -301,17 +301,22 @@ class DetailsPhotosView extends ConsumerWidget {
     // no sign their photo existed. This also now supplies the value the old
     // inner listener read, so there is only one — the per-drain rebuild stays
     // scoped to this row rather than the whole detail body.
-    return ValueListenableBuilder<Map<String, int>>(
-      valueListenable: notifier.pending,
-      builder: (context, pending, _) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([notifier.pending, notifier.failures]),
+      builder: (context, _) {
         final pendingCount = appointmentId == null
             ? 0
-            : pending[appointmentId] ?? 0;
+            : notifier.pending.value[appointmentId] ?? 0;
+        final failure = appointmentId == null
+            ? null
+            : notifier.failureFor(appointmentId);
+        final failedCount = failure?.failedCount ?? 0;
         final hasPhotos =
             existingImages.isNotEmpty ||
             newImages.isNotEmpty ||
             failedCount > 0 ||
-            pendingCount > 0;
+            pendingCount > 0 ||
+            loading;
         if (!hasPhotos) return const SizedBox.shrink();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -330,12 +335,12 @@ class DetailsPhotosView extends ConsumerWidget {
                 failedCount: failedCount,
                 pendingCount: pendingCount,
                 tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
-                onRetry: failedCount > 0 && !isCancelled
+                onRetry: failedCount > 0 && !isCancelled && onRetry != null
                     ? () {
                         if (appointmentId != null) {
                           notifier.clearFailure(appointmentId);
                         }
-                        onRetry();
+                        onRetry!();
                       }
                     : null,
               ),

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
+import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/features/employees/domain/models/job_title.dart';
 
@@ -258,6 +259,74 @@ void main() {
 
     test('a blank name contributes nothing to the tally', () {
       expect(firstNameTally(['', '   ', 'Marc Tremblay']), {'marc': 1});
+    });
+  });
+
+  group('replaceAssignee', () {
+    AppointmentRecord job({String status = 'pending'}) => AppointmentRecord(
+      id: 'job-1',
+      startTime: DateTime(2026, 8, 26, 8),
+      endTime: DateTime(2026, 8, 26, 12),
+      status: status,
+      employeeIds: const ['e3', 'e1'],
+      employeeNames: const ['Theo Roy', 'Marc Tremblay'],
+    );
+
+    test('swaps the id AND the name positionally', () {
+      final swapped = replaceAssignee(
+        job(),
+        removeId: 'e1',
+        addId: 'e2',
+        addName: 'Nadia Berger',
+      );
+
+      expect(swapped.employeeIds, ['e3', 'e2']);
+      expect(swapped.employeeNames, ['Theo Roy', 'Nadia Berger']);
+    });
+
+    test('a legacy `confirmed` status is normalized, never written back', () {
+      // A swap re-serializes the WHOLE record, so an off-allowlist status
+      // would reach the rules verbatim and be refused as an opaque
+      // permission-denied on an ordinary-looking swap.
+      final swapped = replaceAssignee(
+        job(status: 'confirmed'),
+        removeId: 'e1',
+        addId: 'e2',
+        addName: 'Nadia Berger',
+      );
+
+      expect(swapped.status, 'pending');
+    });
+
+    test('a valid status is carried through untouched', () {
+      final swapped = replaceAssignee(
+        job(status: 'in_progress'),
+        removeId: 'e1',
+        addId: 'e2',
+        addName: 'Nadia Berger',
+      );
+
+      expect(swapped.status, 'in_progress');
+    });
+
+    test('a missing denormalized name becomes empty, never an offset', () {
+      final short = AppointmentRecord(
+        id: 'job-2',
+        startTime: DateTime(2026, 8, 26, 8),
+        endTime: DateTime(2026, 8, 26, 12),
+        employeeIds: const ['e3', 'e1'],
+        employeeNames: const ['Theo Roy'],
+      );
+
+      final swapped = replaceAssignee(
+        short,
+        removeId: 'e3',
+        addId: 'e2',
+        addName: 'Nadia Berger',
+      );
+
+      expect(swapped.employeeIds, ['e2', 'e1']);
+      expect(swapped.employeeNames, ['Nadia Berger', '']);
     });
   });
 }

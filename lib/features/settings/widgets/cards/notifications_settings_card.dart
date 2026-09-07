@@ -68,113 +68,79 @@ class NotificationsSettingsCard extends ConsumerWidget {
     final showLocationSharing = locationSharingEnabled != null;
     // Held as a local so the tour's wrap can be applied to it by name.
     final locationTile = showLocationSharing
-        ? SettingsTile(
-            iconBg: scheme.primaryContainer,
+        ? SettingsSwitchTile(
+            switchKey: const Key('locationSharingSwitch'),
             icon: Icons.location_on_rounded,
-            iconColor: scheme.primary,
             label: context.l10n.settings_locationSharing,
-            isLast: true,
+            value: locationSharingEnabled!,
+            isBusy: isTogglingLocationSharing,
+            onChanged: onToggleLocationSharing,
+            // The row opens the detail screen; only the switch flips sharing.
             onTap: onLocationSharingTap,
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Switch.adaptive(
-                  key: const Key('locationSharingSwitch'),
-                  value: locationSharingEnabled!,
-                  onChanged: isTogglingLocationSharing
-                      ? null
-                      : (value) => onToggleLocationSharing(value: value),
-                  activeTrackColor: scheme.primary,
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ],
+            trailing: Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: scheme.onSurfaceVariant,
             ),
           )
         : null;
+    // Dividers are indexed off this list, so a new row never has to be
+    // threaded through every earlier row's "am I last" condition.
+    final tiles = <Widget>[
+      SettingsTile(
+        iconBg: granted ? scheme.primaryContainer : scheme.errorContainer,
+        icon: granted
+            ? Icons.notifications_active_rounded
+            : Icons.notifications_off_rounded,
+        iconColor: granted ? scheme.primary : scheme.error,
+        label: context.l10n.settings_notifications,
+        trailing: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: AppSpacing.sp4,
+          runSpacing: AppSpacing.sp4,
+          children: [
+            SettingsTrailingPill(
+              label: granted
+                  ? context.l10n.settings_notificationsOn
+                  : context.l10n.settings_notificationsOff,
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: scheme.onSurfaceVariant,
+            ),
+          ],
+        ),
+        onTap: () => onNotificationsTap(status),
+      ),
+      if (showLiveActivity)
+        SettingsSwitchTile(
+          icon: Icons.directions_car_rounded,
+          label: context.l10n.settings_liveActivity,
+          value: liveActivityEnabled,
+          isBusy: isTogglingLiveActivity,
+          onChanged: onToggleLiveActivity,
+        ),
+      if (showTravelAlerts)
+        SettingsSwitchTile(
+          switchKey: const Key('travelAlertsSwitch'),
+          icon: Icons.schedule_send_rounded,
+          label: context.l10n.settings_travelAlerts,
+          value: travelAlertsEnabled!,
+          isBusy: isTogglingTravelAlerts,
+          onChanged: onToggleTravelAlerts,
+        ),
+      if (locationTile != null)
+        tourWrap?.call(TourStepId.settingsLocationSharing, locationTile) ??
+            locationTile,
+    ];
     return SettingsSectionCard(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SettingsTile(
-            iconBg: granted ? scheme.primaryContainer : scheme.errorContainer,
-            icon: granted
-                ? Icons.notifications_active_rounded
-                : Icons.notifications_off_rounded,
-            iconColor: granted ? scheme.primary : scheme.error,
-            label: context.l10n.settings_notifications,
-            isLast:
-                !showLiveActivity && !showTravelAlerts && !showLocationSharing,
-            trailing: Wrap(
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: AppSpacing.sp4,
-              runSpacing: AppSpacing.sp4,
-              children: [
-                SettingsTrailingPill(
-                  label: granted
-                      ? context.l10n.settings_notificationsOn
-                      : context.l10n.settings_notificationsOff,
-                ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: scheme.onSurfaceVariant,
-                ),
-              ],
-            ),
-            onTap: () => onNotificationsTap(status),
-          ),
-          if (showLiveActivity) ...[
-            const SettingsTileDivider(),
-            SettingsTile(
-              iconBg: scheme.primaryContainer,
-              icon: Icons.directions_car_rounded,
-              iconColor: scheme.primary,
-              label: context.l10n.settings_liveActivity,
-              isLast: !showTravelAlerts && !showLocationSharing,
-              onTap: isTogglingLiveActivity
-                  ? null
-                  : () => onToggleLiveActivity(value: !liveActivityEnabled),
-              trailing: Switch.adaptive(
-                value: liveActivityEnabled,
-                onChanged: isTogglingLiveActivity
-                    ? null
-                    : (value) => onToggleLiveActivity(value: value),
-                activeTrackColor: scheme.primary,
-              ),
-            ),
-          ],
-          if (showTravelAlerts) ...[
-            const SettingsTileDivider(),
-            SettingsTile(
-              iconBg: scheme.primaryContainer,
-              icon: Icons.schedule_send_rounded,
-              iconColor: scheme.primary,
-              label: context.l10n.settings_travelAlerts,
-              isLast: !showLocationSharing,
-              onTap: isTogglingTravelAlerts
-                  ? null
-                  : () => onToggleTravelAlerts(value: !travelAlertsEnabled!),
-              trailing: Switch.adaptive(
-                key: const Key('travelAlertsSwitch'),
-                value: travelAlertsEnabled!,
-                onChanged: isTogglingTravelAlerts
-                    ? null
-                    : (value) => onToggleTravelAlerts(value: value),
-                activeTrackColor: scheme.primary,
-              ),
-            ),
-          ],
-          if (locationTile != null) ...[
-            const SettingsTileDivider(),
-            tourWrap?.call(
-                  TourStepId.settingsLocationSharing,
-                  locationTile,
-                ) ??
-                locationTile,
+          for (final (index, tile) in tiles.indexed) ...[
+            if (index > 0) const SettingsTileDivider(),
+            tile,
           ],
         ],
       ),
