@@ -13,23 +13,37 @@ import 'package:scheduling/features/calendar/domain/models/appointment_record.da
 /// Hand-rolled rather than mocked so [gate] can hold the read open across the
 /// window a user edit lands in — the case the adopt check exists for.
 class _PicturesRepo implements AppointmentsRepository {
-  _PicturesRepo({this.stored = const [], this.gate, this.throws = false});
+  _PicturesRepo({
+    this.stored = const [],
+    this.later,
+    this.gate,
+    this.throws = false,
+  }) {
+    addTearDown(localWrites.close);
+  }
 
   final List<AppointmentImage> stored;
+
+  /// Served from the second read on, so a poke-driven refresh is visible.
+  final List<AppointmentImage>? later;
   final Completer<void>? gate;
   final bool throws;
   int calls = 0;
+
+  /// The background-upload poke, real rather than `Stream.empty()`: stubbed
+  /// empty, the subscription under test could be deleted with every test green.
+  final StreamController<void> localWrites = StreamController<void>.broadcast();
 
   @override
   Future<List<AppointmentImage>> fetchAppointmentPictures(String id) async {
     calls++;
     if (gate != null) await gate!.future;
     if (throws) throw Exception('subcollection read failed');
-    return stored;
+    return calls > 1 ? (later ?? stored) : stored;
   }
 
   @override
-  Stream<void> get onLocalWrite => const Stream.empty();
+  Stream<void> get onLocalWrite => localWrites.stream;
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>
@@ -183,6 +197,47 @@ void main() {
 
     await settle();
 
+    expect(harness.read().existingImages, isEmpty);
+  });
+
+  test('a local write poke re-reads and adopts the new photo list', () async {
+    // The subscription in `build()` IS the fix for a background upload landing
+    // with nothing left to re-read the subcollection.
+    final repo = _PicturesRepo(
+      stored: [_image('p1')],
+      later: [_image('p1'), _image('p2')],
+    );
+    final harness = build(_appointmentWith(1), repo);
+    await settle();
+    expect(paths(harness.read().existingImages), ['appointments/a1/images/p1']);
+
+    repo.localWrites.add(null);
+    await settle();
+
+    expect(repo.calls, 2);
+    expect(paths(harness.read().existingImages), [
+      'appointments/a1/images/p1',
+      'appointments/a1/images/p2',
+    ]);
+  });
+
+  test('a poke does NOT adopt over an edit made in the sheet', () async {
+    // Same refusal the mid-round-trip case pins, reached from the poke instead:
+    // a photo removed in the sheet must not be put back by a server list.
+    final repo = _PicturesRepo(
+      stored: [_image('p1')],
+      later: [_image('p1'), _image('p2')],
+    );
+    final harness = build(_appointmentWith(1), repo);
+    await settle();
+
+    harness.notifier.removeExistingImage(0);
+    expect(harness.read().existingImages, isEmpty);
+
+    repo.localWrites.add(null);
+    await settle();
+
+    expect(repo.calls, 2);
     expect(harness.read().existingImages, isEmpty);
   });
 

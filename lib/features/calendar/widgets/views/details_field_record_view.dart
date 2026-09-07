@@ -56,8 +56,23 @@ class _DetailsFieldRecordViewState
     final authorName = ref.read(currentUserNameProvider);
     final text = _notes.text.trim();
 
-    if (identity == null || text.isEmpty) {
+    // Disabled while empty, so this is the double-tap race, not a failure.
+    if (text.isEmpty) {
       setState(() => _isSaving = false);
+      return;
+    }
+
+    if (identity == null) {
+      final missing = StateError('no active user identity');
+      logger.warn('APPT-FIELDNOTE no identity for note author', missing);
+      setState(() => _isSaving = false);
+      notices.error(
+        composeErrorNotice(
+          context,
+          intro: context.l10n.error_introSaveFieldNotes,
+          error: missing,
+        ),
+      );
       return;
     }
 

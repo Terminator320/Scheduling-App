@@ -64,6 +64,7 @@
   "calendar_fieldNotesLabel": "Vos notes",
   "calendar_fieldNotesHint": "Ce que vous avez trouvé, ce que vous avez fait, ce qui reste à estimer",
   "calendar_crewNotesLabel": "NOTES DE L’ÉQUIPE",
+  "calendar_crewNotesUnread": "Impossible de charger les notes de l’équipe. Fermez et rouvrez la tâche pour réessayer — ce qui a déjà été ajouté est toujours là.",
   "calendar_addANote": "Ajouter une note",
   "calendar_notePosted": "Note ajoutée",
   "calendar_noteBy": "{name} · {when}",
