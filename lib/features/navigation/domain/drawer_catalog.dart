@@ -18,7 +18,10 @@ List<DrawerGroup> drawerGroups({required bool isAdmin}) => [
     rows: [
       HubTab.calendar,
       PushedDestination.dayRoute,
-      if (isAdmin) HubTab.liveMap else PushedDestination.history,
+      // History is admin-only (2026-09-06). An employee's copy carried no
+      // filter control of any kind, and a technician still reaches a finished
+      // job through the calendar's closed-job sink.
+      if (isAdmin) HubTab.liveMap,
     ],
   ),
   if (isAdmin)

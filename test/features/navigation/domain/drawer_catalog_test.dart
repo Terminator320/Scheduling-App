@@ -21,12 +21,20 @@ void main() {
     expect(rows, isNot(contains(HubTab.employees)));
     expect(rows, isNot(contains(HubTab.liveMap)));
     expect(rows, isNot(contains(PushedDestination.dashboard)));
+    expect(rows, isNot(contains(PushedDestination.history)));
   });
 
-  test('an employee reaches History from the TODAY group', () {
-    // Their one search: the finished and cancelled jobs they were on.
-    final today = drawerGroups(isAdmin: false).first.rows;
-    expect(today, contains(PushedDestination.history));
+  test('an employee never reaches History', () {
+    // Owner call 2026-09-06: History is an admin surface. A technician reaches
+    // a finished job through the calendar, where closed jobs sink to the
+    // bottom of the day's agenda.
+    final rows = drawerGroups(isAdmin: false).expand((g) => g.rows).toList();
+    expect(rows, isNot(contains(PushedDestination.history)));
+  });
+
+  test('an admin still reaches History from the BUSINESS group', () {
+    final business = drawerGroups(isAdmin: true)[2].rows;
+    expect(business, contains(PushedDestination.history));
   });
 
   test('no destination appears in more than one group', () {
