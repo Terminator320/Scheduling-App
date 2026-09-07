@@ -6,7 +6,10 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
+import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
+import 'package:scheduling/features/calendar/application/field_notes_provider.dart';
 import 'package:scheduling/features/calendar/data/appointment_image_upload_service.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/widgets/sheets/image_source_picker.dart';
@@ -27,14 +30,7 @@ class DetailsFieldRecordView extends ConsumerStatefulWidget {
 
 class _DetailsFieldRecordViewState
     extends ConsumerState<DetailsFieldRecordView> {
-  late final TextEditingController _notes = TextEditingController(
-    text: widget.appointment.fieldNotes,
-  );
-
-  /// The value last known to be stored, so Save can be offered only when there
-  /// is something to save — and so a successful write settles the dirty state
-  /// without re-reading the document.
-  late String _saved = widget.appointment.fieldNotes;
+  final TextEditingController _notes = TextEditingController();
 
   bool _isSaving = false;
 
@@ -44,12 +40,11 @@ class _DetailsFieldRecordViewState
     super.dispose();
   }
 
-  Future<void> _save() async {
+  Future<void> _post() async {
     final id = widget.appointment.id;
     if (id == null || _isSaving) return;
     // Set BEFORE the first await, like every other submit in this codebase:
-    // awaiting first leaves the button live and a double tap starts a second
-    // write.
+    // awaiting first leaves the button live and a double tap posts twice.
     setState(() => _isSaving = true);
 
     // Resolved up front — `ref.read` on an unmounted consumer throws under
@@ -57,7 +52,14 @@ class _DetailsFieldRecordViewState
     final logger = ref.read(loggerProvider);
     final notices = ref.read(noticeServiceProvider);
     final repository = ref.read(appointmentsRepositoryProvider);
+    final identity = ref.read(activeUserIdentityProvider).value;
+    final authorName = ref.read(currentUserNameProvider);
     final text = _notes.text.trim();
+
+    if (identity == null || text.isEmpty) {
+      setState(() => _isSaving = false);
+      return;
+    }
 
     if (guardedOffline(
       context,
@@ -69,15 +71,21 @@ class _DetailsFieldRecordViewState
     }
 
     try {
-      await repository.updateFieldNotes(id: id, notes: text);
+      await repository.appendFieldNote(
+        appointmentId: id,
+        text: text,
+        // The rules pin this to the caller's own doc id, so a note can never
+        // be filed under a colleague's name.
+        authorId: identity.docId,
+        authorName: authorName,
+      );
       if (!mounted) return;
-      setState(() {
-        _saved = text;
-        _isSaving = false;
-      });
-      notices.success(context.l10n.calendar_fieldNotesSaved);
+      _notes.clear();
+      setState(() => _isSaving = false);
+      ref.invalidate(appointmentFieldNotesProvider(id));
+      notices.success(context.l10n.calendar_notePosted);
     } catch (e, st) {
-      logger.warn('APPT-FIELDNOTE updateFieldNotes failed', e, st);
+      logger.warn('APPT-FIELDNOTE appendFieldNote failed', e, st);
       if (!mounted) return;
       setState(() => _isSaving = false);
       notices.error(
@@ -111,7 +119,7 @@ class _DetailsFieldRecordViewState
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final isDirty = _notes.text.trim() != _saved;
+    final canPost = _notes.text.trim().isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -140,12 +148,12 @@ class _DetailsFieldRecordViewState
             const SizedBox(width: AppSpacing.sp8),
             Expanded(
               child: FilledButton(
-                // Disabled while unchanged, so the row cannot spend a write on
-                // a no-op — this is the one surface a technician taps with
+                // Disabled while empty, so the row cannot spend a write on
+                // nothing — this is the one surface a technician taps with
                 // gloves on, glancing away.
-                onPressed: isDirty && !_isSaving ? _save : null,
+                onPressed: canPost && !_isSaving ? _post : null,
                 child: Text(
-                  _isSaving ? l10n.common_saving : l10n.common_save,
+                  _isSaving ? l10n.common_saving : l10n.calendar_addANote,
                 ),
               ),
             ),

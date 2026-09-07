@@ -9,6 +9,7 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
+import 'package:scheduling/features/auth/application/is_active_admin_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
@@ -21,6 +22,7 @@ import 'package:scheduling/features/calendar/widgets/dialogs/busy_conflict_dialo
 import 'package:scheduling/features/calendar/widgets/dialogs/cancel_appointment_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/dialogs/series_scope_dialog.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_action_bar.dart';
+import 'package:scheduling/features/calendar/widgets/views/details_field_notes_view.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_field_record_view.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_leaf_widgets.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
@@ -171,6 +173,9 @@ class DetailsViewBody extends ConsumerWidget {
           isCancelled: data.isCancelled,
           onRetry: notifier.enterEditing,
         ),
+        // Anyone who may READ the job may read its crew notes — the same set
+        // the rules admit. The compose box below stays crew-only.
+        DetailsFieldNotesView(appointment: appointment),
         // Offered to a NON-ADMIN ASSIGNEE only — exactly the set the crew
         // branches of `firestore.rules` admit, so the surface and the rule
         // cannot disagree about who may write.
@@ -206,8 +211,9 @@ class DetailsViewBody extends ConsumerWidget {
     WidgetRef ref,
     AppointmentRecord appointment,
   ) {
+    if (ref.watch(isActiveAdminProvider)) return false;
     final identity = ref.watch(activeUserIdentityProvider).value;
-    if (identity == null || identity.role == 'admin') return false;
+    if (identity == null) return false;
     return appointment.employeeIds.contains(identity.docId);
   }
 
