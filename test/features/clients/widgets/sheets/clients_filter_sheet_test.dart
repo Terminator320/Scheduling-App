@@ -10,6 +10,7 @@ import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
 import 'package:scheduling/features/clients/domain/policies/client_building.dart';
 import 'package:scheduling/features/clients/widgets/sheets/clients_filter_sheet.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/primitives/app_back_button.dart';
 
 AppLocalizations _l10n(WidgetTester tester) =>
     AppLocalizations.of(tester.element(find.byType(ClientsFilterSheet)));
@@ -17,6 +18,7 @@ AppLocalizations _l10n(WidgetTester tester) =>
 Widget _harness({
   required ClientsFilter selected,
   required ValueChanged<ClientsFilterPick> onChanged,
+  VoidCallback? onBack,
   List<ClientBuilding> buildings = const [],
   bool buildingsLoading = false,
   bool buildingsFail = false,
@@ -36,7 +38,11 @@ Widget _harness({
       supportedLocales: AppLocalizations.supportedLocales,
       theme: lightTheme(),
       home: Scaffold(
-        body: ClientsFilterSheet(selected: selected, onChanged: onChanged),
+        body: ClientsFilterSheet(
+          selected: selected,
+          onChanged: onChanged,
+          onBack: onBack ?? () {},
+        ),
       ),
     ),
   );
@@ -175,6 +181,29 @@ void main() {
       find.text(clientTypeLabel(l10n, ClientType.residential)),
       findsOneWidget,
     );
+  });
+
+  testWidgets('the sheet offers a visible back control that reports nothing', (
+    tester,
+  ) async {
+    var backs = 0;
+    ClientsFilterPick? emitted;
+    await tester.pumpWidget(
+      _harness(
+        selected: const ClientsFilterAll(),
+        onChanged: (pick) => emitted = pick,
+        onBack: () => backs++,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AppBackButton), findsOneWidget);
+    await tester.tap(find.byType(AppBackButton));
+    await tester.pump();
+
+    // Back reports NOTHING, so the caller keeps the filter it already had.
+    expect(backs, 1);
+    expect(emitted, isNull);
   });
 
   testWidgets('does not overflow at 260px with 2x text', (tester) async {
