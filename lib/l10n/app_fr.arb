@@ -840,7 +840,6 @@
   "clients_tapPhoneToStart": "Touchez Téléphone pour commencer",
   "clients_digitsTyped": "{typed} sur {total}",
   "clients_keepGoing": "Continuez",
-  "clients_recentClients": "Récents",
   "clients_exactMatch": "Correspondance exacte",
   "clients_searchResults": "Résultats de recherche",
   "clients_closestNumbers": "Numéros les plus proches au dossier",

@@ -5,7 +5,6 @@ import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/calendar/domain/assignee_availability.dart';
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
-import 'package:scheduling/features/calendar/domain/models/recent_client.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
 import 'package:scheduling/features/calendar/utils/appointment_draft_defaults.dart';
@@ -74,7 +73,6 @@ class AppointmentFormCallbacks {
     required this.onClientQueryModeChanged,
     required this.onRetryClientSearch,
     required this.onSelectClient,
-    required this.onResolveRecentClient,
     required this.onClearClient,
     required this.onToggleEmployee,
     required this.onSelectStartDate,
@@ -95,11 +93,6 @@ class AppointmentFormCallbacks {
   final ValueChanged<ClientQueryMode> onClientQueryModeChanged;
   final VoidCallback onRetryClientSearch;
   final ValueChanged<ClientRecord> onSelectClient;
-
-  /// Reads the real client behind a recents row. A [RecentClient] carries only
-  /// what an appointment denormalizes, so attaching one as-is produced a draft
-  /// with no address where the same client picked from SEARCH pre-fills one.
-  final Future<ClientRecord?> Function(RecentClient) onResolveRecentClient;
   final VoidCallback onClearClient;
   final ValueChanged<EmployeeRecord> onToggleEmployee;
 
@@ -151,7 +144,6 @@ class AppointmentFormFields extends StatelessWidget {
     this.onPersonalChanged,
     this.tourWrap,
     this.assigneeAvailability = AssigneeAvailability.none,
-    this.recentClients = const [],
     this.previousAddresses = const [],
     this.lastVisitLabel,
   });
@@ -166,9 +158,6 @@ class AppointmentFormFields extends StatelessWidget {
   final List<ClientRecord> clientResults;
   final bool isSearchingClient;
   final ClientSearchStatus clientSearchStatus;
-
-  /// Clients this admin booked recently, offered before a query is selective.
-  final List<RecentClient> recentClients;
 
   /// Where the attached client's earlier jobs were, newest-first.
   final List<String> previousAddresses;
@@ -238,24 +227,6 @@ class AppointmentFormFields extends StatelessWidget {
   String? _err(BuildContext context, String field) {
     final key = errors[field];
     return key == null ? null : appointmentFormErrorText(context, key);
-  }
-
-  /// Resolving a recent is a Firestore round trip, and the tap that starts it
-  /// discards the future — so the post-await controller writes must not run
-  /// against a sheet that has since been dismissed, or "used after being
-  /// disposed" reaches the zone handler as an app-level FATAL from a row tap
-  /// that merely failed to prefill a name.
-  Future<void> _selectRecent(BuildContext context, RecentClient recent) async {
-    final resolved = await callbacks.onResolveRecentClient(recent);
-    if (!context.mounted) return;
-    _selectClient(
-      resolved ??
-          ClientRecord(
-            id: recent.clientId,
-            name: recent.name,
-            phone: recent.phone,
-          ),
-    );
   }
 
   void _selectClient(ClientRecord client) {
@@ -409,13 +380,10 @@ class AppointmentFormFields extends StatelessWidget {
                   controller: controllers.clientSearch,
                   results: clientResults,
                   status: clientSearchStatus,
-                  recentClients: recentClients,
                   isSearching: isSearchingClient,
                   onChanged: callbacks.onSearchClients,
                   onModeChanged: callbacks.onClientQueryModeChanged,
                   onSelect: _selectClient,
-                  onSelectRecent: (recent) =>
-                      _selectRecent(context, recent),
                   onRetry: callbacks.onRetryClientSearch,
                   errorText: _err(context, 'client'),
                   onAddNew: onRequestAddClient == null ? null : _addNewClient,

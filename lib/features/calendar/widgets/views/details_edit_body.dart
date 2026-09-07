@@ -13,7 +13,6 @@ import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
-import 'package:scheduling/features/calendar/application/recent_clients_provider.dart';
 import 'package:scheduling/features/calendar/domain/assignee_resolver.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
@@ -177,14 +176,6 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       clientResults: state.clientResults,
       isSearchingClient: state.isSearchingClient,
       clientSearchStatus: state.clientSearchStatus,
-      // Only the picker renders recents, and it is built only with no client
-      // attached — on an edit, the rare path. Not free: `_loadClientIfNeeded`
-      // resolves asynchronously, so an ordinary client job is briefly null here
-      // and does still fire the query. It stops the CLEARED-client and personal
-      // cases paying for rows they never show.
-      recentClients: state.selectedClient == null
-          ? ref.watch(recentClientsProvider).value ?? const []
-          : const [],
       previousAddresses: bookingContext.previousAddresses,
       lastVisitLabel: bookingContext.lastVisitLabel,
       selectedEmployees: state.selectedEmployees,
@@ -233,7 +224,6 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
     onClientQueryModeChanged: _onClientQueryModeChanged,
     onRetryClientSearch: _onRetryClientSearch,
     onSelectClient: notifier.selectClient,
-    onResolveRecentClient: (recent) => resolveRecentClient(ref, recent),
     onClearClient: notifier.clearClient,
     onToggleEmployee: notifier.toggleEmployee,
     onSelectStartDate: (picked) => _onStartDateSelected(notifier, picked),
