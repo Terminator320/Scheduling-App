@@ -72,10 +72,7 @@ class DetailsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final title = Text(
-      appointment.title,
-      style: theme.textTheme.headlineLarge,
-    );
+    final title = Text(appointment.title, style: theme.textTheme.headlineLarge);
     final chip = StatusChip(status: status);
 
     return Padding(
@@ -120,11 +117,7 @@ class DetailsHeader extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.repeat,
-                  size: 13,
-                  color: theme.palette.textTertiary,
-                ),
+                Icon(Icons.repeat, size: 13, color: theme.palette.textTertiary),
                 const SizedBox(width: AppSpacing.sp4),
                 Flexible(
                   child: Text(
@@ -298,8 +291,17 @@ class DetailsPhotosView extends ConsumerWidget {
         ? notifier.failureFor(appointmentId)
         : null;
     final failedCount = failure?.failedCount ?? 0;
+    final pendingCount = appointmentId == null
+        ? 0
+        : notifier.pending.value[appointmentId] ?? 0;
+    // pendingCount is part of this test on purpose: without it the FIRST photo
+    // added to a job left the whole section as a SizedBox.shrink for the whole
+    // upload, so the crew saw no sign their photo existed.
     final hasPhotos =
-        existingImages.isNotEmpty || newImages.isNotEmpty || failedCount > 0;
+        existingImages.isNotEmpty ||
+        newImages.isNotEmpty ||
+        failedCount > 0 ||
+        pendingCount > 0;
     if (!hasPhotos) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

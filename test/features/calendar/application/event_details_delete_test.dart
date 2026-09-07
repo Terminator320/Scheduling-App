@@ -15,6 +15,9 @@ class _ThrowingRepo implements AppointmentsRepository {
   }
 
   @override
+  Stream<void> get onLocalWrite => const Stream.empty();
+
+  @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName}');
 }
@@ -37,6 +40,9 @@ class _RecordingRepo implements AppointmentsRepository {
 
   @override
   Future<List<AppointmentRecord>> getSeries(String seriesId) async => series;
+
+  @override
+  Stream<void> get onLocalWrite => const Stream.empty();
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>

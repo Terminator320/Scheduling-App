@@ -71,14 +71,15 @@ void main() {
     // Empty client id short-circuits the seed lookup; empty employee stream
     // keeps build()'s microtasks from blocking.
     when(employees.watchEmployees).thenAnswer((_) => Stream.value(const []));
+    when(
+      () => appointments.onLocalWrite,
+    ).thenAnswer((_) => const Stream.empty());
   });
 
   ProviderContainer makeContainer(AppointmentRecord appointment) {
     when(
       () => appointments.fetchAppointmentPictures('appt-1'),
-    ).thenAnswer(
-      (_) async => List.generate(appointment.pictureCount, _image),
-    );
+    ).thenAnswer((_) async => List.generate(appointment.pictureCount, _image));
     final c =
         ProviderContainer(
             overrides: [

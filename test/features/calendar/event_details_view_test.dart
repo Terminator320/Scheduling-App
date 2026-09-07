@@ -78,6 +78,9 @@ void main() {
     when(
       employees.watchEmployees,
     ).thenAnswer((_) => Stream.value(const [_employeeA]));
+    when(
+      () => appointments.onLocalWrite,
+    ).thenAnswer((_) => const Stream.empty());
     when(() => appointments.updateAppointment(any())).thenAnswer((_) async {});
     // The edit flow now runs a conflict check before writing; no clash here.
     when(

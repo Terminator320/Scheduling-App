@@ -29,6 +29,9 @@ class _PicturesRepo implements AppointmentsRepository {
   }
 
   @override
+  Stream<void> get onLocalWrite => const Stream.empty();
+
+  @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName}');
 }
@@ -120,10 +123,7 @@ void main() {
       // view, so an `identical` seed check could never pass — which is why the
       // adopt gate compares by value.
       expect(
-        identical(
-          harness.read().existingImages,
-          harness.read().existingImages,
-        ),
+        identical(harness.read().existingImages, harness.read().existingImages),
         isFalse,
       );
 
@@ -172,9 +172,7 @@ void main() {
 
     harness.notifier.removeExistingImage(0);
 
-    expect(paths(harness.read().existingImages), [
-      'appointments/a1/images/p2',
-    ]);
+    expect(paths(harness.read().existingImages), ['appointments/a1/images/p2']);
     expect(harness.read().removedExistingImages, hasLength(1));
   });
 
@@ -201,9 +199,8 @@ void main() {
     await settle();
 
     expect(repo.calls, 1);
-    expect(
-      harness.read().existingImages.map((i) => i.storagePath),
-      ['appointments/a1/images/p1'],
-    );
+    expect(harness.read().existingImages.map((i) => i.storagePath), [
+      'appointments/a1/images/p1',
+    ]);
   });
 }

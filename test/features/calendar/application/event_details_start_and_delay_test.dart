@@ -96,6 +96,9 @@ void main() {
     when(
       employees.watchEmployees,
     ).thenAnswer((_) => Stream.value(const [_employeeA]));
+    when(
+      () => appointments.onLocalWrite,
+    ).thenAnswer((_) => const Stream.empty());
     when(() => appointments.updateAppointment(any())).thenAnswer((_) async {});
     when(
       () => appointments.updateAppointmentStatus(
