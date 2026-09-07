@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
@@ -111,6 +112,11 @@ class _AddEmployeePageState extends ConsumerState<AddEmployeePage> {
     // no detail page worth opening, and the sheet's actions all assume an
     // account that exists.
     if (employee.isInvited) return;
+    // Reported here rather than in `EmployeeDetailsView`, which is a
+    // `ConsumerWidget` — logging from its `build` would file an event on every
+    // rebuild. This is the one place BOTH layouts pass through: the two-pane
+    // selection below and the sheet.
+    ref.read(analyticsServiceProvider).logEmployeeViewed();
     _clearSearch();
     await Future<void>.delayed(const Duration(milliseconds: 80));
     if (!mounted) return;

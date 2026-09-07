@@ -794,6 +794,18 @@ UI catches the typed failure, calls `failure.toLocalizedMessage(context)`, and p
 - **Listener-owned** (e.g. `main_calendar_screen`): a `ref.listen(provider, (prev, next) {...})` next to the `.watch` detects `data → error` / `loading → error` transitions and fires the one-shot `logger.warn` + `noticeServiceProvider.error(...)`. The build reads data via `appointmentsAsync.value ?? const []` — **not** a `.when(error:)` — so neither the log nor the toast can repeat on rebuild.
 - **`.when`-owned** (e.g. `appointment_history_view`): the `.when(error: ...)` branch logs via `logger.warn` and renders an inline placeholder/message (no toast). Don't add a toast here — `.when` runs on every rebuild and would re-toast.
 
+### Analytics (Firebase Analytics, added 2026-09-07)
+
+`lib/core/analytics/` is the only place the app talks to Firebase Analytics. Four files, one job each: `analytics_events.dart` (event names, the parameter allowlist, user properties, and the canonical `source`/`surface`/`scope` values), `analytics_privacy.dart` (the sanitizer and count bucketing), `analytics_screens.dart` (route/tab → canonical screen name), and `analytics_service.dart` — the single importer of `firebase_analytics`. `analytics_providers.dart` exposes `analyticsServiceProvider` and `analyticsObserverProvider` plus the build-mode constants.
+
+**Privacy is enforced by the allowlist, not by convention.** `sanitizeAnalyticsParams` drops any key absent from `AnalyticsParams.allParams` (asserting in debug), narrows values to `num`/`bool`/`String` — dropping anything else rather than `toString()`-ing it — and caps string length. Counts are bucketed and a search query is reduced to a bucketed LENGTH. `setUserId` is never called; the only identity-adjacent signal is the `user_role` user property, kept in step with the live Firestore doc by `AnalyticsIdentityListener` (`core/app/`).
+
+**Screen views are split between the observer and the hub shell.** `FirebaseAnalyticsObserver` handles named pushed routes through `analyticsScreenForRoute`, which returns null for the four routes in `kShellOwnedRoutes` — `HubShellState` reports those tabs itself. Without the split, `HubTabRedirectRoute` (which pushes a named route *and* hands off to the live shell) would double-count one of the three ways a tab is reached. Modal sheets carry no route name, so each reports itself from `initState`.
+
+**Events fire on sealed success branches only** (`AddEventSubmitted`, `EventDetailsSaved`, `EventDetailsActionOk`, `ClientSaved`, `EmployeeAccountCreated`) — never on the `Busy` members, which are reentrancy-guard no-ops that wrote nothing.
+
+`AnalyticsService` methods return `void` and cannot throw: every send is wrapped, a failure is a `logger.warn` under the `ANALYTICS` tag, and `FirebaseAnalytics.instance` is resolved lazily — returning null when `Firebase.apps.isEmpty`, so no widget test needs an override. Collection is off in debug builds unless `--dart-define=ANALYTICS_DEBUG=true`; `build_env` is set as a user property so debug traffic stays filterable. Full rules: `.claude/rules/analytics.md`.
+
 ### Validation
 
 Free-text input length caps live in `lib/core/validators/text_limits.dart`. The constants (`TextLimits.appointmentTitle`, `TextLimits.personName`, `TextLimits.phone`, etc.) are applied at three layers:

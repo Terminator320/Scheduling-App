@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/storage/secure_storage_service.dart';
@@ -111,6 +112,9 @@ class _LoginState extends ConsumerState<Login> {
 
     switch (outcome) {
       case SignInSuccess(:final employee):
+        // The ROLE, never the uid or the email. `login` is Firebase's own
+        // recommended event name, so it feeds the built-in engagement reports.
+        ref.read(analyticsServiceProvider).logLogin(role: employee.role);
         TextInput.finishAutofillContext(); // Offer to save these credentials in the OS password manager.
         await _routeToCalendar(employee);
       case SignInInvalidCredentials():

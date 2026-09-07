@@ -18,7 +18,9 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:scheduling/core/adaptive/app_scroll_behavior.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/app/account_exit_listeners.dart';
+import 'package:scheduling/core/app/analytics_identity_listener.dart';
 import 'package:scheduling/core/app/app_sync_listeners.dart';
 import 'package:scheduling/core/app/appointment_link_opener.dart';
 import 'package:scheduling/core/connectivity/offline_banner.dart';
@@ -226,6 +228,18 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     _languageController.setLanguage(widget.settings.language);
     _setupLinkOpening();
     _setupDeepLinkHandling();
+    _setupAnalytics();
+  }
+
+  /// Collection state and the two properties that never change mid-session.
+  ///
+  /// `user_role` is NOT set here — it follows the live account doc through
+  /// [AnalyticsIdentityListener], because at this point nobody is signed in yet.
+  void _setupAnalytics() {
+    ref.read(analyticsServiceProvider)
+      ..setCollectionEnabled(enabled: kAnalyticsCollectionEnabled)
+      ..setBuildEnv(kAnalyticsBuildEnv)
+      ..setAppLocale(widget.settings.language);
   }
 
   /// The two external entry points the `app_links` dispatcher doesn't own: iOS
@@ -264,6 +278,12 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     setState(() {
       _themeMode = toggledThemeMode(_themeMode, platformBrightness);
     });
+    ref
+        .read(analyticsServiceProvider)
+        .logSettingsChanged(
+          settingName: 'theme',
+          settingValue: _themeMode.name,
+        );
     unawaited(_saveSettings(themeMode: _themeMode));
   }
 
@@ -271,6 +291,15 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     setState(() {
       _textScale = value;
     });
+    // Reported here rather than inside the debounced save: the debounce exists
+    // to coalesce WRITES, and one event per settled write is what a drag along
+    // the slider should produce.
+    ref
+        .read(analyticsServiceProvider)
+        .logSettingsChanged(
+          settingName: 'text_scale',
+          settingValue: value.toStringAsFixed(2),
+        );
     _settingsSaveDebouncer.run(
       () => _saveSettings(textScale: value),
     );
@@ -279,6 +308,9 @@ class _PaulAppState extends ConsumerState<PaulApp> {
   void setLanguage(String code) {
     _languageController.setLanguage(code);
     unawaited(_saveSettings(language: code));
+    ref.read(analyticsServiceProvider)
+      ..setAppLocale(code)
+      ..logSettingsChanged(settingName: 'language', settingValue: code);
     // Re-upsert the token so its `locale` field follows the app language.
     unawaited(ref.read(pushRegistrationControllerProvider).sync());
     // Same for the Live Activity tokens — `locale` drives the card's text.
@@ -329,6 +361,7 @@ class _PaulAppState extends ConsumerState<PaulApp> {
     // Register the sync listeners — the order here matters for
     // account-lifecycle control, so don't reorder these calls.
     AppSyncListeners(ref).registerAll();
+    AnalyticsIdentityListener(ref).registerAll();
     _primeControllerSyncsOnce();
     return ThemeNotifier(
       themeMode: _themeMode,
@@ -342,7 +375,10 @@ class _PaulAppState extends ConsumerState<PaulApp> {
           final locale = Locale(languageCode, 'CA');
           return MaterialApp(
             navigatorKey: _navigatorKey,
-            navigatorObservers: [_topRouteObserver],
+            navigatorObservers: [
+              _topRouteObserver,
+              ref.read(analyticsObserverProvider),
+            ],
             scaffoldMessengerKey: _scaffoldMessengerKey,
             debugShowCheckedModeBanner: false,
             locale: locale,

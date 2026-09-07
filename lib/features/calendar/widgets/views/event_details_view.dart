@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/analytics/analytics_screens.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
@@ -18,6 +19,7 @@ import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 class EventDetailsView extends ConsumerStatefulWidget {
   const EventDetailsView({
     required this.appointment,
+    required this.analyticsSource,
     super.key,
     // Defaults CLOSED — a default of true once exposed admin-only Edit/Cancel/
     // Delete affordances to employees.
@@ -29,6 +31,9 @@ class EventDetailsView extends ConsumerStatefulWidget {
   });
 
   final AppointmentRecord appointment;
+
+  /// Which surface opened this sheet (see `AnalyticsSources`).
+  final String analyticsSource;
   final bool showActions;
   final bool initialEditing;
   final ScrollController? scrollController;
@@ -55,6 +60,7 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
   @override
   void initState() {
     super.initState();
+    _logView();
     if (widget.initialEditing) {
       Future.microtask(() {
         if (!mounted) return;
@@ -67,6 +73,23 @@ class _EventDetailsViewState extends ConsumerState<EventDetailsView> {
             .enterEditing();
       });
     }
+  }
+
+  /// One view per sheet open.
+  ///
+  /// The appointment's SHAPE goes out and nothing else — never its title,
+  /// client, address or notes. The role that opened it is already on every
+  /// event as the `user_role` user property, so it is not repeated here.
+  void _logView() {
+    final a = widget.appointment;
+    ref.read(analyticsServiceProvider)
+      ..logScreenView(AnalyticsScreens.appointmentDetails)
+      ..logAppointmentViewed(
+        source: widget.analyticsSource,
+        status: a.status,
+        isPersonal: a.isPersonal,
+        hasPhotos: a.pictureCount > 0,
+      );
   }
 
   AppointmentFormControllers _ensureControllers() {

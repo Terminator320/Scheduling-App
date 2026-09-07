@@ -1,8 +1,8 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:scheduling/core/adaptive/adaptive.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/app/device_deregistration.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
@@ -47,6 +47,7 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
     final logger = ref.read(loggerProvider);
     final authService = ref.read(authServiceProvider);
     final notices = ref.read(noticeServiceProvider);
+    final analytics = ref.read(analyticsServiceProvider);
     setState(() => _isSigningOut = true);
     // Holds the deps once the teardown has actually run, so the rollback in
     // the catch below reuses THEM instead of reading `ref` again — see
@@ -61,6 +62,16 @@ mixin DeleteAccountFlow<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       await deregisterThisDevice(devices);
       deregistered = devices;
       await authService.signOut();
+      // After the sign-out lands — the catch below rolls the device state back
+      // and leaves the person signed IN, which is not a sign-out.
+      //
+      // `resetAnalyticsData` is deliberately NOT called: it would mint a new
+      // app instance id, and retention ("do people come back?") is measured
+      // against that id. `user_role` is cleared instead, by
+      // `AnalyticsIdentityListener`, when the account doc empties.
+      analytics
+        ..logSignOut()
+        ..setUserRole(null);
     } catch (e, st) {
       logger.warn('ACCT-SIGNOUT signOut failed', e, st);
       if (deregistered != null) await restoreThisDevice(deregistered);

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -55,6 +57,7 @@ class _DetailsFieldRecordViewState
     final logger = ref.read(loggerProvider);
     final notices = ref.read(noticeServiceProvider);
     final repository = ref.read(appointmentsRepositoryProvider);
+    final analytics = ref.read(analyticsServiceProvider);
     final identity = ref.read(activeUserIdentityProvider).value;
     final authorName = ref.read(currentUserNameProvider);
     final text = _notes.text.trim();
@@ -101,6 +104,8 @@ class _DetailsFieldRecordViewState
       _notes.clear();
       setState(() => _isSaving = false);
       ref.invalidate(appointmentFieldNotesProvider(id));
+      // The note's TEXT is never sent — only that the crew wrote one.
+      analytics.logNoteAdded(surface: AnalyticsSurfaces.fieldRecord);
       notices.success(context.l10n.calendar_notePosted);
     } catch (e, st) {
       logger.warn('APPT-FIELDNOTE appendFieldNote failed', e, st);
@@ -143,6 +148,14 @@ class _DetailsFieldRecordViewState
         );
       }
       if (accepted.isEmpty) return;
+      // Counted at ACCEPT, not at upload: the queue drains on reconnect, so a
+      // send-time event would report the crew's offline photos as never taken.
+      ref
+          .read(analyticsServiceProvider)
+          .logPhotoAdded(
+            surface: AnalyticsSurfaces.fieldRecord,
+            count: accepted.length,
+          );
       uploader.uploadInBackground(appointmentId: id, newImages: accepted);
     } catch (e, st) {
       logger.warn('APPT-FIELDNOTE photo pick failed', e, st);

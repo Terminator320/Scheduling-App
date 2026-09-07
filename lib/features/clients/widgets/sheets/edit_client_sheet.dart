@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/analytics/analytics_screens.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -74,6 +75,9 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
   void initState() {
     super.initState();
     _initControllers();
+    ref
+        .read(analyticsServiceProvider)
+        .logScreenView(AnalyticsScreens.editClient);
   }
 
   void _initControllers() {
@@ -267,6 +271,7 @@ class _EditClientSheetState extends ConsumerState<EditClientSheet>
       case ClientSaveBusy():
         break;
       case ClientSaved():
+        ref.read(analyticsServiceProvider).logClientEdited();
         ref
             .read(noticeServiceProvider)
             .success(context.l10n.common_changesSaved);

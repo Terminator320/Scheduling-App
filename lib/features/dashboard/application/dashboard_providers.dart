@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
@@ -109,7 +109,12 @@ class DashboardPeriodController extends Notifier<DashboardPeriod> {
   /// Re-tapping the active segment is a no-op rather than a rebuild of every
   /// section watching this.
   void select(DashboardPeriod period) {
+    // The no-op guard is also what keeps a re-tap of the active segment from
+    // reporting a change nothing acted on.
     if (period == state) return;
+    ref.read(analyticsServiceProvider).logDashboardPeriodChanged(
+      period: period.name,
+    );
     state = period;
   }
 }

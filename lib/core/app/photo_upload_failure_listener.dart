@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -89,6 +89,7 @@ class _PhotoUploadFailureListenerState
                 context,
                 appointment,
                 showActions: widget.showActions,
+                analyticsSource: AnalyticsSources.notice,
               );
             } catch (error, stackTrace) {
               logger.warn('APPT-OPEN photo failure reopen', error, stackTrace);

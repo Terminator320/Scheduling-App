@@ -92,6 +92,7 @@ class StaffInfoCard extends ConsumerWidget {
                     label: Text(context.l10n.liveMap_openInMaps),
                     onPressed: () => AddressMapLauncher.showMapChoices(
                       context,
+                      ref,
                       address: resolvedAddress?.isNotEmpty ?? false
                           ? resolvedAddress!
                           : '${point.lat},${point.lng}',

@@ -24,15 +24,25 @@ Future<AppointmentRecord?> showAddEventPopup(
 }
 
 /// Opens the appointment detail sheet with explicit action visibility.
+///
+/// [analyticsSource] is REQUIRED rather than defaulted: this sheet is reachable
+/// from ten surfaces, and which one a person came from is the whole answer to
+/// "how do people actually get to a job?". A default would silently attribute a
+/// new call site to whichever surface happened to be the default.
 Future<void> showEventDetails(
   BuildContext context,
   AppointmentRecord a, {
   required bool showActions,
+  required String analyticsSource,
 }) async {
   final result = await showAppBottomSheet<Object?>(
     context,
     shape: _kSheetShape,
-    builder: (_) => EventDetailsSheet(appointment: a, showActions: showActions),
+    builder: (_) => EventDetailsSheet(
+      appointment: a,
+      showActions: showActions,
+      analyticsSource: analyticsSource,
+    ),
   );
   if (result is! AppointmentPrefill || !context.mounted) return;
   await showAddEventPopup(context, prefill: result);

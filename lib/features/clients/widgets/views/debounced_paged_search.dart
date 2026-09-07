@@ -1,6 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 
@@ -22,6 +22,9 @@ mixin DebouncedPagedSearch<W extends ConsumerStatefulWidget>
 
   /// The Crashlytics warn tag for a search that throws inside the timer.
   String get searchDebounceTag;
+
+  /// Which list this is, for `search_used` (see `AnalyticsSurfaces`).
+  String get analyticsSurface;
 
   @override
   void initState() {
@@ -52,6 +55,16 @@ mixin DebouncedPagedSearch<W extends ConsumerStatefulWidget>
     }
     searchDebounce.run(() {
       if (mounted && next != committedQuery) {
+        // Reported at the DEBOUNCE COMMIT, which is the one moment a search
+        // actually runs — instrumenting the text field would file an event per
+        // keystroke and report typing as searching. The query itself is never
+        // sent: a search here is a surname or a phone number by definition.
+        ref
+            .read(analyticsServiceProvider)
+            .logSearchUsed(
+              surface: analyticsSurface,
+              queryLength: next.length,
+            );
         setState(() => committedQuery = next);
       }
     });

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -71,6 +73,19 @@ class _AppointmentHistoryViewState extends ConsumerState<AppointmentHistoryView>
 
   @override
   String get searchDebounceTag => 'HIST-SEARCH debounced search failed';
+
+  @override
+  String get analyticsSurface => AnalyticsSurfaces.history;
+
+  void _logFilter(String name, {String? value}) {
+    ref
+        .read(analyticsServiceProvider)
+        .logFilterUsed(
+          surface: AnalyticsSurfaces.history,
+          filterName: name,
+          filterValue: value,
+        );
+  }
 
   int? _year;
   String? _employeeId;
@@ -226,12 +241,23 @@ class _AppointmentHistoryViewState extends ConsumerState<AppointmentHistoryView>
       child: HistoryFilterBar(
         years: years,
         selectedYear: _year,
-        onYearChanged: (v) => setState(() => _year = v),
+        // Never the chosen year, employee id or client — only WHICH control
+        // was used, and for status the fixed enum value.
+        onYearChanged: (v) {
+          _logFilter('year');
+          setState(() => _year = v);
+        },
         employees: employees,
         selectedEmployeeId: _employeeId,
-        onEmployeeChanged: (v) => setState(() => _employeeId = v),
+        onEmployeeChanged: (v) {
+          _logFilter('employee');
+          setState(() => _employeeId = v);
+        },
         selectedStatus: _status,
-        onStatusChanged: (v) => setState(() => _status = v),
+        onStatusChanged: (v) {
+          _logFilter('status', value: v?.name);
+          setState(() => _status = v);
+        },
       ),
     );
     return widget.filterTourWrap?.call(bar) ?? bar;

@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/images/images_providers.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/permissions/media_permission_service.dart';
@@ -55,6 +57,9 @@ Future<void> pickAndAddAppointmentImages(
   required int Function() remainingSlots,
 }) async {
   final notices = ref.read(noticeServiceProvider);
+  // Read before the pick — the OS picker is the longest await in the app, and
+  // `ref.read` on an unmounted consumer throws.
+  final analytics = ref.read(analyticsServiceProvider);
   final l10n = context.l10n;
   final picked = await pickAppointmentImages(context, ref);
   if (!context.mounted || picked.isEmpty) return;
@@ -63,6 +68,15 @@ Future<void> pickAndAddAppointmentImages(
   // when "only 10 more can be added" is the wrong sentence.
   final room = remainingSlots();
   final dropped = addImages(picked);
+  // Counts what the form ACCEPTED, so a pick trimmed by the per-job cap is not
+  // reported as photos the job received.
+  final added = picked.length - dropped;
+  if (added > 0) {
+    analytics.logPhotoAdded(
+      surface: AnalyticsSurfaces.appointmentForm,
+      count: added,
+    );
+  }
   if (dropped > 0) {
     notices.info(
       room == 0

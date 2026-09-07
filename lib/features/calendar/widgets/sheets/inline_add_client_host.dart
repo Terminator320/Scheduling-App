@@ -1,5 +1,5 @@
 import 'package:flutter/widgets.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/widgets/sheets/add_client_sheet.dart';
 
@@ -17,6 +17,7 @@ mixin InlineAddClientHost<T extends StatefulWidget> on State<T> {
       // meaningless here, since a booking is already in progress.
       final result = await showAddClientSheet(
         context,
+        analyticsSource: AnalyticsSources.inlineAddClient,
         initialName: name,
         settleFocus: true,
       );

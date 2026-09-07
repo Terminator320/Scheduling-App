@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -237,7 +237,7 @@ class _FlagGroup extends StatelessWidget {
             appointment: shown[i],
             crew: crewFor(shown[i], colorMap: colorMap, nameMap: nameMap),
             onTap: () =>
-                showEventDetails(context, shown[i], showActions: isAdmin),
+                showEventDetails(context, shown[i], analyticsSource: AnalyticsSources.dashboard, showActions: isAdmin),
           ),
         ],
         if (hidden > 0) ...[

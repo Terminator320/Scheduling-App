@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -470,6 +472,17 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
             : updatedSiblings > 0
             ? l10n.calendar_changesAppliedToSeries(updatedSiblings)
             : l10n.common_appointmentChangesSaved;
+        // `updatedSiblings`/`futureBookings` are what a series edit actually
+        // wrote, so they — not the dialog's answer — say whether the scope was
+        // a series.
+        ref
+            .read(analyticsServiceProvider)
+            .logAppointmentEdited(
+              scope: updatedSiblings > 0 || futureBookings > 0
+                  ? AnalyticsScopes.series
+                  : AnalyticsScopes.single,
+              assigneeCount: appointment.employeeIds.length,
+            );
         ref.read(noticeServiceProvider).success(message);
         widget.onSaved(appointment);
       case EventDetailsFailed(:final error):
@@ -513,6 +526,13 @@ class _DetailsEditBodyState extends ConsumerState<DetailsEditBody>
       case EventDetailsActionBusy():
         return;
       case EventDetailsActionOk():
+        ref
+            .read(analyticsServiceProvider)
+            .logAppointmentDeleted(
+              scope: choice == SeriesScopeChoice.thisAndFuture
+                  ? AnalyticsScopes.series
+                  : AnalyticsScopes.single,
+            );
         ref
             .read(noticeServiceProvider)
             .success(context.l10n.common_appointmentDeleted);

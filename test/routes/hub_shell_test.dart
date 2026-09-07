@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
@@ -27,15 +28,21 @@ Widget _stubScreen(HubTab destination) => Scaffold(
   ),
 );
 
-Widget _app({Widget? home}) => MaterialApp(
-  home:
-      home ??
-      const HubShell(
-        isAdmin: true,
-        employeeId: 'e1',
-        screenBuilder: _stubScreen,
-      ),
-  onGenerateRoute: AppRoutes.onGenerateRoute,
+/// The shell is a `ConsumerStatefulWidget` (it reports its own tab screen
+/// views), so every pump needs a scope. Nothing here overrides
+/// `analyticsServiceProvider`: with no Firebase in the harness the service
+/// resolves to null and every call is a silent no-op.
+Widget _app({Widget? home}) => ProviderScope(
+  child: MaterialApp(
+    home:
+        home ??
+        const HubShell(
+          isAdmin: true,
+          employeeId: 'e1',
+          screenBuilder: _stubScreen,
+        ),
+    onGenerateRoute: AppRoutes.onGenerateRoute,
+  ),
 );
 
 HubShellState _shellState(WidgetTester tester) =>
@@ -191,11 +198,13 @@ void main() {
       }
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: HubShell(
-            isAdmin: true,
-            employeeId: 'e1',
-            screenBuilder: countingBuilder,
+        ProviderScope(
+          child: MaterialApp(
+            home: HubShell(
+              isAdmin: true,
+              employeeId: 'e1',
+              screenBuilder: countingBuilder,
+            ),
           ),
         ),
       );
@@ -233,11 +242,13 @@ void main() {
       }
 
       await tester.pumpWidget(
-        MaterialApp(
-          home: HubShell(
-            isAdmin: false,
-            employeeId: 'e1',
-            screenBuilder: countingBuilder,
+        ProviderScope(
+          child: MaterialApp(
+            home: HubShell(
+              isAdmin: false,
+              employeeId: 'e1',
+              screenBuilder: countingBuilder,
+            ),
           ),
         ),
       );

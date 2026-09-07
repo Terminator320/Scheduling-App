@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -316,7 +316,7 @@ class _PersonalBlockClashDialogState
           onSwap: () => _openRow(group.employeeId, job),
           onPick: (person) => _swap(group.employeeId, job, person),
           onUndo: () => _undo(group, job),
-          onOpenJob: () => showEventDetails(context, job, showActions: true),
+          onOpenJob: () => showEventDetails(context, job, analyticsSource: AnalyticsSources.calendar, showActions: true),
         ),
       );
     }

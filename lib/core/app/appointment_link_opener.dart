@@ -6,7 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:home_widget/home_widget.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -41,6 +41,7 @@ class AppointmentLinkOpener {
       BuildContext context,
       AppointmentRecord record, {
       required bool showActions,
+      required String analyticsSource,
     })?
     showDetails,
     Duration hubPollInterval = const Duration(milliseconds: 200),
@@ -74,6 +75,7 @@ class AppointmentLinkOpener {
     BuildContext context,
     AppointmentRecord record, {
     required bool showActions,
+    required String analyticsSource,
   })
   showDetails;
 
@@ -217,7 +219,14 @@ class AppointmentLinkOpener {
       );
       return;
     }
-    await showDetails(navContext, record, showActions: shell.isAdmin);
+    // This opener serves BOTH external entry points — an `esproschedule://`
+    // deep link and a push/widget tap — so it reports the one they share.
+    await showDetails(
+      navContext,
+      record,
+      showActions: shell.isAdmin,
+      analyticsSource: AnalyticsSources.notification,
+    );
   }
 
   /// Polls for up to ~10s waiting for the live hub to appear. Returns null

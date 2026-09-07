@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/launchers/external_uri_launcher.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -27,6 +28,7 @@ Future<void> launchWebUrl(
     ref,
     uri,
     tag: 'LAUNCH-URL',
+    analyticsAction: AnalyticsContactActions.link,
     errorMessage: context.l10n.error_couldNotOpenLink,
   );
 }

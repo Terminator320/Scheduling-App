@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/features/clients/application/client_form_controller.dart';
@@ -38,6 +38,10 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       case ClientArchiveBusy():
         return false;
       case ClientArchived(:final archived):
+        // One toggle, one event — the direction is a parameter.
+        ref
+            .read(analyticsServiceProvider)
+            .logClientArchived(action: archived ? 'archive' : 'unarchive');
         notices.success(
           archived
               ? context.l10n.clients_archivedNotice(client.displayName)
@@ -84,6 +88,7 @@ mixin ClientActionsHost<T extends ConsumerStatefulWidget> on ConsumerState<T> {
       case ClientDeleteBusy():
         return;
       case ClientDeleted():
+        ref.read(analyticsServiceProvider).logClientDeleted();
         notices.success(context.l10n.clients_deletedNotice(client.displayName));
         onClientDeleted(client);
       case ClientDeleteFailed(:final error):

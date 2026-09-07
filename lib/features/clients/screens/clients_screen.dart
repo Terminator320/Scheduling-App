@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
@@ -25,7 +28,7 @@ import 'package:scheduling/shared/widgets/app_bars/app_top_bar.dart';
 import 'package:scheduling/shared/widgets/feedback/app_empty_state.dart';
 import 'package:scheduling/shared/widgets/fields/app_search_bar.dart';
 
-class ListInformation extends StatefulWidget {
+class ListInformation extends ConsumerStatefulWidget {
   const ListInformation({
     required this.isAdmin,
     required this.employeeId,
@@ -36,10 +39,10 @@ class ListInformation extends StatefulWidget {
   final String employeeId;
 
   @override
-  State<ListInformation> createState() => _ListInformationState();
+  ConsumerState<ListInformation> createState() => _ListInformationState();
 }
 
-class _ListInformationState extends State<ListInformation> {
+class _ListInformationState extends ConsumerState<ListInformation> {
   final TextEditingController _searchController = TextEditingController();
   ClientRecord? _selectedClient;
   ClientsFilter _filter = const ClientsFilterAll();
@@ -67,6 +70,23 @@ class _ListInformationState extends State<ListInformation> {
   Future<void> _openFilterSheet() async {
     final picked = await showClientsFilterSheet(context, selected: _filter);
     if (picked == null || !mounted) return;
+    // The building KEY is a street address — reported as the filter KIND only,
+    // never its value.
+    ref
+        .read(analyticsServiceProvider)
+        .logFilterUsed(
+          surface: AnalyticsSurfaces.clients,
+          filterName: switch (picked.filter) {
+            ClientsFilterAll() => 'none',
+            ClientsFilterType() => 'type',
+            ClientsFilterBuilding() => 'building',
+            ClientsFilterArchived() => 'archived',
+          },
+          filterValue: switch (picked.filter) {
+            ClientsFilterType(:final type) => type.name,
+            _ => null,
+          },
+        );
     setState(() {
       _filter = picked.filter;
       _activeBuildingLabel = picked.buildingLabel;
@@ -159,7 +179,16 @@ class _ListInformationState extends State<ListInformation> {
                 ClientsListHeader(
                   count: _visibleCount,
                   sort: _sort,
-                  onSortChanged: (next) => setState(() => _sort = next),
+                  onSortChanged: (next) {
+                    ref
+                        .read(analyticsServiceProvider)
+                        .logFilterUsed(
+                          surface: AnalyticsSurfaces.clients,
+                          filterName: 'sort',
+                          filterValue: next.name,
+                        );
+                    setState(() => _sort = next);
+                  },
                 ),
               ),
               Expanded(

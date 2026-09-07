@@ -5,6 +5,7 @@
   "PROJECT_ID": "your-firebase-project-id",
   "STORAGE_BUCKET": "your-firebase-project-id.firebasestorage.app",
   "IOS_MAPS_API_KEY": "your-ios-google-maps-key",
+  "ANALYTICS_DEBUG": "false",
   "USE_FIREBASE_EMULATOR": "false",
   "EMULATOR_HOST": "127.0.0.1"
 }

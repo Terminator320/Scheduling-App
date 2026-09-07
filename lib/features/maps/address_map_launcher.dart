@@ -1,8 +1,11 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive.dart';
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/launchers/external_uri_launcher.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -16,8 +19,14 @@ class AddressMapLauncher {
 
   static final AppLogger _logger = AppLogger();
 
+  /// Takes a [ref] purely to report the launch: this chooser is the app's main
+  /// Directions path and it deliberately does NOT go through
+  /// `launchExternalUri` (it surfaces failures via a SnackBar), so without this
+  /// the one contact action a field crew uses most would be the one missing
+  /// from the numbers.
   static Future<void> showMapChoices(
-    BuildContext context, {
+    BuildContext context,
+    WidgetRef ref, {
     required String address,
   }) async {
     final cleanAddress = address.trim();
@@ -122,8 +131,15 @@ class AddressMapLauncher {
     // launchUrl can throw and an unguarded throw here would be fatal, so log
     // it before we even check mounted.
     var opened = false;
+    // Read before the await, like every other post-await provider use.
+    final analytics = ref.read(analyticsServiceProvider);
     try {
       opened = await launchUrl(chosen, mode: LaunchMode.externalApplication);
+      if (opened) {
+        analytics.logContactAction(
+          action: AnalyticsContactActions.directions,
+        );
+      }
     } catch (e, st) {
       // Same reason as `launchExternalUri`: the chosen URI is a Maps route
       // built from client addresses, and the exception message quotes it.

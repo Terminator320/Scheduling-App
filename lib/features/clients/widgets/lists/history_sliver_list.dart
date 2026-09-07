@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -177,7 +177,7 @@ class _HistorySliverListState extends State<HistorySliverList> {
               // admin needs to reach a finished job's Edit button from here,
               // which is where finished jobs actually live.
               onTap: () =>
-                  showEventDetails(context, app, showActions: widget.isAdmin),
+                  showEventDetails(context, app, analyticsSource: AnalyticsSources.history, showActions: widget.isAdmin),
             ),
           ),
         ],

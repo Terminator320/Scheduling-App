@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/month_grid.dart';
@@ -190,7 +191,7 @@ class EmployeeDetailsView extends ConsumerWidget {
     final jobs = ref.read(employeeTodayJobsProvider(employeeId));
     for (final job in jobs) {
       if (job.id == appointmentId) {
-        showEventDetails(context, job, showActions: isCurrentUserAdmin);
+        showEventDetails(context, job, analyticsSource: AnalyticsSources.employees, showActions: isCurrentUserAdmin);
         return;
       }
     }

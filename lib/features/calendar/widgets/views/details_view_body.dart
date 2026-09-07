@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/launchers/phone_call_launcher.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
@@ -82,6 +83,7 @@ class DetailsViewBody extends ConsumerWidget {
     final onDirections = appointment.address.isNotEmpty
         ? () => AddressMapLauncher.showMapChoices(
             context,
+            ref,
             address: appointment.address,
           )
         : null;
@@ -263,6 +265,9 @@ class DetailsViewBody extends ConsumerWidget {
     final notices = ref.read(noticeServiceProvider);
     final repository = ref.read(appointmentsRepositoryProvider);
     final logger = ref.read(loggerProvider);
+    // Hoisted with the rest: the Undo runs from a timer callback after this
+    // sheet is gone, where `ref.read` throws.
+    final analytics = ref.read(analyticsServiceProvider);
     final outcome = await notifier.markAsDone(appointment);
     if (!context.mounted) return;
     switch (outcome) {
@@ -279,6 +284,7 @@ class DetailsViewBody extends ConsumerWidget {
               ),
             );
       case EventDetailsActionOk():
+        analytics.logJobCompleted(hasPhotos: appointment.pictureCount > 0);
         notices.successWithAction(
           l10n.common_appointmentMarkedAsDone,
           actionLabel: l10n.common_undo,
@@ -289,6 +295,7 @@ class DetailsViewBody extends ConsumerWidget {
                 id: id,
                 previousStatus: previousStatus,
               );
+              analytics.logAppointmentRestored();
               notices.success(l10n.common_changesSaved);
             } catch (e, st) {
               logger.warn('APPT-STATUS undo mark-complete failed', e, st);
@@ -320,6 +327,7 @@ class DetailsViewBody extends ConsumerWidget {
       successMessage: context.l10n.calendar_jobStarted,
       // Mark-done and cancel close because the job is FINISHED.
       closeOnSuccess: false,
+      onSuccess: ref.read(analyticsServiceProvider).logJobStarted,
     );
   }
 
@@ -360,6 +368,9 @@ class DetailsViewBody extends ConsumerWidget {
     if (outcome == null || !context.mounted) return;
     switch (outcome) {
       case EventDetailsSaved():
+        ref.read(analyticsServiceProvider).logAppointmentDelayed(
+          minutes: minutes,
+        );
         notices.success(l10n.calendar_pushedBack(minutes));
         onClose();
       case EventDetailsFailed(:final error):
@@ -399,6 +410,7 @@ class DetailsViewBody extends ConsumerWidget {
       ref,
       outcome,
       successMessage: context.l10n.common_appointmentCancelled,
+      onSuccess: ref.read(analyticsServiceProvider).logAppointmentCancelled,
     );
   }
 
@@ -409,6 +421,9 @@ class DetailsViewBody extends ConsumerWidget {
     EventDetailsActionOutcome outcome, {
     required String successMessage,
     bool closeOnSuccess = true,
+    // Runs on the Ok branch only — never for the reentrancy-guard no-op, which
+    // wrote nothing.
+    void Function()? onSuccess,
   }) {
     switch (outcome) {
       case EventDetailsActionBusy():
@@ -424,6 +439,7 @@ class DetailsViewBody extends ConsumerWidget {
               ),
             );
       case EventDetailsActionOk():
+        onSuccess?.call();
         ref.read(noticeServiceProvider).success(successMessage);
         if (closeOnSuccess) onClose();
     }

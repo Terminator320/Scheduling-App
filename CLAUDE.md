@@ -60,7 +60,9 @@ keys out with repeated `--dart-define=KEY=value`. 6 required keys:
 `IOS_API_KEY`, `IOS_APP_ID`, `MESSAGING_SENDER_ID`, `PROJECT_ID`,
 `STORAGE_BUCKET` (read in `lib/firebase_options.dart`, which fails fast naming
 any missing one) plus `IOS_MAPS_API_KEY`. `USE_FIREBASE_EMULATOR` and
-`EMULATOR_HOST` are the optional pair `main()` reads.
+`EMULATOR_HOST` are the optional pair `main()` reads, plus `ANALYTICS_DEBUG`
+(turns analytics collection ON in a debug build for DebugView work — it is OFF
+there by default so `flutter run` never reaches the production property).
 `IOS_MAPS_API_KEY` is a RESTRICTED CLIENT key — distinct from the server-side
 Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
 
@@ -130,6 +132,19 @@ Secret-Manager `GOOGLE_MAP_API_KEY`, which must never ship in the app.
   while photos retry via the queue above. `persistenceEnabled: true` is pinned in
   `main()` (serves cached reads) — don't remove it.
 - **App Check:** `FirebaseAppCheck.instance.activate()` in `main()`. Do not remove.
+- **Analytics: NOTHING outside `lib/core/analytics/analytics_service.dart` may
+  import `firebase_analytics`, and no parameter reaches Firebase unless its key
+  is declared in `AnalyticsParams.allParams`.** The sanitizer drops an
+  undeclared key and asserts in debug, which is what makes a PII leak
+  structurally impossible in an app full of client phones, addresses and job
+  notes — a leak arrives through one call site passing a convenient
+  `'client_name': record.name`, never through a decision. `setUserId` is never
+  called; the role travels as the `user_role` user property. An event fires on
+  the sealed SUCCESS branch only (`AddEventSubmitted`, `EventDetailsSaved`,
+  `ClientSaved`, …) — a `Busy` member is the reentrancy guard's no-op and wrote
+  nothing. Full rules in `.claude/rules/analytics.md` (loads under
+  `lib/core/analytics/`), including the observer-vs-hub-shell screen-view split
+  that keeps the four tabs from double-counting.
 - **Appointment rules live in `.claude/rules/appointments.md`** (moved
   2026-08-19; the assignee and job-record set moved 2026-09-02) — the status
   allowlist and `displayStatusAt` ladder, mark-complete, `showActions`, personal
@@ -619,10 +634,11 @@ Always run `cd functions && npm run lint` before deploying.
   before that date `.claude/` was gitignored and `docs/ARCHITECTURE.md` was the
   only copy anyone else could read. Only `.claude/settings.local.json` stays
   ignored, because it is machine-local. `code-quality.md`, `error-handling.md` and
-  `security.md` are `alwaysApply: true`; the other nine
-  (`testing.md`, `frontend.md`, and the 2026-08-19 additions
+  `security.md` are `alwaysApply: true`; the other ten
+  (`testing.md`, `frontend.md`, the 2026-08-19 additions
   `appointments.md`, `clients.md`, `employees.md`, `images.md`,
-  `notifications.md`, `wave.md`, `firestore-indexes.md`) are `paths:`-scoped,
+  `notifications.md`, `wave.md`, `firestore-indexes.md`, and `analytics.md`,
+  added 2026-09-07) are `paths:`-scoped,
   so they load only when Claude touches a matching file. That scoping is verified working — a
   `paths:` rule is absent from context until its paths are touched — and it
   is what took this file from ~155k chars to ~31k.
