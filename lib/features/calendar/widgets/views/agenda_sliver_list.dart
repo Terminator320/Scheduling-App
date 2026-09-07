@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
@@ -191,7 +192,7 @@ class AgendaSliverList extends StatelessWidget {
           if (onAppointmentTap != null) {
             onAppointmentTap!(e);
           } else {
-            showEventDetails(context, e, showActions: isAdmin);
+            showEventDetails(context, e, analyticsSource: AnalyticsSources.calendar, showActions: isAdmin);
           }
         },
       ),

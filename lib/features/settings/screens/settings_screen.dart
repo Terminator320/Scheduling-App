@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/layout/master_detail_scaffold.dart';
@@ -145,6 +146,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     // unmounted (Riverpod 3), and the catch below deliberately logs before its
     // mounted guard so the failure still reaches Crashlytics.
     final logger = ref.read(loggerProvider);
+    final analytics = ref.read(analyticsServiceProvider);
     if (value) {
       final available = await ref
           .read(biometricAuthServiceProvider)
@@ -160,6 +162,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     setState(() => _pendingAppLockValue = value);
     try {
       await ref.read(appLockEnabledProvider.notifier).setEnabled(value: value);
+      // After the write lands, never on the optimistic flip — a keychain fault
+      // reverts the switch, and reporting the intent would count a setting the
+      // person does not actually have.
+      analytics.logSettingsChanged(
+        settingName: 'app_lock',
+        settingValue: value ? 'on' : 'off',
+      );
     } catch (e, st) {
       // flutter_secure_storage throws on an iOS keychain fault, including the
       // pre-first-unlock -25308 window AppLockController._load() documents by
@@ -251,9 +260,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     // with no guard at all.
     final enabled = ref.read(liveActivityEnabledProvider.notifier);
     final controller = ref.read(liveActivityRegistrationControllerProvider);
+    final analytics = ref.read(analyticsServiceProvider);
     setState(() => _pendingLiveActivityValue = value);
     try {
       await enabled.setEnabled(value: value);
+      analytics.logSettingsChanged(
+        settingName: 'live_activity',
+        settingValue: value ? 'on' : 'off',
+      );
       if (value) {
         await controller.sync();
       } else {

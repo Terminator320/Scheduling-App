@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/analytics/analytics_screens.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -78,6 +79,9 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
           orElse: () => AppColors.crewPalette.first,
         )
         .toARGB32();
+    ref
+        .read(analyticsServiceProvider)
+        .logScreenView(AnalyticsScreens.invitePerson);
   }
 
   @override
@@ -151,6 +155,9 @@ class _InvitePersonSheetState extends ConsumerState<InvitePersonSheet> {
       case EmployeeSaveBusy():
         break;
       case EmployeeAccountCreated(:final credentials):
+        // Fires before the credentials dialog: the account exists at this
+        // point, and the dialog can be dismissed without changing that.
+        ref.read(analyticsServiceProvider).logEmployeeInvited();
         await showNewAccountDialog(
           context,
           name: _firstNameController.text.trim(),

@@ -148,6 +148,31 @@ Walk the **device-only checklist** (none covered by the test harness):
   Dynamic Island needs Pro hardware)
 - **Siri App Intents** — the read intents (count / today / next / a specific day)
 
+### Verifying analytics events in DebugView
+
+Analytics collection is **off in debug builds by default**, so day-to-day
+`flutter run` never files events against the production property. Watching
+events live needs BOTH halves — they do different things, and only having one
+is why "DebugView shows nothing" is the usual first result:
+
+1. **Turn collection on** for the run:
+   `flutter run --dart-define=ANALYTICS_DEBUG=true --dart-define-from-file=dev/firebase.local.json`.
+   This also stamps the `build_env=debug` user property, so this traffic stays
+   filterable (and excludable) in the console afterwards.
+2. **Add the launch argument** so events stream immediately instead of being
+   batched: Xcode → *Product → Scheme → Edit Scheme…* → **Run** → *Arguments* →
+   *Arguments Passed On Launch* → `+` → `-FIRDebugEnabled`. Run from Xcode, or
+   from `flutter run` after the scheme is saved.
+3. Open Firebase Console → *Analytics → DebugView* and pick the device in the
+   top-left selector. Events appear within seconds.
+4. **Turn it back off** when finished: remove `-FIRDebugEnabled` (or set
+   `-FIRDebugDisabled`) on the scheme. Leaving it on keeps that device
+   streaming every session into DebugView.
+
+Verify at least one of each shape: a `screen_view` (switch hub tabs), a custom
+event with parameters (create an appointment), and the `user_role` user
+property under *DebugView → the device card → User properties*.
+
 ## Phase G — Before TestFlight / App Store (not for dev builds)
 
 1. **Enable App Attest in the Firebase Console** (Build → App Check → the iOS
@@ -157,9 +182,20 @@ Walk the **device-only checklist** (none covered by the test harness):
    (All Cloud Function callables already enforce App Check — nothing to flip in
    `functions/`; the old pre-ship `enforceAppCheck: false` carve-out was retired
    in 1.25.1.)
-2. Bump `+BUILD` in `pubspec.yaml` + add a `CHANGELOG.md` entry, then **Archive**
+2. **Build with `FIREBASE_ANALYTICS_WITHOUT_ADID=true`** in the environment.
+   The plugin's `Package.swift` reads it and links `FirebaseAnalyticsCore`
+   instead of `FirebaseAnalytics`, dropping IDFA/advertising-identifier
+   collection — this app sells no ads and needs no attribution, so the ad id
+   buys nothing and costs a heavier privacy disclosure (and a possible ATT
+   prompt).
+3. **Update the App Store Connect privacy labels for analytics.**
+   `ios/Runner/PrivacyInfo.xcprivacy` declares **Product Interaction** (Usage
+   Data), not linked and not used for tracking — `setUserId` is never called
+   and no analytics parameter carries a name, email, phone, address or note.
+   The App Store Connect answers must match that manifest.
+4. Bump `+BUILD` in `pubspec.yaml` + add a `CHANGELOG.md` entry, then **Archive**
    in Xcode (*Product → Archive*) and upload.
-3. **Verify Crashlytics symbolication:** on the first TestFlight build,
+5. **Verify Crashlytics symbolication:** on the first TestFlight build,
    trigger a test crash and confirm the symbolicated report appears in the
    Firebase Crashlytics console within ~10 minutes (proves the Run Script
    phase + dSYM settings from Phase D are correct).
@@ -168,10 +204,14 @@ Walk the **device-only checklist** (none covered by the test harness):
 
 Neither applies today — recorded so they aren't forgotten:
 
-- **App Tracking Transparency:** if an analytics/ads SDK with cross-app
-  tracking is ever added, present the ATT prompt and add
-  `NSUserTrackingUsageDescription` to `Info.plist`. (`PrivacyInfo.xcprivacy`
-  currently declares `NSPrivacyTracking: false`.)
+- **App Tracking Transparency:** if an SDK with CROSS-APP tracking is ever
+  added, present the ATT prompt and add `NSUserTrackingUsageDescription` to
+  `Info.plist`. (`PrivacyInfo.xcprivacy` declares `NSPrivacyTracking: false`.)
+  Firebase Analytics, added 2026-09-07, does NOT change this — it is built
+  with `FIREBASE_ANALYTICS_WITHOUT_ADID=true` (Phase G step 2), so it collects
+  no advertising identifier and does no cross-app tracking. Dropping that build
+  flag is what would put ATT back on the table, which is the reason it is a
+  documented release step rather than a preference.
 - **Sign in with Apple:** required by Apple as soon as any third-party
   sign-in provider (Google, Facebook, …) is offered. Not required for the
   current Firebase email/password-only auth.

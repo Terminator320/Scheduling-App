@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/connectivity/connectivity_providers.dart';
 import 'package:scheduling/core/constants/app_urls.dart';
@@ -258,6 +258,9 @@ class _AccountSetupScreenState extends ConsumerState<AccountSetupScreen> {
     if (!mounted) return;
     switch (outcome) {
       case SignInSuccess(:final employee):
+        // Only on the branch that actually reaches the app — the pending-doc
+        // branch below leaves the person back at sign-in.
+        ref.read(analyticsServiceProvider).logAccountSetupCompleted();
         await Navigator.of(context).pushNamedAndRemoveUntil(
           AppRoutes.mainCalendar,
           (_) => false,

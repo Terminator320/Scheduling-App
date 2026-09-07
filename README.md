@@ -28,6 +28,20 @@ The application is backed by Google Firebase, giving it a secure, cloud-based fo
    flutter run --dart-define=USE_FIREBASE_EMULATOR=true --dart-define=EMULATOR_HOST=192.168.x.x
    ```
 
+5. **Analytics (optional in development)** — Firebase Analytics collection is **off in debug builds** so `flutter run` never files events against the production property. To watch events in Firebase DebugView, turn collection on *and* add the launch argument:
+
+   ```bash
+   flutter run --dart-define-from-file=dev/firebase.local.json --dart-define=ANALYTICS_DEBUG=true
+   ```
+
+   The `-FIRDebugEnabled` launch argument also has to be on the Xcode scheme — see [docs/IOS_MAC_BUILD.md](docs/IOS_MAC_BUILD.md). Release builds always collect.
+
+6. **Release builds should drop the advertising identifier** — the app sells no ads and needs no attribution, so build with `FIREBASE_ANALYTICS_WITHOUT_ADID=true` in the environment. That swaps `FirebaseAnalytics` for `FirebaseAnalyticsCore` in the plugin's SPM package, which removes IDFA collection and the App Store privacy disclosure that comes with it:
+
+   ```bash
+   FIREBASE_ANALYTICS_WITHOUT_ADID=true flutter build ios --release --dart-define-from-file=dev/firebase.local.json
+   ```
+
 The app targets **iOS only** and building it requires a Mac — see [docs/IOS_MAC_BUILD.md](docs/IOS_MAC_BUILD.md).
 
 ---

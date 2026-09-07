@@ -9,6 +9,7 @@ import 'package:scheduling/shared/widgets/sheets/sheet_widgets.dart';
 class EventDetailsSheet extends ConsumerWidget {
   const EventDetailsSheet({
     required this.appointment,
+    required this.analyticsSource,
     super.key,
     // Defaults CLOSED — see EventDetailsView.showActions.
     this.showActions = false,
@@ -18,6 +19,9 @@ class EventDetailsSheet extends ConsumerWidget {
   final AppointmentRecord appointment;
   final bool showActions;
   final bool initialEditing;
+
+  /// Which surface opened this sheet (see `AnalyticsSources`).
+  final String analyticsSource;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,6 +40,7 @@ class EventDetailsSheet extends ConsumerWidget {
     if (isEditing && showActions) {
       return EventDetailsView(
         appointment: appointment,
+        analyticsSource: analyticsSource,
         showActions: showActions,
         initialEditing: initialEditing,
         onClose: close,
@@ -45,6 +50,7 @@ class EventDetailsSheet extends ConsumerWidget {
     return DraggableSheetFrame(
       builder: (sheetContext, scrollController) => EventDetailsView(
         appointment: appointment,
+        analyticsSource: analyticsSource,
         showActions: showActions,
         initialEditing: initialEditing,
         scrollController: scrollController,

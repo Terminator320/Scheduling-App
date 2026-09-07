@@ -85,7 +85,8 @@ void main() {
                 isSignedIn: () => signedIn,
                 resolveHub: () => hub,
                 hubPollInterval: hubPollInterval,
-                showDetails: (context, record, {required showActions}) async {
+                showDetails:
+                    (context, record, {required showActions, required analyticsSource}) async {
                   shown?.add(record);
                   shownWithActions?.add(showActions);
                 },
@@ -273,7 +274,8 @@ void main() {
                 isMounted: () => true,
                 isSignedIn: () => true,
                 resolveHub: _FakeHub.new,
-                showDetails: (context, record, {required showActions}) async =>
+                showDetails:
+                    (context, record, {required showActions, required analyticsSource}) async =>
                     throw StateError('boom'),
               );
               return const SizedBox.shrink();

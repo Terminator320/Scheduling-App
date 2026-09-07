@@ -15,6 +15,7 @@
 // selection and the `initialTab` it carries are the logic under test.
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:scheduling/core/navigation/app_destination.dart';
@@ -50,9 +51,11 @@ void main() {
   /// the cold-start condition. Returns a context for the route builders.
   Future<BuildContext> pumpShellLessApp(WidgetTester tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        onGenerateRoute: AppRoutes.onGenerateRoute,
-        home: Scaffold(body: Text('no-shell')),
+      const ProviderScope(
+        child: MaterialApp(
+          onGenerateRoute: AppRoutes.onGenerateRoute,
+          home: Scaffold(body: Text('no-shell')),
+        ),
       ),
     );
     expect(HubShell.liveState, isNull, reason: 'a shell leaked into the test');
@@ -133,12 +136,14 @@ void main() {
     // The contrast case, and the reason the pair is two branches: once a shell
     // exists the same push must switch its tab rather than stack a second one.
     await tester.pumpWidget(
-      const MaterialApp(
-        onGenerateRoute: AppRoutes.onGenerateRoute,
-        home: HubShell(
-          isAdmin: true,
-          employeeId: 'e1',
-          screenBuilder: _stubScreen,
+      const ProviderScope(
+        child: MaterialApp(
+          onGenerateRoute: AppRoutes.onGenerateRoute,
+          home: HubShell(
+            isAdmin: true,
+            employeeId: 'e1',
+            screenBuilder: _stubScreen,
+          ),
         ),
       ),
     );

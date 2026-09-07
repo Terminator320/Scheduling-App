@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_action_sheet.dart';
 import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/launchers/route_map_launcher.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
@@ -447,7 +448,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
   }
 }
 
-class _StopTile extends StatelessWidget {
+class _StopTile extends ConsumerWidget {
   const _StopTile({
     required this.slice,
     required this.number,
@@ -472,7 +473,7 @@ class _StopTile extends StatelessWidget {
   final bool isAdmin;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final statusColors = Theme.of(context).statusColors;
     final isOpen = number != null;
     final job = slice.appointment;
@@ -501,12 +502,13 @@ class _StopTile extends StatelessWidget {
                   crew: crew,
                   slice: slice,
                   onTap: () =>
-                      showEventDetails(context, job, showActions: isAdmin),
+                      showEventDetails(context, job, analyticsSource: AnalyticsSources.dayRoute, showActions: isAdmin),
                   footer: (isOpen && hasAddress)
                       ? _NavigatePill(
                           label: navigateLabel,
                           onTap: () => AddressMapLauncher.showMapChoices(
                             context,
+                            ref,
                             address: job.address,
                           ),
                         )

@@ -3,7 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
@@ -122,6 +122,7 @@ void main() {
             // the admin-only Edit affordance.
             body: EventDetailsView(
               appointment: appointment ?? _appointment,
+              analyticsSource: AnalyticsSources.calendar,
               showActions: true,
               onClose: onClose,
             ),

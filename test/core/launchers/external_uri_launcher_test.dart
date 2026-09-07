@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/launchers/external_uri_launcher.dart';
 import 'package:scheduling/core/notices/app_notice.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -80,6 +80,7 @@ void main() {
         ref,
         Uri.parse(_uri),
         tag: 'LAUNCH-TEL',
+        analyticsAction: AnalyticsContactActions.call,
         errorMessage: 'could not call',
       );
       await tester.pump();
@@ -105,6 +106,7 @@ void main() {
         ref,
         Uri.parse(_uri),
         tag: 'LAUNCH-TEL',
+        analyticsAction: AnalyticsContactActions.call,
         errorMessage: 'could not call',
       );
       await tester.pump();
@@ -127,6 +129,7 @@ void main() {
         ref,
         Uri.parse(_uri),
         tag: 'LAUNCH-TEL',
+        analyticsAction: AnalyticsContactActions.call,
         errorMessage: 'could not call',
       );
       await tester.pump();
@@ -157,6 +160,7 @@ void main() {
         ref,
         Uri.parse(_uri),
         tag: 'LAUNCH-TEL',
+        analyticsAction: AnalyticsContactActions.call,
         errorMessage: 'could not call',
       );
 

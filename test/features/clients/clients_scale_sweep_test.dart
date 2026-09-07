@@ -5,9 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:mocktail/mocktail.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
@@ -131,7 +130,11 @@ void main() {
       await _pumpAt(
         tester,
         scale: scale,
-        home: const Scaffold(body: AddClientSheet()),
+        home: const Scaffold(
+          body: AddClientSheet(
+            analyticsSource: AnalyticsSources.clientsTab,
+          ),
+        ),
       );
 
       expect(tester.takeException(), isNull);

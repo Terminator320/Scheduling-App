@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:infinite_scroll_pagination/infinite_scroll_pagination.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -79,6 +80,9 @@ class _ClientsListViewState extends ConsumerState<ClientsListView>
 
   @override
   String get searchDebounceTag => 'CLI-SEARCH debounced search failed';
+
+  @override
+  String get analyticsSurface => AnalyticsSurfaces.clients;
 
   late final PagingController<int, ClientRecord> _pagingController =
       PagingController<int, ClientRecord>(

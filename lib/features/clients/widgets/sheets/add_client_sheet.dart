@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/analytics/analytics_screens.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -37,8 +38,12 @@ enum AddClientNext { none, bookJob }
 typedef AddClientResult = ({ClientRecord client, AddClientNext next});
 
 /// Opens the add-client sheet.
+/// [analyticsSource] is required: this sheet serves the Clients tab and the
+/// booking form's inline add, and telling those apart is what says whether
+/// clients are created deliberately or mid-booking.
 Future<AddClientResult?> showAddClientSheet(
   BuildContext context, {
+  required String analyticsSource,
   String? initialName,
   bool settleFocus = false,
 }) async {
@@ -48,7 +53,10 @@ Future<AddClientResult?> showAddClientSheet(
   }
   final created = await showAppBottomSheet<AddClientResult>(
     context,
-    builder: (_) => AddClientSheet(initialName: initialName),
+    builder: (_) => AddClientSheet(
+      initialName: initialName,
+      analyticsSource: analyticsSource,
+    ),
   );
   if (settleFocus && context.mounted) await SheetFocus.unfocusAfterSheet();
   // Guard against the widget unmounting while the sheet is open — we shouldn't
@@ -57,7 +65,14 @@ Future<AddClientResult?> showAddClientSheet(
 }
 
 class AddClientSheet extends ConsumerStatefulWidget {
-  const AddClientSheet({super.key, this.initialName});
+  const AddClientSheet({
+    required this.analyticsSource,
+    super.key,
+    this.initialName,
+  });
+
+  /// Which surface opened this sheet (see `AnalyticsSources`).
+  final String analyticsSource;
 
   /// Prefills the name field (e.g.
   final String? initialName;
@@ -96,6 +111,8 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
     // The seed is a programmatic write, which never fires the name field's
     // `onChanged` — so the lift below has to be run by hand here.
     liftPhoneFromNameField(name: _nameController, phone: _phoneController);
+    // A sheet route has no name, so the observer skips it.
+    ref.read(analyticsServiceProvider).logScreenView(AnalyticsScreens.addClient);
   }
 
   @override
@@ -190,6 +207,9 @@ class _AddClientSheetState extends ConsumerState<AddClientSheet>
       case ClientSaveBusy():
         break;
       case ClientSaved(:final client):
+        ref
+            .read(analyticsServiceProvider)
+            .logClientCreated(source: widget.analyticsSource);
         ref
             .read(noticeServiceProvider)
             .success(context.l10n.common_clientAdded);

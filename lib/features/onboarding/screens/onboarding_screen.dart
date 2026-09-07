@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/analytics/analytics_screens.dart';
 import 'package:scheduling/core/animations/animated_loading_button.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/l10n/l10n.dart';
@@ -9,23 +12,26 @@ import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 /// First-launch intro carousel — swipeable slides with a page-dot indicator,
 /// and "Get Started"/"Skip" actions that both call [onFinish].
-class OnboardingScreen extends StatefulWidget {
+class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({required this.onFinish, super.key});
 
   /// Marks onboarding complete and advances to the auth/splash flow.
   final Future<void> Function() onFinish;
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _controller = PageController();
   int _index = 0;
 
   @override
   void initState() {
     super.initState();
+    ref
+        .read(analyticsServiceProvider)
+        .logScreenView(AnalyticsScreens.onboarding);
     // Onboarding owns the native splash handoff on fresh install.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FlutterNativeSplash.remove();

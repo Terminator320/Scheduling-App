@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -112,7 +112,7 @@ class _JobList extends StatelessWidget {
             // before.
             crew: crewFor(job, colorMap: colorMap),
             dimWhenCancelled: true,
-            onTap: () => showEventDetails(context, job, showActions: false),
+            onTap: () => showEventDetails(context, job, analyticsSource: AnalyticsSources.clientDetail, showActions: false),
           ),
           const SizedBox(height: AppSpacing.sp8),
         ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/app/photo_upload_failure_listener.dart';
 import 'package:scheduling/core/app/role_upgrade_listener.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
@@ -126,7 +127,22 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
       !isSameDate(_selectedDay ?? _focusedDay, today) ||
       !isInMonth(today, _focusedDay);
 
+  /// One event per date move, with WHICH gesture moved it.
+  ///
+  /// `_onDaySelected` is the single funnel every path ends in, so the direction
+  /// is passed down rather than logged at each entry point — logging at both
+  /// would count a week page or a Today tap twice.
+  void _logDateChange(String direction) {
+    ref
+        .read(analyticsServiceProvider)
+        .logCalendarDateChanged(
+          viewMode: _agendaMode.name,
+          direction: direction,
+        );
+  }
+
   void _goToToday(DateTime today) {
+    _logDateChange('today');
     setState(() {
       _focusedDay = today;
       _selectedDay = today;
@@ -157,6 +173,9 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
 
   void _setAgendaMode(_AgendaMode mode) {
     if (mode == _agendaMode) return;
+    ref
+        .read(analyticsServiceProvider)
+        .logCalendarViewChanged(viewMode: mode.name);
     final day = _selectedDay ?? _focusedDay;
     setState(() {
       _agendaMode = mode;
@@ -169,11 +188,12 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   /// A tap on a week bar: that day, in day mode.
   void _onWeekDaySelected(DateTime day) {
     setState(() => _agendaMode = _AgendaMode.day);
-    _onDaySelected(day);
+    _onDaySelected(day, direction: 'week_strip');
   }
 
   /// Moves focus and selection to the given month/day.
   void _setFocusedDay(DateTime day) {
+    _logDateChange('picked');
     final newRange = _rangeFor(day, day);
     setState(() {
       _focusedDay = day;
@@ -188,7 +208,10 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
     final from = _selectedDay ?? _focusedDay;
     final weekStart = CalendarMonthGrid.weekStartOf(context);
     final target = DateTime(from.year, from.month, from.day + 7 * direction);
-    _onDaySelected(weekOf(target, weekStart: weekStart).first);
+    _onDaySelected(
+      weekOf(target, weekStart: weekStart).first,
+      direction: direction > 0 ? 'next' : 'previous',
+    );
   }
 
   Map<DateTime, List<AppointmentDaySlice>>? _dayIndex;
@@ -242,8 +265,11 @@ class _MainCalendarState extends ConsumerState<MainCalendar> {
   Iterable<AppointmentRecord> _appointmentsOn(DateTime day) =>
       _getEventsForDay(day).map((slice) => slice.appointment);
 
-  void _onDaySelected(DateTime selectedDay) {
+  void _onDaySelected(DateTime selectedDay, {String direction = 'day'}) {
+    // The early return is what keeps a re-tap of the selected day from
+    // reporting a move that did not happen.
     if (isSameDate(_selectedDay ?? _focusedDay, selectedDay)) return;
+    _logDateChange(direction);
     final newRange = _rangeFor(selectedDay, selectedDay);
     setState(() {
       _selectedDay = selectedDay;

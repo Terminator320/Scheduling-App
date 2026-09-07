@@ -100,6 +100,7 @@ class ClientDetailViewBody extends ConsumerWidget {
         ? null
         : () => AddressMapLauncher.showMapChoices(
             context,
+            ref,
             // The composed address, never the stored one: a street-only doc
             // would send the maps app a street with no city.
             address: displayAddress,

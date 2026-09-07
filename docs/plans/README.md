@@ -26,6 +26,7 @@ at the top of each file, not its boxes.
 | `2026-07-29-redesign-program.md` | **COMPLETE.** P1–P5 and P7 shipped; **P6 and P7b CANCELLED by owner call 2026-09-06.** Owes nothing further — kept as the program record. |
 | `redesign-subdocs/` | The build record for P1 through P7 — see the README in there. P4b is **withdrawn**; P6 and P7b are **cancelled**. |
 | `redesign-subdocs/2026-07-30-p1-p2-DEVICE-TEST.md` | **§0–§10 closed 2026-08-11**, owner-reported passing. The **P5 block (18 checks) is still unrun** — no longer blocked (the deploy landed 2026-08-11), but it needs a technician account. |
+| `2026-09-07-analytics-followups.md` | **Code COMPLETE and verified** (analyzer clean, 3547 tests). Every open item is off-repo: Google Analytics must be ENABLED on the project or the SDK reports nothing silently; custom dimensions must be registered or `user_role` and `source` are uncollectable in reports; App Store Connect privacy labels and the `FIREBASE_ANALYTICS_WITHOUT_ADID=true` release build are submission-gating. |
 | `2026-07-10-siri-app-intents-design.md` | Design, 6 phases. Phases 5–6 unscoped. |
 | `2026-07-19-siri-app-intents-implementation.md` | Phases 1–3 built; **no device pass ever run**. |
 | `2026-07-20-siri-phase4-write-actions.md` | **NOT STARTED.** Mac + Apple-portal session. |

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/analytics/analytics_screens.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
@@ -98,6 +99,9 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
   @override
   void initState() {
     super.initState();
+    ref
+        .read(analyticsServiceProvider)
+        .logScreenView(AnalyticsScreens.editPerson);
     final e = widget.employee;
     // A legacy doc has the whole name in `name` and nothing in first/last.
     // Seeding First with it keeps the stored name visible and editable, and
@@ -268,6 +272,7 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
       case EmployeeSaveBusy():
         break;
       case EmployeeUpdated():
+        ref.read(analyticsServiceProvider).logEmployeeEdited();
         ref
             .read(noticeServiceProvider)
             .success(context.l10n.common_changesSaved);
@@ -313,6 +318,12 @@ class _EditPersonSheetState extends ConsumerState<EditPersonSheet> {
 
     switch (outcome) {
       case EmployeeStatusChanged():
+        // The NEW status only — never who it was applied to.
+        ref
+            .read(analyticsServiceProvider)
+            .logEmployeeStatusChanged(
+              status: _isDisabled ? 'active' : 'disabled',
+            );
         setState(() => _isDisabled = !_isDisabled);
         ref
             .read(noticeServiceProvider)

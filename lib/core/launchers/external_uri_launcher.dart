@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -30,6 +31,7 @@ Future<bool> launchExternalUri(
   Uri uri, {
   required String tag,
   required String errorMessage,
+  required String analyticsAction,
   LaunchMode mode = LaunchMode.externalApplication,
 }) async {
   // Both resolved before the await. `launchUrl` hands control to the OS, so
@@ -38,9 +40,15 @@ Future<bool> launchExternalUri(
   // replace the launch failure with a StateError and lose the tagged log.
   final logger = ref.read(loggerProvider);
   final notices = ref.read(noticeServiceProvider);
+  final analytics = ref.read(analyticsServiceProvider);
   try {
     final opened = await launchUrl(uri, mode: mode);
-    if (!opened) {
+    if (opened) {
+      // Only a launch the OS actually accepted. The URI itself is never sent —
+      // it is a phone number, an email address or a route through client
+      // addresses, the same reason it is kept out of the log below.
+      analytics.logContactAction(action: analyticsAction);
+    } else {
       logger.warn('$tag launchUrl returned false');
       if (context.mounted) notices.error(errorMessage);
     }

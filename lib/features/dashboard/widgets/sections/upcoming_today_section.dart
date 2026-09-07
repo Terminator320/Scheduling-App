@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/utils/sheet_helpers.dart';
@@ -58,6 +58,7 @@ class UpcomingTodaySection extends StatelessWidget {
                 context,
                 ops.upcoming[i].appointment,
                 showActions: isAdmin,
+                analyticsSource: AnalyticsSources.dashboard,
               ),
             ),
           ],

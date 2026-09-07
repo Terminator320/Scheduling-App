@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-
+import 'package:scheduling/core/analytics/analytics_events.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/analytics/analytics_screens.dart';
 import 'package:scheduling/core/layout/breakpoints.dart';
 import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
@@ -59,6 +61,12 @@ class _ClientDetailViewState extends ConsumerState<ClientDetailView>
   void initState() {
     super.initState();
     _client = widget.client;
+    // Reported HERE, not from the list tile: the tile's `onOpen` override is
+    // what the two-pane layout uses to select into this pane instead of pushing
+    // a sheet, so a tile-side event would miss every tablet open.
+    ref.read(analyticsServiceProvider)
+      ..logScreenView(AnalyticsScreens.clientDetail)
+      ..logClientViewed(source: AnalyticsSources.clientsTab);
   }
 
   Future<void> _openEdit() async {

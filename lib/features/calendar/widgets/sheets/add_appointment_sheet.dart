@@ -3,6 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/adaptive/adaptive_pickers.dart';
+import 'package:scheduling/core/analytics/analytics_events.dart';
+import 'package:scheduling/core/analytics/analytics_providers.dart';
+import 'package:scheduling/core/analytics/analytics_screens.dart';
 import 'package:scheduling/core/errors/error_cause.dart';
 import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
@@ -84,6 +87,12 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
     }
     final prefill = widget.prefill;
     if (prefill != null) _seedFrom(prefill);
+    // A sheet route carries no name, so the observer skips it — the form
+    // reports itself here. Without this the create funnel has no entry step and
+    // only its successful completions are visible.
+    ref
+        .read(analyticsServiceProvider)
+        .logScreenView(AnalyticsScreens.addAppointment);
   }
 
   /// Text lives in the controllers; the rest is state, applied once the family
@@ -235,6 +244,22 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
         :final futureBookings,
         :final runDays,
       ):
+        // Fires on the SUBMITTED branch only. `AddEventBusy` is the reentrancy
+        // guard's no-op and `AddEventBusyEmployees` returns to the sheet for a
+        // force-through choice — counting either as a creation would report
+        // jobs that were never written.
+        ref
+            .read(analyticsServiceProvider)
+            .logAppointmentCreated(
+              source: AnalyticsSources.calendar,
+              repeat: appointment.repeat.name,
+              assigneeCount: appointment.employeeIds.length,
+              hasPhotos: appointment.pictureCount > 0,
+              isPersonal: appointment.isPersonal,
+              isAllDay: appointment.isAllDay,
+              isDayOff: appointment.isDayOff,
+              isMultiDay: runDays > 1,
+            );
         // A run and a repeat series are different things and must not share a
         // sentence: a 5-day job is ONE job over 5 days, not 4 future visits.
         ref.read(noticeServiceProvider).success(switch ((
