@@ -209,6 +209,27 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   are written to `getTemporaryDirectory()` for the platform channel — and the
   1×1 refusal stand-in is excluded by identity, or Save/Share would hand over a
   blank pixel as if it were the job.
+  **`DetailsPhotosView`'s render gate must COUNT `pendingCount` and WATCH it**
+  (2026-09-06, caught in review before it shipped). The gate sits inside a
+  `ValueListenableBuilder` on `notifier.pending`, not a plain read: a job with
+  zero existing/new/failed photos renders `SizedBox.shrink()` with nothing
+  listening, so a background upload started from the read-only field-record
+  path (`DetailsFieldRecordView._addPhotos` → `uploadInBackground` →
+  `reportPending`) left the crew with no sign their first photo on a job
+  existed for the whole upload — a plain non-reactive read of `pendingCount`
+  has the same hole, since nothing would rebuild the shrunk section when the
+  count changed.
+  **`EventDetailsController` subscribes to `repo.onLocalWrite` and re-runs
+  `_loadStoredPictures()`** so an open sheet learns when a background upload
+  lands, instead of only ever reading the subcollection once at `build()`.
+  `onLocalWrite` is the ONE broadcast stream on the singleton repository, poked
+  by nine write paths (see the root `CLAUDE.md`'s `_patchWindow`/
+  `_notifyLocalWrite` rule), so this subscription also means posting a crew
+  note or flipping a status costs an `appointments/{id}/images` subcollection
+  read while a detail sheet is open — bounded and accepted, but previously
+  unstated. `_loadStoredPictures`'s existing `_lastKnownImages` guard already
+  refuses to adopt a server list over photos the user has edited in the sheet,
+  so this poke needed no change on that side.
 - **Photos live in `appointments/{id}/images`. The `pictures` array is GONE
   (the CONTRACT step).** Every appointment document used to carry its whole
   photo array — a `url` alone was ~215 of a ~290-byte entry — while the

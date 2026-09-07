@@ -111,6 +111,34 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   completed-job edit button above unreachable from the one screen an admin would
   look for it on. It still DEFAULTS closed like every other appointment surface;
   `HistoryScreen` passes `widget.isAdmin`.
+- **A route argument's `isAdmin` is a push-time SNAPSHOT — a live gate reads
+  `isActiveAdminProvider` instead** (`features/auth/application/`, 2026-09-06).
+  It is `role == 'admin' && status == 'active'` off the already-live
+  `currentUserDocProvider`, and **fails CLOSED while the doc is unsettled**,
+  matching the least-privilege default every appointment surface already
+  takes. A stale back stack, an argless push or a deep link can all carry an
+  `isAdmin: true` argument that no longer describes the signed-in person; this
+  asks Firestore instead. **Three consumers, and they gate differently.**
+  `DayRouteScreen` resolves `widget.isAdmin && ref.watch(isActiveAdminProvider)`
+  **once** and feeds that value to the crew picker, the
+  `appointmentsInRangeProvider`/`myAppointmentsProvider` choice, `buildDayRoute`
+  and `showEventDetails(showActions:)` — and, load-bearing, into
+  `_prepareBuild`'s memo key, or the first cached `DayRoute` wins forever. The
+  `/history` route (`app_routes.dart`) wraps `HistoryScreen` in the `AdminOnly`
+  gate widget, which watches it directly and degrades to `InvalidRouteScreen`
+  for anyone else. `DetailsViewBody._canRecordFieldWork` reads it too (below).
+  **The fail-closed guarantee does NOT transfer to `_canRecordFieldWork`**,
+  which reads it as a NEGATIVE gate — `if (isActiveAdminProvider) return
+  false;`, so `false` is a step toward GRANTING the compose box rather than
+  refusing it. That is safe today only because `activeUserIdentityProvider.value`
+  is also null in the same unsettled window, which is a SECOND guard and not a
+  property of this provider's own contract — a refactor that removes or
+  reorders that second check would open the compose box to a not-yet-resolved
+  viewer with nothing here to stop it.
+  **The deliberate exception:** `DayRouteScreen`'s `_tour` and `FeatureTourHost`
+  stay on `widget.isAdmin`, never the live gate — `TourSteps` owns GlobalKeys
+  that must stay stable across rebuilds, and the one admin-only step is a
+  `stepIf` on a widget that no longer renders once the crew picker is gone.
 - **Personal jobs (`isPersonal`, added 2026-07-31) carry no client, and their
   address is OPTIONAL** (owner call, 2026-08-11, which reversed the original
   "no address"). The switch at the top of the form's WHO section is on BOTH the
@@ -761,6 +789,46 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   ASSIGNEE (`activeUserIdentityProvider`), which is exactly the set those rules
   admit — never `!showActions`, which the client job-history surface also
   passes and which is an admin reading somebody else's job.
+  **Crew notes moved to a subcollection on 2026-09-06** (the parent
+  `fieldNotes` disjunct above is now a LEGACY write path, kept for older
+  builds — read on). `appointments/{id}/fieldNotes/{noteId}` —
+  `{text, authorId, authorName, createdAt}` — mirrors the images
+  subcollection's additive posture: read is admin **or** assignee; create is
+  admin or assignee **and** `authorId == myDocId()`, so a note can never be
+  filed under a colleague's name; **update and delete are ADMIN-ONLY**, same
+  reasoning as images — a field record must not be quietly editable by the
+  person whose work it documents. `'fieldNotes'` is a hand-mirrored literal
+  between `AppointmentFieldNotesStore.notesSubcollection`
+  (`calendar/data/appointment_field_notes_store.dart`) and the
+  `match /fieldNotes/{noteId}` block in `firestore.rules` — a divergence there
+  is a silent `permission-denied`, the same trap `IMAGES_SUBCOLLECTION` guards
+  against. **A note write never touches the parent document** — appending one
+  goes through `AppointmentFieldNotesStore.append`, which never calls the
+  appointments collection's `update()` — so this added NO new parent
+  `allow update` disjunct: `appointment_employee_update_rules_test.dart` still
+  pins that count at three (mark-done, the legacy `fieldNotes` field, Start
+  job), and `field_notes_rules_test.dart` re-asserts the same count and says
+  why it did not move.
+  **The parent `fieldNotes` string, its `allow update` disjunct and
+  `updateFieldNotes` all SURVIVE deliberately** — older builds in the fleet
+  still write that field, and there was no backfill, so removing the disjunct
+  would break them. The legacy string still renders, unattributed, at the top
+  of `DetailsFieldNotesView`'s thread when non-empty; nothing writes it any
+  more. **`updateFieldNotes` on `FirebaseAppointmentsRepository` has no
+  production caller as of 2026-09-06** — its only reference is
+  `firebase_appointments_repository_invalidation_test.dart`. It is KEPT
+  DELIBERATELY as an emergency repair path for a doc some older build wrote
+  badly; do not delete it as dead code on a later simplify pass without first
+  checking whether any build in the fleet still calls it. That is a question
+  about the Dart method; the disjunct's own survival is a question about the
+  server contract, and the two happen to share an answer for different
+  reasons.
+  **Who sees the thread versus who may post to it are two different sets.**
+  `DetailsFieldNotesView` renders read-only for ANYONE who may read the job —
+  admin and assignees both, the same set the rules admit — which is the bug
+  this shipped to fix: an admin previously could not see crew notes at all.
+  The compose box (`DetailsFieldRecordView`) stays crew-only, gated by
+  `_canRecordFieldWork` in `details_view_body.dart`.
 - **"Start job" must NOT dismiss the detail sheet.** Mark-done and cancel close
   because the job is finished; Start is mid-job, and that sheet is where the
   crew records it — the status chips, the notes box and the photo picker are
