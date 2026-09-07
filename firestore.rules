@@ -415,6 +415,10 @@ service cloud.firestore {
     }
 
     match /appointments/{appointmentId} {
+      function parentAppointment() {
+        return get(/databases/$(database)/documents/appointments/$(appointmentId)).data;
+      }
+
       // Read: admin sees all; assigned employee sees their appointments.
       allow read: if isAdmin() || isAssignedEmployee(resource.data);
 
@@ -477,10 +481,6 @@ service cloud.firestore {
       // ── appointments/{id}/images ────────────────────────────────────────
 
       match /images/{imageId} {
-        function parentAppointment() {
-          return get(/databases/$(database)/documents/appointments/$(appointmentId)).data;
-        }
-
         allow read: if isAdmin() || isAssignedEmployee(parentAppointment());
 
         allow create: if (isAdmin() || isAssignedEmployee(parentAppointment()))
@@ -507,6 +507,22 @@ service cloud.firestore {
               || request.resource.data.uploadedAt == null
               || request.resource.data.uploadedAt is timestamp);
 
+        allow delete: if isAdmin();
+      }
+
+      match /fieldNotes/{noteId} {
+        allow read: if isAdmin() || isAssignedEmployee(parentAppointment());
+
+        allow create: if (isAdmin() || isAssignedEmployee(parentAppointment()))
+          && request.resource.data.keys().hasOnly(
+              ['text', 'authorId', 'authorName', 'createdAt'])
+          && isBoundedString(request.resource.data.text, 4000)
+          && request.resource.data.text.size() > 0
+          && request.resource.data.authorId == myDocId()
+          && isBoundedString(request.resource.data.authorName, 200)
+          && request.resource.data.createdAt == request.time;
+
+        allow update: if isAdmin();
         allow delete: if isAdmin();
       }
     }

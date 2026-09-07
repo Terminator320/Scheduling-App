@@ -35,9 +35,9 @@ void main() {
     });
 
     test('parentAppointment() resolves the appointment being scoped to', () {
-      // The wildcard has to be the enclosing match's `appointmentId`.
+      // Hoisted one level up (2026-09-07) so /fieldNotes resolves it too.
       expect(
-        imagesBlock(),
+        rules,
         contains(
           r'get(/databases/$(database)/documents/appointments/$(appointmentId))',
         ),
@@ -87,10 +87,7 @@ void main() {
       // the SECOND appointment's assignees through the read rule above.
       final block = imagesBlock();
       expect(block, contains('request.resource.data.storagePath.matches('));
-      expect(
-        block,
-        contains("'appointments/' + appointmentId + '/images/.*'"),
-      );
+      expect(block, contains("'appointments/' + appointmentId + '/images/.*'"));
     });
 
     test('the document shape is locked', () {
