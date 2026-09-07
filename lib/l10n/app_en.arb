@@ -365,9 +365,25 @@
   "@calendar_fieldNotesHint": {
     "description": "Hint under the crew notes field. Names the upsell case explicitly because that is the one most likely to travel by phone call instead."
   },
-  "calendar_fieldNotesSaved": "Notes saved",
-  "@calendar_fieldNotesSaved": {
-    "description": "Success notice after a technician saves their job notes."
+  "calendar_crewNotesLabel": "CREW NOTES",
+  "@calendar_crewNotesLabel": {
+    "description": "Mono all-caps section label over the thread of notes the crew wrote on a job, shown to admins and crew alike. Already uppercase in source."
+  },
+  "calendar_addANote": "Add a note",
+  "@calendar_addANote": {
+    "description": "Button that posts the text in the crew notes field as a new note. Replaced a Save button when notes became append-only."
+  },
+  "calendar_notePosted": "Note added",
+  "@calendar_notePosted": {
+    "description": "Success notice after a technician posts a crew note."
+  },
+  "calendar_noteBy": "{name} · {when}",
+  "@calendar_noteBy": {
+    "description": "Byline over one crew note: who wrote it and when.",
+    "placeholders": {
+      "name": { "type": "String" },
+      "when": { "type": "String" }
+    }
   },
   "calendar_addPhotos": "Add photos",
   "@calendar_addPhotos": {
