@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
+import 'package:scheduling/features/auth/application/is_active_admin_provider.dart';
 import 'package:scheduling/features/auth/screens/account_setup_screen.dart';
 import 'package:scheduling/features/auth/screens/forgot_password_screen.dart';
 import 'package:scheduling/features/auth/screens/login_screen.dart';
@@ -123,8 +125,15 @@ class AppRoutes {
         if (args == null) return _invalidRoute(settings);
         return AppPageRoute(
           settings: settings,
-          builder: (_) =>
-              HistoryScreen(isAdmin: args.isAdmin, employeeId: args.employeeId),
+          // The archive is admin-only (2026-09-06). The drawer no longer
+          // offers it to an employee; this is the half a forged argument or a
+          // stale back stack cannot get past.
+          builder: (_) => AdminOnly(
+            child: HistoryScreen(
+              isAdmin: args.isAdmin,
+              employeeId: args.employeeId,
+            ),
+          ),
         );
 
       case liveMap:
@@ -205,6 +214,18 @@ class AppRoutes {
       ),
     );
   }
+}
+
+/// Renders [child] only for a live active admin; anyone else gets a screen they
+/// can leave rather than a surface the rules would reject anyway.
+class AdminOnly extends ConsumerWidget {
+  const AdminOnly({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) =>
+      ref.watch(isActiveAdminProvider) ? child : const InvalidRouteScreen();
 }
 
 class InvalidRouteScreen extends StatelessWidget {

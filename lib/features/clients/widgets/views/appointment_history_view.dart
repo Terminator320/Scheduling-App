@@ -32,7 +32,6 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
     required this.searchQuery,
     super.key,
     this.isAdmin = false,
-    this.scopeEmployeeId,
     this.filterTourWrap,
     this.firstRowTourWrap,
     this.onFirstPageSettled,
@@ -42,11 +41,6 @@ class AppointmentHistoryView extends ConsumerStatefulWidget {
 
   /// Caller role gate passed to appointment details.
   final bool isAdmin;
-
-  /// Whose history this is. Null lists the business-wide archive, which only an
-  /// admin may read; a technician passes their own doc id and both the paged
-  /// list and the search scan narrow to jobs they were assigned to.
-  final String? scopeEmployeeId;
 
   /// Optional feature-tour wrapper for the filter bar.
   final Widget Function(Widget child)? filterTourWrap;
@@ -135,11 +129,7 @@ class _AppointmentHistoryViewState extends ConsumerState<AppointmentHistoryView>
           : items.last;
       return await ref
           .read(historyPagerProvider)
-          .fetchPage(
-            after: after,
-            limit: _pageSize,
-            employeeId: widget.scopeEmployeeId,
-          );
+          .fetchPage(after: after, limit: _pageSize);
     } catch (e, st) {
       logger.warn('HIST-LOAD history page fetch error', e, st);
       rethrow;
@@ -259,10 +249,9 @@ class _AppointmentHistoryViewState extends ConsumerState<AppointmentHistoryView>
         controller: _pagingController,
         builder: (context, state, fetchNextPage) {
           // Cache flattened pages so identity-based memos can hit.
-          final loaded = _loadedRows.of(
-            (state.pages,),
-            () => state.items ?? const <AppointmentRecord>[],
-          );
+          final loaded = _loadedRows.of((
+            state.pages,
+          ), () => state.items ?? const <AppointmentRecord>[]);
           // Filter options and search index share page identity.
           if (!identical(state.pages, _filterOptionsPages)) {
             _filterOptionsPages = state.pages;
@@ -318,10 +307,7 @@ class _AppointmentHistoryViewState extends ConsumerState<AppointmentHistoryView>
         _ => AppEmptyState(
           icon: Icons.history_outlined,
           title: context.l10n.common_noAppointmentsFound,
-          // A technician has no "+" to tap.
-          body: widget.scopeEmployeeId == null
-              ? context.l10n.common_tapToScheduleAnAppointment
-              : context.l10n.clients_noHistoryYetForYou,
+          body: context.l10n.common_tapToScheduleAnAppointment,
         ),
       };
     }
@@ -427,10 +413,12 @@ class _AppointmentHistoryViewState extends ConsumerState<AppointmentHistoryView>
         .when(
           data: (results) => list(
             // Provider identity holds until it refetches.
-            _searchRows.of(
-              (results, _year, _employeeId, _status),
-              () => _applyChips(results),
-            ),
+            _searchRows.of((
+              results,
+              _year,
+              _employeeId,
+              _status,
+            ), () => _applyChips(results)),
             inSearch: true,
           ),
           loading: () => localOr(_skeleton),
@@ -439,8 +427,7 @@ class _AppointmentHistoryViewState extends ConsumerState<AppointmentHistoryView>
         );
   }
 
-  HistorySearchKey _searchKey(String query) =>
-      (query: query, employeeId: widget.scopeEmployeeId);
+  HistorySearchKey _searchKey(String query) => (query: query, employeeId: null);
 
   // Retry invalidates the watched search provider.
   Widget _searchError(Object error, String query) => _errorState(
