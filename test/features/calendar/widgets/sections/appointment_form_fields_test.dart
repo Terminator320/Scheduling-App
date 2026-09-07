@@ -111,7 +111,6 @@ void main() {
                   onClientQueryModeChanged: (_) {},
                   onRetryClientSearch: () {},
                   onSelectClient: onSelectClient ?? (_) {},
-                  onResolveRecentClient: (_) async => null,
                   onClearClient: () {},
                   onToggleEmployee: (_) {},
                   onSelectStartDate: onSelectStartDate ?? (_) {},
@@ -311,9 +310,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('tapping the Day off chip reports the new value', (
-    tester,
-  ) async {
+  testWidgets('tapping the Day off chip reports the new value', (tester) async {
     final changes = <bool>[];
     await pumpAppointmentForm(
       tester,
@@ -335,9 +332,7 @@ void main() {
 
     expect(
       tester
-          .widget<AppointmentAddressField>(
-            find.byType(AppointmentAddressField),
-          )
+          .widget<AppointmentAddressField>(find.byType(AppointmentAddressField))
           .optional,
       isFalse,
     );
@@ -366,9 +361,7 @@ void main() {
     expect(controllers.address.text, '9 Rue Test');
   });
 
-  testWidgets('switching to personal drops the CLIENT address', (
-    tester,
-  ) async {
+  testWidgets('switching to personal drops the CLIENT address', (tester) async {
     // `_selectClient` writes the client's address into the controller and it
     // renders as a read-only pill, so the admin never typed it. The switch is
     // the first row of WHO while the field is far below in DETAILS, so leaving
@@ -433,9 +426,7 @@ void main() {
 
   testWidgets(
     'a personal job drops the templates, repeat and job-site fields',
-    (
-      tester,
-    ) async {
+    (tester) async {
       await pumpAppointmentForm(
         tester,
         width: 400,
@@ -455,11 +446,7 @@ void main() {
     tester,
   ) async {
     // The edit flow passes null on a job that was never personal.
-    await pumpAppointmentForm(
-      tester,
-      width: 400,
-      showPersonalSwitch: false,
-    );
+    await pumpAppointmentForm(tester, width: 400, showPersonalSwitch: false);
     expect(find.text('Personal job'), findsNothing);
     expect(find.text('Client'), findsOneWidget);
   });

@@ -3,10 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/validators/phone_format.dart';
-import 'package:scheduling/features/calendar/domain/models/recent_client.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
-import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
@@ -21,12 +19,10 @@ class ClientPicker extends StatelessWidget {
     required this.controller,
     required this.results,
     required this.status,
-    required this.recentClients,
     required this.isSearching,
     required this.onChanged,
     required this.onModeChanged,
     required this.onSelect,
-    required this.onSelectRecent,
     required this.onRetry,
     super.key,
     this.errorText,
@@ -36,15 +32,10 @@ class ClientPicker extends StatelessWidget {
   final TextEditingController controller;
   final List<ClientRecord> results;
   final ClientSearchStatus status;
-  final List<RecentClient> recentClients;
   final bool isSearching;
   final ValueChanged<String> onChanged;
   final ValueChanged<ClientQueryMode> onModeChanged;
   final ValueChanged<ClientRecord> onSelect;
-
-  /// A recents row hands back the RECENT, not a record built from it — the
-  /// host resolves the real client so both paths produce the same draft.
-  final ValueChanged<RecentClient> onSelectRecent;
   final VoidCallback onRetry;
   final String? errorText;
 
@@ -95,7 +86,7 @@ class ClientPicker extends StatelessWidget {
     // created for a client who is already on file.
     if (status.failed) return _failure(context, l10n);
     if (controller.text.trim().isEmpty || status.isHolding) {
-      return _recents(context, l10n);
+      return const SizedBox.shrink();
     }
     return _results(context, l10n);
   }
@@ -112,32 +103,6 @@ class ClientPicker extends StatelessWidget {
           ),
         ),
         TextButton(onPressed: onRetry, child: Text(l10n.clients_retrySearch)),
-      ],
-    );
-  }
-
-  Widget _recents(BuildContext context, AppLocalizations l10n) {
-    final digits = ClientSearchPolicy.digitsOnly(controller.text);
-    final matching = [
-      for (final recent in recentClients)
-        if (matchesDigits(recent, digits)) recent,
-    ];
-    if (matching.isEmpty) return const SizedBox.shrink();
-    return _Panel(
-      header: l10n.clients_recentClients,
-      count: null,
-      rows: [
-        for (final recent in matching)
-          _Row(
-            headline: formatPhoneNumber(recent.phone),
-            detail: recent.name,
-            // A recent is a whole client the admin already booked, so the row
-            // itself is the affordance — no second confirm step.
-            onTap: () {
-              FocusScope.of(context).unfocus();
-              onSelectRecent(recent);
-            },
-          ),
       ],
     );
   }

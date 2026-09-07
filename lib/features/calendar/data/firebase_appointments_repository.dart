@@ -499,19 +499,6 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
         .toList();
   }
 
-  @override
-  Future<List<AppointmentRecord>> fetchRecentClientBookings({
-    int limit = 60,
-  }) async {
-    final snapshot = await _appointments
-        .orderBy('createdAt', descending: true)
-        .limit(limit)
-        .get();
-    return [
-      for (final doc in snapshot.docs) _recordFrom(doc.id, doc.data()),
-    ];
-  }
-
   static const int _futureAssignmentScanLimit = 200;
   static const int _seriesScanLimit = RepeatInterval.maxOccurrences + 1;
 
@@ -784,7 +771,10 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
     final snapshots = await Future.wait([
       for (var i = 0; i < employeeIds.length; i += 30)
         _appointments
-            .where('employeeIds', arrayContainsAny: employeeIds.skip(i).take(30).toList())
+            .where(
+              'employeeIds',
+              arrayContainsAny: employeeIds.skip(i).take(30).toList(),
+            )
             .where('startTime', isLessThan: Timestamp.fromDate(end))
             .where('endTime', isGreaterThan: Timestamp.fromDate(start))
             .limit(_conflictScanLimit)

@@ -3949,10 +3949,6 @@
   "@clients_keepGoing": {
     "description": "Shown beside the digit pips while the typed number is still too short to search."
   },
-  "clients_recentClients": "Recent",
-  "@clients_recentClients": {
-    "description": "Header above the recently booked clients shown before a search runs."
-  },
   "clients_exactMatch": "Exact match",
   "@clients_exactMatch": {
     "description": "Header above a client result that matched the full phone number."

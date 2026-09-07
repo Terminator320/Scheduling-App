@@ -9,7 +9,6 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
-import 'package:scheduling/features/calendar/application/recent_clients_provider.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_prefill.dart';
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
@@ -241,15 +240,16 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
       ):
         // A run and a repeat series are different things and must not share a
         // sentence: a 5-day job is ONE job over 5 days, not 4 future visits.
-        ref.read(noticeServiceProvider).success(
-          switch ((runDays, futureBookings)) {
-            (final days, _) when days > 1 =>
-              context.l10n.calendar_appointmentCreatedRunDays(days),
-            (_, final repeats) when repeats > 0 =>
-              context.l10n.calendar_appointmentCreatedWithRepeats(repeats),
-            _ => context.l10n.common_appointmentCreated,
-          },
-        );
+        ref.read(noticeServiceProvider).success(switch ((
+          runDays,
+          futureBookings,
+        )) {
+          (final days, _) when days > 1 =>
+            context.l10n.calendar_appointmentCreatedRunDays(days),
+          (_, final repeats) when repeats > 0 =>
+            context.l10n.calendar_appointmentCreatedWithRepeats(repeats),
+          _ => context.l10n.common_appointmentCreated,
+        });
         // Show clashes before closing this sheet.
         await showPersonalBlockClashesIfAny(context, ref, block: appointment);
         if (!mounted) return;
@@ -326,7 +326,6 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
             clientResults: state.clientResults,
             isSearchingClient: state.isSearchingClient,
             clientSearchStatus: state.clientSearchStatus,
-            recentClients: ref.watch(recentClientsProvider).value ?? const [],
             previousAddresses: bookingContext.previousAddresses,
             lastVisitLabel: bookingContext.lastVisitLabel,
             selectedEmployees: state.selectedEmployees,
@@ -352,8 +351,6 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
               onClientQueryModeChanged: _onClientQueryModeChanged,
               onRetryClientSearch: _onRetryClientSearch,
               onSelectClient: _notifier.selectClient,
-              onResolveRecentClient: (recent) =>
-                  resolveRecentClient(ref, recent),
               onClearClient: _notifier.clearClient,
               onToggleEmployee: _notifier.toggleEmployee,
               onSelectStartDate: _onStartDateSelected,
