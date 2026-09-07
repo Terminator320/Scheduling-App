@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import 'package:scheduling/core/errors/error_cause.dart';
+import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/calendar/application/field_notes_provider.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
 import 'package:scheduling/features/calendar/domain/models/field_note.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/feedback/warning_note.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 import 'package:scheduling/shared/widgets/primitives/mono_section_label.dart';
 
@@ -23,19 +26,26 @@ class DetailsFieldNotesView extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final id = appointment.id;
-    final stored = id == null
-        ? const <FieldNote>[]
-        : ref.watch(appointmentFieldNotesProvider(id)).value ??
-              const <FieldNote>[];
+    // Resolved here, never in the listener: `ref` dies with this consumer.
+    final logger = ref.read(loggerProvider);
+    // The provider answers `const []` for an empty id.
+    final key = appointment.id ?? '';
+    ref.listen(appointmentFieldNotesProvider(key), (previous, next) {
+      if (!isFirstAsyncError(previous, next)) return;
+      logger.warn(
+        'APPT-FIELDNOTE crew notes read failed',
+        next.error,
+        next.stackTrace,
+      );
+    });
+    final thread = ref.watch(appointmentFieldNotesProvider(key));
+    final stored = thread.value ?? const <FieldNote>[];
+    final failed = thread.hasError;
 
     final legacy = appointment.fieldNotes.trim();
-    final notes = [
-      if (legacy.isNotEmpty) FieldNote.legacy(legacy),
-      ...stored,
-    ];
-    // Empty omitted, like every other optional block on this sheet.
-    if (notes.isEmpty) return const SizedBox.shrink();
+    final notes = [if (legacy.isNotEmpty) FieldNote.legacy(legacy), ...stored];
+    // Empty omitted, but a failed read must not read as "no notes".
+    if (notes.isEmpty && !failed) return const SizedBox.shrink();
 
     // Hoisted out of the notes: constructing one parses the locale's symbols.
     final when = DateFormat.MMMd(
@@ -52,6 +62,7 @@ class DetailsFieldNotesView extends ConsumerWidget {
           _Note(note: note, when: when),
           const SizedBox(height: AppSpacing.sp12),
         ],
+        if (failed) WarningNote(message: context.l10n.calendar_crewNotesUnread),
       ],
     );
   }

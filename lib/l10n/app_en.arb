@@ -369,6 +369,10 @@
   "@calendar_crewNotesLabel": {
     "description": "Mono all-caps section label over the thread of notes the crew wrote on a job, shown to admins and crew alike. Already uppercase in source."
   },
+  "calendar_crewNotesUnread": "Couldn't load the crew notes. Close and reopen the job to try again — anything already added is still there.",
+  "@calendar_crewNotesUnread": {
+    "description": "Inline caveat under the crew notes section when the notes read failed. Says the thread may be incomplete rather than letting an empty section read as a job with no notes."
+  },
   "calendar_addANote": "Add a note",
   "@calendar_addANote": {
     "description": "Button that posts the text in the crew notes field as a new note. Replaced a Save button when notes became append-only."
