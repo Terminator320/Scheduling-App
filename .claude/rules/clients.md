@@ -594,19 +594,15 @@ Root context: `../../CLAUDE.md`.
   `ClientSearchStatus.failed` exists because "No clients found" on the booking
   path reads as "new customer", and that is how a duplicate gets created for a
   client already on file — carrying a number that can then never be searched.
-- **Recents are free or they are nothing.** `recentClientsProvider` builds them
-  from appointments' denormalized `clientId`/`clientName`/`clientPhone`, so
-  showing them costs no client reads. Two halves of that, both easy to lose:
-  it projects `currentUserDocProvider` down to the ROLE STRING via
-  `selectAsync` (a `Map` compares by identity, so watching the raw doc re-ran
-  the 60-doc query on any own-doc write), and a host watches it only when
-  `selectedClient == null` — the picker is the sole renderer of recents and is
-  built only then, so the EDIT sheet was buying 60 appointment reads for pixels
-  that never existed. It returns empty for a non-admin: the
-  query carries no `employeeIds` constraint and adding one would need a new
-  composite index. Job creation is admin-only today (`_addAppointmentFab`), so
-  that costs nothing — it is recorded so a future decision to let employees
-  book does not quietly ship a permanently empty recents list.
+- **Recent clients was REMOVED 2026-09-06 (owner call).** Search is the only
+  path to a client on the booking form. `recentClientsProvider`, the
+  `RecentClient` model, `AppointmentsRepository.fetchRecentClientBookings` and
+  `ClientPicker.recentClients`/`onSelectRecent` all went with the UI - don't
+  restore any of them from an older copy of this file. Two facts worth keeping
+  in case recents ever come back: they were FREE, built from appointments'
+  denormalized `clientId`/`clientName`/`clientPhone` rather than client reads;
+  and they returned empty for a non-admin, because the query carries no
+  `employeeIds` constraint and adding one would need a new composite index.
 - **The COLLAPSED match summary is NOT built.** `ClientPicker` is stateless and
   always renders its list; the design doc names a focus-collapsed summary, and
   it was left out deliberately because a focus-driven collapse can rebuild
