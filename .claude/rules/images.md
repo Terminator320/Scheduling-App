@@ -209,6 +209,21 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   are written to `getTemporaryDirectory()` for the platform channel — and the
   1×1 refusal stand-in is excluded by identity, or Save/Share would hand over a
   blank pixel as if it were the job.
+  **The `isLoadingPictures` half of that gate is scoped to UPLOAD-driven
+  re-reads, never the build-time one** (2026-09-07). `_loadStoredPictures`
+  takes `showLoading`, and only the `onLocalWrite` listener passes true: the
+  flag exists to hold the section on screen across the gap between the pending
+  count dropping to 0 and the refreshed list arriving, and raising it on the
+  read every sheet open fires made a job with NO photos render the PHOTOS
+  header over an empty strip and collapse it a round trip later, on every open.
+  **The per-job photo cap is measured AFTER the pick, never before**
+  (`_roomForPhotos`, and `remainingSlots` on `pickAndAddAppointmentImages`).
+  The pick is the longest await in the app, so a background upload landing
+  inside it goes uncounted and the job overshoots. **And the notice names the
+  room LEFT, not the total cap** — it only fires when the pick was trimmed,
+  i.e. when the job is at or near its limit, which is exactly when "only 10
+  more photos can be added" is false; at zero room it is
+  `calendar_photosLimitFull` instead, since "only 0 more" is not a sentence.
   **`DetailsPhotosView`'s render gate must COUNT `pendingCount` and WATCH it**
   (2026-09-06, caught in review before it shipped). The gate sits inside a
   `ValueListenableBuilder` on `notifier.pending`, not a plain read: a job with

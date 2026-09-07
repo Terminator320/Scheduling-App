@@ -256,10 +256,19 @@ mixin AppointmentFormConcerns<StateT extends AppointmentFormFields>
     );
   }
 
+  /// How many more photos this form will accept. The notice a trimmed pick
+  /// raises names THIS, not the total cap — "only 10 more can be added" at the
+  /// moment none can is worse than saying nothing.
+  int get remainingImageSlots =>
+      (maxImagesPerAppointment - usedImageCount).clamp(
+        0,
+        maxImagesPerAppointment,
+      );
+
   /// Adds what fits and returns how many were DROPPED, so the caller can say
   /// so. Returning nothing made a full job's Add-photos button a silent no-op.
   int addImages(List<File> files) {
-    final remaining = maxImagesPerAppointment - usedImageCount;
+    final remaining = remainingImageSlots;
     if (remaining <= 0) return files.length;
     final accepted = files.take(remaining).toList();
     _apply(

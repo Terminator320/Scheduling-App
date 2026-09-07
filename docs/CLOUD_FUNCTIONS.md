@@ -2,7 +2,15 @@
 
 Map of every Cloud Function in `functions/` — what it does, how it's
 triggered, who calls it, and its security posture. Generated 2026-07-05,
-refreshed 2026-09-05 (release 1.58.0+87 — **the export list is unchanged at 29**;
+refreshed 2026-09-07 (release 1.59.0+88 — **the export list is unchanged at 29**,
+and all 29 are now DEPLOYED. This pass changed no signature: the five Wave
+callables opened with a hand-spelled auth/`assertAdmin`/payload preamble and now
+open with the composed `assertAdminCall`, which changes the opening and not one
+allowlist key, and every `wave/connection` read went through the new
+`readWaveConnection`/`connectionFieldsOf` pair in `sync_run.js` — eight
+hand-copied coercions, one of which applied the unknown-cadence fallback and one
+of which did not. `firestore.rules` gained the `appointments/{id}/fieldNotes`
+grants. Previously refreshed 2026-09-05 (release 1.58.0+87 — **the export list was unchanged at 29**;
 this pass hardened three guards rather than adding any. `assertActiveCall` now
 resolves the caller's uid so a bridge-row field cannot shadow it,
 `matchPhoneInName` gained the whole-field branch its Dart twin already had (a
@@ -205,13 +213,18 @@ earlier `TODO(pre-ship)` carve-outs were retired in 1.25.1
   *count* never moved (25 throughout, `index.js` untouched), so a count check
   looked clean for three days while prod ran older bodies — check the deploy
   log, not the count.
-- **29 functions defined** in code as of 2026-09-04 (25 -> 29: `searchClients`,
-  `searchHistory`, `findAppointmentConflicts`, `restoreAppointmentStatus`).
-  **NOT YET DEPLOYED** — prod still runs 25. This deploy CREATES functions, so
-  it prompts on neither of the two known aborts (deletion, failure-policy
-  change), but it does need `firestore:indexes` deployed FIRST and verified
-  READY, and the `searchTokens`/`historySearchScopes` backfill run, before the
-  app build ships. Previously **25 defined and 25 deployed**, verified against
+- **29 functions defined and 29 DEPLOYED**, verified by NAME rather than by
+  count on 2026-09-07 (`functions_list_functions` diffed against the 29
+  `exports.` in `index.js`: zero missing, zero orphans). The 25 -> 29 deploy ran
+  2026-09-06 with its `firestore:indexes` prerequisite READY and the
+  `searchTokens`/`historySearchScopes` backfill already run; 2026-09-07 then
+  redeployed all 29 unchanged alongside the `fieldNotes` rules grant. **The
+  three-release backend debt spanning 1.56/1.57/1.58 is PAID** — see
+  `docs/DEPLOYMENT.md`, which is the authority for what prod actually runs.
+  Note the rollback asymmetry this creates: the old client-side scan path is
+  unreachable in a shipped build (`firebaseFunctionsProvider` is non-nullable),
+  so once the app build ships, roll back the APP, never the backend.
+  Previously **25 defined and 25 deployed**, verified against
   `functions_list_functions` on 2026-08-22 (the CONTRACT deploy reported 25
   updates, 0 creates, 0 deletions) — an exact match, no orphans and no
   extras. **DRIFT OPEN as of 2026-08-25 (1.52.0+81): eight deployable modules
@@ -1194,7 +1207,8 @@ by adding a second one.
 ### `waveSetImportSchedule` — `wave/callables.js`
 Admin-only setter for the automatic-import cadence — writes the `importSchedule`
 field (`off` | `weekly` | `monthly`) on `wave/connection`. Validates the value
-against the shared `SCHEDULE_VALUES` set and requires an already-bootstrapped
+against the shared `SCHEDULE_SET` (the membership form of `SCHEDULE_VALUES`,
+owned beside it in `import_schedule.js`) and requires an already-bootstrapped
 connection. No secret. **Durably rate-limited at 20/hour per admin uid** (added
 2026-08-04) — every other admin write callable is, and the audit flagged this as
 the lone exception. The limiter sits AFTER the payload validation so a burst of

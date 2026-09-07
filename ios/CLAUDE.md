@@ -45,6 +45,21 @@ iOS notes (Phase 0 of clean-architecture restructure):
   App Check → the iOS app — no `.p8` key required, unlike DeviceCheck). The
   console provider MUST match the code provider or attestation is rejected.
   App Attest fails on the iOS Simulator — verify on real hardware.
+- **`AppDelegate` registers the native-config channel from
+  `didInitializeImplicitFlutterEngine`, NOT from
+  `application(_:didFinishLaunchingWithOptions:)`** (2026-09-06). It conforms to
+  `FlutterImplicitEngineDelegate` and takes the messenger from
+  `engineBridge.applicationRegistrar.messenger()`. The old shape reached for
+  `window?.rootViewController as? FlutterViewController`, which under the
+  implicit engine runs BEFORE the window has a root — so that guard takes its
+  failure branch, logs "Native config channel unavailable" and never registers
+  a handler, and the Maps key then never reaches `GMSServices`, leaving the
+  live map blank with only that one log line to say why. Don't "restore" a `didFinishLaunchingWithOptions` override to
+  register a channel; take the messenger the bridge hands you. The Dart half is
+  unchanged — `main()` still awaits the send before `runApp`.
+  `ios/Flutter/AppFrameworkInfo.plist` no longer pins `MinimumOSVersion`; the
+  18.0 floor lives on the Xcode targets, which is the only place it was ever
+  enforced.
 - `Info.plist` already declares `NSCameraUsageDescription`,
   `NSPhotoLibraryUsageDescription`, and `LSApplicationQueriesSchemes`.
 - **`NSLocationAlwaysAndWhenInUseUsageDescription` is declared on purpose even

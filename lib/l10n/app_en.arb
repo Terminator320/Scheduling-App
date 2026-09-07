@@ -365,14 +365,18 @@
   "@calendar_fieldNotesHint": {
     "description": "Hint under the crew notes field. Names the upsell case explicitly because that is the one most likely to travel by phone call instead."
   },
-  "calendar_photosLimitReached": "Only {count} more photos can be added to this job.",
+  "calendar_photosLimitReached": "{count, plural, =1{Only 1 more photo can be added to this job.} other{Only {count} more photos can be added to this job.}}",
   "@calendar_photosLimitReached": {
-    "description": "Notice shown when a photo pick is trimmed because the job is at or near its photo limit.",
+    "description": "Notice shown when a photo pick is trimmed because the job is near its photo limit. Count is the room LEFT on the job, never the total cap.",
     "placeholders": {
       "count": {
         "type": "int"
       }
     }
+  },
+  "calendar_photosLimitFull": "This job already holds all the photos it can.",
+  "@calendar_photosLimitFull": {
+    "description": "Notice shown when a photo pick is refused outright because the job is at its photo limit."
   },
   "calendar_crewNotesLabel": "CREW NOTES",
   "@calendar_crewNotesLabel": {
@@ -3949,15 +3953,6 @@
   "clients_sortRecentlyAdded": "Recently added",
   "@clients_sortRecentlyAdded": {
     "description": "Sort the clients list by creation date, newest first."
-  },
-  "clients_sharedAddressCount": "{count, plural, =1{1 other client at this address} other{{count} other clients at this address}}",
-  "@clients_sharedAddressCount": {
-    "description": "How many other clients share this client's street address.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
   },
   "clients_modePhone": "Phone",
   "@clients_modePhone": {

@@ -109,7 +109,12 @@ class EventDetailsController extends Notifier<EventDetailsState>
         .read(appointmentsRepositoryProvider)
         .onLocalWrite
         .listen(
-          (_) => unawaited(_loadStoredPictures()),
+          // `showLoading` holds the section on screen across the gap between
+          // the pending count dropping to 0 and the refreshed list arriving.
+          // The BUILD-time read passes false: a job with no photos would
+          // otherwise raise the PHOTOS header over an empty strip on every
+          // open and collapse it a round trip later.
+          (_) => unawaited(_loadStoredPictures(showLoading: true)),
           onError: (Object e, StackTrace st) =>
               logger.warn('APPT-IMG local write poke', e, st),
         );
@@ -133,13 +138,15 @@ class EventDetailsController extends Notifier<EventDetailsState>
   }
 
   /// Reads this job's photos from `appointments/{id}/images`.
-  Future<void> _loadStoredPictures() async {
+  Future<void> _loadStoredPictures({bool showLoading = false}) async {
     final id = appointment.id;
     if (id == null || id.isEmpty) return;
     final repo = ref.read(appointmentsRepositoryProvider);
     // Read the logger before this notifier can be disposed.
     final logger = ref.read(loggerProvider);
-    if (ref.mounted) state = state.copyWith(isLoadingPictures: true);
+    if (showLoading && ref.mounted) {
+      state = state.copyWith(isLoadingPictures: true);
+    }
     List<AppointmentImage> stored;
     try {
       stored = await repo.fetchAppointmentPictures(id);
@@ -147,7 +154,9 @@ class EventDetailsController extends Notifier<EventDetailsState>
       logger.warn('APPT-IMG subcollection read failed', e, st);
       return;
     } finally {
-      if (ref.mounted) state = state.copyWith(isLoadingPictures: false);
+      if (showLoading && ref.mounted) {
+        state = state.copyWith(isLoadingPictures: false);
+      }
     }
     if (stored.isEmpty || !ref.mounted) return;
     // Adopt only if the user has not edited the photo list.

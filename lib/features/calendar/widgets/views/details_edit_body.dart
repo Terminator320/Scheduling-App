@@ -10,8 +10,6 @@ import 'package:scheduling/core/theme/button_styles.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
-import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart'
-    show AppointmentFormConcerns;
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/event_details_controller.dart';
 import 'package:scheduling/features/calendar/application/event_series_helpers.dart';
@@ -567,23 +565,12 @@ class _EditPhotosSection extends ConsumerWidget {
       existingImages: existingImages,
       newImages: newImages,
       isEditing: true,
-      onPickImages: () async {
-        final notices = ref.read(noticeServiceProvider);
-        final l10n = context.l10n;
-        final picked = await pickAppointmentImages(context, ref);
-        // The longest await in the app — an OS action sheet and then the
-        // camera/Photos picker.
-        if (!context.mounted) return;
-        if (picked.isEmpty) return;
-        final dropped = notifier.addImages(picked);
-        if (dropped > 0) {
-          notices.info(
-            l10n.calendar_photosLimitReached(
-              AppointmentFormConcerns.maxImagesPerAppointment,
-            ),
-          );
-        }
-      },
+      onPickImages: () => pickAndAddAppointmentImages(
+        context,
+        ref,
+        addImages: notifier.addImages,
+        remainingSlots: () => notifier.remainingImageSlots,
+      ),
       onRemoveExisting: notifier.removeExistingImage,
       onRemoveNew: notifier.removeNewImage,
     );

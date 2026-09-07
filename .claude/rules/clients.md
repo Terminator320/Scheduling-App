@@ -196,11 +196,16 @@ Root context: `../../CLAUDE.md`.
   sealed `ClientsFilterBuilding(key)`, so selecting one clears whichever type
   was on. The section renders NOTHING when no address is shared; an empty
   control looks broken, and on a small roster that is the normal state.
-  **The per-row Building pill is GONE** (2026-09-04) — the shared-address count
-  moved to the CLIENT DETAIL, where it is one document read against the same
-  cached window rather than a signal every row had to be fed. The row now
+  **NOTHING renders a shared-address count any more** (owner call, 2026-09-07).
+  The per-row Building pill went on 2026-09-04, moving the count to the CLIENT
+  DETAIL; the detail row went too, along with `clientBuildingCountsProvider`
+  and the `clients_sharedAddressCount` key. The count answered a question
+  nobody was asking on a screen about ONE client — the FILTER SHEET is where
+  "who else is at this address" belongs, and it still has it. The row now
   carries ONE badge, Archived: it previously showed archived, type, Building
-  and the job count all competing under one name.
+  and the job count all competing under one name. Grouping itself is
+  untouched — `buildingKeyFor`/`buildingsIn`, `clientBuildingsProvider` and
+  `fetchClientsByBuilding` all still back the sheet's address section.
   **`fetchClientsByBuilding` / `fetchBuildings` read the SAME bounded cached
   window as the type filter**, so the whole feature costs no extra Firestore
   read inside the TTL and needs no index. It inherits that window's bound: past

@@ -11,6 +11,7 @@ import 'package:scheduling/features/maps/domain/address_parser.dart';
 import 'package:scheduling/features/maps/domain/models/address_suggestion.dart';
 import 'package:scheduling/features/maps/domain/places_repository.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/fields/attached_dropdown.dart';
 import 'package:scheduling/shared/widgets/fields/clear_text_button.dart';
 import 'package:scheduling/shared/widgets/fields/labeled_text_field.dart';
 import 'package:uuid/uuid.dart';
@@ -264,12 +265,7 @@ class _AddressAutocompleteFieldState
                 ),
         ),
         if (_suggestions.isNotEmpty)
-          Container(
-            margin: const EdgeInsets.only(top: AppSpacing.sp4),
-            decoration: BoxDecoration(
-              border: Border.all(color: scheme.outlineVariant),
-              borderRadius: BorderRadius.circular(AppRadius.r12),
-            ),
+          AttachedDropdown(
             child: Column(
               children: _suggestions
                   .map(

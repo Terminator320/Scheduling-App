@@ -114,9 +114,22 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
 - **A route argument's `isAdmin` is a push-time SNAPSHOT — a live gate reads
   `isActiveAdminProvider` instead** (`features/auth/application/`, 2026-09-06).
   It is `role == 'admin' && status == 'active'` off the already-live
-  `currentUserDocProvider`, and **fails CLOSED while the doc is unsettled**,
-  matching the least-privilege default every appointment surface already
-  takes. A stale back stack, an argless push or a deep link can all carry an
+  `currentUserDocProvider`, and **fails CLOSED whenever the doc is unsettled,
+  errored or EMPTY**, matching the least-privilege default every appointment
+  surface already takes. **The empty case is not hypothetical and is an
+  ACCEPTED limitation** (reviewed 2026-09-07): a settled empty doc is the
+  bootstrap window a fresh sign-in and a cold cache both pass through, so for
+  its duration a real admin reads as not-admin — `AdminOnly` shows
+  `InvalidRouteScreen`, the drawer drops its admin rows. It fails in the SAFE
+  direction and self-heals when the doc settles, it is the same answer
+  `readAccountGateInputs` gives in the same window, and a genuinely empty doc
+  is `SplashScreen`'s and `AccountExitListeners`' business, not this
+  provider's. Holding the last settled answer instead was considered and NOT
+  taken: it needs a uid to hold against (or one session's answer carries into
+  the next person's), which makes this depend on `authUidProvider` and drags
+  Firebase auth into every widget test that only overrides the doc provider.
+  Don't file the flicker as a new bug — reopen this decision, with that cost
+  named. A stale back stack, an argless push or a deep link can all carry an
   `isAdmin: true` argument that no longer describes the signed-in person; this
   asks Firestore instead. **Five consumers, and they gate differently.**
   `DayRouteScreen` resolves `widget.isAdmin && ref.watch(isActiveAdminProvider)`
