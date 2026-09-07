@@ -496,4 +496,45 @@ void main() {
     expect(find.text('End date'), findsNothing);
     expect(find.text('Start date'), findsOneWidget);
   });
+
+  const withAddress = ClientRecord(
+    id: 'c1',
+    name: 'Groupe Lemieux',
+    phone: '5145550142',
+    address: '4188 Rue Sainte-Catherine E',
+  );
+  const noAddress = ClientRecord(
+    id: 'c2',
+    name: 'Anne Roy',
+    phone: '5145550199',
+  );
+
+  testWidgets('the toggle ON hides the Job address section', (tester) async {
+    await pumpAppointmentForm(
+      tester,
+      width: 400,
+      selectedClient: withAddress,
+      useCustomAddress: false,
+    );
+    expect(find.text('Job address'), findsNothing);
+  });
+
+  testWidgets('the toggle OFF shows the Job address section', (tester) async {
+    await pumpAppointmentForm(tester, width: 400, selectedClient: withAddress);
+    expect(find.text('Job address'), findsOneWidget);
+  });
+
+  testWidgets('a client with NO address on file keeps the field', (
+    tester,
+  ) async {
+    // This client sits at useCustomAddress == false too, and shows no toggle -
+    // hiding here would make the job unable to get an address at all.
+    await pumpAppointmentForm(
+      tester,
+      width: 400,
+      selectedClient: noAddress,
+      useCustomAddress: false,
+    );
+    expect(find.text('Job address'), findsOneWidget);
+  });
 }
