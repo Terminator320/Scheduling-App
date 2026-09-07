@@ -61,4 +61,56 @@ void main() {
     expect(find.text('PHOTOS'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'a background upload started with the sheet already open reveals the '
+    'section without a remount',
+    (tester) async {
+      final notifier = PhotoUploadNotifier();
+      addTearDown(notifier.dispose);
+      final appointments = _MockAppointmentsRepo();
+      when(
+        () => appointments.fetchAppointmentPictures(any()),
+      ).thenAnswer((_) async => const []);
+      when(
+        () => appointments.onLocalWrite,
+      ).thenAnswer((_) => const Stream.empty());
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            photoUploadNotifierProvider.overrideWithValue(notifier),
+            appointmentsRepositoryProvider.overrideWithValue(appointments),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: DetailsPhotosView(
+                appointment: appointment,
+                isCancelled: false,
+                onRetry: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // No photos, nothing pending yet: the section stays hidden.
+      expect(find.text('PHOTOS'), findsNothing);
+
+      // A background upload (e.g. DetailsFieldRecordView._addPhotos, from
+      // view mode) reports pending on the SAME notifier instance with no
+      // remount of this widget. Before: the outer gate read
+      // `notifier.pending.value` once at build time and never listened, so
+      // this transition was invisible until the upload finished and
+      // `existingImages` picked it up.
+      notifier.reportPending({'a1': 1});
+      await tester.pump();
+
+      expect(find.text('PHOTOS'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

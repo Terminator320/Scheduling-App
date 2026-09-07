@@ -291,55 +291,58 @@ class DetailsPhotosView extends ConsumerWidget {
         ? notifier.failureFor(appointmentId)
         : null;
     final failedCount = failure?.failedCount ?? 0;
-    final pendingCount = appointmentId == null
-        ? 0
-        : notifier.pending.value[appointmentId] ?? 0;
-    // pendingCount is part of this test on purpose: without it the FIRST photo
-    // added to a job left the whole section as a SizedBox.shrink for the whole
-    // upload, so the crew saw no sign their photo existed.
-    final hasPhotos =
-        existingImages.isNotEmpty ||
-        newImages.isNotEmpty ||
-        failedCount > 0 ||
-        pendingCount > 0;
-    if (!hasPhotos) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: AppSpacing.sp16),
-        DetailsSectionRow(
-          label: context.l10n.calendar_photosLabel,
-          value: '',
-          // The queue depth is a ValueNotifier rather than a provider, so the
-          // rebuild is scoped to this row: a drain of a long queue republishes
-          // per entry, and rebuilding the whole detail body each time would be
-          // a real cost on the screen a technician has open in the field.
-          customValue: ValueListenableBuilder<Map<String, int>>(
-            valueListenable: notifier.pending,
-            builder: (context, pending, _) => PhotoPickerSection(
-              existingImages: existingImages,
-              newImages: newImages,
-              isEditing: false,
-              onPickImages: () {},
-              onRemoveExisting: (_) {},
-              onRemoveNew: (_) {},
-              failedCount: failedCount,
-              pendingCount: appointmentId == null
-                  ? 0
-                  : pending[appointmentId] ?? 0,
-              tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
-              onRetry: failedCount > 0 && !isCancelled
-                  ? () {
-                      if (appointmentId != null) {
-                        notifier.clearFailure(appointmentId);
+    // The GATE itself must watch the queue, not just read it once: a
+    // background upload can be started from view mode
+    // (DetailsFieldRecordView.uploadInBackground) with no remount of this
+    // widget, and none of the other watches above (existingImages, newImages,
+    // the notifier singleton) fire when only the pending count changes.
+    // Without this outer listener the FIRST photo on a job with none left the
+    // whole section a SizedBox.shrink for the entire upload, so the crew saw
+    // no sign their photo existed. This also now supplies the value the old
+    // inner listener read, so there is only one — the per-drain rebuild stays
+    // scoped to this row rather than the whole detail body.
+    return ValueListenableBuilder<Map<String, int>>(
+      valueListenable: notifier.pending,
+      builder: (context, pending, _) {
+        final pendingCount = appointmentId == null
+            ? 0
+            : pending[appointmentId] ?? 0;
+        final hasPhotos =
+            existingImages.isNotEmpty ||
+            newImages.isNotEmpty ||
+            failedCount > 0 ||
+            pendingCount > 0;
+        if (!hasPhotos) return const SizedBox.shrink();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: AppSpacing.sp16),
+            DetailsSectionRow(
+              label: context.l10n.calendar_photosLabel,
+              value: '',
+              customValue: PhotoPickerSection(
+                existingImages: existingImages,
+                newImages: newImages,
+                isEditing: false,
+                onPickImages: () {},
+                onRemoveExisting: (_) {},
+                onRemoveNew: (_) {},
+                failedCount: failedCount,
+                pendingCount: pendingCount,
+                tooLargeFileNames: failure?.tooLargeFileNames ?? const [],
+                onRetry: failedCount > 0 && !isCancelled
+                    ? () {
+                        if (appointmentId != null) {
+                          notifier.clearFailure(appointmentId);
+                        }
+                        onRetry();
                       }
-                      onRetry();
-                    }
-                  : null,
+                    : null,
+              ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 }
