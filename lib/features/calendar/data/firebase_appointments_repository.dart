@@ -9,12 +9,14 @@ import 'package:scheduling/core/logging/app_logger.dart';
 import 'package:scheduling/core/search/search_tokens.dart';
 import 'package:scheduling/core/utils/firestore_parsing.dart';
 import 'package:scheduling/core/utils/retry.dart';
+import 'package:scheduling/features/calendar/data/appointment_field_notes_store.dart';
 import 'package:scheduling/features/calendar/data/appointment_images_store.dart';
 import 'package:scheduling/features/calendar/domain/appointment_status_values.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/assignee_availability.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/models/field_note.dart';
 import 'package:scheduling/features/calendar/domain/models/repeat_interval.dart';
 import 'package:scheduling/features/calendar/domain/policies/history_search_policy.dart';
 import 'package:scheduling/features/clients/domain/policies/client_search_policy.dart';
@@ -35,6 +37,10 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
       appointments: _appointments,
       logger: _logger,
     );
+    _fieldNotes = AppointmentFieldNotesStore(
+      appointments: _appointments,
+      logger: _logger,
+    );
   }
 
   final CollectionReference<Map<String, dynamic>> _appointments;
@@ -43,6 +49,9 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
 
   /// The photo half — the `appointments/{id}/images` subcollection.
   late final AppointmentImagesStore _images;
+
+  /// The crew-notes half — the `appointments/{id}/fieldNotes` subcollection.
+  late final AppointmentFieldNotesStore _fieldNotes;
 
   /// Lets tests inject a fake clock so the search-cache TTL is testable.
   final DateTime Function() _clock;
@@ -292,6 +301,28 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   @override
   Future<List<AppointmentImage>> fetchAppointmentPictures(String id) =>
       _images.fetch(id);
+
+  @override
+  Future<void> appendFieldNote({
+    required String appointmentId,
+    required String text,
+    required String authorId,
+    required String authorName,
+  }) async {
+    await _fieldNotes.append(
+      appointmentId,
+      text: text,
+      authorId: authorId,
+      authorName: authorName,
+    );
+    // The narrow poke: a note changes no field matchHistoryDocs reads, so the
+    // window is woken rather than rebuilt.
+    _notifyLocalWrite();
+  }
+
+  @override
+  Future<List<FieldNote>> fetchFieldNotes(String appointmentId) =>
+      _fieldNotes.fetch(appointmentId);
 
   static const _allowedStatuses = {
     'pending',
