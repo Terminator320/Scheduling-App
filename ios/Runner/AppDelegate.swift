@@ -4,26 +4,15 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
-  override func application(
-    _ application: UIApplication,
-    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-  ) -> Bool {
-    registerNativeConfigChannel()
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    registerNativeConfigChannel(messenger: engineBridge.applicationRegistrar.messenger())
   }
 
-  private func registerNativeConfigChannel() {
-    guard let controller = window?.rootViewController as? FlutterViewController else {
-      NSLog("Native config channel unavailable")
-      return
-    }
+  private func registerNativeConfigChannel(messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(
       name: "net.vogas.scheduling/native_config",
-      binaryMessenger: controller.binaryMessenger
+      binaryMessenger: messenger
     )
     channel.setMethodCallHandler { call, result in
       guard call.method == "provideGoogleMapsApiKey" else {
