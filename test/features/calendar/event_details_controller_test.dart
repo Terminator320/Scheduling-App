@@ -108,6 +108,9 @@ void main() {
     ).thenAnswer((_) async {});
     when(() => appointments.deleteAppointment(any())).thenAnswer((_) async {});
     when(() => storage.deleteImages(any())).thenAnswer((_) async {});
+    when(
+      () => appointments.onLocalWrite,
+    ).thenAnswer((_) => const Stream.empty());
     // No clash by default; the conflict tests override this.
     when(
       () => appointments.findBusyEmployees(
@@ -210,9 +213,7 @@ void main() {
           eventDetailsControllerProvider(EventDetailsKey(_appointment)),
           (_, _) {},
         )
-        ..read(
-          eventDetailsControllerProvider(EventDetailsKey(_appointment)),
-        );
+        ..read(eventDetailsControllerProvider(EventDetailsKey(_appointment)));
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
 
@@ -246,9 +247,7 @@ void main() {
             eventDetailsControllerProvider(EventDetailsKey(_appointment)),
             (_, _) {},
           )
-          ..read(
-            eventDetailsControllerProvider(EventDetailsKey(_appointment)),
-          );
+          ..read(eventDetailsControllerProvider(EventDetailsKey(_appointment)));
         await Future<void>.delayed(Duration.zero);
         await Future<void>.delayed(Duration.zero);
 
@@ -331,9 +330,7 @@ void main() {
           eventDetailsControllerProvider(EventDetailsKey(_appointment)),
           (_, _) {},
         )
-        ..read(
-          eventDetailsControllerProvider(EventDetailsKey(_appointment)),
-        );
+        ..read(eventDetailsControllerProvider(EventDetailsKey(_appointment)));
       await Future<void>.delayed(Duration.zero);
       await Future<void>.delayed(Duration.zero);
 
@@ -362,20 +359,17 @@ void main() {
       expect(readState().errors, isEmpty);
     });
 
-    test(
-      'turning Personal off KEEPS all-day (retired invariant: all-day now '
-      'applies to client jobs too, so the flag is reachable and repairable '
-      'rather than an unrepairable dead end)',
-      () {
-        final c = readNotifier()
-          ..setPersonal(value: true)
-          ..setAllDay(value: true);
-        expect(readState().isAllDay, isTrue);
+    test('turning Personal off KEEPS all-day (retired invariant: all-day now '
+        'applies to client jobs too, so the flag is reachable and repairable '
+        'rather than an unrepairable dead end)', () {
+      final c = readNotifier()
+        ..setPersonal(value: true)
+        ..setAllDay(value: true);
+      expect(readState().isAllDay, isTrue);
 
-        c.setPersonal(value: false);
-        expect(readState().isAllDay, isTrue);
-      },
-    );
+      c.setPersonal(value: false);
+      expect(readState().isAllDay, isTrue);
+    });
 
     test('turning Personal on again does not resurrect all-day', () {
       final c = readNotifier()..setPersonal(value: true);
@@ -483,23 +477,20 @@ void main() {
       },
     );
 
-    test(
-      'markAsDone reports Failed with the error and resets isSaving '
-      'when repo throws',
-      () async {
-        final failure = Exception('boom');
-        when(
-          () => appointments.updateAppointmentStatus(
-            id: any(named: 'id'),
-            status: any(named: 'status'),
-          ),
-        ).thenThrow(failure);
-        final outcome = await readNotifier().markAsDone(_appointment);
-        expect(outcome, isA<EventDetailsActionFailed>());
-        expect((outcome as EventDetailsActionFailed).error, same(failure));
-        expect(readState().isSaving, isFalse);
-      },
-    );
+    test('markAsDone reports Failed with the error and resets isSaving '
+        'when repo throws', () async {
+      final failure = Exception('boom');
+      when(
+        () => appointments.updateAppointmentStatus(
+          id: any(named: 'id'),
+          status: any(named: 'status'),
+        ),
+      ).thenThrow(failure);
+      final outcome = await readNotifier().markAsDone(_appointment);
+      expect(outcome, isA<EventDetailsActionFailed>());
+      expect((outcome as EventDetailsActionFailed).error, same(failure));
+      expect(readState().isSaving, isFalse);
+    });
 
     test('a status write skipped by the busy guard reports Busy', () async {
       final notifier = readNotifier()..setSaving(busy: true);
@@ -1002,98 +993,92 @@ void main() {
       );
     });
 
-    test(
-      'applyToSeries propagates details + time of day to future visits, '
-      'keeping each visit date',
-      () async {
-        when(
-          () => appointments.updateAppointments(any()),
-        ).thenAnswer((_) async {});
+    test('applyToSeries propagates details + time of day to future visits, '
+        'keeping each visit date', () async {
+      when(
+        () => appointments.updateAppointments(any()),
+      ).thenAnswer((_) async {});
 
-        final repeating = _appointment.copyWith(
-          id: 'series-1',
-          seriesId: 'series-1',
-          repeat: RepeatInterval.sixMonths,
-        );
-        when(() => appointments.getSeries('series-1')).thenAnswer(
-          (_) async => [
-            repeating,
-            repeating.copyWith(
-              id: 'past',
-              startTime: DateTime(2025, 11, 10, 9),
-            ),
-            repeating.copyWith(
-              id: 'fut-1',
-              startTime: DateTime(2026, 11, 10, 9),
-              status: 'confirmed',
-            ),
-            repeating.copyWith(
-              id: 'fut-2',
-              startTime: DateTime(2027, 5, 10, 9),
-              status: 'in_progress',
-            ),
-            repeating.copyWith(
-              id: 'fut-done',
-              startTime: DateTime(2027, 11, 10, 9),
-              status: 'done',
-            ),
-          ],
-        );
-
-        container.listen(
-          eventDetailsControllerProvider(EventDetailsKey(repeating)),
-          (_, _) {},
-        );
-        final c = container.read(
-          eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
-        );
-        await waitForSeed();
-        // Move the time of day; the repeat rule is unchanged.
-        c
-          ..selectStartTime(const TimeOfDay(hour: 8, minute: 0))
-          ..selectEndTime(const TimeOfDay(hour: 9, minute: 0));
-
-        final outcome = await c.save(
+      final repeating = _appointment.copyWith(
+        id: 'series-1',
+        seriesId: 'series-1',
+        repeat: RepeatInterval.sixMonths,
+      );
+      when(() => appointments.getSeries('series-1')).thenAnswer(
+        (_) async => [
           repeating,
-          title: 'New title',
-          address: 'New address',
-          notes: 'n',
-          materialsNeeded: 'm',
-          applyToSeries: true,
-        );
-
-        // Two future non-terminal siblings updated; past and done preserved.
-        expect((outcome as EventDetailsSaved).updatedSiblings, 2);
-
-        final captured = verify(
-          () => appointments.updateAppointments(captureAny()),
-        ).captured.single;
-        final batch = (captured as List).cast<AppointmentRecord>();
-        // This visit plus the two future siblings, in order.
-        expect(batch.map((a) => a.id), ['series-1', 'fut-1', 'fut-2']);
-        expect(batch.every((a) => a.title == 'New title'), isTrue);
-        expect(batch.every((a) => a.address == 'New address'), isTrue);
-        expect(batch.every((a) => a.seriesId == 'series-1'), isTrue);
-        // Status stays per-visit (never propagated) but is canonicalized:
-        // 'confirmed' normalizes to 'pending', 'in_progress' round-trips
-        // unchanged.
-        expect(batch[1].status, 'pending');
-        expect(batch[2].status, 'in_progress');
-        // Each sibling keeps its own date but takes the new time of day.
-        expect(batch[1].startTime, DateTime(2026, 11, 10, 8));
-        expect(batch[1].endTime, DateTime(2026, 11, 10, 9));
-        expect(batch[2].startTime, DateTime(2027, 5, 10, 8));
-        expect(batch[2].endTime, DateTime(2027, 5, 10, 9));
-
-        verifyNever(
-          () => appointments.rewriteSeries(
-            updated: any(named: 'updated'),
-            deleteIds: any(named: 'deleteIds'),
-            copies: any(named: 'copies'),
+          repeating.copyWith(id: 'past', startTime: DateTime(2025, 11, 10, 9)),
+          repeating.copyWith(
+            id: 'fut-1',
+            startTime: DateTime(2026, 11, 10, 9),
+            status: 'confirmed',
           ),
-        );
-      },
-    );
+          repeating.copyWith(
+            id: 'fut-2',
+            startTime: DateTime(2027, 5, 10, 9),
+            status: 'in_progress',
+          ),
+          repeating.copyWith(
+            id: 'fut-done',
+            startTime: DateTime(2027, 11, 10, 9),
+            status: 'done',
+          ),
+        ],
+      );
+
+      container.listen(
+        eventDetailsControllerProvider(EventDetailsKey(repeating)),
+        (_, _) {},
+      );
+      final c = container.read(
+        eventDetailsControllerProvider(EventDetailsKey(repeating)).notifier,
+      );
+      await waitForSeed();
+      // Move the time of day; the repeat rule is unchanged.
+      c
+        ..selectStartTime(const TimeOfDay(hour: 8, minute: 0))
+        ..selectEndTime(const TimeOfDay(hour: 9, minute: 0));
+
+      final outcome = await c.save(
+        repeating,
+        title: 'New title',
+        address: 'New address',
+        notes: 'n',
+        materialsNeeded: 'm',
+        applyToSeries: true,
+      );
+
+      // Two future non-terminal siblings updated; past and done preserved.
+      expect((outcome as EventDetailsSaved).updatedSiblings, 2);
+
+      final captured = verify(
+        () => appointments.updateAppointments(captureAny()),
+      ).captured.single;
+      final batch = (captured as List).cast<AppointmentRecord>();
+      // This visit plus the two future siblings, in order.
+      expect(batch.map((a) => a.id), ['series-1', 'fut-1', 'fut-2']);
+      expect(batch.every((a) => a.title == 'New title'), isTrue);
+      expect(batch.every((a) => a.address == 'New address'), isTrue);
+      expect(batch.every((a) => a.seriesId == 'series-1'), isTrue);
+      // Status stays per-visit (never propagated) but is canonicalized:
+      // 'confirmed' normalizes to 'pending', 'in_progress' round-trips
+      // unchanged.
+      expect(batch[1].status, 'pending');
+      expect(batch[2].status, 'in_progress');
+      // Each sibling keeps its own date but takes the new time of day.
+      expect(batch[1].startTime, DateTime(2026, 11, 10, 8));
+      expect(batch[1].endTime, DateTime(2026, 11, 10, 9));
+      expect(batch[2].startTime, DateTime(2027, 5, 10, 8));
+      expect(batch[2].endTime, DateTime(2027, 5, 10, 9));
+
+      verifyNever(
+        () => appointments.rewriteSeries(
+          updated: any(named: 'updated'),
+          deleteIds: any(named: 'deleteIds'),
+          copies: any(named: 'copies'),
+        ),
+      );
+    });
 
     test('applyToSeries reports a conflict on a future sibling', () async {
       final repeating = _appointment.copyWith(
@@ -1104,10 +1089,7 @@ void main() {
       when(() => appointments.getSeries('series-1')).thenAnswer(
         (_) async => [
           repeating,
-          repeating.copyWith(
-            id: 'fut-1',
-            startTime: DateTime(2026, 11, 10, 9),
-          ),
+          repeating.copyWith(id: 'fut-1', startTime: DateTime(2026, 11, 10, 9)),
         ],
       );
       when(
@@ -1508,42 +1490,39 @@ void main() {
       verifyNever(() => appointments.updateAppointment(any()));
     });
 
-    test(
-      'a PERSONAL save never returns the busy outcome — the clash alert '
-      'handles it after the write',
-      () async {
-        // Two dialogs about the same clash, back to back, is what running both
-        // would give.
-        await waitForSeed();
-        when(
-          () => appointments.findBusyEmployees(
-            candidates: any(named: 'candidates'),
-            start: any(named: 'start'),
-            end: any(named: 'end'),
-            excludeAppointmentId: any(named: 'excludeAppointmentId'),
-          ),
-        ).thenAnswer((_) async => const [_employeeA]);
+    test('a PERSONAL save never returns the busy outcome — the clash alert '
+        'handles it after the write', () async {
+      // Two dialogs about the same clash, back to back, is what running both
+      // would give.
+      await waitForSeed();
+      when(
+        () => appointments.findBusyEmployees(
+          candidates: any(named: 'candidates'),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          excludeAppointmentId: any(named: 'excludeAppointmentId'),
+        ),
+      ).thenAnswer((_) async => const [_employeeA]);
 
-        readNotifier().setPersonal(value: true);
-        final outcome = await readNotifier().save(
-          _appointment,
-          title: 'Dentist',
-          address: '',
-          notes: '',
-          materialsNeeded: '',
-        );
+      readNotifier().setPersonal(value: true);
+      final outcome = await readNotifier().save(
+        _appointment,
+        title: 'Dentist',
+        address: '',
+        notes: '',
+        materialsNeeded: '',
+      );
 
-        expect(outcome, isA<EventDetailsSaved>());
-        verifyNever(
-          () => appointments.findBusyEmployees(
-            candidates: any(named: 'candidates'),
-            start: any(named: 'start'),
-            end: any(named: 'end'),
-            excludeAppointmentId: any(named: 'excludeAppointmentId'),
-          ),
-        );
-      },
-    );
+      expect(outcome, isA<EventDetailsSaved>());
+      verifyNever(
+        () => appointments.findBusyEmployees(
+          candidates: any(named: 'candidates'),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          excludeAppointmentId: any(named: 'excludeAppointmentId'),
+        ),
+      );
+    });
 
     test(
       'excludes the appointment being edited from its own conflicts',

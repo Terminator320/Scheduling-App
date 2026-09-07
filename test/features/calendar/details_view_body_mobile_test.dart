@@ -18,7 +18,9 @@ import 'package:scheduling/features/employees/domain/models/employee_record.dart
 import 'package:scheduling/l10n/l10n.dart';
 
 class _MockAppointmentsRepo extends Mock implements AppointmentsRepository {}
+
 class _MockClientsRepo extends Mock implements ClientsRepository {}
+
 class _MockEmployeesRepo extends Mock implements EmployeesRepository {}
 
 const _client = ClientRecord(
@@ -56,49 +58,59 @@ void main() {
     employees = _MockEmployeesRepo();
     uploadNotifier = PhotoUploadNotifier();
     when(() => clients.getClientById(any())).thenAnswer((_) async => _client);
-    when(employees.watchEmployees).thenAnswer((_) => Stream.value(const [_employeeA]));
+    when(
+      employees.watchEmployees,
+    ).thenAnswer((_) => Stream.value(const [_employeeA]));
+    when(
+      () => appointments.onLocalWrite,
+    ).thenAnswer((_) => const Stream.empty());
   });
 
-  testWidgets('appointment detail view does not overflow on small width at 2x text', (tester) async {
-    tester.view.physicalSize = const Size(320, 760);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets(
+    'appointment detail view does not overflow on small width at 2x text',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 760);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          appointmentsRepositoryProvider.overrideWithValue(appointments),
-          clientsRepositoryProvider.overrideWithValue(clients),
-          employeesRepositoryProvider.overrideWithValue(employees),
-          photoUploadNotifierProvider.overrideWithValue(uploadNotifier),
-        ],
-        child: MaterialApp(
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appointmentsRepositoryProvider.overrideWithValue(appointments),
+            clientsRepositoryProvider.overrideWithValue(clients),
+            employeesRepositoryProvider.overrideWithValue(employees),
+            photoUploadNotifierProvider.overrideWithValue(uploadNotifier),
           ],
-          supportedLocales: AppLocalizations.supportedLocales,
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(2)),
-            child: child ?? const SizedBox.shrink(),
-          ),
-          home: Scaffold(
-            body: SingleChildScrollView(
-              child: DetailsViewBody(
-                appointment: _appointment,
-                showActions: true,
-                onClose: () {},
+          child: MaterialApp(
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(2)),
+              child: child ?? const SizedBox.shrink(),
+            ),
+            home: Scaffold(
+              body: SingleChildScrollView(
+                child: DetailsViewBody(
+                  appointment: _appointment,
+                  showActions: true,
+                  onClose: () {},
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(tester.takeException(), isNull);
-  });
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

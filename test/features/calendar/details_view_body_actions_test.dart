@@ -78,6 +78,9 @@ void main() {
     when(
       employees.watchEmployees,
     ).thenAnswer((_) => Stream.value(const [_employeeA]));
+    when(
+      () => appointments.onLocalWrite,
+    ).thenAnswer((_) => const Stream.empty());
   });
 
   List<Override> overrides() => [
@@ -204,9 +207,7 @@ void main() {
       expect(find.text('Push back'), findsNothing);
     });
 
-    testWidgets('a job with no same-day offset left gets none', (
-      tester,
-    ) async {
+    testWidgets('a job with no same-day offset left gets none', (tester) async {
       await pump(
         tester,
         _open.copyWith(

@@ -88,13 +88,14 @@ void main() {
     when(
       employees.watchEmployees,
     ).thenAnswer((_) => Stream.value(const [_employee]));
+    when(
+      () => appointments.onLocalWrite,
+    ).thenAnswer((_) => const Stream.empty());
   });
 
   testWidgets(
     'appointment card does not overflow under French localized strings at 2x text',
-    (
-      tester,
-    ) async {
+    (tester) async {
       tester.view.physicalSize = const Size(320, 640);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -131,9 +132,7 @@ void main() {
 
   testWidgets(
     'appointment detail body does not overflow under French localized strings at 2x text',
-    (
-      tester,
-    ) async {
+    (tester) async {
       tester.view.physicalSize = const Size(320, 760);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(tester.view.resetPhysicalSize);
@@ -157,9 +156,9 @@ void main() {
             ],
             supportedLocales: AppLocalizations.supportedLocales,
             builder: (context, child) => MediaQuery(
-              data: MediaQuery.of(context).copyWith(
-                textScaler: const TextScaler.linear(2),
-              ),
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(2)),
               child: child ?? const SizedBox.shrink(),
             ),
             home: Scaffold(

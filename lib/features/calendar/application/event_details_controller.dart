@@ -94,6 +94,21 @@ class EventDetailsController extends Notifier<EventDetailsState>
     _lastKnownImages = const [];
     Future.microtask(() => _loadClientIfNeeded(appointment.clientId));
     Future.microtask(_loadStoredPictures);
+    // A background photo upload appends its rows through this same singleton
+    // repository, so its local-write poke is how this sheet learns the photo
+    // landed. Without it the crew saw nothing until they closed and reopened.
+    // Resolved here (before any await) rather than inside `onError`: `ref` is
+    // not safe to touch once this notifier may be disposed.
+    final logger = ref.read(loggerProvider);
+    final writes = ref
+        .read(appointmentsRepositoryProvider)
+        .onLocalWrite
+        .listen(
+          (_) => unawaited(_loadStoredPictures()),
+          onError: (Object e, StackTrace st) =>
+              logger.warn('APPT-IMG local write poke', e, st),
+        );
+    ref.onDispose(writes.cancel);
     _seedFuture = Future.microtask(_enrichSelectedEmployees);
     return EventDetailsState(
       selectedDate: appointment.startTime,

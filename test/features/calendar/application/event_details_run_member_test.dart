@@ -77,6 +77,9 @@ void main() {
     final employees = _MockEmployeesRepo();
 
     when(
+      () => appointments.onLocalWrite,
+    ).thenAnswer((_) => const Stream.empty());
+    when(
       () => clients.getClientById(any()),
     ).thenAnswer((_) async => _existingClient);
     when(
