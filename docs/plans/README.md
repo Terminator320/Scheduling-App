@@ -43,12 +43,20 @@ at the top of each file, not its boxes.
 
 ## What has not been done
 
-### 1. The backend deploy — a THREE-RELEASE DEBT is open again
+### 1. The backend deploy — CLOSED 2026-09-06
 
 The P5/multi-day deploy this section was written for landed 2026-08-11 at
 `70579d22` (release 1.45.0+72), which unblocked the P5 device block in §4 and
 shipping an app build carrying the P5 UI — the ordering hazard was that the
 rules clause had to be live first, or every self save fails `permission-denied`.
+
+**CLOSED 2026-09-06.** The debt described below is paid: indexes deployed and
+all four composites `READY`, both prod backfills run (720 clients / 84
+appointments tokenized; 658 clients given sort fields), and
+`functions` + `firestore:rules` deployed, taking the live export set 25 → 29.
+**Only the app build is outstanding.** The paragraphs below are kept as the
+record of what was owed and in what order; read `docs/DEPLOYMENT.md`'s log
+for what production runs, never this file.
 
 **Nothing about deploy state should be read from this file** —
 **`docs/DEPLOYMENT.md` is the only reliable record of what production runs**;
@@ -189,14 +197,44 @@ and read as though nothing was outstanding):
   rule's repair is the failure mode. `restore-business-client-names.js` covers
   the businesses the heuristic caught. The read-only damage audit for the
   2026-08-08 run is `docs/audits/audit-client-phone-backfill-damage.js`.
-- **The appointment-images backfill RAN, and was RE-RUN at the CONTRACT step
-  2026-08-22** — the current figure is `copied 14 photos across 11
-  appointments`, not the superseded `13 / 10` from the 2026-08-15 run. Copy-only
-  and idempotent; `pictures` is untouched. **TWO steps of that migration are
-  still outstanding, not one**: step 3 (ship the app build) and then step 4 (the
-  irreversible clear script, gated on the fleet ageing off builds that still
-  write the array). See the deploy log in `docs/DEPLOYMENT.md`, which is the
-  authority here; the full audit history is in `docs/archive/`.
+- **The appointment-images migration is COMPLETE — all four steps, verified
+  2026-09-06.** This bullet claimed two were outstanding; both were already
+  done and one of them can never do anything again.
+  Step 2, the backfill, ran and was re-run at the CONTRACT step 2026-08-22:
+  `copied 14 photos across 11 appointments` (not the superseded `13 / 10` from
+  2026-08-15). Copy-only and idempotent.
+  **Step 3 shipped in 1.49.0+78 on 2026-08-22** (`7ace6528` “retire the
+  pictures array”, released as `9cdc60d4` “photos live only in the
+  subcollection”). The gate was never “ship the NEXT build” — it was the fleet
+  ageing off builds that touch the array, and that is settled on the SAME
+  evidence that retired `#compat-1.47.0`: the owner confirmed the whole fleet
+  on **1.53** by 2026-08-29, four releases past 1.49.
+  **Step 4 has nothing left to clear.** A prod dry run on 2026-09-06 reported
+  `0 array entries across 0 appointments (0 still carried an array, 84
+  scanned)`, no refusals and no `pictureCount` re-stamp. Verified independently
+  by reading all 84 docs through the Firestore MCP under a field mask: **not
+  one holds a non-empty `pictures` array.** Every doc is one of two shapes —
+  about 45 carry an empty `pictures: []` and no `pictureCount`, the rest carry
+  `pictureCount` (0/1/2) and no array at all.
+  **The empty-array residue is PERMANENT and that is not a defect.** The clear
+  script early-returns on `pictures.length === 0` before it reaches the delete,
+  so it will never remove those fields no matter how often it runs. They are
+  inert — empty, accepted by the rules, never emitted by `toMap()`. Don't file
+  the residue as outstanding work, and don't re-run the clear script expecting
+  it to go: removing it would take a different one-line script nobody needs.
+  **Step 4 already RAN, on 2026-08-27** — dry run and live run agreed exactly:
+  `cleared 14 array entries across 11 appointments, 67 scanned`, no refusals,
+  no identity-less entries. That is why today's dry run finds nothing, and it
+  is why the ~39 `pictureCount`-only docs have no `pictures` field at all: the
+  script issues `FieldValue.delete()` on the ones it clears. The ~45 empty
+  arrays are the docs that never held a photo, which it never touches. Every
+  number reconciles.
+  The fleet gate for that run was read off re-running the idempotent COPY
+  backfill the same day and getting the SAME 14 photos / 11 appointments —
+  identical counts five days on means no build still writing the array had
+  added an entry. **That technique is the reusable part**: it checks the gate
+  without being able to see fleet versions at all. See the deploy log in
+  `docs/DEPLOYMENT.md`; the full audit history is in `docs/archive/`.
 - **The three "orphaned Cloud Scheduler jobs" NEVER EXISTED — RESOLVED
   2026-08-23.** Checking found exactly the 3 expected scheduled jobs and no
   orphans; this bullet claimed otherwise for nine days. What the check DID turn
