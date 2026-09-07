@@ -274,9 +274,13 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   and moving the photos out is precisely what makes that unreachable, so it was
   not reinstated as a ceiling — rules cannot count documents in a subcollection
   anyway. **The array clause itself is NOT gone**: `firestore.rules` still
-  enforces `d.pictures.size() <= 100` for documents the clear script has not
-  reached, whose arrays ride along in `request.resource.data` on every ordinary
-  edit. Read "not reinstated" as "no equivalent on the SUBCOLLECTION", never as
+  enforces `d.pictures.size() <= 100`, and it is still reachable — about 45
+  prod appointments carry an EMPTY `pictures: []` that rides along in
+  `request.resource.data` on every ordinary edit. That residue is permanent:
+  the clear script early-returns on `pictures.length === 0` before its delete,
+  so no run will ever remove it (verified 2026-09-06 — no prod doc holds a
+  NON-empty array, so the migration is complete and the clause now guards only
+  empty lists). Read "not reinstated" as "no equivalent on the SUBCOLLECTION", never as
   "the clause was deleted". What replaces it is visibility at the same number:
   `AppointmentImagesStore.scanLimit` (100) bounds the read and warns at the
   cap, and `PICTURE_COUNT_WARN_CAP` (`functions/appointment_images.js`) makes
@@ -285,7 +289,8 @@ Loaded when working on the image pipeline. Root context: `../../CLAUDE.md`.
   client gets near either. Keep the two hundreds equal.
   Scripts: `functions/scripts/backfill-appointment-images.js` copies an array
   into the subcollection (copy-only, `--dry-run`, atomic per appointment) and
-  `clear-appointment-picture-arrays.js` deletes the array afterwards. They are
+  `clear-appointment-picture-arrays.js` deletes the array afterwards (its work
+  is DONE as of 2026-09-06 — a prod run now clears nothing). They are
   deliberately separate: a script that copied and deleted in one pass could not
   be dry-run meaningfully, since the dry run would report a coverage it was
   about to create. The clear script REFUSES any appointment whose subcollection
