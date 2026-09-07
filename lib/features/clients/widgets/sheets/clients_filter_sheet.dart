@@ -6,6 +6,7 @@ import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/models/clients_filter.dart';
 import 'package:scheduling/l10n/l10n.dart';
+import 'package:scheduling/shared/widgets/primitives/app_back_button.dart';
 import 'package:scheduling/shared/widgets/primitives/section_label.dart';
 
 /// What the sheet hands back: the filter, plus the street of a picked address
@@ -26,11 +27,16 @@ class ClientsFilterSheet extends ConsumerWidget {
   const ClientsFilterSheet({
     required this.selected,
     required this.onChanged,
+    required this.onBack,
     super.key,
   });
 
   final ClientsFilter selected;
   final ValueChanged<ClientsFilterPick> onChanged;
+
+  /// Leaves the sheet reporting NOTHING, so the caller keeps the filter, the
+  /// chip label and the list position it already had.
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -46,14 +52,21 @@ class ClientsFilterSheet extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                AppSpacing.sp16,
-                AppSpacing.sp8,
+                AppSpacing.sp4,
+                AppSpacing.sp4,
                 AppSpacing.sp16,
                 AppSpacing.sp8,
               ),
-              child: Text(
-                l10n.clients_filterTitle,
-                style: Theme.of(context).textTheme.titleMedium,
+              child: Row(
+                children: [
+                  AppBackButton(onTap: onBack),
+                  Expanded(
+                    child: Text(
+                      l10n.clients_filterTitle,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                ],
               ),
             ),
             _Option(
@@ -191,5 +204,6 @@ Future<ClientsFilterPick?> showClientsFilterSheet(
   builder: (sheetContext) => ClientsFilterSheet(
     selected: selected,
     onChanged: (pick) => Navigator.of(sheetContext).pop(pick),
+    onBack: () => Navigator.of(sheetContext).pop(),
   ),
 );
