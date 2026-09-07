@@ -1,5 +1,6 @@
 import 'package:scheduling/features/calendar/domain/models/appointment_image.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/models/field_note.dart';
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 
 abstract class AppointmentsRepository {
@@ -52,6 +53,20 @@ abstract class AppointmentsRepository {
 
   /// Writes what the CREW recorded on site.
   Future<void> updateFieldNotes({required String id, required String notes});
+
+  /// Appends one crew note to `appointments/{id}/fieldNotes`.
+  ///
+  /// [authorId] must be the caller's own users-doc id — `firestore.rules`
+  /// refuses anything else, so a note cannot be filed under another name.
+  Future<void> appendFieldNote({
+    required String appointmentId,
+    required String text,
+    required String authorId,
+    required String authorName,
+  });
+
+  /// This job's crew notes, oldest first.
+  Future<List<FieldNote>> fetchFieldNotes(String appointmentId);
 
   Future<void> updateAppointmentStatus({
     required String id,

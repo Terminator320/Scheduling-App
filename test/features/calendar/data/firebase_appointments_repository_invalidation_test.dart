@@ -118,6 +118,17 @@ final List<_WriteCase> _writeCases = [
     why: 'a crew note changes no field the history matcher reads',
   ),
   (
+    method: 'appendFieldNote',
+    run: (r) => r.appendFieldNote(
+      appointmentId: 'a1',
+      text: 'Valve replaced',
+      authorId: 'e1',
+      authorName: 'Marc Tremblay',
+    ),
+    keepsA1: true,
+    why: 'a crew note touches no field matchHistoryDocs reads',
+  ),
+  (
     method: 'updateAppointmentStatus',
     run: (r) => r.updateAppointmentStatus(id: 'a1', status: 'done'),
     keepsA1: true,
@@ -158,6 +169,7 @@ void main() {
   late _MockCollection appointments;
   late _MockDoc parentDoc;
   late _MockCollection images;
+  late _MockCollection fieldNotes;
   late _MockBatch batch;
   late _MockTransaction txn;
   late _MockQuery query;
@@ -168,6 +180,7 @@ void main() {
     appointments = _MockCollection();
     parentDoc = _MockDoc();
     images = _MockCollection();
+    fieldNotes = _MockCollection();
     batch = _MockBatch();
     txn = _MockTransaction();
     query = _MockQuery();
@@ -179,6 +192,8 @@ void main() {
     when(() => parentDoc.id).thenReturn('a1');
     when(() => parentDoc.collection('images')).thenReturn(images);
     when(() => images.doc(any())).thenReturn(_MockDoc());
+    when(() => parentDoc.collection('fieldNotes')).thenReturn(fieldNotes);
+    when(() => fieldNotes.add(any())).thenAnswer((_) async => _MockDoc());
     when(() => parentDoc.update(any())).thenAnswer((_) async {});
 
     when(firestore.batch).thenReturn(batch);
@@ -197,9 +212,9 @@ void main() {
 
     final txnSnap = _MockDocSnap();
     when(() => txnSnap.exists).thenReturn(true);
-    when(() => txn.get<Map<String, dynamic>>(any())).thenAnswer(
-      (_) async => txnSnap,
-    );
+    when(
+      () => txn.get<Map<String, dynamic>>(any()),
+    ).thenAnswer((_) async => txnSnap);
     when(() => txn.update(any(), any())).thenReturn(txn);
     when(() => firestore.runTransaction<Null>(any())).thenAnswer((
       invocation,
@@ -323,9 +338,7 @@ void main() {
         }
         current?.writeln(line);
       }
-      return {
-        for (final e in members.entries) e.key: e.value.toString(),
-      };
+      return {for (final e in members.entries) e.key: e.value.toString()};
     }
 
     /// Anything that changes a document.
