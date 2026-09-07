@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:scheduling/core/adaptive/adaptive_progress_indicator.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
 import 'package:scheduling/features/clients/domain/policies/phone_query_policy.dart';
@@ -73,9 +74,7 @@ void main() {
     expect(find.text('Search results'), findsNothing);
   });
 
-  testWidgets('an exact match is labelled and carries an Attach button', (
-    tester,
-  ) async {
+  testWidgets('an exact match carries an Attach button', (tester) async {
     await tester.pumpWidget(
       harness(
         controller: TextEditingController(text: '(514) 562-8332'),
@@ -86,7 +85,6 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Exact match'), findsOneWidget);
     expect(find.text('Attach'), findsOneWidget);
   });
 
@@ -111,7 +109,9 @@ void main() {
     expect(attached, marie);
   });
 
-  testWidgets('several results are not an "exact match"', (tester) async {
+  testWidgets('several text results are never captioned as near misses', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       harness(
         controller: TextEditingController(text: 'mar'),
@@ -122,11 +122,12 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Exact match'), findsNothing);
-    expect(find.text('Search results'), findsOneWidget);
+    expect(find.text('NO EXACT MATCH · CLOSEST NUMBERS'), findsNothing);
+    expect(find.text('Marie Tremblay'), findsOneWidget);
+    expect(find.text('J-P Gagnon'), findsOneWidget);
   });
 
-  testWidgets('a text search is a substring test, never an exact match', (
+  testWidgets('a text search leads with the name, the number beneath', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -139,11 +140,12 @@ void main() {
         ),
       ),
     );
-    expect(find.text('Exact match'), findsNothing);
-    expect(find.text('Search results'), findsOneWidget);
+    expect(find.text('NO EXACT MATCH · CLOSEST NUMBERS'), findsNothing);
+    expect(find.text('Marie Tremblay'), findsOneWidget);
+    expect(find.text('(514) 562-8332'), findsOneWidget);
   });
 
-  testWidgets('a fallback answer is labelled as closest, not as matches', (
+  testWidgets('a fallback answer is captioned as closest, not as matches', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -157,8 +159,58 @@ void main() {
         onAddNew: () {},
       ),
     );
-    expect(find.text('Closest numbers on file'), findsOneWidget);
+    expect(find.text('NO EXACT MATCH · CLOSEST NUMBERS'), findsOneWidget);
     expect(find.text('None of these — new client'), findsOneWidget);
+  });
+
+  testWidgets('results render as an attached dropdown, not a titled panel', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      harness(
+        controller: TextEditingController(text: '(514) 562-8332'),
+        results: [marie],
+        status: const ClientSearchStatus(
+          digitsTyped: 10,
+          answeredRung: PhoneRung.canonical,
+        ),
+      ),
+    );
+    // The panel header and match count are gone with Option A.
+    expect(find.text('Exact match'), findsNothing);
+    expect(find.text('1 match'), findsNothing);
+    expect(find.textContaining('Marie Tremblay'), findsOneWidget);
+  });
+
+  testWidgets('an exact hit carries NO caption', (tester) async {
+    await tester.pumpWidget(
+      harness(
+        controller: TextEditingController(text: '(514) 562-8332'),
+        results: [marie],
+        status: const ClientSearchStatus(
+          digitsTyped: 10,
+          answeredRung: PhoneRung.canonical,
+        ),
+      ),
+    );
+    expect(find.text('NO EXACT MATCH · CLOSEST NUMBERS'), findsNothing);
+  });
+
+  testWidgets('searching shows a suffix spinner and KEEPS the results', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      harness(
+        controller: TextEditingController(text: 'lemi'),
+        results: [marie],
+        status: const ClientSearchStatus(mode: ClientQueryMode.text),
+        isSearching: true,
+      ),
+    );
+    // The old build replaced the whole body with a centred indicator, so the
+    // list jumped on every keystroke.
+    expect(find.textContaining('Marie Tremblay'), findsOneWidget);
+    expect(find.byType(AdaptiveProgressIndicator), findsOneWidget);
   });
 
   testWidgets('a failed search is not an empty one', (tester) async {
@@ -199,6 +251,24 @@ void main() {
         status: const ClientSearchStatus(
           digitsTyped: 10,
           answeredRung: PhoneRung.canonical,
+        ),
+        textScale: 2,
+      ),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the dropdown survives a 260px phone at 2x text', (tester) async {
+    tester.view.physicalSize = const Size(260, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pumpWidget(
+      harness(
+        controller: TextEditingController(text: '(514) 562-8999'),
+        results: [marie, jp],
+        status: const ClientSearchStatus(
+          digitsTyped: 10,
+          answeredRung: PhoneRung.firstSeven,
         ),
         textScale: 2,
       ),

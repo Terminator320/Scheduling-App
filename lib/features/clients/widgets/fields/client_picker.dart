@@ -6,7 +6,6 @@ import 'package:scheduling/core/validators/phone_format.dart';
 import 'package:scheduling/features/clients/domain/models/client_record.dart';
 import 'package:scheduling/features/clients/domain/models/client_search_status.dart';
 import 'package:scheduling/l10n/l10n.dart';
-import 'package:scheduling/shared/widgets/cards/sheet_panel.dart';
 import 'package:scheduling/shared/widgets/fields/form_helpers.dart';
 
 /// The add-job client step: a mode switch, one field, and whatever the current
@@ -59,10 +58,19 @@ class ClientPicker extends StatelessWidget {
           keyboardType: isPhone ? TextInputType.phone : TextInputType.text,
           inputFormatters: isPhone ? const [PhoneInputFormatter()] : null,
           textInputAction: TextInputAction.search,
-          decoration: formInputDecoration(
-            context,
-            l10n.clients_tapPhoneToStart,
-          ).copyWith(errorText: errorText),
+          decoration: formInputDecoration(context, l10n.clients_tapPhoneToStart)
+              .copyWith(
+                errorText: errorText,
+                // The spinner rides the FIELD, not the list: replacing the
+                // results with a centred indicator made the list jump on
+                // every keystroke.
+                suffixIcon: isSearching
+                    ? const Padding(
+                        padding: EdgeInsets.all(AppSpacing.sp12),
+                        child: AdaptiveProgressIndicator(size: 16),
+                      )
+                    : null,
+              ),
           onChanged: onChanged,
         ),
         if (status.isHolding) ...[
@@ -76,12 +84,6 @@ class ClientPicker extends StatelessWidget {
   }
 
   Widget _body(BuildContext context, AppLocalizations l10n) {
-    if (isSearching) {
-      return const Padding(
-        padding: EdgeInsets.all(AppSpacing.sp12),
-        child: AdaptiveProgressIndicator(),
-      );
-    }
     // A failure that renders as "no clients found" is how a duplicate gets
     // created for a client who is already on file.
     if (status.failed) return _failure(context, l10n);
@@ -114,21 +116,29 @@ class ClientPicker extends StatelessWidget {
         style: Theme.of(context).textTheme.bodyMedium,
       );
     }
-    return _Panel(
-      header: _header(l10n),
-      count: results.isEmpty ? null : l10n.clients_matchCount(results.length),
-      rows: [
+    final isPhone = status.mode == ClientQueryMode.phone;
+    return _Dropdown(
+      // Option A drops the panel header, so the fallback rung keeps its
+      // warning as a caption: those rows answer a query nobody typed and must
+      // never read as matches.
+      caption: status.isFallback ? l10n.clients_noExactMatchClosest : null,
+      children: [
         for (final client in results)
-          _Row(
-            headline: client.phone.trim().isEmpty
+          _DropdownRow(
+            headline: isPhone && client.phone.trim().isNotEmpty
+                ? formatPhoneNumber(client.phone)
+                : client.displayName,
+            detail: isPhone
                 ? client.displayName
-                : formatPhoneNumber(client.phone),
-            detail: client.displayName,
+                : (client.phone.trim().isEmpty
+                      ? null
+                      : formatPhoneNumber(client.phone)),
+            mono: isPhone,
             action: l10n.clients_attach,
             onTap: () => _attach(context, client),
           ),
         if (onAddNew != null)
-          _Row(
+          _DropdownRow(
             headline: l10n.clients_noneOfTheseNewClient,
             icon: Icons.person_add_alt_1,
             onTap: () {
@@ -138,19 +148,6 @@ class ClientPicker extends StatelessWidget {
           ),
       ],
     );
-  }
-
-  /// A fallback rung answered a query he did not type, so those are near misses
-  /// and must never read as matches. "Exact match" is reserved for the one case
-  /// that IS one — a canonical phone rung with a single hit; a text query is a
-  /// substring test server-side, so several results under that header
-  /// contradict themselves and invite attaching the wrong client.
-  String _header(AppLocalizations l10n) {
-    if (status.isFallback) return l10n.clients_closestNumbers;
-    if (status.mode == ClientQueryMode.phone && results.length == 1) {
-      return l10n.clients_exactMatch;
-    }
-    return l10n.clients_searchResults;
   }
 
   /// The ONE place allowed to drop the keyboard.
@@ -271,64 +268,75 @@ class _Tally extends StatelessWidget {
   }
 }
 
-/// A titled block of tappable rows. Paints its own background, so the rows are
-/// hand-built rather than `ListTile`s.
-class _Panel extends StatelessWidget {
-  const _Panel({required this.header, required this.count, required this.rows});
 
-  final String header;
-  final String? count;
-  final List<Widget> rows;
+/// The attached autocomplete list, drawn exactly like
+/// `AddressAutocompleteField`'s — same border, radius and `sp4` gap — so the
+/// client picker and the address picker behave identically.
+class _Dropdown extends StatelessWidget {
+  const _Dropdown({required this.children, this.caption});
+
+  final String? caption;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.sp4),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  header,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.monoType.groupLabel,
+    final scheme = theme.colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(top: AppSpacing.sp4),
+      decoration: BoxDecoration(
+        border: Border.all(color: scheme.outlineVariant),
+        borderRadius: BorderRadius.circular(AppRadius.r12),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (caption != null)
+            Container(
+              width: double.infinity,
+              color: theme.statusColors.warningContainer,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.sp12,
+                vertical: AppSpacing.sp8,
+              ),
+              child: Text(
+                caption!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.monoType.groupLabel.copyWith(
+                  color: theme.statusColors.onWarningContainer,
                 ),
               ),
-              if (count != null)
-                Text(
-                  count!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-            ],
-          ),
-        ),
-        SheetPanel(children: rows),
-      ],
+            ),
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0 || caption != null)
+              Divider(height: 1, color: scheme.outlineVariant),
+            children[i],
+          ],
+        ],
+      ),
     );
   }
 }
 
-class _Row extends StatelessWidget {
-  const _Row({
+class _DropdownRow extends StatelessWidget {
+  const _DropdownRow({
     required this.headline,
     required this.onTap,
     this.detail,
     this.action,
     this.icon,
+    this.mono = false,
   });
 
   final String headline;
   final String? detail;
   final String? action;
   final IconData? icon;
+
+  /// A phone number reads as a number, not as prose.
+  final bool mono;
   final VoidCallback onTap;
 
   @override
@@ -356,12 +364,16 @@ class _Row extends StatelessWidget {
                     headline,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: icon == null
-                        ? theme.monoType.metric
-                        : theme.textTheme.bodyMedium?.copyWith(
+                    style: icon != null
+                        ? theme.textTheme.bodyMedium?.copyWith(
                             color: scheme.primary,
                             fontWeight: FontWeight.w600,
-                          ),
+                          )
+                        : (mono
+                              ? theme.monoType.metric
+                              : theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                )),
                   ),
                   if (detail != null && detail!.trim().isNotEmpty)
                     Text(

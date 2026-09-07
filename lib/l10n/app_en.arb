@@ -3977,6 +3977,10 @@
   "@clients_closestNumbers": {
     "description": "Header above near-miss results, shown when no client has the exact number typed."
   },
+  "clients_noExactMatchClosest": "NO EXACT MATCH · CLOSEST NUMBERS",
+  "@clients_noExactMatchClosest": {
+    "description": "Caption inside the client search dropdown when the results are a fallback rung rather than hits. They answer a query nobody typed, so they must never read as matches. Already uppercase in source."
+  },
   "clients_matchCount": "{count, plural, =0{No matches} =1{1 match} other{{count} matches}}",
   "@clients_matchCount": {
     "description": "Count of clients matching the current query in the add-job picker.",
