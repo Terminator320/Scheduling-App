@@ -846,6 +846,7 @@
   "clients_exactMatch": "Correspondance exacte",
   "clients_searchResults": "Résultats de recherche",
   "clients_closestNumbers": "Numéros les plus proches au dossier",
+  "clients_noExactMatchClosest": "AUCUNE CORRESPONDANCE EXACTE · NUMÉROS LES PLUS PROCHES",
   "clients_matchCount": "{count, plural, =0{Aucune correspondance} =1{1 correspondance} other{{count} correspondances}}",
   "clients_attach": "Associer",
   "clients_searchFailed": "Impossible de vérifier ce numéro",
