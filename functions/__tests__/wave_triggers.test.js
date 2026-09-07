@@ -18,6 +18,7 @@ jest.mock("../wave/worker", () => ({
 jest.mock("../wave/sync_run", () => ({
   importWithWatermark: jest.fn(),
   readWaveBusinessIdCached: jest.fn(),
+  readWaveConnection: jest.fn(),
 }));
 
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
@@ -77,6 +78,22 @@ beforeEach(() => {
   worker.drainQueue.mockResolvedValue(IDLE_DRAIN);
   worker.listOutstandingClientIds.mockResolvedValue([]);
   syncRun.readWaveBusinessIdCached.mockResolvedValue("");
+  // Stands in for the shared connection read so `makeDb`'s `connection` /
+  // `connectionError` options still drive these tests. The COERCION itself is
+  // proved against the real `sync_run` in `wave_callables.test.js`; all this
+  // double owes the rider is the shape and the throw.
+  syncRun.readWaveConnection.mockImplementation(async () => {
+    const ref = getFirestore().collection("wave").doc("connection");
+    const snap = await ref.get();
+    const data = snap.exists ? snap.data() : null;
+    return {
+      ref,
+      data,
+      businessId: (data && data.businessId) || "",
+      businessName: (data && data.businessName) || "",
+      importSchedule: (data && data.importSchedule) || "off",
+    };
+  });
 });
 
 describe("waveUpsertCustomer mark-pending batch", () => {

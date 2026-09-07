@@ -10,6 +10,7 @@ import 'package:scheduling/features/live_activity/application/live_activity_pref
 import 'package:scheduling/features/live_activity/application/live_activity_registration_controller.dart';
 import 'package:scheduling/features/notifications/application/push_registration_controller.dart';
 import 'package:scheduling/features/settings/widgets/cards/notifications_settings_card.dart';
+import 'package:scheduling/features/settings/widgets/cards/settings_tiles.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 Widget _harness({
@@ -150,5 +151,47 @@ void main() {
     );
     expect(toggle.onChanged, isNull);
     expect(calls, 0);
+  });
+
+  testWidgets('every switch row is shrink-wrapped, so they render alike', (
+    tester,
+  ) async {
+    // A padded Switch.adaptive is taller than a shrink-wrapped one, so a row
+    // that spells its own switch renders at a different height from the rest
+    // of the same Settings screen. Three of these four had already drifted.
+    await tester.pumpWidget(
+      _harness(
+        liveActivityReady: Future<void>.value(),
+        travelAlertsEnabled: true,
+        locationSharingEnabled: true,
+      ),
+    );
+    await tester.pump();
+
+    final switches = tester.widgetList<Switch>(find.byType(Switch));
+    expect(switches, hasLength(3));
+    for (final toggle in switches) {
+      expect(
+        toggle.materialTapTargetSize,
+        MaterialTapTargetSize.shrinkWrap,
+        reason: 'a padded switch makes its row taller than its siblings',
+      );
+    }
+  });
+
+  testWidgets('divides the rows it actually rendered', (tester) async {
+    // The dividers are indexed off the built list rather than each row
+    // computing whether it is last, so a hidden row cannot leave a hanging
+    // rule and a new row costs no edit to the rows above it.
+    await tester.pumpWidget(
+      _harness(
+        liveActivityReady: Future<void>.value(),
+        travelAlertsEnabled: true,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byType(SettingsTileDivider), findsNWidgets(2));
+    expect(find.byType(SettingsTile), findsNWidgets(3));
   });
 }

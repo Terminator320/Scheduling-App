@@ -54,6 +54,7 @@ Widget _wrap({
   required Stream<List<AppointmentRecord>> appointments,
   required Stream<List<EmployeeRecord>> allUsers,
   required EmployeesRepository repo,
+  Stream<List<AppointmentRecord>>? myAppointments,
   bool isAdmin = true,
   double textScale = 1,
 }) {
@@ -66,6 +67,11 @@ Widget _wrap({
     // has listened to yet reports that as an UNHANDLED async error and fails
     // the test.
     ..ignore();
+  // Defaults to the same list, so an existing case cannot depend on WHICH
+  // provider the screen picked; a case that passes its own list can.
+  final replayMine = myAppointments == null
+      ? replayAppointments
+      : (myAppointments.first..ignore());
   return ProviderScope(
     overrides: [
       employeesRepositoryProvider.overrideWithValue(repo),
@@ -77,7 +83,7 @@ Widget _wrap({
         (_, _) => Stream.fromFuture(replayAppointments),
       ),
       myAppointmentsProvider.overrideWith(
-        (_, _) => Stream.fromFuture(replayAppointments),
+        (_, _) => Stream.fromFuture(replayMine),
       ),
     ],
     child: ThemeNotifier(
@@ -269,10 +275,7 @@ void main() {
     // followed the swipe instead of being left behind in the old month.
     final now = DateTime.now();
     final next = DateTime(now.year, now.month + 1);
-    expect(
-      find.text(_dayHeader(next)),
-      findsOneWidget,
-    );
+    expect(find.text(_dayHeader(next)), findsOneWidget);
   });
 
   testWidgets('swiping the collapsed week strip pages a week', (tester) async {
@@ -304,10 +307,7 @@ void main() {
       DateTime(today.year, today.month, today.day + 7),
       weekStart: weekStart,
     ).first;
-    expect(
-      find.text(_dayHeader(expected)),
-      findsOneWidget,
-    );
+    expect(find.text(_dayHeader(expected)), findsOneWidget);
   });
 
   testWidgets('tapping the header month opens the month and year picker', (
@@ -795,6 +795,29 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byType(CrewFilterButton), findsNothing);
+  });
+
+  testWidgets('an employee calendar reads the employee-scoped stream', (
+    tester,
+  ) async {
+    // Employees see only appointments whose `employeeIds` hold their doc id —
+    // the ternary picking `myAppointmentsProvider` is the client half of that
+    // invariant, so the two streams must carry DIFFERENT lists here.
+    await withPhoneViewport(tester);
+    final today = DateTime.now();
+    await tester.pumpWidget(
+      _wrap(
+        appointments: Stream.value([_appointment(2, today)]),
+        myAppointments: Stream.value([_appointment(1, today)]),
+        allUsers: Stream.value(const [_jane]),
+        repo: repo,
+        isAdmin: false,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Appt 1'), findsOneWidget);
+    expect(find.text('Appt 2'), findsNothing);
   });
 
   testWidgets('filtering to one person hides the rest and clears back', (

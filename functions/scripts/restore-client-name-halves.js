@@ -109,8 +109,12 @@ const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
 // The batched-write loop, shared so `--dry-run` cannot be forgotten at a
 // call site — see `_batch.js`.
 const {commitInBatches} = require("./_batch");
+// The document-id paging loop, shared so a bulk run cannot read the whole
+// collection in one `.get()` — see `_scan.js`.
+const {scanByName} = require("./_scan");
 
 const BATCH_SIZE = 200;
+const PAGE_SIZE = 500;
 
 /**
  * Past appointments read per candidate client.
@@ -278,7 +282,10 @@ async function main() {
   const {db, dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
   const max = parseMax(argv);
 
-  const snap = await db.collection("clients").get();
+  // A count() aggregate rather than the size of a whole-collection `.get()`:
+  // the scan below is paged, and the total is only needed to say how much of
+  // the roster a `--max` run never looked at.
+  const total = (await db.collection("clients").count().get()).data().count;
 
   const restored = [];
   const business = [];
@@ -287,13 +294,17 @@ async function main() {
   const skipped = {notRenamed: 0, hasName: 0};
 
   const writer = commitInBatches(db, {dryRun, batchSize: BATCH_SIZE});
-  // Counted rather than read off `snap.size`: `--max` BREAKS the loop, so on a
-  // staged run the collection size would tell the operator the whole roster was
-  // examined when a tail of it was never looked at — and every tally below is a
-  // tally of this prefix only.
+  // Counted rather than read off the collection total: `--max` BREAKS the
+  // loop, so that number would tell the operator the whole roster was
+  // examined when a tail of it was never looked at — and every tally below is
+  // a tally of this prefix only.
   let examined = 0;
 
-  for (const doc of snap.docs) {
+  // Paged, never one `.get()` of the whole collection: a run that dies
+  // part-way leaves a HALF-restored collection, which from the app's side is
+  // indistinguishable from one that was never repaired at all.
+  for await (const doc of scanByName(
+      db.collection("clients"), {pageSize: PAGE_SIZE})) {
     if (restored.length >= max) break;
     const data = doc.data() || {};
     examined += 1;
@@ -351,15 +362,15 @@ async function main() {
   }
 
   console.log(
-      `${tag}clients: ${examined} of ${snap.size} examined, ` +
+      `${tag}clients: ${examined} of ${total} examined, ` +
       `${restored.length} restored, ` +
       `${business.length + typedBusiness.length} left for the business ` +
       `repair, ${noEvidence.length} with no usable evidence, ` +
       `${skipped.hasName} skipped (already has a name), ` +
       `${skipped.notRenamed} skipped (not renamed)`);
-  if (examined < snap.size) {
+  if (examined < total) {
     console.log(
-        `${tag}--max stopped the run early — ${snap.size - examined} ` +
+        `${tag}--max stopped the run early — ${total - examined} ` +
         "client(s) were never looked at. Re-run to pick up where this " +
         "pass stopped.");
   }

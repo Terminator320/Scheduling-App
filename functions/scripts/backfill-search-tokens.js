@@ -20,6 +20,7 @@
 const {assertKnownFlags: rejectUnknownFlags} = require("./_flags");
 const {commitInBatches} = require("./_batch");
 const {bootstrapScript} = require("./_project");
+const {scanByName} = require("./_scan");
 const {
   appointmentHistoryScopes,
   clientSearchTokens,
@@ -78,24 +79,14 @@ async function backfillCollection(db, collection, field, tokensFor, dryRun) {
   const writer = commitInBatches(db, {dryRun, batchSize: BATCH_SIZE});
   let scanned = 0;
   let patched = 0;
-  let cursor = null;
-  for (;;) {
-    let query = db.collection(collection)
-        .orderBy("__name__")
-        .limit(PAGE_SIZE);
-    if (cursor) query = query.startAfter(cursor);
-    const snap = await query.get();
-    if (snap.empty) break;
-    for (const doc of snap.docs) {
-      scanned += 1;
-      const data = doc.data() || {};
-      const patch = patchFor(data, tokensFor(data), field);
-      if (!patch) continue;
-      patched += 1;
-      await writer.stage(doc.ref, patch);
-    }
-    if (snap.size < PAGE_SIZE) break;
-    cursor = snap.docs[snap.docs.length - 1];
+  for await (const doc of scanByName(
+      db.collection(collection), {pageSize: PAGE_SIZE})) {
+    scanned += 1;
+    const data = doc.data() || {};
+    const patch = patchFor(data, tokensFor(data), field);
+    if (!patch) continue;
+    patched += 1;
+    await writer.stage(doc.ref, patch);
   }
   await writer.flush();
   return {scanned, patched};

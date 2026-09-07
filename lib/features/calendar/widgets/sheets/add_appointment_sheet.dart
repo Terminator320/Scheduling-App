@@ -9,6 +9,8 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
 import 'package:scheduling/core/utils/debouncer.dart';
 import 'package:scheduling/features/calendar/application/add_event_controller.dart';
+import 'package:scheduling/features/calendar/application/appointment_form_concerns.dart'
+    show AppointmentFormConcerns;
 import 'package:scheduling/features/calendar/domain/models/appointment_prefill.dart';
 import 'package:scheduling/features/calendar/domain/models/job_template.dart';
 import 'package:scheduling/features/calendar/domain/policies/appointment_form_validator.dart';
@@ -198,10 +200,20 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
   }
 
   Future<void> _pickImages() async {
+    final notices = ref.read(noticeServiceProvider);
+    final l10n = context.l10n;
     final picked = await pickAppointmentImages(context, ref);
     // The picker can outlive this sheet.
     if (!mounted) return;
-    if (picked.isNotEmpty) _notifier.addImages(picked);
+    if (picked.isEmpty) return;
+    final dropped = _notifier.addImages(picked);
+    if (dropped > 0) {
+      notices.info(
+        l10n.calendar_photosLimitReached(
+          AppointmentFormConcerns.maxImagesPerAppointment,
+        ),
+      );
+    }
   }
 
   Future<void> _submit() async {
@@ -219,19 +231,16 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet>
           forceBusy: forceBusy,
         );
 
-    var outcome = await attempt();
-    if (!mounted) return;
-    if (outcome is AddEventBusyEmployees) {
-      final confirmed = await showBusyConflictDialog(
-        context,
-        busyEmployees: outcome.busyEmployees,
-        start: outcome.start,
-        end: outcome.end,
-      );
-      if (!confirmed || !mounted) return;
-      outcome = await attempt(forceBusy: true);
-      if (!mounted) return;
-    }
+    final outcome = await retryPastBusyConflict(
+      context,
+      attempt: attempt,
+      busyOf: (o) => o is AddEventBusyEmployees
+          ? (busyEmployees: o.busyEmployees, start: o.start, end: o.end)
+          : null,
+    );
+    // The helper already returned null if unmounted; repeated so the
+    // analyzer can still see the guard across the await.
+    if (outcome == null || !mounted) return;
     switch (outcome) {
       case AddEventSubmitted(
         :final appointment,

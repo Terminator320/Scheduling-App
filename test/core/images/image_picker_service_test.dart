@@ -45,6 +45,50 @@ void main() {
     expect(file!.path, '/tmp/photo.jpg');
   });
 
+  test('pickImage asks the plugin to downscale and re-encode', () async {
+    // The only downscale in the app: without it a full-res JPEG exceeds
+    // `maxUploadBytes`, the staged file is deleted and the photo is lost.
+    when(
+      () => picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: any(named: 'maxWidth'),
+        maxHeight: any(named: 'maxHeight'),
+        imageQuality: any(named: 'imageQuality'),
+      ),
+    ).thenAnswer((_) async => XFile('/tmp/photo.jpg'));
+
+    await service.pickImage(ImageSource.camera);
+
+    verify(
+      () => picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 70,
+      ),
+    ).called(1);
+  });
+
+  test('pickMultiImages asks the plugin to downscale and re-encode', () async {
+    when(
+      () => picker.pickMultiImage(
+        maxWidth: any(named: 'maxWidth'),
+        maxHeight: any(named: 'maxHeight'),
+        imageQuality: any(named: 'imageQuality'),
+      ),
+    ).thenAnswer((_) async => [XFile('/tmp/a.jpg')]);
+
+    await service.pickMultiImages();
+
+    verify(
+      () => picker.pickMultiImage(
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 70,
+      ),
+    ).called(1);
+  });
+
   test('pickImage returns null when the plugin throws', () async {
     when(
       () => picker.pickImage(
@@ -66,25 +110,26 @@ void main() {
         maxHeight: any(named: 'maxHeight'),
         imageQuality: any(named: 'imageQuality'),
       ),
-    ).thenAnswer(
-      (_) async => [XFile('/tmp/a.jpg'), XFile('/tmp/b.jpg')],
-    );
+    ).thenAnswer((_) async => [XFile('/tmp/a.jpg'), XFile('/tmp/b.jpg')]);
 
     final files = await service.pickMultiImages();
 
     expect(files.map((f) => f.path), ['/tmp/a.jpg', '/tmp/b.jpg']);
   });
 
-  test('pickMultiImages returns an empty list when the plugin throws', () async {
-    when(
-      () => picker.pickMultiImage(
-        maxWidth: any(named: 'maxWidth'),
-        maxHeight: any(named: 'maxHeight'),
-        imageQuality: any(named: 'imageQuality'),
-      ),
-    ).thenThrow(StateError('picker failed'));
+  test(
+    'pickMultiImages returns an empty list when the plugin throws',
+    () async {
+      when(
+        () => picker.pickMultiImage(
+          maxWidth: any(named: 'maxWidth'),
+          maxHeight: any(named: 'maxHeight'),
+          imageQuality: any(named: 'imageQuality'),
+        ),
+      ).thenThrow(StateError('picker failed'));
 
-    expect(await service.pickMultiImages(), isEmpty);
-    expect(logger.warnings.single, 'IMG-PICK multi pick failed');
-  });
+      expect(await service.pickMultiImages(), isEmpty);
+      expect(logger.warnings.single, 'IMG-PICK multi pick failed');
+    },
+  );
 }

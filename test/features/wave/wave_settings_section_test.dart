@@ -12,6 +12,7 @@ import 'package:scheduling/core/notices/app_notice.dart';
 import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/theme_notifier.dart';
 import 'package:scheduling/core/theme/themes.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/settings/screens/settings_screen.dart';
 import 'package:scheduling/features/wave/application/wave_providers.dart';
 import 'package:scheduling/features/wave/data/wave_service.dart';
@@ -67,10 +68,20 @@ Widget _wrapSection(
 }
 
 /// Wraps the full SettingsScreen for admin-gating tests.
-Widget _wrapSettings({required String? role, WaveService? service}) {
+///
+/// [liveRole] is the LIVE user doc, which is a separate question from the
+/// push-time [role] argument — the admin sections are gated on both.
+Widget _wrapSettings({
+  required String? role,
+  WaveService? service,
+  String liveRole = 'admin',
+}) {
   return ProviderScope(
     overrides: [
       if (service != null) waveServiceProvider.overrideWithValue(service),
+      currentUserDocProvider.overrideWith(
+        (ref) => Stream.value({'role': liveRole, 'status': 'active'}),
+      ),
     ],
     child: ThemeNotifier(
       themeMode: ThemeMode.light,
@@ -628,6 +639,30 @@ void main() {
 
       expect(find.textContaining('INTEGRATIONS'), findsOneWidget);
       expect(find.text('Connect to Wave'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    // The route argument is a push-time snapshot: a stale back stack or a deep
+    // link can carry `role: 'admin'` for someone the user doc no longer says
+    // is one. The live gate is what refuses them.
+    testWidgets('Wave section is hidden when the live doc is not an admin', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        _wrapSettings(
+          role: 'admin',
+          service: _mockService(),
+          liveRole: 'employee',
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('INTEGRATIONS'), findsNothing);
+      expect(find.text('Connect to Wave'), findsNothing);
       expect(tester.takeException(), isNull);
     });
 

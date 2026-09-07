@@ -212,5 +212,27 @@ void main() {
       expect(refreshCount(), 0);
       expect(container.read(clientFormControllerProvider), isFalse);
     });
+
+    test('a double-tapped archive returns Busy, not a second write', () async {
+      // The last unexercised member of the family. Archive is a toggle, so a
+      // second write while the first is in flight is a state flip nobody
+      // asked for; and Busy must surface NOTHING, where a fabricated
+      // `SocketException` would render "you appear to be offline".
+      final gate = Completer<void>();
+      when(
+        () => repo.setClientArchived(any(), archived: any(named: 'archived')),
+      ).thenAnswer((_) => gate.future);
+
+      final first = notifier().setArchived('c1', archived: true);
+      final second = await notifier().setArchived('c1', archived: true);
+
+      expect(second, isA<ClientArchiveBusy>());
+      gate.complete();
+      await first;
+      verify(
+        () => repo.setClientArchived(any(), archived: any(named: 'archived')),
+      ).called(1);
+      expect(refreshCount(), 1);
+    });
   });
 }

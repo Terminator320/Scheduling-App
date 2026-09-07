@@ -57,7 +57,8 @@ abstract class AppointmentsRepository {
   /// Appends one crew note to `appointments/{id}/fieldNotes`.
   ///
   /// [authorId] must be the caller's own users-doc id — `firestore.rules`
-  /// refuses anything else, so a note cannot be filed under another name.
+  /// refuses anything else. [authorName] is NOT pinned by the rules, so the
+  /// reader resolves the display name from [authorId] rather than trusting it.
   Future<void> appendFieldNote({
     required String appointmentId,
     required String text,
@@ -65,8 +66,8 @@ abstract class AppointmentsRepository {
     required String authorName,
   });
 
-  /// This job's crew notes, oldest first.
-  Future<List<FieldNote>> fetchFieldNotes(String appointmentId);
+  /// This job's crew notes, oldest first, and whether older ones were dropped.
+  Future<FieldNoteThread> fetchFieldNotes(String appointmentId);
 
   Future<void> updateAppointmentStatus({
     required String id,

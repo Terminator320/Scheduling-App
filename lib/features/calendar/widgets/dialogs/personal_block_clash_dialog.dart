@@ -15,7 +15,6 @@ import 'package:scheduling/features/employees/application/employees_providers.da
 import 'package:scheduling/features/employees/domain/models/employee_record.dart';
 import 'package:scheduling/l10n/l10n.dart';
 import 'package:scheduling/shared/widgets/dialogs/app_dialog_frame.dart';
-import 'package:scheduling/shared/widgets/feedback/status_chip.dart';
 import 'package:scheduling/shared/widgets/primitives/app_avatar.dart';
 
 /// Reads the client jobs a just-saved personal block ran into, and offers to
@@ -208,11 +207,7 @@ class _PersonalBlockClashDialogState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 for (final group in groups)
-                  ..._groupRows(
-                    context,
-                    group,
-                    showName: groups.length > 1,
-                  ),
+                  ..._groupRows(context, group, showName: groups.length > 1),
               ],
             ),
           ),
@@ -432,7 +427,7 @@ class _PersonalBlockClashDialogState
   ) async {
     final key = _keyFor(employeeId, job);
     final previous = _states[key] ?? const _RowIdle();
-    final updated = _replaceAssignee(
+    final updated = replaceAssignee(
       _live(job),
       removeId: employeeId,
       addId: person.id,
@@ -458,7 +453,7 @@ class _PersonalBlockClashDialogState
     final key = _keyFor(group.employeeId, job);
     final state = _states[key];
     if (state is! _RowDone) return;
-    final reverted = _replaceAssignee(
+    final reverted = replaceAssignee(
       _live(job),
       removeId: state.took.id,
       addId: group.employeeId,
@@ -517,42 +512,6 @@ class _PersonalBlockClashDialogState
   }
 }
 
-/// [job] with [removeId] swapped out for [addId]/[addName].
-///
-/// Takes the replacement as an id and a name rather than an `EmployeeRecord`
-/// because Undo runs it BACKWARDS — putting the person who is off back in
-/// place of whoever took the job — and this dialog only ever holds that
-/// person's name, never a roster record for them.
-///
-/// `employeeIds` and `employeeNames` are paired POSITIONALLY, so both lists are
-/// rebuilt in one pass — writing the id and appending the name would silently
-/// re-pair every assignee after the one replaced.
-AppointmentRecord _replaceAssignee(
-  AppointmentRecord job, {
-  required String removeId,
-  required String addId,
-  required String addName,
-}) {
-  // This re-serializes the WHOLE record, so a legacy `confirmed`/unknown
-  // status would be written back verbatim and rejected by the rules as an
-  // opaque permission-denied on an ordinary-looking swap.
-  final status = AppointmentStatus.storedRaw(job.status);
-  final ids = <String>[];
-  final names = <String>[];
-  for (var i = 0; i < job.employeeIds.length; i++) {
-    final isTarget = job.employeeIds[i] == removeId;
-    ids.add(isTarget ? addId : job.employeeIds[i]);
-    names.add(
-      isTarget ? addName : (assigneeNameAt(job.employeeNames, i) ?? ''),
-    );
-  }
-  return job.copyWith(
-    employeeIds: ids,
-    employeeNames: names,
-    status: status,
-  );
-}
-
 class _ClashRow extends StatelessWidget {
   const _ClashRow({
     required this.job,
@@ -588,9 +547,7 @@ class _ClashRow extends StatelessWidget {
     // strip for every chip in it, which is the quadratic naming pass the
     // picker's own comment warns against.
     final freeFirstNames = switch (state) {
-      _RowOpen(:final free) => firstNameTally([
-        for (final p in free) p.name,
-      ]),
+      _RowOpen(:final free) => firstNameTally([for (final p in free) p.name]),
       _ => const <String, int>{},
     };
 

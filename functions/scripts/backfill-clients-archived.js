@@ -35,6 +35,9 @@ const {bootstrapScript} = require("./_project");
 // The batched-write loop, shared so `--dry-run` cannot be forgotten at a
 // call site — see `_batch.js`.
 const {commitInBatches} = require("./_batch");
+// The document-id paging loop, shared so a bulk run cannot read the whole
+// collection in one `.get()` — see `_scan.js`.
+const {scanByName} = require("./_scan");
 
 /** Bare switches, matched EXACTLY — see `_flags.js`. */
 const EXACT_FLAGS = ["--dry-run"];
@@ -50,6 +53,7 @@ function assertKnownFlags(argv) {
 }
 
 const BATCH_SIZE = 400;
+const PAGE_SIZE = 500;
 
 /**
  * True when a client doc still needs the `archived` field written.
@@ -75,13 +79,15 @@ async function main() {
   const argv = process.argv.slice(2);
   const {db, dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
 
-  const snap = await db.collection("clients").get();
-
   let patched = 0;
   let skipped = 0;
   const writer = commitInBatches(db, {dryRun, batchSize: BATCH_SIZE});
 
-  for (const doc of snap.docs) {
+  // Paged, never one `.get()` of the whole collection: a run that dies
+  // part-way leaves a HALF-patched collection, which from the app's side is
+  // indistinguishable from one that was never backfilled at all.
+  for await (const doc of scanByName(
+      db.collection("clients"), {pageSize: PAGE_SIZE})) {
     if (!needsArchivedField(doc.data())) {
       skipped += 1;
       continue;

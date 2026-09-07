@@ -15,6 +15,7 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/security/biometric_auth_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
+import 'package:scheduling/features/auth/application/is_active_admin_provider.dart';
 import 'package:scheduling/features/auth/services/account_deletion_service.dart';
 import 'package:scheduling/features/employees/application/employees_providers.dart';
 import 'package:scheduling/features/feature_tour/application/tour_seen_store.dart';
@@ -83,7 +84,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
 
   late final _tour = TourSteps(
     const DestinationTour(PushedDestination.settings),
-    isAdmin: widget.role == 'admin',
+    isAdmin: _isAdminArg,
   );
 
   @override
@@ -122,7 +123,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
       ? widget.email
       : FirebaseAuth.instance.currentUser?.email ?? '';
 
-  bool get _isAdmin => widget.role == 'admin';
+  /// Push-time argument. Tour wiring keys on it: `TourSteps` owns GlobalKeys
+  /// that must stay stable across rebuilds.
+  bool get _isAdminArg => widget.role == 'admin';
+
+  /// Live gate for the admin-only surfaces — the route argument is a snapshot,
+  /// so this asks Firestore. Fails CLOSED while the user doc is unsettled.
+  bool get _isAdmin => _isAdminArg && ref.watch(isActiveAdminProvider);
   bool? _pendingAppLockValue;
   bool? _pendingLiveActivityValue;
   bool? _pendingTravelAlertsValue;
@@ -299,30 +306,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
     final record = ref.read(myEmployeeRecordProvider);
     if (record == null) return;
 
-    final l10n = context.l10n;
-    final notices = ref.read(noticeServiceProvider);
-    final logger = ref.read(loggerProvider);
-    if (guardedOffline(
-      context,
-      ref,
-      intro: l10n.error_introSaveLocationSharing,
-    )) {
-      return;
-    }
-
     setState(() => _pendingLocationSharingValue = value);
     try {
-      await applyLocationSharing(ref, record, enabled: value);
-    } catch (error, stackTrace) {
-      logger.warn('ME-SAVE location sharing failed', error, stackTrace);
-      if (!mounted) return;
-      notices.error(
-        composeErrorNotice(
-          context,
-          intro: l10n.error_introSaveLocationSharing,
-          error: error,
-        ),
-      );
+      await saveLocationSharing(context, ref, record, enabled: value);
     } finally {
       if (mounted) setState(() => _pendingLocationSharingValue = null);
     }
@@ -350,7 +336,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
           icon: Icons.tour_rounded,
           iconColor: scheme.primary,
           label: context.l10n.settings_replayTour,
-          isLast: true,
           onTap: _onReplayTour,
         ),
       ),
@@ -410,7 +395,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
   Widget build(BuildContext context) {
     return FeatureTourHost(
       scope: _tour.scope,
-      isAdmin: _isAdmin,
+      isAdmin: _isAdminArg,
       stepKeys: _tour.keys,
       autoScroll: true,
       child: Stack(
@@ -463,7 +448,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen>
         icon: Icons.badge_outlined,
         iconColor: scheme.primary,
         label: context.l10n.settings_myDetails,
-        isLast: true,
         onTap: () => Navigator.pushNamed(context, AppRoutes.myDetails),
       ),
     ),

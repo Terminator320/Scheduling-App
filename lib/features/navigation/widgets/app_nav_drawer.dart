@@ -5,6 +5,7 @@ import 'package:scheduling/core/navigation/app_destination.dart';
 import 'package:scheduling/core/navigation/hub_shell_scope.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/features/auth/application/account_status_provider.dart';
+import 'package:scheduling/features/auth/application/is_active_admin_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
 import 'package:scheduling/features/employees/application/employee_schedule_providers.dart';
@@ -45,7 +46,11 @@ class AppNavDrawer extends ConsumerWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final l10n = context.l10n;
-    final groups = drawerGroups(isAdmin: isAdmin);
+    // The route argument is a push-time SNAPSHOT, so the admin rows ask
+    // Firestore too. Fails CLOSED while the user doc is unsettled, and is
+    // resolved ONCE so the rows, the header and the counts agree.
+    final isLiveAdmin = isAdmin && ref.watch(isActiveAdminProvider);
+    final groups = drawerGroups(isAdmin: isLiveAdmin);
 
     // The shadow wraps the drawer from OUTSIDE. A BoxShadow is painted from the
     // edges of its own box and its blur reaches inward as well as outward, so a
@@ -61,7 +66,7 @@ class AppNavDrawer extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Header(isAdmin: isAdmin, userName: userName),
+            _Header(isAdmin: isLiveAdmin, userName: userName),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(12, 14, 12, 20),
@@ -82,7 +87,7 @@ class AppNavDrawer extends ConsumerWidget {
                         padding: const EdgeInsets.only(bottom: 2),
                         child: _NavRow(
                           destination: destination,
-                          isAdmin: isAdmin,
+                          isAdmin: isLiveAdmin,
                           employeeId: employeeId,
                           userName: userName,
                           email: email,

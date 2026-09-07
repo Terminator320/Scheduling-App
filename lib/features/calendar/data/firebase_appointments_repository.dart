@@ -321,7 +321,7 @@ class FirebaseAppointmentsRepository implements AppointmentsRepository {
   }
 
   @override
-  Future<List<FieldNote>> fetchFieldNotes(String appointmentId) =>
+  Future<FieldNoteThread> fetchFieldNotes(String appointmentId) =>
       _fieldNotes.fetch(appointmentId);
 
   static const _allowedStatuses = {

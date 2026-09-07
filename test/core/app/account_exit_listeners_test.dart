@@ -262,5 +262,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(pushedRoutes, isEmpty);
+
+    // The half the name promised and nothing proved: releasing the guard is
+    // only observable by exiting AGAIN. Left latched, the app that comes back
+    // stays signed in on a revoked account with no second signal to save it.
+    mounted = true;
+    await controller.exitAccount(
+      selectMessage: (l10n) => 'disabled',
+      navigatorKey: navigatorKey,
+      scaffoldMessengerKey: messengerKey,
+      isMounted: () => mounted,
+    );
+    tester.binding.scheduleFrame();
+    await tester.pumpAndSettle();
+
+    expect(pushedRoutes, [AppRoutes.login]);
   });
 }

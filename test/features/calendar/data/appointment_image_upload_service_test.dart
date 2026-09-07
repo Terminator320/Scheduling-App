@@ -409,6 +409,23 @@ void main() {
     });
   });
 
+  group('clearPending', () {
+    test('deletes the staged JPEGs, not just the queue index', () async {
+      // `_store.clearAll()` empties the index on its own, so dropping the
+      // per-file loop looks like nothing: one user's staged job photos would
+      // survive sign-out on a shared handset with nothing pointing at them.
+      final one = await stageEntry('a1', ['1.jpg']);
+      final two = await stageEntry('a2', ['2.jpg', '3.jpg']);
+
+      await makeService().clearPending();
+
+      expect(await store.load(), isEmpty);
+      for (final path in [...one.paths, ...two.paths]) {
+        expect(File(path).existsSync(), isFalse, reason: path);
+      }
+    });
+  });
+
   group('AttemptOutcome.from', () {
     AttemptOutcome outcome({
       int permanentFailures = 0,

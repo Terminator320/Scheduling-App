@@ -77,7 +77,6 @@ class AppearanceSettingsCard extends StatelessWidget {
               currentCode: langCode,
               onChanged: notifier.setLanguage,
             ),
-            isLast: true,
           ),
         ],
       ),

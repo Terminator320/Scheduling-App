@@ -6,6 +6,13 @@
  * then enforceDurableRateLimit, and only then the real work (the invariant
  * documented in .claude/rules/security.md). We mock the security module so
  * `mock.invocationCallOrder` can confirm that sequence.
+ *
+ * The callables open with `assertAdminCall`, which COMPOSES the first three
+ * steps, so the stub below is the COMPOSER — it delegates to the mocked
+ * `assertAdmin`/`assertPayloadShape` rather than replacing them. Stubbing
+ * those two alone would intercept nothing (the composer holds a
+ * module-internal reference) and every assertion here would pass vacuously,
+ * which is the shape that hid the original missing-gate bug.
  */
 
 jest.mock("../security");
@@ -146,6 +153,14 @@ beforeEach(() => {
     }
   });
   security.enforceDurableRateLimit.mockResolvedValue({refund: jest.fn()});
+  security.assertAdminCall.mockImplementation(async (request, allowed) => {
+    if (!request.auth || !request.auth.uid) {
+      throw new HttpsError("unauthenticated", "auth-required");
+    }
+    await security.assertAdmin(request.auth.uid);
+    security.assertPayloadShape(request.data, allowed);
+    return request.auth.uid;
+  });
 
   FieldValue.serverTimestamp = jest.fn(() => "SERVER_TS");
   waveClient.whoami.mockResolvedValue({});
@@ -169,26 +184,60 @@ beforeEach(() => {
 // vacuously, because the `{}` payload this table drives it with is rejected as
 // `invalid-argument` before the limiter is ever reached.
 const CALLABLES = [
-  {name: "waveBootstrap", fn: () => waveBootstrap, rateLimited: true},
-  {name: "waveGetConnection", fn: () => waveGetConnection, rateLimited: true},
+  {
+    name: "waveBootstrap",
+    fn: () => waveBootstrap,
+    rateLimited: true,
+    keys: [],
+  },
+  {
+    name: "waveGetConnection",
+    fn: () => waveGetConnection,
+    rateLimited: true,
+    keys: [],
+  },
   {
     name: "waveSetImportSchedule",
     fn: () => waveSetImportSchedule,
     rateLimited: true,
+    keys: ["schedule"],
   },
   {
     name: "waveImportCustomers",
     fn: () => waveImportCustomers,
     rateLimited: true,
+    keys: [],
   },
   {
     name: "waveRetryFailedJobs",
     fn: () => waveRetryFailedJobs,
     rateLimited: true,
+    keys: [],
   },
 ];
 
-describe.each(CALLABLES)("$name guard order", ({fn, rateLimited}) => {
+describe.each(CALLABLES)("$name guard order", ({fn, rateLimited, keys}) => {
+  test("opens with the composed assertAdminCall, not a hand-spelled gate",
+      async () => {
+        // Five copies of the composer's body lived here, and one of them had
+        // already drifted. Asserting the CALL is what stops a sixth: a
+        // re-inlined gate satisfies every order assertion below while the
+        // composer goes uncalled.
+        await fn().run(req(ADMIN_UID, {})).catch(() => {});
+        expect(security.assertAdminCall).toHaveBeenCalledTimes(1);
+        expect(security.assertAdminCall.mock.calls[0][0].auth.uid)
+            .toBe(ADMIN_UID);
+      });
+
+  test("accepts exactly its documented payload keys", async () => {
+    // Removing a key from an allowlist is a BREAKING change for a shipped
+    // build — `assertPayloadShape` throws `unexpected-field` on the first
+    // unrecognised one — so the sets are pinned rather than inferred.
+    await fn().run(req(ADMIN_UID, {})).catch(() => {});
+    const allowed = security.assertAdminCall.mock.calls[0][1];
+    expect([...allowed].sort()).toEqual(keys);
+  });
+
   test("an unauthenticated caller is rejected first", async () => {
     const err = await expectThrows(fn(), req(null, {}));
 

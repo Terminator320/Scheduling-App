@@ -94,8 +94,12 @@ const {bootstrapScript} = require("./_project");
 // The batched-write loop, shared so `--dry-run` cannot be forgotten at a
 // call site — see `_batch.js`.
 const {commitInBatches} = require("./_batch");
+// The document-id paging loop, shared so a bulk run cannot read the whole
+// collection in one `.get()` — see `_scan.js`.
+const {scanByName} = require("./_scan");
 
 const BATCH_SIZE = 400;
+const PAGE_SIZE = 500;
 const SAMPLE_SIZE = 25;
 
 /** Bare switches, matched EXACTLY — the same way the code reading them does. */
@@ -177,15 +181,19 @@ async function main() {
   const argv = process.argv.slice(2);
   const {db, dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
 
-  const snap = await db.collection("clients").get();
-
+  let scanned = 0;
   let patched = 0;
   let noLocality = 0;
   const changes = [];
 
   const writer = commitInBatches(db, {dryRun, batchSize: BATCH_SIZE});
 
-  for (const doc of snap.docs) {
+  // Paged, never one `.get()` of the whole collection: a run that dies
+  // part-way leaves a HALF-patched collection, which from the app's side is
+  // indistinguishable from one that was never backfilled at all.
+  for await (const doc of scanByName(
+      db.collection("clients"), {pageSize: PAGE_SIZE})) {
+    scanned += 1;
     const data = doc.data();
     if (String(data.address || "").trim() && !hasLocalityFields(data)) {
       noLocality += 1;
@@ -220,8 +228,8 @@ async function main() {
     console.log("");
   }
   console.log(
-      `${tag}clients: ${snap.size} scanned, ${patched} reduced, ` +
-      `${snap.size - patched} left alone`);
+      `${tag}clients: ${scanned} scanned, ${patched} reduced, ` +
+      `${scanned - patched} left alone`);
 
   if (noLocality > 0) {
     console.log(

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,10 +7,14 @@ import 'package:flutter_riverpod/misc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
+import 'package:scheduling/features/auth/application/active_user_identity_provider.dart';
+import 'package:scheduling/features/auth/application/is_active_admin_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/application/photo_upload_notifier.dart';
 import 'package:scheduling/features/calendar/domain/appointments_repository.dart';
 import 'package:scheduling/features/calendar/domain/models/appointment_record.dart';
+import 'package:scheduling/features/calendar/domain/models/field_note.dart';
+import 'package:scheduling/features/calendar/widgets/views/details_field_record_view.dart';
 import 'package:scheduling/features/calendar/widgets/views/details_view_body.dart';
 import 'package:scheduling/features/clients/application/clients_providers.dart';
 import 'package:scheduling/features/clients/domain/clients_repository.dart';
@@ -81,13 +87,22 @@ void main() {
     when(
       () => appointments.onLocalWrite,
     ).thenAnswer((_) => const Stream.empty());
+    when(
+      () => appointments.fetchFieldNotes(any()),
+    ).thenAnswer((_) async => (notes: const <FieldNote>[], truncated: false));
   });
 
-  List<Override> overrides() => [
+  List<Override> overrides({
+    bool? isAdmin,
+    Future<ActiveUserIdentity?>? identity,
+  }) => [
     appointmentsRepositoryProvider.overrideWithValue(appointments),
     clientsRepositoryProvider.overrideWithValue(clients),
     employeesRepositoryProvider.overrideWithValue(employees),
     photoUploadNotifierProvider.overrideWithValue(uploadNotifier),
+    if (isAdmin != null) isActiveAdminProvider.overrideWithValue(isAdmin),
+    if (identity != null)
+      activeUserIdentityProvider.overrideWith((ref) => identity),
   ];
 
   Future<void> pump(
@@ -95,6 +110,8 @@ void main() {
     AppointmentRecord appointment, {
     bool showActions = true,
     VoidCallback? onClose,
+    bool? isAdmin,
+    Future<ActiveUserIdentity?>? identity,
   }) async {
     await tester.pumpWidget(
       _wrap(
@@ -103,7 +120,7 @@ void main() {
           showActions: showActions,
           onClose: onClose ?? () {},
         ),
-        overrides: overrides(),
+        overrides: overrides(isAdmin: isAdmin, identity: identity),
       ),
     );
     await tester.pumpAndSettle();
@@ -216,6 +233,63 @@ void main() {
         ),
       );
       expect(find.text('Push back'), findsNothing);
+    });
+  });
+
+  group('the crew compose box', () {
+    // `DetailsFieldRecordView` is the only surface an assignee may WRITE from,
+    // and `_canRecordFieldWork` is the whole gate in front of it.
+
+    testWidgets('a non-admin assignee gets it', (tester) async {
+      await pump(
+        tester,
+        _open,
+        showActions: false,
+        isAdmin: false,
+        identity: Future.value((role: 'employee', docId: 'e1')),
+      );
+
+      expect(find.byType(DetailsFieldRecordView), findsOneWidget);
+    });
+
+    testWidgets('an admin who is ALSO an assignee does not', (tester) async {
+      // The admin's write surface is the edit form; the crew branches of
+      // `firestore.rules` are what this box exists to match, and an admin is
+      // not in that set even when their own doc id is on the job.
+      await pump(
+        tester,
+        _open,
+        isAdmin: true,
+        identity: Future.value((role: 'admin', docId: 'e1')),
+      );
+
+      expect(find.byType(DetailsFieldRecordView), findsNothing);
+    });
+
+    testWidgets('an unsettled identity does not', (tester) async {
+      // The admin gate reads as a NEGATIVE test, so "we do not know yet"
+      // must be refused by the identity check behind it.
+      await pump(
+        tester,
+        _open,
+        showActions: false,
+        isAdmin: false,
+        identity: Completer<ActiveUserIdentity?>().future,
+      );
+
+      expect(find.byType(DetailsFieldRecordView), findsNothing);
+    });
+
+    testWidgets('a non-admin who is not on the job does not', (tester) async {
+      await pump(
+        tester,
+        _open,
+        showActions: false,
+        isAdmin: false,
+        identity: Future.value((role: 'employee', docId: 'e9')),
+      );
+
+      expect(find.byType(DetailsFieldRecordView), findsNothing);
     });
   });
 }

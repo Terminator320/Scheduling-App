@@ -42,7 +42,8 @@ void main() {
   });
 
   test('a note can only be filed under the CALLER own doc id', () {
-    // Without this an assignee could post a note signed with a colleague name.
+    // This pins the AUTHOR, not the displayed name: `authorName` is only
+    // length-bounded, so the reader resolves the name from this id.
     expect(
       collapsed(notesBlock()),
       contains('request.resource.data.authorId == myDocId()'),
@@ -69,7 +70,7 @@ void main() {
     );
     expect(
       block,
-      contains('isBoundedString(request.resource.data.authorName, 200)'),
+      contains('isBoundedString(request.resource.data.authorName, 250)'),
     );
     expect(block, contains('request.resource.data.createdAt == request.time'));
   });

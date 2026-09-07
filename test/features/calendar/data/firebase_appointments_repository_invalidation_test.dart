@@ -153,6 +153,15 @@ final List<_WriteCase> _writeCases = [
     keepsA1: false,
     why: 'a deleted job must never surface in a search result',
   ),
+  (
+    // No `FirebaseFunctions` is injected here, so this takes the local
+    // fallback; the callable path and its own patch live in
+    // `firebase_appointments_repository_restore_test.dart`.
+    method: 'restoreAppointmentStatus',
+    run: (r) => r.restoreAppointmentStatus(id: 'a1', previousStatus: 'pending'),
+    keepsA1: false,
+    why: 'an undone mark-complete is open again, so history no longer holds it',
+  ),
 ];
 
 void main() {
@@ -278,6 +287,21 @@ void main() {
         verify(() => query.get()).called(1);
       });
 
+      test('${c.method} wakes onLocalWrite', () async {
+        // The behavioural half of the static guard below: an open detail sheet
+        // and both history providers re-read off this stream, so a write that
+        // pokes neither `_patchWindow` nor `_notifyLocalWrite` leaves every
+        // one of them showing what the write just changed.
+        final r = repo();
+        var wakes = 0;
+        final sub = r.onLocalWrite.listen((_) => wakes++);
+        await c.run(r);
+        await Future<void>.delayed(Duration.zero);
+        await sub.cancel();
+
+        expect(wakes, greaterThan(0));
+      });
+
       test('${c.method}: ${c.why}', () async {
         final r = repo();
         await r.searchHistory('sophie');
@@ -341,14 +365,16 @@ void main() {
       return {for (final e in members.entries) e.key: e.value.toString()};
     }
 
-    /// Anything that changes a document.
-    bool mutates(String body) => const [
-      '.set(',
-      '.update(',
-      '.delete(',
-      'batch.commit',
-      'runTransaction',
-    ].any(body.contains);
+    /// Anything that changes a document: every public write returns
+    /// `Future<void>`.
+    ///
+    /// Scanning the body for `.set(`/`.update(`/`.delete(`/`batch.commit`/
+    /// `runTransaction` missed four — the three that delegate to a store and
+    /// `restoreAppointmentStatus`, which writes through a callable — so the
+    /// guard was blind to exactly the shapes it was there to catch next. A read
+    /// returns its data and `dispose`/`clearCaches` are bare `void`, so the
+    /// return type names the write set and no new delegation can evade it.
+    bool mutates(String body) => body.trimLeft().startsWith('Future<void> ');
 
     late final members = repositoryMembers();
     late final mutating = members.entries
@@ -377,9 +403,17 @@ void main() {
       // the call, rather than only on the ones somebody remembered to add to
       // the table.
       for (final name in mutating) {
+        final body = members[name]!;
+        // A one-line singular that hands off to its plural is covered by the
+        // call it makes, so the delegation counts as telling the window.
+        final delegates = mutating.any(
+          (other) => other != name && body.contains('$other('),
+        );
         expect(
-          members[name],
-          anyOf(contains('_patchWindow('), contains('_notifyLocalWrite()')),
+          delegates ||
+              body.contains('_patchWindow(') ||
+              body.contains('_notifyLocalWrite()'),
+          isTrue,
           reason:
               '$name mutates Firestore without telling the history scan '
               'window, so search can serve a row that no longer exists',

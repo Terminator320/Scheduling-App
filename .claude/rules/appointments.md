@@ -118,7 +118,7 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   matching the least-privilege default every appointment surface already
   takes. A stale back stack, an argless push or a deep link can all carry an
   `isAdmin: true` argument that no longer describes the signed-in person; this
-  asks Firestore instead. **Three consumers, and they gate differently.**
+  asks Firestore instead. **Five consumers, and they gate differently.**
   `DayRouteScreen` resolves `widget.isAdmin && ref.watch(isActiveAdminProvider)`
   **once** and feeds that value to the crew picker, the
   `appointmentsInRangeProvider`/`myAppointmentsProvider` choice, `buildDayRoute`
@@ -127,6 +127,13 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   `/history` route (`app_routes.dart`) wraps `HistoryScreen` in the `AdminOnly`
   gate widget, which watches it directly and degrades to `InvalidRouteScreen`
   for anyone else. `DetailsViewBody._canRecordFieldWork` reads it too (below).
+  `SettingsScreen._isAdmin` (2026-09-07) resolves the same pair for its
+  admin-only sections — today the Wave integration card — over
+  `_isAdminArg`, the raw argument its tour wiring keeps. `AppNavDrawer`
+  resolves it ONCE in `build` and feeds the admin groups, the header's role
+  label and the calendar row's count query from that one value; the rows
+  themselves come from `drawerGroups(isAdmin:)`, a pure function, so the gate
+  belongs at the widget that feeds the catalog and not in the catalog.
   **The fail-closed guarantee does NOT transfer to `_canRecordFieldWork`**,
   which reads it as a NEGATIVE gate — `if (isActiveAdminProvider) return
   false;`, so `false` is a step toward GRANTING the compose box rather than
@@ -135,8 +142,9 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   property of this provider's own contract — a refactor that removes or
   reorders that second check would open the compose box to a not-yet-resolved
   viewer with nothing here to stop it.
-  **The deliberate exception:** `DayRouteScreen`'s `_tour` and `FeatureTourHost`
-  stay on `widget.isAdmin`, never the live gate — `TourSteps` owns GlobalKeys
+  **The deliberate exception:** the `_tour` and `FeatureTourHost` of both
+  `DayRouteScreen` and `SettingsScreen` stay on the route argument, never the
+  live gate — `TourSteps` owns GlobalKeys
   that must stay stable across rebuilds, and the one admin-only step is a
   `stepIf` on a widget that no longer renders once the crew picker is gone.
 - **Personal jobs (`isPersonal`, added 2026-07-31) carry no client, and their
@@ -695,7 +703,12 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   through `AppointmentStatus.storedRaw`** like every other such write — a
   legacy `confirmed`/unknown value would otherwise be written back verbatim
   and rejected by the rules as an opaque `permission-denied` on an
-  ordinary-looking swap.
+  ordinary-looking swap. The swap itself is the pure `replaceAssignee`
+  (`calendar/domain/assignee_resolver.dart`, moved out of the dialog
+  2026-09-07): it has to agree with `mergeRetainedAssignees`,
+  `assigneeNameAt` and `assigneeOfferState` about the positional pairing, so
+  it lives beside them and is unit-tested there — the rule above was a comment
+  on a private function no test could reach.
 - **The conflict check runs SERVER-SIDE now** (2026-09-04), through the
   `findAppointmentConflicts` callable — the client query was capped at 1000 docs
   per 30-id chunk and silently reported no clash past it. The server applies the

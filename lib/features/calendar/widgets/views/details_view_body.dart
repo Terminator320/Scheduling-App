@@ -85,25 +85,24 @@ class DetailsViewBody extends ConsumerWidget {
             address: appointment.address,
           )
         : null;
-    // Push back is the admin's, on a job that still has a time to move; an
-    // all-day block has no clock to shift and a closed one nothing to delay.
     final pushBackOptions = pushBackOptionsFor(appointment.startTime);
     final onPushBack =
-        showActions &&
-            !data.isClosed &&
-            !appointment.isAllDay &&
-            pushBackOptions.isNotEmpty
+        offersPushBack(
+          appointment,
+          showActions: showActions,
+          isClosed: data.isClosed,
+          hasOptions: pushBackOptions.isNotEmpty,
+        )
         ? () => _onPushBack(context, ref, notifier, pushBackOptions)
         : null;
     // Resolved once: it gates the field record below AND the Start button.
     final canRecordFieldWork = _canRecordFieldWork(ref, appointment);
-    // Book again is the admin's, on any client job — a repeat callback most
-    // often follows a FINISHED visit, so a closed job offers it too.
     final bookAgain =
-        onBookAgain != null &&
-            showActions &&
-            !appointment.isPersonal &&
-            appointment.clientId.trim().isNotEmpty
+        offersBookAgain(
+          appointment,
+          showActions: showActions,
+          hasHandler: onBookAgain != null,
+        )
         ? () => onBookAgain!(
             AppointmentPrefill.bookAgain(
               appointment,
@@ -171,7 +170,10 @@ class DetailsViewBody extends ConsumerWidget {
         DetailsPhotosView(
           appointment: appointment,
           isCancelled: data.isCancelled,
-          onRetry: notifier.enterEditing,
+          // Only the editor can act on a retry. The crew re-add through the
+          // field record's own picker below, and a Retry that merely cleared
+          // the failure record destroyed their one trace of the loss.
+          onRetry: showActions ? notifier.enterEditing : null,
         ),
         // Anyone who may READ the job may read its crew notes — the same set
         // the rules admit. The compose box below stays crew-only.
@@ -205,6 +207,34 @@ class DetailsViewBody extends ConsumerWidget {
       ],
     );
   }
+
+  /// Whether Push back is offered.
+  ///
+  /// The admin's, on a job that still has a time to move: an all-day block has
+  /// no clock to shift and a closed one nothing to delay.
+  @visibleForTesting
+  static bool offersPushBack(
+    AppointmentRecord appointment, {
+    required bool showActions,
+    required bool isClosed,
+    required bool hasOptions,
+  }) =>
+      showActions && !isClosed && !appointment.isAllDay && hasOptions;
+
+  /// Whether Book again is offered.
+  ///
+  /// The admin's, on any client job — a repeat callback most often follows a
+  /// FINISHED visit, so a closed job offers it too.
+  @visibleForTesting
+  static bool offersBookAgain(
+    AppointmentRecord appointment, {
+    required bool showActions,
+    required bool hasHandler,
+  }) =>
+      hasHandler &&
+      showActions &&
+      !appointment.isPersonal &&
+      appointment.clientId.trim().isNotEmpty;
 
   /// Whether the viewer is a non-admin assignee of [appointment].
   static bool _canRecordFieldWork(
@@ -314,26 +344,20 @@ class DetailsViewBody extends ConsumerWidget {
     );
     if (minutes == null || !context.mounted) return;
 
-    var outcome = await notifier.delayAppointment(
-      appointment,
-      minutes: minutes,
-    );
-    if (!context.mounted) return;
-    if (outcome is EventDetailsBusyEmployees) {
-      final confirmed = await showBusyConflictDialog(
-        context,
-        busyEmployees: outcome.busyEmployees,
-        start: outcome.start,
-        end: outcome.end,
-      );
-      if (!confirmed || !context.mounted) return;
-      outcome = await notifier.delayAppointment(
+    final outcome = await retryPastBusyConflict(
+      context,
+      attempt: ({forceBusy = false}) => notifier.delayAppointment(
         appointment,
         minutes: minutes,
-        forceBusy: true,
-      );
-      if (!context.mounted) return;
-    }
+        forceBusy: forceBusy,
+      ),
+      busyOf: (o) => o is EventDetailsBusyEmployees
+          ? (busyEmployees: o.busyEmployees, start: o.start, end: o.end)
+          : null,
+    );
+    // The helper already returned null if unmounted; repeated so the
+    // analyzer can still see the guard across the await.
+    if (outcome == null || !context.mounted) return;
     switch (outcome) {
       case EventDetailsSaved():
         notices.success(l10n.calendar_pushedBack(minutes));

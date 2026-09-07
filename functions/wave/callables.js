@@ -13,12 +13,14 @@ const {
   listOutstandingClientIds,
 } = require("./worker");
 const {classifyWaveError} = require("./errors");
-const {SCHEDULE_VALUES} = require("./import_schedule");
+const {SCHEDULE_SET} = require("./import_schedule");
 // The sync-run primitives are shared with the `waveUpsertCustomer` trigger and
 // the daily rider (`triggers.js`), so they live in their own module — these
 // were hand-copied here once and the copies drifted.
 const {
   readWaveBusinessId,
+  readWaveConnection,
+  connectionFieldsOf,
   importWithWatermark,
   drainForSync,
   SYNC_PUSH_BATCH_LIMIT,
@@ -26,15 +28,10 @@ const {
 } = require("./sync_run");
 
 const {
-  assertPayloadShape,
-  assertAdmin,
+  assertAdminCall,
   enforceDurableRateLimit,
   shortHash,
 } = require("../security");
-
-// Accepted automatic-import cadences (mirrors the app's WaveImportSchedule
-// enum and the wave/connection field); "off" is the default when absent.
-const IMPORT_SCHEDULE_SET = new Set(SCHEDULE_VALUES);
 
 // waveImportCustomers is a heavy one-shot admin op (~650 customers across ~7
 // Wave pages), so a modest cap keeps a stuck/retried admin from hammering Wave.
@@ -106,27 +103,15 @@ const waveBootstrap = onCall(
       enforceAppCheck: true,
     },
     async (req) => {
-      if (!req.auth || !req.auth.uid) {
-        throw new HttpsError("unauthenticated", "auth-required");
-      }
-      await assertAdmin(req.auth.uid);
-      assertPayloadShape(req.data, new Set());
-
-      const db = getFirestore();
-      const ref = db.collection("wave").doc("connection");
+      const uid = await assertAdminCall(req, new Set());
 
       // Already-connected doc gets returned unchanged, so this call is safe
       // to make more than once.
-      const existing = await ref.get();
-      if (existing.exists && existing.data() &&
-          typeof existing.data().businessId === "string" &&
-          existing.data().businessId) {
-        const d = existing.data();
-        logger.info("WAVE-BOOT already connected", {
-          uidHash: shortHash(req.auth.uid),
-          businessId: d.businessId,
-        });
-        return {businessId: d.businessId, businessName: d.businessName || ""};
+      const {ref, businessId, businessName} = await readWaveConnection();
+      if (businessId) {
+        logger.info("WAVE-BOOT already connected",
+            {uidHash: shortHash(uid), businessId});
+        return {businessId, businessName};
       }
 
       // The target business is chosen server-side from the Secret Manager
@@ -137,7 +122,7 @@ const waveBootstrap = onCall(
       // Only the not-yet-connected path (live Wave calls) is rate-limited.
       await enforceDurableRateLimit(
           "wave-bootstrap",
-          req.auth.uid,
+          uid,
           WAVE_BOOTSTRAP_RATE_MAX,
           WAVE_IMPORT_RATE_WINDOW_MS,
       );
@@ -154,19 +139,20 @@ const waveBootstrap = onCall(
         if (e instanceof HttpsError) throw e;
         const {code, message} = classifyWaveError(e);
         logger.warn("WAVE-BOOT failed",
-            {uidHash: shortHash(req.auth.uid), code, message});
+            {uidHash: shortHash(uid), code, message});
         throw new HttpsError(code, message);
       }
 
       // Transaction set-if-absent so concurrent first calls converge on one
       // connection — the first writer wins, and later writers just return
       // its value.
-      const result = await db.runTransaction(async (tx) => {
-        const fresh = await tx.get(ref);
-        const fd = fresh.exists ? fresh.data() : null;
-        if (fd && typeof fd.businessId === "string" && fd.businessId) {
-          return {businessId: fd.businessId, businessName: fd.businessName ||
-            ""};
+      const result = await getFirestore().runTransaction(async (tx) => {
+        const fresh = connectionFieldsOf(await tx.get(ref));
+        if (fresh.businessId) {
+          return {
+            businessId: fresh.businessId,
+            businessName: fresh.businessName,
+          };
         }
         tx.set(ref, {
           businessId: selected.id,
@@ -177,7 +163,7 @@ const waveBootstrap = onCall(
       });
 
       logger.info("WAVE-BOOT connected", {
-        uidHash: shortHash(req.auth.uid),
+        uidHash: shortHash(uid),
         businessId: result.businessId,
       });
       return result;
@@ -187,30 +173,16 @@ const waveBootstrap = onCall(
 const waveGetConnection = onCall(
     {enforceAppCheck: true},
     async (req) => {
-      if (!req.auth || !req.auth.uid) {
-        throw new HttpsError("unauthenticated", "auth-required");
-      }
-      await assertAdmin(req.auth.uid);
-      assertPayloadShape(req.data, new Set());
-      // Guard order: auth → assertAdmin → payload → limiter → work.
+      const uid = await assertAdminCall(req, new Set());
       await enforceDurableRateLimit(
           "wave-connection",
-          req.auth.uid,
+          uid,
           WAVE_CONN_RATE_MAX,
           WAVE_CONN_RATE_WINDOW_MS,
       );
 
-      const snap = await getFirestore()
-          .collection("wave").doc("connection").get();
-      const data = snap.exists ? snap.data() : null;
-      const businessId = data && typeof data.businessId === "string" ?
-        data.businessId : "";
-      const businessName = data && typeof data.businessName === "string" ?
-        data.businessName : "";
-      const rawSchedule = data && typeof data.importSchedule === "string" ?
-        data.importSchedule : "off";
-      const importSchedule =
-        IMPORT_SCHEDULE_SET.has(rawSchedule) ? rawSchedule : "off";
+      const {businessId, businessName, importSchedule} =
+        await readWaveConnection();
 
       // Outbox depth, so Settings can say what is still waiting instead of
       // offering a Sync button over an invisible queue. Two `count()`
@@ -270,13 +242,9 @@ const WAVE_RETRY_RATE_WINDOW_MS = 60 * 60 * 1000;
 const waveRetryFailedJobs = onCall(
     {enforceAppCheck: true, secrets: [WAVE_FULL_ACCESS_TOKEN]},
     async (req) => {
-      if (!req.auth || !req.auth.uid) {
-        throw new HttpsError("unauthenticated", "auth-required");
-      }
-      await assertAdmin(req.auth.uid);
-      assertPayloadShape(req.data, new Set());
+      const uid = await assertAdminCall(req, new Set());
       await enforceDurableRateLimit(
-          "wave-retry", req.auth.uid,
+          "wave-retry", uid,
           WAVE_RETRY_RATE_MAX, WAVE_RETRY_RATE_WINDOW_MS);
 
       const businessId = await readWaveBusinessId();
@@ -289,7 +257,7 @@ const waveRetryFailedJobs = onCall(
 
       const {requeued, scanned} = await requeueDeadJobs();
       logger.info("WAVE-RETRY requeued dead jobs",
-          {uidHash: shortHash(req.auth.uid), requeued, scanned});
+          {uidHash: shortHash(uid), requeued, scanned});
 
       // Push them now so the admin sees the result of the press rather than
       // waiting for their next client edit or the daily sweep. Best-effort:
@@ -317,7 +285,7 @@ const waveRetryFailedJobs = onCall(
           failed = drained.dead;
         } catch (e) {
           logger.warn("WAVE-RETRY drain after requeue failed",
-              {uidHash: shortHash(req.auth.uid), error: String(e)});
+              {uidHash: shortHash(uid), error: String(e)});
         }
       }
 
@@ -333,33 +301,28 @@ const waveRetryFailedJobs = onCall(
 const waveSetImportSchedule = onCall(
     {enforceAppCheck: true},
     async (req) => {
-      if (!req.auth || !req.auth.uid) {
-        throw new HttpsError("unauthenticated", "auth-required");
-      }
-      await assertAdmin(req.auth.uid);
-      assertPayloadShape(req.data, new Set(["schedule"]));
+      const uid = await assertAdminCall(req, new Set(["schedule"]));
 
+      // The VALUE check sits between the composed opening and the limiter, so
+      // a burst of invalid cadences can't burn a legitimate admin's window.
       const schedule = req.data && req.data.schedule;
-      if (typeof schedule !== "string" || !IMPORT_SCHEDULE_SET.has(schedule)) {
+      if (typeof schedule !== "string" || !SCHEDULE_SET.has(schedule)) {
         throw new HttpsError("invalid-argument", "wave/invalid-schedule");
       }
       await enforceDurableRateLimit(
           "wave-schedule",
-          req.auth.uid,
+          uid,
           WAVE_SCHEDULE_RATE_MAX,
           WAVE_SCHEDULE_RATE_WINDOW_MS,
       );
 
-      const ref = getFirestore().collection("wave").doc("connection");
-      const snap = await ref.get();
-      const data = snap.exists ? snap.data() : null;
-      if (!data || typeof data.businessId !== "string" || !data.businessId) {
+      const {ref, businessId} = await readWaveConnection();
+      if (!businessId) {
         throw new HttpsError("failed-precondition", "wave/not-bootstrapped");
       }
 
       await ref.update({importSchedule: schedule});
-      logger.info("WAVE-SCHED set",
-          {uidHash: shortHash(req.auth.uid), schedule});
+      logger.info("WAVE-SCHED set", {uidHash: shortHash(uid), schedule});
       return {schedule};
     },
 );
@@ -381,25 +344,17 @@ const waveImportCustomers = onCall(
       timeoutSeconds: 300,
     },
     async (req) => {
-      if (!req.auth || !req.auth.uid) {
-        throw new HttpsError("unauthenticated", "auth-required");
-      }
-      await assertAdmin(req.auth.uid);
-      assertPayloadShape(req.data, new Set());
+      const uid = await assertAdminCall(req, new Set());
       await enforceDurableRateLimit(
           "wave-import",
-          req.auth.uid,
+          uid,
           WAVE_IMPORT_RATE_MAX,
           WAVE_IMPORT_RATE_WINDOW_MS,
       );
 
-      const connectionRef =
-        getFirestore().collection("wave").doc("connection");
-      const connectionSnap = await connectionRef.get();
-      const connection =
-        (connectionSnap.exists && connectionSnap.data()) || {};
-      const businessId = typeof connection.businessId === "string" ?
-        connection.businessId : "";
+      const {ref: connectionRef, data, businessId} =
+        await readWaveConnection();
+      const connection = data || {};
       if (!businessId) {
         throw new HttpsError("failed-precondition", "wave/not-bootstrapped");
       }
@@ -409,12 +364,12 @@ const waveImportCustomers = onCall(
       const startedAtMs = Date.now();
 
       logger.info("WAVE-CUST sync starting",
-          {uidHash: shortHash(req.auth.uid), businessId});
+          {uidHash: shortHash(uid), businessId});
 
       // Push BEFORE pulling. Local edits are the newer truth here — the
       // outbox holds writes the app already accepted — so importing first
       // would overwrite them with the Wave rows they are about to replace.
-      const pushed = await drainForSync({businessId, uid: req.auth.uid});
+      const pushed = await drainForSync({businessId, uid});
 
       // Ordering is NOT sufficient on its own. The drain is bounded and only
       // takes jobs already due, so anything it left behind is still a live
@@ -429,7 +384,7 @@ const waveImportCustomers = onCall(
       } catch (e) {
         logger.error("WAVE-CUST outstanding-job read failed — import may " +
           "overwrite un-pushed client edits",
-        {uidHash: shortHash(req.auth.uid), error: String(e)});
+        {uidHash: shortHash(uid), error: String(e)});
       }
 
       let summary;
@@ -445,7 +400,7 @@ const waveImportCustomers = onCall(
       } catch (e) {
         const {code, message} = classifyWaveError(e);
         logger.warn("WAVE-CUST import failed", {
-          uidHash: shortHash(req.auth.uid),
+          uidHash: shortHash(uid),
           code,
           message,
         });
@@ -454,7 +409,7 @@ const waveImportCustomers = onCall(
 
       logger.info("WAVE-CUST sync done", {
         window: window.reason,
-        uidHash: shortHash(req.auth.uid),
+        uidHash: shortHash(uid),
         totalCount: summary.totalCount,
         imported: summary.imported,
         updated: summary.updated,

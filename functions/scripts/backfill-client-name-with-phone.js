@@ -103,8 +103,12 @@ const {bootstrapScript} = require("./_project");
 // The batched-write loop, shared so `--dry-run` cannot be forgotten at a
 // call site — see `_batch.js`.
 const {commitInBatches} = require("./_batch");
+// The document-id paging loop, shared so a bulk run cannot read the whole
+// collection in one `.get()` — see `_scan.js`.
+const {scanByName} = require("./_scan");
 
 const BATCH_SIZE = 400;
+const PAGE_SIZE = 500;
 const SAMPLE_SIZE = 25;
 
 /** Clients created on or after this instant are left alone. */
@@ -268,8 +272,7 @@ async function main() {
   const {db, dryRun} = bootstrapScript(argv, {assertFlags: assertKnownFlags});
   const sinceMs = parseSince(argv);
 
-  const snap = await db.collection("clients").get();
-
+  let scanned = 0;
   let patched = 0;
   let skippedRecent = 0;
   let skippedNoPhone = 0;
@@ -281,7 +284,12 @@ async function main() {
 
   const writer = commitInBatches(db, {dryRun, batchSize: BATCH_SIZE});
 
-  for (const doc of snap.docs) {
+  // Paged, never one `.get()` of the whole collection: a run that dies
+  // part-way leaves a HALF-renamed collection, which from the app's side is
+  // indistinguishable from one that was never backfilled at all.
+  for await (const doc of scanByName(
+      db.collection("clients"), {pageSize: PAGE_SIZE})) {
+    scanned += 1;
     const data = doc.data();
     const patch = patchFor(data, sinceMs);
 
@@ -355,7 +363,7 @@ async function main() {
     console.log("");
   }
   console.log(
-      `${tag}clients: ${snap.size} scanned, ${patched} renamed, ` +
+      `${tag}clients: ${scanned} scanned, ${patched} renamed, ` +
       `${businesses.length} skipped (business), ` +
       `${skippedRecent} skipped (created on/after ${
         new Date(sinceMs).toISOString().slice(0, 10)}), ` +

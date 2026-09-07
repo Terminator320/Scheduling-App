@@ -685,6 +685,15 @@ Root context: `../../CLAUDE.md`.
   which is what tracks a new page or a new search result; the query and chips
   compare by value). A new row-producing path needs its own cache entry, not a
   second memo at the far end.
+  **`HistoryPager.fetchPage`'s `employeeId` and `HistorySearchKey.employeeId`
+  are KEPT although every caller passes null** (2026-09-07 audit, D3). History
+  went admin-only on 2026-09-06 and `AppointmentHistoryView` dropped its scope
+  control, but the REPOSITORY parameter behind them survives deliberately — it
+  mirrors the deployed `historyScope` guard in `functions/indexed_search.js`
+  (see `.claude/rules/appointments.md`). These two are the one-layer facade
+  over it, and `HistorySearchKey` is also a provider FAMILY KEY, so dropping
+  them means re-adding the same field in two places the moment a
+  technician-scoped History returns. Don't file the null call site as dead code.
 
 - **Client "Job history" section** (`ClientJobHistorySection`, admin-only client
   detail) reads via `fetchClientHistory` (`clientJobHistoryProvider`, an

@@ -365,9 +365,27 @@
   "@calendar_fieldNotesHint": {
     "description": "Hint under the crew notes field. Names the upsell case explicitly because that is the one most likely to travel by phone call instead."
   },
+  "calendar_photosLimitReached": "Only {count} more photos can be added to this job.",
+  "@calendar_photosLimitReached": {
+    "description": "Notice shown when a photo pick is trimmed because the job is at or near its photo limit.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "calendar_crewNotesLabel": "CREW NOTES",
   "@calendar_crewNotesLabel": {
     "description": "Mono all-caps section label over the thread of notes the crew wrote on a job, shown to admins and crew alike. Already uppercase in source."
+  },
+  "calendar_crewNotesTruncated": "Showing the most recent {count} notes. Older notes on this job aren't shown here.",
+  "@calendar_crewNotesTruncated": {
+    "description": "Warning shown under the crew notes thread when the job has more notes than one read returns, so the oldest are omitted.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "calendar_crewNotesUnread": "Couldn't load the crew notes. Close and reopen the job to try again — anything already added is still there.",
   "@calendar_crewNotesUnread": {
@@ -1263,10 +1281,6 @@
   "clients_noAppointmentsMatchFilters": "No appointments match your filters",
   "@clients_noAppointmentsMatchFilters": {
     "description": "Empty state shown when the active history filters exclude every appointment"
-  },
-  "clients_noHistoryYetForYou": "Your finished and cancelled jobs will appear here.",
-  "@clients_noHistoryYetForYou": {
-    "description": "Empty-state body on History when a technician has no closed jobs of their own yet"
   },
   "clients_clearFilters": "Clear filters",
   "@clients_clearFilters": {
@@ -3969,26 +3983,9 @@
   "@clients_keepGoing": {
     "description": "Shown beside the digit pips while the typed number is still too short to search."
   },
-  "clients_exactMatch": "Exact match",
-  "@clients_exactMatch": {
-    "description": "Header above a client result that matched the full phone number."
-  },
-  "clients_searchResults": "Search results",
-  "@clients_searchResults": {
-    "description": "Header above client search results that are substring or multiple matches rather than one exact hit."
-  },
-  "clients_closestNumbers": "Closest numbers on file",
-  "@clients_closestNumbers": {
-    "description": "Header above near-miss results, shown when no client has the exact number typed."
-  },
   "clients_noExactMatchClosest": "NO EXACT MATCH · CLOSEST NUMBERS",
   "@clients_noExactMatchClosest": {
     "description": "Caption inside the client search dropdown when the results are a fallback rung rather than hits. They answer a query nobody typed, so they must never read as matches. Already uppercase in source."
-  },
-  "clients_matchCount": "{count, plural, =0{No matches} =1{1 match} other{{count} matches}}",
-  "@clients_matchCount": {
-    "description": "Count of clients matching the current query in the add-job picker.",
-    "placeholders": { "count": { "type": "int", "example": "3" } }
   },
   "clients_attach": "Attach",
   "@clients_attach": {

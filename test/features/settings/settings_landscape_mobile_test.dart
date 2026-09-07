@@ -6,12 +6,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import 'package:scheduling/core/theme/theme_notifier.dart';
+import 'package:scheduling/features/auth/application/account_status_provider.dart';
 import 'package:scheduling/features/navigation/widgets/app_nav_drawer.dart';
 import 'package:scheduling/features/settings/screens/settings_screen.dart';
 import 'package:scheduling/features/settings/widgets/views/text_size_view.dart';
 import 'package:scheduling/l10n/l10n.dart';
 
 Widget _wrap(Widget child, {double textScale = 2}) => ProviderScope(
+  // The drawer's admin rows are gated on the LIVE user doc as well as the
+  // route argument, and the admin drawer is the taller overflow case.
+  overrides: [
+    currentUserDocProvider.overrideWith(
+      (ref) => Stream.value(const {'role': 'admin', 'status': 'active'}),
+    ),
+  ],
   child: ThemeNotifier(
     themeMode: ThemeMode.light,
     toggleTheme: () {},

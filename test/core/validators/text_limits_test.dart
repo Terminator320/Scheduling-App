@@ -7,6 +7,7 @@ import 'package:scheduling/core/images/image_storage_service.dart';
 import 'package:scheduling/core/validators/text_limits.dart';
 import 'package:scheduling/features/clients/domain/models/client_type.dart';
 import 'package:scheduling/features/clients/domain/policies/client_name_policy.dart';
+import 'package:scheduling/features/employees/domain/policies/employee_name_policy.dart';
 
 /// S2: `TextLimits` caps must be applied through
 /// `LengthLimitingTextInputFormatter`, which truncates a too-long paste
@@ -153,6 +154,27 @@ void main() {
       expect(
         TextLimits.personName + 1 + TextLimits.phone,
         lessThanOrEqualTo(rulesCapFor('name')),
+      );
+    });
+
+    test('the widest crew-note author name fits the fieldNotes cap', () {
+      // `authorName` on a crew note is `displayEmployeeName`, which joins two
+      // 100-char halves with a space (201) and falls back to the stored
+      // `users.name` or the email. A cap sized under any of those refuses the
+      // note outright as an opaque `permission-denied`, with no field for the
+      // author to correct.
+      final widestComposed = composeEmployeeName(
+        firstName: 'a' * TextLimits.employeeNameHalf,
+        lastName: 'b' * TextLimits.employeeNameHalf,
+        fallback: '',
+      );
+      expect(
+        widestComposed.length,
+        lessThanOrEqualTo(rulesCapFor('authorName')),
+      );
+      expect(
+        rulesCapFor('name'),
+        lessThanOrEqualTo(rulesCapFor('authorName')),
       );
     });
 
