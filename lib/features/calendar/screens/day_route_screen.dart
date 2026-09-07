@@ -12,6 +12,7 @@ import 'package:scheduling/core/notices/notice_service.dart';
 import 'package:scheduling/core/theme/design_tokens.dart';
 import 'package:scheduling/core/utils/current_day_provider.dart';
 import 'package:scheduling/core/utils/date_utils_helper.dart';
+import 'package:scheduling/features/auth/application/is_active_admin_provider.dart';
 import 'package:scheduling/features/calendar/application/appointments_providers.dart';
 import 'package:scheduling/features/calendar/domain/appointment_crew.dart';
 import 'package:scheduling/features/calendar/domain/appointment_day_slice.dart';
@@ -100,11 +101,16 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // The route argument is a SNAPSHOT; this is the same question asked of
+    // Firestore. Resolved ONCE so the picker, the stream, the day filter and
+    // `showActions` cannot disagree about who is looking.
+    final isAdmin = widget.isAdmin && ref.watch(isActiveAdminProvider);
+
     // Use a week bucket so day switching reuses the same range listener.
     final range = AppointmentDateRange.forWeekBucketOf(_day);
 
     // Admins need the whole day for the employee picker.
-    final provider = widget.isAdmin
+    final provider = isAdmin
         ? appointmentsInRangeProvider(range)
         : myAppointmentsProvider((employeeId: widget.employeeId, range: range));
     final async = ref.watch(provider);
@@ -113,6 +119,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     final data = _prepareBuild(
       async.value ?? const <AppointmentRecord>[],
       ref.watch(employeeNameMapProvider),
+      isAdmin: isAdmin,
     );
 
     return FeatureTourHost(
@@ -121,14 +128,15 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
       stepKeys: _tour.keys,
       // Wait for real rows before starting the tour.
       ready: async is AsyncData<List<AppointmentRecord>>,
-      child: _buildScaffold(async, data),
+      child: _buildScaffold(async, data, isAdmin: isAdmin),
     );
   }
 
   Widget _buildScaffold(
     AsyncValue<List<AppointmentRecord>> async,
-    DayRoute data,
-  ) {
+    DayRoute data, {
+    required bool isAdmin,
+  }) {
     return Scaffold(
       appBar: AppTopBar(
         title: context.l10n.calendar_dayRouteTitle,
@@ -152,7 +160,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
             children: [
               _tour.stepIf(TourStepId.dayRouteDaySwitcher, _daySwitcher()),
               // Missing steps are skipped by the tour host.
-              if (widget.isAdmin && data.assigneeEntries.isNotEmpty)
+              if (isAdmin && data.assigneeEntries.isNotEmpty)
                 _tour.stepIf(
                   TourStepId.dayRouteEmployee,
                   _employeePicker(data.assigneeEntries, data.employeeId),
@@ -160,7 +168,12 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
               Expanded(
                 child: _tour.stepIf(
                   TourStepId.dayRouteStops,
-                  _timeline(async, data.jobs, data.employeeId),
+                  _timeline(
+                    async,
+                    data.jobs,
+                    data.employeeId,
+                    isAdmin: isAdmin,
+                  ),
                 ),
               ),
             ],
@@ -176,20 +189,23 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
   Map<String, String>? _preparedNameMap;
   DateTime? _preparedDay;
   String? _preparedEmployeeId;
+  bool? _preparedIsAdmin;
 
   // Memoizes `buildDayRoute` on the inputs it was derived from. The identity
   // memo stays here rather than in `domain/`: it keys on `State` fields the
   // pure function does not have.
   DayRoute _prepareBuild(
     List<AppointmentRecord> source,
-    Map<String, String> nameMap,
-  ) {
+    Map<String, String> nameMap, {
+    required bool isAdmin,
+  }) {
     final cached = _preparedData;
     if (cached != null &&
         identical(source, _preparedSource) &&
         identical(nameMap, _preparedNameMap) &&
         _preparedDay == _day &&
-        _preparedEmployeeId == _selectedEmployeeId) {
+        _preparedEmployeeId == _selectedEmployeeId &&
+        _preparedIsAdmin == isAdmin) {
       return cached;
     }
 
@@ -197,11 +213,12 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     _preparedNameMap = nameMap;
     _preparedDay = _day;
     _preparedEmployeeId = _selectedEmployeeId;
+    _preparedIsAdmin = isAdmin;
     return _preparedData = buildDayRoute(
       source: source,
       nameMap: nameMap,
       day: _day,
-      isAdmin: widget.isAdmin,
+      isAdmin: isAdmin,
       ownEmployeeId: widget.employeeId,
       selectedEmployeeId: _selectedEmployeeId,
     );
@@ -285,9 +302,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
     );
   }
 
-  Future<void> _pickEmployee(
-    List<MapEntry<String, String>> assignees,
-  ) async {
+  Future<void> _pickEmployee(List<MapEntry<String, String>> assignees) async {
     final picked = await showAdaptiveActionSheet<String>(
       context,
       title: context.l10n.calendar_dayRouteEmployeeLabel,
@@ -372,8 +387,9 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
   Widget _timeline(
     AsyncValue<List<AppointmentRecord>> async,
     List<AppointmentDaySlice> jobs,
-    String employeeId,
-  ) {
+    String employeeId, {
+    required bool isAdmin,
+  }) {
     final l10n = context.l10n;
     if (async.isLoading && !async.hasValue) {
       return ListView(
@@ -425,7 +441,7 @@ class _DayRouteScreenState extends ConsumerState<DayRouteScreen> {
         ),
         showConnector: i < jobs.length - 1,
         navigateLabel: l10n.calendar_dayRouteNavigate,
-        isAdmin: widget.isAdmin,
+        isAdmin: isAdmin,
       ),
     );
   }
