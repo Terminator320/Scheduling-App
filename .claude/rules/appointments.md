@@ -942,11 +942,18 @@ Calendar *rendering* rules live in `lib/features/calendar/CLAUDE.md`.
   doc whose `employeeIds` stops naming the scope, the same way the
   terminal-status rule removes a reopened one. The search cache key carries
   the scope. `HistorySearchKey` (query + employeeId) is the provider family
-  key; `AppointmentHistoryView.scopeEmployeeId` null means business-wide,
-  which only an admin may list, and `HistoryScreen` passes
-  `isAdmin ? null : employeeId`. No rules change was needed: the list is
+  key. No rules change was needed: the list is
   constrained by `arrayContains` on the caller's own doc id, the same shape
-  `watchForEmployeeInRange` already relies on. The non-admin drawer gets the
-  History row under TODAY; `runAddClientFlow`
+  `watchForEmployeeInRange` already relies on. `runAddClientFlow`
   (`clients/widgets/sheets/add_client_flow.dart`) is the one add-client →
   book-a-job flow, called by the Clients FAB and the list's empty state.
+  **History became admin-only on 2026-09-06** (owner call) — an employee's
+  copy carried no filter control of any kind, and a technician still reaches a
+  finished job through the calendar's closed-job sink, so the drawer row and
+  `AppointmentHistoryView`'s widget-level `scopeEmployeeId` are gone. The
+  repository-layer scoping above deliberately SURVIVES: `_historyQuery`'s
+  `employeeId` narrowing, the per-scope scan windows and the server-side
+  `historyScope` guard plus its `emp:<id>:` search-token scopes
+  (`functions/indexed_search.js`, `functions/search_tokens.js`) all mirror a
+  DEPLOYED contract that older shipped builds still call — removing any of
+  that would be a breaking backend change, not tidying up dead code.
