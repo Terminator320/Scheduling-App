@@ -1,7 +1,7 @@
 # Codebase Audit — 2026-08-04
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
-`firestore.indexes.json`, `test/`, `docs/`). Baseline: `9b384aa` on `redesgin`,
+`firestore.indexes.json`, `test/`, `docs/`). Baseline: `7166d03` on `redesgin`,
 clean working tree.
 
 Method: deterministic static scan, then five parallel deep reviewers
@@ -38,7 +38,7 @@ not optional here.
 
 ### The headline finding
 
-Commit `a4b6882` (multi-day appointments, 2026-08-03) widened both range
+Commit `decc5ff` (multi-day appointments, 2026-08-03) widened both range
 queries to start at `AppointmentDateRange.fetchStart` — **14 days before the
 range's start** — so a job already under way is still fetched. That makes every
 range stream a deliberate *superset* of its range. Only the calendar screen
@@ -110,7 +110,7 @@ allow update: if isAdmin()
 and `:68`, `app_nav_drawer.dart:292`.
 
 All four reduced `appointmentsInRangeProvider` with no date predicate, trusting
-the stream to be range-exact. Since `a4b6882` it is not. Concretely: the Day
+the stream to be range-exact. Since `decc5ff` it is not. Concretely: the Day
 route listed every non-cancelled job of the previous fortnight as a numbered
 stop and built the "Open in Maps" route from the first 10 of them; the Team
 roster's "jobs today" and the employee detail's TODAY panel showed 11 where the

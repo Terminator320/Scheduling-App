@@ -2,7 +2,7 @@
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 `firestore.indexes.json`, `test/`, `lib/l10n/*.arb`, `docs/`).
-Baseline: `db99d889` on `redesgin`.
+Baseline: `1cd40b7b` on `redesgin`.
 
 > **Doc references use the NEW rule layout.** The CLAUDE.md → `.claude/rules/`
 > lazy-loading split landed on disk *during* this audit (root CLAUDE.md 2100 →
@@ -100,8 +100,8 @@ BOMs, zero import-order violations, zero unsanctioned SnackBars, zero raw
 zero widget-disposal leaks across all 123 controller sites. All eight documented
 Dart↔JS hand-mirrors were diffed and **none has drifted**.
 
-The findings concentrate in one place: **the last two commits** (`a06c8e4a`
-"clean up and review of code", `db99d889` "more clean up"). Between them they
+The findings concentrate in one place: **the last two commits** (`a37e7571`
+"clean up and review of code", `1cd40b7b` "more clean up"). Between them they
 removed every named query ceiling in the data layer and shipped 41 failing
 tests. Nearly everything above 🔵 traces to those two commits or to the new
 image/account-exit code they landed alongside.
@@ -230,7 +230,7 @@ those two lines and it fails today.
 
 ### S3 — `AppLock` permanently disables the user's biometric setting on a transient plugin error · severity: medium · confidence: high
 
-**Where:** `lib/core/security/app_lock.dart:136-153` (added in `a06c8e4a`)
+**Where:** `lib/core/security/app_lock.dart:136-153` (added in `a37e7571`)
 **Doc:** `CLAUDE.md:175` — *"a persistent read failure still degrades to
 unlocked, on purpose."*
 
@@ -345,7 +345,7 @@ The largest single cause is mechanical and unambiguous: the cleanup commits adde
 (`AppointmentDateRange`, `DocumentSnapshot<Object?>`). mocktail throws
 immediately, and because the throw is in `setUp` it poisons **every test in the
 file** — including previously-passing ones. That is why 41 failures span 15
-files. `git diff 8ddae0f7..db99d889 -- test/features/calendar/application/appointments_providers_test.dart`
+files. `git diff 2437eb1e..1cd40b7b -- test/features/calendar/application/appointments_providers_test.dart`
 shows the block added with no fallback registration. **These tests cannot ever
 have been executed.**
 

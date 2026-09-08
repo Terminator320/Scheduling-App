@@ -99,14 +99,14 @@ this one".
 - `2026-08-04-drawer-icons-and-tour-expansion.md` / `-PLAN.md` — tinted icon
   chips on the nav drawer rows, and the feature tour regrown from 14 screen-level
   steps to 43, including the three create-flow **sheet** tours that the sealed
-  `TourScope` split made expressible (pushed, `2845d43a`..`881834b2`).
+  `TourScope` split made expressible (pushed, `059a2cf9`..`07131173`).
   `lib/features/feature_tour/domain/tour_scope.dart`. On-device verification is
   the one residual item.
 
 - `2026-08-02-multi-day-appointments.md` (design) / `-PLAN-1-app.md` /
   `2026-08-03-multi-day-appointments-PLAN-2-mirrors.md` — an appointment spans
   up to 14 days and its two times are a **daily window**. Plan 1 built the app
-  half (`140fc92`, 2026-08-03): `AppointmentDaySlice` as the one owner of
+  half (`e0518c9`, 2026-08-03): `AppointmentDaySlice` as the one owner of
   day-scoping, and every consumer of the range stream re-scoped through
   `runsOn`. Plan 2 built the off-screen mirrors (2026-08-10): the home widget,
   `functions/day_slice_utils.js`, the Siri snapshot at **schema v3** and the
@@ -143,7 +143,7 @@ this one".
   email-verification step from employee setup and the admin toggle from account
   creation, replacing the shared `Welcome123!` with a random per-account
   starting password. Shipped 1.48.0+77, backend deployed 2026-08-21
-  (`903161e1`, then `d99b6673` restoring account creation the first deploy
+  (`1c89892a`, then `229b6e24` restoring account creation the first deploy
   broke). Backend rollback is unsafe — the dependent build is on the App Store.
 - `2026-08-24-assignee-availability.md` — the assignee picker dims crew who
   can't take the job on the chosen date rather than hiding them. Built
@@ -161,7 +161,7 @@ this one".
 - `2026-08-27-per-day-appointments.md` / `-plan.md` — a multi-day job books as
   one document per day, linked by `seriesId` with a stored `dayIndex`/`dayCount`,
   so marking day 1 complete no longer closes days 2–5. Implemented 2026-08-27,
-  shipped 1.53.0+82, rules deployed 2026-08-29 (`d5aa3a21`).
+  shipped 1.53.0+82, rules deployed 2026-08-29 (`77c6a66f`).
 - `2026-08-28-client-building-grouping.md` — grouping clients by building, made
   the case by the address backfill's prod dry run (32 clients across 7 Prom.
   Paton buildings). Shipped; `client_building.dart` and the filter sheet. Its
@@ -245,22 +245,22 @@ damage (`audit-renamed-client-names.js` and the earlier
   *before* the P4c employee-account commits landed.
 - `CODEBASE_AUDIT_2026-08-02-post-p4c.md` — the re-run over the P4c result.
   Supersedes the pre-P4c snapshot.
-- `CODEBASE_AUDIT_2026-08-04-first-pass.md` — closed 21 findings at `9b384aa`.
+- `CODEBASE_AUDIT_2026-08-04-first-pass.md` — closed 21 findings at `7166d03`.
 - `CODEBASE_AUDIT_2026-08-04-second-pass.md` — a fresh sweep over the shipped
-  result at `46154b1`, not a re-run of the first pass's checks; it found a
+  result at `a8cf8d3`, not a re-run of the first pass's checks; it found a
   distinct set.
-- `CODEBASE_AUDIT_2026-08-11-first-pass.md` — 20 findings at `8bf07c6e`, all
-  actioned in `a90474cc`. Superseded the same day by the second pass below.
-- `CODEBASE_AUDIT_2026-08-11-second-pass.md` — 31 findings at `55ea3cb3`, closed
-  in `ef698365` + `78d89478`. It caught the rules span bound that DST would have
+- `CODEBASE_AUDIT_2026-08-11-first-pass.md` — 20 findings at `102a6b21`, all
+  actioned in `96a514a2`. Superseded the same day by the second pass below.
+- `CODEBASE_AUDIT_2026-08-11-second-pass.md` — 31 findings at `4ec9ad8a`, closed
+  in `d0f99f23` + `45302651`. It caught the rules span bound that DST would have
   made reject legal saves, before that bound deployed.
-- `CODEBASE_AUDIT_2026-08-14-first-pass.md` — 30 findings at `bf316828`,
-  implemented the same day in `4b500e84`; it found the edit sheet renaming real
+- `CODEBASE_AUDIT_2026-08-14-first-pass.md` — 30 findings at `0edf80b7`,
+  implemented the same day in `2ca8013b`; it found the edit sheet renaming real
   Wave customers. Its ⚠️ pre-deploy item (deleting three live Cloud Functions)
   ran in the 2026-08-14 deploy.
 - `CODEBASE_AUDIT_2026-08-14-pre-deploy.md` — a fresh sweep run immediately
   before that deploy and before the Wave client-name/phone backfills, weighted
-  toward what breaks once deployed. 27 findings, all closed at `a30eb3ef`.
+  toward what breaks once deployed. 27 findings, all closed at `10545972`.
   **Both 2026-08-14 snapshots were restored from git history on 2026-08-15** —
   each had been overwritten in place by the sweep that followed it.
 - `CODEBASE_AUDIT_2026-08-19.md` — the follow-up audit after the appointment

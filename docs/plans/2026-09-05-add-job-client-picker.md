@@ -3,8 +3,8 @@
 **Date:** 2026-09-05
 **Status:** DESIGN APPROVED (owner, 2026-09-05), with the four open questions
 answered the same day (see **Owner decisions** below). **BUILT AND RELEASED the
-same day** as 1.58.0+87 (`d7e8294f`); the implementation plan's boxes were
-ticked in `f884e120`. In the code: `PhoneQueryPolicy`
+same day** as 1.58.0+87 (`101d0c0a`); the implementation plan's boxes were
+ticked in `394d67af`. In the code: `PhoneQueryPolicy`
 (`lib/features/clients/domain/policies/phone_query_policy.dart`), `ClientPicker`
 and `SelectedClientCard`. **NOT usable in production yet** — the picker calls
 the `searchClients` callable, which is part of the undeployed 1.57/1.58 backend

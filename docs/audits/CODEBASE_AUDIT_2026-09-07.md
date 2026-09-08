@@ -2,7 +2,7 @@
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 `firestore.indexes.json`, `test/`, `.claude/rules/`, `pubspec.yaml`).
-Baseline: `5dbd54e8` (branch `redesgin`), working tree clean at start.
+Baseline: `051a6b6d` (branch `redesgin`), working tree clean at start.
 
 The previous audit (2026-09-05, all 33 findings closed) is archived at
 `docs/archive/CODEBASE_AUDIT_2026-09-05.md`. Its carryover items — the Maps
@@ -132,7 +132,7 @@ holds.
 
 | File:line | Change | Why |
 |---|---|---|
-| `.claude/rules/error-handling.md:170` | Dropped the `CLI-RECENT` clause | The tag named `recent_clients_provider.dart`, deleted in `0e3b2393`; zero code occurrences remain. That registry is declared exhaustive because notices no longer carry support codes, so a stale row misdirects Crashlytics triage. |
+| `.claude/rules/error-handling.md:170` | Dropped the `CLI-RECENT` clause | The tag named `recent_clients_provider.dart`, deleted in `d3440af1`; zero code occurrences remain. That registry is declared exhaustive because notices no longer carry support codes, so a stale row misdirects Crashlytics triage. |
 
 > Nothing else was auto-changed. No `.dart`, `.js` or rules file was touched.
 
@@ -198,7 +198,7 @@ holds.
 
 - **Where:** `lib/features/calendar/widgets/views/details_view_leaf_widgets.dart:290-315`
 - **Problem:** `failure`/`failedCount` are captured in `build()` **outside** the
-  `ValueListenableBuilder` added by `8789be1a`. `PhotoUploadNotifier._failures`
+  `ValueListenableBuilder` added by `916e27ab`. `PhotoUploadNotifier._failures`
   is a plain `Map` with no listenable and `photoUploadNotifierProvider` returns a
   stable singleton, so nothing rebuilds on `reportFailure`. When every file in a
   batch fails permanently, `_publishPending()` drops the pending count to 0, the
@@ -218,7 +218,7 @@ holds.
   `notifier.clearFailure(appointmentId)` first. But
   `event_details_view.dart:115` computes `showEdit = state.isEditing &&
   widget.showActions`, and `showActions` is false for a non-admin assignee — so
-  `enterEditing` renders the identical read view. Since `6e37483e`/`8789be1a`
+  `enterEditing` renders the identical read view. Since `c17fda1f`/`916e27ab`
   the crew are the people who start these uploads, so they are the ones who meet
   the tile: tapping Retry deletes their only in-app trace of the loss and offers
   no way to re-add the photos.
@@ -664,11 +664,11 @@ coverage.
 
 | ARB line (EN / FR) | Key | Orphaned by |
 |---|---|---|
-| `app_en.arb:1267` / `app_fr.arb:265` | `clients_noHistoryYetForYou` | `547b848f` (History admin-only) |
-| `app_en.arb:3972` / `:847` | `clients_exactMatch` | `29143d64` (dropdown, no section headers) |
-| `app_en.arb:3976` / `:848` | `clients_searchResults` | `29143d64` |
-| `app_en.arb:3980` / `:849` | `clients_closestNumbers` | `29143d64` |
-| `app_en.arb:3988` / `:851` | `clients_matchCount` | `29143d64` |
+| `app_en.arb:1267` / `app_fr.arb:265` | `clients_noHistoryYetForYou` | `c9e5812e` (History admin-only) |
+| `app_en.arb:3972` / `:847` | `clients_exactMatch` | `7159fd26` (dropdown, no section headers) |
+| `app_en.arb:3976` / `:848` | `clients_searchResults` | `7159fd26` |
+| `app_en.arb:3980` / `:849` | `clients_closestNumbers` | `7159fd26` |
+| `app_en.arb:3988` / `:851` | `clients_matchCount` | `7159fd26` |
 
 Four of the five were added and orphaned within one release. Remove EN + FR + the
 `@key` block in lockstep and run `flutter gen-l10n`.
@@ -683,7 +683,7 @@ count. Resolve B3 first, then delete it only if unused.
 ### D3 — `HistoryPager.fetchPage`'s `employeeId` has no non-null caller · impact: low · confidence: medium  · **DONE (documented in `.claude/rules/clients.md`, parameter kept)**
 
 `appointment_history_providers.dart:25` · `appointment_history_view.dart:132,430`
-(`employeeId: null` hard-coded). `547b848f` removed per-employee scoping from the
+(`employeeId: null` hard-coded). `c9e5812e` removed per-employee scoping from the
 view. The **repository**-level `employeeId` is confirmed-intentional — it mirrors
 the deployed `historyScope` guard in `functions/indexed_search.js` and must stay.
 What is not covered by that note is the intermediate `HistoryPager`/

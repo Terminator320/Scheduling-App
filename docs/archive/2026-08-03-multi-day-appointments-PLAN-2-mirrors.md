@@ -39,7 +39,7 @@ appointments off-screen, and adds ONE hand-mirrored JS copy of the slice rule
 > not to this.) Tasks 4–6 are unaffected: the snapshot already carries `isAllDay`
 > and `title` at v2, so the v3 bump this plan specifies is still the right move.
 
-**Prerequisite:** Plan 1 complete (`140fc92`).
+**Prerequisite:** Plan 1 complete (`e0518c9`).
 **Design doc:** `docs/plans/2026-08-02-multi-day-appointments.md` §8.
 **Plan 1:** `docs/plans/2026-08-02-multi-day-appointments-PLAN-1-app.md`.
 

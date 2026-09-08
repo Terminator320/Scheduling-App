@@ -1,6 +1,6 @@
 # Multi-day Appointments — Implementation Plan 1: the Flutter app
 
-> **Status: DONE** (`140fc92`, 2026-08-03). Every invariant it established is
+> **Status: DONE** (`e0518c9`, 2026-08-03). Every invariant it established is
 > written up in `CLAUDE.md`; its unticked checkboxes are an artifact of how it
 > was executed, not remaining work. Kept beside **Plan 2**
 > (`2026-08-03-multi-day-appointments-PLAN-2-mirrors.md`), which is **NOT

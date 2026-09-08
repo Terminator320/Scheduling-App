@@ -1,7 +1,7 @@
 # Security Assessment — ES Pro (Scheduling-App)
 
 **Date:** 2026-08-04
-**Target:** `schedulingapp-88727` · branch `redesgin` @ `2a480cc2` · app 1.41.0+66
+**Target:** `schedulingapp-88727` · branch `redesgin` @ `f9562f32` · app 1.41.0+66
 **Method:** adversarial (external attacker with only the shipped artefact) + standards mapping (OWASP MASVS, OWASP Mobile Top 10, OWASP API Top 10, STRIDE) + dependency review
 **Authorisation:** granted by the owner for live read-only inspection and live testing, including writes.
 
@@ -141,16 +141,16 @@ const password = generateStartingPassword();   // crypto.randomBytes → policy-
 
 ```
 $ git log --all --diff-filter=A -- '**/GoogleService-Info.plist'
-bc5a7aaa  Sun Jun 21 16:04:52 2026  gvogas   setting up ios config
+c089978e  Sun Jun 21 16:04:52 2026  gvogas   setting up ios config
 
-$ git show bc5a7aaa:ios/GoogleService-Info.plist
+$ git show c089978e:ios/GoogleService-Info.plist
 API_KEY         AIzaSyBNH…uY8BU          # redacted in this report — see note
 GOOGLE_APP_ID   1:914958291749:ios:8661aad8546e8b5f0d00cc
 PROJECT_ID      schedulingapp-88727
 GCM_SENDER_ID   914958291749
 ```
 
-The file was untracked later (`6f89c3cb`) and is now correctly gitignored (`.gitignore:14`), but **removal from HEAD does not remove it from history** — the blob is still reachable in any clone or fork.
+The file was untracked later (`7d5deb96`) and is now correctly gitignored (`.gitignore:14`), but **removal from HEAD does not remove it from history** — the blob is still reachable in any clone or fork.
 
 > The key is **truncated in this report on purpose.** It is already in this repository's history, which is the finding — but there is no reason to also place it in `HEAD`, where a grep of the working tree would surface it. The commit hash and path above are the full reproduction pointer; run the `git show` yourself to see the value.
 

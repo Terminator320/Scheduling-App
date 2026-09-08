@@ -3,7 +3,7 @@
 Scope: whole repo — `lib/` (401 Dart), `functions/` (JS), `test/` (319),
 `functions/__tests__/` (66 suites), `firestore.rules`, `storage.rules`,
 `firestore.indexes.json`, both ARBs.
-Baseline: **working tree** on `redesgin` at `fb4c88a6`.
+Baseline: **working tree** on `redesgin` at `837f6704`.
 
 > ## Read this first — what this pass is
 >

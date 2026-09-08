@@ -2,7 +2,7 @@
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 `firestore.indexes.json`, `lib/l10n/*.arb`, `pubspec.yaml`, `docs/`).
-Baseline: working tree at `8bf07c6e` on `redesgin`, version `1.44.1+71`, tree clean.
+Baseline: working tree at `102a6b21` on `redesgin`, version `1.44.1+71`, tree clean.
 
 ## Summary
 
@@ -97,7 +97,7 @@ archive/delete work. All 11 callables enforce App Check; there is no
 
 ### S2 — `ios/GoogleService-Info.plist` is reachable in git history · severity: low · confidence: high
 
-- **Where:** commit `bc5a7aaa` (deleted at `6f89c3cb`); not in the working tree,
+- **Where:** commit `c089978e` (deleted at `7d5deb96`); not in the working tree,
   correctly gitignored via `**/GoogleService-Info.plist`.
 - **Risk:** Same class as `dev/.env` — restricted client config that ships inside
   the IPA anyway, with App Check + rules as the real defense. Impact is limited
@@ -325,8 +325,8 @@ archive/delete work. All 11 callables enforce App Check; there is no
   3. `:1023` cites error tag `EMP-DEL`; the actual tag is `EMP-DELETE`
      (`employee_form_controller.dart:289`).
   4. `docs/CLOUD_FUNCTIONS.md:44,160-161` claims `revokeInvite`/`previewInvite`
-     *"never existed in code"* — they existed under P4b (`461f84ba`) and were
-     removed by P4c (`ea375b1b`).
+     *"never existed in code"* — they existed under P4b (`5f33ca63`) and were
+     removed by P4c (`b0e0fe4e`).
 - **Suggested improvement:** Update all four; describe the P5 dirty-gated-identity
   vs. immediate-availability split and list the genuinely admin-only fields
   (`maxJobsPerDay`, `role`, `jobTitle`, `colorValue`, `status`).

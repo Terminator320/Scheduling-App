@@ -168,7 +168,7 @@ Claude-Session: https://claude.ai/code/session_016a4uSgRfEzNGHKFVGNga23
 EOF
 ```
 
-Shipped as `7ec375ae`.
+Shipped as `b3ca82a2`.
 
 ---
 
@@ -414,7 +414,7 @@ Claude-Session: https://claude.ai/code/session_016a4uSgRfEzNGHKFVGNga23
 EOF
 ```
 
-Shipped as `7e1449a6`.
+Shipped as `240102b6`.
 
 ---
 
@@ -674,7 +674,7 @@ EOF
 
 `.claude/rules/appointments.md` names "the technician's History scope" in its assignee/job-record paragraph. Replace that clause with a sentence recording that History became admin-only on 2026-09-06 and that the server-side `historyScope` guard and the `emp:<id>:` search scopes deliberately remain.
 
-Shipped as `547b848f` + `442cc90a`.
+Shipped as `c9e5812e` + `24b3fdbe`.
 
 ---
 
@@ -783,7 +783,7 @@ Claude-Session: https://claude.ai/code/session_016a4uSgRfEzNGHKFVGNga23
 EOF
 ```
 
-Shipped as `0e3b2393`. Follow-up noted: `.claude/rules/clients.md` still carries a
+Shipped as `d3440af1`. Follow-up noted: `.claude/rules/clients.md` still carries a
 "Recents are free or they are nothing" bullet describing the deleted
 `recentClientsProvider` — stale, to be trimmed.
 

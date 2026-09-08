@@ -1,6 +1,6 @@
 # Wave-integration branch — ultra code review
 
-Scope: `git diff main...HEAD` on `wave-integration` (merge-base `cac81c4`), 28 commits,
+Scope: `git diff main...HEAD` on `wave-integration` (merge-base `7e642aa`), 28 commits,
 132 files. Reviewed by an 11-area multi-agent fan-out (security / correctness / performance /
 convention lenses), every finding adversarially verified against the actual source, plus a
 manual cross-cutting pass. Binary icon/splash assets excluded (nothing to review).
@@ -106,7 +106,7 @@ drops to low.
 (the Name field prefills and the validator passes).
 
 ### 2. `ios/GoogleService-Info.plist` committed despite being gitignored — iOS Firebase key in history
-File: `ios/GoogleService-Info.plist` (added by commit `bc5a7aa`)
+File: `ios/GoogleService-Info.plist` (added by commit `c089978`)
 
 The branch force-adds the iOS plist, putting the iOS API key, `GCM_SENDER_ID`, `GOOGLE_APP_ID`,
 `PROJECT_ID`, `STORAGE_BUCKET` in plaintext git history — violating the project's secret-hygiene

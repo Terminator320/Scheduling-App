@@ -2,7 +2,7 @@
 
 Scope: whole repo (`lib/`, `functions/`, `firestore.rules`, `storage.rules`,
 `firestore.indexes.json`, `test/`, `ios/`, `android/`).
-Baseline: `46154b1` on `redesgin` (v1.41.0+66), clean working tree.
+Baseline: `a8cf8d3` on `redesgin` (v1.41.0+66), clean working tree.
 
 Method: deterministic static scan, then five parallel deep reviewers
 (security · bugs · dead-code/conventions · performance · maintainability).
@@ -10,7 +10,7 @@ Every finding below was re-verified against source by the coordinator before
 being written down; the ones that did not survive that check were dropped.
 
 > Supersedes `CODEBASE_AUDIT_2026-08-04-first-pass.md` (preserved alongside).
-> That pass ran the same day against `9b384aa` and closed 21 findings. This one
+> That pass ran the same day against `7166d03` and closed 21 findings. This one
 > is a fresh sweep over the shipped result — it is **not** a re-run of the same
 > checks, and it found a distinct set.
 

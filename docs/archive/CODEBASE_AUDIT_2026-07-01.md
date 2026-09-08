@@ -2,7 +2,7 @@
 
 Scope: whole repo — `lib/` (190 non-generated Dart files), `test/` (101 files),
 `functions/` (25 JS files), `firestore.rules`, `storage.rules`. Baseline: clean
-working tree on branch `moblie` (`2c64072`).
+working tree on branch `moblie` (`9709aff`).
 
 ## Summary
 - Scanned: 190 `lib/` Dart + 101 `test/` + 25 `functions/` JS + Firestore/Storage rules.

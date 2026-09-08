@@ -2,8 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** IMPLEMENTED 2026-09-05, released as 1.58.0+87 (`d7e8294f`); boxes
-ticked in `f884e120`. Blocked from being usable in production only by the
+**Status:** IMPLEMENTED 2026-09-05, released as 1.58.0+87 (`101d0c0a`); boxes
+ticked in `394d67af`. Blocked from being usable in production only by the
 undeployed 1.57/1.58 backend that owns `searchClients`. Design doc:
 `docs/plans/2026-09-05-add-job-client-picker.md`.
 

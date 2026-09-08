@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-04
 **Branch:** `redesgin`
-**Status:** IMPLEMENTED 2026-08-04 and **pushed** (`2845d43a`..`881834b2`).
+**Status:** IMPLEMENTED 2026-08-04 and **pushed** (`059a2cf9`..`07131173`).
 Not device-verified.
 Built as designed, with three deviations recorded in §7.
 
@@ -39,7 +39,7 @@ IconData drawerRowIcon(AppDestination destination) => switch (destination) {
 ```
 
 Seven of the eight are the icons the deleted `settings_drawer.dart` used
-(commit `3c9a3fb7^`), so this is a genuine re-add rather than a new vocabulary.
+(commit `c7ebfbcc^`), so this is a genuine re-add rather than a new vocabulary.
 `dayRoute` is the exception — it had no row in the old drawer — and takes
 `route_rounded`.
 

@@ -1,13 +1,13 @@
 # Codebase Audit — 2026-07-04
 
 Scope: whole repo — `lib/`, `functions/`, `firestore.rules`, `storage.rules`,
-`test/`. Baseline: clean working tree on branch `moblie` (`fca4d27`).
+`test/`. Baseline: clean working tree on branch `moblie` (`718b0ea`).
 Per request, everything flagged or decided in prior audits is **excluded**
 (see `docs/audits/CODEBASE_AUDIT_2026-07-01.md`, `docs/audits/CODEBASE_AUDIT_2026-06-26.md`,
 `docs/audits/WAVE_REVIEW_FINDINGS.md`) — this report contains only NEW findings.
 Review effort was weighted toward code that postdates the 2026-07-01 audit
-(the application-controller refactor `620fc47`, robustness pass `6be1754`,
-a11y `eb0cd39`, PR #30, and the `fca4d27` "mac" commit), none of which had
+(the application-controller refactor `e4ab0c0`, robustness pass `5b136cb`,
+a11y `0b63124`, PR #30, and the `718b0ea` "mac" commit), none of which had
 been reviewed before.
 
 ## Summary
@@ -195,7 +195,7 @@ launcher URLs structured/encoded; deps current with committed lockfile.
   still unset); B resolves and renders, then A resolves and replaces the list
   with matches for "ma" while the field shows "mar". Self-corrects on the next
   keystroke; mild harm. The codebase already fixed this exact pattern in
-  `address_autocomplete_field.dart` (`_requestId`, added in `6be1754`) — this
+  `address_autocomplete_field.dart` (`_requestId`, added in `5b136cb`) — this
   call site didn't get it.
 - **Fix:** Monotonic request id in the mixin (mirror the address field), or
   drop responses whose query no longer matches the latest one.
@@ -245,7 +245,7 @@ launcher URLs structured/encoded; deps current with committed lockfile.
   — the `onLocalWrite → invalidateSelf` wiring (enforces the "just-deleted
   appointment must leave history search" invariant) is stubbed as
   `Stream.empty()` in every existing test, so a regression is silent.
-  (b) `fca4d27`'s three runtime-throw fixes (`primary_scroll_scope.dart`,
+  (b) `718b0ea`'s three runtime-throw fixes (`primary_scroll_scope.dart`,
   `master_detail_scaffold.dart:29-43`, unique FAB `heroTag`s) have zero tests,
   and those throws go silently to Crashlytics in release.
 - **Suggested improvement:** (a) one provider-level test with a
@@ -253,7 +253,7 @@ launcher URLs structured/encoded; deps current with committed lockfile.
   (b) one widget test: wide `MasterDetailScaffold`, two primary `ListView`s
   under `AppScrollBehavior`, assert `takeException()` is null.
 
-### I5 — Five sites still construct `AuthCache()`/`AuthService()` directly, bypassing the providers `620fc47` introduced · impact: low · confidence: high
+### I5 — Five sites still construct `AuthCache()`/`AuthService()` directly, bypassing the providers `e4ab0c0` introduced · impact: low · confidence: high
 - **Where:** `lib/main.dart:203` (`AuthService().signOut()`), `lib/main.dart:273`
   (`AuthCache().loadIfMatch`), `lib/features/splash/screens/splash_screen.dart:73`,
   `lib/features/splash/application/splash_controller.dart:56,60`.
@@ -276,7 +276,7 @@ launcher URLs structured/encoded; deps current with committed lockfile.
   `'CLI-LIST clients page fetch error'`.
 - `lib/shared/widgets/fields/address_autocomplete_field.dart:46,79,91` — raw
   `Timer` debounce instead of `Debouncer` (correctly cancelled in `dispose`, so
-  drift only; predates the rule but was touched in `6be1754` without migrating).
+  drift only; predates the rule but was touched in `5b136cb` without migrating).
 - Off-token radii/spacing introduced or touched recently (mechanical pass):
   `circular(10)` in `address_autocomplete_field.dart:218`,
   `client_search_field.dart:81`, `photo_picker_section.dart:243,248,280`;
@@ -288,12 +288,12 @@ launcher URLs structured/encoded; deps current with committed lockfile.
   Possibly an intentional legacy default for pre-palette docs — check stored
   data before changing.
 - `lib/core/errors/error_cause.dart:12` — `ErrorCause` enum is public but has
-  zero external references since `620fc47` privatized `classifyError`; could be
+  zero external references since `e4ab0c0` privatized `classifyError`; could be
   file-private.
 - Doc drift: `.claude/rules/error-handling.md` still cites
   `login_screen._retryOnAuthPropagation` (moved to
   `sign_in_controller.dart:186`; note `.claude/` is gitignored — local-only
-  edit), and `docs/ARCHITECTURE.md` predates `620fc47` (says "StateNotifier",
+  edit), and `docs/ARCHITECTURE.md` predates `e4ab0c0` (says "StateNotifier",
   names none of the new controllers) — refresh at the next `/release`.
 
 ## Notes / uncertainties
@@ -320,7 +320,7 @@ launcher URLs structured/encoded; deps current with committed lockfile.
   discrimination; employee visibility filters + rules `hasOnly` on the
   employee "mark done" write; date/DST math (`combineEndDateAndTime`,
   `occurrenceEnd`, `_addMonthsClamped`); `retry.dart` semantics and call sites;
-  `fca4d27` scroll/hero fixes; invite-flow transaction; `deleteAccount`
+  `718b0ea` scroll/hero fixes; invite-flow transaction; `deleteAccount`
   ordering + rate-limit refund; Wave worker lease/claim/commit/reclaim outbox
   invariant; image pipeline append/remove-only writes; leak sweep (all
   debouncers/controllers/subscriptions disposed); startup path; no dead code.

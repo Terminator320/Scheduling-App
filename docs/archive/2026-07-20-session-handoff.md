@@ -6,10 +6,10 @@ Flutter 3.44.2). Everything below is committed; working tree clean.
 Resume-here doc. Read this first, then the linked plans for detail.
 
 ## Commits this session
-- `3041ca3` — Siri Phases 2–3 + Live Activity APNs sandbox fallback
-- `3e42040` — appointments `(employeeIds, endTime)` index for the travel origin-context query
-- `4c60c7c` — Siri Phase 4: blockers resolved on paper + execution runbook
-- (`3a6cd58` "update version ios" is yours, interleaved.)
+- `e0658a0` — Siri Phases 2–3 + Live Activity APNs sandbox fallback
+- `dc5e86e` — appointments `(employeeIds, endTime)` index for the travel origin-context query
+- `3a5f176` — Siri Phase 4: blockers resolved on paper + execution runbook
+- (`e4fc211` "update version ios" is yours, interleaved.)
 
 ---
 

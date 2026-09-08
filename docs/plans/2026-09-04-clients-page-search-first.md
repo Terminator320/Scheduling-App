@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-04
 **Status:** DESIGN APPROVED; build authorized by the owner 2026-09-05 and
-**IMPLEMENTED the same day** — commits `68ae7d37` + `d84cae53` on `redesgin`.
+**IMPLEMENTED the same day** — commits `767ec99e` + `b2adc705` on `redesgin`.
 NOT deployed: the two new `clients` composites must be READY and
 `backfill-client-sort-fields.js` must have run before a build using the
 Most jobs / Recently added sorts ships.

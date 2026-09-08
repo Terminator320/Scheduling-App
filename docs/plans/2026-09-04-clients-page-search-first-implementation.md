@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** IMPLEMENTED 2026-09-05 — commits `68ae7d37` + `d84cae53` on
+**Status:** IMPLEMENTED 2026-09-05 — commits `767ec99e` + `b2adc705` on
 `redesgin`, released in 1.58.0+87. **NOT deployed:** the two new `clients`
 composite indexes must be READY and
 `functions/scripts/backfill-client-sort-fields.js` must have run before the

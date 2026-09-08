@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** BUILT AND DEPLOYED 2026-08-30 (`485c88cb`, functions + rules +
+**Status:** BUILT AND DEPLOYED 2026-08-30 (`fe9edc51`, functions + rules +
 storage) in report-only mode. **One step of Phase 1 is still open:** the
 production replay `functions/scripts/audit-wave-contract.js` has never been run
 — it needs application-default credentials this box does not have — and its
